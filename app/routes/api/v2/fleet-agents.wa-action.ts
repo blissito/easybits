@@ -1,15 +1,15 @@
-import type { Route } from "./+types/pools.wa-action";
+import type { Route } from "./+types/fleet-agents.wa-action";
 import { db } from "~/.server/db";
 import { executeWaAction } from "~/.server/integrations/whatsapp/baileys.server";
-import { mergedCapabilities, type GroupConfig } from "~/.server/core/poolOperations";
+import { mergedCapabilities, type GroupConfig } from "~/.server/core/fleetAgentOperations";
 
-// POST /api/v2/pools/wa-action
+// POST /api/v2/fleet-agents/wa-action
 //
-// The pool worker's in-process `wa` MCP server calls this to perform a native
+// The fleetAgent worker's in-process `wa` MCP server calls this to perform a native
 // WhatsApp action (send file/poll/location/reaction, get invite link) on the
-// pool's shared Baileys socket. Auth = the pool token (injected as POOL_TOKEN).
-// We resolve sessionId → the conversation's group via PoolRoute, then gate
-// elevated CROSS-GROUP actions to the pool's mainGroupJid (mirrors isMain).
+// fleetAgent's shared Baileys socket. Auth = the fleet-agent token (injected as FLEET_TOKEN).
+// We resolve sessionId → the conversation's group via FleetAgentRoute, then gate
+// elevated CROSS-GROUP actions to the fleetAgent's mainGroupJid (mirrors isMain).
 const CORS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
@@ -34,11 +34,11 @@ export async function action({ request }: Route.ActionArgs) {
   }
 
   // Resolve the conversation: token must own the route, route gives the group.
-  const route = await db.poolRoute.findFirst({
-    where: { sessionUuid: sessionId, pool: { token: bearer } },
+  const route = await db.fleetAgentRoute.findFirst({
+    where: { sessionUuid: sessionId, fleetAgent: { token: bearer } },
     select: {
       groupId: true,
-      pool: {
+      fleetAgent: {
         select: {
           id: true, mainGroupJid: true, enabledGroups: true, groupKeys: true,
           seenGroups: true, mcpCatalog: true, groupConfigs: true,
@@ -49,10 +49,10 @@ export async function action({ request }: Route.ActionArgs) {
   if (!route) return Response.json({ ok: false, error: "Unauthorized" }, { status: 401, headers: CORS });
 
   const sessionGroup = route.groupId;
-  const poolId = route.pool.id;
-  const isMain = !!route.pool.mainGroupJid && sessionGroup === route.pool.mainGroupJid;
+  const fleetAgentId = route.fleetAgent.id;
+  const isMain = !!route.fleetAgent.mainGroupJid && sessionGroup === route.fleetAgent.mainGroupJid;
 
-  // Config actions (admin): administer the per-group MCP/org keys (Pool.groupKeys).
+  // Config actions (admin): administer the per-group MCP/org keys (FleetAgent.groupKeys).
   // Only the MAIN group may list/edit other groups' keys — mirrors the cross-group
   // send gate. These are DB ops, not Baileys socket actions, so they short-circuit
   // before executeWaAction.
@@ -64,12 +64,12 @@ export async function action({ request }: Route.ActionArgs) {
         { status: 403, headers: CORS }
       );
     }
-    const keys = (route.pool.groupKeys as Record<string, string> | null) ?? {};
-    const subjects = (route.pool.seenGroups as Record<string, string> | null) ?? {};
+    const keys = (route.fleetAgent.groupKeys as Record<string, string> | null) ?? {};
+    const subjects = (route.fleetAgent.seenGroups as Record<string, string> | null) ?? {};
     // Curated capabilities (code) ∪ the owner's custom entries — same source of
     // truth as the dashboard, so the agent and the UI never diverge.
-    const catalog = mergedCapabilities(route.pool);
-    const configs = (route.pool.groupConfigs as Record<string, GroupConfig> | null) ?? {};
+    const catalog = mergedCapabilities(route.fleetAgent);
+    const configs = (route.fleetAgent.groupConfigs as Record<string, GroupConfig> | null) ?? {};
 
     if (actionName === "list_mcps") {
       // The agent's full capability menu. builtin = always-on (easybits/wa); the
@@ -81,11 +81,11 @@ export async function action({ request }: Route.ActionArgs) {
     if (actionName === "list_groups") {
       // Surface every ENABLED group with its key status AND which custom MCPs it
       // has on, so the agent can report and reason about its fleet config.
-      const groups = route.pool.enabledGroups.map((jid) => ({
+      const groups = route.fleetAgent.enabledGroups.map((jid) => ({
         jid,
         subject: subjects[jid] ?? null,
         hasKey: Boolean(keys[jid]),
-        isMain: jid === route.pool.mainGroupJid,
+        isMain: jid === route.fleetAgent.mainGroupJid,
         mcps: configs[jid]?.mcpServers ?? [],
       }));
       return Response.json({ ok: true, result: JSON.stringify({ groups }) }, { status: 200, headers: CORS });
@@ -96,7 +96,7 @@ export async function action({ request }: Route.ActionArgs) {
     if (!jid.endsWith("@g.us")) {
       return Response.json({ ok: false, error: "jid de grupo inválido" }, { status: 400, headers: CORS });
     }
-    if (!route.pool.enabledGroups.includes(jid)) {
+    if (!route.fleetAgent.enabledGroups.includes(jid)) {
       return Response.json({ ok: false, error: "ese grupo no está activo en el agente" }, { status: 400, headers: CORS });
     }
 
@@ -113,7 +113,7 @@ export async function action({ request }: Route.ActionArgs) {
         );
       }
       const nextConfigs = { ...configs, [jid]: { ...(configs[jid] ?? {}), mcpServers: requested } };
-      await db.pool.update({ where: { id: poolId }, data: { groupConfigs: nextConfigs } });
+      await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { groupConfigs: nextConfigs } });
       return Response.json(
         { ok: true, result: `MCPs de ${subjects[jid] ?? jid}: ${requested.length ? requested.join(", ") : "(ninguno custom)"}` },
         { status: 200, headers: CORS }
@@ -125,7 +125,7 @@ export async function action({ request }: Route.ActionArgs) {
     const nextKeys = { ...keys };
     if (key) nextKeys[jid] = key;
     else delete nextKeys[jid];
-    await db.pool.update({ where: { id: poolId }, data: { groupKeys: nextKeys } });
+    await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { groupKeys: nextKeys } });
     return Response.json(
       { ok: true, result: key ? `key asignada a ${subjects[jid] ?? jid}` : `key quitada de ${subjects[jid] ?? jid}` },
       { status: 200, headers: CORS }
@@ -145,6 +145,6 @@ export async function action({ request }: Route.ActionArgs) {
     targetJid = args.jid;
   }
 
-  const res = await executeWaAction(poolId, targetJid, actionName, args);
+  const res = await executeWaAction(fleetAgentId, targetJid, actionName, args);
   return Response.json(res, { status: res.ok ? 200 : 400, headers: CORS });
 }

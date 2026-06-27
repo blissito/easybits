@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useFetcher, useSearchParams } from "react-router";
 import { BrutalButton } from "~/components/common/BrutalButton";
 import { LuMemoryStick, LuCpu, LuHardDrive } from "react-icons/lu";
-import { POOL_BOX } from "~/lib/hostingCatalog";
+import { FLEET_BOX } from "~/lib/hostingCatalog";
 import { getUserOrRedirect } from "~/.server/getters";
 import { checkAiGenerationLimit } from "~/.server/aiGenerationLimit";
 import { checkLLMTokenLimit } from "~/.server/llmTokenLimit";
@@ -176,8 +176,8 @@ export default function PacksPage({ loaderData }: Route.ComponentProps) {
       ) : (
         <div className="mb-12">
           <p className="text-sm text-iron mb-4 max-w-xl">
-            Reserva capacidad para tus agentes Ghosty. El pool es uniforme: agrega las
-            cajas que necesites — cada caja corre <b>{POOL_BOX.agents} agentes Ghosty</b> a la vez.
+            Reserva capacidad para tus agentes Ghosty. El fleetAgent es uniforme: agrega las
+            cajas que necesites — cada caja corre <b>{FLEET_BOX.agents} agentes Ghosty</b> a la vez.
           </p>
           <SandboxBoxCard canBuy={canBuyAddon} />
         </div>
@@ -438,17 +438,17 @@ function CreditPackCard({
   );
 }
 
-// ─── Sandbox Box Card (caja del pool: agrega N cajas iguales) ───────────────
+// ─── Sandbox Box Card (caja del fleetAgent: agrega N cajas iguales) ───────────────
 
 function SandboxBoxCard({ canBuy }: { canBuy: boolean }) {
   const fetcher = useFetcher<{ url?: string; error?: string }>();
   const isLoading = fetcher.state !== "idle";
   const [qty, setQty] = useState(1);
 
-  const ramGB = POOL_BOX.memoryMb / 1024;
-  const diskGB = Math.round(POOL_BOX.diskMb / 1024);
-  const totalAgents = POOL_BOX.agents * qty;
-  const totalPrice = POOL_BOX.priceMxn * qty;
+  const ramGB = FLEET_BOX.memoryMb / 1024;
+  const diskGB = Math.round(FLEET_BOX.diskMb / 1024);
+  const totalAgents = FLEET_BOX.agents * qty;
+  const totalPrice = FLEET_BOX.priceMxn * qty;
   const shownBoxes = Math.min(qty, 12); // cap mini-box render; overflow shown as "+N"
 
   if (fetcher.data?.url) {
@@ -457,15 +457,15 @@ function SandboxBoxCard({ canBuy }: { canBuy: boolean }) {
 
   return (
     <div className="border-2 border-brand-500 ring-2 ring-brand-500 rounded-xl bg-white shadow-[4px_4px_0px_0px_#9870ED] grid grid-cols-1 lg:grid-cols-[1fr_auto_1fr] overflow-hidden">
-      {/* Left: pool grows with quantity — clusters of 4 keep "4 por caja" legible */}
+      {/* Left: fleetAgent grows with quantity — clusters of 4 keep "4 por caja" legible */}
       <div className="p-6 bg-brand-50 flex flex-col items-center justify-center text-center lg:border-r-2 border-brand-500 border-b-2 lg:border-b-0">
         <p className="text-[11px] uppercase tracking-widest font-black text-black/70 mb-3">
-          {qty === 1 ? "Caja del pool" : `${qty} cajas del pool`}
+          {qty === 1 ? "Caja del fleetAgent" : `${qty} cajas del fleetAgent`}
         </p>
         <div className="flex flex-wrap items-center justify-center gap-2 mb-3 max-w-[20rem]">
           {Array.from({ length: shownBoxes }).map((_, b) => (
             <div key={b} className="grid grid-cols-2 gap-1 p-1.5 rounded-lg border border-brand-300/70 bg-white/60">
-              {Array.from({ length: POOL_BOX.agents }).map((_, i) => (
+              {Array.from({ length: FLEET_BOX.agents }).map((_, i) => (
                 <img key={i} src="/logo-purple.svg" alt="" className="w-5 h-5" />
               ))}
             </div>
@@ -476,11 +476,11 @@ function SandboxBoxCard({ canBuy }: { canBuy: boolean }) {
         </div>
         <p className="text-xl font-bold leading-tight">{totalAgents} agentes Ghosty</p>
         <p className="mt-0.5 text-xs font-black uppercase tracking-wide text-brand-500">
-          {qty} {qty === 1 ? "caja" : "cajas"} × {POOL_BOX.agents}
+          {qty} {qty === 1 ? "caja" : "cajas"} × {FLEET_BOX.agents}
         </p>
         <div className="flex items-center justify-center gap-3 text-xs text-iron mt-3 flex-wrap">
           <span className="flex items-center gap-1" title="RAM total reservada"><LuMemoryStick size={13} /> {ramGB * qty}GB</span>
-          <span className="flex items-center gap-1" title="vCPU compartida por caja"><LuCpu size={13} /> {POOL_BOX.vcpus} vCPU/caja</span>
+          <span className="flex items-center gap-1" title="vCPU compartida por caja"><LuCpu size={13} /> {FLEET_BOX.vcpus} vCPU/caja</span>
           <span className="flex items-center gap-1" title="Disco total reservado"><LuHardDrive size={13} /> {diskGB * qty}GB</span>
         </div>
         <p className="text-[10px] text-iron/60 mt-1">RAM y disco en total · CPU compartida</p>
@@ -508,7 +508,7 @@ function SandboxBoxCard({ canBuy }: { canBuy: boolean }) {
             +
           </button>
         </div>
-        <p className="text-xs text-iron">× ${POOL_BOX.priceMxn} mxn c/u</p>
+        <p className="text-xs text-iron">× ${FLEET_BOX.priceMxn} mxn c/u</p>
       </div>
 
       {/* Right: total + buy */}

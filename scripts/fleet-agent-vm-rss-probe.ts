@@ -9,8 +9,8 @@
  *   - estimado por turno = (pico - baseline) / N
  *   - top procesos por RSS en el pico
  *
- * Run: cd /Users/bliss/easybits && npx tsx scripts/pool-vm-rss-probe.ts [memMb] [nTurns]
- *   ej. npx tsx scripts/pool-vm-rss-probe.ts 2048 2
+ * Run: cd /Users/bliss/easybits && npx tsx scripts/fleet-agent-vm-rss-probe.ts [memMb] [nTurns]
+ *   ej. npx tsx scripts/fleet-agent-vm-rss-probe.ts 2048 2
  *
  * Destruye la VM al final (incl. en error).
  */

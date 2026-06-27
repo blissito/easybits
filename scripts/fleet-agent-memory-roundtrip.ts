@@ -1,5 +1,5 @@
 /**
- * End-to-end test del restore de memoria del Pool (poolOperations).
+ * End-to-end test del restore de memoria del FleetAgent (fleetAgentOperations).
  *
  * Verifica el round-trip que NO estaba probado: tar en la VM → readFile base64 →
  * S3 → getReadUrl → fetch → writeFile base64 → untar en una VM FRESCA, con
@@ -8,7 +8,7 @@
  *
  * Usa las funciones REALES (backupConversation/restoreConversation), no réplicas.
  *
- * Run: cd /Users/bliss/easybits && npx tsx scripts/pool-memory-roundtrip.ts
+ * Run: cd /Users/bliss/easybits && npx tsx scripts/fleet-memory-roundtrip.ts
  *
  * Spawnea 2 VMs throwaway en el host OVH y las destruye al final (incl. en error).
  */
@@ -25,17 +25,17 @@ import {
 import {
   backupConversation,
   restoreConversation,
-} from "../app/.server/core/poolOperations";
+} from "../app/.server/core/fleetAgentOperations";
 import { getPlatformDefaultClient } from "../app/.server/storage";
 
 const OWNER_EMAIL = process.env.MEMTEST_OWNER_EMAIL || "fixtergeek@gmail.com";
 const TEMPLATE = (process.env.MEMTEST_TEMPLATE || "code-interpreter") as any;
-const POOL_ID = "memtest-" + randomUUID().slice(0, 8);
+const FLEET_AGENT_ID = "memtest-" + randomUUID().slice(0, 8);
 const SESSION_UUID = randomUUID();
 
-// Mismo esquema que poolOperations: prefix "pool-memory/", key poolId/uuid.tgz
-const MEM_PREFIX = "pool-memory/";
-const memKey = (poolId: string, uuid: string) => `${poolId}/${uuid}.tgz`;
+// Mismo esquema que fleetAgentOperations: prefix "fleet-memory/", key fleetAgentId/uuid.tgz
+const MEM_PREFIX = "fleet-memory/";
+const memKey = (fleetAgentId: string, uuid: string) => `${fleetAgentId}/${uuid}.tgz`;
 const memClient = () => getPlatformDefaultClient({ prefix: MEM_PREFIX });
 
 function log(...a: unknown[]) {
@@ -116,7 +116,7 @@ async function main() {
   if (!user) throw new Error(`owner ${OWNER_EMAIL} no encontrado`);
   const ctx: AuthContext = { user, scopes: ["READ", "WRITE", "DELETE"] };
   log(`Owner: ${user.email} (${user.id})`);
-  log(`poolId=${POOL_ID} sessionUuid=${SESSION_UUID}`);
+  log(`fleetAgentId=${FLEET_AGENT_ID} sessionUuid=${SESSION_UUID}`);
 
   let vmA: { agentId: string; sandboxId: string } | null = null;
   let vmB: { agentId: string; sandboxId: string } | null = null;
@@ -128,10 +128,10 @@ async function main() {
     const seeded = await seedMemory(ctx, vmA.sandboxId);
 
     log(`\n💾 backupConversation…`);
-    await backupConversation(ctx, { sandboxId: vmA.sandboxId }, POOL_ID, SESSION_UUID);
+    await backupConversation(ctx, { sandboxId: vmA.sandboxId }, FLEET_AGENT_ID, SESSION_UUID);
 
     // 2. Verificar blob en S3
-    const url = await memClient().getReadUrl(memKey(POOL_ID, SESSION_UUID)).catch(() => null);
+    const url = await memClient().getReadUrl(memKey(FLEET_AGENT_ID, SESSION_UUID)).catch(() => null);
     const res = url ? await fetch(url) : null;
     const blobLen = res && res.ok ? (await res.arrayBuffer()).byteLength : 0;
     log(`   blob S3: ${blobLen > 0 ? `✅ ${blobLen} bytes` : "❌ vacío/ausente"}`);
@@ -145,7 +145,7 @@ async function main() {
     // 4. VM B fresca: RESTORE
     vmB = await spawnReadyVm(ctx, "B");
     log(`\n♻️  restoreConversation en VM fresca…`);
-    const restored = await restoreConversation(ctx, { sandboxId: vmB.sandboxId }, POOL_ID, SESSION_UUID);
+    const restored = await restoreConversation(ctx, { sandboxId: vmB.sandboxId }, FLEET_AGENT_ID, SESSION_UUID);
     log(`   restoreConversation devolvió: ${restored}`);
     if (!restored) throw new Error("RESTORE FALLÓ: devolvió false (blob no encontrado)");
 
@@ -161,7 +161,7 @@ async function main() {
     log(`\n🧹 cleanup…`);
     await teardownVm(ctx, vmA);
     await teardownVm(ctx, vmB);
-    await memClient().deleteObject(memKey(POOL_ID, SESSION_UUID)).catch(() => {});
+    await memClient().deleteObject(memKey(FLEET_AGENT_ID, SESSION_UUID)).catch(() => {});
     log(`   blob S3 borrado`);
     await db.$disconnect().catch(() => {});
   }

@@ -1,9 +1,9 @@
 /**
- * Reserved pool capacity ("sandboxes" tab in /dash/packs).
+ * Reserved fleet capacity ("sandboxes" tab in /dash/packs).
  *
  * A reservation is NOT a host VM. It's a capacity grant: each ACTIVE row raises
- * the owner's elastic-pool budget by +1 machine slot and +`agents` agent slots
- * (consumed on demand by the pool's normal spawn path). Billing is a dedicated
+ * the owner's elastic-fleet budget by +1 machine slot and +`agents` agent slots
+ * (consumed on demand by the fleet's normal spawn path). Billing is a dedicated
  * monthly Stripe subscription created via Checkout; the webhook records the
  * reservation on success and cancels it when that subscription is deleted.
  *
@@ -47,7 +47,7 @@ export async function getUserReservations(ownerId: string) {
 }
 
 /** Sum of an owner's ACTIVE reservations → extra machine + agent budget.
- * Capacity is bought in flat boxes (4 agents = 1 pool VM), so a single row may
+ * Capacity is bought in flat boxes (4 agents = 1 fleet VM), so a single row may
  * cover several boxes. Machines are derived from agents (ceil ÷ 4) rather than
  * row count, which keeps the VM budget correct for multi-box purchases. */
 export async function getReservedCapacity(

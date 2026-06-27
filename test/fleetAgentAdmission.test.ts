@@ -1,10 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { ADMIT_BACKOFFS_MS, ADMIT_GIVEUP_MS, admitRetryDelay } from "~/.server/core/poolOperations";
+import { ADMIT_BACKOFFS_MS, ADMIT_GIVEUP_MS, admitRetryDelay } from "~/.server/core/fleetAgentOperations";
 
-// Backoff policy for the saturation queue: on PoolAtCapacity the surface holds
+// Backoff policy for the saturation queue: on FleetAgentAtCapacity the surface holds
 // the burst and retries on this schedule until the give-up window, instead of
 // dropping the message. Shared so a future WABA surface reuses the same cadence.
-describe("pool admission backoff policy", () => {
+describe("fleetAgent admission backoff policy", () => {
   it("retries on an increasing 5→10→20→30s schedule", () => {
     expect(ADMIT_BACKOFFS_MS).toEqual([5_000, 10_000, 20_000, 30_000]);
     expect(admitRetryDelay(0)).toBe(5_000);

@@ -2,13 +2,13 @@ import { data } from "react-router";
 import type { Route } from "./+types/sandbox-reservations";
 import { getUserOrRedirect } from "~/.server/getters";
 import { getUserPlan, isPaidPlan } from "~/lib/plans";
-import { POOL_BOX } from "~/lib/hostingCatalog";
+import { FLEET_BOX } from "~/lib/hostingCatalog";
 import { createSandboxReservationCheckout } from "~/.server/stripe";
 
 /**
- * Create a Stripe Checkout session to RESERVE pool capacity.
+ * Create a Stripe Checkout session to RESERVE fleetAgent capacity.
  *
- * The pool is flat: capacity is bought in identical boxes (see POOL_BOX). The
+ * The fleetAgent is flat: capacity is bought in identical boxes (see FLEET_BOX). The
  * client sends how many boxes (`quantity`); we bill that many and grant
  * `4 × quantity` agent slots. Returns `{ url }` to redirect to; provisioning is
  * the webhook's job after payment succeeds (purchase-first, not create-first).
@@ -27,13 +27,13 @@ export async function action({ request }: Route.ActionArgs) {
     );
   }
 
-  const agents = POOL_BOX.agents * quantity;
+  const agents = FLEET_BOX.agents * quantity;
   const url = await createSandboxReservationCheckout({
     userId: user.id,
     email: user.email,
-    tier: POOL_BOX.key,
+    tier: FLEET_BOX.key,
     quantity,
-    priceMxn: POOL_BOX.priceMxn,
+    priceMxn: FLEET_BOX.priceMxn,
     agents,
   });
   return data({ url });

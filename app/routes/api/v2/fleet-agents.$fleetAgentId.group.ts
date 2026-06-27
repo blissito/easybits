@@ -1,13 +1,13 @@
-import type { Route } from "./+types/pool.$poolId.group";
+import type { Route } from "./+types/fleet-agents.$fleetAgentId.group";
 import { db } from "~/.server/db";
-import { createPoolGroup } from "~/.server/integrations/whatsapp/baileys.server";
+import { createFleetAgentGroup } from "~/.server/integrations/whatsapp/baileys.server";
 
-// POST /api/v2/pool/:poolId/group
+// POST /api/v2/fleet-agents/:fleetAgentId/group
 //
-// Crea un grupo de WhatsApp NUEVO desde el número del pool y devuelve su invite
+// Crea un grupo de WhatsApp NUEVO desde el número del fleetAgent y devuelve su invite
 // link. Lo consume denik (createEasybitsWhatsAppGroup) para el feature "abre el
-// grupo para hablar con el agente". Auth = el bearer token del pool (igual que
-// /pool/:poolId/message). Síncrono: el invite link llega en la respuesta.
+// grupo para hablar con el agente". Auth = el bearer token del fleetAgent (igual que
+// /fleetAgent/:fleetAgentId/message). Síncrono: el invite link llega en la respuesta.
 const CORS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
@@ -20,10 +20,10 @@ export async function loader({ request }: Route.LoaderArgs) {
 }
 
 export async function action({ request, params }: Route.ActionArgs) {
-  const poolId = params.poolId!;
+  const fleetAgentId = params.fleetAgentId!;
   const bearer = request.headers.get("Authorization")?.replace(/^Bearer\s+/i, "") ?? "";
-  const pool = await db.pool.findUnique({ where: { id: poolId } });
-  if (!pool || !bearer || pool.token !== bearer) {
+  const fleetAgent = await db.fleetAgent.findUnique({ where: { id: fleetAgentId } });
+  if (!fleetAgent || !bearer || fleetAgent.token !== bearer) {
     return Response.json({ error: "Unauthorized" }, { status: 401, headers: CORS });
   }
 
@@ -36,7 +36,7 @@ export async function action({ request, params }: Route.ActionArgs) {
   }
 
   try {
-    const { groupJid, inviteUrl } = await createPoolGroup(poolId, name, denikApiKey);
+    const { groupJid, inviteUrl } = await createFleetAgentGroup(fleetAgentId, name, denikApiKey);
     return Response.json({ groupJid, inviteUrl }, { headers: CORS });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "group create failed";

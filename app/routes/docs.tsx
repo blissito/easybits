@@ -3,7 +3,7 @@ import type { Route } from "./+types/docs";
 import getBasicMetaTags from "~/utils/getBasicMetaTags";
 import { useState, useEffect, useRef } from "react";
 import { CodeBlock } from "~/components/mdx/CodeBlock";
-import { POOL_BOX, HOSTING_CATALOG, SELLABLE_TIERS } from "~/lib/hostingCatalog";
+import { FLEET_BOX, HOSTING_CATALOG, SELLABLE_TIERS } from "~/lib/hostingCatalog";
 
 // Formato humano de specs de un tier (MB → GB/MB legible).
 const fmtRam = (mb: number) => (mb >= 1024 ? `${mb / 1024}GB` : `${mb}MB`);
@@ -1494,7 +1494,7 @@ console.log(status.result);  // resultado final del agente`} />
 
             <h3 className="text-lg font-bold mb-3">Cómo funciona: cajas</h3>
             <p className="text-gray-600 text-sm mb-3">
-              La capacidad de tu flota se compra en <strong>cajas</strong>. Cada caja corre <strong>{POOL_BOX.agents} agentes Ghosty</strong> a la vez y cuesta <strong>${POOL_BOX.priceMxn} MXN/mes</strong> como suscripción mensual. ¿Necesitas atender más conversaciones al mismo tiempo? Agrega más cajas — cada caja suma {POOL_BOX.agents} agentes a tu flota.
+              La capacidad de tu flota se compra en <strong>cajas</strong>. Cada caja corre <strong>{FLEET_BOX.agents} agentes Ghosty</strong> a la vez y cuesta <strong>${FLEET_BOX.priceMxn} MXN/mes</strong> como suscripción mensual. ¿Necesitas atender más conversaciones al mismo tiempo? Agrega más cajas — cada caja suma {FLEET_BOX.agents} agentes a tu flota.
             </p>
 
             <div className="mb-6 bg-blue-50 border-2 border-blue-300 rounded-xl p-4 text-sm">

@@ -12,7 +12,7 @@ import { BrutalButton } from "~/components/common/BrutalButton";
 import { Switch } from "../../components/forms/Switch";
 
 import { PLANS, type PlanKey } from "~/lib/plans";
-import { POOL_BOX } from "~/lib/hostingCatalog";
+import { FLEET_BOX } from "~/lib/hostingCatalog";
 
 export const DEFAULT_PIC =
   "/logo-default.svg";
@@ -78,34 +78,34 @@ export const SuscriptionCard = ({
   );
 };
 
-// Read-only list of the user's active pool-box reservations (Stripe subscriptions).
+// Read-only list of the user's active fleetAgent-box reservations (Stripe subscriptions).
 // Managing/cancelling happens in the Stripe portal (same intent as the plan card).
 export const AddonsCard = ({ reservations = [] }: { reservations?: any[] }) => {
   if (!reservations.length) return null;
   const totalAgents = reservations.reduce((sum, r) => sum + (r.agents || 0), 0);
-  const totalBoxes = Math.ceil(totalAgents / POOL_BOX.agents);
+  const totalBoxes = Math.ceil(totalAgents / FLEET_BOX.agents);
   return (
     <section className="border-2 bg-white max-w-2xl border-black rounded-2xl mt-8">
       <div className="p-4 md:p-6 flex flex-col items-start">
         <div className="flex flex-wrap w-full justify-between mb-3 gap-3 md:flex-nowrap md:gap-0">
-          <h3 className="font-semibold text-xl md:text-2xl">Cajas de pool</h3>
+          <h3 className="font-semibold text-xl md:text-2xl">Cajas de fleetAgent</h3>
           <span className="text-xl font-semibold md:text-2xl">
-            ${totalBoxes * POOL_BOX.priceMxn} mxn/mes
+            ${totalBoxes * FLEET_BOX.priceMxn} mxn/mes
           </span>
         </div>
         <ul className="w-full flex flex-col gap-2">
           {reservations.map((r) => {
-            const boxes = Math.max(1, Math.ceil((r.agents || 0) / POOL_BOX.agents));
+            const boxes = Math.max(1, Math.ceil((r.agents || 0) / FLEET_BOX.agents));
             return (
               <li
                 key={r.id}
                 className="flex flex-wrap justify-between items-center gap-2 border-2 border-black rounded-xl px-3 py-2"
               >
                 <span className="font-semibold">
-                  {boxes === 1 ? "Caja del pool" : `${boxes} cajas del pool`}
+                  {boxes === 1 ? "Caja del fleetAgent" : `${boxes} cajas del fleetAgent`}
                   <span className="text-iron font-normal"> · {r.agents} agentes</span>
                 </span>
-                <span className="font-semibold">${boxes * POOL_BOX.priceMxn} mxn/mes</span>
+                <span className="font-semibold">${boxes * FLEET_BOX.priceMxn} mxn/mes</span>
               </li>
             );
           })}

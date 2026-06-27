@@ -1,7 +1,7 @@
-# Contrato: `claude-worker` (runtime de VM del Pool)
+# Contrato: `claude-worker` (runtime de VM del FleetAgent)
 
 Este es el contrato que debe cumplir el template **`claude-worker`** para enchufar al
-Pool manager de EasyBits (`app/.server/core/poolOperations.ts`). Es **intercambiable
+FleetAgent manager de EasyBits (`app/.server/core/fleetAgentOperations.ts`). Es **intercambiable
 con `ghosty-gc`** — mismo contrato de transporte.
 
 ## Jerarquía (verdad — no la mezcles)
@@ -10,9 +10,9 @@ con `ghosty-gc`** — mismo contrato de transporte.
 - **Worker** = **un proceso por conversación**, identificado por un `sessionId` (UUID).
   **1 conversación = 1 worker = 1 transcript `.jsonl`.** Un worker NUNCA atiende más
   de una conversación.
-- Cuando una VM llega a `maxWorkersPerVm` (default 8), el Pool levanta **otra VM**.
+- Cuando una VM llega a `maxWorkersPerVm` (default 8), el FleetAgent levanta **otra VM**.
 
-El Pool orquesta VMs (spawn/suspend/route). **Tú construyes el runtime que corre
+El FleetAgent orquesta VMs (spawn/suspend/route). **Tú construyes el runtime que corre
 DENTRO de la VM y que levanta un worker por cada `sessionId` nuevo.**
 
 ---
@@ -44,7 +44,7 @@ EasyBits inyecta SIEMPRE:
 - `ADMIN_TOKEN` — bearer para endpoints `/admin/*` del runtime (= `embedToken`).
 - `TZ` — zona horaria (default `America/Mexico_City`).
 
-Del **Pool** (`pool.persona.env`, lo pega el dueño al crear su pool) — aquí viene
+Del **FleetAgent** (`fleet agent.persona.env`, lo pega el dueño al crear su fleet agent) — aquí viene
 lo importante para tu caso OAuth Max:
 - **El OAuth del dueño** (su cuenta Claude Max) → el worker lo usa como credencial
   del Agent SDK. Nombre de la var: **defínelo tú** y documéntalo (sugerido
@@ -69,7 +69,7 @@ El host hace `POST {port}{messagePath}` a la VM con JSON:
 { "content": "string", "sessionId": "uuid-v4-string" }
 ```
 
-- `content`: el mensaje del usuario (el Pool ya le antepone `[sender]` y, si hay
+- `content`: el mensaje del usuario (el FleetAgent ya le antepone `[sender]` y, si hay
   adjunto, una línea `(adjunto: <url>)`).
 - `sessionId`: **UUID estable por conversación**. El mismo UUID llega en cada turno
   de ese grupo → úsalo como handle de `--resume` y como key del transcript `.jsonl`.
@@ -99,23 +99,23 @@ data: {"type":"error","message":"motivo"}
   del Agent SDK con `--resume <sessionId>`). Si el `sessionId` ya tiene worker →
   enrútalo a ese. **NO multiplexes conversaciones en un solo proceso.**
 - Varios `sessionId` simultáneos = varios workers vivos en la misma VM, concurrentes
-  (limitados por los vCPU de la VM). El Pool nunca manda más de `maxWorkersPerVm` a
+  (limitados por los vCPU de la VM). El FleetAgent nunca manda más de `maxWorkersPerVm` a
   una VM.
 - El estado de resume es el transcript del Agent SDK:
   `~/.claude/projects/<proj>/<sessionId>.jsonl`. Mismo `sessionId` ⇒ mismo transcript
   ⇒ `--resume` reconstruye contexto + auto-compact gratis.
 - Escribe los `.jsonl` en el **volumen persistente** de la VM (p. ej. bajo `/data`).
-  El Pool usa suspend/resume (snapshot) → el disco se preserva → resume sobrevive la
+  El FleetAgent usa suspend/resume (snapshot) → el disco se preserva → resume sobrevive la
   ventana idle sin nada extra.
 - **Fase 2 (no para el POC):** montar cada `.jsonl` desde un volumen externo → VMs
   100% desechables/intercambiables. Por ahora vive en disco de la VM y basta.
 
 ## 5. Archivos
 
-- Entrante (media de WhatsApp): el Pool te pasa una **URL** en `content`
+- Entrante (media de WhatsApp): el FleetAgent te pasa una **URL** en `content`
   (`(adjunto: <url>)`), no bytes. Descárgala tú si la necesitas.
 - Saliente (lo que el agente genere): súbelo a EasyBits con `upload_file` (MCP, con
-  `EASYBITS_API_KEY`) y devuelve la **URL** en tu texto de respuesta. El Pool/Baileys
+  `EASYBITS_API_KEY`) y devuelve la **URL** en tu texto de respuesta. El FleetAgent/Baileys
   la manda al grupo. Disco local de la VM = scratch.
 
 ## 6. Lifecycle (lo maneja EasyBits, solo para que lo sepas)

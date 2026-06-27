@@ -67,13 +67,13 @@ export const HOSTING_CATALOG: Record<TierKey, HostingTier> = {
 };
 
 /**
- * Pool capacity box — the ONLY buyable unit in the "Sandboxes" tab.
+ * FleetAgent capacity box — the ONLY buyable unit in the "Sandboxes" tab.
  *
- * The pool is flat: capacity grows in identical boxes, you just pick how many.
- * One box = one pool VM (2 vCPU / 2 GB) running 4 agents (2 pairs). Reserved
+ * The fleetAgent is flat: capacity grows in identical boxes, you just pick how many.
+ * One box = one fleetAgent VM (2 vCPU / 2 GB) running 4 agents (2 pairs). Reserved
  * capacity is therefore always a multiple of these, so `machines = agents / 4`.
  */
-export const POOL_BOX = {
+export const FLEET_BOX = {
   key: "box",
   agents: 4,
   vcpus: 2,

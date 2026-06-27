@@ -251,7 +251,7 @@ model User {
   agents               Agent[]
   computeKeys          ComputeKey[]
   sandboxes            Sandbox[]
-  pools                Pool[]
+  fleetAgents          FleetAgent[]
 }
 
 model Secret {
@@ -1033,32 +1033,32 @@ model Agent {
   // last-known state without a roundtrip.
   whatsapp Json?
 
-  // Pool membership: when set, this Agent is an EPHEMERAL worker spawned by a
-  // Pool (not a standalone always-on agent). The pool manager picks/spawns/
-  // suspends these by RAM budget. null = standalone agent (legacy 1:1).
-  poolId        String?   @db.ObjectId
+  // FleetAgent membership: when set, this Agent is an EPHEMERAL worker spawned by
+  // a FleetAgent (not a standalone always-on agent). The fleet manager picks/
+  // spawns/suspends these by RAM budget. null = standalone agent (legacy 1:1).
+  fleetAgentId  String?   @db.ObjectId
   // Last time a message was dispatched to this worker — drives the idle reaper
-  // (suspend after Pool.idleSuspendMin of silence). Null until first message.
+  // (suspend after FleetAgent.idleSuspendMin of silence). Null until first message.
   lastMessageAt DateTime?
   // Which box (sandbox-host base URL) this VM lives on. Null = the default
   // SANDBOX_HOST_URL. Multi-box seam: dispatch/suspend resolve the host from here.
   host          String?
 
   @@index([ownerId])
-  @@index([poolId])
+  @@index([fleetAgentId])
 }
 
-// A Pool is the always-on SURFACE (Baileys/WhatsApp) for one owner that routes
-// inbound group messages to a fleet of ephemeral worker Agents. Workers are
-// spawned on demand, multiplex conversations by sessionId=groupId, scale out
+// A FleetAgent is the always-on SURFACE (Baileys/WhatsApp) for one owner that
+// routes inbound group messages to a fleet of ephemeral worker Agents. Workers
+// are spawned on demand, multiplex conversations by sessionId=groupId, scale out
 // when full (RAM-gated), and suspend when idle (warm window). The conversation
 // branding/personality is injected per spawn from `persona`.
-model Pool {
+model FleetAgent {
   id            String   @id @default(auto()) @map("_id") @db.ObjectId
   ownerId       String   @db.ObjectId
   owner         User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   name          String?
-  // Bearer the Baileys surface presents on POST /api/v2/pool/:id/message.
+  // Bearer the Baileys surface presents on POST /api/v2/fleet-agents/:id/message.
   token         String   @unique
   // VM template to spawn. Default is "claude-worker" (Claude Agent SDK + OAuth,
   // native .jsonl transcript resume); interchangeable with "ghosty-gc".
@@ -1076,7 +1076,7 @@ model Pool {
   // conversation = 1 sessionId. When a VM hits maxWorkersPerVm, spawn another VM.
   maxWorkersPerVm Int  @default(2)    // conversations (workers) per VM (512MB ≈ 2)
   vmMemMb         Int  @default(512)  // RAM gate: free >= this to spawn a VM
-  maxVms          Int  @default(10)   // hard cap on pool's own VMs
+  maxVms          Int  @default(10)   // hard cap on fleet agent's own VMs
   idleSuspendMin     Int  @default(5)    // suspend a worker after N idle min (memory backed up first)
   // Destroy a suspended worker after N idle min to reclaim host disk. Its
   // conversation memory is externalized to storage at suspend, so the next
@@ -1085,7 +1085,7 @@ model Pool {
   // + restore-from-S3); restore round-trip is verified, so destroy is only deferred.
   destroyIdleMin     Int  @default(45)
   // WABA (WhatsApp Business / Meta) channel config. Formmy is the gateway: it
-  // owns the Meta number and FORWARDS each inbound message to this pool, then
+  // owns the Meta number and FORWARDS each inbound message to this fleet agent, then
   // expects us to POST the reply back to Formmy's /send. Shape:
   //   { formmySecret: string,
   //     orgs: { [integrationId]: { denikApiKey: string, phoneNumberId: string } } }
@@ -1100,23 +1100,23 @@ model Pool {
   // update; read at boot rehydration. BufferJSON-serialized.
   authCreds     Json?
   authKeys      Json?
-  // ANTI-SPAM allowlist: the pool only answers in these group jids. Empty = OFF
+  // ANTI-SPAM allowlist: the fleet agent only answers in these group jids. Empty = OFF
   // everywhere (safe default — never auto-replies in all the owner's groups).
   enabledGroups String[] @default([])
-  // The pool's MAIN group jid — elevated privileges (cross-group send, invite
+  // The fleet agent's MAIN group jid — elevated privileges (cross-group send, invite
   // link, admin tools). Other enabled groups are restricted to their own
   // conversation. null = no main group. Mirrors nanoclaw's isMain.
   mainGroupJid  String?
   // Per-group MCP key map { [groupJid]: DENIK_API_KEY }. Set at group creation
-  // (createPoolGroup); routeMessage injects the group's key per message so one
-  // shared agent (e.g. denik's "Nik") is scoped to each group's org. Tenant
+  // (createFleetAgentGroup); routeMessage injects the group's key per message so
+  // one shared agent (e.g. denik's "Nik") is scoped to each group's org. Tenant
   // isolation is enforced by the downstream MCP auth, not by trusting the agent.
   groupKeys     Json?
   // The agent's MENU of MCP servers it can offer (config-driven, nanoclaw parity).
-  // Array of McpCatalogEntry (see poolOperations.ts): { name, label?, transport,
-  // command?, args?, url?, env?, builtin? }. Seeded on createPool with the
-  // builtins (easybits/wa/denik). The owner (UI) or the agent (main group) can
-  // add/remove custom entries (brightdata, kommo, supabase, custom http…).
+  // Array of McpCatalogEntry (see fleetAgentOperations.ts): { name, label?,
+  // transport, command?, args?, url?, env?, builtin? }. Seeded on createFleetAgent
+  // with the builtins (easybits/wa/denik). The owner (UI) or the agent (main
+  // group) can add/remove custom entries (brightdata, kommo, supabase, http…).
   mcpCatalog    Json?
   // Per-group MCP selection + env overrides:
   //   { [groupJid]: { mcpServers?: string[], env?: Record<string,string> } }
@@ -1141,18 +1141,18 @@ model Pool {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  routes        PoolRoute[]
+  routes        FleetAgentRoute[]
 
   @@index([ownerId])
 }
 
 // Sticky mapping: a conversation (WhatsApp group/jid) → the worker Agent that
 // serves it. Sticky so in-VM memory (preserved across suspend/resume) stays
-// coherent. unique(poolId, groupId).
-model PoolRoute {
-  id            String   @id @default(auto()) @map("_id") @db.ObjectId
-  poolId        String   @db.ObjectId
-  pool          Pool     @relation(fields: [poolId], references: [id], onDelete: Cascade)
+// coherent. unique(fleetAgentId, groupId).
+model FleetAgentRoute {
+  id            String     @id @default(auto()) @map("_id") @db.ObjectId
+  fleetAgentId  String     @db.ObjectId
+  fleetAgent    FleetAgent @relation(fields: [fleetAgentId], references: [id], onDelete: Cascade)
   groupId       String   // WhatsApp group jid / conversation key (human-readable)
   // Stable UUID handed to the worker as sessionId — Claude CLI --resume requires
   // UUID format, and it keys the per-conversation .jsonl transcript. groupId is
@@ -1168,7 +1168,7 @@ model PoolRoute {
   createdAt     DateTime @default(now())
   lastMessageAt DateTime @default(now())
 
-  @@unique([poolId, groupId])
+  @@unique([fleetAgentId, groupId])
   @@index([agentId])
 }
 
@@ -1176,16 +1176,16 @@ model PoolRoute {
 // worker. The Agent SDK's own .jsonl transcript (on the worker volume) drives
 // native resume + auto-compact; this table is the portable record (audit,
 // funnel, stateless-replay fallback). One row per inbound/outbound turn.
-model PoolMessage {
-  id        String   @id @default(auto()) @map("_id") @db.ObjectId
-  poolId    String   @db.ObjectId
-  groupId   String
-  role      String   // "user" | "agent"
-  sender    String?  // WhatsApp sender (for "user" rows)
-  text      String
-  createdAt DateTime @default(now())
+model FleetAgentMessage {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  fleetAgentId String   @db.ObjectId
+  groupId      String
+  role         String   // "user" | "agent"
+  sender       String?  // WhatsApp sender (for "user" rows)
+  text         String
+  createdAt    DateTime @default(now())
 
-  @@index([poolId, groupId])
+  @@index([fleetAgentId, groupId])
 }
 
 // Local registry row for a sandbox we track in Mongo. ONE model, keyed by the
@@ -1249,12 +1249,12 @@ model StudioBox {
   @@index([ownerId])
 }
 
-// Reserved pool capacity bought from /dash/packs (Sandboxes tab). Each ACTIVE
-// row raises the owner's elastic-pool budget: +1 machine slot and +`agents`
+// Reserved fleet capacity bought from /dash/packs (Sandboxes tab). Each ACTIVE
+// row raises the owner's elastic-fleet budget: +1 machine slot and +`agents`
 // agent slots (see pools.tsx capacity HUD). Created by the Stripe webhook on
 // `checkout.session.completed` (type=reserved_sandbox); flipped to "cancelled"
 // when its dedicated subscription is deleted. NOT a host VM — it's a capacity
-// grant the pool consumes on demand (distinct from the standalone permanent
+// grant the fleet agent consumes on demand (distinct from the standalone permanent
 // machines in the Sandbox model / /dash/hosting).
 model SandboxReservation {
   id                   String   @id @default(auto()) @map("_id") @db.ObjectId

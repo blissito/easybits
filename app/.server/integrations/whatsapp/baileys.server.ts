@@ -1,16 +1,16 @@
 // Baileys surface — IN-PROCESS WhatsApp socket(s) for Pools, running inside the
-// EasyBits Fly app. One socket per connected pool. Receives GROUP messages,
-// routes them to the pool's ephemeral VMs via routeMessage, sends the reply back.
+// EasyBits Fly app. One socket per connected fleetAgent. Receives GROUP messages,
+// routes them to the fleetAgent's ephemeral VMs via routeMessage, sends the reply back.
 //
 // Robustness:
-//   - Auth (creds + signal keys) persists in the Pool row (DB), so the socket
+//   - Auth (creds + signal keys) persists in the FleetAgent row (DB), so the socket
 //     survives app redeploys/restarts WITHOUT re-scanning the QR.
 //   - rehydratePools() reconnects previously-connected pools at first use after
 //     a restart (lazy — never at module import, to keep the prerender build safe).
 //   - Reconnect is bounded (backoff + cap → "failed", no tight loop) and ALWAYS
 //     ends the previous socket before opening a new one (no orphaned handlers /
 //     duplicate replies).
-//   - ANTI-SPAM: only answers in Pool.enabledGroups (empty = silent everywhere).
+//   - ANTI-SPAM: only answers in FleetAgent.enabledGroups (empty = silent everywhere).
 import { Boom } from "@hapi/boom";
 import makeWASocket, {
   fetchLatestWaWebVersion,
@@ -24,7 +24,7 @@ import makeWASocket, {
   type AuthenticationState,
 } from "@whiskeysockets/baileys";
 import { db } from "~/.server/db";
-import { routeMessage, PoolAtCapacity, PoolRateLimited, ADMIT_GIVEUP_MS, admitRetryDelay } from "~/.server/core/poolOperations";
+import { routeMessage, FleetAgentAtCapacity, FleetAgentRateLimited, ADMIT_GIVEUP_MS, admitRetryDelay } from "~/.server/core/fleetAgentOperations";
 import { checkSandboxRateLimit } from "~/.server/rateLimiter";
 import { extractInboundContent } from "~/.server/integrations/whatsapp/inboundMedia.server";
 import { deliverFilesFromReply } from "~/.server/integrations/whatsapp/outboundMedia.server";
@@ -32,10 +32,10 @@ import { wantsVoiceReply, synthesizeVoiceOgg } from "~/.server/integrations/what
 
 const MAX_RECONNECT = 5;
 // Cooldown so a rate-limited (spamming) group gets the "saturado" notice at most
-// once a minute — the notice itself must not become spam. keyed by `${poolId}:${jid}`.
+// once a minute — the notice itself must not become spam. keyed by `${fleetAgentId}:${jid}`.
 const NOTICE_COOLDOWN_MS = 60_000;
 const lastNoticeAt = new Map<string, number>();
-// Cache for listPoolGroups' groupFetchAllParticipating (rate-limited by WhatsApp).
+// Cache for listFleetAgentGroups' groupFetchAllParticipating (rate-limited by WhatsApp).
 const GROUP_CACHE_MS = 60_000;
 const groupListCache = new Map<string, { at: number; groups: Array<[string, string]> }>();
 const silent: any = { level: "silent", child: () => silent };
@@ -45,12 +45,12 @@ type ConnState = { sock: WASocket; attempts: number; connecting: boolean; pairin
 const sockets = new Map<string, ConnState>();
 // A `connecting` socket that never fires a terminal connection.update (hung
 // handshake, or a deploy that killed it mid-pair) would otherwise wedge the guard
-// in connectPool forever → every "Conectar" click silently no-ops. Treat a
+// in connectFleetAgent forever → every "Conectar" click silently no-ops. Treat a
 // connecting attempt older than this as stale and let a new connect supersede it.
 const CONNECTING_STALE_MS = 45_000;
 
-// Last inbound message per (poolId, jid) — so the worker's `wa` MCP can quote it
-// (reply_to_last) and react to it. Keyed `${poolId}:${jid}`.
+// Last inbound message per (fleetAgentId, jid) — so the worker's `wa` MCP can quote it
+// (reply_to_last) and react to it. Keyed `${fleetAgentId}:${jid}`.
 const lastIncoming = new Map<string, proto.IWebMessageInfo>();
 
 // IDs of messages WE sent — so our own outbound media (documents/images, which
@@ -69,14 +69,14 @@ async function sendTracked(sock: WASocket, jid: string, content: Record<string, 
   return sent;
 }
 
-function log(poolId: string, msg: string) {
-  console.log(`[pool ${poolId}] ${msg}`);
+function log(fleetAgentId: string, msg: string) {
+  console.log(`[fleet ${fleetAgentId}] ${msg}`);
 }
 
-// Send a backpressure notice at most once per NOTICE_COOLDOWN_MS per (pool, jid)
+// Send a backpressure notice at most once per NOTICE_COOLDOWN_MS per (fleetAgent, jid)
 // so the notice itself doesn't become spam. Fire-and-forget.
-function sendNoticeOnce(sock: WASocket, poolId: string, jid: string, text: string) {
-  const noticeKey = `${poolId}:${jid}`;
+function sendNoticeOnce(sock: WASocket, fleetAgentId: string, jid: string, text: string) {
+  const noticeKey = `${fleetAgentId}:${jid}`;
   const last = lastNoticeAt.get(noticeKey) ?? 0;
   if (Date.now() - last < NOTICE_COOLDOWN_MS) return;
   lastNoticeAt.set(noticeKey, Date.now());
@@ -91,13 +91,13 @@ function sendNoticeOnce(sock: WASocket, poolId: string, jid: string, text: strin
 // burst to settle, then run ONE turn over the combined text → ONE reply. If more
 // messages arrive while a turn runs, we re-drain after it (nanoclaw GroupQueue
 // pattern, edge-side). In-memory is correct here: single-instance edge, same as
-// sentMsgIds/busyVms. Keyed `${poolId}:${jid}`.
+// sentMsgIds/busyVms. Keyed `${fleetAgentId}:${jid}`.
 type InboundItem = {
   content: NonNullable<Awaited<ReturnType<typeof extractInboundContent>>>;
   m: proto.IWebMessageInfo;
   sender?: string;
 };
-// `heldAt`/`attempt`: when a turn fails with PoolAtCapacity we DON'T drop the
+// `heldAt`/`attempt`: when a turn fails with FleetAgentAtCapacity we DON'T drop the
 // burst — we put it back and retry with backoff (see drainGroup). heldAt>0 marks
 // an active capacity hold; the retry timer (not the debounce) drives the drain.
 type GroupBuffer = { items: InboundItem[]; timer: ReturnType<typeof setTimeout> | null; running: boolean; heldAt: number; attempt: number };
@@ -108,8 +108,8 @@ const MAX_HELD_ITEMS = 20; // cap a group's buffer during a capacity hold
 // drain can wait for the in-flight ones to finish cleanly. See drainSurface.
 let shuttingDown = false;
 
-function enqueueInbound(sock: WASocket, poolId: string, jid: string, item: InboundItem) {
-  const key = `${poolId}:${jid}`;
+function enqueueInbound(sock: WASocket, fleetAgentId: string, jid: string, item: InboundItem) {
+  const key = `${fleetAgentId}:${jid}`;
   let buf = groupBuffers.get(key);
   if (!buf) { buf = { items: [], timer: null, running: false, heldAt: 0, attempt: 0 }; groupBuffers.set(key, buf); }
   // During a capacity hold, keep coalescing up to a cap but let the backoff retry
@@ -121,13 +121,13 @@ function enqueueInbound(sock: WASocket, poolId: string, jid: string, item: Inbou
   buf.items.push(item);
   if (buf.running) return; // a turn is in flight; it re-drains itself on finish
   if (buf.timer) clearTimeout(buf.timer);
-  buf.timer = setTimeout(() => { void drainGroup(sock, poolId, jid); }, COALESCE_DEBOUNCE_MS);
+  buf.timer = setTimeout(() => { void drainGroup(sock, fleetAgentId, jid); }, COALESCE_DEBOUNCE_MS);
 }
 
 // Run ONE coalesced turn over the whole pending burst for a group, then re-drain
-// anything that arrived while it ran. Pool meta is re-read so config changes apply.
-async function drainGroup(sock: WASocket, poolId: string, jid: string) {
-  const key = `${poolId}:${jid}`;
+// anything that arrived while it ran. FleetAgent meta is re-read so config changes apply.
+async function drainGroup(sock: WASocket, fleetAgentId: string, jid: string) {
+  const key = `${fleetAgentId}:${jid}`;
   const buf = groupBuffers.get(key);
   // shuttingDown: don't START a new turn during a drain — let the in-flight ones
   // finish. Buffered items wait for the next process (the WA socket re-delivers /
@@ -137,13 +137,13 @@ async function drainGroup(sock: WASocket, poolId: string, jid: string) {
   buf.running = true;
   const batch = buf.items.splice(0); // claim the whole burst
 
-  const pool = await db.pool.findUnique({
-    where: { id: poolId },
+  const fleetAgent = await db.fleetAgent.findUnique({
+    where: { id: fleetAgentId },
     select: { hasOwnNumber: true, assistantName: true, ownerId: true },
   });
-  const hasOwnNumber = pool?.hasOwnNumber ?? false;
-  const assistantName = pool?.assistantName || "Asistente";
-  const ownerId = pool?.ownerId ?? "";
+  const hasOwnNumber = fleetAgent?.hasOwnNumber ?? false;
+  const assistantName = fleetAgent?.assistantName || "Asistente";
+  const ownerId = fleetAgent?.ownerId ?? "";
 
   const last = batch[batch.length - 1];
   // Combine the burst into one prompt (one person typing several lines, not N
@@ -171,7 +171,7 @@ async function drainGroup(sock: WASocket, poolId: string, jid: string) {
   }, 8000);
   try {
     const reply = await routeMessage(
-      poolId,
+      fleetAgentId,
       { groupId: jid, sender: last.sender, text: combinedText, image: batch.map((it) => it.content.image).find(Boolean) },
       { skipRateLimit: true, hasMedia: batch.some((it) => it.content.hasMedia) }
     );
@@ -189,16 +189,16 @@ async function drainGroup(sock: WASocket, poolId: string, jid: string) {
         }
       }
       if (last.m.key) sock.sendMessage(jid, { react: { text: "✅", key: last.m.key } }).catch(() => {});
-      log(poolId, `replied in ${jid} (batch ${batch.length})${delivered.sent ? ` (+${delivered.sent} files)` : ""}`);
+      log(fleetAgentId, `replied in ${jid} (batch ${batch.length})${delivered.sent ? ` (+${delivered.sent} files)` : ""}`);
     }
     // Turn succeeded (capacity was fine) → clear any capacity hold.
     if (buf.heldAt > 0) {
-      log(poolId, `served in ${jid} after ${Date.now() - buf.heldAt}ms held (${buf.attempt} retries)`);
+      log(fleetAgentId, `served in ${jid} after ${Date.now() - buf.heldAt}ms held (${buf.attempt} retries)`);
       buf.heldAt = 0;
       buf.attempt = 0;
     }
   } catch (e) {
-    if (e instanceof PoolAtCapacity) {
+    if (e instanceof FleetAgentAtCapacity) {
       // No room right now → HOLD the burst and retry with backoff (don't drop it).
       // The reaper frees RAM within its 60s cadence, so this is normally served
       // well inside the give-up window — the user never has to resend.
@@ -206,24 +206,24 @@ async function drainGroup(sock: WASocket, poolId: string, jid: string) {
       if (buf.heldAt === 0) {
         buf.heldAt = Date.now();
         const notice = "Estamos a tope ahora, dame un momento. 🙏";
-        sendNoticeOnce(sock, poolId, jid, hasOwnNumber ? notice : `${assistantName}: ${notice}`);
+        sendNoticeOnce(sock, fleetAgentId, jid, hasOwnNumber ? notice : `${assistantName}: ${notice}`);
       }
       if (Date.now() - buf.heldAt >= ADMIT_GIVEUP_MS) {
         const bye = "Sigo saturado, reintenta en un rato. 🙏";
-        sendNoticeOnce(sock, poolId, jid, hasOwnNumber ? bye : `${assistantName}: ${bye}`);
-        log(poolId, `gave up in ${jid} after ${Date.now() - buf.heldAt}ms`);
+        sendNoticeOnce(sock, fleetAgentId, jid, hasOwnNumber ? bye : `${assistantName}: ${bye}`);
+        log(fleetAgentId, `gave up in ${jid} after ${Date.now() - buf.heldAt}ms`);
         buf.items.length = 0; buf.heldAt = 0; buf.attempt = 0; // drop the hold
       } else {
-        log(poolId, `at capacity in ${jid}, holding (retry ${buf.attempt + 1})`);
+        log(fleetAgentId, `at capacity in ${jid}, holding (retry ${buf.attempt + 1})`);
       }
     } else {
       // Rate-limit (intentional anti-spam throttle) and any other error → drop,
       // one brief notice. Queuing a rate-limited group would defeat the throttle.
-      if (e instanceof PoolRateLimited) {
+      if (e instanceof FleetAgentRateLimited) {
         const notice = "Voy un poco saturado, dame un momento. 🙏";
-        sendNoticeOnce(sock, poolId, jid, hasOwnNumber ? notice : `${assistantName}: ${notice}`);
+        sendNoticeOnce(sock, fleetAgentId, jid, hasOwnNumber ? notice : `${assistantName}: ${notice}`);
       }
-      log(poolId, `route failed in ${jid}: ${e}`);
+      log(fleetAgentId, `route failed in ${jid}: ${e}`);
     }
   } finally {
     clearInterval(typingTimer);
@@ -234,10 +234,10 @@ async function drainGroup(sock: WASocket, poolId: string, jid: string) {
     // messages that landed during the turn.
     if (buf.items.length > 0) {
       if (buf.heldAt > 0) {
-        buf.timer = setTimeout(() => { void drainGroup(sock, poolId, jid); }, admitRetryDelay(buf.attempt));
+        buf.timer = setTimeout(() => { void drainGroup(sock, fleetAgentId, jid); }, admitRetryDelay(buf.attempt));
         buf.attempt++;
       } else {
-        buf.timer = setTimeout(() => { void drainGroup(sock, poolId, jid); }, COALESCE_DEBOUNCE_MS);
+        buf.timer = setTimeout(() => { void drainGroup(sock, fleetAgentId, jid); }, COALESCE_DEBOUNCE_MS);
       }
     }
   }
@@ -245,7 +245,7 @@ async function drainGroup(sock: WASocket, poolId: string, jid: string) {
 
 type BaileysStatus = "qr_pending" | "pairing" | "connecting" | "connected" | "failed" | "disconnected";
 
-// ── Pairing throttle guard (persisted on Pool.baileys) ───────────────────────
+// ── Pairing throttle guard (persisted on FleetAgent.baileys) ───────────────────────
 // Meta throttles device-link handshakes after ~3 attempts/30min, with a 3-6h
 // backoff (documented in nanoclaw). Mashing "Conectar" only deepens it and shows
 // the client a bare "Falló". We count pairing fails on the baileys blob (survives
@@ -262,8 +262,8 @@ function pickPairGuard(b: Record<string, unknown>): Record<string, unknown> {
   for (const k of PAIR_KEYS) if (b[k] !== undefined) out[k] = b[k];
   return out;
 }
-async function readBaileys(poolId: string): Promise<Record<string, unknown>> {
-  const row = await db.pool.findUnique({ where: { id: poolId }, select: { baileys: true } }).catch(() => null);
+async function readBaileys(fleetAgentId: string): Promise<Record<string, unknown>> {
+  const row = await db.fleetAgent.findUnique({ where: { id: fleetAgentId }, select: { baileys: true } }).catch(() => null);
   return (row?.baileys as Record<string, unknown> | null) ?? {};
 }
 // ms timestamp if currently throttled (block in the future), else 0.
@@ -272,8 +272,8 @@ function pairBlockMs(b: Record<string, unknown>): number {
   return until > Date.now() ? until : 0;
 }
 // Record a failed pairing attempt; once THRESHOLD land within WINDOW, set a block.
-async function recordPairFail(poolId: string): Promise<void> {
-  const b = await readBaileys(poolId);
+async function recordPairFail(fleetAgentId: string): Promise<void> {
+  const b = await readBaileys(fleetAgentId);
   const now = Date.now();
   const firstAt = b.pairFirstFailAt ? new Date(b.pairFirstFailAt as string).getTime() : 0;
   const inWindow = firstAt > 0 && now - firstAt < PAIR_FAIL_WINDOW_MS;
@@ -284,7 +284,7 @@ async function recordPairFail(poolId: string): Promise<void> {
     pairFirstFailAt: inWindow ? b.pairFirstFailAt : new Date(now).toISOString(),
   };
   if (fails >= PAIR_FAIL_THRESHOLD) patch.pairBlockedUntil = new Date(now + PAIR_BLOCK_MS).toISOString();
-  await db.pool.update({ where: { id: poolId }, data: { baileys: patch as never } }).catch(() => {});
+  await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { baileys: patch as never } }).catch(() => {});
 }
 
 // MERGE the baileys blob so a transient status change (e.g. a reconnect flipping
@@ -292,23 +292,23 @@ async function recordPairFail(poolId: string): Promise<void> {
 // showing it until we actually connect. Terminal states clear the artifacts, BUT
 // failed/disconnected keep the pairing-throttle guard counters (a "failed" must
 // not reset the cooldown); a successful "connected" wipes everything (fresh).
-async function setStatus(poolId: string, status: BaileysStatus, extra: Record<string, unknown> = {}) {
+async function setStatus(fleetAgentId: string, status: BaileysStatus, extra: Record<string, unknown> = {}) {
   const terminal = status === "connected" || status === "disconnected" || status === "failed";
   const prev =
-    ((await db.pool.findUnique({ where: { id: poolId }, select: { baileys: true } }).catch(() => null))?.baileys as
+    ((await db.fleetAgent.findUnique({ where: { id: fleetAgentId }, select: { baileys: true } }).catch(() => null))?.baileys as
       | Record<string, unknown>
       | null) ?? {};
   const cur = !terminal ? prev : status === "connected" ? {} : pickPairGuard(prev);
   const next = { ...cur, status, at: new Date().toISOString(), ...extra };
-  await db.pool.update({ where: { id: poolId }, data: { baileys: next } }).catch(() => {});
+  await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { baileys: next } }).catch(() => {});
 }
 
-// ── DB-backed Baileys auth (creds + signal keys persisted on the Pool row) ────
+// ── DB-backed Baileys auth (creds + signal keys persisted on the FleetAgent row) ────
 const ser = (o: unknown) => JSON.parse(JSON.stringify(o, BufferJSON.replacer));
 const de = (o: unknown) => (o == null ? null : JSON.parse(JSON.stringify(o), BufferJSON.reviver));
 
-async function useDBAuthState(poolId: string): Promise<{ state: AuthenticationState; saveCreds: () => Promise<void> }> {
-  const row = await db.pool.findUnique({ where: { id: poolId }, select: { authCreds: true, authKeys: true } });
+async function useDBAuthState(fleetAgentId: string): Promise<{ state: AuthenticationState; saveCreds: () => Promise<void> }> {
+  const row = await db.fleetAgent.findUnique({ where: { id: fleetAgentId }, select: { authCreds: true, authKeys: true } });
   const creds = de(row?.authCreds) ?? initAuthCreds();
   const keys: Record<string, Record<string, unknown>> = de(row?.authKeys) ?? {};
 
@@ -320,7 +320,7 @@ async function useDBAuthState(poolId: string): Promise<{ state: AuthenticationSt
     if (flushTimer) return;
     flushTimer = setTimeout(() => {
       flushTimer = null;
-      db.pool.update({ where: { id: poolId }, data: { authKeys: ser(keys) } }).catch(() => {});
+      db.fleetAgent.update({ where: { id: fleetAgentId }, data: { authKeys: ser(keys) } }).catch(() => {});
     }, 600);
     if (typeof flushTimer.unref === "function") flushTimer.unref();
   };
@@ -348,57 +348,57 @@ async function useDBAuthState(poolId: string): Promise<{ state: AuthenticationSt
   };
   // Baileys fires creds.update WITHOUT awaiting saveCreds, so an unhandled
   // rejection here crashes the whole app. During a reconnect storm multiple creds
-  // writes hit the same Pool doc concurrently → Mongo "write conflict". Retry once,
+  // writes hit the same FleetAgent doc concurrently → Mongo "write conflict". Retry once,
   // then swallow — losing one creds write is harmless (the next update re-persists).
   const saveCreds = () =>
-    db.pool
-      .update({ where: { id: poolId }, data: { authCreds: ser(creds) } })
+    db.fleetAgent
+      .update({ where: { id: fleetAgentId }, data: { authCreds: ser(creds) } })
       .then(() => {})
       .catch(() =>
-        db.pool
-          .update({ where: { id: poolId }, data: { authCreds: ser(creds) } })
+        db.fleetAgent
+          .update({ where: { id: fleetAgentId }, data: { authCreds: ser(creds) } })
           .then(() => {})
-          .catch((e) => console.error(`[pool ${poolId}] saveCreds failed:`, e instanceof Error ? e.message : e))
+          .catch((e) => console.error(`[fleet ${fleetAgentId}] saveCreds failed:`, e instanceof Error ? e.message : e))
       );
   return { state, saveCreds };
 }
 
-// Start (or restart) the socket for a pool. Idempotent while connecting. Always
-// ends a prior socket first. UI polls Pool.baileys for {status, qr}.
-export async function connectPool(poolId: string, opts: { pairingPhone?: string } = {}): Promise<void> {
+// Start (or restart) the socket for a fleetAgent. Idempotent while connecting. Always
+// ends a prior socket first. UI polls FleetAgent.baileys for {status, qr}.
+export async function connectFleetAgent(fleetAgentId: string, opts: { pairingPhone?: string } = {}): Promise<void> {
   const pairingPhone = opts.pairingPhone?.replace(/[^0-9]/g, "") || undefined;
-  const existing = sockets.get(poolId);
+  const existing = sockets.get(fleetAgentId);
   // Honor an in-flight connect only if it's RECENT — a stale `connecting` (its
   // socket hung / a deploy killed it) must not wedge re-pairing forever.
   if (existing?.connecting && Date.now() - (existing.startedAt ?? 0) < CONNECTING_STALE_MS) return;
   if (existing) {
     try { existing.sock.ev.removeAllListeners("connection.update"); existing.sock.end(undefined); } catch {}
-    sockets.delete(poolId);
+    sockets.delete(fleetAgentId);
   }
 
-  const pool = await db.pool.findUnique({ where: { id: poolId } });
-  if (!pool) throw new Error(`pool ${poolId} not found`);
+  const fleetAgent = await db.fleetAgent.findUnique({ where: { id: fleetAgentId } });
+  if (!fleetAgent) throw new Error(`fleetAgent ${fleetAgentId} not found`);
 
   // Don't burn a Meta attempt on an obviously-bad number (E.164: ~10-15 digits).
   if (pairingPhone && (pairingPhone.length < 10 || pairingPhone.length > 15)) {
-    log(poolId, `invalid pairing number (${pairingPhone.length} digits)`);
-    await setStatus(poolId, "failed", { reason: "invalid_number" });
+    log(fleetAgentId, `invalid pairing number (${pairingPhone.length} digits)`);
+    await setStatus(fleetAgentId, "failed", { reason: "invalid_number" });
     return;
   }
   // Throttle guard: if Meta blocked us (>=3 fails/30min), REFUSE new attempts
   // during the cooldown — mashing only deepens it. Tell the UI when to retry.
-  const blockedUntil = pairBlockMs((pool.baileys as Record<string, unknown> | null) ?? {});
+  const blockedUntil = pairBlockMs((fleetAgent.baileys as Record<string, unknown> | null) ?? {});
   if (blockedUntil) {
-    log(poolId, `pairing blocked until ${new Date(blockedUntil).toISOString()}`);
-    await setStatus(poolId, "failed", { reason: "throttled", until: new Date(blockedUntil).toISOString() });
+    log(fleetAgentId, `pairing blocked until ${new Date(blockedUntil).toISOString()}`);
+    await setStatus(fleetAgentId, "failed", { reason: "throttled", until: new Date(blockedUntil).toISOString() });
     return;
   }
 
-  await setStatus(poolId, "connecting");
+  await setStatus(fleetAgentId, "connecting");
 
   let auth, version;
   try {
-    auth = await useDBAuthState(poolId);
+    auth = await useDBAuthState(fleetAgentId);
     // Network fetch — race a 5s timeout so a hang can't stall the connect
     // (makeWASocket falls back to its bundled version when undefined).
     version = await Promise.race([
@@ -406,8 +406,8 @@ export async function connectPool(poolId: string, opts: { pairingPhone?: string 
       new Promise<undefined>((res) => setTimeout(() => res(undefined), 5000)),
     ]);
   } catch (e) {
-    log(poolId, `init failed: ${e}`);
-    await setStatus(poolId, "failed", { reason: "init_error" });
+    log(fleetAgentId, `init failed: ${e}`);
+    await setStatus(fleetAgentId, "failed", { reason: "init_error" });
     throw e;
   }
   const sock = makeWASocket({
@@ -417,7 +417,7 @@ export async function connectPool(poolId: string, opts: { pairingPhone?: string 
     printQRInTerminal: false,
     browser: Browsers.macOS("Chrome"),
   });
-  sockets.set(poolId, { sock, attempts: existing?.attempts ?? 0, connecting: true, pairingPhone, startedAt: Date.now() });
+  sockets.set(fleetAgentId, { sock, attempts: existing?.attempts ?? 0, connecting: true, pairingPhone, startedAt: Date.now() });
   sock.ev.on("creds.update", auth.saveCreds);
 
   // Pairing-code method: instead of (or alongside) the QR, request an 8-char
@@ -428,24 +428,24 @@ export async function connectPool(poolId: string, opts: { pairingPhone?: string 
     setTimeout(async () => {
       try {
         const code = await sock.requestPairingCode(pairingPhone);
-        log(poolId, `pairing code ${code}`);
-        await setStatus(poolId, "pairing", { pairingCode: code, phone: pairingPhone });
+        log(fleetAgentId, `pairing code ${code}`);
+        await setStatus(fleetAgentId, "pairing", { pairingCode: code, phone: pairingPhone });
       } catch (e) {
-        log(poolId, `requestPairingCode failed: ${e}`);
-        await recordPairFail(poolId);
-        await setStatus(poolId, "failed", { reason: "pairing_code_error" });
+        log(fleetAgentId, `requestPairingCode failed: ${e}`);
+        await recordPairFail(fleetAgentId);
+        await setStatus(fleetAgentId, "failed", { reason: "pairing_code_error" });
       }
     }, 1500);
   }
 
   sock.ev.on("connection.update", async (u) => {
-    const cur = sockets.get(poolId);
+    const cur = sockets.get(fleetAgentId);
     // In pairing-code mode don't clobber the code with the rotating QR.
-    if (u.qr && !pairingPhone) { log(poolId, "QR ready"); await setStatus(poolId, "qr_pending", { qr: u.qr }); }
+    if (u.qr && !pairingPhone) { log(fleetAgentId, "QR ready"); await setStatus(fleetAgentId, "qr_pending", { qr: u.qr }); }
     if (u.connection === "open") {
       if (cur) { cur.attempts = 0; cur.connecting = false; }
-      log(poolId, "connected");
-      await setStatus(poolId, "connected");
+      log(fleetAgentId, "connected");
+      await setStatus(fleetAgentId, "connected");
     }
     if (u.connection === "close") {
       if (cur) cur.connecting = false;
@@ -453,14 +453,14 @@ export async function connectPool(poolId: string, opts: { pairingPhone?: string 
       // restartRequired (515) is the normal post-pairing handshake — reconnect
       // immediately and don't count it as a failure.
       if (code === DisconnectReason.restartRequired) {
-        log(poolId, "restart required → reconnecting");
-        setTimeout(() => void connectPool(poolId, { pairingPhone: cur?.pairingPhone }).catch(() => {}), 500);
+        log(fleetAgentId, "restart required → reconnecting");
+        setTimeout(() => void connectFleetAgent(fleetAgentId, { pairingPhone: cur?.pairingPhone }).catch(() => {}), 500);
         return;
       }
       const loggedOut = code === DisconnectReason.loggedOut;
       const attempts = (cur?.attempts ?? 0) + 1;
       if (loggedOut || attempts > MAX_RECONNECT) {
-        sockets.delete(poolId);
+        sockets.delete(fleetAgentId);
         // Dead session: drop the stored creds so the NEXT connect re-pairs fresh.
         // Baileys leaves creds.registered=true after a logout (optimistic false
         // positive set when it generated the pairing code), which would otherwise
@@ -468,40 +468,40 @@ export async function connectPool(poolId: string, opts: { pairingPhone?: string 
         // resume a dead session → instant re-logout loop. Only on loggedOut: a
         // max_reconnect is a transient close where the creds may still be valid.
         if (loggedOut) {
-          await db.pool.update({ where: { id: poolId }, data: { authCreds: null, authKeys: null } }).catch(() => {});
+          await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { authCreds: null, authKeys: null } }).catch(() => {});
           // Count EVERY logout toward the pairing throttle (not only the pairing-
           // code case): a genuine logout LOOP (Meta rejecting our handshake, or a
           // session that keeps dying) trips the 3/30min block, which STOPS the auto
           // re-pair below — so we can never hammer Meta into a deeper throttle.
-          await recordPairFail(poolId);
+          await recordPairFail(fleetAgentId);
           // Clean slate (creds cleared) + NOT throttled → auto re-pair: emit a fresh
           // QR instead of sitting in a dead "Falló". A fresh QR (registered=false)
           // can't resume a dead session, so there's no tight relink loop; and the
-          // throttle counter above bounds any pathological one. connectPool also
+          // throttle counter above bounds any pathological one. connectFleetAgent also
           // re-checks the block, so this is safe even under a race.
-          if (!pairBlockMs(await readBaileys(poolId))) {
-            log(poolId, "logged_out → auto re-pairing (fresh QR)");
-            await setStatus(poolId, "connecting", { reason: "relink" });
-            setTimeout(() => void connectPool(poolId).catch(() => {}), 1000);
+          if (!pairBlockMs(await readBaileys(fleetAgentId))) {
+            log(fleetAgentId, "logged_out → auto re-pairing (fresh QR)");
+            await setStatus(fleetAgentId, "connecting", { reason: "relink" });
+            setTimeout(() => void connectFleetAgent(fleetAgentId).catch(() => {}), 1000);
             return;
           }
         }
-        log(poolId, `stopped (${loggedOut ? "logged_out" : "max_reconnect"})`);
-        await setStatus(poolId, "failed", { reason: loggedOut ? "logged_out" : "max_reconnect" });
+        log(fleetAgentId, `stopped (${loggedOut ? "logged_out" : "max_reconnect"})`);
+        await setStatus(fleetAgentId, "failed", { reason: loggedOut ? "logged_out" : "max_reconnect" });
         return; // STOP — no loop
       }
       if (cur) cur.attempts = attempts;
       const backoffMs = Math.min(30_000, 1000 * 2 ** attempts);
-      log(poolId, `closed → retry ${attempts}/${MAX_RECONNECT} in ${backoffMs}ms`);
-      await setStatus(poolId, "connecting", { attempt: attempts });
-      setTimeout(() => void connectPool(poolId, { pairingPhone: cur?.pairingPhone }).catch(() => {}), backoffMs);
+      log(fleetAgentId, `closed → retry ${attempts}/${MAX_RECONNECT} in ${backoffMs}ms`);
+      await setStatus(fleetAgentId, "connecting", { attempt: attempts });
+      setTimeout(() => void connectFleetAgent(fleetAgentId, { pairingPhone: cur?.pairingPhone }).catch(() => {}), backoffMs);
     }
   });
 
   sock.ev.on("messages.upsert", async ({ messages, type }) => {
     if (type !== "notify") return;
-    const fresh = await db.pool.findUnique({
-      where: { id: poolId },
+    const fresh = await db.fleetAgent.findUnique({
+      where: { id: fleetAgentId },
       select: { enabledGroups: true, hasOwnNumber: true, assistantName: true, ownerId: true },
     });
     const enabled = new Set(fresh?.enabledGroups ?? []);
@@ -514,7 +514,7 @@ export async function connectPool(poolId: string, opts: { pairingPhone?: string 
       if (m.key.id && sentMsgIds.has(m.key.id)) continue; // our own outbound media echoed back
       // DISCOVERY (independent of the allowlist): record any group with activity
       // so the UI can surface it to enable — even before WhatsApp's sync.
-      await recordSeenGroup(poolId, sock, jid);
+      await recordSeenGroup(fleetAgentId, sock, jid);
       // Cheap raw text first — for loop-detection + the enable gate, BEFORE any
       // media download (which is slow + costs a Gemini call).
       const rawText = m.message?.conversation ?? m.message?.extendedTextMessage?.text ?? "";
@@ -526,15 +526,15 @@ export async function connectPool(poolId: string, opts: { pairingPhone?: string 
       const fromMe = m.key.fromMe || false;
       const isBotMessage = hasOwnNumber ? fromMe : rawText.startsWith(`${assistantName}:`);
       if (isBotMessage) continue;
-      if (!enabled.has(jid)) { log(poolId, `msg in ${jid} ignored (group not enabled)`); continue; }
-      if (!ownerId) { log(poolId, `msg in ${jid} skipped (no ownerId)`); continue; }
+      if (!enabled.has(jid)) { log(fleetAgentId, `msg in ${jid} ignored (group not enabled)`); continue; }
+      if (!ownerId) { log(fleetAgentId, `msg in ${jid} skipped (no ownerId)`); continue; }
       // Rate-limit BEFORE extracting media so a spammy group can't run up Gemini
       // cost. We pass skipRateLimit to routeMessage to avoid double-counting.
-      const rl = await checkSandboxRateLimit(`${poolId}:${jid}`, "op");
+      const rl = await checkSandboxRateLimit(`${fleetAgentId}:${jid}`, "op");
       if (!rl.allowed) {
         const notice = "Voy un poco saturado, dame un momento. 🙏";
-        sendNoticeOnce(sock, poolId, jid, hasOwnNumber ? notice : `${assistantName}: ${notice}`);
-        log(poolId, `msg in ${jid} rate limited`);
+        sendNoticeOnce(sock, fleetAgentId, jid, hasOwnNumber ? notice : `${assistantName}: ${notice}`);
+        log(fleetAgentId, `msg in ${jid} rate limited`);
         continue;
       }
       // Media-aware extraction: turn images/voice/video/docs/location/etc. into the
@@ -543,55 +543,55 @@ export async function connectPool(poolId: string, opts: { pairingPhone?: string 
       try {
         content = await extractInboundContent(sock, m, { ownerId });
       } catch (e) {
-        log(poolId, `media extract failed in ${jid}: ${e}`);
+        log(fleetAgentId, `media extract failed in ${jid}: ${e}`);
         continue;
       }
       if (!content) continue;
-      lastIncoming.set(`${poolId}:${jid}`, m); // for wa MCP quote/react
+      lastIncoming.set(`${fleetAgentId}:${jid}`, m); // for wa MCP quote/react
       const text = content.text;
-      log(poolId, `msg in ${jid} from ${m.key.participant ?? (fromMe ? "owner" : "?")}: "${text.slice(0, 40)}"`);
+      log(fleetAgentId, `msg in ${jid} from ${m.key.participant ?? (fromMe ? "owner" : "?")}: "${text.slice(0, 40)}"`);
       // The turn runs COALESCED after a short debounce (drainGroup): a burst
       // becomes one turn + one reply, with a SINGLE 👀 (on start) + ✅ (on done)
       // reaction emitted there — not one 👀 per message (spammy).
-      enqueueInbound(sock, poolId, jid, { content, m, sender: m.key.participant ?? undefined });
+      enqueueInbound(sock, fleetAgentId, jid, { content, m, sender: m.key.participant ?? undefined });
     }
   });
 }
 
 // Record a group discovered from an inbound message (jid → subject), so the UI
 // can offer it to enable even if WhatsApp's metadata sync hasn't listed it yet.
-async function recordSeenGroup(poolId: string, sock: WASocket, jid: string) {
+async function recordSeenGroup(fleetAgentId: string, sock: WASocket, jid: string) {
   try {
-    const row = await db.pool.findUnique({ where: { id: poolId }, select: { seenGroups: true } });
+    const row = await db.fleetAgent.findUnique({ where: { id: fleetAgentId }, select: { seenGroups: true } });
     const seen = (row?.seenGroups as Record<string, string> | null) ?? {};
     if (seen[jid]) return; // already known
     let subject = jid;
     try { subject = (await sock.groupMetadata(jid)).subject || jid; } catch {}
     seen[jid] = subject;
-    await db.pool.update({ where: { id: poolId }, data: { seenGroups: seen } });
+    await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { seenGroups: seen } });
   } catch {}
 }
 
 // List the WhatsApp groups to offer in the UI: the union of (a) groups the
 // account participates in (groupFetchAllParticipating, authoritative subjects)
 // and (b) groups discovered from inbound messages (seenGroups). Flagged by
-// whether the pool currently answers there. Live socket preferred; falls back
+// whether the fleetAgent currently answers there. Live socket preferred; falls back
 // to seenGroups so a group with activity always shows up.
-export async function listPoolGroups(
-  poolId: string
+export async function listFleetAgentGroups(
+  fleetAgentId: string
 ): Promise<Array<{ id: string; subject: string; enabled: boolean }>> {
-  const pool = await db.pool.findUnique({
-    where: { id: poolId },
+  const fleetAgent = await db.fleetAgent.findUnique({
+    where: { id: fleetAgentId },
     select: { enabledGroups: true, seenGroups: true },
   });
-  const enabled = new Set(pool?.enabledGroups ?? []);
+  const enabled = new Set(fleetAgent?.enabledGroups ?? []);
   const merged = new Map<string, string>(); // jid → subject
-  const cur = sockets.get(poolId);
+  const cur = sockets.get(fleetAgentId);
   if (cur) {
     // Cache groupFetchAllParticipating: the dashboard polls every ~2.5s and
     // hammering this IQ makes WhatsApp return rate-overlimit (and can degrade the
     // link). One fetch per 60s is plenty — seenGroups covers gaps in between.
-    const cached = groupListCache.get(poolId);
+    const cached = groupListCache.get(fleetAgentId);
     if (cached && Date.now() - cached.at < GROUP_CACHE_MS) {
       for (const [id, subject] of cached.groups) merged.set(id, subject);
     } else {
@@ -599,15 +599,15 @@ export async function listPoolGroups(
         const groups = await cur.sock.groupFetchAllParticipating();
         const list: Array<[string, string]> = [];
         for (const g of Object.values(groups) as any[]) list.push([g.id, g.subject || g.id]);
-        groupListCache.set(poolId, { at: Date.now(), groups: list });
+        groupListCache.set(fleetAgentId, { at: Date.now(), groups: list });
         for (const [id, subject] of list) merged.set(id, subject);
       } catch (e) {
-        log(poolId, `groupFetch failed: ${e}`);
+        log(fleetAgentId, `groupFetch failed: ${e}`);
         if (cached) for (const [id, subject] of cached.groups) merged.set(id, subject); // serve stale
       }
     }
   }
-  for (const [jid, subject] of Object.entries((pool?.seenGroups as Record<string, string>) ?? {})) {
+  for (const [jid, subject] of Object.entries((fleetAgent?.seenGroups as Record<string, string>) ?? {})) {
     if (!merged.has(jid)) merged.set(jid, subject);
   }
   return [...merged.entries()]
@@ -615,29 +615,29 @@ export async function listPoolGroups(
     .sort((a, b) => a.subject.localeCompare(b.subject));
 }
 
-export function isPoolLive(poolId: string): boolean {
-  return sockets.has(poolId);
+export function isFleetAgentLive(fleetAgentId: string): boolean {
+  return sockets.has(fleetAgentId);
 }
 
-// Execute a worker-requested WhatsApp action on the pool's live socket. Called by
-// the /api/v2/pools/wa-action endpoint after it has authenticated the pool token,
+// Execute a worker-requested WhatsApp action on the fleetAgent's live socket. Called by
+// the /api/v2/fleet-agents/wa-action endpoint after it has authenticated the fleet-agent token,
 // resolved sessionId → group, and gated elevated actions by mainGroupJid. `jid`
 // is the target group (the session's own group, or another one for main-group
 // cross-sends). Mirrors ghosty-gc's WA MCP tools.
 export async function executeWaAction(
-  poolId: string,
+  fleetAgentId: string,
   jid: string,
   action: string,
   args: Record<string, any>
 ): Promise<{ ok: boolean; result?: string; error?: string }> {
   // Single-instance assumption: the socket lives in THIS process. If Fly ever runs
   // >1 machine, the worker's wa-action could land on a machine that doesn't hold
-  // this pool's socket → "not connected". Keep Baileys single-instance (see the
-  // SCALING CAVEAT in poolOperations busyVms).
-  const cur = sockets.get(poolId);
-  if (!cur) return { ok: false, error: "pool socket not connected" };
+  // this fleetAgent's socket → "not connected". Keep Baileys single-instance (see the
+  // SCALING CAVEAT in fleetAgentOperations busyVms).
+  const cur = sockets.get(fleetAgentId);
+  if (!cur) return { ok: false, error: "fleet-agent socket not connected" };
   const sock = cur.sock;
-  const last = lastIncoming.get(`${poolId}:${jid}`);
+  const last = lastIncoming.get(`${fleetAgentId}:${jid}`);
   try {
     switch (action) {
       case "send_message": {
@@ -704,52 +704,52 @@ export async function executeWaAction(
   }
 }
 
-// createPoolGroup: crea un grupo de WhatsApp NUEVO desde el número del pool y
+// createFleetAgentGroup: crea un grupo de WhatsApp NUEVO desde el número del fleetAgent y
 // devuelve su invite link (chat.whatsapp.com/…). Lo consume el endpoint
-// POST /api/v2/pool/:poolId/group — denik lo llama para el feature "abre el grupo
-// para hablar con el agente". Registra el jid en enabledGroups para que el pool
+// POST /api/v2/fleet-agents/:fleetAgentId/group — denik lo llama para el feature "abre el grupo
+// para hablar con el agente". Registra el jid en enabledGroups para que el fleetAgent
 // responda ahí. Single-instance (el socket vive en este proceso, ver caveat).
-export async function createPoolGroup(
-  poolId: string,
+export async function createFleetAgentGroup(
+  fleetAgentId: string,
   name: string,
   denikApiKey?: string
 ): Promise<{ groupJid: string; inviteUrl: string }> {
-  const cur = sockets.get(poolId);
-  if (!cur) throw new Error("pool socket not connected");
+  const cur = sockets.get(fleetAgentId);
+  if (!cur) throw new Error("fleet-agent socket not connected");
   const sock = cur.sock;
-  const meta = await sock.groupCreate(name, []); // grupo con solo el número del pool
+  const meta = await sock.groupCreate(name, []); // grupo con solo el número del fleetAgent
   const groupJid = meta.id;
   const code = await sock.groupInviteCode(groupJid);
   if (!code) throw new Error("could not get group invite code");
-  // Opt-in: el pool solo responde en enabledGroups → registrar el grupo nuevo.
+  // Opt-in: el fleetAgent solo responde en enabledGroups → registrar el grupo nuevo.
   // Y si viene denikApiKey, guardarlo en groupKeys[groupJid] → routeMessage lo
   // inyecta per-mensaje para scopear el MCP a ESE org (aislamiento per-grupo).
-  const pool = await db.pool.findUnique({
-    where: { id: poolId },
+  const fleetAgent = await db.fleetAgent.findUnique({
+    where: { id: fleetAgentId },
     select: { enabledGroups: true, groupKeys: true },
   });
-  const enabled = new Set(pool?.enabledGroups ?? []);
+  const enabled = new Set(fleetAgent?.enabledGroups ?? []);
   enabled.add(groupJid);
   const data: { enabledGroups: string[]; groupKeys?: Record<string, string> } = {
     enabledGroups: [...enabled],
   };
   if (denikApiKey) {
     data.groupKeys = {
-      ...((pool?.groupKeys as Record<string, string> | null) ?? {}),
+      ...((fleetAgent?.groupKeys as Record<string, string> | null) ?? {}),
       [groupJid]: denikApiKey,
     };
   }
-  await db.pool.update({ where: { id: poolId }, data });
+  await db.fleetAgent.update({ where: { id: fleetAgentId }, data });
   return { groupJid, inviteUrl: `https://chat.whatsapp.com/${code}` };
 }
 
-export async function disconnectPool(poolId: string): Promise<void> {
-  const cur = sockets.get(poolId);
+export async function disconnectFleetAgent(fleetAgentId: string): Promise<void> {
+  const cur = sockets.get(fleetAgentId);
   if (cur) {
     try { cur.sock.ev.removeAllListeners("connection.update"); cur.sock.end(undefined); } catch {}
-    sockets.delete(poolId);
+    sockets.delete(fleetAgentId);
   }
-  await setStatus(poolId, "disconnected");
+  await setStatus(fleetAgentId, "disconnected");
 }
 
 // ── Boot rehydration (lazy singleton) ────────────────────────────────────────
@@ -772,19 +772,19 @@ export function ensureRehydrated(): Promise<void> {
   if (rehydrating) return rehydrating;
   rehydrating = (async () => {
     try {
-      // Re-establish the socket for any pool that was mid-flight before the restart
+      // Re-establish the socket for any fleetAgent that was mid-flight before the restart
       // — INCLUDING the pairing states (qr_pending/pairing) which have no creds yet:
-      // otherwise a deploy mid-pair leaves a DEAD QR the user can't scan. connectPool
+      // otherwise a deploy mid-pair leaves a DEAD QR the user can't scan. connectFleetAgent
       // resumes when creds exist and emits a fresh QR when they don't. Skip throttled
-      // pools (and connectPool re-checks) so rehydration never feeds a reconnect loop.
-      const pools = await db.pool.findMany({ select: { id: true, baileys: true } });
+      // pools (and connectFleetAgent re-checks) so rehydration never feeds a reconnect loop.
+      const pools = await db.fleetAgent.findMany({ select: { id: true, baileys: true } });
       for (const p of pools) {
         const b = (p.baileys as Record<string, unknown> | null) ?? {};
         const status = b.status as string | undefined;
         const active = status === "connected" || status === "connecting" || status === "qr_pending" || status === "pairing";
         if (active && !sockets.has(p.id) && !pairBlockMs(b)) {
           log(p.id, `rehydrating after restart (${status})`);
-          await connectPool(p.id).catch((e) => log(p.id, `rehydrate failed: ${e}`));
+          await connectFleetAgent(p.id).catch((e) => log(p.id, `rehydrate failed: ${e}`));
         }
       }
     } finally {
@@ -801,11 +801,11 @@ export function ensureRehydrated(): Promise<void> {
 // Without this, in-flight agent turns are cut mid-stream on every deploy (the
 // surface + reaper run in this one process). On the signal we stop starting NEW
 // turns (`shuttingDown`) and wait for the running ones to finish — each turn's
-// durable writes (agent PoolMessage, lastMessageAt) complete BEFORE buf.running
+// durable writes (agent FleetAgentMessage, lastMessageAt) complete BEFORE buf.running
 // flips false, so waiting for zero in-flight guarantees nothing is half-written.
 // Bounded under kill_timeout so we never delay the SIGKILL. Residual loss: items
 // still buffered (sub-second window) + turns longer than the grace — replay from
-// PoolMessage is the documented follow-up ([[todo_pool_surface_durability]]).
+// FleetAgentMessage is the documented follow-up ([[todo_pool_surface_durability]]).
 let drainHandlersInstalled = false;
 function installDrainHandlers() {
   if (drainHandlersInstalled) return;
@@ -840,10 +840,10 @@ function startReaper() {
   if (reaperTimer) return;
   reaperTimer = setInterval(async () => {
     try {
-      const { reapIdlePools } = await import("~/.server/core/poolOperations");
-      await reapIdlePools();
+      const { reapIdleFleetAgents } = await import("~/.server/core/fleetAgentOperations");
+      await reapIdleFleetAgents();
     } catch (e) {
-      console.error("pool reaper tick failed:", e);
+      console.error("fleet reaper tick failed:", e);
     }
     try {
       // Idle reaper de los call boxes livekit-svc (30min boot / suspende en
@@ -854,7 +854,7 @@ function startReaper() {
       console.error("studio reaper tick failed:", e);
     }
     try {
-      // Idle reaper de los agentes embed standalone (claude-worker sin pool,
+      // Idle reaper de los agentes embed standalone (claude-worker sin fleetAgent,
       // ej. los chatbots de denik). Suspende a los idle → wake-on-message.
       const { reapIdleEmbedAgents } = await import("~/.server/core/embedAgentReaper");
       await reapIdleEmbedAgents();

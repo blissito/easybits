@@ -119,10 +119,10 @@ export default [
       // Hosting — máquinas permanentes + sandboxes
       route("hosting", "routes/dash/hosting/machines.tsx"),
       route("hosting/wa/:id", "routes/dash/hosting/wa.tsx"),
-      // Pools de WhatsApp ("Líneas") — superficie Baileys + workers efímeros
-      route("flota", "routes/dash/pools.tsx"),
+      // FleetAgents de WhatsApp ("Líneas") — superficie Baileys + workers efímeros
+      route("flota", "routes/dash/fleet-agents.tsx"),
       // Poll resiliente del HUD de la flota (JSON, no tumba la página en deploys)
-      route("flota/poll", "routes/dash/pools.poll.tsx"),
+      route("flota/poll", "routes/dash/fleet-agents.poll.tsx"),
       // Cuentas de clientes — roster + "operar como" (impersonation)
       route("cuentas", "routes/dash/cuentas.tsx"),
       // Email — audiencia + newsletters
@@ -198,19 +198,19 @@ export default [
     route("agents/:id/whatsapp/status", "routes/api/v2/agent-whatsapp-status.ts"),
     route("agents/:id/whatsapp/link", "routes/api/v2/agent-whatsapp-link.ts"),
     route("agents/:id/whatsapp/unlink", "routes/api/v2/agent-whatsapp-unlink.ts"),
-    // Pool — superficie WhatsApp always-on que rutea a workers efímeros
-    route("pools", "routes/api/v2/pools.ts"),
-    route("pools/wa-action", "routes/api/v2/pools.wa-action.ts"),
-    route("pool/:poolId/message", "routes/api/v2/pool.$poolId.message.ts"),
-    route("pool/:poolId/message-stream", "routes/api/v2/pool.$poolId.message-stream.ts"),
-    route("pool/:poolId/group", "routes/api/v2/pool.$poolId.group.ts"),
-    route("pool/:poolId/connect", "routes/api/v2/pool.$poolId.connect.ts"),
+    // FleetAgent — superficie WhatsApp always-on que rutea a workers efímeros
+    route("fleet-agents", "routes/api/v2/fleet-agents.ts"),
+    route("fleet-agents/wa-action", "routes/api/v2/fleet-agents.wa-action.ts"),
+    route("fleet-agents/:fleetAgentId/message", "routes/api/v2/fleet-agents.$fleetAgentId.message.ts"),
+    route("fleet-agents/:fleetAgentId/message-stream", "routes/api/v2/fleet-agents.$fleetAgentId.message-stream.ts"),
+    route("fleet-agents/:fleetAgentId/group", "routes/api/v2/fleet-agents.$fleetAgentId.group.ts"),
+    route("fleet-agents/:fleetAgentId/connect", "routes/api/v2/fleet-agents.$fleetAgentId.connect.ts"),
     // WABA channel — Formmy forwards inbound here; partner writes per-number config
-    route("pool/:poolId/waba/message", "routes/api/v2/pool.$poolId.waba.message.ts"),
-    route("pool/:poolId/waba/config", "routes/api/v2/pool.$poolId.waba.config.ts"),
+    route("fleet-agents/:fleetAgentId/waba/message", "routes/api/v2/fleet-agents.$fleetAgentId.waba.message.ts"),
+    route("fleet-agents/:fleetAgentId/waba/config", "routes/api/v2/fleet-agents.$fleetAgentId.waba.config.ts"),
     // WABA connect (EasyBits as Formmy partner) — Embedded Signup popup + callback
-    route("pool/:poolId/waba/connect/start", "routes/api/v2/pool.$poolId.waba.connect-start.ts"),
-    route("pool/:poolId/waba/connect", "routes/api/v2/pool.$poolId.waba.connect.ts"),
+    route("fleet-agents/:fleetAgentId/waba/connect/start", "routes/api/v2/fleet-agents.$fleetAgentId.waba.connect-start.ts"),
+    route("fleet-agents/:fleetAgentId/waba/connect", "routes/api/v2/fleet-agents.$fleetAgentId.waba.connect.ts"),
     // WhatsApp Business Cloud API (Meta) — webhook de verificación + eventos
     route("whatsapp/webhook", "routes/api/v2/whatsapp-webhook.ts"),
     route("agents/:id/skills", "routes/api/v2/agent-skills.ts"),

@@ -1,5 +1,5 @@
 /**
- * One-off: fija la persona CUSTOM de denik (capa 2) en el pool de la flota.
+ * One-off: fija la persona CUSTOM de denik (capa 2) en el fleetAgent de la flota.
  *
  * El worker NUNCA sobreescribe la base de EasyBits: appendea esta persona al
  * preset `claude_code` (provider.ts), y la personalización POR-ORG (capa 3) se
@@ -10,13 +10,13 @@
  * lee process.env.DENIK_BASE_URL para armar el MCP @denik.me/mcp; sin él pega a
  * base vacía → 404 (el gotcha de localhost/base).
  *
- * Run: cd /Users/bliss/easybits && npx tsx scripts/set-denik-pool-persona.ts [poolId]
+ * Run: cd /Users/bliss/easybits && npx tsx scripts/set-denik-fleetAgent-persona.ts [fleetAgentId]
  * ⚠️ Pega contra la DB de PROD.
  */
 import "dotenv/config";
 import { db } from "../app/.server/db";
 
-const POOL_ID = process.argv[2] || "6a3da33701649d68258e42da";
+const FLEET_AGENT_ID = process.argv[2] || "6a3da33701649d68258e42da";
 
 const DENIK_SYSTEM_PROMPT = [
   "Eres el asistente de un negocio que usa denik.me para agendar citas.",
@@ -37,19 +37,19 @@ const persona = {
 };
 
 async function main() {
-  const before = await db.pool.findUnique({
-    where: { id: POOL_ID },
+  const before = await db.fleetAgent.findUnique({
+    where: { id: FLEET_AGENT_ID },
     select: { name: true, persona: true },
   });
-  if (!before) throw new Error(`pool ${POOL_ID} no encontrado`);
-  console.log(`pool "${before.name}" (${POOL_ID})`);
+  if (!before) throw new Error(`fleetAgent ${FLEET_AGENT_ID} no encontrado`);
+  console.log(`fleetAgent "${before.name}" (${FLEET_AGENT_ID})`);
   console.log("persona ANTES:", JSON.stringify(before.persona)?.slice(0, 120));
   // assistantName es la columna que baileys usa como PREFIJO de texto en cada
-  // respuesta cuando hasOwnNumber=false (`${assistantName}: …`). createPool la
+  // respuesta cuando hasOwnNumber=false (`${assistantName}: …`). createFleetAgent la
   // hardcodea a "Ghosty"; hay que alinearla a la persona o el bot se presenta
   // como "Ghosty: …" aunque el SYSTEM_PROMPT ya sea el de denik.
-  await db.pool.update({
-    where: { id: POOL_ID },
+  await db.fleetAgent.update({
+    where: { id: FLEET_AGENT_ID },
     data: { persona: persona as any, assistantName: "Nik" },
   });
   console.log("persona DESPUÉS:", JSON.stringify(persona).slice(0, 200));

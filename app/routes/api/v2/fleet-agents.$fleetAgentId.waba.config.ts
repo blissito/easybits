@@ -1,14 +1,14 @@
-import type { Route } from "./+types/pool.$poolId.waba.config";
+import type { Route } from "./+types/fleet-agents.$fleetAgentId.waba.config";
 import { db } from "~/.server/db";
 
-// POST /api/v2/pool/:poolId/waba/config
+// POST /api/v2/fleet-agents/:fleetAgentId/waba/config
 //
-// Denik writes the pool's WABA config here so the inbound forward (/waba/message)
-// can authenticate Formmy and scope each org's worker. Auth = pool.token (the
-// owner-trusted bearer, same as the pool message route) — NOT formmySecret, which
+// Denik writes the fleetAgent's WABA config here so the inbound forward (/waba/message)
+// can authenticate Formmy and scope each org's worker. Auth = fleetAgent.token (the
+// owner-trusted bearer, same as the fleetAgent message route) — NOT formmySecret, which
 // is the value this very call sets.
 //
-// Merge semantics: overwrite formmySecret (one per pool) and set/replace the one
+// Merge semantics: overwrite formmySecret (one per fleetAgent) and set/replace the one
 // org keyed by integrationId; preserve all other orgs already configured.
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -34,10 +34,10 @@ export async function loader({ request }: Route.LoaderArgs) {
 }
 
 export async function action({ request, params }: Route.ActionArgs) {
-  const poolId = params.poolId!;
+  const fleetAgentId = params.fleetAgentId!;
   const bearer = request.headers.get("Authorization")?.replace(/^Bearer\s+/i, "") ?? "";
-  const pool = await db.pool.findUnique({ where: { id: poolId } });
-  if (!pool || !bearer || pool.token !== bearer) {
+  const fleetAgent = await db.fleetAgent.findUnique({ where: { id: fleetAgentId } });
+  if (!fleetAgent || !bearer || fleetAgent.token !== bearer) {
     return Response.json({ error: "Unauthorized" }, { status: 401, headers: CORS });
   }
 
@@ -58,7 +58,7 @@ export async function action({ request, params }: Route.ActionArgs) {
     );
   }
 
-  const current = (pool.wabaConfig as WabaConfig | null) ?? {};
+  const current = (fleetAgent.wabaConfig as WabaConfig | null) ?? {};
   // Merge over any existing entry for this integration so a re-register that omits
   // optional fields (identity, denik key) doesn't wipe previously-set values.
   const prevOrg = current.orgs?.[integrationId] ?? {};
@@ -77,7 +77,7 @@ export async function action({ request, params }: Route.ActionArgs) {
       },
     },
   };
-  await db.pool.update({ where: { id: poolId }, data: { wabaConfig: next } });
+  await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { wabaConfig: next } });
 
   return Response.json({ ok: true }, { headers: CORS });
 }

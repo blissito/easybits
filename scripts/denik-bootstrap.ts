@@ -1,7 +1,7 @@
 /**
  * Bootstrap de denik en la flota EasyBits — crea, bajo la cuenta de brenda:
  *   1. Un POOL de WhatsApp (cerebro claude-worker) → su id/token van a denik
- *      como EASYBITS_WA_POOL_ID / EASYBITS_WA_POOL_TOKEN (feature "abre el grupo").
+ *      como EASYBITS_WA_FLEET_ID / EASYBITS_WA_FLEET_TOKEN (feature "abre el grupo").
  *   2. Un CHATBOT web de prueba (claude-worker standalone) con el MCP de denik.
  *   3. Delegación scope `agents` a fixtergeek → ve/opera la flota desde su cuenta.
  *
@@ -20,7 +20,7 @@ import "dotenv/config";
 
 import { db } from "../app/.server/db";
 import type { AuthContext } from "../app/.server/apiAuth";
-import { createPool } from "../app/.server/core/poolOperations";
+import { createFleetAgent } from "../app/.server/core/fleetAgentOperations";
 import { createAgent } from "../app/.server/core/sandboxOperations";
 
 const BRENDA_EMAIL = process.env.DENIK_OWNER_EMAIL || "brenda@fixter.org";
@@ -40,20 +40,20 @@ async function main() {
   if (!user) throw new Error(`owner ${BRENDA_EMAIL} no encontrado en la DB`);
   const ctx: AuthContext = { user, scopes: ["READ", "WRITE", "DELETE"] };
 
-  // 1) Pool de WhatsApp (Nik) — UN cerebro/persona para toda denik.me. SIN
+  // 1) FleetAgent de WhatsApp (Nik) — UN cerebro/persona para toda denik.me. SIN
   //    DENIK_API_KEY en persona: la key de cada org se inyecta PER-MENSAJE
   //    (groupKeys → routeMessage), así Nik en cada grupo solo ve datos de SU org.
-  log(`\n⏳ creando Pool de WhatsApp (Nik) bajo ${BRENDA_EMAIL}…`);
-  const pool = await createPool(ctx, {
+  log(`\n⏳ creando FleetAgent de WhatsApp (Nik) bajo ${BRENDA_EMAIL}…`);
+  const fleetAgent = await createFleetAgent(ctx, {
     name: "denik-wa",
     workerTemplate: "claude-worker",
     persona: { env: { DENIK_BASE_URL, SYSTEM_PROMPT } },
     oauthSecretName: "CLAUDE_CODE_OAUTH_TOKEN",
   });
-  log("✅ Pool creado:");
-  log(`   EASYBITS_WA_POOL_ID=${pool.id}`);
-  log(`   EASYBITS_WA_POOL_TOKEN=${pool.token}`);
-  log("   → parea el número de brenda en /dash/pools antes de crear grupos.");
+  log("✅ FleetAgent creado:");
+  log(`   EASYBITS_WA_FLEET_ID=${fleetAgent.id}`);
+  log(`   EASYBITS_WA_FLEET_TOKEN=${fleetAgent.token}`);
+  log("   → parea el número de brenda en /dash/flota antes de crear grupos.");
 
   // 2) Chatbot web de prueba (claude-worker standalone, 1 agente = 1 org → la
   //    DENIK_API_KEY sí va en su env).
@@ -67,7 +67,7 @@ async function main() {
   log(`   agentId=${agent.agentId}`);
   log(`   embedToken=${agent.embedToken}`);
 
-  log("\nListo. Wirea EASYBITS_WA_POOL_ID/TOKEN en denik y prueba el chatbot.");
+  log("\nListo. Wirea EASYBITS_WA_FLEET_ID/TOKEN en denik y prueba el chatbot.");
   log("(La delegación a fixtergeek la maneja el agente de 'compartidos'.)");
 }
 

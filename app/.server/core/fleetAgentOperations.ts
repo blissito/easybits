@@ -1,4 +1,4 @@
-// Pool manager — the always-on WhatsApp SURFACE that routes inbound group
+// FleetAgent manager — the always-on WhatsApp SURFACE that routes inbound group
 // messages to a fleet of ephemeral worker Agents (claude-worker / ghosty-gc).
 //
 // Design (see plan lucky-finding-lecun):
@@ -6,9 +6,9 @@
 //     scale out when full (RAM-gated via /v1/stats), and suspend when idle.
 //   - Routing is STICKY per group so the worker's native resume state (the Agent
 //     SDK .jsonl transcript on its disk, preserved across suspend/resume) stays
-//     coherent. PoolRoute is the sticky map; PoolMessage is the durable log.
-//   - Branding/OAuth: pool.persona.env is injected into every worker spawn, so
-//     the owner's Max-account OAuth + persona power the whole pool.
+//     coherent. FleetAgentRoute is the sticky map; FleetAgentMessage is the durable log.
+//   - Branding/OAuth: fleetAgent.persona.env is injected into every worker spawn, so
+//     the owner's Max-account OAuth + persona power the whole fleetAgent.
 import { randomBytes, randomUUID } from "node:crypto";
 import { db } from "~/.server/db";
 import type { AuthContext } from "~/.server/apiAuth";
@@ -30,23 +30,23 @@ import { getUserPlan, PLANS } from "~/lib/plans";
 import { getPlatformDefaultClient } from "~/.server/storage";
 import { checkSandboxRateLimit } from "~/.server/rateLimiter";
 
-export class PoolAtCapacity extends Error {
+export class FleetAgentAtCapacity extends Error {
   constructor(msg: string) {
     super(msg);
-    this.name = "PoolAtCapacity";
+    this.name = "FleetAgentAtCapacity";
   }
 }
 
-// A chatty group exceeded its per-(pool,group) rate limit. The Baileys surface
+// A chatty group exceeded its per-(fleetAgent,group) rate limit. The Baileys surface
 // catches this and sends one brief "saturado" notice instead of spawning work.
-export class PoolRateLimited extends Error {
+export class FleetAgentRateLimited extends Error {
   constructor(msg: string) {
     super(msg);
-    this.name = "PoolRateLimited";
+    this.name = "FleetAgentRateLimited";
   }
 }
 
-// Admission backoff policy — when a surface hits PoolAtCapacity it HOLDS the
+// Admission backoff policy — when a surface hits FleetAgentAtCapacity it HOLDS the
 // message and retries instead of dropping it (the user never resends). Shared
 // here (not in the Baileys surface) so a future WABA surface reuses the same
 // schedule. Dos formas de liberarse dentro de la ventana: (a) un turno activo
@@ -74,13 +74,13 @@ export const admitRetryDelay = (attempt: number) =>
 // single-instance — else machine B's reaper could reap a VM busy on machine A.
 const busyVms = new Set<string>();
 
-// ── Audit instrumentation (POOL_AUDIT_LOG=1) ──────────────────────────────────
+// ── Audit instrumentation (FLEET_AUDIT_LOG=1) ──────────────────────────────────
 // Stage-by-stage timing/decisions for the live Baileys audit (warm/cold place,
 // boot ms, turn ms, self-heal, reaper). Off unless the flag is set so prod logs
-// stay clean. Grep `fly logs` for `[pool-audit]`.
-const AUDIT = process.env.POOL_AUDIT_LOG === "1";
+// stay clean. Grep `fly logs` for `[fleet-audit]`.
+const AUDIT = process.env.FLEET_AUDIT_LOG === "1";
 function auditLog(event: string, data?: Record<string, unknown>) {
-  if (AUDIT) console.log(`[pool-audit] ${event}`, data ? JSON.stringify(data) : "");
+  if (AUDIT) console.log(`[fleet-audit] ${event}`, data ? JSON.stringify(data) : "");
 }
 
 // Classify a turn failure. A DEAD BOX (host unreachable / VM gone via crash /
@@ -108,7 +108,7 @@ async function markWorkerLost(agentId: string): Promise<void> {
 // ── In-process placement mutex ────────────────────────────────────────────────
 // The Baileys surface is single-instance (accepted constraint), so an in-memory
 // lock is a correct serialization point. Used to serialize the capacity decision
-// (pick free VM / spawn / assign route) per pool so concurrent inbound messages
+// (pick free VM / spawn / assign route) per fleetAgent so concurrent inbound messages
 // from DIFFERENT groups can't both grab the last slot (overcommit → OOM) or
 // exceed maxVms. Same Map<key, tail-of-chain> pattern the worker uses internally.
 const placeLocks = new Map<string, Promise<unknown>>();
@@ -129,8 +129,8 @@ function withLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
 // That disk dies when the idle reaper DESTROYS the VM. To make the VM disposable,
 // we tar that dir to durable storage on suspend (keyed by sessionUuid) and untar
 // it back onto a fresh VM on cold-spawn — so the conversation resumes its memory.
-const MEM_PREFIX = "pool-memory/";
-const memKey = (poolId: string, sessionUuid: string) => `${poolId}/${sessionUuid}.tgz`;
+const MEM_PREFIX = "fleet-memory/";
+const memKey = (fleetAgentId: string, sessionUuid: string) => `${fleetAgentId}/${sessionUuid}.tgz`;
 const memClient = () => getPlatformDefaultClient({ prefix: MEM_PREFIX });
 
 // Tar the conversation's workspace on the VM → upload to storage. Best-effort;
@@ -139,7 +139,7 @@ const memClient = () => getPlatformDefaultClient({ prefix: MEM_PREFIX });
 export async function backupConversation(
   ctx: AuthContext,
   vm: { sandboxId: string },
-  poolId: string,
+  fleetAgentId: string,
   sessionUuid: string
 ): Promise<void> {
   const tgz = `/tmp/${sessionUuid}.tgz`;
@@ -157,7 +157,7 @@ export async function backupConversation(
   });
   const { content } = await readFile(ctx, vm.sandboxId, { path: tgz, encoding: "base64" });
   if (!content) return; // nothing to back up (workspace not created yet)
-  await memClient().putObject(memKey(poolId, sessionUuid), Buffer.from(content, "base64"), "application/gzip");
+  await memClient().putObject(memKey(fleetAgentId, sessionUuid), Buffer.from(content, "base64"), "application/gzip");
   await execCommand(ctx, vm.sandboxId, { command: `rm -f ${tgz}`, timeoutSeconds: 15 }).catch(() => {});
 }
 
@@ -166,10 +166,10 @@ export async function backupConversation(
 export async function restoreConversation(
   ctx: AuthContext,
   vm: { sandboxId: string },
-  poolId: string,
+  fleetAgentId: string,
   sessionUuid: string
 ): Promise<boolean> {
-  const url = await memClient().getReadUrl(memKey(poolId, sessionUuid)).catch(() => null);
+  const url = await memClient().getReadUrl(memKey(fleetAgentId, sessionUuid)).catch(() => null);
   if (!url) return false;
   const res = await fetch(url).catch(() => null);
   if (!res || !res.ok) return false; // missing → fresh conversation
@@ -185,7 +185,7 @@ export async function restoreConversation(
 }
 
 // ── Multi-box seam ──────────────────────────────────────────────────────────
-// The pool ingress is box-agnostic; placement is the only box-aware decision.
+// The fleetAgent ingress is box-agnostic; placement is the only box-aware decision.
 // SANDBOX_HOSTS = optional CSV of sandbox-host base URLs; defaults to the single
 // SANDBOX_HOST_URL. pickHost queries each box's /v1/stats and returns the one
 // with the most free RAM that can fit a vmMemMb VM (null if none fits → queue).
@@ -244,18 +244,18 @@ type InboundMessage = {
   image?: { base64: string; ext: string; url?: string };
   // Per-message MCP key override (the org's dnk_pub_/admin key). Web channels
   // (denik widget/admin) pass it per turn instead of pre-registering one per
-  // ephemeral conversation; wins over pool.groupKeys[groupId]. WhatsApp omits it
+  // ephemeral conversation; wins over fleetAgent.groupKeys[groupId]. WhatsApp omits it
   // and relies on the pre-registered groupKeys.
   denikApiKey?: string;
   // Per-message personalización por-org (capa 3): se APPENDEA a la persona del
-  // pool en el worker (que a su vez se appendea al preset). Canales web (denik)
+  // fleetAgent en el worker (que a su vez se appendea al preset). Canales web (denik)
   // la pasan por turno; WhatsApp la omite.
   appendSystemPrompt?: string;
 };
 
 // ── MCP catalog (config-driven capabilities, nanoclaw parity) ────────────────
-// A pool (agent) offers a MENU of MCP servers; each group enables a SUBSET. The
-// catalog lives on Pool.mcpCatalog; the per-group selection on Pool.groupConfigs.
+// A fleetAgent (agent) offers a MENU of MCP servers; each group enables a SUBSET. The
+// catalog lives on FleetAgent.mcpCatalog; the per-group selection on FleetAgent.groupConfigs.
 export type McpCatalogEntry = {
   name: string; // unique key + Claude tool prefix (mcp__<name>__*)
   label?: string; // human label for the UI
@@ -275,7 +275,7 @@ export type GroupConfig = { mcpServers?: string[]; env?: Record<string, string> 
 // $secret:NAME reference shape (same as agentOperations.expandMcpServerSecrets).
 const SECRET_REF_RE = /^\$secret:([A-Z_][A-Z0-9_]*)$/;
 
-// Builtins seeded on every pool: easybits + wa are ALWAYS active in the worker
+// Builtins seeded on every fleetAgent: easybits + wa are ALWAYS active in the worker
 // (baked env / in-process), not togglable. NO denik here — denik's per-group org
 // key is a reseller-only path (groupKeys + denikApiKey), invisible to the generic UI.
 export const DEFAULT_MCP_CATALOG: McpCatalogEntry[] = [
@@ -286,7 +286,7 @@ export const DEFAULT_MCP_CATALOG: McpCatalogEntry[] = [
 // CURATED capabilities EasyBits ships in CODE (not stored in the DB) — every agent
 // can enable these per group. Each declares the vault secret(s) it needs; the
 // owner provides them once (agent-level) and the per-group toggle just turns the
-// capability on/off. Custom (advanced) MCPs live in Pool.mcpCatalog instead.
+// capability on/off. Custom (advanced) MCPs live in FleetAgent.mcpCatalog instead.
 export const CURATED_CAPABILITIES: McpCatalogEntry[] = [
   {
     name: "brightdata",
@@ -315,11 +315,11 @@ export const CURATED_CAPABILITIES: McpCatalogEntry[] = [
   },
 ];
 
-// The full capability menu for a pool: curated (code) ∪ the owner's custom entries
-// (Pool.mcpCatalog, non-builtin, not shadowing a curated name). Single source of
+// The full capability menu for a fleetAgent: curated (code) ∪ the owner's custom entries
+// (FleetAgent.mcpCatalog, non-builtin, not shadowing a curated name). Single source of
 // truth for the dashboard, the agent (wa-action) and per-turn resolution.
-export function mergedCapabilities(pool: { mcpCatalog?: unknown }): McpCatalogEntry[] {
-  const stored = (pool.mcpCatalog as McpCatalogEntry[] | null) ?? [];
+export function mergedCapabilities(fleetAgent: { mcpCatalog?: unknown }): McpCatalogEntry[] {
+  const stored = (fleetAgent.mcpCatalog as McpCatalogEntry[] | null) ?? [];
   const custom = stored.filter(
     (e) => !e.builtin && !CURATED_CAPABILITIES.some((c) => c.name === e.name)
   );
@@ -332,14 +332,14 @@ export function mergedCapabilities(pool: { mcpCatalog?: unknown }): McpCatalogEn
 // from the OWNER's vault and emit PLAINTEXT env. A capability whose required secret
 // is missing is SKIPPED entirely — never ship a half-configured MCP to the worker.
 export async function resolveGroupMcpServers(
-  pool: { mcpCatalog?: unknown; groupConfigs?: unknown },
+  fleetAgent: { mcpCatalog?: unknown; groupConfigs?: unknown },
   groupId: string,
   ownerId: string
 ): Promise<Record<string, unknown> | undefined> {
-  const cfg = ((pool.groupConfigs as Record<string, GroupConfig> | null) ?? {})[groupId] ?? {};
+  const cfg = ((fleetAgent.groupConfigs as Record<string, GroupConfig> | null) ?? {})[groupId] ?? {};
   const enabled = cfg.mcpServers;
   if (!enabled?.length) return undefined;
-  const caps = mergedCapabilities(pool);
+  const caps = mergedCapabilities(fleetAgent);
   const out: Record<string, unknown> = {};
   for (const e of caps) {
     if (e.builtin || !enabled.includes(e.name)) continue;
@@ -362,11 +362,11 @@ export async function resolveGroupMcpServers(
   return Object.keys(out).length ? out : undefined;
 }
 
-// Build a background AuthContext for a pool's owner. Pool dispatch runs outside
+// Build a background AuthContext for a fleetAgent's owner. FleetAgent dispatch runs outside
 // any HTTP request (reaper, autoscale), so we mint a ctx with full owner scopes.
 async function ctxForOwner(ownerId: string): Promise<AuthContext> {
   const user = await db.user.findUnique({ where: { id: ownerId } });
-  if (!user) throw new Error(`pool owner ${ownerId} not found`);
+  if (!user) throw new Error(`fleetAgent owner ${ownerId} not found`);
   return { user, scopes: ["READ", "WRITE", "DELETE"] };
 }
 
@@ -386,7 +386,7 @@ async function waitAgentRunning(agentId: string, timeoutMs = 120_000) {
 
 // Drain a unified {type:"chunk"|"done"|"error"} SSE stream into plain text.
 // WhatsApp is non-streaming (one message out), so we collect server-side; this
-// also lets us log the full reply as PoolMessage.
+// also lets us log the full reply as FleetAgentMessage.
 async function collectStream(
   stream: ReadableStream<Uint8Array>,
   onChunk?: (s: string) => void
@@ -429,19 +429,19 @@ async function collectStream(
 
 // How many workers (= conversations, sticky routes) a VM currently hosts.
 function workersOnVm(agentId: string): Promise<number> {
-  return db.poolRoute.count({ where: { agentId } });
+  return db.fleetAgentRoute.count({ where: { agentId } });
 }
 
-// Spawn a fresh VM for the pool, branded from persona, RAM-gated.
+// Spawn a fresh VM for the fleetAgent, branded from persona, RAM-gated.
 const appBaseUrl = () =>
   (process.env.BASE_URL || process.env.EASYBITS_URL || process.env.SITE_URL || "https://www.easybits.cloud").replace(/\/$/, "");
 
-async function spawnVm(ctx: AuthContext, pool: { id: string; name: string | null; workerTemplate: string; persona: unknown; vmMemMb: number; maxVms: number; oauthSecretName: string | null; token: string }) {
+async function spawnVm(ctx: AuthContext, fleetAgent: { id: string; name: string | null; workerTemplate: string; persona: unknown; vmMemMb: number; maxVms: number; oauthSecretName: string | null; token: string }) {
   // ── Account sandbox budget (la fuente de verdad, consistente con el HUD) ──
   // El plan da `concurrentSandboxes` y las reservas (add-ons) suman. TODAS las
   // sandboxes del owner en el host consumen este budget — workers de CUALQUIER
-  // canal, llamadas livekit, custom, permanentes — no solo los de este pool. Por
-  // eso contamos vía listSandboxes (todo el host del owner), no db.agent. El pool
+  // canal, llamadas livekit, custom, permanentes — no solo los de este fleetAgent. Por
+  // eso contamos vía listSandboxes (todo el host del owner), no db.agent. El fleetAgent
   // NO puede pasarse de aquí: el "X/N sandboxes" del HUD es real, no solo display.
   // (pickHost sigue como gate FÍSICO de RAM; este es el gate LÓGICO de plan.)
   const plan = getUserPlan(ctx.user);
@@ -453,59 +453,59 @@ async function spawnVm(ctx: AuthContext, pool: { id: string; name: string | null
   // llena sus cajas, deja que el reaper las duerma (desaparecen del conteo) y
   // vuelve a spawnear encima → duplica su cupo y es explotable. Una VM suspendida
   // es capacidad reservada real (disco + snapshot resume <1s), así que la sumamos
-  // de vuelta desde DB (el owner es dueño de sus workers de pool).
+  // de vuelta desde DB (el owner es dueño de sus workers de fleetAgent).
   const suspended = await db.agent.count({ where: { ownerId: ctx.user.id, status: "suspended" } });
   const live = hostVms
     ? hostVms.filter((v) => v.status === "running" || v.status === "starting").length
-    : await db.agent.count({ where: { poolId: pool.id, status: { in: ["running", "building"] } } });
+    : await db.agent.count({ where: { fleetAgentId: fleetAgent.id, status: { in: ["running", "building"] } } });
   const inUse = live + suspended;
-  if (inUse >= Math.min(budget, pool.maxVms)) {
-    throw new PoolAtCapacity(`account at sandbox budget (${inUse}/${budget})`);
+  if (inUse >= Math.min(budget, fleetAgent.maxVms)) {
+    throw new FleetAgentAtCapacity(`account at sandbox budget (${inUse}/${budget})`);
   }
   // RAM gate, multi-box aware: pick the box with the most free RAM that fits the
   // VM. null = no box has room → queue. (The host also rejects at create as a
   // backstop.) Single-box today: pickHost returns the only box.
-  const target = await pickHost(pool.vmMemMb);
+  const target = await pickHost(fleetAgent.vmMemMb);
   if (!target) {
-    throw new PoolAtCapacity(`no box has ${pool.vmMemMb}MB free`);
+    throw new FleetAgentAtCapacity(`no box has ${fleetAgent.vmMemMb}MB free`);
   }
-  const persona = (pool.persona ?? {}) as Persona;
+  const persona = (fleetAgent.persona ?? {}) as Persona;
   const env = { ...(persona.env ?? {}) };
   // Resolve the channel's Claude OAuth from the chosen vault secret (default
   // CLAUDE_CODE_OAUTH_TOKEN) and inject it for claude-worker. Lets different
   // channels use different Max accounts. persona.env wins if it already set it.
   if (!env.CLAUDE_CODE_OAUTH_TOKEN) {
-    const secretName = pool.oauthSecretName || "CLAUDE_CODE_OAUTH_TOKEN";
+    const secretName = fleetAgent.oauthSecretName || "CLAUDE_CODE_OAUTH_TOKEN";
     const oauth = await getSecretValue(ctx.user.id, secretName).catch(() => null);
     if (oauth) env.CLAUDE_CODE_OAUTH_TOKEN = oauth;
   }
   // WhatsApp action callback — lets the worker's in-process `wa` MCP send polls/
   // reactions/locations/files into the chat via the shared Baileys socket. The
-  // worker authenticates with the pool token; the endpoint resolves sessionId →
+  // worker authenticates with the fleet-agent token; the endpoint resolves sessionId →
   // group and gates elevated actions by mainGroupJid.
-  env.POOL_TOKEN = pool.token;
-  env.POOL_WA_ACTION_URL = `${appBaseUrl()}/api/v2/pools/wa-action`;
+  env.FLEET_TOKEN = fleetAgent.token;
+  env.FLEET_WA_ACTION_URL = `${appBaseUrl()}/api/v2/fleet-agents/wa-action`;
   // TODO(multi-box): target.url must drive createSandbox/callHost; today it uses
   // the single SANDBOX_HOST_URL, so target is recorded but not yet routed.
   const created = await createAgent(ctx, {
-    template: pool.workerTemplate as SandboxTemplate,
+    template: fleetAgent.workerTemplate as SandboxTemplate,
     env,
-    name: persona.name ?? `${pool.name ?? "pool"}-worker`,
+    name: persona.name ?? `${fleetAgent.name ?? "fleetAgent"}-worker`,
     seedFiles: persona.seedFiles,
-    memoryMb: pool.vmMemMb, // size the VM per the channel's config (e.g. 512MB)
-    vcpus: pool.vmMemMb <= 512 ? 1 : 2,
+    memoryMb: fleetAgent.vmMemMb, // size the VM per the channel's config (e.g. 512MB)
+    vcpus: fleetAgent.vmMemMb <= 512 ? 1 : 2,
   });
-  auditLog("spawn", { pool: pool.id, agentId: created.agentId, memMb: pool.vmMemMb, box: target.url });
+  auditLog("spawn", { fleetAgent: fleetAgent.id, agentId: created.agentId, memMb: fleetAgent.vmMemMb, box: target.url });
   // Return the BUILDING row immediately — the caller waits for it to come up
   // OUTSIDE the placement lock (so concurrent cold conversations boot in
   // parallel, not serialized behind each other's ~boot time).
   return db.agent.update({
     where: { id: created.agentId },
-    data: { poolId: pool.id, lastMessageAt: new Date(), host: target.url },
+    data: { fleetAgentId: fleetAgent.id, lastMessageAt: new Date(), host: target.url },
   });
 }
 
-type PoolRow = Awaited<ReturnType<typeof db.pool.findUniqueOrThrow>>;
+type PoolRow = Awaited<ReturnType<typeof db.fleetAgent.findUniqueOrThrow>>;
 type AgentRow = NonNullable<Awaited<ReturnType<typeof db.agent.findUnique>>>;
 
 async function ensureRunning(ctx: AuthContext, agent: AgentRow): Promise<AgentRow | null> {
@@ -520,55 +520,55 @@ async function ensureRunning(ctx: AuthContext, agent: AgentRow): Promise<AgentRo
 }
 
 // Reserve a VM for `groupId` and claim its slot — the FAST decision only (DB +
-// host create-call). Runs under the per-pool placement lock so concurrent cold
+// host create-call). Runs under the per-fleetAgent placement lock so concurrent cold
 // conversations can't both grab the last slot or exceed maxVms. The slow boot
 // (waitAgentRunning) and memory restore happen OUTSIDE the lock in pickOrSpawn,
 // so N cold conversations boot in parallel instead of serializing.
 //   - Counts "building" VMs as candidates so two concurrent placements SHARE a
 //     booting VM (up to maxWorkersPerVm) rather than each spawning its own.
 type Reservation = { agentId: string; sessionUuid: string; needsRestore: boolean };
-async function reserveVm(ctx: AuthContext, pool: PoolRow, groupId: string): Promise<Reservation> {
-  const key = { poolId_groupId: { poolId: pool.id, groupId } };
-  return withLock(`place:${pool.id}`, async () => {
-    const fresh = await db.poolRoute.findUnique({ where: key });
+async function reserveVm(ctx: AuthContext, fleetAgent: PoolRow, groupId: string): Promise<Reservation> {
+  const key = { fleetAgentId_groupId: { fleetAgentId: fleetAgent.id, groupId } };
+  return withLock(`place:${fleetAgent.id}`, async () => {
+    const fresh = await db.fleetAgentRoute.findUnique({ where: key });
 
     // Find a VM with a free slot — include "building" so concurrent placements
     // pack onto a booting VM instead of over-spawning. Prefer the route's
     // current VM if it still has a slot (no churn).
     const vms = await db.agent.findMany({
-      where: { poolId: pool.id, status: { in: ["running", "building", "suspended"] } },
+      where: { fleetAgentId: fleetAgent.id, status: { in: ["running", "building", "suspended"] } },
     });
     let target: AgentRow | null = null;
     if (fresh?.agentId) target = vms.find((v) => v.id === fresh.agentId) ?? null;
     if (!target) {
       for (const vm of vms) {
-        if ((await workersOnVm(vm.id)) >= pool.maxWorkersPerVm) continue;
+        if ((await workersOnVm(vm.id)) >= fleetAgent.maxWorkersPerVm) continue;
         target = vm;
         break;
       }
     }
     if (!target) {
       try {
-        target = await spawnVm(ctx, pool); // building row; throws PoolAtCapacity if no room
+        target = await spawnVm(ctx, fleetAgent); // building row; throws FleetAgentAtCapacity if no room
       } catch (e) {
-        if (!(e instanceof PoolAtCapacity)) throw e;
+        if (!(e instanceof FleetAgentAtCapacity)) throw e;
         // En el techo de flota: en vez de pasarnos (la "generosidad" explotable),
         // RECICLAMOS un slot. Desalojamos la conversación dormida menos-reciente
         // (LRU) de una VM SUSPENDIDA — su memoria ya está en S3 (backup al
         // suspender), así que volverá a montarse fría (~12s) la próxima vez que
         // hable. Sólo suspendidas: están ociosas por definición y respaldadas, así
         // no cortamos un turno en vuelo. Si NO hay ninguna dormida, todo está vivo
-        // de verdad → back-pressure legítima: relanzamos PoolAtCapacity.
-        const napping = await db.agent.findMany({ where: { poolId: pool.id, status: "suspended" }, select: { id: true } });
+        // de verdad → back-pressure legítima: relanzamos FleetAgentAtCapacity.
+        const napping = await db.agent.findMany({ where: { fleetAgentId: fleetAgent.id, status: "suspended" }, select: { id: true } });
         const victim = napping.length
-          ? await db.poolRoute.findFirst({
-              where: { poolId: pool.id, groupId: { not: groupId }, agentId: { in: napping.map((v) => v.id) } },
+          ? await db.fleetAgentRoute.findFirst({
+              where: { fleetAgentId: fleetAgent.id, groupId: { not: groupId }, agentId: { in: napping.map((v) => v.id) } },
               orderBy: { lastMessageAt: "asc" },
             })
           : null;
         if (!victim?.agentId) throw e;
-        await db.poolRoute.update({ where: { id: victim.id }, data: { agentId: null, detachedAt: new Date() } });
-        auditLog("evict", { pool: pool.id, victim: victim.groupId, freedVm: victim.agentId });
+        await db.fleetAgentRoute.update({ where: { id: victim.id }, data: { agentId: null, detachedAt: new Date() } });
+        auditLog("evict", { fleetAgent: fleetAgent.id, victim: victim.groupId, freedVm: victim.agentId });
         // El slot liberado vive en una VM suspendida → ensureRunning la resume.
         target = vms.find((v) => v.id === victim.agentId) ?? (await db.agent.findUniqueOrThrow({ where: { id: victim.agentId } }));
       }
@@ -578,18 +578,18 @@ async function reserveVm(ctx: AuthContext, pool: PoolRow, groupId: string): Prom
     if (fresh) {
       const moved = fresh.agentId !== target.id;
       if (moved) {
-        await db.poolRoute.update({ where: { id: fresh.id }, data: { agentId: target.id, detachedAt: null } });
+        await db.fleetAgentRoute.update({ where: { id: fresh.id }, data: { agentId: target.id, detachedAt: null } });
       }
       // Restore when the route was detached (cold) or moved to a different VM.
       return { agentId: target.id, sessionUuid: fresh.sessionUuid, needsRestore: !fresh.agentId || moved };
     }
     const sessionUuid = randomUUID();
     try {
-      await db.poolRoute.create({ data: { poolId: pool.id, groupId, agentId: target.id, sessionUuid } });
+      await db.fleetAgentRoute.create({ data: { fleetAgentId: fleetAgent.id, groupId, agentId: target.id, sessionUuid } });
     } catch {
-      const won = await db.poolRoute.findUnique({ where: key }); // adopt the winner
+      const won = await db.fleetAgentRoute.findUnique({ where: key }); // adopt the winner
       if (won) return { agentId: won.agentId ?? target.id, sessionUuid: won.sessionUuid, needsRestore: !won.agentId };
-      throw new Error(`pool route race for ${groupId} left no winner`);
+      throw new Error(`fleetAgent route race for ${groupId} left no winner`);
     }
     return { agentId: target.id, sessionUuid, needsRestore: false };
   });
@@ -599,9 +599,9 @@ async function reserveVm(ctx: AuthContext, pool: PoolRow, groupId: string): Prom
 //   - warm path (route + running agent): return it, no lock, no wait.
 //   - cold path: reserve under the lock (fast), then boot + restore OUTSIDE the
 //     lock so concurrent cold conversations come up in parallel.
-async function pickOrSpawn(ctx: AuthContext, pool: PoolRow, groupId: string) {
+async function pickOrSpawn(ctx: AuthContext, fleetAgent: PoolRow, groupId: string) {
   // 1. Warm path — route with an already-running worker.
-  const route = await db.poolRoute.findUnique({ where: { poolId_groupId: { poolId: pool.id, groupId } } });
+  const route = await db.fleetAgentRoute.findUnique({ where: { fleetAgentId_groupId: { fleetAgentId: fleetAgent.id, groupId } } });
   if (route?.agentId) {
     const agent = await db.agent.findUnique({ where: { id: route.agentId } });
     if (agent?.status === "running") {
@@ -612,14 +612,14 @@ async function pickOrSpawn(ctx: AuthContext, pool: PoolRow, groupId: string) {
 
   // 2. Cold path — fast reservation under the lock; slow boot/restore outside it.
   const t0 = Date.now();
-  const res = await reserveVm(ctx, pool, groupId);
+  const res = await reserveVm(ctx, fleetAgent, groupId);
   const reserved = await db.agent.findUniqueOrThrow({ where: { id: res.agentId } });
   const wasBuilding = reserved.status === "building";
   const vm = await ensureRunning(ctx, reserved); // waits for boot/resume — in PARALLEL across groups
-  if (!vm) throw new Error(`pool worker ${res.agentId} failed to start`);
+  if (!vm) throw new Error(`fleetAgent worker ${res.agentId} failed to start`);
   if (res.needsRestore) {
-    await restoreConversation(ctx, vm, pool.id, res.sessionUuid).catch((e) =>
-      console.error(`pool restore ${res.sessionUuid} failed:`, e)
+    await restoreConversation(ctx, vm, fleetAgent.id, res.sessionUuid).catch((e) =>
+      console.error(`fleetAgent restore ${res.sessionUuid} failed:`, e)
     );
   }
   auditLog("place.cold", {
@@ -645,12 +645,12 @@ function formatContent(msg: InboundMessage): string {
 // Session command — `/clear` (and aliases) resets a group's conversation: drops
 // the externalized memory blob, wipes the workspace on a live VM, and rotates the
 // sessionUuid so the NEXT message starts a brand-new conversation. Mirrors
-// nanoclaw's /clear ("Sesión limpia. 🧹"). The durable PoolMessage audit log is
+// nanoclaw's /clear ("Sesión limpia. 🧹"). The durable FleetAgentMessage audit log is
 // intentionally kept (it's not fed back to the worker's memory).
-async function clearGroupSession(ctx: AuthContext, pool: PoolRow, groupId: string): Promise<string> {
-  const route = await db.poolRoute.findUnique({ where: { poolId_groupId: { poolId: pool.id, groupId } } });
+async function clearGroupSession(ctx: AuthContext, fleetAgent: PoolRow, groupId: string): Promise<string> {
+  const route = await db.fleetAgentRoute.findUnique({ where: { fleetAgentId_groupId: { fleetAgentId: fleetAgent.id, groupId } } });
   if (route) {
-    await memClient().deleteObject(memKey(pool.id, route.sessionUuid)).catch(() => {});
+    await memClient().deleteObject(memKey(fleetAgent.id, route.sessionUuid)).catch(() => {});
     if (route.agentId) {
       const vm = await db.agent.findUnique({ where: { id: route.agentId } });
       if (vm?.status === "running") {
@@ -660,7 +660,7 @@ async function clearGroupSession(ctx: AuthContext, pool: PoolRow, groupId: strin
         }).catch(() => {});
       }
     }
-    await db.poolRoute.update({ where: { id: route.id }, data: { sessionUuid: randomUUID() } });
+    await db.fleetAgentRoute.update({ where: { id: route.id }, data: { sessionUuid: randomUUID() } });
   }
   return "Sesión limpia. 🧹";
 }
@@ -668,12 +668,12 @@ async function clearGroupSession(ctx: AuthContext, pool: PoolRow, groupId: strin
 // MAIN ENTRY — the Baileys surface calls this per inbound group message.
 // Returns the agent's reply text (to send back to the group).
 export async function routeMessage(
-  poolId: string,
+  fleetAgentId: string,
   msg: InboundMessage,
   opts: { skipRateLimit?: boolean; hasMedia?: boolean; onChunk?: (s: string) => void } = {}
 ): Promise<string> {
-  const pool = await db.pool.findUniqueOrThrow({ where: { id: poolId } });
-  const ctx = await ctxForOwner(pool.ownerId);
+  const fleetAgent = await db.fleetAgent.findUniqueOrThrow({ where: { id: fleetAgentId } });
+  const ctx = await ctxForOwner(fleetAgent.ownerId);
   auditLog("route.in", {
     groupId: msg.groupId,
     sender: msg.sender ?? null,
@@ -682,33 +682,33 @@ export async function routeMessage(
     hasMedia: opts.hasMedia ?? !!msg.mediaUrl,
   });
 
-  // Per-(pool, group) rate limit so one chatty group can't drain the fleet. The
+  // Per-(fleetAgent, group) rate limit so one chatty group can't drain the fleet. The
   // in-process Baileys edge checks this BEFORE extracting media (to not pay for
   // Gemini on a spammy group) and passes skipRateLimit so we don't double-count;
-  // the HTTP surface relies on this check. PoolRateLimited → one "saturado" notice.
+  // the HTTP surface relies on this check. FleetAgentRateLimited → one "saturado" notice.
   if (!opts.skipRateLimit) {
-    const rl = await checkSandboxRateLimit(`${poolId}:${msg.groupId}`, "op");
+    const rl = await checkSandboxRateLimit(`${fleetAgentId}:${msg.groupId}`, "op");
     if (!rl.allowed) {
-      throw new PoolRateLimited(`group ${msg.groupId} rate limited (retry ${rl.retryAfterS}s)`);
+      throw new FleetAgentRateLimited(`group ${msg.groupId} rate limited (retry ${rl.retryAfterS}s)`);
     }
   }
 
   // Session commands — intercept before spawning work / logging.
-  //  - /clear|/nueva|/reset: pool-state reset (no worker turn).
+  //  - /clear|/nueva|/reset: fleetAgent-state reset (no worker turn).
   //  - /compact: forward the BARE "/compact" (no sender prefix) so the Agent SDK
   //    recognizes its built-in slash command and compacts the transcript.
   const cmd = msg.text.trim().toLowerCase();
   if (cmd === "/clear" || cmd === "/nueva" || cmd === "/reset") {
-    return clearGroupSession(ctx, pool, msg.groupId);
+    return clearGroupSession(ctx, fleetAgent, msg.groupId);
   }
   const bareCompact = cmd === "/compact";
 
-  await db.poolMessage.create({
-    data: { poolId: pool.id, groupId: msg.groupId, role: "user", sender: msg.sender ?? null, text: msg.text },
+  await db.fleetAgentMessage.create({
+    data: { fleetAgentId: fleetAgent.id, groupId: msg.groupId, role: "user", sender: msg.sender ?? null, text: msg.text },
   });
 
   let content = bareCompact ? "/compact" : formatContent(msg); // stable UUID → per-conversation .jsonl transcript
-  let placed = await pickOrSpawn(ctx, pool, msg.groupId);
+  let placed = await pickOrSpawn(ctx, fleetAgent, msg.groupId);
   // Config unit for key + capabilities: the number (WABA) or the conversation itself.
   const cfgId = msg.configGroupId ?? msg.groupId;
 
@@ -742,7 +742,7 @@ export async function routeMessage(
       // the fresh VM also has it) before the turn opens — so Read finds the file.
       if (imgPath && msg.image) {
         await writeFile(ctx, worker.sandboxId, { path: imgPath, content: msg.image.base64, encoding: "base64" }).catch(
-          (e) => console.error(`pool image write ${imgPath} failed:`, e)
+          (e) => console.error(`fleetAgent image write ${imgPath} failed:`, e)
         );
       }
       const stream = await openAgentChunkStream(
@@ -762,18 +762,18 @@ export async function routeMessage(
           content,
           sessionId: placed.sessionUuid,
           // Per-grupo: la dnk_pub_ del org dueño de este grupo. El body gana
-          // (canales web la mandan por turno); cae a pool.groupKeys[cfgId]
+          // (canales web la mandan por turno); cae a fleetAgent.groupKeys[cfgId]
           // (registrado al crear el grupo, ruta WhatsApp). cfgId = configGroupId
           // (WABA: el número) o groupId (Baileys/web: la conversación misma).
           denikApiKey:
             msg.denikApiKey ??
-            (pool.groupKeys as Record<string, string> | null)?.[cfgId],
-          // Personalización por-org (capa 3): se appendea a la persona del pool.
+            (fleetAgent.groupKeys as Record<string, string> | null)?.[cfgId],
+          // Personalización por-org (capa 3): se appendea a la persona del fleetAgent.
           appendSystemPrompt: msg.appendSystemPrompt,
           // Per-grupo: las capacidades que este grupo habilitó (curadas ∪ custom),
           // con sus secrets resueltos del vault del dueño. El worker las mergea
           // sobre sus builtins (easybits/wa). Resuelve por cfgId (unidad de config).
-          mcpServers: await resolveGroupMcpServers(pool, cfgId, pool.ownerId),
+          mcpServers: await resolveGroupMcpServers(fleetAgent, cfgId, fleetAgent.ownerId),
         }
       );
       reply = await collectStream(stream, opts.onChunk);
@@ -793,7 +793,7 @@ export async function routeMessage(
         err: e instanceof Error ? e.message : String(e),
       });
       await markWorkerLost(worker.id);
-      placed = await pickOrSpawn(ctx, pool, msg.groupId); // fresh box, restores memory
+      placed = await pickOrSpawn(ctx, fleetAgent, msg.groupId); // fresh box, restores memory
     } finally {
       busyVms.delete(worker.id);
     }
@@ -802,13 +802,13 @@ export async function routeMessage(
 
   const now = new Date();
   await db.agent.update({ where: { id: placed.vm.id }, data: { lastMessageAt: now } });
-  await db.poolRoute.update({
-    where: { poolId_groupId: { poolId: pool.id, groupId: msg.groupId } },
+  await db.fleetAgentRoute.update({
+    where: { fleetAgentId_groupId: { fleetAgentId: fleetAgent.id, groupId: msg.groupId } },
     data: { lastMessageAt: now },
   });
   if (reply) {
-    await db.poolMessage.create({
-      data: { poolId: pool.id, groupId: msg.groupId, role: "agent", text: reply },
+    await db.fleetAgentMessage.create({
+      data: { fleetAgentId: fleetAgent.id, groupId: msg.groupId, role: "agent", text: reply },
     });
   }
   return reply;
@@ -822,7 +822,7 @@ export async function routeMessage(
 //      the next message restore the conversation onto a fresh VM.
 // Order matters: destroy first (clears long-idle VMs), then suspend the 5–10min
 // band that remains. Call from a cron/interval. Returns {suspended, destroyed}.
-export async function reapIdlePools(): Promise<{ suspended: number; destroyed: number }> {
+export async function reapIdleFleetAgents(): Promise<{ suspended: number; destroyed: number }> {
   let suspended = 0;
   let destroyed = 0;
   const now = Date.now();
@@ -830,17 +830,17 @@ export async function reapIdlePools(): Promise<{ suspended: number; destroyed: n
   // filters by id ∉ busy so an in-flight turn is exempt regardless of how stale
   // its lastMessageAt looks (it only refreshes at turn completion).
   const busy = [...busyVms];
-  const pools = await db.pool.findMany();
-  for (const pool of pools) {
-    const suspendCutoff = new Date(now - pool.idleSuspendMin * 60_000);
-    const destroyCutoff = new Date(now - pool.destroyIdleMin * 60_000);
-    const ctx = await ctxForOwner(pool.ownerId).catch(() => null);
+  const pools = await db.fleetAgent.findMany();
+  for (const fleetAgent of pools) {
+    const suspendCutoff = new Date(now - fleetAgent.idleSuspendMin * 60_000);
+    const destroyCutoff = new Date(now - fleetAgent.destroyIdleMin * 60_000);
+    const ctx = await ctxForOwner(fleetAgent.ownerId).catch(() => null);
     if (!ctx) continue;
 
     // Stage 2 — destroy long-idle VMs (running or already-suspended).
     const toDestroy = await db.agent.findMany({
       where: {
-        poolId: pool.id,
+        fleetAgentId: fleetAgent.id,
         status: { in: ["running", "suspended"] },
         lastMessageAt: { lt: destroyCutoff },
         id: { notIn: busy },
@@ -851,26 +851,26 @@ export async function reapIdlePools(): Promise<{ suspended: number; destroyed: n
         // A still-running VM may hold un-backed-up turns since its last suspend —
         // back up before destroying. Suspended VMs were backed up at suspend.
         if (w.status === "running") {
-          const routes = await db.poolRoute.findMany({ where: { agentId: w.id } });
+          const routes = await db.fleetAgentRoute.findMany({ where: { agentId: w.id } });
           for (const r of routes) {
-            await backupConversation(ctx, w, pool.id, r.sessionUuid).catch((e) =>
-              console.error(`pool reaper: backup ${r.sessionUuid} failed:`, e)
+            await backupConversation(ctx, w, fleetAgent.id, r.sessionUuid).catch((e) =>
+              console.error(`fleet reaper: backup ${r.sessionUuid} failed:`, e)
             );
           }
         }
-        await db.poolRoute.updateMany({ where: { agentId: w.id }, data: { agentId: null, detachedAt: new Date() } });
+        await db.fleetAgentRoute.updateMany({ where: { agentId: w.id }, data: { agentId: null, detachedAt: new Date() } });
         await destroySandbox(ctx, w.sandboxId);
         await db.agent.delete({ where: { id: w.id } }).catch(() => {});
         destroyed++;
       } catch (e) {
-        console.error(`pool reaper: destroy ${w.sandboxId} failed:`, e);
+        console.error(`fleet reaper: destroy ${w.sandboxId} failed:`, e);
       }
     }
 
     // Stage 1 — suspend the 5–10min idle band (running VMs not just destroyed).
     const toSuspend = await db.agent.findMany({
       where: {
-        poolId: pool.id,
+        fleetAgentId: fleetAgent.id,
         status: "running",
         lastMessageAt: { lt: suspendCutoff },
         id: { notIn: busy },
@@ -878,17 +878,17 @@ export async function reapIdlePools(): Promise<{ suspended: number; destroyed: n
     });
     for (const w of toSuspend) {
       try {
-        const routes = await db.poolRoute.findMany({ where: { agentId: w.id } });
+        const routes = await db.fleetAgentRoute.findMany({ where: { agentId: w.id } });
         for (const r of routes) {
-          await backupConversation(ctx, w, pool.id, r.sessionUuid).catch((e) =>
-            console.error(`pool reaper: backup ${r.sessionUuid} failed:`, e)
+          await backupConversation(ctx, w, fleetAgent.id, r.sessionUuid).catch((e) =>
+            console.error(`fleet reaper: backup ${r.sessionUuid} failed:`, e)
           );
         }
         await suspendSandbox(ctx, w.sandboxId);
         await db.agent.update({ where: { id: w.id }, data: { status: "suspended" } });
         suspended++;
       } catch (e) {
-        console.error(`pool reaper: suspend ${w.sandboxId} failed:`, e);
+        console.error(`fleet reaper: suspend ${w.sandboxId} failed:`, e);
       }
     }
   }
@@ -896,13 +896,13 @@ export async function reapIdlePools(): Promise<{ suspended: number; destroyed: n
   return { suspended, destroyed };
 }
 
-// Delete a pool: destroy its worker VMs (best-effort), then remove its routes,
-// messages and the pool row. Caller must disconnect the Baileys socket first
-// (disconnectPool) — kept out of here to avoid a circular import.
-export async function deletePool(ctx: AuthContext, poolId: string): Promise<void> {
-  const pool = await db.pool.findUnique({ where: { id: poolId } });
-  if (!pool || pool.ownerId !== ctx.user.id) throw new Error("pool not found");
-  const workers = await db.agent.findMany({ where: { poolId } });
+// Delete a fleetAgent: destroy its worker VMs (best-effort), then remove its routes,
+// messages and the fleetAgent row. Caller must disconnect the Baileys socket first
+// (disconnectFleetAgent) — kept out of here to avoid a circular import.
+export async function deleteFleetAgent(ctx: AuthContext, fleetAgentId: string): Promise<void> {
+  const fleetAgent = await db.fleetAgent.findUnique({ where: { id: fleetAgentId } });
+  if (!fleetAgent || fleetAgent.ownerId !== ctx.user.id) throw new Error("fleetAgent not found");
+  const workers = await db.agent.findMany({ where: { fleetAgentId } });
   for (const w of workers) {
     try {
       await destroySandbox(ctx, w.sandboxId);
@@ -910,24 +910,24 @@ export async function deletePool(ctx: AuthContext, poolId: string): Promise<void
     } catch (e) {
       // Don't drop the Agent row if the host VM survived — leave it for
       // reconciliation instead of orphaning a live VM on the box.
-      console.error(`deletePool: destroy ${w.sandboxId} failed, keeping row:`, e);
+      console.error(`deleteFleetAgent: destroy ${w.sandboxId} failed, keeping row:`, e);
       await db.agent.update({ where: { id: w.id }, data: { status: "error" } }).catch(() => {});
     }
   }
   // Best-effort: drop the externalized memory blobs so they don't orphan.
-  const routes = await db.poolRoute.findMany({ where: { poolId }, select: { sessionUuid: true } });
+  const routes = await db.fleetAgentRoute.findMany({ where: { fleetAgentId }, select: { sessionUuid: true } });
   for (const r of routes) {
-    await memClient().deleteObject(memKey(poolId, r.sessionUuid)).catch(() => {});
+    await memClient().deleteObject(memKey(fleetAgentId, r.sessionUuid)).catch(() => {});
   }
-  await db.poolMessage.deleteMany({ where: { poolId } });
-  await db.pool.delete({ where: { id: poolId } }); // PoolRoute cascades
+  await db.fleetAgentMessage.deleteMany({ where: { fleetAgentId } });
+  await db.fleetAgent.delete({ where: { id: fleetAgentId } }); // FleetAgentRoute cascades
 }
 
-// Default identity for pool workers: Ghosty, español, con tools de EasyBits vía
+// Default identity for fleetAgent workers: Ghosty, español, con tools de EasyBits vía
 // MCP (la llave EASYBITS_API_KEY la inyecta createAgent → el runtime arma el
 // server `easybits`). Va como SYSTEM_PROMPT en persona.env (el claude-worker lo
 // lee). Equivale al rol de un CLAUDE.md. Solidificar el default en el template
-// (CLAUDE.md propio) es follow-up; por ahora el pool lo inyecta.
+// (CLAUDE.md propio) es follow-up; por ahora el fleetAgent lo inyecta.
 // BASE / guardrails de plataforma (formato WhatsApp, brevedad, uso de tools,
 // honestidad). NO es la personalidad final: cuando llegue la customización del
 // dueño (agenda #3, form de agente), su texto debe COMPONERSE ENCIMA de esto
@@ -945,8 +945,8 @@ const GHOSTY_SYSTEM = [
 ].join(" ");
 export const GHOSTY_PERSONA = { name: "Ghosty", env: { ASSISTANT_NAME: "Ghosty", SYSTEM_PROMPT: GHOSTY_SYSTEM } };
 
-// Create a pool for an owner. token is the bearer the Baileys surface presents.
-export async function createPool(
+// Create a fleetAgent for an owner. token is the bearer the Baileys surface presents.
+export async function createFleetAgent(
   ctx: AuthContext,
   opts: {
     name?: string;
@@ -960,7 +960,7 @@ export async function createPool(
     destroyIdleMin?: number;
   } = {}
 ) {
-  return db.pool.create({
+  return db.fleetAgent.create({
     data: {
       ownerId: ctx.user.id,
       name: opts.name,
@@ -975,7 +975,7 @@ export async function createPool(
       // OJO: maxWorkersPerVm cuenta RUTAS pegajosas (conversaciones), pero la RAM
       // la consume el TURNO ACTIVO (subproceso claude). Entre turnos el subproceso
       // sale → una ruta dormida cuesta ~0 RAM (solo disco). Medición real 2026-06-24
-      // (scripts/pool-vm-rss-probe.ts): baseline VM 182MB + ~221MB por turno LIGERO
+      // (scripts/fleetAgent-vm-rss-probe.ts): baseline VM 182MB + ~221MB por turno LIGERO
       // (sin tools); presupuesta ~450MB/turno con MCP/tool calls. 4 turnos ligeros
       // concurrentes = 1059MB (53% de 2GB); 4 pesados ≈ 1982MB ≈ 99% (al borde →
       // semáforo encola el 5º). Densidad ~512MB/agente, en pares: 1GB→2, 2GB→4,
@@ -989,7 +989,7 @@ export async function createPool(
       // Por eso destroy@45min y no @3: el disco aguanta (hay box de sobra) y el
       // win real es que un mensaje tras un hueco de minutos arranca sub-segundo en
       // vez de re-bootear. La memoria igual se externaliza a S3 (round-trip probado
-      // byte-a-byte, scripts/pool-memory-roundtrip.ts), así que destruir sigue
+      // byte-a-byte, scripts/fleet-memory-roundtrip.ts), así que destruir sigue
       // siendo seguro — solo lo posponemos para cobrar el resume caliente.
       idleSuspendMin: opts.idleSuspendMin ?? 2,
       destroyIdleMin: opts.destroyIdleMin ?? 45,

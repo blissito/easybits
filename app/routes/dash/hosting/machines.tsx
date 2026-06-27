@@ -70,7 +70,7 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
   });
   const { PLANS: plansMap } = await import("~/lib/plans");
   // Total concurrent-sandbox budget = plan + add-ons reservados (mismos add-ons
-  // que el pool). Así hosting y pools muestran el MISMO número (no 3 vs 5).
+  // que la flota). Así hosting y flota muestran el MISMO número (no 3 vs 5).
   const { getReservedCapacity } = await import("~/.server/core/sandboxReservations");
   const reserved = await getReservedCapacity(user.id);
   const sandboxLimit = (plansMap[plan]?.concurrentSandboxes ?? 1) + reserved.machines;

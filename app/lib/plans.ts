@@ -157,13 +157,13 @@ export function isPaidPlan(plan: PlanKey): boolean {
 }
 
 /**
- * Tamaño de la caja (sandbox worker) del pool — UNIFORME para todos los planes.
+ * Tamaño de la caja (sandbox worker) del fleetAgent — UNIFORME para todos los planes.
  * Una sola caja (2GB/2vCPU/4 agentes, sí caben llamadas/voz). El tier escala SOLO
  * el NÚMERO de cajas (`concurrentSandboxes`), no el tamaño — así el guard es simple
- * y no hay densidades mixtas. Fuente única para el HUD y el default de createPool.
+ * y no hay densidades mixtas. Fuente única para el HUD y el default de createFleetAgent.
  * El param `plan` se mantiene por si en el futuro se quiere diferenciar.
  */
-export function getPoolBox(_plan: PlanKey): {
+export function getFleetBox(_plan: PlanKey): {
   vmMemMb: number;
   vcpu: number;
   agentsPerBox: number;

@@ -1,28 +1,28 @@
-import type { Route } from "./+types/pools";
+import type { Route } from "./+types/fleet-agents";
 import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { useFetcher, useRevalidator, data } from "react-router";
 import { motion, AnimatePresence } from "motion/react";
 import QRCode from "qrcode";
 import { Switch } from "~/components/forms/Switch";
 import { FeltFilters } from "~/components/felt/FeltFilters";
-import { PLANS, getUserPlan, getPoolBox, NEXT_PLAN } from "~/lib/plans";
+import { PLANS, getUserPlan, getFleetBox, NEXT_PLAN } from "~/lib/plans";
 import { getUserOrRedirect } from "~/.server/getters";
 import { db } from "~/.server/db";
 import { delegatedAccountIds, SCOPES } from "~/.server/delegation";
-import { createPool, deletePool, mergedCapabilities, CURATED_CAPABILITIES, DEFAULT_MCP_CATALOG, type McpCatalogEntry, type GroupConfig } from "~/.server/core/poolOperations";
+import { createFleetAgent, deleteFleetAgent, mergedCapabilities, CURATED_CAPABILITIES, DEFAULT_MCP_CATALOG, type McpCatalogEntry, type GroupConfig } from "~/.server/core/fleetAgentOperations";
 import { getReservedCapacity } from "~/.server/core/sandboxReservations";
 import { listSecrets, createSecret } from "~/.server/core/secretOperations";
 import {
-  connectPool,
-  disconnectPool,
-  listPoolGroups,
-  isPoolLive,
+  connectFleetAgent,
+  disconnectFleetAgent,
+  listFleetAgentGroups,
+  isFleetAgentLive,
   ensureRehydrated,
 } from "~/.server/integrations/whatsapp/baileys.server";
 
 const DEFAULT_OAUTH = "CLAUDE_CODE_OAUTH_TOKEN";
 
-// The live HUD poll (routes/dash/pools.poll.tsx) reuses THIS loader on the server
+// The live HUD poll (routes/dash/fleet-agents.poll.tsx) reuses THIS loader on the server
 // to return the EXACT same shape as JSON, so the page can poll it with a plain
 // `fetch` instead of useRevalidator → a transient 5xx (e.g. the ~50s window while
 // Fly replaces the single machine on deploy) no longer tears the page down into
@@ -35,14 +35,14 @@ export async function loader({ request }: Route.LoaderArgs) {
   await ensureRehydrated();
 
   const secretNames = (await listSecrets(user.id)).map((s) => s.name);
-  const rows = await db.pool.findMany({ where: { ownerId: user.id }, orderBy: { createdAt: "desc" } });
+  const rows = await db.fleetAgent.findMany({ where: { ownerId: user.id }, orderBy: { createdAt: "desc" } });
   const pools = await Promise.all(
     rows.map(async (p) => {
       const b = (p.baileys ?? {}) as { status?: string; qr?: string; reason?: string; pairBlockedUntil?: string };
       const status = b.status ?? "disconnected";
       // Pairing throttle: WhatsApp blocked this number for too many attempts.
       const throttledUntil = b.pairBlockedUntil && new Date(b.pairBlockedUntil) > new Date() ? b.pairBlockedUntil : null;
-      const live = isPoolLive(p.id);
+      const live = isFleetAgentLive(p.id);
       // Show QR / pairing code by PRESENCE (they persist across transient status
       // changes via the merge in setStatus) — hide only once actually connected.
       const connectedNow = status === "connected";
@@ -51,7 +51,7 @@ export async function loader({ request }: Route.LoaderArgs) {
       const pairingCode = !connectedNow ? ((b as any).pairingCode as string | undefined) ?? null : null;
       // Merged list (live groupFetch ∪ discovered seenGroups) — shows groups with
       // activity even if metadata sync hasn't listed them yet.
-      const rawGroups = await listPoolGroups(p.id);
+      const rawGroups = await listFleetAgentGroups(p.id);
       // Capabilities for the admin UI. builtins (easybits/wa) are always-on and
       // just listed. capabilities (curated ∪ custom) are togglable per group; each
       // carries whether its required vault secret(s) are present (NAMES only — the
@@ -95,7 +95,7 @@ export async function loader({ request }: Route.LoaderArgs) {
       // Per-VM capacity boxes: each worker VM + how many conversations (slots) it
       // holds vs maxWorkersPerVm. Drives the "cajitas encendidas" capacity view.
       const workers = await db.agent.findMany({
-        where: { poolId: p.id, status: { in: ["running", "suspended", "building"] } },
+        where: { fleetAgentId: p.id, status: { in: ["running", "suspended", "building"] } },
         select: { id: true, status: true, sandboxId: true },
       });
       // Ghosty = cerebro claude-worker → en las cajitas los agentes se dibujan
@@ -107,10 +107,10 @@ export async function loader({ request }: Route.LoaderArgs) {
           sandboxId: w.sandboxId,
           status: w.status,
           ghosty,
-          slots: await db.poolRoute.count({ where: { agentId: w.id } }),
+          slots: await db.fleetAgentRoute.count({ where: { agentId: w.id } }),
         }))
       );
-      const conversations = await db.poolRoute.count({ where: { poolId: p.id } });
+      const conversations = await db.fleetAgentRoute.count({ where: { fleetAgentId: p.id } });
       return {
         id: p.id, name: p.name, status, live, qrDataUrl, pairingCode, groups,
         wabaNumbers,
@@ -124,14 +124,14 @@ export async function loader({ request }: Route.LoaderArgs) {
   // Capacity is per ACCOUNT (one fleet, any number of channels) — aggregate every
   // channel's worker VMs into a single general view instead of per-card cajitas.
   const machines = pools.flatMap((p) => p.machines);
-  // Account capacity = the plan's concurrent-sandbox budget. A pool worker VM IS
+  // Account capacity = the plan's concurrent-sandbox budget. A fleetAgent worker VM IS
   // a sandbox, so "Mega = 3 máquinas" maps 1:1. Each VM holds maxWorkersPerVm
   // agents (workers), so agent capacity = maxMachines × maxWorkersPerVm.
   const plan = getUserPlan(user);
   const planCfg = PLANS[plan];
-  // Tamaño de caja DERIVADO DEL PLAN (fuente única). Si ya hay pool, su config
+  // Tamaño de caja DERIVADO DEL PLAN (fuente única). Si ya hay fleetAgent, su config
   // real manda; si no, caemos al tamaño del plan (no a un fallback "byte" fijo).
-  const box = getPoolBox(plan);
+  const box = getFleetBox(plan);
   const maxWorkersPerVm = pools[0]?.maxWorkersPerVm ?? box.agentsPerBox;
   // Reserved capacity bought in /dash/packs raises the budget on top of the
   // plan: +1 machine slot and +`agents` agent slots per active reservation.
@@ -139,7 +139,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   // TODAS las sandboxes del owner en el host se muestran en el HUD, categorizadas:
   // las de SISTEMA (llamadas livekit / voz kokoro) en azul, y cualquier otra
   // (custom: code-interpreter, etc.) en gris con su template. Dedup contra los
-  // worker del pool (ya están en `machines`). Consistente con el gate de budget.
+  // worker del fleetAgent (ya están en `machines`). Consistente con el gate de budget.
   const { listSandboxes } = await import("~/.server/core/sandboxOperations");
   const SYSTEM_TEMPLATES: Record<string, string> = { "livekit-svc": "llamadas" };
   const workerSandboxIds = new Set(machines.map((m) => m.sandboxId).filter(Boolean) as string[]);
@@ -205,7 +205,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   let sharedPools: Array<{ id: string; name: string | null; status: string; ownerEmail: string | null }> = [];
   if (delegatedIds.length) {
     const [sharedRows, owners] = await Promise.all([
-      db.pool.findMany({ where: { ownerId: { in: delegatedIds } }, orderBy: { createdAt: "desc" } }),
+      db.fleetAgent.findMany({ where: { ownerId: { in: delegatedIds } }, orderBy: { createdAt: "desc" } }),
       db.user.findMany({ where: { id: { in: delegatedIds } }, select: { id: true, email: true } }),
     ]);
     const emailById = new Map(owners.map((u) => [u.id, u.email]));
@@ -236,73 +236,73 @@ export async function action({ request }: Route.ActionArgs) {
       oauthSecretName = secretName;
     }
     if (!oauthSecretName) return data({ error: "Elige o pega un OAuth" }, { status: 400 });
-    const pool = await createPool(ctx, { name, oauthSecretName });
-    return data({ ok: true, poolId: pool.id });
+    const fleetAgent = await createFleetAgent(ctx, { name, oauthSecretName });
+    return data({ ok: true, fleetAgentId: fleetAgent.id });
   }
 
-  const poolId = String(fd.get("poolId") || "");
-  const pool = poolId ? await db.pool.findUnique({ where: { id: poolId } }) : null;
-  if (!pool || pool.ownerId !== user.id) return data({ error: "not found" }, { status: 404 });
+  const fleetAgentId = String(fd.get("fleetAgentId") || "");
+  const fleetAgent = fleetAgentId ? await db.fleetAgent.findUnique({ where: { id: fleetAgentId } }) : null;
+  if (!fleetAgent || fleetAgent.ownerId !== user.id) return data({ error: "not found" }, { status: 404 });
 
   if (intent === "connect") {
-    const cur = (pool.baileys as Record<string, any> | null) ?? {};
+    const cur = (fleetAgent.baileys as Record<string, any> | null) ?? {};
     // Respect the pairing throttle: if Meta blocked us, don't even start — every
     // attempt deepens it. The UI already hides the buttons, this guards the race.
     if (cur.pairBlockedUntil && new Date(cur.pairBlockedUntil) > new Date()) {
       return data({ error: "throttled", until: cur.pairBlockedUntil }, { status: 429 });
     }
     // Non-blocking: flip status to "connecting" so the UI starts polling, then
-    // fire connectPool in the background. Awaiting it could hang the action on
+    // fire connectFleetAgent in the background. Awaiting it could hang the action on
     // the WhatsApp version fetch / socket setup → spinner stuck forever.
     const phone = String(fd.get("phone") || "").trim() || undefined; // pairing-code method if set
     // PRESERVE the throttle-guard counters (drop only transient artifacts) — a
     // raw replace here would reset pairFails on every click and defeat the guard.
     const { qr, pairingCode, reason, until, ...keep } = cur;
-    await db.pool.update({ where: { id: poolId }, data: { baileys: { ...keep, status: "connecting", at: new Date().toISOString() } } });
-    void connectPool(poolId, { pairingPhone: phone }).catch((e) => console.error("connectPool failed", e));
+    await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { baileys: { ...keep, status: "connecting", at: new Date().toISOString() } } });
+    void connectFleetAgent(fleetAgentId, { pairingPhone: phone }).catch((e) => console.error("connectFleetAgent failed", e));
     return data({ ok: true });
   }
   if (intent === "disconnect") {
-    await disconnectPool(poolId);
+    await disconnectFleetAgent(fleetAgentId);
     return data({ ok: true });
   }
   if (intent === "delete") {
-    await disconnectPool(poolId).catch(() => {});
-    await deletePool(ctx, poolId);
+    await disconnectFleetAgent(fleetAgentId).catch(() => {});
+    await deleteFleetAgent(ctx, fleetAgentId);
     return data({ ok: true, deleted: true });
   }
   if (intent === "rename") {
     const name = String(fd.get("name") || "").trim();
-    await db.pool.update({ where: { id: poolId }, data: { name: name || null } });
+    await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { name: name || null } });
     return data({ ok: true });
   }
   if (intent === "toggle-group") {
     const groupId = String(fd.get("groupId") || "");
     const on = String(fd.get("on") || "") === "1";
-    const set = new Set(pool.enabledGroups);
+    const set = new Set(fleetAgent.enabledGroups);
     if (on) set.add(groupId);
     else set.delete(groupId);
     const next: { enabledGroups: string[]; mainGroupJid?: null } = { enabledGroups: [...set] };
     // Un grupo apagado no puede seguir siendo el main (perdería el privilegio de
     // admin sin estar atendido) → lo limpiamos al desactivarlo.
-    if (!on && pool.mainGroupJid === groupId) next.mainGroupJid = null;
-    await db.pool.update({ where: { id: poolId }, data: next });
+    if (!on && fleetAgent.mainGroupJid === groupId) next.mainGroupJid = null;
+    await db.fleetAgent.update({ where: { id: fleetAgentId }, data: next });
     return data({ ok: true });
   }
   if (intent === "set-main") {
     // Marca/desmarca el grupo MAIN (admin) del agente. Solo un grupo activo puede
     // serlo; re-tocarlo lo desmarca. El gate cross-grupo lo lee pools.wa-action.
     const groupId = String(fd.get("groupId") || "");
-    const mainNext = pool.mainGroupJid === groupId ? null : groupId || null;
-    if (mainNext && !pool.enabledGroups.includes(mainNext)) {
+    const mainNext = fleetAgent.mainGroupJid === groupId ? null : groupId || null;
+    if (mainNext && !fleetAgent.enabledGroups.includes(mainNext)) {
       return data({ error: "el grupo main debe estar activo" }, { status: 400 });
     }
-    await db.pool.update({ where: { id: poolId }, data: { mainGroupJid: mainNext } });
+    await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { mainGroupJid: mainNext } });
     return data({ ok: true });
   }
   if (intent === "set-secret") {
     // Provide a capability's credential — stored in the owner's secrets vault
-    // (AES-256-GCM), referenced by name as $secret:NAME. Never stored in the pool.
+    // (AES-256-GCM), referenced by name as $secret:NAME. Never stored in the fleetAgent.
     const name = String(fd.get("name") || "").trim();
     const value = String(fd.get("value") || "").trim();
     if (!value) return data({ error: "valor requerido" }, { status: 400 });
@@ -318,16 +318,16 @@ export async function action({ request }: Route.ActionArgs) {
     const groupId = String(fd.get("groupId") || "");
     const name = String(fd.get("mcp") || "");
     const on = String(fd.get("on") || "") === "1";
-    if (!mergedCapabilities(pool).some((e) => e.name === name && !e.builtin)) {
+    if (!mergedCapabilities(fleetAgent).some((e) => e.name === name && !e.builtin)) {
       return data({ error: "esa capacidad no existe" }, { status: 400 });
     }
-    const configs = { ...((pool.groupConfigs as Record<string, GroupConfig> | null) ?? {}) };
+    const configs = { ...((fleetAgent.groupConfigs as Record<string, GroupConfig> | null) ?? {}) };
     const cur = configs[groupId] ?? {};
     const set = new Set(cur.mcpServers ?? []);
     if (on) set.add(name);
     else set.delete(name);
     configs[groupId] = { ...cur, mcpServers: [...set] };
-    await db.pool.update({ where: { id: poolId }, data: { groupConfigs: configs } });
+    await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { groupConfigs: configs } });
     return data({ ok: true });
   }
   if (intent === "add-mcp") {
@@ -341,7 +341,7 @@ export async function action({ request }: Route.ActionArgs) {
     const envVar = String(fd.get("envVar") || "").trim() || secretName; // env var the MCP reads
     if (!name) return data({ error: "nombre requerido" }, { status: 400 });
     if (CURATED_CAPABILITIES.some((e) => e.name === name)) return data({ error: "ese nombre es una capacidad incluida" }, { status: 400 });
-    const catalog = (pool.mcpCatalog as McpCatalogEntry[] | null) ?? [];
+    const catalog = (fleetAgent.mcpCatalog as McpCatalogEntry[] | null) ?? [];
     if (catalog.some((e) => e.name === name)) return data({ error: "ya existe ese MCP" }, { status: 400 });
     if (!pkg && !url) return data({ error: "da un paquete npm (stdio) o una URL (http)" }, { status: 400 });
     if (secretName && !/^[A-Z_][A-Z0-9_]*$/.test(secretName)) return data({ error: "el secret debe ser MAYÚSCULAS_CON_GUION_BAJO" }, { status: 400 });
@@ -349,24 +349,24 @@ export async function action({ request }: Route.ActionArgs) {
     const entry: McpCatalogEntry = url
       ? { name, label, transport: "http", url, ...(env ? { env } : {}), ...(secretName ? { requiredSecrets: [secretName] } : {}) }
       : { name, label, transport: "stdio", command: "npx", args: ["-y", pkg], ...(env ? { env } : {}), ...(secretName ? { requiredSecrets: [secretName] } : {}) };
-    await db.pool.update({ where: { id: poolId }, data: { mcpCatalog: [...catalog, entry] } });
+    await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { mcpCatalog: [...catalog, entry] } });
     return data({ ok: true });
   }
   if (intent === "remove-mcp") {
     const name = String(fd.get("name") || "");
     if (CURATED_CAPABILITIES.some((e) => e.name === name)) return data({ error: "no se puede quitar una capacidad incluida" }, { status: 400 });
-    const catalog = (pool.mcpCatalog as McpCatalogEntry[] | null) ?? [];
+    const catalog = (fleetAgent.mcpCatalog as McpCatalogEntry[] | null) ?? [];
     const target = catalog.find((e) => e.name === name);
     if (!target) return data({ error: "no existe" }, { status: 404 });
     if (target.builtin) return data({ error: "no se puede quitar un MCP builtin" }, { status: 400 });
     // Drop it from every group's selection too, so no stale reference lingers.
-    const configs = { ...((pool.groupConfigs as Record<string, GroupConfig> | null) ?? {}) };
+    const configs = { ...((fleetAgent.groupConfigs as Record<string, GroupConfig> | null) ?? {}) };
     for (const jid of Object.keys(configs)) {
       const list = configs[jid].mcpServers;
       if (list?.includes(name)) configs[jid] = { ...configs[jid], mcpServers: list.filter((n) => n !== name) };
     }
-    await db.pool.update({
-      where: { id: poolId },
+    await db.fleetAgent.update({
+      where: { id: fleetAgentId },
       data: { mcpCatalog: catalog.filter((e) => e.name !== name), groupConfigs: configs },
     });
     return data({ ok: true });
@@ -376,7 +376,7 @@ export async function action({ request }: Route.ActionArgs) {
     // fromMe y NO antepone "assistantName:"; false = número compartido (antepone
     // el nombre + permite autoprueba del dueño). Lo lee baileys fresco por ráfaga.
     const on = String(fd.get("on") || "") === "1";
-    await db.pool.update({ where: { id: poolId }, data: { hasOwnNumber: on } });
+    await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { hasOwnNumber: on } });
     return data({ ok: true });
   }
   if (intent === "set-waba-identity") {
@@ -385,14 +385,14 @@ export async function action({ request }: Route.ActionArgs) {
     const integrationId = String(fd.get("integrationId") || "");
     const name = String(fd.get("name") || "").trim();
     const systemPrompt = String(fd.get("systemPrompt") || "").trim();
-    const cfg = (pool.wabaConfig as { formmySecret?: string; orgs?: Record<string, any> } | null) ?? {};
+    const cfg = (fleetAgent.wabaConfig as { formmySecret?: string; orgs?: Record<string, any> } | null) ?? {};
     const org = cfg.orgs?.[integrationId];
     if (!org) return data({ error: "número no encontrado" }, { status: 404 });
     const next = {
       ...cfg,
       orgs: { ...cfg.orgs, [integrationId]: { ...org, name: name || undefined, systemPrompt: systemPrompt || undefined } },
     };
-    await db.pool.update({ where: { id: poolId }, data: { wabaConfig: next } });
+    await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { wabaConfig: next } });
     return data({ ok: true });
   }
   return data({ error: "intent inválido" }, { status: 400 });
@@ -435,7 +435,7 @@ function blinkTiming(seed: string): { offset: number; period: number } {
 }
 
 // Ghosty — la mascota de la marca (fantasma morado + lentes), el agente INSIGNIA
-// que el pool ofrece por default. Inline SVG (no hay asset suelto del fantasma;
+// que el fleetAgent ofrece por default. Inline SVG (no hay asset suelto del fantasma;
 // /logo-purple.svg es solo los ojitos). Parpadea sutil para sentirse vivo.
 function GhostyMascot({ className = "", blink = true, sleeping = false, offset = 0, period = 5 }: { className?: string; blink?: boolean; sleeping?: boolean; offset?: number; period?: number }) {
   // begin negativo = arranca desfasado; period distinto = derivan y NUNCA vuelven a
@@ -657,8 +657,8 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
 
   const busy = fetcher.state !== "idle";
   const bIntent = fetcher.formData?.get("intent") as string | undefined;
-  const bPool = fetcher.formData?.get("poolId") as string | undefined;
-  const isBusy = (intent: string, poolId?: string) => busy && bIntent === intent && (poolId === undefined || bPool === poolId);
+  const bPool = fetcher.formData?.get("fleetAgentId") as string | undefined;
+  const isBusy = (intent: string, fleetAgentId?: string) => busy && bIntent === intent && (fleetAgentId === undefined || bPool === fleetAgentId);
 
   const polling = pools.some(
     (p) =>
@@ -668,25 +668,25 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
   );
   const [phones, setPhones] = useState<Record<string, string>>({});
   const [showAllGroups, setShowAllGroups] = useState<Record<string, boolean>>({});
-  // Which group's capabilities modal is open: { poolId, groupId } | null.
-  const [capModal, setCapModal] = useState<{ poolId: string; groupId: string } | null>(null);
+  // Which group's capabilities modal is open: { fleetAgentId, groupId } | null.
+  const [capModal, setCapModal] = useState<{ fleetAgentId: string; groupId: string } | null>(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [editingName, setEditingName] = useState<string | null>(null);
   const [draftName, setDraftName] = useState("");
   const [optimisticNames, setOptimisticNames] = useState<Record<string, string>>({});
   const [wabaConnecting, setWabaConnecting] = useState<string | null>(null);
-  // Tabs por canal (baileys/waba/…) + ⚙ ajustes del canal abierto, por pool.
+  // Tabs por canal (baileys/waba/…) + ⚙ ajustes del canal abierto, por fleetAgent.
   const [activeChannel, setActiveChannel] = useState<Record<string, string>>({});
   const [chSettings, setChSettings] = useState<Record<string, boolean>>({});
   // Connect a WhatsApp Business number: ask our server for Formmy's signed popup
   // URL, open it, and wait for the popup to postMessage { code, phoneNumberId,
   // wabaId } back. We forward that to /waba/connect (which provisions via Formmy
   // and writes wabaConfig), then revalidate so the new number shows in the card.
-  const connectWaba = async (poolId: string) => {
-    setWabaConnecting(poolId);
+  const connectWaba = async (fleetAgentId: string) => {
+    setWabaConnecting(fleetAgentId);
     try {
-      const res = await fetch(`/api/v2/pool/${poolId}/waba/connect/start`, { method: "POST" });
+      const res = await fetch(`/api/v2/fleet-agents/${fleetAgentId}/waba/connect/start`, { method: "POST" });
       const { popupUrl, error } = await res.json();
       if (!popupUrl) throw new Error(error || "no popup");
       const popup = window.open(popupUrl, "waba-connect", "width=600,height=760");
@@ -696,7 +696,7 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
         if (!d?.code || !d?.phoneNumberId || !d?.wabaId) return;
         window.removeEventListener("message", onMsg);
         try { popup?.close(); } catch {}
-        await fetch(`/api/v2/pool/${poolId}/waba/connect`, {
+        await fetch(`/api/v2/fleet-agents/${fleetAgentId}/waba/connect`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(d),
@@ -854,7 +854,7 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                   </button>
                   {editingName === p.id ? (
                     <input autoFocus value={draftName} onChange={(e) => setDraftName(e.target.value)}
-                      onBlur={() => { const v = draftName.trim(); if (v !== displayName) { setOptimisticNames((s) => ({ ...s, [p.id]: v })); fetcher.submit({ intent: "rename", poolId: p.id, name: v }, { method: "post" }); } setEditingName(null); }}
+                      onBlur={() => { const v = draftName.trim(); if (v !== displayName) { setOptimisticNames((s) => ({ ...s, [p.id]: v })); fetcher.submit({ intent: "rename", fleetAgentId: p.id, name: v }, { method: "post" }); } setEditingName(null); }}
                       onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); if (e.key === "Escape") setEditingName(null); }}
                       placeholder="Sin nombre"
                       className="font-bold border-b-2 border-brand-500 bg-transparent outline-none min-w-0 flex-1 px-0.5" />
@@ -930,18 +930,18 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                             transition={{ type: "spring", stiffness: 500, damping: 34 }}>
                             <Switch value={g.enabled} label={g.subject}
                               className={`text-sm items-center flex-1 min-w-0 ${g.enabled ? "font-semibold" : "text-gray-600"}`}
-                              onChange={(on) => fetcher.submit({ intent: "toggle-group", poolId: p.id, groupId: g.id, on: on ? "1" : "0" }, { method: "post" })} />
+                              onChange={(on) => fetcher.submit({ intent: "toggle-group", fleetAgentId: p.id, groupId: g.id, on: on ? "1" : "0" }, { method: "post" })} />
                             {g.enabled && (
                               <div className="flex items-center gap-2 shrink-0">
                                 <button type="button" title="Capacidades y conexión de este grupo"
-                                  onClick={() => setCapModal({ poolId: p.id, groupId: g.id })}
+                                  onClick={() => setCapModal({ fleetAgentId: p.id, groupId: g.id })}
                                   className="flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-lg border-2 border-gray-200 text-gray-600 hover:border-brand-500 hover:text-brand-500 transition-colors">
                                   <span className="text-sm leading-none">⚡</span><span>Capacidades</span>
                                   <span className="text-[10px] leading-none bg-gray-100 text-gray-600 rounded-full px-1.5 py-0.5">{capCount}</span>
                                 </button>
                                 <button type="button"
                                   title={isMain ? "Grupo main (admin) — clic para quitar" : "Marcar como grupo main (admin)"}
-                                  onClick={() => fetcher.submit({ intent: "set-main", poolId: p.id, groupId: g.id }, { method: "post" })}
+                                  onClick={() => fetcher.submit({ intent: "set-main", fleetAgentId: p.id, groupId: g.id }, { method: "post" })}
                                   className={`flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg border-2 transition-colors ${isMain ? "border-brand-500 bg-brand-500 text-white" : "border-gray-200 text-gray-400 hover:border-gray-400 hover:text-gray-700"}`}>
                                   <span className="text-sm leading-none">{isMain ? "★" : "☆"}</span><span>Main</span>
                                 </button>
@@ -990,7 +990,7 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                   {/* Conectar (canal desconectado) */}
                   {!p.throttledUntil && p.status !== "connecting" && p.status !== "qr_pending" && p.status !== "pairing" && !(p.status === "connected" && p.live) && (
                     <div className="mt-3 flex flex-wrap gap-2 items-center">
-                      <button disabled={isBusy("connect", p.id)} onClick={() => fetcher.submit({ intent: "connect", poolId: p.id }, { method: "post" })}
+                      <button disabled={isBusy("connect", p.id)} onClick={() => fetcher.submit({ intent: "connect", fleetAgentId: p.id }, { method: "post" })}
                         className="border-2 border-black rounded-lg px-3 py-1.5 text-sm font-semibold disabled:opacity-60">
                         {isBusy("connect", p.id) ? <Spinner /> : "Conectar con QR"}
                       </button>
@@ -998,7 +998,7 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                       <input value={phones[p.id] ?? ""} onChange={(e) => setPhones((s) => ({ ...s, [p.id]: e.target.value }))}
                         placeholder="52155..." className="border-2 border-black rounded-lg px-2 py-1.5 text-sm w-32 font-mono" />
                       <button disabled={isBusy("connect", p.id) || !(phones[p.id] ?? "").trim()}
-                        onClick={() => fetcher.submit({ intent: "connect", poolId: p.id, phone: phones[p.id] }, { method: "post" })}
+                        onClick={() => fetcher.submit({ intent: "connect", fleetAgentId: p.id, phone: phones[p.id] }, { method: "post" })}
                         className="border-2 border-black rounded-lg px-3 py-1.5 text-sm font-semibold disabled:opacity-40">
                         Vincular con número
                       </button>
@@ -1015,10 +1015,10 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                       <div className="mt-2">
                         <Switch value={p.hasOwnNumber} label="Número dedicado"
                           className="text-sm items-center font-semibold"
-                          onChange={(on) => fetcher.submit({ intent: "toggle-own-number", poolId: p.id, on: on ? "1" : "0" }, { method: "post" })} />
+                          onChange={(on) => fetcher.submit({ intent: "toggle-own-number", fleetAgentId: p.id, on: on ? "1" : "0" }, { method: "post" })} />
                         <p className="text-xs text-gray-400 mt-1">Sin prefijo de nombre en las respuestas. Apágalo si compartes el número con una persona.</p>
                         {(p.live || p.status === "connecting" || p.status === "qr_pending" || p.status === "pairing") && (
-                          <button disabled={isBusy("disconnect", p.id)} onClick={() => fetcher.submit({ intent: "disconnect", poolId: p.id }, { method: "post" })}
+                          <button disabled={isBusy("disconnect", p.id)} onClick={() => fetcher.submit({ intent: "disconnect", fleetAgentId: p.id }, { method: "post" })}
                             className="mt-3 border-2 border-black rounded-lg px-3 py-1.5 text-sm font-semibold disabled:opacity-60">
                             {isBusy("disconnect", p.id) ? <Spinner /> : "Desconectar"}
                           </button>
@@ -1036,7 +1036,7 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                         <div key={w.id} className="flex items-center justify-between gap-2">
                           <span className="text-sm font-semibold truncate">{w.subject}</span>
                           <button type="button" title="Capacidades e identidad de este número"
-                            onClick={() => setCapModal({ poolId: p.id, groupId: w.id })}
+                            onClick={() => setCapModal({ fleetAgentId: p.id, groupId: w.id })}
                             className="flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-lg border-2 border-gray-200 text-gray-600 hover:border-brand-500 hover:text-brand-500 transition-colors shrink-0">
                             <span className="text-sm leading-none">⚡</span><span>Capacidades</span>
                             <span className="text-[10px] leading-none bg-gray-100 text-gray-600 rounded-full px-1.5 py-0.5">{p.builtins.length + w.mcps.length}</span>
@@ -1058,7 +1058,7 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                     dispare por accidente. Mantiene el confirm reforzado. */}
                 <div className="mt-4 pt-3 border-t border-gray-100 flex justify-end">
                   <button disabled={isBusy("delete", p.id)}
-                    onClick={() => { if (confirm(`¿Borrar el agente "${displayName || "Sin nombre"}"? Se destruyen sus sandboxes y datos. Esta acción NO se puede deshacer.`)) fetcher.submit({ intent: "delete", poolId: p.id }, { method: "post" }); }}
+                    onClick={() => { if (confirm(`¿Borrar el agente "${displayName || "Sin nombre"}"? Se destruyen sus sandboxes y datos. Esta acción NO se puede deshacer.`)) fetcher.submit({ intent: "delete", fleetAgentId: p.id }, { method: "post" }); }}
                     className="text-xs text-gray-400 hover:text-red-600 transition-colors disabled:opacity-60">
                     {isBusy("delete", p.id) ? "Borrando…" : "Borrar agente"}
                   </button>
@@ -1085,7 +1085,7 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                   className="border-2 border-black rounded-xl p-3 flex items-center justify-between gap-2 bg-gray-50"
                 >
                   <div className="min-w-0">
-                    <p className="font-medium truncate">{p.name || "Pool"}</p>
+                    <p className="font-medium truncate">{p.name || "Agente"}</p>
                     <p className="text-xs text-gray-500 truncate">
                       Compartido por {p.ownerEmail ?? "—"}
                     </p>
@@ -1102,7 +1102,7 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
       )}
 
       {capModal && (() => {
-        const cp = pools.find((x) => x.id === capModal.poolId);
+        const cp = pools.find((x) => x.id === capModal.fleetAgentId);
         // The cap target is a Baileys group OR a WABA number — both share {id,
         // subject, mcps}, so the modal reuses the same body. WABA targets also
         // carry integrationId/name/systemPrompt → an extra Identity section.
@@ -1123,17 +1123,17 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
               <p className="text-sm text-gray-500 mb-4 truncate">en <b>{cg.subject}</b></p>
 
               {/* Identidad — solo números WABA. Cada número tiene su propia
-                  persona (nombre + instrucciones) que se appendea a la del pool. */}
+                  persona (nombre + instrucciones) que se appendea a la del fleetAgent. */}
               {waba && (
                 <fetcher.Form method="post" className="mb-4 border-2 border-gray-100 rounded-xl p-3 flex flex-col gap-2">
                   <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Identidad de este número</span>
                   <input type="hidden" name="intent" value="set-waba-identity" />
-                  <input type="hidden" name="poolId" value={cp.id} />
+                  <input type="hidden" name="fleetAgentId" value={cp.id} />
                   <input type="hidden" name="integrationId" value={waba.integrationId} />
                   <input name="name" defaultValue={waba.name} placeholder="Nombre (ej. Soporte Marca X)"
                     className="border-2 border-gray-300 rounded-lg px-2 py-1 text-sm" />
                   <textarea name="systemPrompt" defaultValue={waba.systemPrompt} rows={3}
-                    placeholder="Instrucciones propias de este número (se suman a la persona del pool)"
+                    placeholder="Instrucciones propias de este número (se suman a la persona del fleetAgent)"
                     className="border-2 border-gray-300 rounded-lg px-2 py-1 text-sm resize-y" />
                   <button type="submit" className="self-end border-2 border-black rounded-lg px-3 py-1 text-xs font-semibold">Guardar identidad</button>
                 </fetcher.Form>
@@ -1165,7 +1165,7 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                               {m.label}
                               {m.custom && (
                                 <button type="button" title="Quitar capacidad"
-                                  onClick={() => fetcher.submit({ intent: "remove-mcp", poolId: cp.id, name: m.name }, { method: "post" })}
+                                  onClick={() => fetcher.submit({ intent: "remove-mcp", fleetAgentId: cp.id, name: m.name }, { method: "post" })}
                                   className="text-[10px] text-red-400 hover:text-red-600 font-normal">quitar</button>
                               )}
                             </p>
@@ -1174,7 +1174,7 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                           {m.secretsPresent ? (
                             <Switch value={cg.mcps.includes(m.name)}
                               className="text-sm items-center shrink-0"
-                              onChange={(on) => fetcher.submit({ intent: "toggle-group-mcp", poolId: cp.id, groupId: cg.id, mcp: m.name, on: on ? "1" : "0" }, { method: "post" })} />
+                              onChange={(on) => fetcher.submit({ intent: "toggle-group-mcp", fleetAgentId: cp.id, groupId: cg.id, mcp: m.name, on: on ? "1" : "0" }, { method: "post" })} />
                           ) : (
                             <span className="text-[10px] font-semibold text-amber-600 shrink-0 whitespace-nowrap">Falta configurar</span>
                           )}
@@ -1183,7 +1183,7 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                           <fetcher.Form method="post" className="mt-2 flex items-center gap-2"
                             onSubmit={(e) => { const f = e.currentTarget; requestAnimationFrame(() => f.reset()); }}>
                             <input type="hidden" name="intent" value="set-secret" />
-                            <input type="hidden" name="poolId" value={cp.id} />
+                            <input type="hidden" name="fleetAgentId" value={cp.id} />
                             <input type="hidden" name="name" value={m.requiredSecrets[0] ?? ""} />
                             <input type="password" name="value" required autoComplete="off"
                               placeholder={`Pega tu ${m.requiredSecrets[0] ?? "key"}`}
@@ -1209,7 +1209,7 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                   <fetcher.Form method="post" className="mt-2 flex flex-col gap-2"
                     onSubmit={(e) => { const f = e.currentTarget; requestAnimationFrame(() => f.reset()); }}>
                     <input type="hidden" name="intent" value="add-mcp" />
-                    <input type="hidden" name="poolId" value={cp.id} />
+                    <input type="hidden" name="fleetAgentId" value={cp.id} />
                     <input name="name" placeholder="nombre (ej. kommo)" required className="border-2 border-gray-300 rounded-lg px-2 py-1.5 text-sm font-mono" />
                     <input name="pkg" placeholder="paquete npm (ej. @foo/mcp)" className="border-2 border-gray-300 rounded-lg px-2 py-1.5 text-sm font-mono" />
                     <input name="url" placeholder="o URL http del MCP" className="border-2 border-gray-300 rounded-lg px-2 py-1.5 text-sm font-mono" />

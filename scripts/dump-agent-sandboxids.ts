@@ -9,7 +9,7 @@ const db = new PrismaClient();
 
 async function main() {
   const agents = await db.agent.findMany({
-    select: { sandboxId: true, status: true, name: true, poolId: true },
+    select: { sandboxId: true, status: true, name: true, fleetAgentId: true },
   });
   // KEEP anything not terminally dead — these are rows easybits may still
   // resume/route to; deleting their snapshots would lose state.
@@ -18,7 +18,7 @@ async function main() {
   console.log("AGENT_TOTAL", agents.length);
   console.log("AGENT_KEEP", keep.length);
   for (const a of keep) {
-    console.log("KEEP", a.sandboxId, a.status, a.poolId ? "pool" : "standalone", a.name ?? "");
+    console.log("KEEP", a.sandboxId, a.status, a.fleetAgentId ? "fleetAgent" : "standalone", a.name ?? "");
   }
 }
 

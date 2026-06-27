@@ -1,4 +1,4 @@
-// Outbound file delivery for the Pool's Baileys edge.
+// Outbound file delivery for the FleetAgent's Baileys edge.
 //
 // The worker brain is text-only over SSE, so when it wants to send a file it
 // uploads to EasyBits (export_document / upload_file / get_file) and drops the

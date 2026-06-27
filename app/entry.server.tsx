@@ -10,7 +10,7 @@ import { handleSubdomainWebsite } from "~/.server/subdomainWebsite";
 
 // Process-level safety net (covers BOTH `react-router dev` and prod `server.mjs`):
 // a single unhandled rejection — e.g. a Mongo "write conflict" from concurrent
-// pool.update during a Baileys reconnect — must never take the server down. The
+// fleetAgent.update during a Baileys reconnect — must never take the server down. The
 // dev server runs Vite (no server.mjs), so this module is the shared early-load
 // point that protects local dev too. Targeted fixes still belong at the source.
 declare global { var __ebProcessGuards: boolean | undefined; }

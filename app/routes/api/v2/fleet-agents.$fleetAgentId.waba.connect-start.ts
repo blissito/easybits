@@ -1,20 +1,20 @@
-import type { Route } from "./+types/pool.$poolId.waba.connect-start";
+import type { Route } from "./+types/fleet-agents.$fleetAgentId.waba.connect-start";
 import { db } from "~/.server/db";
 import { getUserOrRedirect } from "~/.server/getters";
 import { buildPopupUrl } from "~/.server/integrations/whatsapp/formmyPartner";
 
-// POST /api/v2/pool/:poolId/waba/connect/start
+// POST /api/v2/fleet-agents/:fleetAgentId/waba/connect/start
 //
 // Starts the Embedded Signup flow for connecting a WhatsApp Business number to
-// THIS pool. EasyBits doesn't run Meta's SDK in-house — Formmy hosts the popup
+// THIS fleetAgent. EasyBits doesn't run Meta's SDK in-house — Formmy hosts the popup
 // (it holds the Meta App Secret). We return a popup URL signed with the easybits
 // partner secret so Formmy verifies the opener is a legit partner. The browser
 // opens it, listens for the postMessage `{ code, phoneNumberId, wabaId }`, and
 // posts that to /waba/connect.
 export async function action({ request, params }: Route.ActionArgs) {
   const user = await getUserOrRedirect(request);
-  const pool = await db.pool.findUnique({ where: { id: params.poolId! } });
-  if (!pool || pool.ownerId !== user.id) {
+  const fleetAgent = await db.fleetAgent.findUnique({ where: { id: params.fleetAgentId! } });
+  if (!fleetAgent || fleetAgent.ownerId !== user.id) {
     return Response.json({ error: "Not found" }, { status: 404 });
   }
 

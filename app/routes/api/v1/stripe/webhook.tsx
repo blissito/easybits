@@ -280,8 +280,8 @@ export async function action({ request }: ActionFunctionArgs) {
           break;
         }
 
-        // Handle reserved pool sandbox (subscription mode). Records the
-        // capacity grant; the pool consumes it on demand. Keyed off the
+        // Handle reserved fleet sandbox (subscription mode). Records the
+        // capacity grant; the fleet consumes it on demand. Keyed off the
         // session metadata set by createSandboxReservationCheckout.
         if (session.metadata?.type === "reserved_sandbox") {
           const resOwnerId = session.metadata.userId;

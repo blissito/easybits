@@ -133,7 +133,7 @@ export const createPackCheckout = async ({
 };
 
 /**
- * Recurring monthly Checkout for a RESERVED pool sandbox (packs → Sandboxes tab).
+ * Recurring monthly Checkout for a reserved fleet sandbox (packs → Sandboxes tab).
  *
  * subscription mode → a dedicated subscription per reservation, so cancelling it
  * cleanly frees the capacity without touching the user's plan subscription. The
@@ -151,7 +151,7 @@ export const createSandboxReservationCheckout = async ({
   userId: string;
   email: string;
   tier: string;
-  /** Number of identical pool boxes to bill. */
+  /** Number of identical fleet boxes to bill. */
   quantity: number;
   /** Price per box (MXN/month). */
   priceMxn: number;
@@ -168,7 +168,7 @@ export const createSandboxReservationCheckout = async ({
       {
         price_data: {
           currency: "mxn",
-          product_data: { name: `Caja del pool (${agents / quantity} agentes c/u)` },
+          product_data: { name: `Caja de la flota (${agents / quantity} agentes c/u)` },
           recurring: { interval: "month" },
           unit_amount: priceMxn * 100, // centavos
         },

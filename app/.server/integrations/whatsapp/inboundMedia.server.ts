@@ -1,6 +1,6 @@
-// Inbound WhatsApp media → text, for the Pool's Baileys edge.
+// Inbound WhatsApp media → text, for the FleetAgent's Baileys edge.
 //
-// The pool's worker (claude-worker) is a pure TEXT brain over SSE — it never sees
+// The fleetAgent's worker (claude-worker) is a pure TEXT brain over SSE — it never sees
 // raw media. So the edge must turn every attachment into text the agent can read,
 // exactly like the standalone ghosty-gc does in-process (server.js dispatcher).
 // Ported from ghosty-gc, RE-PATHED for Fly: ghosty calls box-internal services
@@ -58,7 +58,7 @@ export type InboundContent = {
   /** True when ANY non-text modality was present (image/doc/audio/video/etc) —
    *  even if its extraction failed. Drives the truthful `hasMedia` audit field. */
   hasMedia?: boolean;
-  /** Raw inbound image bytes (base64) for NATIVE Claude vision: the pool writes
+  /** Raw inbound image bytes (base64) for NATIVE Claude vision: the fleetAgent writes
    *  this into the worker's FS so the agent's Read tool sees it — no Gemini middle
    *  step. `url` is the signed copy for editing/reusing with image tools. */
   image?: { base64: string; ext: string; url?: string };
@@ -230,19 +230,19 @@ export async function extractInboundContent(
 ): Promise<InboundContent | null> {
   const c: any = normalizeMessageContent(m.message!) || m.message;
 
-  // ── Forward/wrapper diagnostics (POOL_AUDIT_LOG=1) ──────────────────────────
+  // ── Forward/wrapper diagnostics (FLEET_AUDIT_LOG=1) ──────────────────────────
   // A forwarded captioned image was reaching the worker as TEXT ONLY (no vision
   // framing) — i.e. `c.imageMessage` undefined. Log the raw vs normalized shape
   // so we can see whether the media node is in a wrapper normalizeMessageContent
   // misses, or arrives split. Off unless the flag is set.
-  if (process.env.POOL_AUDIT_LOG === "1") {
+  if (process.env.FLEET_AUDIT_LOG === "1") {
     let kind: string | undefined;
     try {
       kind = getContentType(c);
     } catch {}
     const ci = getContextInfo(c);
     console.log(
-      `[pool-audit] inbound.raw ${JSON.stringify({
+      `[fleet-audit] inbound.raw ${JSON.stringify({
         rawKeys: Object.keys(m.message ?? {}),
         normKeys: Object.keys(c ?? {}),
         kind,
@@ -321,7 +321,7 @@ export async function extractInboundContent(
   }
 
   // Image / sticker → NATIVE Claude vision. We download the bytes and hand them
-  // (base64) to the pool, which writes them onto the worker's disk so the agent's
+  // (base64) to the fleetAgent, which writes them onto the worker's disk so the agent's
   // Read tool SEES the image — no Gemini describe middle step (Claude is already
   // multimodal). We also stash a short-lived SIGNED url so the agent can edit/reuse
   // it with image tools (the user's photo must NOT land in a public bucket).

@@ -1,4 +1,4 @@
-# Tamaño de las VMs (sandboxes) del Pool — diseño
+# Tamaño de las VMs (sandboxes) del FleetAgent — diseño
 
 > Resumen de lo que hemos venido discutiendo. Pregunta: **¿de qué tamaño se levanta
 > la VM y cómo lo controlamos? ¿por agente? ¿por cuenta?**
@@ -14,7 +14,7 @@ no le pones lanzallamas a cada aldeano por si algún día hay que quemar algo. S
   cualquier cerebro liviano invoca. Un Chromium sirve a 50 agentes.
 
 ## Medición real (2026-06-24) — rutas ≠ turnos concurrentes
-> `scripts/pool-vm-rss-probe.ts` contra el host OVH, claude-worker @ 2GB/2vCPU.
+> `scripts/fleet-agent-vm-rss-probe.ts` contra el host OVH, claude-worker @ 2GB/2vCPU.
 
 | Métrica | Valor |
 |---|---|
@@ -61,7 +61,7 @@ El tamaño es **propiedad del Agente**, declarada al crearlo (editable después)
 | **Navegador** | 2GB  | necesita ver/capturar webs, llenar forms (Chromium baked) |
 | **Estudio** | 4GB    | multimedia pesado (video/imágenes)         |
 
-Mecánica concreta: un campo `size`/`class` en el Pool(Agente) → mapea a `memMb`/`vcpus`
+Mecánica concreta: un campo `size`/`class` en el FleetAgent(Agente) → mapea a `memMb`/`vcpus`
 que ya consume `spawnVm` (`createAgent({ memoryMb, vcpus })`). Hoy está fijo en 512;
 solo hay que leerlo de la clase del agente.
 
@@ -81,7 +81,7 @@ solo hay que leerlo de la clase del agente.
   visible/editable para que nunca te sorprenda el tamaño.
 
 ## Equivalencia con el plan / capacidad de la cuenta
-Capacidad de la cuenta = **`concurrentSandboxes` del plan** (una VM del pool *es* un
+Capacidad de la cuenta = **`concurrentSandboxes` del plan** (una VM del fleet agent *es* un
 sandbox): Byte=2, Mega=3, Tera=10 sandboxes. Cada sandbox aloja `maxWorkersPerVm`
 agentes (hoy 2). Un agente de clase pesada ocupa más de ese presupuesto.
 

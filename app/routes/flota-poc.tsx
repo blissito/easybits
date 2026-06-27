@@ -19,7 +19,7 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
 // ---------------------------------------------------------------------------
 // POC: la visualización de la flota (cajas + fantasmas) renderizada DENTRO del
 // Canvas del SDK (html-in-canvas) con textura de fieltro. Datos mock — esto es
-// solo para evaluar el look; no toca el HUD real (app/routes/dash/pools.tsx).
+// solo para evaluar el look; no toca el HUD real (app/routes/dash/fleet-agents.tsx).
 // ---------------------------------------------------------------------------
 
 type MockBox = {

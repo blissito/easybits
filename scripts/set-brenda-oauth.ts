@@ -1,6 +1,6 @@
 /**
  * Copia CLAUDE_CODE_OAUTH_TOKEN de ~/nanoclaw/.env al vault EasyBits de brenda
- * (cerebro plano OAuth Max para sus agentes/pool claude-worker).
+ * (cerebro plano OAuth Max para sus agentes/flota claude-worker).
  * Run: cd ~/easybits && npx tsx scripts/set-brenda-oauth.ts   [WRITE prod DB]
  */
 import "dotenv/config";

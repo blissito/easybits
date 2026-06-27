@@ -1,12 +1,12 @@
-import type { Route } from "./+types/pool.$poolId.message-stream";
+import type { Route } from "./+types/fleet-agents.$fleetAgentId.message-stream";
 import { db } from "~/.server/db";
-import { routeMessage, PoolAtCapacity, PoolRateLimited } from "~/.server/core/poolOperations";
+import { routeMessage, FleetAgentAtCapacity, FleetAgentRateLimited } from "~/.server/core/fleetAgentOperations";
 import { checkFleetAgentWebIp } from "~/.server/rateLimiter";
 
-// POST /api/v2/pool/:poolId/message-stream
+// POST /api/v2/fleet-agents/:fleetAgentId/message-stream
 //
 // Streaming twin of /message for WEB channels (denik widget / admin assistant).
-// Same auth (pool bearer token) and body, but responds SSE so the browser sees
+// Same auth (fleetAgent bearer token) and body, but responds SSE so the browser sees
 // the reply token-by-token. Emits:
 //   data: {"type":"chunk","value":"..."}   (live preview, best-effort)
 //   data: {"type":"done","value":"<full>"} (authoritative final reply)
@@ -26,10 +26,10 @@ export async function loader({ request }: Route.LoaderArgs) {
 }
 
 export async function action({ request, params }: Route.ActionArgs) {
-  const poolId = params.poolId!;
+  const fleetAgentId = params.fleetAgentId!;
   const bearer = request.headers.get("Authorization")?.replace(/^Bearer\s+/i, "") ?? "";
-  const pool = await db.pool.findUnique({ where: { id: poolId } });
-  if (!pool || !bearer || pool.token !== bearer) {
+  const fleetAgent = await db.fleetAgent.findUnique({ where: { id: fleetAgentId } });
+  if (!fleetAgent || !bearer || fleetAgent.token !== bearer) {
     return Response.json({ error: "Unauthorized" }, { status: 401, headers: CORS });
   }
 
@@ -54,7 +54,7 @@ export async function action({ request, params }: Route.ActionArgs) {
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       try {
-        const reply = await routeMessage(poolId, {
+        const reply = await routeMessage(fleetAgentId, {
           groupId,
           sender: typeof body?.sender === "string" ? body.sender : undefined,
           text,
@@ -68,13 +68,13 @@ export async function action({ request, params }: Route.ActionArgs) {
         controller.enqueue(sse({ type: "done", value: reply }));
       } catch (e) {
         const message =
-          e instanceof PoolRateLimited
+          e instanceof FleetAgentRateLimited
             ? e.message
-            : e instanceof PoolAtCapacity
+            : e instanceof FleetAgentAtCapacity
               ? e.message
               : e instanceof Error
                 ? e.message
-                : "pool error";
+                : "fleetAgent error";
         controller.enqueue(sse({ type: "error", message }));
       } finally {
         controller.close();

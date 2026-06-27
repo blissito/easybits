@@ -1,5 +1,5 @@
-import type { Route } from "./+types/pools.poll";
-import { loader as fleetLoader } from "./pools";
+import type { Route } from "./+types/fleet-agents.poll";
+import { loader as fleetLoader } from "./fleet-agents";
 
 // Live HUD poll endpoint for /dash/flota. Reuses the page's loader on the server
 // to return the SAME payload, as plain JSON, so the client can poll it with a raw

@@ -1,4 +1,4 @@
-// Voice replies for the Pool's Baileys edge — ElevenLabs (Fly-reachable) instead
+// Voice replies for the FleetAgent's Baileys edge — ElevenLabs (Fly-reachable) instead
 // of ghosty-gc's box-internal kokoro-svc. Synthesizes the reply to OGG/opus and
 // the caller sends it as a WhatsApp PTT (voice-note) bubble.
 //
@@ -9,8 +9,8 @@ import { getSecretValue } from "~/.server/core/secretOperations";
 const VOICE_ID = process.env.WA_VOICE_ID || process.env.ELEVENLABS_DEFAULT_VOICE || "EXAVITQu4vr4xnSDxMaL";
 const MODEL = process.env.ELEVENLABS_MODEL || "eleven_multilingual_v2";
 
-// PER-ACCOUNT key: each pool bills voice to its OWNER's ElevenLabs key (siiqtec's
-// pool ≠ bliss's pool). The owner's vault secret wins; the Fly app-level key is a
+// PER-ACCOUNT key: each fleetAgent bills voice to its OWNER's ElevenLabs key (siiqtec's
+// fleetAgent ≠ bliss's fleetAgent). The owner's vault secret wins; the Fly app-level key is a
 // fallback for owners that haven't set their own.
 async function resolveElevenKey(ownerId: string): Promise<string> {
   const own = await getSecretValue(ownerId, "ELEVENLABS_API_KEY").catch(() => null);

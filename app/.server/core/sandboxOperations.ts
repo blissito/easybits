@@ -145,7 +145,7 @@ export async function openAgentMessageStream(
     denikApiKey?: string;
     appendSystemPrompt?: string;
     // Per-turn EXTRA MCP servers (name→serverDef) for the worker to merge over
-    // its baked builtins. Resolved per-group by poolOperations.resolveGroupMcpServers.
+    // its baked builtins. Resolved per-group by fleetAgentOperations.resolveGroupMcpServers.
     mcpServers?: Record<string, unknown>;
     port?: number;
     path?: string;
@@ -514,7 +514,7 @@ export async function createSandbox(
     persistent?: boolean;
     size?: "s" | "m" | "l" | "xl";
     // Explicit resource override (wins over `size`/template default). Used by the
-    // pool to size workers per channel (e.g. 512MB tiny VMs). Firecracker sets RAM
+    // fleetAgent to size workers per channel (e.g. 512MB tiny VMs). Firecracker sets RAM
     // at boot — not hot-resizable; to "grow" you spawn a bigger/another VM.
     memoryMb?: number;
     vcpus?: number;
@@ -539,7 +539,7 @@ export async function createSandbox(
     );
   }
   const resources = { ...SIZE_RESOURCES[size] };
-  // Explicit override (pool worker sizing). Sent to the host, which honors
+  // Explicit override (fleetAgent worker sizing). Sent to the host, which honors
   // memoryMb/vcpus over the template default.
   if (params.memoryMb) resources.memoryMb = params.memoryMb;
   if (params.vcpus) resources.vcpus = params.vcpus;
@@ -567,7 +567,7 @@ export async function createSandbox(
       (s) => s.status === "running" || s.status === "starting"
     ).length;
     // Budget = plan.concurrentSandboxes + add-ons reservados. MISMO denominador
-    // que el pool (spawnVm) y el HUD ("X/N sandboxes") — sin esto, comprar add-ons
+    // que el fleetAgent (spawnVm) y el HUD ("X/N sandboxes") — sin esto, comprar add-ons
     // no subía este límite (quedaba en 3 aunque el HUD dijera 5).
     const { getReservedCapacity } = await import("./sandboxReservations");
     const reserved = await getReservedCapacity(ctx.user.id).catch(() => ({ machines: 0, agents: 0 }));
@@ -775,8 +775,8 @@ export async function destroySandbox(
     undefined,
     opts?.asOperator ?? false
   );
-  // Propaga el destroy al registro Agent (worker de pool o agente persistente):
-  // el router del pool NO corre la reconciliación de la UI (getAgent/listAgents),
+  // Propaga el destroy al registro Agent (worker de fleetAgent o agente persistente):
+  // el router del fleetAgent NO corre la reconciliación de la UI (getAgent/listAgents),
   // así que sin esto el Agent se queda en "running" y routeMessage sigue
   // entregando tráfico a una caja muerta. "lost" es el mismo estado terminal que
   // produce probeRealStatus en un 404 — el cold path de pickOrSpawn lo excluye y
@@ -1216,7 +1216,7 @@ export async function exposeSandboxPort(
 }
 
 export interface RawForwardResult {
-  hostPort: number;   // unique host port from the pool (49000-49999)
+  hostPort: number;   // unique host port from the fleetAgent (49000-49999)
   guestPort: number;  // the port the service listens on inside the VM
   protocol: "udp" | "tcp";
   ok: boolean;
@@ -1808,7 +1808,7 @@ export async function createAgent(
     timeoutSeconds?: number;
     /** Archivos de conocimiento (base64) a sembrar en /data/workspace tras el boot. */
     seedFiles?: Array<{ name: string; contentBase64: string }>;
-    /** Override explícito de recursos de la VM (pool worker sizing). */
+    /** Override explícito de recursos de la VM (fleetAgent worker sizing). */
     memoryMb?: number;
     vcpus?: number;
   }
@@ -1849,7 +1849,7 @@ export async function createAgent(
     env.ADMIN_TOKEN = embedToken;
   }
   // claude-worker (cerebro Claude Agent SDK, tarifa plana con OAuth Max del DUEÑO,
-  // no proxy medido). El OAuth llega por pool.persona.env (CLAUDE_CODE_OAUTH_TOKEN);
+  // no proxy medido). El OAuth llega por fleetAgent.persona.env (CLAUDE_CODE_OAUTH_TOKEN);
   // si no viene, se resuelve del vault del dueño. GOTCHA: el Claude CLI corre como
   // root dentro de la VM → exige IS_SANDBOX=1 o sale exit 1.
   if (params.template === "claude-worker") {
@@ -1867,7 +1867,7 @@ export async function createAgent(
         env.EASYBITS_API_KEY = ebKey;
       } else {
         const minted = await createApiKey(ctx.user.id, {
-          name: `claude-worker-${params.name || "pool"}`,
+          name: `claude-worker-${params.name || "fleetAgent"}`,
           scopes: ctx.scopes,
         });
         env.EASYBITS_API_KEY = minted.raw;
@@ -1897,7 +1897,7 @@ export async function createAgent(
       params.template === "cagent-ghosty" ||
       // claude-worker wires the easybits MCP (upload_file, docs, DBs) over stdio
       // when EASYBITS_API_KEY is present; pull it from the owner's vault so the
-      // pool's workers get the catalog without persona.env having to carry it.
+      // fleetAgent's workers get the catalog without persona.env having to carry it.
       params.template === "claude-worker") &&
     !env.EASYBITS_API_KEY
   ) {
@@ -2840,11 +2840,11 @@ export async function openAgentChunkStream(
     const upstream = await openAgentMessageStream(agent.sandboxId, agent.ownerId, {
       content: body.content,
       sessionId: body.sessionId,
-      // Per-message denik org key (pool/Nik): scope del MCP denik por turno.
+      // Per-message denik org key (fleetAgent/Nik): scope del MCP denik por turno.
       denikApiKey: body.denikApiKey,
       // Per-message personalización por-org (capa 3, append).
       appendSystemPrompt: body.appendSystemPrompt,
-      // Per-message MCP custom servers (resueltos por grupo en poolOperations).
+      // Per-message MCP custom servers (resueltos por grupo en fleetAgentOperations).
       mcpServers: body.mcpServers,
       port: agent.port ?? undefined,
       path: agent.messagePath ?? undefined,

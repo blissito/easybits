@@ -1,13 +1,13 @@
-import type { Route } from "./+types/pool.$poolId.waba.message";
+import type { Route } from "./+types/fleet-agents.$fleetAgentId.waba.message";
 import { db } from "~/.server/db";
-import { routeMessage } from "~/.server/core/poolOperations";
+import { routeMessage } from "~/.server/core/fleetAgentOperations";
 
-// POST /api/v2/pool/:poolId/waba/message
+// POST /api/v2/fleet-agents/:fleetAgentId/waba/message
 //
 // The WABA channel inbound. Formmy owns the Meta WhatsApp Business number and is
 // the gateway: it receives the Meta webhook and FORWARDS each inbound message
 // here using its "droplet protocol", then expects us to POST the reply back to
-// Formmy's /send endpoint. So WABA becomes another entry into the SAME pool
+// Formmy's /send endpoint. So WABA becomes another entry into the SAME fleetAgent
 // fleet that Baileys uses — both end in routeMessage().
 //
 // Fire-and-forget: Formmy doesn't await the reply (it ignores this response
@@ -15,8 +15,8 @@ import { routeMessage } from "~/.server/core/poolOperations";
 // LLM turn + send-back in a DETACHED task (mirrors whatsapp-webhook.ts, which
 // does `void handleIncomingText(...)` then returns 200).
 //
-// Auth = pool.wabaConfig.formmySecret (the shared secret Formmy presents AND the
-// one we present back). NOT pool.token — that bearer belongs to the Baileys
+// Auth = fleetAgent.wabaConfig.formmySecret (the shared secret Formmy presents AND the
+// one we present back). NOT fleetAgent.token — that bearer belongs to the Baileys
 // surface / web channel.
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -62,12 +62,12 @@ export async function loader({ request }: Route.LoaderArgs) {
 }
 
 export async function action({ request, params }: Route.ActionArgs) {
-  const poolId = params.poolId!;
+  const fleetAgentId = params.fleetAgentId!;
   const bearer = request.headers.get("Authorization")?.replace(/^Bearer\s+/i, "") ?? "";
-  const pool = await db.pool.findUnique({ where: { id: poolId } });
-  const waba = (pool?.wabaConfig as WabaConfig | null) ?? null;
+  const fleetAgent = await db.fleetAgent.findUnique({ where: { id: fleetAgentId } });
+  const waba = (fleetAgent?.wabaConfig as WabaConfig | null) ?? null;
   const formmySecret = waba?.formmySecret ?? "";
-  if (!pool || !bearer || !formmySecret || formmySecret !== bearer) {
+  if (!fleetAgent || !bearer || !formmySecret || formmySecret !== bearer) {
     return Response.json({ error: "Unauthorized" }, { status: 401, headers: CORS });
   }
 
@@ -89,16 +89,16 @@ export async function action({ request, params }: Route.ActionArgs) {
     !body.is_from_me &&
     !body.manual_mode
   ) {
-    void handleWabaInbound(poolId, waba!, { integrationId, sender, content });
+    void handleWabaInbound(fleetAgentId, waba!, { integrationId, sender, content });
   }
 
   return Response.json({ ok: true }, { status: 200, headers: CORS });
 }
 
-// Detached task: run the pool turn, then POST the reply back to Formmy's /send.
+// Detached task: run the fleetAgent turn, then POST the reply back to Formmy's /send.
 // Never throws (it runs unawaited) — every failure is logged and swallowed.
 async function handleWabaInbound(
-  poolId: string,
+  fleetAgentId: string,
   waba: WabaConfig,
   msg: { integrationId: string; sender: string; content: string }
 ): Promise<void> {
@@ -110,7 +110,7 @@ async function handleWabaInbound(
     // (waba:<integrationId>) so capabilities + key resolve once per Meta number,
     // not per sender. Identity per number = org.systemPrompt as appendSystemPrompt.
     const reply = await routeMessage(
-      poolId,
+      fleetAgentId,
       {
         groupId: `waba:${msg.integrationId}:${msg.sender}`,
         configGroupId: `waba:${msg.integrationId}`,
@@ -124,7 +124,7 @@ async function handleWabaInbound(
     if (!reply) return;
     await sendReplyToFormmy(waba.formmySecret ?? "", msg.integrationId, msg.sender, reply);
   } catch (e) {
-    console.error(`[waba] pool ${poolId} inbound failed:`, e instanceof Error ? e.message : e);
+    console.error(`[waba] fleetAgent ${fleetAgentId} inbound failed:`, e instanceof Error ? e.message : e);
   }
 }
 
