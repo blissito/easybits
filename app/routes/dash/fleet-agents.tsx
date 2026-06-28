@@ -934,8 +934,8 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                 const activeCh = inFlow ? "baileys" : (activeChannel[p.id] ?? "baileys");
                 const settingsOpen = chSettings[p.id] ?? false;
                 const channels = [
-                  { kind: "baileys", label: "WhatsApp", dot: (stale || relinking) ? "bg-orange-400" : st.dot, count: p.conversations },
-                  { kind: "waba", label: "Business", dot: p.wabaNumbers.length ? "bg-green-500" : "bg-gray-300", count: p.wabaNumbers.length },
+                  { kind: "baileys", label: "Personal y grupos (QR)", dot: (stale || relinking) ? "bg-orange-400" : st.dot, count: p.conversations },
+                  { kind: "waba", label: "WhatsApp Business API", dot: p.wabaNumbers.length ? "bg-green-500" : "bg-gray-300", count: p.wabaNumbers.length },
                 ];
                 return (<>
                 {/* Tabs por canal */}

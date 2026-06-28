@@ -297,7 +297,7 @@ const SECRET_REF_RE = /^\$secret:([A-Z_][A-Z0-9_]*)$/;
 // key is a reseller-only path (groupKeys + denikApiKey), invisible to the generic UI.
 export const DEFAULT_MCP_CATALOG: McpCatalogEntry[] = [
   { name: "easybits", label: "EasyBits — archivos, docs, imágenes", transport: "stdio", command: "npx", args: ["-y", "@easybits.cloud/mcp"], builtin: true },
-  { name: "wa", label: "WhatsApp — enviar archivos, encuestas, reacciones", transport: "stdio", builtin: true },
+  { name: "wa", label: "Personal y grupos (QR) — enviar archivos, encuestas, reacciones", transport: "stdio", builtin: true },
 ];
 
 // CURATED capabilities EasyBits ships in CODE (not stored in the DB) — every agent
