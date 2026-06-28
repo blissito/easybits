@@ -275,7 +275,19 @@ export type McpCatalogEntry = {
   requiredSecrets?: string[]; // vault secret names this capability needs to work
   builtin?: boolean; // easybits/wa — always-on, not togglable
 };
-export type GroupConfig = { mcpServers?: string[]; env?: Record<string, string> };
+export type GroupConfig = { mcpServers?: string[]; env?: Record<string, string>; disabledBuiltins?: string[] };
+
+// Builtins (easybits/wa) the group turned OFF. Absent/[] = all builtins ON
+// (backward-compatible default). The worker removes these from its merged MCP set
+// for that group's turn — e.g. ["easybits"] forces the agent onto fleet service
+// boxes instead of the EasyBits MCP. Keyed by the same groupId/cfgId as mcpServers.
+export function resolveDisabledBuiltins(
+  fleetAgent: { groupConfigs?: unknown },
+  groupId: string
+): string[] {
+  const cfg = ((fleetAgent.groupConfigs as Record<string, GroupConfig> | null) ?? {})[groupId] ?? {};
+  return cfg.disabledBuiltins ?? [];
+}
 
 // $secret:NAME reference shape (same as agentOperations.expandMcpServerSecrets).
 const SECRET_REF_RE = /^\$secret:([A-Z_][A-Z0-9_]*)$/;
@@ -796,6 +808,9 @@ export async function routeMessage(
           // con sus secrets resueltos del vault del dueño. El worker las mergea
           // sobre sus builtins (easybits/wa). Resuelve por cfgId (unidad de config).
           mcpServers: await resolveGroupMcpServers(fleetAgent, cfgId, fleetAgent.ownerId),
+          // Per-grupo: builtins apagados (ej. ["easybits"]) → el worker los quita
+          // del set MCP de ese turno (forzar uso de cajas de la flota).
+          disabledBuiltins: resolveDisabledBuiltins(fleetAgent, cfgId),
         }
       );
       reply = await collectStream(stream, opts.onChunk);

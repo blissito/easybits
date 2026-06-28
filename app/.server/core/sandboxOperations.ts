@@ -147,6 +147,9 @@ export async function openAgentMessageStream(
     // Per-turn EXTRA MCP servers (name→serverDef) for the worker to merge over
     // its baked builtins. Resolved per-group by fleetAgentOperations.resolveGroupMcpServers.
     mcpServers?: Record<string, unknown>;
+    // Per-turn builtins to REMOVE (e.g. ["easybits"]) — the worker deletes these
+    // from its merged MCP set. Resolved per-group by resolveDisabledBuiltins.
+    disabledBuiltins?: string[];
     port?: number;
     path?: string;
     rawBody?: unknown;
@@ -162,7 +165,7 @@ export async function openAgentMessageStream(
   if (body.headers) payload.headers = body.headers;
   if (body.rawBody !== undefined) {
     payload.rawBody = body.rawBody;
-  } else if (body.denikApiKey || body.appendSystemPrompt || body.mcpServers) {
+  } else if (body.denikApiKey || body.appendSystemPrompt || body.mcpServers || body.disabledBuiltins?.length) {
     // ⚠️ El host (sandbox-host /v1/sandbox/:id/agent/message) SOLO reenvía
     // {content, sessionId} de los campos top-level — descarta cualquier extra.
     // Para que campos del worker (denikApiKey, appendSystemPrompt) lleguen al
@@ -174,6 +177,7 @@ export async function openAgentMessageStream(
       ...(body.denikApiKey ? { denikApiKey: body.denikApiKey } : {}),
       ...(body.appendSystemPrompt ? { appendSystemPrompt: body.appendSystemPrompt } : {}),
       ...(body.mcpServers ? { mcpServers: body.mcpServers } : {}),
+      ...(body.disabledBuiltins?.length ? { disabledBuiltins: body.disabledBuiltins } : {}),
     };
   } else {
     payload.content = body.content;
@@ -2835,6 +2839,7 @@ export async function openAgentChunkStream(
     denikApiKey?: string;
     appendSystemPrompt?: string;
     mcpServers?: Record<string, unknown>;
+    disabledBuiltins?: string[];
   }
 ): Promise<ReadableStream<Uint8Array>> {
   const protocol = agent.protocol ?? "sse";
@@ -2851,6 +2856,8 @@ export async function openAgentChunkStream(
       appendSystemPrompt: body.appendSystemPrompt,
       // Per-message MCP custom servers (resueltos por grupo en fleetAgentOperations).
       mcpServers: body.mcpServers,
+      // Per-message builtins apagados por grupo (ej. ["easybits"]).
+      disabledBuiltins: body.disabledBuiltins,
       port: agent.port ?? undefined,
       path: agent.messagePath ?? undefined,
     });

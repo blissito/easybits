@@ -92,6 +92,7 @@ export async function loader({ request }: Route.LoaderArgs) {
       const groups = rawGroups.map((g: { id: string; subject: string; enabled: boolean }) => ({
         ...g,
         mcps: gconf[g.id]?.mcpServers ?? [],
+        disabledBuiltins: gconf[g.id]?.disabledBuiltins ?? [],
       }));
       // WABA numbers (Meta WhatsApp Business). Each integration is its OWN config
       // unit `waba:<integrationId>` — same shape as a group so the Capacidades
@@ -107,6 +108,7 @@ export async function loader({ request }: Route.LoaderArgs) {
           systemPrompt: o.systemPrompt ?? "",
           phoneNumber: o.phoneNumber ?? "",
           mcps: gconf[id]?.mcpServers ?? [],
+          disabledBuiltins: gconf[id]?.disabledBuiltins ?? [],
         };
       });
       // Per-VM capacity boxes: each worker VM + how many conversations (slots) it
@@ -344,6 +346,24 @@ export async function action({ request }: Route.ActionArgs) {
     if (on) set.add(name);
     else set.delete(name);
     configs[groupId] = { ...cur, mcpServers: [...set] };
+    await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { groupConfigs: configs } });
+    return data({ ok: true });
+  }
+  if (intent === "toggle-group-builtin") {
+    // Turn a BUILTIN (easybits/wa) on/off for one group. `on=0` adds it to
+    // disabledBuiltins → the worker removes it from the merged MCP set that turn.
+    const groupId = String(fd.get("groupId") || "");
+    const name = String(fd.get("builtin") || "");
+    const on = String(fd.get("on") || "") === "1";
+    if (!DEFAULT_MCP_CATALOG.some((e) => e.name === name)) {
+      return data({ error: "ese builtin no existe" }, { status: 400 });
+    }
+    const configs = { ...((fleetAgent.groupConfigs as Record<string, GroupConfig> | null) ?? {}) };
+    const cur = configs[groupId] ?? {};
+    const set = new Set(cur.disabledBuiltins ?? []);
+    if (on) set.delete(name); // on = NOT disabled
+    else set.add(name);
+    configs[groupId] = { ...cur, disabledBuiltins: [...set] };
     await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { groupConfigs: configs } });
     return data({ ok: true });
   }
@@ -1222,6 +1242,23 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                 ) : (
                   <p className="mt-1 text-xs text-gray-400">Sin capacidades opcionales. Agrega una abajo.</p>
                 )}
+              </div>
+
+              {/* Builtins (easybits/wa) — siempre disponibles, pero se pueden APAGAR
+                  por grupo. Apagar easybits fuerza al agente a usar las cajas de la
+                  flota (render/voz) en vez del MCP de EasyBits. */}
+              <div className="mb-4">
+                <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Builtins</span>
+                <div className="mt-1 flex flex-col gap-2">
+                  {cp.builtins.map((b) => (
+                    <div key={b.name} className="border-2 border-gray-100 rounded-xl px-3 py-2 flex items-center justify-between gap-2">
+                      <p className="text-sm font-semibold min-w-0 truncate">{b.label}</p>
+                      <Switch value={!cg.disabledBuiltins.includes(b.name)}
+                        className="text-sm items-center shrink-0"
+                        onChange={(on) => fetcher.submit({ intent: "toggle-group-builtin", fleetAgentId: cp.id, groupId: cg.id, builtin: b.name, on: on ? "1" : "0" }, { method: "post" })} />
+                    </div>
+                  ))}
+                </div>
               </div>
 
               {/* Avanzado — agregar un MCP custom (npm o URL), declarando su secret */}
