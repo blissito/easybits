@@ -559,10 +559,18 @@ function VmBox({ id, status, slots, max, ghosty, addon, kind, sysLabel }: { id: 
     <motion.div
       whileHover={{ scale: 1.04, y: -2 }}
       transition={{ type: "spring", stiffness: 500, damping: 30 }}
-      title={extra ? `Sandbox de ${system ? "llamadas/voz" : "sistema"} — no atiende agentes` : status == null ? "Sandbox disponible — se levanta bajo demanda" : status === "suspended" ? `Dormida — congelada, 0 CPU/RAM, resume en <1s. Solo ocupa disco; se destruye a los 45 min sin actividad. ${slots}/${max} conversaciones en memoria` : `Sandbox ${status} · ${slots}/${max} agentes`}
-      style={feltStyle}
-      className={`w-full aspect-square felt flex flex-col items-center justify-center gap-3 cursor-default ${status === "building" ? "animate-pulse" : ""}`}
+      className="w-full aspect-square"
     >
+      {/* El transform del hover va en ESTE wrapper, NO en el .felt: border-radius +
+          overflow:hidden deja de recortar cuando el MISMO elemento tiene un filter
+          (#feltRough) Y un transform → en hover asomaban las esquinas cuadradas del
+          fill (el "segundo bg"). Aquí el felt nunca se transforma; el padre solo
+          escala su raster YA redondeado, así que las esquinas quedan limpias. */}
+      <div
+        title={extra ? `Sandbox de ${system ? "llamadas/voz" : "sistema"} — no atiende agentes` : status == null ? "Sandbox disponible — se levanta bajo demanda" : status === "suspended" ? `Dormida — congelada, 0 CPU/RAM, resume en <1s. Solo ocupa disco; se destruye a los 45 min sin actividad. ${slots}/${max} conversaciones en memoria` : `Sandbox ${status} · ${slots}/${max} agentes`}
+        style={feltStyle}
+        className={`w-full h-full felt flex flex-col items-center justify-center gap-3 cursor-default ${status === "building" ? "animate-pulse" : ""}`}
+      >
       {system ? (
         sysLabel === "render" ? (
           // Render (PDF/PNG): hoja con líneas de texto, NO teléfono.
@@ -620,6 +628,7 @@ function VmBox({ id, status, slots, max, ghosty, addon, kind, sysLabel }: { id: 
         </div>
       )}
       <span className={`font-jersey text-base leading-none truncate max-w-full px-2 ${system ? "text-blue-700 font-bold" : custom ? "text-slate-600 font-bold" : addon && status == null ? "text-brand-600 font-bold" : status == null ? "text-[#55525f] font-bold" : "text-[#4a3f2c] font-bold"}`}>{label}</span>
+      </div>
     </motion.div>
   );
 }
