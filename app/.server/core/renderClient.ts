@@ -9,13 +9,13 @@
  * behavior is identical when the box is down.
  *
  * Ownership mirrors the voice service (fleetVoice.ts): the box is keyed on the
- * resource OWNER (the document/quiz owner's userId), so EVERY render for that
- * owner — documents, presentations, carousels, OG, thumbnails — shares ONE box.
- * This is the fleet-service pattern: a capability available to any of the
- * owner's surfaces, not a per-call or per-group box.
- *
- * Gated by RENDER_SERVICE_ENABLED=1. Ownerless callers (e.g. the public quiz)
- * fall back to RENDER_BOX_OWNER_ID; if that's unset they render in-process.
+ * resource OWNER (the document owner's userId) and counts against THAT user's
+ * sandbox budget — so EVERY render for that owner (documents, presentations,
+ * carousels, OG, thumbnails) shares ONE box. Like every catalog service, it's
+ * available to all users with NO feature switch: the only gate is whether the
+ * box fits in the owner's budget. If it doesn't (plan cap) or the box can't be
+ * brought up, ensureServiceBox throws → we render in-process. Ownerless callers
+ * (e.g. the public quiz) have no budget to charge → they render in-process too.
  */
 import { db } from "../db";
 import type { AuthContext } from "../apiAuth";
@@ -57,8 +57,7 @@ export async function renderViaBox(
   payload: RenderPayload,
   ownerId: string
 ): Promise<RenderResult | null> {
-  if (process.env.RENDER_SERVICE_ENABLED !== "1") return null;
-  const ctx = await ctxFor(ownerId || process.env.RENDER_BOX_OWNER_ID || "");
+  const ctx = await ctxFor(ownerId);
   if (!ctx) return null;
   try {
     const box = await ensureServiceBox(ctx, "render");

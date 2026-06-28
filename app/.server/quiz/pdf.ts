@@ -295,7 +295,7 @@ export const renderQuizPdf = async (
   };
   // waitAssets:false → the box uses setContent({waitUntil:"load"}), identical to
   // the in-process path (the header logo loads from www.easybits.cloud).
-  // No resource owner here (public quiz) → "" falls back to RENDER_BOX_OWNER_ID.
+  // Public quiz has no owner with a budget → "" renders in-process (no box).
   const boxed = await renderViaBox("pdf", { html, waitAssets: false, pdf: pdfOpts }, "");
   if (boxed) return boxed.bytes;
   return await withPage(async (page) => {
