@@ -27,6 +27,7 @@ import {
 import { getSecretValue } from "~/.server/core/secretOperations";
 import { getReservedCapacity } from "~/.server/core/sandboxReservations";
 import { getUserPlan, PLANS } from "~/lib/plans";
+import { profileToToolsParam, DEFAULT_PROFILE } from "~/.server/mcp/toolGroups";
 import { getPlatformDefaultClient } from "~/.server/storage";
 import { checkSandboxRateLimit } from "~/.server/rateLimiter";
 
@@ -841,8 +842,9 @@ export async function routeMessage(
           // así el guardrail de voz llega a todos los agentes sin rebuild/migración.
           appendSystemPrompt: [
             PLATFORM_VOICE_GUARDRAIL,
-            // Code Mode: solo si este fleetAgent corre con la superficie lean.
-            (fleetAgent.persona as Persona | null)?.env?.EASYBITS_TOOL_GROUP === "scripting"
+            // Code Mode: si este fleetAgent corre con un perfil (la superficie lean
+            // siempre empieza con `scripting`, seguido de los buckets del perfil).
+            (fleetAgent.persona as Persona | null)?.env?.EASYBITS_TOOL_GROUP?.startsWith("scripting")
               ? CODE_MODE_GUIDANCE
               : null,
             msg.admin ? ADMIN_NOTE : null,
@@ -1073,13 +1075,23 @@ export async function createFleetAgent(
     destroyIdleMin?: number;
   } = {}
 ) {
+  // Default tool profile for NEW agents: "Público" (creativo, sin admin). Vive en
+  // persona.env.EASYBITS_TOOL_GROUP (= "scripting,imagenes,…"), que el worker lee
+  // al spawn → tools/list lean + run_tool acotado al perfil. El env explícito de
+  // la persona gana (power users). Agentes EXISTENTES no se tocan (sin este env =
+  // catálogo completo, intacto).
+  const basePersona = opts.persona ?? GHOSTY_PERSONA;
+  const persona: Persona = {
+    ...basePersona,
+    env: { EASYBITS_TOOL_GROUP: profileToToolsParam(DEFAULT_PROFILE), ...(basePersona.env ?? {}) },
+  };
   return db.fleetAgent.create({
     data: {
       ownerId: ctx.user.id,
       name: opts.name,
       token: "pool_" + randomBytes(24).toString("hex"),
       workerTemplate: opts.workerTemplate ?? "claude-worker",
-      persona: opts.persona ?? GHOSTY_PERSONA,
+      persona,
       assistantName: "Ghosty",
       oauthSecretName: opts.oauthSecretName ?? null,
       // Seed the MCP menu with the builtins so the UI/agent can immediately see

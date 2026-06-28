@@ -459,7 +459,13 @@ export function createMcpServer(groups?: string[]) {
 
   // Always install the dynamic-discovery meta-tools last so they survive any
   // earlier disable pass and stay reachable regardless of the active group.
-  installDynamicTools(server);
+  // Strict (Code Mode profile) mode: when `scripting` is among the requested
+  // groups, BOUND discover_tools/run_tool to the active allowlist — the agent
+  // cannot reach tools outside its profile (no DBs/sandboxes for a "Público"
+  // agent), even via run_tool. Other clients (Claude.ai) never send `scripting`
+  // → meta-tools keep their full-catalog escape-hatch.
+  const strict = enabled.has("scripting");
+  installDynamicTools(server, strict && activeAllowlist ? { scopeAllowlist: activeAllowlist } : {});
 
   // The SDK answers a tools/call for an unknown OR disabled (out-of-group) tool
   // with a raw McpError(-32602 InvalidParams) — bypassing our fail() contract

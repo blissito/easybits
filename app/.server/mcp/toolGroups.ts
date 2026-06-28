@@ -25,6 +25,11 @@ export type ToolGroupKey =
   | "email"
   | "public-safe"
   | "scripting"
+  // Capability buckets — composables de los PERFILES de la flota (no son grupos de
+  // conector de Claude.ai, por eso no están en TOOL_GROUPS, solo en GROUP_ALLOWLISTS).
+  | "imagenes"
+  | "documentos"
+  | "investigacion"
   | "all";
 
 export interface ToolGroup {
@@ -463,6 +468,39 @@ export const PUBLIC_SAFE_ALLOWLIST = new Set<string>([
   "db_select",
 ]);
 
+// ── Capability buckets para los PERFILES de la flota ──
+// Bloques humanos componibles (Imágenes/Documentos/Investigación). Un perfil = la
+// unión de unos cuantos. Reusan tools ya existentes; el bucket "archivos" no se
+// define aparte porque SCRIPTING_ALLOWLIST ya trae list/get/upload_file.
+
+/** Imágenes — generar/editar/describir/transformar + IO para traer el resultado. */
+export const IMAGENES_ALLOWLIST = new Set<string>([
+  "create_or_edit_image",
+  "edit_image",
+  "transform_image",
+  "optimize_image",
+  "describe_image",
+  "get_file", "list_files", "upload_file",
+]);
+
+/** Documentos — crear/editar/publicar + páginas + export, sin tocar DB/sitios. */
+export const DOCUMENTOS_ALLOWLIST = new Set<string>([
+  "create_document", "get_document", "list_documents", "update_document", "delete_document",
+  "open_design_in_editor",
+  "add_page", "delete_page", "reorder_pages",
+  "set_page_html", "get_page_html",
+  "structured_doc",
+  "deploy_document", "export_document", "get_document_pdf",
+  "create_share_link", "list_share_links", "revoke_share_link",
+  "get_file", "list_files", "upload_file",
+]);
+
+/** Investigación — Brightdata scrape + SERP. */
+export const INVESTIGACION_ALLOWLIST = new Set<string>([
+  "research_scrape", "research_search",
+  "list_files", "upload_file",
+]);
+
 /**
  * Scripting (Code Mode) toolset — la superficie MÍNIMA. La idea: el agente
  * descubre y ejecuta cualquier tool vía `discover_tools` + `run_tool` (siempre
@@ -513,6 +551,9 @@ export const GROUP_ALLOWLISTS: Partial<Record<ToolGroupKey, Set<string>>> = {
   email: EMAIL_ALLOWLIST,
   "public-safe": PUBLIC_SAFE_ALLOWLIST,
   scripting: SCRIPTING_ALLOWLIST,
+  imagenes: IMAGENES_ALLOWLIST,
+  documentos: DOCUMENTOS_ALLOWLIST,
+  investigacion: INVESTIGACION_ALLOWLIST,
 };
 
 // Keep `toolCount` honest: derive it from the real allowlist size for every
@@ -522,4 +563,45 @@ export const GROUP_ALLOWLISTS: Partial<Record<ToolGroupKey, Set<string>>> = {
 for (const g of TOOL_GROUPS) {
   const al = GROUP_ALLOWLISTS[g.key];
   if (al) g.toolCount = al.size;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PERFILES de la flota (Tool Profiles)
+//
+// Un perfil = un set nombrado de capability buckets, presentado al user como un
+// preset (ej. "Público" = creativo sin admin). Se ENTREGA al worker como la lista
+// de grupos que su MCP easybits pide (`--tools scripting,imagenes,documentos,…`):
+// `scripting` da la superficie lean (Code Mode) y el enforcement bound de
+// run_tool; los buckets definen qué alcanza. v1 ships un solo preset; más
+// presets (Creativo/Admin/Lectura) y edición tool-level llegan después.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface ToolProfile {
+  key: string;
+  label: string;
+  description: string;
+  /** Capability buckets que el agente PUEDE usar (además del `scripting` base). */
+  buckets: ToolGroupKey[];
+}
+
+export const TOOL_PROFILES: Record<string, ToolProfile> = {
+  publico: {
+    key: "publico",
+    label: "Público",
+    description:
+      "Creativo, sin administración. Crea imágenes y documentos, investiga y maneja archivos — pero NO bases de datos, sitios, secrets ni sandboxes. Ideal para un agente de cara al cliente.",
+    buckets: ["imagenes", "documentos", "investigacion"],
+  },
+};
+
+export const DEFAULT_PROFILE = "publico";
+
+/**
+ * Resuelve un perfil al valor de `EASYBITS_TOOL_GROUP` / `?tools=` que consume el
+ * worker: SIEMPRE antepone `scripting` (superficie lean + enforcement) seguido de
+ * los buckets del perfil. Desconocido → solo `scripting` (lo más restrictivo).
+ */
+export function profileToToolsParam(profileKey: string): string {
+  const p = TOOL_PROFILES[profileKey];
+  return ["scripting", ...(p?.buckets ?? [])].join(",");
 }

@@ -107,8 +107,9 @@ export async function loader({ request }: Route.LoaderArgs) {
           name: o.name ?? "",
           systemPrompt: o.systemPrompt ?? "",
           phoneNumber: o.phoneNumber ?? "",
-          // ★ Main: número marcado admin → su self-chat administra (igual que mainGroupJid).
-          main: o.admin === true,
+          // ★ Main: el self-chat de este número administra POR DEFAULT (admin !== false);
+          // la ★ se apaga solo si explícitamente lo desactivas.
+          main: o.admin !== false,
           // undefined = encendido (compat con números ya conectados).
           enabled: o.enabled !== false,
           mutedCount: (o.mutedSenders ?? []).length,
@@ -438,15 +439,16 @@ export async function action({ request }: Route.ActionArgs) {
     return data({ ok: true });
   }
   if (intent === "set-waba-main") {
-    // Estrella ★ Main por número: marca/desmarca el número como ADMIN — su self-chat
-    // (mensajearte a ti mismo) administra el agente. Espejo de set-main de Baileys.
+    // ★ Main por número: su self-chat (mensajearte a ti mismo) administra el agente.
+    // ON por DEFAULT (admin !== false); la ★ solo sirve para APAGARlo.
     const integrationId = String(fd.get("integrationId") || "");
     const cfg = (fleetAgent.wabaConfig as { formmySecret?: string; orgs?: Record<string, any> } | null) ?? {};
     const org = cfg.orgs?.[integrationId];
     if (!org) return data({ error: "número no encontrado" }, { status: 404 });
+    const effective = org.admin !== false; // estado actual (default ON)
     const next = {
       ...cfg,
-      orgs: { ...cfg.orgs, [integrationId]: { ...org, admin: !org.admin } },
+      orgs: { ...cfg.orgs, [integrationId]: { ...org, admin: !effective } },
     };
     await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { wabaConfig: next } });
     return data({ ok: true });
@@ -1204,9 +1206,9 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                               <span className="text-sm leading-none">⚡</span><span>Capacidades</span>
                               <span className="text-[10px] leading-none bg-gray-100 text-gray-600 rounded-full px-1.5 py-0.5">{p.builtins.length + w.mcps.length}</span>
                             </button>
-                            {/* ★ Main = número admin: su self-chat administra el agente (igual que Baileys). */}
+                            {/* ★ Main = el self-chat administra (ON por default). Clic para apagarlo. */}
                             <button type="button"
-                              title={w.main ? "Número admin — su self-chat administra el agente. Clic para quitar" : "Marcar como número admin (administras desde su self-chat)"}
+                              title={w.main ? "Su self-chat (mensajearte a ti mismo) administra el agente. Clic para apagar" : "Admin por self-chat apagado. Clic para activar"}
                               onClick={() => fetcher.submit({ intent: "set-waba-main", fleetAgentId: p.id, integrationId: w.integrationId }, { method: "post" })}
                               className={`flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg border-2 transition-colors ${w.main ? "border-brand-500 bg-brand-500 text-white" : "border-gray-200 text-gray-400 hover:border-gray-400 hover:text-gray-700"}`}>
                               <span className="text-sm leading-none">{w.main ? "★" : "☆"}</span><span>Main</span>

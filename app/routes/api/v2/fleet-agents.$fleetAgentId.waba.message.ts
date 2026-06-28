@@ -104,13 +104,15 @@ export async function action({ request, params }: Route.ActionArgs) {
   // drop de is_from_me/manual_mode (el self-chat del dueño puede estar auto-pausado).
   const org = waba!.orgs?.[integrationId];
   const np = normalizePhone(sender);
-  // Solo un número marcado admin (★ Main) administra; su self-chat (sender === el
-  // propio número) o un adminSender opcional designado.
+  // El SELF-CHAT (mensajearte a tu propio número) administra POR DEFAULT — solo se
+  // apaga con la ★ Main en off (org.admin === false). Además un adminSender
+  // designado puede administrar. En coexistencia el note-to-self llega como
+  // smb_message_echoes con from===to===tu número → Formmy lo reenvía is_from_me:true,
+  // sender=tu número.
   const isAdmin =
     !!body.is_from_me &&
     !!np &&
-    org?.admin === true &&
-    (np === normalizePhone(org?.phoneNumber) ||
+    ((org?.admin !== false && np === normalizePhone(org?.phoneNumber)) ||
       (!!org?.adminSender && np === normalizePhone(org.adminSender)));
 
   // Gate del número: apagado (enabled === false) o conversación silenciada → el

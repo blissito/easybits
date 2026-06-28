@@ -34,6 +34,14 @@ interface RegisteredToolInternal {
 
 const META_TOOL_NAMES = new Set(["discover_tools", "run_tool"]);
 
+export interface DynamicToolOptions {
+  // When set (strict mode, e.g. Code Mode profiles), run_tool/discover_tools are
+  // BOUNDED to this allowlist — the agent cannot reach tools outside its profile,
+  // even though they stay registered. Without it (Claude.ai, legacy clients), the
+  // meta-tools keep their escape-hatch behavior: reach the FULL catalog.
+  scopeAllowlist?: Set<string>;
+}
+
 function getRegisteredTools(server: McpServer): Record<string, RegisteredToolInternal> {
   return ((server as any)._registeredTools ?? {}) as Record<string, RegisteredToolInternal>;
 }
@@ -47,7 +55,11 @@ function dumpSchema(schema: any): unknown {
   }
 }
 
-export function installDynamicTools(server: McpServer) {
+export function installDynamicTools(server: McpServer, opts: DynamicToolOptions = {}) {
+  const scope = opts.scopeAllowlist;
+  // In scope, the meta-tools themselves are always reachable.
+  const inScope = (name: string) => !scope || scope.has(name) || META_TOOL_NAMES.has(name);
+
   server.tool(
     "discover_tools",
     "Search the FULL Easybits MCP catalog — including tools NOT loaded in your current session's toolGroup. Returns name, description, inputSchema (JSON Schema) and `loaded` (whether it's already in tools/list). After finding what you need, call it via `run_tool({ name, params })` — no reconnect required. Combine with `run_tool` to escape the active toolGroup without restarting Claude.",
@@ -70,6 +82,9 @@ export function installDynamicTools(server: McpServer) {
       const all = getRegisteredTools(server);
       const items = Object.entries(all)
         .filter(([name]) => !META_TOOL_NAMES.has(name))
+        // Strict (profile) mode: only surface tools the profile actually permits,
+        // so the agent never even sees — let alone tries — an out-of-profile tool.
+        .filter(([name]) => inScope(name))
         .filter(([name, t]) => {
           if (!q) return true;
           const haystack = `${name} ${t.description ?? ""}`.toLowerCase();
@@ -115,6 +130,25 @@ export function installDynamicTools(server: McpServer) {
               type: "text" as const,
               text: JSON.stringify(
                 { error: `Cannot dispatch the meta-tool '${input.name}' through run_tool.` },
+                null,
+                2
+              ),
+            },
+          ],
+          isError: true,
+        };
+      }
+
+      // Strict (profile) mode: refuse to dispatch anything outside the active
+      // profile's allowlist — this is the real lock. Without it run_tool reaches
+      // ALL ~186 tools regardless of tools/list, making any profile UI theater.
+      if (!inScope(input.name)) {
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: JSON.stringify(
+                { error: `La herramienta '${input.name}' no está permitida en el perfil activo de este agente.` },
                 null,
                 2
               ),

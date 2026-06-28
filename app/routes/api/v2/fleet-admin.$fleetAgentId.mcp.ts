@@ -54,7 +54,7 @@ function buildAdminServer(fleetAgentId: string): McpServer {
         phoneNumber: o.phoneNumber ?? null,
         name: o.name ?? null,
         systemPrompt: o.systemPrompt ?? null,
-        admin: o.admin === true, // marcado como número admin (★ Main)
+        admin: o.admin !== false, // self-chat admin ON por default (★ Main); false = apagado
         adminSender: o.adminSender ?? null,
         enabled: o.enabled !== false, // undefined = encendido (compat)
         mutedSenders: o.mutedSenders ?? [],
