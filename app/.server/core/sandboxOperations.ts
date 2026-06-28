@@ -93,7 +93,7 @@ export interface TemplateInfo {
 export interface SandboxRecord {
   sandboxId: string;
   template: SandboxTemplate;
-  status: "starting" | "running" | "stopped" | "error" | "lost";
+  status: "starting" | "running" | "suspended" | "stopped" | "error" | "lost";
   createdAt: string;
   expiresAt: string;
   ownerId: string;
@@ -742,6 +742,11 @@ export async function waitUntilRunning(
     }
     if (last.status === "stopped") {
       throw new Error(`sandbox ${sandboxId} is stopped`);
+    }
+    // A suspended box never transitions to running on its own — only resumeSandbox
+    // wakes it. Polling here would burn the whole timeout. Caller must resume first.
+    if (last.status === "suspended") {
+      throw new Error(`sandbox ${sandboxId} is suspended`);
     }
     await new Promise((r) => setTimeout(r, intervalMs));
   }

@@ -2,6 +2,7 @@ import { db } from "../db";
 import type { Slide } from "~/lib/buildRevealHtml";
 import { getPalette } from "~/lib/buildRevealHtml";
 import { withPage, setContentAndWaitForAssets } from "./browserPool";
+import { renderViaBox } from "./renderClient";
 import { buildSingleThemeCss, buildCustomTheme } from "@easybits.cloud/html-tailwind-generator";
 import { replaceCdnWithCompiledCSS } from "../tailwind";
 
@@ -132,11 +133,14 @@ ${slidesHtml}
 </html>`;
 
   const optimizedHtml = await replaceCdnWithCompiledCSS(html);
+  const pdfOpts = { width: "960px", height: "540px", printBackground: true, landscape: false };
 
   try {
+    const boxed = await renderViaBox("pdf", { html: optimizedHtml, pdf: pdfOpts }, userId);
+    if (boxed) return boxed.bytes;
     return await withPage(async (page) => {
       await setContentAndWaitForAssets(page, optimizedHtml);
-      return await page.pdf({ width: "960px", height: "540px", printBackground: true, landscape: false });
+      return await page.pdf(pdfOpts);
     });
   } catch (err: any) {
     console.error("[takePresentationPdf] error:", err.message);

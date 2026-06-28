@@ -1,4 +1,5 @@
 import { withPage } from "~/.server/core/browserPool";
+import { renderViaBox } from "~/.server/core/renderClient";
 import { QUIZ_WHATSAPP_DISPLAY } from "~/lib/quiz/contact";
 import {
   ANNUAL_DISCOUNT_PCT,
@@ -287,15 +288,18 @@ export const renderQuizPdf = async (
   folio: string
 ): Promise<Buffer> => {
   const html = buildQuizPdfHtml(payload, folio);
+  const pdfOpts = {
+    format: "Letter",
+    printBackground: true,
+    margin: { top: "0", right: "0", bottom: "0", left: "0" },
+  };
+  // waitAssets:false → the box uses setContent({waitUntil:"load"}), identical to
+  // the in-process path (the header logo loads from www.easybits.cloud).
+  // No resource owner here (public quiz) → "" falls back to RENDER_BOX_OWNER_ID.
+  const boxed = await renderViaBox("pdf", { html, waitAssets: false, pdf: pdfOpts }, "");
+  if (boxed) return boxed.bytes;
   return await withPage(async (page) => {
-    // Cambiamos a `load` porque ahora el header carga el logo desde
-    // www.easybits.cloud/logo.png — domcontentloaded no esperaría la imagen
-    // y saldría rota en el PDF.
     await page.setContent(html, { waitUntil: "load" });
-    return await page.pdf({
-      format: "Letter",
-      printBackground: true,
-      margin: { top: "0", right: "0", bottom: "0", left: "0" },
-    });
+    return await page.pdf(pdfOpts);
   });
 };

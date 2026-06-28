@@ -8,6 +8,7 @@ import type { Section3 } from "~/lib/landing3/types";
 import { replaceCdnWithCompiledCSS } from "../tailwind";
 import { buildSingleThemeCss, buildCustomTheme } from "@easybits.cloud/html-tailwind-generator";
 import { withPage, setContentAndWaitForAssets, optimizePageImages, replaceBrokenImages } from "./browserPool";
+import { renderViaBox } from "./renderClient";
 import { getPlatformPublicClient, buildPublicAssetUrl } from "../storage";
 import { resolveLandingPaletteWithBrandKit } from "../themePalette";
 
@@ -92,15 +93,24 @@ export async function takeDocumentThumbnail(
   );
   const optimizedHtml = await replaceCdnWithCompiledCSS(html);
 
+  const viewport = { width: format.width, height: format.height };
+  const clip = { x: 0, y: 0, width: targetW, height: clipH };
   try {
+    const boxed = await renderViaBox("screenshot", {
+      html: optimizedHtml,
+      viewport,
+      replaceBroken: true,
+      screenshot: { type: "png", clip },
+    }, userId);
+    if (boxed) {
+      thumbCache.set(cacheKey, boxed.bytes);
+      return boxed.bytes;
+    }
     const buffer = await withPage(async (page) => {
       await setContentAndWaitForAssets(page, optimizedHtml);
       await replaceBrokenImages(page);
-      return await page.screenshot({
-        type: "png",
-        clip: { x: 0, y: 0, width: targetW, height: clipH },
-      });
-    }, { viewport: { width: format.width, height: format.height } });
+      return await page.screenshot({ type: "png", clip });
+    }, { viewport });
     thumbCache.set(cacheKey, buffer);
     return buffer;
   } catch (err: any) {
@@ -155,6 +165,14 @@ export async function takeDocumentScreenshot(
   const optimizedHtml = await replaceCdnWithCompiledCSS(html);
 
   try {
+    const boxed = await renderViaBox("screenshot", {
+      html: optimizedHtml,
+      replaceBroken: true,
+      screenshot: { type: "png" },
+    }, userId);
+    if (boxed) {
+      return { type: "image" as const, mimeType: "image/png" as const, data: boxed.bytes.toString("base64") };
+    }
     return await withPage(async (page) => {
       await setContentAndWaitForAssets(page, optimizedHtml);
       await replaceBrokenImages(page);
@@ -218,23 +236,26 @@ export async function takeDocumentPdf(
   const html = buildDocumentPrintHtml(sectionsForPrint, { themeCss, tailwindConfig, title: doc.name || "Document", format });
   const optimizedHtml = await replaceCdnWithCompiledCSS(html);
 
+  // page.pdf() options, identical for box and in-process paths.
+  const isLandscape = filteredContent.some((s) => s.html?.includes('w-[11in]'));
+  const pdfOpts: Record<string, unknown> = format?.width && format?.height
+    ? { width: `${format.width}px`, height: `${format.height}px`, printBackground: true }
+    : { format: "Letter", printBackground: true, ...(isLandscape && { landscape: true }) };
+
   try {
+    const boxed = await renderViaBox("pdf", {
+      html: optimizedHtml,
+      optimizeImages: true,
+      replaceBroken: true,
+      pdf: pdfOpts,
+    }, userId);
+    if (boxed) return { pdf: boxed.bytes, brokenImages: boxed.broken };
+
     return await withPage(async (page) => {
       await setContentAndWaitForAssets(page, optimizedHtml);
       await optimizePageImages(page);
       const brokenImages = await replaceBrokenImages(page);
-      let pdf: Buffer;
-      if (format?.width && format?.height) {
-        pdf = await page.pdf({
-          width: `${format.width}px`,
-          height: `${format.height}px`,
-          printBackground: true,
-        });
-      } else {
-        // Detect landscape sections (w-[11in] h-[8.5in])
-        const isLandscape = filteredContent.some((s) => s.html?.includes('w-[11in]'));
-        pdf = await page.pdf({ format: "Letter", printBackground: true, ...(isLandscape && { landscape: true }) });
-      }
+      const pdf = await page.pdf(pdfOpts);
       return { pdf, brokenImages };
     });
   } catch (err: any) {
@@ -283,13 +304,23 @@ export async function takeOgScreenshot(
     </style></head>`
   );
 
+  const ogViewport = { width: 1200, height: 630 };
+  const ogClip = { x: 0, y: 0, width: 1200, height: 630 };
   try {
+    const boxed = await renderViaBox("screenshot", {
+      html: ogHtml,
+      viewport: ogViewport,
+      optimizeImages: true,
+      replaceBroken: true,
+      screenshot: { type: "png", clip: ogClip },
+    }, userId);
+    if (boxed) return boxed.bytes;
     return await withPage(async (page) => {
       await setContentAndWaitForAssets(page, ogHtml);
       await optimizePageImages(page);
       await replaceBrokenImages(page);
-      return await page.screenshot({ type: "png", clip: { x: 0, y: 0, width: 1200, height: 630 } });
-    }, { viewport: { width: 1200, height: 630 } });
+      return await page.screenshot({ type: "png", clip: ogClip });
+    }, { viewport: ogViewport });
   } catch (err: any) {
     console.error("[takeOgScreenshot] error:", err.message);
     return null;
@@ -351,54 +382,67 @@ export async function exportDocumentImages(
   const safeName = (doc.name || "document").replace(/[^a-zA-Z0-9_\-. ]/g, "_").slice(0, 80);
 
   const results: { id: string; url: string; contentType: string; width: number; height: number; sectionId: string }[] = [];
+  const viewport = { width: format.width, height: format.height };
+  const screenshot = { type: "png" as const, clip: { x: 0, y: 0, width: format.width, height: format.height } };
 
   try {
-    await withPage(async (page) => {
-      for (let i = 0; i < filtered.length; i++) {
-        const section = filtered[i];
-        // Render this page in isolation so the screenshot is exactly format-sized.
-        const html = buildDocumentPrintHtml(
-          [...cssSections, section],
-          { themeCss, tailwindConfig, title: doc.name || "Document", format },
-        );
-        const optimizedHtml = await replaceCdnWithCompiledCSS(html);
-        await setContentAndWaitForAssets(page, optimizedHtml);
-        await optimizePageImages(page);
-        await replaceBrokenImages(page);
-        const buffer = await page.screenshot({
-          type: "png",
-          clip: { x: 0, y: 0, width: format.width, height: format.height },
-        });
+    for (let i = 0; i < filtered.length; i++) {
+      const section = filtered[i];
+      // Render this page in isolation so the screenshot is exactly format-sized.
+      const html = buildDocumentPrintHtml(
+        [...cssSections, section],
+        { themeCss, tailwindConfig, title: doc.name || "Document", format },
+      );
+      const optimizedHtml = await replaceCdnWithCompiledCSS(html);
 
-        // Upload PNG to Tigris as a public file
-        const storageKey = `${userId}/${nanoid(8)}.png`;
-        await client.putObject(storageKey, buffer, "image/png");
-        const publicUrl = buildPublicAssetUrl(storageKey);
-        const file = await db.file.create({
-          data: {
-            name: `${safeName}-page-${i + 1}.png`,
-            storageKey,
-            slug: storageKey,
-            size: buffer.length,
-            contentType: "image/png",
-            ownerId: userId,
-            access: "public",
-            url: publicUrl,
-            status: "DONE",
-            source: "mcp",
-            metadata: { sourceDocumentId: documentId, sourceSectionId: section.id, pageIndex: i },
-          },
-        });
-        results.push({
-          id: file.id,
-          url: publicUrl,
-          contentType: "image/png",
-          width: format.width,
-          height: format.height,
-          sectionId: section.id,
-        });
+      // Box-first (just the pixels); upload + db row stay Fly-side below.
+      let buffer: Buffer;
+      const boxed = await renderViaBox("screenshot", {
+        html: optimizedHtml,
+        viewport,
+        optimizeImages: true,
+        replaceBroken: true,
+        screenshot,
+      }, userId);
+      if (boxed) {
+        buffer = boxed.bytes;
+      } else {
+        buffer = await withPage(async (page) => {
+          await setContentAndWaitForAssets(page, optimizedHtml);
+          await optimizePageImages(page);
+          await replaceBrokenImages(page);
+          return await page.screenshot(screenshot);
+        }, { viewport });
       }
-    }, { viewport: { width: format.width, height: format.height } });
+
+      // Upload PNG to Tigris as a public file
+      const storageKey = `${userId}/${nanoid(8)}.png`;
+      await client.putObject(storageKey, buffer, "image/png");
+      const publicUrl = buildPublicAssetUrl(storageKey);
+      const file = await db.file.create({
+        data: {
+          name: `${safeName}-page-${i + 1}.png`,
+          storageKey,
+          slug: storageKey,
+          size: buffer.length,
+          contentType: "image/png",
+          ownerId: userId,
+          access: "public",
+          url: publicUrl,
+          status: "DONE",
+          source: "mcp",
+          metadata: { sourceDocumentId: documentId, sourceSectionId: section.id, pageIndex: i },
+        },
+      });
+      results.push({
+        id: file.id,
+        url: publicUrl,
+        contentType: "image/png",
+        width: format.width,
+        height: format.height,
+        sectionId: section.id,
+      });
+    }
   } catch (err: any) {
     console.error("[exportDocumentImages] error:", err.message);
     return null;

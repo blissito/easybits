@@ -13,7 +13,7 @@ export const SANDBOX_TEMPLATES = [
   "ghosty-gc", "claude-worker",
   "cagent-ghosty", "openclaw", "chat-openai", "chat-anthropic",
   "code-interpreter", "desktop-ghosty", "computer-ghosty", "computer-ghosty-gemini",
-  "livekit-svc", "whisper-svc", "kokoro-svc", "voice-svc",
+  "livekit-svc", "whisper-svc", "kokoro-svc", "voice-svc", "render-svc",
 ] as const;
 
 export type SandboxTemplate = (typeof SANDBOX_TEMPLATES)[number];

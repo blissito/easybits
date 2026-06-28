@@ -8,6 +8,8 @@ import {
   startAgent,
   exposeSandboxPort,
   destroySandbox,
+  suspendSandbox,
+  resumeSandbox,
 } from "./sandboxOperations";
 import type { SandboxTemplate } from "../sandbox/schemas";
 
@@ -35,7 +37,14 @@ interface ServiceSpec {
   ports: number[]; // ports[0] = the agent/health port startAgent probes
   readyPaths: Record<number, string>; // port → HTTP path that 200s only when ready
   ttlSeconds: number;
-  idleMin: number; // destroy after this many minutes with no use
+  idleMin: number; // suspend (or destroy) after this many minutes with no use
+  // suspendOnIdle: park the box (Firecracker snapshot) instead of destroying it.
+  // Resume is ~700ms vs cold-boot, ideal for heavy images (Chromium). The box's
+  // memory stays on disk as a snapshot until it's resumed or hard-reaped.
+  suspendOnIdle?: boolean;
+  // hardTtlMin: once suspended, destroy after this long to reclaim snapshot disk.
+  // Measured from lastActiveAt (= suspended-since, since we don't touch it while parked).
+  hardTtlMin?: number;
 }
 
 // Registro de servicios. Añadir un servicio nuevo = una entrada aquí + (si hace
@@ -49,6 +58,23 @@ const SERVICE_REGISTRY: Record<string, ServiceSpec> = {
     readyPaths: { 9000: "/health", 9101: "/health" },
     ttlSeconds: 1800, // 30 min host TTL (hard ceiling; reaper kills sooner)
     idleMin: 10, // destroy after 10 min idle
+  },
+  // render: Chromium HTML→PDF/PNG box. Heavy image (~300MB) → snapshot/resume
+  // pays off (warm ~700ms vs ~12s cold). Keyed per OWNER like voice, so every
+  // render for that owner shares ONE box. Suspends after 5 min idle (memory
+  // snapshot), and is hard-reaped after 60 min suspended to reclaim the ~2GB
+  // snapshot disk — bounds accumulation across many owners while keeping warm
+  // resume for active export sessions.
+  render: {
+    template: "render-svc",
+    unit: "render-svc-runtime",
+    envFile: "/etc/render-svc-runtime/.env",
+    ports: [9300],
+    readyPaths: { 9300: "/health" },
+    ttlSeconds: 1800,
+    idleMin: 5,
+    suspendOnIdle: true,
+    hardTtlMin: 60,
   },
 };
 
@@ -73,6 +99,8 @@ export interface ServiceBoxHandle {
   // Semantic aliases per service (voice). Filled by buildUrls.
   transcribeUrl?: string;
   speakUrl?: string;
+  // render: base URL for the box's HTTP API (POST /render/pdf, /render/screenshot).
+  renderUrl?: string;
 }
 
 function buildUrls(kind: string, sandboxId: string, status: string, urls: Record<number, string>): ServiceBoxHandle {
@@ -82,6 +110,10 @@ function buildUrls(kind: string, sandboxId: string, status: string, urls: Record
     const tts = urls[9101];
     if (stt) h.transcribeUrl = `${stt.replace(/\/$/, "")}/transcribe`;
     if (tts) h.speakUrl = `${tts.replace(/\/$/, "")}/speak`;
+  }
+  if (kind === "render") {
+    const r = urls[9300];
+    if (r) h.renderUrl = r.replace(/\/$/, "");
   }
   return h;
 }
@@ -119,6 +151,30 @@ export async function ensureServiceBox(ctx: AuthContext, kind: string): Promise<
   });
   if (existing) {
     const sb = await getSandbox(ctx, existing.sandboxId).catch(() => null);
+    // Parked box → wake it. Resume restores the same TAP/IP and the HTTP port
+    // exposure survives (host never clears exposedPorts on suspend), so we just
+    // resume, confirm running, and re-assert exposeAll (idempotent no-op). If
+    // resume fails (e.g. 410 Gone after a host restart), drop the row + respawn.
+    if (sb && sb.status === "suspended") {
+      try {
+        await resumeSandbox(ctx, existing.sandboxId);
+        await waitUntilRunning(ctx, existing.sandboxId, { timeoutMs: 15_000 });
+        const urls = await exposeAll(ctx, existing.sandboxId, spec.ports);
+        const ready = await waitReady(
+          urls[spec.ports[0]],
+          spec.readyPaths[spec.ports[0]],
+          10,
+          500
+        );
+        if (!ready) throw new Error("box did not become ready after resume");
+        await touchServiceBox(existing.sandboxId);
+        return buildUrls(kind, existing.sandboxId, "running", urls);
+      } catch (e) {
+        console.error("service resume failed, respawning:", (e as Error).message);
+        await db.serviceBox.delete({ where: { id: existing.id } }).catch(() => {});
+        return spawnServiceBox(ctx, kind);
+      }
+    }
     if (sb && (sb.status === "running" || sb.status === "starting")) {
       if (sb.status === "starting") {
         const ok = await waitUntilRunning(ctx, existing.sandboxId, { timeoutMs: 60_000 }).catch(() => null);
@@ -224,8 +280,9 @@ export async function touchServiceBox(sandboxId: string): Promise<void> {
 // idle past its kind's idleMin → destroy. If the box is already gone (host TTL)
 // past the host TTL window, drop the orphan row. Simpler than reapIdleStudios:
 // no participant polling — a service box has no "active call" concept.
-export async function reapIdleServiceBoxes(): Promise<{ checked: number; destroyed: number }> {
+export async function reapIdleServiceBoxes(): Promise<{ checked: number; destroyed: number; suspended: number }> {
   let destroyed = 0;
+  let suspended = 0;
   const now = Date.now();
   const boxes = await db.serviceBox.findMany();
   for (const box of boxes) {
@@ -244,15 +301,33 @@ export async function reapIdleServiceBoxes(): Promise<{ checked: number; destroy
         }
         continue;
       }
+      // Already parked: leave it (resume is cheap), but destroy if it's been
+      // suspended past hardTtl to reclaim the snapshot disk. lastActiveAt doubles
+      // as "suspended-since" — we never touch it while parked.
+      if (sb.status === "suspended") {
+        const hardTtlMin = spec?.hardTtlMin ?? 720;
+        if (now - box.lastActiveAt.getTime() >= hardTtlMin * 60_000) {
+          await destroyServiceBox(ctx, box.sandboxId);
+          destroyed++;
+        }
+        continue;
+      }
       if (now - box.lastActiveAt.getTime() >= idleMin * 60_000) {
-        await destroyServiceBox(ctx, box.sandboxId);
-        destroyed++;
+        if (spec?.suspendOnIdle) {
+          // Park, don't kill. Keep the row + lastActiveAt (now the suspended-since
+          // clock). Next ensureServiceBox resumes it in ~700ms.
+          await suspendSandbox(ctx, box.sandboxId);
+          suspended++;
+        } else {
+          await destroyServiceBox(ctx, box.sandboxId);
+          destroyed++;
+        }
       }
     } catch (e) {
       console.error(`service reaper: poll ${box.sandboxId} failed:`, (e as Error).message);
     }
   }
-  return { checked: boxes.length, destroyed };
+  return { checked: boxes.length, destroyed, suspended };
 }
 
 // Background AuthContext for the box owner (the reaper runs outside any HTTP
