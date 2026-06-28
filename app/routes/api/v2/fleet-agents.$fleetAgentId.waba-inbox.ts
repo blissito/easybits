@@ -22,18 +22,14 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     return Response.json({ error: "not found" }, { status: 404 });
   }
   const org = ((fleetAgent.wabaConfig as { orgs?: Record<string, any> } | null)?.orgs ?? {})[integrationId] ?? {};
-  const muted = new Set(((org.mutedSenders as string[] | undefined) ?? []).map(onlyDigits));
   const allowed = new Set(((org.allowedSenders as string[] | undefined) ?? []).map(onlyDigits));
-  // Auto-pausa por coexistencia (espeja waba.message.ts: 30 min desde tu último eco,
-  // salvo que hayas reactivado después). Para mostrar "⏸ En pausa" + botón Reactivar.
-  const PAUSE_WINDOW_MS = 30 * 60 * 1000;
-  const pausedAt = (org.pausedAt as Record<string, string> | undefined) ?? {};
-  const resumedAt = (org.resumedAt as Record<string, string> | undefined) ?? {};
-  const isPaused = (digits: string) => {
-    const p = pausedAt[digits];
-    if (!p || Date.now() - Date.parse(p) >= PAUSE_WINDOW_MS) return false;
-    const r = resumedAt[digits];
-    return !(r && Date.parse(r) >= Date.parse(p));
+  // Estado de pausa = espejo de Formmy (fuente única): el `paused_until` que cacheamos
+  // por conversación en waba.message.ts. Vigente = en el futuro. 9999 = permanente.
+  const pausedUntil = (org.pausedUntil as Record<string, string> | undefined) ?? {};
+  const pauseInfo = (digits: string): { paused: boolean; permanent: boolean } => {
+    const u = pausedUntil[digits];
+    if (!u || !(Date.parse(u) > Date.now())) return { paused: false, permanent: false };
+    return { paused: true, permanent: Date.parse(u) > Date.parse("9000-01-01") };
   };
 
   // Mensajes recientes de las conversaciones de ESTE número (waba:<int>:<sender>).
@@ -68,14 +64,13 @@ export async function loader({ request, params }: Route.LoaderArgs) {
       lastRole: c.lastRole,
       lastAt: c.lastAt.toISOString(),
       count: c.count,
-      muted: muted.has(onlyDigits(c.sender)),
       allowed: allowed.has(onlyDigits(c.sender)),
-      paused: isPaused(onlyDigits(c.sender)),
+      ...pauseInfo(onlyDigits(c.sender)),
     }));
 
   // no-store: data dinámica; evita que el reload tras un toggle traiga caché viejo.
   return Response.json(
-    { conversations, respectEchoes: org.respectEchoes !== false },
+    { conversations },
     { headers: { "Cache-Control": "no-store" } }
   );
 }

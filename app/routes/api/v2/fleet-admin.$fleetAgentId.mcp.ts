@@ -27,6 +27,21 @@ type WabaConfig = { formmySecret?: string; orgs?: Record<string, WabaOrg> };
 
 const onlyDigits = (s: string) => s.replace(/\D/g, "");
 
+// Puente a Formmy (fuente única de la coexistencia) — pausa/reactiva una conversación.
+async function formmyCoexistence(formmySecret: string, integrationId: string, phone: string, mode: "resume" | "permanent"): Promise<boolean> {
+  const base = (process.env.FORMMY_BASE_URL || "https://www.formmy.app").replace(/\/$/, "");
+  try {
+    const res = await fetch(`${base}/api/v1/integrations/whatsapp/coexistence/control`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${formmySecret}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ integration_id: integrationId, phone_number: phone, mode }),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 async function ctxForOwner(ownerId: string): Promise<AuthContext | null> {
   const user = await db.user.findUnique({ where: { id: ownerId } });
   return user ? { user, scopes: ["READ", "WRITE", "DELETE"] } : null;
@@ -58,7 +73,6 @@ function buildAdminServer(fleetAgentId: string): McpServer {
         admin: o.admin !== false, // self-chat admin ON por default (★ Main); false = apagado
         adminSender: o.adminSender ?? null,
         responseMode: resolveMode(o), // off | all | only
-        mutedSenders: o.mutedSenders ?? [],
         allowedSenders: o.allowedSenders ?? [],
       }));
       return ok({ numbers });
@@ -163,20 +177,22 @@ function buildAdminServer(fleetAgentId: string): McpServer {
       if (!fa) return fail("agente no encontrado");
       const cfg = (fa.wabaConfig as WabaConfig | null) ?? {};
       const org = cfg.orgs?.[p.integrationId];
-      if (!org) return fail("número no encontrado");
+      if (!org || !cfg.formmySecret) return fail("número no encontrado");
       const target = onlyDigits(p.sender);
       if (!target) return fail("teléfono inválido");
-      const mode = resolveMode(org);
-      // En 'all' la lista de excepción es mutedSenders (respond=false → silenciar).
-      // En 'only' la lista es allowedSenders (respond=true → permitir).
-      const field = mode === "only" ? "allowedSenders" : "mutedSenders";
-      const inListMeansRespond = mode === "only"; // only: estar en lista = responde; all: estar en lista = NO responde
-      const shouldBeInList = p.respond === inListMeansRespond;
-      const cur = new Set(((org[field] as string[] | undefined) ?? []).map(onlyDigits));
-      if (shouldBeInList) cur.add(target); else cur.delete(target);
-      const next: WabaConfig = { ...cfg, orgs: { ...cfg.orgs, [p.integrationId]: { ...org, [field]: [...cur] } } };
-      await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { wabaConfig: next } });
-      return ok({ integrationId: p.integrationId, sender: target, respond: p.respond, mode });
+      // Pausa/reactiva en Formmy (fuente única de la coexistencia), igual que el dashboard.
+      const okFormmy = await formmyCoexistence(cfg.formmySecret, p.integrationId, target, p.respond ? "resume" : "permanent");
+      if (!okFormmy) return fail("no se pudo aplicar en Formmy");
+      // En modo "only", responder también requiere estar en la allowlist.
+      if (p.respond && resolveMode(org) === "only") {
+        const cur = new Set((org.allowedSenders ?? []).map(onlyDigits));
+        if (!cur.has(target)) {
+          cur.add(target);
+          const next: WabaConfig = { ...cfg, orgs: { ...cfg.orgs, [p.integrationId]: { ...org, allowedSenders: [...cur] } } };
+          await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { wabaConfig: next } });
+        }
+      }
+      return ok({ integrationId: p.integrationId, sender: target, respond: p.respond });
     }
   );
 
