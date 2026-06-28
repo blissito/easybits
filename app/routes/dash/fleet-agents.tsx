@@ -802,6 +802,8 @@ function WabaInboxModal({
   const conv = useFetcher<{ conversations: Array<{ sender: string; lastText: string; lastRole: string; lastAt: string; count: number; muted: boolean; allowed: boolean }> }>();
   const act = useFetcher();
   const [mode, setMode] = useState(modal.mode);
+  // Override optimista por conversación (feedback instantáneo; el reload lo confirma).
+  const [ov, setOv] = useState<Record<string, { muted?: boolean; allowed?: boolean }>>({});
   const inboxUrl = `/api/v2/fleet-agents/${modal.fleetAgentId}/waba-inbox?integrationId=${encodeURIComponent(modal.integrationId)}`;
   // Carga al abrir + recarga cuando una acción (mode/toggle) termina.
   useEffect(() => { conv.load(inboxUrl); }, [inboxUrl]);
@@ -811,8 +813,10 @@ function WabaInboxModal({
     setMode(m);
     act.submit({ intent: "set-waba-mode", fleetAgentId: modal.fleetAgentId, integrationId: modal.integrationId, mode: m }, { method: "post" });
   };
-  const toggle = (sender: string, list: "muted" | "allowed", on: boolean) =>
+  const toggle = (sender: string, list: "muted" | "allowed", on: boolean) => {
+    setOv((prev) => ({ ...prev, [sender]: { ...prev[sender], [list]: on } }));
     act.submit({ intent: "toggle-waba-sender", fleetAgentId: modal.fleetAgentId, integrationId: modal.integrationId, sender, list, on: on ? "1" : "0" }, { method: "post" });
+  };
 
   const conversations = conv.data?.conversations ?? [];
   const loading = conv.state === "loading" && !conv.data;
@@ -850,8 +854,9 @@ function WabaInboxModal({
         ) : (
           <div className="flex flex-col divide-y divide-gray-100">
             {conversations.map((c) => {
-              // Estado efectivo: en "all" responde salvo muted; en "only" responde si allowed; en "off" nadie.
-              const responds = mode === "all" ? !c.muted : mode === "only" ? c.allowed : false;
+              // Efectivo = override optimista si existe, si no el dato del server.
+              const muted = ov[c.sender]?.muted ?? c.muted;
+              const allowed = ov[c.sender]?.allowed ?? c.allowed;
               return (
                 <div key={c.sender} className="flex items-center gap-3 py-2.5">
                   <div className="min-w-0 flex-1">
@@ -861,14 +866,14 @@ function WabaInboxModal({
                   {mode === "off" ? (
                     <span className="text-[11px] text-gray-300 shrink-0">—</span>
                   ) : mode === "all" ? (
-                    <button type="button" onClick={() => toggle(c.sender, "muted", !c.muted)}
-                      className={`shrink-0 text-[11px] font-semibold px-2.5 py-1 rounded-full border-2 transition-colors ${c.muted ? "border-gray-200 text-gray-400" : "border-green-200 text-green-600"}`}>
-                      {c.muted ? "Silenciado" : "Responde"}
+                    <button type="button" onClick={() => toggle(c.sender, "muted", !muted)}
+                      className={`shrink-0 text-[11px] font-semibold px-2.5 py-1 rounded-full border-2 transition-colors ${muted ? "border-gray-200 text-gray-400" : "border-green-200 text-green-600"}`}>
+                      {muted ? "Silenciado" : "Responde"}
                     </button>
                   ) : (
-                    <button type="button" onClick={() => toggle(c.sender, "allowed", !c.allowed)}
-                      className={`shrink-0 text-[11px] font-semibold px-2.5 py-1 rounded-full border-2 transition-colors ${c.allowed ? "border-brand-300 text-brand-600" : "border-gray-200 text-gray-400"}`}>
-                      {c.allowed ? "Responde" : "Activar"}
+                    <button type="button" onClick={() => toggle(c.sender, "allowed", !allowed)}
+                      className={`shrink-0 text-[11px] font-semibold px-2.5 py-1 rounded-full border-2 transition-colors ${allowed ? "border-brand-300 text-brand-600" : "border-gray-200 text-gray-400"}`}>
+                      {allowed ? "Responde" : "Activar"}
                     </button>
                   )}
                 </div>

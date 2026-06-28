@@ -58,5 +58,6 @@ export async function loader({ request, params }: Route.LoaderArgs) {
       allowed: allowed.has(onlyDigits(c.sender)),
     }));
 
-  return Response.json({ conversations });
+  // no-store: data dinámica; evita que el reload tras un toggle traiga caché viejo.
+  return Response.json({ conversations }, { headers: { "Cache-Control": "no-store" } });
 }
