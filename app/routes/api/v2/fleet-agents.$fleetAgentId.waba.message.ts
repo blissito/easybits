@@ -55,7 +55,28 @@ type WabaOrg = {
   mutedSenders?: string[];
   // Modo "only": conversaciones (senders, dígitos) permitidas — solo contesta ahí.
   allowedSenders?: string[];
+  // Coexistencia: respetar tus ecos (auto-pausar al responder tú). Default ON.
+  respectEchoes?: boolean;
+  // Auto-pausa por conversación (coexistencia): cuándo respondiste tú por última vez
+  // (ISO) → el agente se calla ahí. `resumedAt` = cuándo reactivaste el bot. El bot
+  // responde de nuevo si resumedAt >= pausedAt (hasta tu próximo eco). Para
+  // visibilidad en el Inbox + botón Reactivar. Se podan entradas viejas.
+  pausedAt?: Record<string, string>;
+  resumedAt?: Record<string, string>;
 };
+
+// Ventana de auto-pausa (espeja los 30 min de Formmy). Tras eso se reanuda solo.
+const PAUSE_WINDOW_MS = 30 * 60 * 1000;
+// ¿Esta conversación está en pausa AHORA por coexistencia? (eco reciente y sin
+// reactivar después). Fuente: nuestro registro pausedAt/resumedAt.
+function isConvPaused(org: WabaOrg | undefined, np: string, now: number): boolean {
+  const p = org?.pausedAt?.[np];
+  if (!p) return false;
+  const pausedMs = Date.parse(p);
+  if (!(now - pausedMs < PAUSE_WINDOW_MS)) return false; // ventana expiró → reanuda
+  const r = org?.resumedAt?.[np];
+  return !(r && Date.parse(r) >= pausedMs); // reactivado después del eco → no pausada
+}
 
 // Resuelve el modo efectivo (deriva de `enabled` si aún no hay `responseMode`).
 function resolveMode(org: WabaOrg | undefined): "off" | "all" | "only" {
@@ -134,21 +155,56 @@ export async function action({ request, params }: Route.ActionArgs) {
   const allowed = (org?.allowedSenders ?? []).some((s) => normalizePhone(s) === np);
   const shouldRespond = mode === "all" ? !muted : mode === "only" ? allowed : false;
 
+  // Coexistencia — auto-pausa por conversación. Si TÚ escribiste a este contacto
+  // (eco), Formmy manda manual_mode:true y pausa 30min. Lo registramos (pausedAt)
+  // para VERLO en el Inbox y poder REACTIVAR. `respectEchoes` apaga la auto-pausa.
+  const respectEchoes = org?.respectEchoes !== false;
+  const now = Date.now();
+  const echoMs = org?.pausedAt?.[np] ? Date.parse(org.pausedAt[np]) : 0;
+  const recentEcho = !!echoMs && now - echoMs < PAUSE_WINDOW_MS;
+  const resumeMs = org?.resumedAt?.[np] ? Date.parse(org.resumedAt[np]) : 0;
+  const reactivated = !!resumeMs && resumeMs >= echoMs; // reactivado tras el último eco
+  const paused = respectEchoes && !reactivated && (body.manual_mode === true || recentEcho);
+
+  // Si es un ECO tuyo a un cliente (no admin), registra la pausa de esa conversación.
+  if (body.is_from_me && !isAdmin && respectEchoes && integrationId && np) {
+    void recordEcho(fleetAgentId, integrationId, np);
+  }
+
   // ACK immediately. Anything that means "nothing to answer" still returns 200 —
   // Formmy ignores the body, and a non-200 just makes it (or Meta) retry.
-  //  - is_from_me: our own echo, never answer — EXCEPTO turno admin (arriba).
-  //  - manual_mode: the owner is handling this conversation by hand. We do NOT
-  //    call the LLM (no double-reply). Formmy still forwards every message so its
-  //    own pause/transcript state stays complete; the no-LLM choice is OURS here.
+  //  - is_from_me: nuestro eco, nunca contestar — EXCEPTO turno admin (arriba).
+  //  - paused: tú estás atendiendo (coexistencia) — no contestamos salvo que reactives.
   if (integrationId && sender && content.trim()) {
     if (isAdmin) {
       void handleWabaInbound(fleetAgentId, waba!, { integrationId, sender, content, admin: true });
-    } else if (!body.is_from_me && !body.manual_mode && shouldRespond) {
+    } else if (!body.is_from_me && shouldRespond && !paused) {
       void handleWabaInbound(fleetAgentId, waba!, { integrationId, sender, content });
     }
   }
 
   return Response.json({ ok: true }, { status: 200, headers: CORS });
+}
+
+// Registra que el dueño respondió a `np` (eco de coexistencia) → marca la pausa de
+// esa conversación. Merge en wabaConfig.orgs[int].pausedAt, podando entradas más
+// viejas que la ventana (no crece sin límite). Fire-and-forget; nunca lanza.
+async function recordEcho(fleetAgentId: string, integrationId: string, np: string): Promise<void> {
+  try {
+    const fa = await db.fleetAgent.findUnique({ where: { id: fleetAgentId }, select: { wabaConfig: true } });
+    const cfg = (fa?.wabaConfig as WabaConfig | null) ?? {};
+    const org = cfg.orgs?.[integrationId];
+    if (!org) return;
+    const nowIso = new Date().toISOString();
+    const cutoff = Date.now() - PAUSE_WINDOW_MS;
+    const prune = (m?: Record<string, string>) =>
+      Object.fromEntries(Object.entries(m ?? {}).filter(([, v]) => Date.parse(v) >= cutoff));
+    const pausedAt = { ...prune(org.pausedAt), [np]: nowIso };
+    const next: WabaConfig = { ...cfg, orgs: { ...cfg.orgs, [integrationId]: { ...org, pausedAt } } };
+    await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { wabaConfig: next } });
+  } catch (e) {
+    console.error(`[waba] recordEcho ${fleetAgentId}/${np} failed:`, e instanceof Error ? e.message : e);
+  }
 }
 
 // Detached task: run the fleetAgent turn, then POST the reply back to Formmy's /send.
