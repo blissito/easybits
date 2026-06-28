@@ -205,6 +205,8 @@ export default [
     route("fleet-agents/:fleetAgentId/message-stream", "routes/api/v2/fleet-agents.$fleetAgentId.message-stream.ts"),
     route("fleet-agents/:fleetAgentId/group", "routes/api/v2/fleet-agents.$fleetAgentId.group.ts"),
     route("fleet-agents/:fleetAgentId/connect", "routes/api/v2/fleet-agents.$fleetAgentId.connect.ts"),
+    // Always-on `render` MCP for fleet agents (PDF/screenshots via the on-demand Gotenberg box)
+    route("fleet-render/:fleetAgentId/mcp", "routes/api/v2/fleet-render.$fleetAgentId.mcp.ts"),
     // WABA channel — Formmy forwards inbound here; partner writes per-number config
     route("fleet-agents/:fleetAgentId/waba/message", "routes/api/v2/fleet-agents.$fleetAgentId.waba.message.ts"),
     route("fleet-agents/:fleetAgentId/waba/config", "routes/api/v2/fleet-agents.$fleetAgentId.waba.config.ts"),

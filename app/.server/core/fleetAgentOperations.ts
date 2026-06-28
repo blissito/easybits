@@ -379,6 +379,18 @@ export async function resolveGroupMcpServers(
   return Object.keys(out).length ? out : undefined;
 }
 
+// The always-on `render` MCP server (PDF/screenshots via the on-demand Gotenberg
+// box). Injected into EVERY turn for EVERY fleet agent, NOT subject to
+// disabledBuiltins/catalog — so the agent can render even with the EasyBits MCP
+// off in the group. Auth = the fleetAgent token (header + ?token= belt-and-braces).
+function renderMcpServer(fleetAgent: { id: string; token: string }): Record<string, unknown> {
+  const base = (process.env.BASE_URL || "https://www.easybits.cloud").replace(/\/$/, "");
+  const url = `${base}/api/v2/fleet-render/${fleetAgent.id}/mcp?token=${encodeURIComponent(fleetAgent.token)}`;
+  return {
+    render: { type: "http", url, headers: { Authorization: `Bearer ${fleetAgent.token}` } },
+  };
+}
+
 // Build a background AuthContext for a fleetAgent's owner. FleetAgent dispatch runs outside
 // any HTTP request (reaper, autoscale), so we mint a ctx with full owner scopes.
 async function ctxForOwner(ownerId: string): Promise<AuthContext> {
@@ -807,7 +819,12 @@ export async function routeMessage(
           // Per-grupo: las capacidades que este grupo habilitó (curadas ∪ custom),
           // con sus secrets resueltos del vault del dueño. El worker las mergea
           // sobre sus builtins (easybits/wa). Resuelve por cfgId (unidad de config).
-          mcpServers: await resolveGroupMcpServers(fleetAgent, cfgId, fleetAgent.ownerId),
+          // render = SIEMPRE inyectado (no gateado por disabledBuiltins) → PDF/screenshots
+          // disponibles aunque el grupo apague el MCP de easybits. El resto es per-grupo.
+          mcpServers: {
+            ...(await resolveGroupMcpServers(fleetAgent, cfgId, fleetAgent.ownerId)),
+            ...renderMcpServer(fleetAgent),
+          },
           // Per-grupo: builtins apagados (ej. ["easybits"]) → el worker los quita
           // del set MCP de ese turno (forzar uso de cajas de la flota).
           disabledBuiltins: resolveDisabledBuiltins(fleetAgent, cfgId),

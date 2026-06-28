@@ -2433,7 +2433,7 @@ How to embed safely (the only reliable rule):
     "service_start",
     "Levanta un servicio de flota on-demand y devuelve sus URLs. kind='voice' arranca una caja con STT (whisper) + TTS (kokoro): retorna { sandboxId, transcribeUrl, speakUrl }. Para transcribir: POST el audio (bytes) a transcribeUrl → { text }. Para sintetizar voz: POST { text } a speakUrl → bytes de audio. Idempotente: si ya hay una caja de ese tipo corriendo, la reusa. La caja se auto-destruye tras ~10 min sin uso; usa service_stop para liberarla antes.",
     {
-      kind: z.enum(["voice"]).describe("tipo de servicio (por ahora: 'voice')"),
+      kind: z.enum(["voice", "render"]).describe("tipo de servicio: 'voice' (STT+TTS) o 'render' (PDF/PNG via Gotenberg)"),
     },
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
@@ -2447,7 +2447,7 @@ How to embed safely (the only reliable rule):
     "service_status",
     "Estado de un servicio de flota: si está corriendo y sus URLs. Pasa kind (p.ej. 'voice') o el sandboxId devuelto por service_start. Retorna { sandboxId, kind, status, urls, transcribeUrl?, speakUrl? } o null si no hay ninguno.",
     {
-      kind: z.enum(["voice"]).optional().describe("tipo de servicio"),
+      kind: z.enum(["voice", "render"]).optional().describe("tipo de servicio"),
       sandboxId: z.string().optional().describe("sandboxId devuelto por service_start"),
     },
     wrapHandler(async (params, extra) => {
