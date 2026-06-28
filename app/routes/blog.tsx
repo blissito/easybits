@@ -10,6 +10,24 @@ import matter from "gray-matter";
 // Map of known blog posts with their file paths and metadata
 const BLOG_POSTS = [
   {
+    slug: "waba-inbox-estados-de-respuesta",
+    filePath:
+      "app/content/blog/2026-06-28-waba-inbox-estados-de-respuesta.mdx",
+    title:
+      "WhatsApp Business en tu flota: un Inbox y tres estados de respuesta por número",
+    description:
+      "Ya puedes conectar tu número oficial de WhatsApp Business a la flota de EasyBits, con coexistencia (el mismo número que ya usas en tu teléfono) y control fino de a quién responde el agente: apagado, activo o solo a quien actives.",
+    date: "2026-06-28",
+    author: "Equipo Easybits",
+    tags: ["flota", "WhatsApp", "WABA", "agentes", "build in public"],
+    featuredImage:
+      "https://images.unsplash.com/photo-1611746872915-64382b5c76da?w=800&auto=format",
+    readingTime: 4,
+    excerpt:
+      "Conecta tu WhatsApp Business oficial a la flota: coexistencia con el número que ya usas y tres estados de respuesta por número — apagado, activo (todos menos los que silencies) o solo a quien actives.",
+    published: true,
+  },
+  {
     slug: "tres-pruebas-una-sola-herramienta",
     filePath:
       "app/content/blog/2026-06-25-tres-pruebas-una-sola-herramienta.mdx",

@@ -1484,12 +1484,30 @@ console.log(status.result);  // resultado final del agente`} />
               <li>Prende los grupos que quieras que atienda con los <strong>toggles</strong>. El agente solo responde en los grupos activos — los demás los ignora (anti-spam).</li>
             </ol>
 
-            <h3 className="text-lg font-bold mb-3">
-              WhatsApp Business (WABA){" "}
-              <span className="align-middle text-xs font-bold uppercase tracking-wide bg-yellow-100 border border-yellow-300 text-yellow-800 rounded px-1.5 py-0.5">Próximamente</span>
-            </h3>
+            <h3 className="text-lg font-bold mb-3">WhatsApp Business (WABA)</h3>
+            <p className="text-gray-600 text-sm mb-4">
+              Conecta tu <strong>WhatsApp Business API</strong> oficial y tu flota atiende desde tu <strong>número oficial</strong>, sin el riesgo de bloqueo de la vinculación personal. WABA atiende <strong>conversaciones 1:1</strong> con tus clientes (no grupos) — ideal para soporte y ventas directas. Cada número tiene su propia identidad (nombre y persona), su propio Inbox y su propio estado de respuesta.
+            </p>
+            <ol className="list-decimal pl-5 text-gray-600 text-sm mb-4 space-y-1.5">
+              <li>En <a href="/dash/flota" className="underline font-medium">/dash/flota</a>, sobre tu agente, pulsa <strong>Conectar WhatsApp Business</strong>. Se abre el wizard de Meta (Embedded Signup) en un popup.</li>
+              <li>Sigue los pasos de Meta para vincular tu cuenta de WhatsApp Business. Al terminar, el número queda asociado a ese agente.</li>
+              <li>Un número recién conectado arranca <strong>apagado</strong>. Elige su estado de respuesta en <strong>Conversaciones</strong> para que empiece a atender.</li>
+            </ol>
+            <div className="mb-4 bg-amber-50 border-2 border-amber-300 rounded-xl p-4 text-sm">
+              <strong>Coexistencia:</strong> puedes conectar el <strong>mismo número</strong> que ya usas en la app de WhatsApp. El agente atiende mientras tú no estás; en cuanto tú respondes una conversación desde tu teléfono, el bot se <strong>auto-pausa</strong> ahí 30 minutos (handoff humano) y reanuda solo. La reactivas a mano desde el Inbox.
+            </div>
+
+            <h3 className="text-lg font-bold mb-3">Inbox y estados de respuesta (por número)</h3>
+            <p className="text-gray-600 text-sm mb-3">
+              Cada número WABA tiene un <strong>Inbox</strong> (botón <strong>Conversaciones</strong>): ves quién le escribe al agente, su último mensaje, y eliges con granularidad a quién responde. El estado se aplica al instante. Hay <strong>3 estados</strong>:
+            </p>
+            <ul className="text-gray-600 text-sm mb-4 space-y-2">
+              <li><strong>Apagado</strong> — no responde a nadie en ese número.</li>
+              <li><strong>Activo</strong> — responde a <strong>todos</strong>, excepto las conversaciones que <strong>silencies</strong> (lista negra). Útil para soporte abierto donde solo quieres callarlo con clientes puntuales.</li>
+              <li><strong>Solo a…</strong> — responde <strong>solo</strong> a las conversaciones que <strong>actives</strong> (lista blanca). Útil cuando estrenas el bot con un grupo reducido antes de abrirlo a todos.</li>
+            </ul>
             <p className="text-gray-600 text-sm mb-6">
-              Pronto vas a poder conectar tu <strong>WhatsApp Business API</strong> oficial: solo sigues el wizard de Meta para vincular tu cuenta de WhatsApp Business y tu flota empieza a atender desde tu <strong>número oficial</strong>, sin el riesgo de bloqueo de la vinculación personal. WABA atiende <strong>conversaciones 1:1</strong> con tus clientes (no grupos) — ideal para soporte y ventas directas.
+              Una conversación auto-pausada por coexistencia se marca <strong>En pausa</strong> en el Inbox con un botón <strong>Reactivar</strong>. Silenciar/activar a alguien refresca el Inbox de inmediato.
             </p>
 
             <h3 className="text-lg font-bold mb-3">Cómo funciona: cajas</h3>

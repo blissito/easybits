@@ -829,6 +829,7 @@ function WabaInboxModal({
   const [mode, setMode] = useState(modal.mode);
   // Override optimista por conversación (feedback instantáneo; el reload lo confirma).
   const [ov, setOv] = useState<Record<string, { muted?: boolean; allowed?: boolean; resumed?: boolean }>>({});
+  const [q, setQ] = useState(""); // buscador por dígitos (últimos 4, etc.)
   const inboxUrl = `/api/v2/fleet-agents/${modal.fleetAgentId}/waba-inbox?integrationId=${encodeURIComponent(modal.integrationId)}`;
   // Carga al abrir + recarga cuando una acción (mode/toggle) termina.
   useEffect(() => { conv.load(inboxUrl); }, [inboxUrl]);
@@ -849,8 +850,10 @@ function WabaInboxModal({
   const setEchoes = (on: boolean) =>
     act.submit({ intent: "set-waba-echoes", fleetAgentId: modal.fleetAgentId, integrationId: modal.integrationId, on: on ? "1" : "0" }, { method: "post" });
 
-  const conversations = conv.data?.conversations ?? [];
+  const allConversations = conv.data?.conversations ?? [];
   const respectEchoes = conv.data?.respectEchoes ?? true;
+  const qd = q.replace(/\D/g, "");
+  const conversations = qd ? allConversations.filter((c) => c.sender.includes(qd)) : allConversations;
   const loading = conv.state === "loading" && !conv.data;
   const MODES: Array<{ key: "off" | "all" | "only"; label: string; hint: string }> = [
     { key: "off", label: "Apagado", hint: "No responde a nadie" },
@@ -878,11 +881,20 @@ function WabaInboxModal({
         </div>
         <p className="text-[11px] text-gray-400 mb-4">{MODES.find((m) => m.key === mode)?.hint}</p>
 
+        {/* Buscador — aparece cuando hay varias conversaciones. Filtra por dígitos. */}
+        {allConversations.length > 5 && (
+          <input value={q} onChange={(e) => setQ(e.target.value)} inputMode="numeric"
+            placeholder="Buscar por número (ej. últimos 4 dígitos)"
+            className="w-full mb-3 border-2 border-gray-200 rounded-lg px-2.5 py-1.5 text-sm focus:border-brand-500 outline-none" />
+        )}
+
         {/* CONVERSACIONES */}
         {loading ? (
           <p className="text-xs text-gray-400 py-4 text-center">Cargando…</p>
-        ) : conversations.length === 0 ? (
+        ) : allConversations.length === 0 ? (
           <p className="text-xs text-gray-400 py-4 text-center">Nadie le ha escrito a este número todavía.</p>
+        ) : conversations.length === 0 ? (
+          <p className="text-xs text-gray-400 py-4 text-center">Sin resultados para “{q}”.</p>
         ) : (
           <div className="flex flex-col divide-y divide-gray-100">
             {conversations.map((c) => {

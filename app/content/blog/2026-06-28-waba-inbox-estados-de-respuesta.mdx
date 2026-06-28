@@ -1,0 +1,39 @@
+---
+title: "WhatsApp Business en tu flota: un Inbox y tres estados de respuesta por número"
+description: "Ya puedes conectar tu número oficial de WhatsApp Business a la flota de EasyBits, con coexistencia (el mismo número que ya usas en tu teléfono) y control fino de a quién responde el agente: apagado, activo o solo a quien actives."
+date: "2026-06-28"
+author: "Equipo Easybits"
+tags: ["flota", "WhatsApp", "WABA", "agentes", "build in public"]
+featuredImage: "https://images.unsplash.com/photo-1611746872915-64382b5c76da?w=800&auto=format"
+published: true
+---
+
+# WhatsApp Business en tu flota: un Inbox y tres estados de respuesta por número
+
+Hasta esta semana, conectar tu flota a WhatsApp pasaba por vincular un teléfono personal con código QR. Funciona, pero te expone al bloqueo de la vinculación no oficial y no distingue bien quién atiende cada conversación. Ya puedes conectar tu **WhatsApp Business API** oficial: tu agente responde desde tu número de negocio, y tú decides con detalle a quién contesta.
+
+## Conectar es seguir el wizard de Meta
+
+En [/dash/flota](https://www.easybits.cloud/dash/flota), sobre tu agente, pulsas **Conectar WhatsApp Business**. Se abre el Embedded Signup de Meta en un popup; sigues los pasos para vincular tu cuenta de WhatsApp Business y el número queda asociado a ese agente. Cada número trae su propia identidad —nombre y persona—, su propio historial y su propio estado.
+
+Un número recién conectado arranca **apagado**. Nada se mueve hasta que tú eliges cómo debe responder.
+
+## Coexistencia: el mismo número que ya usas
+
+Puedes conectar el número que ya tienes abierto en la app de WhatsApp. El agente atiende cuando tú no estás; en cuanto respondes una conversación desde tu teléfono, el bot se **auto-pausa ahí 30 minutos** y reanuda solo. Es un handoff humano sin botones: si entras a la conversación, el agente se quita. Esa conversación queda marcada **En pausa** en el Inbox, con un botón **Reactivar** por si quieres devolverle el turno al bot antes de tiempo.
+
+## Tres estados, no un switch
+
+El control de "¿responde o no?" suele ser un interruptor de todo-o-nada. En la práctica eso no alcanza: quieres atender a todos menos a un cliente delicado, o estrenar el bot con un grupo chico antes de soltarlo. Por eso cada número tiene **tres estados**:
+
+- **Apagado** — no responde a nadie.
+- **Activo** — responde a **todos**, excepto las conversaciones que **silencies**. Una lista negra para casos puntuales.
+- **Solo a…** — responde **solo** a las conversaciones que **actives**. Una lista blanca para arrancar de a poco.
+
+Todo se maneja desde un mismo lugar: el botón **Conversaciones** abre el Inbox del número, donde ves quién le escribe al agente, el último mensaje de cada quien, y silencias o activas con un toque. El estado se aplica al instante y el Inbox se refresca solo.
+
+## Por qué lo hicimos así
+
+Un agente 24/7 sin handoff es frágil: el día que un cliente necesita un humano, el bot se interpone. Y un agente sin granularidad obliga a apagarlo entero cuando solo querías callarlo con una persona. La coexistencia y los tres estados resuelven las dos cosas con el mismo número de siempre, sin migrar a nadie y sin código.
+
+Conéctalo desde [/dash/flota](https://www.easybits.cloud/dash/flota). Si ya tienes una flota en marcha, agregar un número de WhatsApp Business es un paso más sobre el mismo agente.
