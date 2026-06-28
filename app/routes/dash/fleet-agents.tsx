@@ -158,7 +158,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   // (custom: code-interpreter, etc.) en gris con su template. Dedup contra los
   // worker del fleetAgent (ya están en `machines`). Consistente con el gate de budget.
   const { listSandboxes } = await import("~/.server/core/sandboxOperations");
-  const SYSTEM_TEMPLATES: Record<string, string> = { "livekit-svc": "llamadas", "voice-svc": "voz" };
+  const SYSTEM_TEMPLATES: Record<string, string> = { "livekit-svc": "llamadas", "voice-svc": "voz", "render-svc": "render" };
   const workerSandboxIds = new Set(machines.map((m) => m.sandboxId).filter(Boolean) as string[]);
   // El listing del host es la VERDAD de qué VMs están vivas: una VM suspendida se
   // OMITE de la lista (el host la snapshotea y la saca). Capturamos si el host
