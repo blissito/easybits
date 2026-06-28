@@ -22,8 +22,10 @@ type WabaOrg = {
   name?: string;
   systemPrompt?: string;
   denikApiKey?: string;
+  responseMode?: "off" | "all" | "only";
   enabled?: boolean;
   mutedSenders?: string[];
+  allowedSenders?: string[];
 };
 type WabaConfig = {
   formmySecret?: string;
@@ -64,7 +66,7 @@ export async function action({ request, params }: Route.ActionArgs) {
   // Merge over any existing entry for this integration so a re-register that omits
   // optional fields (identity, denik key) doesn't wipe previously-set values.
   // Número NUEVO arranca APAGADO (encender manual); uno EXISTENTE conserva su estado.
-  const prevOrg = current.orgs?.[integrationId] ?? { enabled: false };
+  const prevOrg = current.orgs?.[integrationId] ?? { responseMode: "off" };
   const next: WabaConfig = {
     ...current,
     formmySecret,

@@ -43,13 +43,25 @@ type WabaOrg = {
   // (Opcional) conversación designada como admin además del self-chat (sender en
   // dígitos). Solo aplica si admin===true. Sin UI hoy; reservado.
   adminSender?: string;
-  // Master ON/OFF del número: el agente NO responde si está apagado (turnos admin
-  // sí pasan, para poder re-encenderlo desde el chat). `undefined` = encendido
-  // (compat con números ya conectados); número nuevo se crea con enabled:false.
+  // Modo de respuesta del número (3 estados):
+  //  - "off"  → no responde a nadie.
+  //  - "all"  → responde a todos EXCEPTO `mutedSenders` (encendido excepto-para).
+  //  - "only" → responde SOLO a `allowedSenders` (encender solo-para / allowlist).
+  // `undefined` → se deriva de `enabled` (compat): enabled===false → "off", else "all".
+  responseMode?: "off" | "all" | "only";
+  // Legacy master ON/OFF (compat con números ya conectados). undefined = encendido.
   enabled?: boolean;
-  // Conversaciones (senders, en dígitos) silenciadas: el agente no contesta ahí.
+  // Modo "all": conversaciones (senders, dígitos) silenciadas — no contesta ahí.
   mutedSenders?: string[];
+  // Modo "only": conversaciones (senders, dígitos) permitidas — solo contesta ahí.
+  allowedSenders?: string[];
 };
+
+// Resuelve el modo efectivo (deriva de `enabled` si aún no hay `responseMode`).
+function resolveMode(org: WabaOrg | undefined): "off" | "all" | "only" {
+  if (org?.responseMode) return org.responseMode;
+  return org?.enabled === false ? "off" : "all";
+}
 
 // Normaliza un teléfono para comparar: quita @sufijo, todo lo no-dígito y el +, y
 // colapsa el "1" extra de México (521 → 52). org.phoneNumber viene del
@@ -115,11 +127,12 @@ export async function action({ request, params }: Route.ActionArgs) {
     ((org?.admin !== false && np === normalizePhone(org?.phoneNumber)) ||
       (!!org?.adminSender && np === normalizePhone(org.adminSender)));
 
-  // Gate del número: apagado (enabled === false) o conversación silenciada → el
-  // agente NO contesta. `undefined` = encendido (compat). Los turnos ADMIN ignoran
-  // este gate (así puedes re-encender el número desde tu propio chat).
-  const numberOn = org?.enabled !== false;
+  // Gate del número por modo: off → nadie; all → todos menos mutedSenders;
+  // only → solo allowedSenders. Los turnos ADMIN ignoran este gate.
+  const mode = resolveMode(org);
   const muted = (org?.mutedSenders ?? []).some((s) => normalizePhone(s) === np);
+  const allowed = (org?.allowedSenders ?? []).some((s) => normalizePhone(s) === np);
+  const shouldRespond = mode === "all" ? !muted : mode === "only" ? allowed : false;
 
   // ACK immediately. Anything that means "nothing to answer" still returns 200 —
   // Formmy ignores the body, and a non-200 just makes it (or Meta) retry.
@@ -130,7 +143,7 @@ export async function action({ request, params }: Route.ActionArgs) {
   if (integrationId && sender && content.trim()) {
     if (isAdmin) {
       void handleWabaInbound(fleetAgentId, waba!, { integrationId, sender, content, admin: true });
-    } else if (!body.is_from_me && !body.manual_mode && numberOn && !muted) {
+    } else if (!body.is_from_me && !body.manual_mode && shouldRespond) {
       void handleWabaInbound(fleetAgentId, waba!, { integrationId, sender, content });
     }
   }

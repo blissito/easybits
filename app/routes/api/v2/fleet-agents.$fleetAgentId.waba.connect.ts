@@ -26,8 +26,10 @@ type WabaOrg = {
   name?: string;
   systemPrompt?: string;
   denikApiKey?: string;
+  responseMode?: "off" | "all" | "only";
   enabled?: boolean;
   mutedSenders?: string[];
+  allowedSenders?: string[];
 };
 type WabaConfig = { formmySecret?: string; orgs?: Record<string, WabaOrg> };
 
@@ -73,9 +75,9 @@ export async function action({ request, params }: Route.ActionArgs) {
       orgs: {
         ...(current.orgs ?? {}),
         [integrationId]: {
-          // Número NUEVO arranca APAGADO (responde solo al encenderlo en el dash);
-          // un número EXISTENTE preserva su estado (undefined = encendido, compat).
-          ...(current.orgs?.[integrationId] ?? { enabled: false }),
+          // Número NUEVO arranca APAGADO (lo enciendes manual en el dash tras conectar);
+          // un número EXISTENTE preserva su estado.
+          ...(current.orgs?.[integrationId] ?? { responseMode: "off" }),
           phoneNumberId,
           ...(phoneNumber ? { phoneNumber, name: phoneNumber } : {}),
         },
