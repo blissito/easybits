@@ -238,6 +238,8 @@ type InboundMessage = {
   // Absent (Baileys/web) → falls back to groupId, so behavior is unchanged.
   configGroupId?: string;
   sender?: string;
+  // Nombre de perfil del contacto (WABA: contacts[].profile.name) — para el Inbox.
+  senderName?: string;
   text: string;
   mediaUrl?: string;
   // Inbound image bytes (base64) for NATIVE Claude vision: written onto the
@@ -781,7 +783,7 @@ export async function routeMessage(
   const bareCompact = cmd === "/compact";
 
   await db.fleetAgentMessage.create({
-    data: { fleetAgentId: fleetAgent.id, groupId: msg.groupId, role: "user", sender: msg.sender ?? null, text: msg.text },
+    data: { fleetAgentId: fleetAgent.id, groupId: msg.groupId, role: "user", sender: msg.sender ?? null, senderName: msg.senderName ?? null, text: msg.text },
   });
 
   let content = bareCompact ? "/compact" : formatContent(msg); // stable UUID → per-conversation .jsonl transcript

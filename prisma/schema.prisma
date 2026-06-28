@@ -1182,6 +1182,7 @@ model FleetAgentMessage {
   groupId      String
   role         String   // "user" | "agent"
   sender       String?  // WhatsApp sender (for "user" rows)
+  senderName   String?  // nombre de perfil del contacto (WABA: contacts[].profile.name)
   text         String
   createdAt    DateTime @default(now())
 

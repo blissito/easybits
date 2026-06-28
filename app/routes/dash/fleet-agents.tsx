@@ -824,7 +824,7 @@ function WabaInboxModal({
   modal: { fleetAgentId: string; integrationId: string; subject: string; mode: "off" | "all" | "only" };
   onClose: () => void;
 }) {
-  const conv = useFetcher<{ conversations: Array<{ sender: string; lastText: string; lastRole: string; lastAt: string; count: number; muted: boolean; allowed: boolean; paused: boolean }>; respectEchoes: boolean }>();
+  const conv = useFetcher<{ conversations: Array<{ sender: string; name: string; lastText: string; lastRole: string; lastAt: string; count: number; muted: boolean; allowed: boolean; paused: boolean }>; respectEchoes: boolean }>();
   const act = useFetcher();
   const [mode, setMode] = useState(modal.mode);
   // Override optimista por conversación (feedback instantáneo; el reload lo confirma).
@@ -853,7 +853,10 @@ function WabaInboxModal({
   const allConversations = conv.data?.conversations ?? [];
   const respectEchoes = conv.data?.respectEchoes ?? true;
   const qd = q.replace(/\D/g, "");
-  const conversations = qd ? allConversations.filter((c) => c.sender.includes(qd)) : allConversations;
+  const ql = q.trim().toLowerCase();
+  const conversations = ql
+    ? allConversations.filter((c) => (qd && c.sender.includes(qd)) || (!!ql && c.name.toLowerCase().includes(ql)))
+    : allConversations;
   const loading = conv.state === "loading" && !conv.data;
   const MODES: Array<{ key: "off" | "all" | "only"; label: string; hint: string }> = [
     { key: "off", label: "Apagado", hint: "No responde a nadie" },
@@ -883,8 +886,8 @@ function WabaInboxModal({
 
         {/* Buscador — aparece cuando hay varias conversaciones. Filtra por dígitos. */}
         {allConversations.length > 5 && (
-          <input value={q} onChange={(e) => setQ(e.target.value)} inputMode="numeric"
-            placeholder="Buscar por número (ej. últimos 4 dígitos)"
+          <input value={q} onChange={(e) => setQ(e.target.value)}
+            placeholder="Buscar por nombre o número (últimos 4 dígitos)"
             className="w-full mb-3 border-2 border-gray-200 rounded-lg px-2.5 py-1.5 text-sm focus:border-brand-500 outline-none" />
         )}
 
@@ -906,7 +909,8 @@ function WabaInboxModal({
                 <div key={c.sender} className="flex items-center gap-3 py-2.5">
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-semibold truncate">
-                      +{c.sender}
+                      {c.name || `+${c.sender}`}
+                      {c.name && <span className="ml-1.5 text-[10px] font-normal text-gray-400">+{c.sender}</span>}
                       {paused && <span className="ml-2 text-[10px] font-semibold text-amber-600">⏸ en pausa</span>}
                     </p>
                     <p className="text-[11px] text-gray-400 truncate">{paused ? "Pausado — respondiste tú desde tu teléfono" : `${c.lastRole === "agent" ? "↩︎ " : ""}${c.lastText}`}</p>

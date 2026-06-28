@@ -42,18 +42,20 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     where: { fleetAgentId, groupId: { startsWith: prefix } },
     orderBy: { createdAt: "desc" },
     take: 500,
-    select: { groupId: true, sender: true, role: true, text: true, createdAt: true },
+    select: { groupId: true, sender: true, senderName: true, role: true, text: true, createdAt: true },
   });
 
   // Agrupar por conversación (groupId). El teléfono = sufijo tras el prefijo.
-  const byConv = new Map<string, { sender: string; lastText: string; lastRole: string; lastAt: Date; count: number }>();
+  // El nombre = el senderName más reciente no vacío (filas en orden desc).
+  const byConv = new Map<string, { sender: string; name: string; lastText: string; lastRole: string; lastAt: Date; count: number }>();
   for (const r of rows) {
     const phone = r.sender || r.groupId.slice(prefix.length);
     const cur = byConv.get(r.groupId);
     if (!cur) {
-      byConv.set(r.groupId, { sender: phone, lastText: r.text, lastRole: r.role, lastAt: r.createdAt, count: 1 });
+      byConv.set(r.groupId, { sender: phone, name: r.senderName ?? "", lastText: r.text, lastRole: r.role, lastAt: r.createdAt, count: 1 });
     } else {
       cur.count++;
+      if (!cur.name && r.senderName) cur.name = r.senderName;
     }
   }
   const conversations = [...byConv.values()]
@@ -61,6 +63,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     .slice(0, 50)
     .map((c) => ({
       sender: c.sender,
+      name: c.name,
       lastText: c.lastText.length > 80 ? c.lastText.slice(0, 80) + "…" : c.lastText,
       lastRole: c.lastRole,
       lastAt: c.lastAt.toISOString(),

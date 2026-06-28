@@ -130,6 +130,10 @@ export async function action({ request, params }: Route.ActionArgs) {
   const integrationId = typeof body.integration_id === "string" ? body.integration_id : "";
   const sender = typeof body.sender === "string" ? body.sender : "";
   const content = typeof body.content === "string" ? body.content : "";
+  // Nombre de perfil del contacto (Formmy lo manda en sender_name). Ignora
+  // "Operador" (placeholder de ecos) y los que son solo el teléfono.
+  const rawName = typeof body.sender_name === "string" ? body.sender_name.trim() : "";
+  const senderName = rawName && rawName !== "Operador" && rawName.replace(/\D/g, "") !== normalizePhone(sender) ? rawName : "";
 
   // ADMIN: el dueño escribe desde su conversación admin (self-chat = sender es el
   // propio número, o un sender designado en org.adminSender). En ese caso SÍ
@@ -177,9 +181,9 @@ export async function action({ request, params }: Route.ActionArgs) {
   //  - paused: tú estás atendiendo (coexistencia) — no contestamos salvo que reactives.
   if (integrationId && sender && content.trim()) {
     if (isAdmin) {
-      void handleWabaInbound(fleetAgentId, waba!, { integrationId, sender, content, admin: true });
+      void handleWabaInbound(fleetAgentId, waba!, { integrationId, sender, content, senderName, admin: true });
     } else if (!body.is_from_me && shouldRespond && !paused) {
-      void handleWabaInbound(fleetAgentId, waba!, { integrationId, sender, content });
+      void handleWabaInbound(fleetAgentId, waba!, { integrationId, sender, content, senderName });
     }
   }
 
@@ -212,7 +216,7 @@ async function recordEcho(fleetAgentId: string, integrationId: string, np: strin
 async function handleWabaInbound(
   fleetAgentId: string,
   waba: WabaConfig,
-  msg: { integrationId: string; sender: string; content: string; admin?: boolean }
+  msg: { integrationId: string; sender: string; content: string; senderName?: string; admin?: boolean }
 ): Promise<void> {
   try {
     const org = waba.orgs?.[msg.integrationId];
@@ -228,6 +232,7 @@ async function handleWabaInbound(
         configGroupId: `waba:${msg.integrationId}`,
         sender: msg.sender,
         text: msg.content,
+        senderName: msg.senderName,
         appendSystemPrompt: org?.systemPrompt,
         denikApiKey: org?.denikApiKey,
         admin: msg.admin,
