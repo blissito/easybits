@@ -37,7 +37,27 @@ type WabaOrg = {
   name?: string;
   systemPrompt?: string;
   denikApiKey?: string;
+  // Conversación designada como ADMIN para este número (sender en dígitos). Vacío =
+  // solo el self-chat (sender === el propio número) es admin. Se fija desde el
+  // dashboard (sesión-autenticado), nunca desde el agente.
+  adminSender?: string;
+  // Master ON/OFF del número: el agente NO responde si está apagado (turnos admin
+  // sí pasan, para poder re-encenderlo desde el chat). `undefined` = encendido
+  // (compat con números ya conectados); número nuevo se crea con enabled:false.
+  enabled?: boolean;
+  // Conversaciones (senders, en dígitos) silenciadas: el agente no contesta ahí.
+  mutedSenders?: string[];
 };
+
+// Normaliza un teléfono para comparar: quita @sufijo, todo lo no-dígito y el +, y
+// colapsa el "1" extra de México (521 → 52). org.phoneNumber viene del
+// display_phone_number de Meta (formateado); el droplet `sender` viene en dígitos
+// crudos → sin normalizar casi nunca matchean. (Otros países podrían necesitar más.)
+function normalizePhone(s: string | undefined | null): string {
+  let d = (s ?? "").replace(/@.*$/, "").replace(/\D/g, "");
+  if (d.startsWith("521")) d = "52" + d.slice(3);
+  return d;
+}
 type WabaConfig = {
   formmySecret?: string;
   orgs?: Record<string, WabaOrg>;
@@ -76,20 +96,36 @@ export async function action({ request, params }: Route.ActionArgs) {
   const sender = typeof body.sender === "string" ? body.sender : "";
   const content = typeof body.content === "string" ? body.content : "";
 
+  // ADMIN: el dueño escribe desde su conversación admin (self-chat = sender es el
+  // propio número, o un sender designado en org.adminSender). En ese caso SÍ
+  // contestamos (turno admin con tools mcp__admin__*), ignorando a propósito el
+  // drop de is_from_me/manual_mode (el self-chat del dueño puede estar auto-pausado).
+  const org = waba!.orgs?.[integrationId];
+  const np = normalizePhone(sender);
+  const isAdmin =
+    !!body.is_from_me &&
+    !!np &&
+    (np === normalizePhone(org?.phoneNumber) ||
+      (!!org?.adminSender && np === normalizePhone(org.adminSender)));
+
+  // Gate del número: apagado (enabled === false) o conversación silenciada → el
+  // agente NO contesta. `undefined` = encendido (compat). Los turnos ADMIN ignoran
+  // este gate (así puedes re-encender el número desde tu propio chat).
+  const numberOn = org?.enabled !== false;
+  const muted = (org?.mutedSenders ?? []).some((s) => normalizePhone(s) === np);
+
   // ACK immediately. Anything that means "nothing to answer" still returns 200 —
   // Formmy ignores the body, and a non-200 just makes it (or Meta) retry.
-  //  - is_from_me: our own echo, never answer.
+  //  - is_from_me: our own echo, never answer — EXCEPTO turno admin (arriba).
   //  - manual_mode: the owner is handling this conversation by hand. We do NOT
   //    call the LLM (no double-reply). Formmy still forwards every message so its
   //    own pause/transcript state stays complete; the no-LLM choice is OURS here.
-  if (
-    integrationId &&
-    sender &&
-    content.trim() &&
-    !body.is_from_me &&
-    !body.manual_mode
-  ) {
-    void handleWabaInbound(fleetAgentId, waba!, { integrationId, sender, content });
+  if (integrationId && sender && content.trim()) {
+    if (isAdmin) {
+      void handleWabaInbound(fleetAgentId, waba!, { integrationId, sender, content, admin: true });
+    } else if (!body.is_from_me && !body.manual_mode && numberOn && !muted) {
+      void handleWabaInbound(fleetAgentId, waba!, { integrationId, sender, content });
+    }
   }
 
   return Response.json({ ok: true }, { status: 200, headers: CORS });
@@ -100,7 +136,7 @@ export async function action({ request, params }: Route.ActionArgs) {
 async function handleWabaInbound(
   fleetAgentId: string,
   waba: WabaConfig,
-  msg: { integrationId: string; sender: string; content: string }
+  msg: { integrationId: string; sender: string; content: string; admin?: boolean }
 ): Promise<void> {
   try {
     const org = waba.orgs?.[msg.integrationId];
@@ -118,6 +154,7 @@ async function handleWabaInbound(
         text: msg.content,
         appendSystemPrompt: org?.systemPrompt,
         denikApiKey: org?.denikApiKey,
+        admin: msg.admin,
       },
       { skipRateLimit: false }
     );

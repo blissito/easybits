@@ -22,6 +22,8 @@ type WabaOrg = {
   name?: string;
   systemPrompt?: string;
   denikApiKey?: string;
+  enabled?: boolean;
+  mutedSenders?: string[];
 };
 type WabaConfig = {
   formmySecret?: string;
@@ -61,7 +63,8 @@ export async function action({ request, params }: Route.ActionArgs) {
   const current = (fleetAgent.wabaConfig as WabaConfig | null) ?? {};
   // Merge over any existing entry for this integration so a re-register that omits
   // optional fields (identity, denik key) doesn't wipe previously-set values.
-  const prevOrg = current.orgs?.[integrationId] ?? {};
+  // Número NUEVO arranca APAGADO (encender manual); uno EXISTENTE conserva su estado.
+  const prevOrg = current.orgs?.[integrationId] ?? { enabled: false };
   const next: WabaConfig = {
     ...current,
     formmySecret,

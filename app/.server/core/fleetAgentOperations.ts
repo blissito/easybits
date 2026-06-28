@@ -256,6 +256,11 @@ type InboundMessage = {
   // fleetAgent en el worker (que a su vez se appendea al preset). Canales web (denik)
   // la pasan por turno; WhatsApp la omite.
   appendSystemPrompt?: string;
+  // Turno de ADMINISTRACIÓN: el dueño escribe desde la conversación admin (WABA
+  // self-chat o sender designado). Inyecta el MCP `admin` + una nota de sistema
+  // para que el agente gestione números/identidad/capacidades. Solo lo setea el
+  // surface tras verificar is_from_me + número normalizado — nunca el agente.
+  admin?: boolean;
 };
 
 // ── MCP catalog (config-driven capabilities, nanoclaw parity) ────────────────
@@ -390,6 +395,27 @@ function renderMcpServer(fleetAgent: { id: string; token: string }): Record<stri
     render: { type: "http", url, headers: { Authorization: `Bearer ${fleetAgent.token}` } },
   };
 }
+
+// Admin MCP server — gestiona números/identidad/capacidades del propio FleetAgent.
+// Mismo patrón que renderMcpServer (HTTP, auth = fleetAgent token), pero inyectado
+// SOLO en turnos admin (msg.admin) → el dueño administra el agente desde su
+// conversación admin de WABA. Auth del endpoint = token; las tools solo se ofrecen
+// cuando el surface marcó el turno como admin (is_from_me + número verificado).
+function adminMcpServer(fleetAgent: { id: string; token: string }): Record<string, unknown> {
+  const base = (process.env.BASE_URL || "https://www.easybits.cloud").replace(/\/$/, "");
+  const url = `${base}/api/v2/fleet-admin/${fleetAgent.id}/mcp?token=${encodeURIComponent(fleetAgent.token)}`;
+  return {
+    admin: { type: "http", url, headers: { Authorization: `Bearer ${fleetAgent.token}` } },
+  };
+}
+
+// Nota de sistema fresca para turnos admin (vía appendSystemPrompt, como el
+// guardrail de voz). Le dice al agente que está en su conversación de administración
+// y que use las tools mcp__admin__* para gestionar la flota.
+const ADMIN_NOTE =
+  "MODO ADMINISTRACIÓN: estás en la conversación de administración de este agente (el dueño te escribe en privado). " +
+  "Tienes herramientas `mcp__admin__*` para LISTAR y CONFIGURAR los números WhatsApp Business (WABA) del agente: " +
+  "ver números, editar su identidad (nombre/instrucciones) y ajustar sus capacidades. Úsalas cuando te pidan administrar.";
 
 // Build a background AuthContext for a fleetAgent's owner. FleetAgent dispatch runs outside
 // any HTTP request (reaper, autoscale), so we mint a ctx with full owner scopes.
@@ -813,7 +839,7 @@ export async function routeMessage(
             (fleetAgent.groupKeys as Record<string, string> | null)?.[cfgId],
           // Capa 3 (per-org) PRECEDIDA por el guardrail de plataforma fresco —
           // así el guardrail de voz llega a todos los agentes sin rebuild/migración.
-          appendSystemPrompt: [PLATFORM_VOICE_GUARDRAIL, msg.appendSystemPrompt]
+          appendSystemPrompt: [PLATFORM_VOICE_GUARDRAIL, msg.admin ? ADMIN_NOTE : null, msg.appendSystemPrompt]
             .filter(Boolean)
             .join("\n\n"),
           // Per-grupo: las capacidades que este grupo habilitó (curadas ∪ custom),
@@ -824,6 +850,8 @@ export async function routeMessage(
           mcpServers: {
             ...(await resolveGroupMcpServers(fleetAgent, cfgId, fleetAgent.ownerId)),
             ...renderMcpServer(fleetAgent),
+            // admin = SOLO en turnos admin (dueño en su conversación admin de WABA).
+            ...(msg.admin ? adminMcpServer(fleetAgent) : {}),
           },
           // Per-grupo: builtins apagados (ej. ["easybits"]) → el worker los quita
           // del set MCP de ese turno (forzar uso de cajas de la flota).
