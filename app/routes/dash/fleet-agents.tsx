@@ -152,6 +152,8 @@ export async function loader({ request }: Route.LoaderArgs) {
         hasOwnNumber: p.hasOwnNumber, builtins, capabilities,
         // restricted = perfil activo (lean). activeBuckets = qué capacidades tiene.
         restricted: toolGroup.startsWith("scripting"), activeBuckets,
+        // Conectores (MCPs custom) ON por default del agente — clave reservada "*".
+        defaultMcps: (gconf["*"]?.mcpServers) ?? [],
       };
     })
   );
@@ -322,9 +324,14 @@ export async function action({ request }: Route.ActionArgs) {
     const env = { ...(persona.env ?? {}) };
     if (restricted) env.EASYBITS_TOOL_GROUP = bucketsToToolsParam(buckets);
     else delete env.EASYBITS_TOOL_GROUP;
+    // Conectores (MCPs custom) ON por default del agente → groupConfigs["*"].mcpServers.
+    // resolveGroupMcpServers cae a este default cuando un grupo no tiene override.
+    const mcps = String(fd.get("mcps") || "").split(",").map((s) => s.trim()).filter(Boolean);
+    const gc = ((fleetAgent.groupConfigs ?? {}) as Record<string, GroupConfig>);
+    const nextGc = { ...gc, "*": { ...(gc["*"] ?? {}), mcpServers: mcps } };
     await db.fleetAgent.update({
       where: { id: fleetAgentId },
-      data: { persona: { ...persona, env } },
+      data: { persona: { ...persona, env }, groupConfigs: nextGc },
     });
     return data({ ok: true });
   }
@@ -910,9 +917,10 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
   // Perfil de herramientas: drawer abierto para un agente + borrador de buckets.
   const [profileDrawer, setProfileDrawer] = useState<string | null>(null);
   const [draftBuckets, setDraftBuckets] = useState<Set<string>>(new Set());
+  const [draftMcps, setDraftMcps] = useState<Set<string>>(new Set());
   const [draftRestricted, setDraftRestricted] = useState(true);
   // Optimistic: refleja el perfil recién guardado en el chip hasta que el loader revalida.
-  const [optimisticProfiles, setOptimisticProfiles] = useState<Record<string, { restricted: boolean; buckets: string[] }>>({});
+  const [optimisticProfiles, setOptimisticProfiles] = useState<Record<string, { restricted: boolean; buckets: string[]; mcps: string[] }>>({});
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [showIdentity, setShowIdentity] = useState(false);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
@@ -1155,7 +1163,8 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                   clic abre el drawer para editar por capacidades. Optimistic: el chip
                   refleja el guardado al instante, antes de que el loader revalide. */}
               {(() => {
-                const eff = optimisticProfiles[p.id] ?? { restricted: p.restricted, buckets: p.activeBuckets };
+                const eff = optimisticProfiles[p.id] ?? { restricted: p.restricted, buckets: p.activeBuckets, mcps: p.defaultMcps };
+                const total = (eff.restricted ? eff.buckets.length : 0) + eff.mcps.length;
                 return (
                   <div className="mt-2 flex items-center gap-2 text-xs">
                     <span className="text-gray-400">Perfil:</span>
@@ -1164,11 +1173,14 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                         setProfileDrawer(p.id);
                         setDraftRestricted(eff.restricted);
                         setDraftBuckets(new Set(eff.buckets));
+                        setDraftMcps(new Set(eff.mcps));
                       }}
                       className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border-2 border-black font-semibold hover:bg-gray-50">
                       {eff.restricted
-                        ? `${eff.buckets.length} capacidad${eff.buckets.length === 1 ? "" : "es"}`
-                        : "Sin restricción"}
+                        ? `${total} capacidad${total === 1 ? "" : "es"}`
+                        : eff.mcps.length
+                          ? `Completo + ${eff.mcps.length} conector${eff.mcps.length === 1 ? "" : "es"}`
+                          : "Sin restricción"}
                       <span className="text-[10px] text-gray-400">editar</span>
                     </button>
                   </div>
@@ -1456,21 +1468,27 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
       {profileDrawer && (() => {
         const ap = pools.find((x) => x.id === profileDrawer);
         if (!ap) return null;
-        const toggle = (key: string) =>
-          setDraftBuckets((prev) => {
+        const toggleIn = (setter: typeof setDraftBuckets) => (key: string) =>
+          setter((prev) => {
             const next = new Set(prev);
             next.has(key) ? next.delete(key) : next.add(key);
             return next;
           });
+        const toggle = toggleIn(setDraftBuckets);
+        const toggleMcp = toggleIn(setDraftMcps);
+        // Conectores del agente = capacidades NO-builtin (custom + curados como denik/brightdata).
+        const connectors = ap.capabilities;
         const save = () => {
           const nextBuckets = [...draftBuckets];
-          setOptimisticProfiles((s) => ({ ...s, [ap.id]: { restricted: draftRestricted, buckets: nextBuckets } }));
+          const nextMcps = [...draftMcps];
+          setOptimisticProfiles((s) => ({ ...s, [ap.id]: { restricted: draftRestricted, buckets: nextBuckets, mcps: nextMcps } }));
           fetcher.submit(
             {
               intent: "set-profile",
               fleetAgentId: ap.id,
               restricted: draftRestricted ? "1" : "0",
               buckets: nextBuckets.join(","),
+              mcps: nextMcps.join(","),
             },
             { method: "post" }
           );
@@ -1496,10 +1514,9 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
 
               {draftRestricted && (
                 <div className="space-y-2">
-                  <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Capacidades permitidas</span>
+                  <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Herramientas EasyBits</span>
                   {buckets.map((b) => (
-                    <label key={b.key} className="flex items-start gap-3 p-2.5 border-2 border-black rounded-xl cursor-pointer hover:bg-gray-50">
-                      <input type="checkbox" className="mt-1 accent-black" checked={draftBuckets.has(b.key)} onChange={() => toggle(b.key)} />
+                    <div key={b.key} className="flex items-center justify-between gap-3 p-2.5 border-2 border-black rounded-xl">
                       <span className="min-w-0">
                         <span className="text-sm font-semibold flex items-center gap-1.5">
                           {b.label}
@@ -1507,8 +1524,31 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                         </span>
                         <span className="block text-xs text-gray-500">{b.description}</span>
                       </span>
-                    </label>
+                      <Switch value={draftBuckets.has(b.key)} onChange={() => toggle(b.key)} />
+                    </div>
                   ))}
+                </div>
+              )}
+
+              {/* Conectores: MCPs custom/externos del agente (denik, brightdata, …).
+                  Independientes de la restricción EasyBits — son servers aparte. */}
+              {connectors.length > 0 && (
+                <div className="space-y-2 mt-4">
+                  <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Conectores</span>
+                  {connectors.map((c) => {
+                    const ready = c.secretsPresent;
+                    return (
+                      <div key={c.name} className={`flex items-center justify-between gap-3 p-2.5 border-2 border-black rounded-xl ${ready ? "" : "opacity-60"}`}>
+                        <span className="min-w-0">
+                          <span className="text-sm font-semibold">{c.label}</span>
+                          <span className="block text-xs text-gray-500">
+                            {ready ? (c.description ?? "Conector externo") : "Falta credencial — configúrala en Capacidades."}
+                          </span>
+                        </span>
+                        <Switch value={draftMcps.has(c.name)} onChange={() => ready && toggleMcp(c.name)} />
+                      </div>
+                    );
+                  })}
                 </div>
               )}
 

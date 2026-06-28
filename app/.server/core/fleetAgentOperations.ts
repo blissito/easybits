@@ -359,14 +359,21 @@ export async function resolveGroupMcpServers(
   groupId: string,
   ownerId: string
 ): Promise<Record<string, unknown> | undefined> {
-  const cfg = ((fleetAgent.groupConfigs as Record<string, GroupConfig> | null) ?? {})[groupId] ?? {};
-  const enabled = cfg.mcpServers;
+  const all = (fleetAgent.groupConfigs as Record<string, GroupConfig> | null) ?? {};
+  const cfg = all[groupId] ?? {};
+  // Default por-AGENTE bajo la clave reservada "*" (la edita el drawer de perfil):
+  // un grupo SIN config propia hereda ese default; un grupo con `mcpServers`
+  // explícito (override de la modal Capacidades) GANA, aunque sea []. Un groupId
+  // real (jid / uuid / waba:…) nunca es "*", así que no colisiona.
+  const enabled = cfg.mcpServers ?? all["*"]?.mcpServers;
   if (!enabled?.length) return undefined;
+  // env del grupo: el del grupo específico, o el del default si hereda.
+  const cfgEnv = cfg.mcpServers ? cfg.env : (cfg.env ?? all["*"]?.env);
   const caps = mergedCapabilities(fleetAgent);
   const out: Record<string, unknown> = {};
   for (const e of caps) {
     if (e.builtin || !enabled.includes(e.name)) continue;
-    const rawEnv = { ...(e.env ?? {}), ...(cfg.env ?? {}) };
+    const rawEnv = { ...(e.env ?? {}), ...(cfgEnv ?? {}) };
     const env: Record<string, string> = {};
     let missing = false;
     for (const [k, v] of Object.entries(rawEnv)) {
