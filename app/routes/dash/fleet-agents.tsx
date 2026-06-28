@@ -419,8 +419,6 @@ type Capacity = {
   reservedMachines: number; agentsActive: number; agentsMax: number;
 };
 
-const SPAWN = { initial: { scale: 0.4, opacity: 0, y: 8 }, animate: { scale: 1, opacity: 1, y: 0 }, exit: { scale: 0.4, opacity: 0, y: 8 } };
-
 // Per-Ghosty blink timing, deterministic (NO Math.random → no SSR/hydration
 // mismatch) from a stable seed (box id + slot index). Returns BOTH a phase offset
 // AND a slightly different period: the offset desyncs on first paint, but SMIL
@@ -516,12 +514,12 @@ function VmBox({ id, status, slots, max, ghosty, addon, kind, sysLabel }: { id: 
     }
     prevStatus.current = status;
   }, [status]);
-  // motion SOLO para entrada/salida (aparecer/desaparecer). SIN `layout` y el
-  // AnimatePresence va SIN popLayout → no hay jitter en cada poll, solo se anima
-  // cuando una caja realmente nace o muere.
+  // El grid de capacidad es POSICIONAL y de tamaño fijo (maxMachines + 1): cada
+  // celda vive en una posición estable keyada por índice, así que un free que
+  // bootea a máquina NO cambia de key → sin pop de entrada/salida ni reflow. La
+  // caja solo cambia su relleno/contenido EN SU LUGAR. Sin `layout`, sin SPAWN.
   return (
     <motion.div
-      {...SPAWN}
       whileHover={{ scale: 1.04, y: -2 }}
       transition={{ type: "spring", stiffness: 500, damping: 30 }}
       title={extra ? `Sandbox de ${system ? "llamadas/voz" : "sistema"} — no atiende agentes` : status == null ? "Sandbox disponible — se levanta bajo demanda" : status === "suspended" ? `Dormida — congelada, 0 CPU/RAM, resume en <1s. Solo ocupa disco; se destruye a los 45 min sin actividad. ${slots}/${max} conversaciones en memoria` : `Sandbox ${status} · ${slots}/${max} agentes`}
@@ -580,8 +578,16 @@ function VmBox({ id, status, slots, max, ghosty, addon, kind, sysLabel }: { id: 
 }
 
 function CapacityHud({ capacity }: { capacity: Capacity }) {
-  const usedSlots = capacity.machines.length + capacity.extraMachines.length;
-  const freeSlots = Math.max(0, capacity.maxMachines - usedSlots);
+  // Aplanamos máquinas + extras a una lista ordenada y la rellenamos a un número
+  // FIJO de celdas (al menos maxMachines). Cada celda lleva su posición `p`; las
+  // posiciones sobrantes quedan `item: undefined` (slot libre). El número de celdas
+  // sólo cambia si cambia el plan/add-ons, no en cada poll → contenedor estable.
+  const ordered: ({ kind: "machine"; m: Capacity["machines"][number] } | { kind: "extra"; s: Capacity["extraMachines"][number] })[] = [
+    ...capacity.machines.map((m) => ({ kind: "machine" as const, m })),
+    ...capacity.extraMachines.map((s) => ({ kind: "extra" as const, s })),
+  ];
+  const totalCells = Math.max(capacity.maxMachines, ordered.length);
+  const capacityCells = Array.from({ length: totalCells }, (_, p) => ({ p, item: ordered[p] }));
   return (
     <div className="felt-mat border-2 border-black rounded-xl p-4 animate-fade-in overflow-hidden" style={{ background: "#f7f4ed" }}>
       {/* filtros del kit de fieltro — montados UNA vez para todo el HUD */}
@@ -599,30 +605,32 @@ function CapacityHud({ capacity }: { capacity: Capacity }) {
         </span>
       </div>
 
+      {/* Grid POSICIONAL de tamaño fijo: maxMachines celdas + el botón "MÁS".
+          Cada celda se keya por su índice de posición (`cell-N`), NO por el id de
+          la VM. Así, cuando un free bootea a máquina o una máquina se duerme/muere,
+          la celda sólo cambia su contenido EN SU MISMA POSICIÓN — el contenedor no
+          muta, las filas se conservan y no hay reflow ni pop en cada poll de 2.5s. */}
       <div className="relative grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <AnimatePresence>
-          {/* Las últimas `reservedMachines` cajitas (de maxMachines) son add-ons
-              comprados — se marcan en morado para que el cliente VEA lo que paga. */}
-          {capacity.machines.map((m, i) => (
-            <VmBox key={m.id} id={m.id} status={m.status} slots={m.slots} max={capacity.maxWorkersPerVm} ghosty={m.ghosty}
-              addon={i >= capacity.maxMachines - capacity.reservedMachines} />
-          ))}
-          {/* Sandboxes extra del host: sistema (llamadas/voz, azul) y custom (gris) */}
-          {capacity.extraMachines.map((s) => (
-            <VmBox key={s.id} id={s.id} status={s.status} slots={0} max={capacity.maxWorkersPerVm} kind={s.kind} sysLabel={s.label} />
-          ))}
-          {Array.from({ length: freeSlots }).map((_, i) => (
-            <VmBox key={`free-${i}`} id={`free-${i}`} status={null} slots={0} max={capacity.maxWorkersPerVm}
-              addon={capacity.machines.length + capacity.extraMachines.length + i >= capacity.maxMachines - capacity.reservedMachines} />
-          ))}
-          {/* Añadir capacidad — sube de plan para más sandboxes */}
-          <motion.a key="add" href="/dash/packs?tab=sandboxes" title="Añadir capacidad"
-            whileHover={{ scale: 1.08, rotate: 2 }} whileTap={{ scale: 0.95 }}
-            className="w-full aspect-square rounded-[24px] border-[3px] border-dashed border-[rgba(60,42,16,0.25)] bg-black/[0.02] text-[#8d7f6a] flex flex-col items-center justify-center gap-0.5 transition-colors hover:border-brand-500 hover:text-brand-600">
-            <span className="text-2xl leading-none">+</span>
-            <span className="font-jersey text-[12px] leading-none">MÁS</span>
-          </motion.a>
-        </AnimatePresence>
+        {capacityCells.map((cell) => {
+          const isAddon = cell.p >= capacity.maxMachines - capacity.reservedMachines;
+          if (!cell.item) {
+            // Celda vacía → slot libre disponible (se levanta bajo demanda).
+            return <VmBox key={`cell-${cell.p}`} id={`free-${cell.p}`} status={null} slots={0} max={capacity.maxWorkersPerVm} addon={isAddon} />;
+          }
+          if (cell.item.kind === "machine") {
+            const m = cell.item.m;
+            return <VmBox key={`cell-${cell.p}`} id={m.id} status={m.status} slots={m.slots} max={capacity.maxWorkersPerVm} ghosty={m.ghosty} addon={isAddon} />;
+          }
+          const s = cell.item.s;
+          return <VmBox key={`cell-${cell.p}`} id={s.id} status={s.status} slots={0} max={capacity.maxWorkersPerVm} kind={s.kind} sysLabel={s.label} />;
+        })}
+        {/* Añadir capacidad — sube de plan para más sandboxes */}
+        <motion.a key="add" href="/dash/packs?tab=sandboxes" title="Añadir capacidad"
+          whileHover={{ scale: 1.08, rotate: 2 }} whileTap={{ scale: 0.95 }}
+          className="w-full aspect-square rounded-[24px] border-[3px] border-dashed border-[rgba(60,42,16,0.25)] bg-black/[0.02] text-[#8d7f6a] flex flex-col items-center justify-center gap-0.5 transition-colors hover:border-brand-500 hover:text-brand-600">
+          <span className="text-2xl leading-none">+</span>
+          <span className="font-jersey text-[12px] leading-none">MÁS</span>
+        </motion.a>
       </div>
 
       <p className="relative text-xs text-gray-500 mt-2">
