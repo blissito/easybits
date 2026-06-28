@@ -547,10 +547,21 @@ export async function action({ request }: Route.ActionArgs) {
     // de la coexistencia). NO guardamos estado de pausa en EasyBits.
     const integrationId = String(fd.get("integrationId") || "");
     const sender = String(fd.get("sender") || "");
+    const np = sender.replace(/\D/g, "").replace(/^521/, "52");
     const cfg = (fleetAgent.wabaConfig as { formmySecret?: string; orgs?: Record<string, any> } | null) ?? {};
-    if (!cfg.formmySecret || !cfg.orgs?.[integrationId]) return data({ error: "número no encontrado" }, { status: 404 });
-    const r = await formmyCoexistence(cfg.formmySecret, integrationId, sender, intent === "waba-pause" ? "permanent" : "resume");
-    return data(r.ok ? { ok: true } : { error: r.error }, { status: r.ok ? 200 : 502 });
+    const org = cfg.orgs?.[integrationId];
+    if (!cfg.formmySecret || !org) return data({ error: "número no encontrado" }, { status: 404 });
+    const pause = intent === "waba-pause";
+    const r = await formmyCoexistence(cfg.formmySecret, integrationId, sender, pause ? "permanent" : "resume");
+    if (!r.ok) return data({ error: r.error }, { status: 502 });
+    // Sincroniza el cache local de pausa de inmediato (si no, el reload del Inbox
+    // trae el `paused_until` viejo del forward y el cambio "se revierte").
+    const pausedUntil = { ...(org.pausedUntil ?? {}) };
+    if (pause) pausedUntil[np] = "9999-12-31T00:00:00.000Z";
+    else delete pausedUntil[np];
+    const next = { ...cfg, orgs: { ...cfg.orgs, [integrationId]: { ...org, pausedUntil } } };
+    await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { wabaConfig: next } });
+    return data({ ok: true });
   }
   return data({ error: "intent inválido" }, { status: 400 });
 }

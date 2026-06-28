@@ -20,17 +20,17 @@ Un número recién conectado arranca **apagado**. Nada se mueve hasta que tú el
 
 ## Coexistencia: el mismo número que ya usas
 
-Puedes conectar el número que ya tienes abierto en la app de WhatsApp. El agente atiende cuando tú no estás; en cuanto respondes una conversación desde tu teléfono, el bot se **auto-pausa ahí 30 minutos** y reanuda solo. Es un handoff humano sin botones: si entras a la conversación, el agente se quita. Esa conversación queda marcada **En pausa** en el Inbox, con un botón **Reactivar** por si quieres devolverle el turno al bot antes de tiempo.
+Puedes conectar el número que ya tienes abierto en la app de WhatsApp. La coexistencia **siempre está activa**: el agente atiende cuando tú no estás, y en cuanto respondes una conversación desde tu teléfono el bot se **pausa solo** en esa conversación. Es un handoff sin botones: si entras, el agente se quita. Esa conversación queda marcada **En pausa** en el Inbox, y desde ahí lo **reactivas** —o lo **pausas** tú— con un solo control.
 
 ## Tres estados, no un switch
 
 El control de "¿responde o no?" suele ser un interruptor de todo-o-nada. En la práctica eso no alcanza: quieres atender a todos menos a un cliente delicado, o estrenar el bot con un grupo chico antes de soltarlo. Por eso cada número tiene **tres estados**:
 
 - **Apagado** — no responde a nadie.
-- **Activo** — responde a **todos**, excepto las conversaciones que **silencies**. Una lista negra para casos puntuales.
+- **Activo** — responde a **todos**, excepto las conversaciones que **pauses** cuando quieras atenderlas tú.
 - **Solo a…** — responde **solo** a las conversaciones que **actives**. Una lista blanca para arrancar de a poco.
 
-Todo se maneja desde un mismo lugar: el botón **Conversaciones** abre el Inbox del número, donde ves quién le escribe al agente, el último mensaje de cada quien, y silencias o activas con un toque. El estado se aplica al instante y el Inbox se refresca solo.
+Todo se maneja desde un mismo lugar: el botón **Conversaciones** abre el Inbox del número, donde buscas por nombre o número, ves quién le escribe al agente y el último mensaje de cada quien, y pausas o reactivas con un toque. El estado se aplica al instante y el Inbox se refresca solo.
 
 ## Por qué lo hicimos así
 

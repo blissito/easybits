@@ -1494,7 +1494,7 @@ console.log(status.result);  // resultado final del agente`} />
               <li>Un número recién conectado arranca <strong>apagado</strong>. Elige su estado de respuesta en <strong>Conversaciones</strong> para que empiece a atender.</li>
             </ol>
             <div className="mb-4 bg-amber-50 border-2 border-amber-300 rounded-xl p-4 text-sm">
-              <strong>Coexistencia:</strong> puedes conectar el <strong>mismo número</strong> que ya usas en la app de WhatsApp. El agente atiende mientras tú no estás; en cuanto tú respondes una conversación desde tu teléfono, el bot se <strong>auto-pausa</strong> ahí 30 minutos (handoff humano) y reanuda solo. La reactivas a mano desde el Inbox.
+              <strong>Coexistencia:</strong> puedes conectar el <strong>mismo número</strong> que ya usas en la app de WhatsApp. La coexistencia <strong>siempre está activa</strong>: el agente atiende mientras tú no estás, y en cuanto respondes una conversación desde tu teléfono el bot se <strong>pausa solo</strong> en esa conversación (handoff humano). Desde el Inbox lo <strong>reactivas</strong> o lo <strong>pausas</strong> tú con un botón.
             </div>
 
             <h3 className="text-lg font-bold mb-3">Inbox y estados de respuesta (por número)</h3>
@@ -1503,11 +1503,11 @@ console.log(status.result);  // resultado final del agente`} />
             </p>
             <ul className="text-gray-600 text-sm mb-4 space-y-2">
               <li><strong>Apagado</strong> — no responde a nadie en ese número.</li>
-              <li><strong>Activo</strong> — responde a <strong>todos</strong>, excepto las conversaciones que <strong>silencies</strong> (lista negra). Útil para soporte abierto donde solo quieres callarlo con clientes puntuales.</li>
+              <li><strong>Activo</strong> — responde a <strong>todos</strong>, excepto las conversaciones que <strong>pauses</strong> (cuando quieres atenderlas tú). Útil para soporte abierto.</li>
               <li><strong>Solo a…</strong> — responde <strong>solo</strong> a las conversaciones que <strong>actives</strong> (lista blanca). Útil cuando estrenas el bot con un grupo reducido antes de abrirlo a todos.</li>
             </ul>
             <p className="text-gray-600 text-sm mb-6">
-              Una conversación auto-pausada por coexistencia se marca <strong>En pausa</strong> en el Inbox con un botón <strong>Reactivar</strong>. Silenciar/activar a alguien refresca el Inbox de inmediato.
+              En el Inbox buscas por <strong>nombre o número</strong>, ves quién está <strong>En pausa</strong> y, con un botón, <strong>pausas</strong> o <strong>reactivas</strong> el agente en cada conversación. Cualquier cambio refresca el Inbox de inmediato.
             </p>
 
             <h3 className="text-lg font-bold mb-3">Cómo funciona: cajas</h3>
