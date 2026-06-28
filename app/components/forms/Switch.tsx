@@ -36,20 +36,21 @@ export const Switch = ({
       type="button"
       onClick={handleChange}
     >
-      <div
+      <motion.div
+        animate={{ backgroundColor: checked ? "#9870ED" : "#e5e7eb" }}
+        transition={{ duration: 0.2 }}
         className={cn(
-          "p-[3px] w-11 shrink-0 border-black rounded-full border flex items-center bg-gray-200",
+          "p-[3px] w-11 shrink-0 border-black rounded-full border flex items-center",
           holderClassName,
-          {
-            "justify-end bg-brand-500": checked,
-          }
+          { "justify-end": checked }
         )}
       >
         <motion.div
           layout
-          className="border-black bg-white rounded-full w-4 h-4 border transition-all"
+          transition={{ type: "spring", stiffness: 500, damping: 32 }}
+          className="border-black bg-white rounded-full w-4 h-4 border"
         />
-      </div>
+      </motion.div>
       {label && <span className="truncate">{label}</span>}
       <input
         checked={checked}
