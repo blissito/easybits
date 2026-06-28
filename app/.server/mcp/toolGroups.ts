@@ -30,6 +30,8 @@ export type ToolGroupKey =
   | "imagenes"
   | "documentos"
   | "investigacion"
+  | "db"
+  | "sitios"
   | "all";
 
 export interface ToolGroup {
@@ -501,6 +503,19 @@ export const INVESTIGACION_ALLOWLIST = new Set<string>([
   "list_files", "upload_file",
 ]);
 
+/** Bases de datos — el set DB completo (crear/consultar/escribir). Administrativo. */
+export const DB_ALLOWLIST = new Set<string>([
+  "db_list", "db_create", "db_get", "db_delete",
+  "db_query", "db_select", "db_exec", "db_import",
+]);
+
+/** Sitios — websites CRUD + deploy de archivos + inyección de HTML. Administrativo. */
+export const SITIOS_ALLOWLIST = new Set<string>([
+  "list_websites", "create_website", "delete_website",
+  "deploy_website_file", "upload_website_file", "list_website_files", "inject_html",
+  "get_file", "list_files", "upload_file",
+]);
+
 /**
  * Scripting (Code Mode) toolset — la superficie MÍNIMA. La idea: el agente
  * descubre y ejecuta cualquier tool vía `discover_tools` + `run_tool` (siempre
@@ -554,6 +569,8 @@ export const GROUP_ALLOWLISTS: Partial<Record<ToolGroupKey, Set<string>>> = {
   imagenes: IMAGENES_ALLOWLIST,
   documentos: DOCUMENTOS_ALLOWLIST,
   investigacion: INVESTIGACION_ALLOWLIST,
+  db: DB_ALLOWLIST,
+  sitios: SITIOS_ALLOWLIST,
 };
 
 // Keep `toolCount` honest: derive it from the real allowlist size for every
@@ -595,6 +612,34 @@ export const TOOL_PROFILES: Record<string, ToolProfile> = {
 };
 
 export const DEFAULT_PROFILE = "publico";
+
+/**
+ * Buckets de capacidad que un user de la flota puede prender/apagar por agente
+ * (la UI los muestra como checkboxes). `admin: true` = capacidad sensible
+ * (escribe/borra/infra) — la UI la pinta aparte y apagada por defecto en Público.
+ * Orden = orden en la UI.
+ */
+export const FLEET_BUCKETS: Array<{ key: ToolGroupKey; label: string; description: string; admin?: boolean }> = [
+  { key: "imagenes", label: "Imágenes", description: "Generar, editar y describir imágenes." },
+  { key: "documentos", label: "Documentos", description: "Crear, editar y publicar documentos." },
+  { key: "investigacion", label: "Investigación", description: "Buscar y leer información de la web." },
+  { key: "video", label: "Video", description: "Generar video y personajes." },
+  { key: "email", label: "Email", description: "Enviar correos y newsletters." },
+  { key: "payments", label: "Pagos", description: "Links de cobro con MercadoPago.", admin: true },
+  { key: "db", label: "Bases de datos", description: "Crear y consultar bases de datos.", admin: true },
+  { key: "sitios", label: "Sitios web", description: "Crear y publicar sitios.", admin: true },
+];
+
+/** Inverso de profileToToolsParam: extrae los buckets activos de un `?tools=` value. */
+export function toolsParamToBuckets(param?: string | null): Set<string> {
+  const parts = (param ?? "").split(",").map((s) => s.trim()).filter(Boolean);
+  return new Set(parts.filter((p) => p !== "scripting"));
+}
+
+/** Arma el `?tools=` value desde un set de buckets (siempre antepone scripting). */
+export function bucketsToToolsParam(buckets: string[]): string {
+  return ["scripting", ...buckets].join(",");
+}
 
 /**
  * Resuelve un perfil al valor de `EASYBITS_TOOL_GROUP` / `?tools=` que consume el

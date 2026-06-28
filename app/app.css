@@ -334,6 +334,16 @@ body::selection {
   animation: fade-in-up 0.4s ease-out both;
 }
 
+/* Drawer slide-over (perfil de herramientas de la flota) */
+@keyframes slideIn {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
 /* "Editor Beta" magic button — animated gradient + twinkling sparkles */
 @keyframes eb-magic-shimmer {
   0% { background-position: 0% 50%; }

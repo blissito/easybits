@@ -10,6 +10,7 @@ import { getUserOrRedirect } from "~/.server/getters";
 import { db } from "~/.server/db";
 import { delegatedAccountIds, SCOPES } from "~/.server/delegation";
 import { createFleetAgent, deleteFleetAgent, mergedCapabilities, CURATED_CAPABILITIES, DEFAULT_MCP_CATALOG, type McpCatalogEntry, type GroupConfig } from "~/.server/core/fleetAgentOperations";
+import { FLEET_BUCKETS, toolsParamToBuckets, bucketsToToolsParam } from "~/.server/mcp/toolGroups";
 import { getReservedCapacity } from "~/.server/core/sandboxReservations";
 import { listSecrets, createSecret } from "~/.server/core/secretOperations";
 import {
@@ -50,7 +51,7 @@ export async function loader({ request }: Route.LoaderArgs) {
     select: {
       id: true, name: true, baileys: true, enabledGroups: true, groupConfigs: true,
       wabaConfig: true, mcpCatalog: true, maxWorkersPerVm: true, vmMemMb: true,
-      mainGroupJid: true, hasOwnNumber: true, workerTemplate: true,
+      mainGroupJid: true, hasOwnNumber: true, workerTemplate: true, persona: true,
     },
   });
   const pools = await Promise.all(
@@ -136,6 +137,11 @@ export async function loader({ request }: Route.LoaderArgs) {
         }))
       );
       const conversations = await db.fleetAgentRoute.count({ where: { fleetAgentId: p.id } });
+      // Perfil de herramientas activo del agente: vive en persona.env.EASYBITS_TOOL_GROUP.
+      // Vacío/ausente = sin restricción (catálogo completo). La UI lo edita por buckets.
+      const toolGroup =
+        ((p.persona as { env?: Record<string, string> } | null)?.env?.EASYBITS_TOOL_GROUP) ?? "";
+      const activeBuckets = [...toolsParamToBuckets(toolGroup)];
       return {
         id: p.id, name: p.name, status, live, qrDataUrl, pairingCode, groups,
         wabaNumbers,
@@ -143,6 +149,8 @@ export async function loader({ request }: Route.LoaderArgs) {
         conversations, maxWorkersPerVm: p.maxWorkersPerVm, vmMemMb: p.vmMemMb,
         throttledUntil, connReason: b.reason ?? null, mainGroupJid: p.mainGroupJid,
         hasOwnNumber: p.hasOwnNumber, builtins, capabilities,
+        // restricted = perfil activo (lean). activeBuckets = qué capacidades tiene.
+        restricted: toolGroup.startsWith("scripting"), activeBuckets,
       };
     })
   );
@@ -241,7 +249,7 @@ export async function loader({ request }: Route.LoaderArgs) {
       ownerEmail: emailById.get(p.ownerId) ?? null,
     }));
   }
-  return { secretNames, pools, capacity, sharedPools };
+  return { secretNames, pools, capacity, sharedPools, buckets: FLEET_BUCKETS };
 }
 
 export async function action({ request }: Route.ActionArgs) {
@@ -299,6 +307,24 @@ export async function action({ request }: Route.ActionArgs) {
   if (intent === "rename") {
     const name = String(fd.get("name") || "").trim();
     await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { name: name || null } });
+    return data({ ok: true });
+  }
+  if (intent === "set-profile") {
+    // Perfil de herramientas del agente. Se guarda en persona.env.EASYBITS_TOOL_GROUP
+    // (= "scripting,<buckets>"), que el worker lee al spawn → tools/list lean +
+    // run_tool acotado a esos buckets. restricted="0" → quita la restricción
+    // (catálogo completo). Aplica al PRÓXIMO spawn (VM nueva); los workers vivos
+    // siguen hasta reciclarse.
+    const restricted = String(fd.get("restricted") || "1") === "1";
+    const buckets = String(fd.get("buckets") || "").split(",").map((s) => s.trim()).filter(Boolean);
+    const persona = ((fleetAgent.persona ?? {}) as { env?: Record<string, string> });
+    const env = { ...(persona.env ?? {}) };
+    if (restricted) env.EASYBITS_TOOL_GROUP = bucketsToToolsParam(buckets);
+    else delete env.EASYBITS_TOOL_GROUP;
+    await db.fleetAgent.update({
+      where: { id: fleetAgentId },
+      data: { persona: { ...persona, env } },
+    });
     return data({ ok: true });
   }
   if (intent === "toggle-group") {
@@ -745,7 +771,7 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
   // Sembrado de loaderData; re-sincronizado cuando el loader revalida (acción/nav).
   const [hud, setHud] = useState(loaderData);
   useEffect(() => setHud(loaderData), [loaderData]);
-  const { secretNames, pools, capacity, sharedPools } = hud;
+  const { secretNames, pools, capacity, sharedPools, buckets } = hud;
   const fetcher = useFetcher();
   const rev = useRevalidator();
   const [showForm, setShowForm] = useState(false);
@@ -770,6 +796,12 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
   const [showAllGroups, setShowAllGroups] = useState<Record<string, boolean>>({});
   // Which group's capabilities modal is open: { fleetAgentId, groupId } | null.
   const [capModal, setCapModal] = useState<{ fleetAgentId: string; groupId: string } | null>(null);
+  // Perfil de herramientas: drawer abierto para un agente + borrador de buckets.
+  const [profileDrawer, setProfileDrawer] = useState<string | null>(null);
+  const [draftBuckets, setDraftBuckets] = useState<Set<string>>(new Set());
+  const [draftRestricted, setDraftRestricted] = useState(true);
+  // Optimistic: refleja el perfil recién guardado en el chip hasta que el loader revalida.
+  const [optimisticProfiles, setOptimisticProfiles] = useState<Record<string, { restricted: boolean; buckets: string[] }>>({});
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [showIdentity, setShowIdentity] = useState(false);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
@@ -1007,6 +1039,30 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                   })()}
                 </span>
               </div>
+
+              {/* Perfil de herramientas: qué puede hacer el agente. Chip siempre visible,
+                  clic abre el drawer para editar por capacidades. Optimistic: el chip
+                  refleja el guardado al instante, antes de que el loader revalide. */}
+              {(() => {
+                const eff = optimisticProfiles[p.id] ?? { restricted: p.restricted, buckets: p.activeBuckets };
+                return (
+                  <div className="mt-2 flex items-center gap-2 text-xs">
+                    <span className="text-gray-400">Perfil:</span>
+                    <button type="button"
+                      onClick={() => {
+                        setProfileDrawer(p.id);
+                        setDraftRestricted(eff.restricted);
+                        setDraftBuckets(new Set(eff.buckets));
+                      }}
+                      className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border-2 border-black font-semibold hover:bg-gray-50">
+                      {eff.restricted
+                        ? `${eff.buckets.length} capacidad${eff.buckets.length === 1 ? "" : "es"}`
+                        : "Sin restricción"}
+                      <span className="text-[10px] text-gray-400">editar</span>
+                    </button>
+                  </div>
+                );
+              })()}
 
               {isOpen && (() => {
                 // Cada canal es un MÓDULO uniforme { kind, label, dot, count }. Los
@@ -1278,6 +1334,79 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
           </div>
         </div>
       )}
+
+      {/* Drawer de PERFIL de herramientas — slide-over lateral. Edita por capacidades
+          (buckets); apagar la restricción = catálogo completo. Aplica al próximo spawn. */}
+      {profileDrawer && (() => {
+        const ap = pools.find((x) => x.id === profileDrawer);
+        if (!ap) return null;
+        const toggle = (key: string) =>
+          setDraftBuckets((prev) => {
+            const next = new Set(prev);
+            next.has(key) ? next.delete(key) : next.add(key);
+            return next;
+          });
+        const save = () => {
+          const nextBuckets = [...draftBuckets];
+          setOptimisticProfiles((s) => ({ ...s, [ap.id]: { restricted: draftRestricted, buckets: nextBuckets } }));
+          fetcher.submit(
+            {
+              intent: "set-profile",
+              fleetAgentId: ap.id,
+              restricted: draftRestricted ? "1" : "0",
+              buckets: nextBuckets.join(","),
+            },
+            { method: "post" }
+          );
+          setProfileDrawer(null);
+        };
+        return (
+          <div className="fixed inset-0 z-50 flex justify-end bg-black/40" onClick={() => setProfileDrawer(null)}>
+            <div className="bg-white border-l-2 border-black w-full max-w-sm h-full overflow-y-auto p-5 animate-[slideIn_.18s_ease]" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-1">
+                <h3 className="font-semibold text-lg">Perfil de herramientas</h3>
+                <button onClick={() => setProfileDrawer(null)} className="text-gray-400 hover:text-black text-xl leading-none">✕</button>
+              </div>
+              <p className="text-sm text-gray-500 mb-4">Qué puede hacer <b>{ap.name || "este agente"}</b>.</p>
+
+              {/* Interruptor maestro: restringir vs catálogo completo. */}
+              <label className="flex items-center justify-between gap-3 mb-4 p-3 border-2 border-black rounded-xl">
+                <span className="text-sm">
+                  <b>Restringir herramientas</b>
+                  <span className="block text-xs text-gray-500">Apágalo para darle acceso completo (avanzado).</span>
+                </span>
+                <Switch value={draftRestricted} onChange={(v) => setDraftRestricted(v)} />
+              </label>
+
+              {draftRestricted && (
+                <div className="space-y-2">
+                  <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Capacidades permitidas</span>
+                  {buckets.map((b) => (
+                    <label key={b.key} className="flex items-start gap-3 p-2.5 border-2 border-black rounded-xl cursor-pointer hover:bg-gray-50">
+                      <input type="checkbox" className="mt-1 accent-black" checked={draftBuckets.has(b.key)} onChange={() => toggle(b.key)} />
+                      <span className="min-w-0">
+                        <span className="text-sm font-semibold flex items-center gap-1.5">
+                          {b.label}
+                          {b.admin && <span className="text-[10px] px-1 rounded bg-amber-100 text-amber-700 border border-amber-300">admin</span>}
+                        </span>
+                        <span className="block text-xs text-gray-500">{b.description}</span>
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              )}
+
+              <div className="mt-5 flex items-center gap-2">
+                <button type="button" onClick={save}
+                  className="flex-1 px-4 py-2 rounded-xl bg-black text-white font-semibold hover:opacity-90">Guardar</button>
+                <button type="button" onClick={() => setProfileDrawer(null)}
+                  className="px-4 py-2 rounded-xl border-2 border-black font-semibold hover:bg-gray-50">Cancelar</button>
+              </div>
+              <p className="mt-3 text-[11px] text-gray-400">Se aplica a conversaciones nuevas; las activas siguen hasta reciclarse.</p>
+            </div>
+          </div>
+        );
+      })()}
 
       {capModal && (() => {
         const cp = pools.find((x) => x.id === capModal.fleetAgentId);
