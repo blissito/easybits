@@ -49,7 +49,10 @@ async function ctxFor(ownerId: string): Promise<AuthContext | null> {
 // up (host down, plan cap, etc.) — that's the ONLY case where callers fall back to
 // the cloud provider.
 async function ensureBox(ctx: AuthContext): Promise<{ transcribeUrl?: string; speakUrl?: string; sandboxId: string } | null> {
-  return ensureServiceBox(ctx, "voice").catch(() => null);
+  return ensureServiceBox(ctx, "voice").catch((e) => {
+    console.error("[voice] ensureBox FAILED → cloud fallback:", (e as Error)?.message || e);
+    return null;
+  });
 }
 
 // ── TTS ───────────────────────────────────────────────────────────────────────
@@ -69,15 +72,16 @@ async function speakViaBox(speakUrl: string, text: string, fmt: VoiceFmt): Promi
       body: text,
       signal: AbortSignal.timeout(25_000),
     });
-    if (!r.ok) return null;
+    if (!r.ok) { console.error(`[voice] speakViaBox http=${r.status} url=${speakUrl}`); return null; }
     const buf = Buffer.from(await r.arrayBuffer());
-    if (!buf.length) return null;
+    if (!buf.length) { console.error("[voice] speakViaBox empty body"); return null; }
     return {
       buffer: buf,
       waveform: r.headers.get("x-waveform") || undefined,
       contentType: fmt === "ogg" ? "audio/ogg" : "audio/wav",
     };
-  } catch {
+  } catch (e) {
+    console.error(`[voice] speakViaBox fetch FAILED url=${speakUrl}:`, (e as Error)?.message || e);
     return null;
   }
 }
@@ -132,6 +136,7 @@ export async function synthesizeVoice(ownerId: string, text: string): Promise<Sy
       }
     }
   }
+  console.warn("[voice] synthesizeVoice: box path unavailable → OpenAI fallback");
   const oa = await speakViaOpenAI(clean, "ogg");
   return oa ? { buffer: oa.buffer, source: "openai" } : null;
 }

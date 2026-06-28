@@ -204,6 +204,19 @@ async function resolveQuotedContext(
     } catch {}
   }
 
+  // Quoted voice note / audio → transcribe it (box-first whisper, Gemini fallback).
+  // Without this, replying to a voice note with "escucha el audio…" reached the
+  // agent with NO transcript → "no recibí ningún audio".
+  if (qm.audioMessage) {
+    try {
+      const buf = await dl(sock, fake);
+      const mime = qm.audioMessage.mimetype || "audio/ogg";
+      const { transcribeAudio } = await import("~/.server/core/fleetVoice");
+      const t = await transcribeAudio(ownerId, buf, mime);
+      if (t) return { frame: `[El usuario CITA una nota de voz. Transcripción: "${t}"]` };
+    } catch {}
+  }
+
   // Quoted document → extract its text.
   const qdoc = qm.documentMessage || qm.documentWithCaptionMessage?.message?.documentMessage;
   if (qdoc) {
