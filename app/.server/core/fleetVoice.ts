@@ -60,10 +60,15 @@ async function ensureBox(ctx: AuthContext): Promise<{ transcribeUrl?: string; sp
 // pipeline. kokoro takes `format=ogg_opus|wav`. SIN proveedores externos.
 type VoiceFmt = "ogg" | "wav";
 
+// Voz kokoro por defecto. El default del box es `ef_dora` (femenina); forzamos
+// `em_santa` (masculina) como default de la flota. Override con KOKORO_VOICE.
+// Voces kokoro: ef_dora (F), em_alex / em_santa (M).
+const KOKORO_VOICE = process.env.KOKORO_VOICE || "em_santa";
+
 async function speakViaBox(speakUrl: string, text: string, fmt: VoiceFmt): Promise<{ buffer: Buffer; waveform?: string; contentType: string } | null> {
   try {
-    // kokoro reads the RAW body as UTF-8 text (NOT JSON); format via query.
-    const q = fmt === "ogg" ? "?format=ogg_opus" : "?format=wav";
+    // kokoro reads the RAW body as UTF-8 text (NOT JSON); format + voice via query.
+    const q = (fmt === "ogg" ? "?format=ogg_opus" : "?format=wav") + `&voice=${encodeURIComponent(KOKORO_VOICE)}`;
     const r = await fetch(`${speakUrl}${q}`, {
       method: "POST",
       headers: { "content-type": "text/plain; charset=utf-8" },
