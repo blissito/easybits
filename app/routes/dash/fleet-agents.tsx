@@ -98,9 +98,11 @@ export async function loader({ request }: Route.LoaderArgs) {
       // WABA numbers (Meta WhatsApp Business). Each integration is its OWN config
       // unit `waba:<integrationId>` — same shape as a group so the Capacidades
       // modal reuses it. Identity (name/systemPrompt) is per number.
-      const wabaOrgs = ((p.wabaConfig as { orgs?: Record<string, { phoneNumberId?: string; phoneNumber?: string; name?: string; systemPrompt?: string; admin?: boolean; enabled?: boolean; mutedSenders?: string[] }> } | null) ?? {}).orgs ?? {};
+      const wabaOrgs = ((p.wabaConfig as { orgs?: Record<string, { phoneNumberId?: string; phoneNumber?: string; name?: string; systemPrompt?: string; admin?: boolean; enabled?: boolean; responseMode?: "off" | "all" | "only"; mutedSenders?: string[]; allowedSenders?: string[] }> } | null) ?? {}).orgs ?? {};
       const wabaNumbers = Object.entries(wabaOrgs).map(([integrationId, o]) => {
         const id = `waba:${integrationId}`;
+        // Modo efectivo: responseMode si existe; si no, se deriva de enabled (compat).
+        const mode: "off" | "all" | "only" = o.responseMode ?? (o.enabled === false ? "off" : "all");
         return {
           id,
           integrationId,
@@ -108,12 +110,11 @@ export async function loader({ request }: Route.LoaderArgs) {
           name: o.name ?? "",
           systemPrompt: o.systemPrompt ?? "",
           phoneNumber: o.phoneNumber ?? "",
-          // ★ Main: el self-chat de este número administra POR DEFAULT (admin !== false);
-          // la ★ se apaga solo si explícitamente lo desactivas.
+          // ★ Main: el self-chat de este número administra POR DEFAULT (admin !== false).
           main: o.admin !== false,
-          // undefined = encendido (compat con números ya conectados).
-          enabled: o.enabled !== false,
+          mode,
           mutedCount: (o.mutedSenders ?? []).length,
+          allowedCount: (o.allowedSenders ?? []).length,
           mcps: gconf[id]?.mcpServers ?? [],
           disabledBuiltins: gconf[id]?.disabledBuiltins ?? [],
         };
@@ -479,18 +480,33 @@ export async function action({ request }: Route.ActionArgs) {
     await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { wabaConfig: next } });
     return data({ ok: true });
   }
-  if (intent === "set-waba-enabled") {
-    // Master ON/OFF de un número: apagado = el agente no responde en ese número
-    // (turnos admin siguen pasando). Merge en wabaConfig.orgs[integrationId].
+  if (intent === "set-waba-mode") {
+    // Modo de respuesta del número: off | all | only. (Turnos admin ignoran el gate.)
     const integrationId = String(fd.get("integrationId") || "");
-    const on = String(fd.get("on") || "") === "1";
+    const mode = String(fd.get("mode") || "");
+    if (!["off", "all", "only"].includes(mode)) return data({ error: "modo inválido" }, { status: 400 });
     const cfg = (fleetAgent.wabaConfig as { formmySecret?: string; orgs?: Record<string, any> } | null) ?? {};
     const org = cfg.orgs?.[integrationId];
     if (!org) return data({ error: "número no encontrado" }, { status: 404 });
-    const next = {
-      ...cfg,
-      orgs: { ...cfg.orgs, [integrationId]: { ...org, enabled: on } },
-    };
+    const next = { ...cfg, orgs: { ...cfg.orgs, [integrationId]: { ...org, responseMode: mode } } };
+    await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { wabaConfig: next } });
+    return data({ ok: true });
+  }
+  if (intent === "toggle-waba-sender") {
+    // Marca/desmarca una conversación (sender, dígitos) en la lista del modo:
+    // list="muted" (modo all → silenciar) o list="allowed" (modo only → permitir).
+    const integrationId = String(fd.get("integrationId") || "");
+    const sender = String(fd.get("sender") || "").replace(/\D/g, "");
+    const list = String(fd.get("list") || ""); // "muted" | "allowed"
+    const on = String(fd.get("on") || "") === "1";
+    if (!sender || !["muted", "allowed"].includes(list)) return data({ error: "parámetros inválidos" }, { status: 400 });
+    const field = list === "muted" ? "mutedSenders" : "allowedSenders";
+    const cfg = (fleetAgent.wabaConfig as { formmySecret?: string; orgs?: Record<string, any> } | null) ?? {};
+    const org = cfg.orgs?.[integrationId];
+    if (!org) return data({ error: "número no encontrado" }, { status: 404 });
+    const cur = new Set(((org[field] as string[] | undefined) ?? []).map((s) => s.replace(/\D/g, "")));
+    if (on) cur.add(sender); else cur.delete(sender);
+    const next = { ...cfg, orgs: { ...cfg.orgs, [integrationId]: { ...org, [field]: [...cur] } } };
     await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { wabaConfig: next } });
     return data({ ok: true });
   }
@@ -765,6 +781,99 @@ function CapacityHud({ capacity }: { capacity: Capacity }) {
   );
 }
 
+// Inbox de un número WABA: ve quién le escribe al agente y elige a quién responde.
+// Misma potencia que un inbox/handoff (respond.io/Chatwoot) pero en un solo modal:
+// arriba el MODO (Apagado / Activo-excepto / Solo), abajo las conversaciones con su
+// toggle. La coexistencia (cuando tú respondes desde tu cel) ya pausa al agente.
+function WabaInboxModal({
+  modal,
+  onClose,
+}: {
+  modal: { fleetAgentId: string; integrationId: string; subject: string; mode: "off" | "all" | "only" };
+  onClose: () => void;
+}) {
+  const conv = useFetcher<{ conversations: Array<{ sender: string; lastText: string; lastRole: string; lastAt: string; count: number; muted: boolean; allowed: boolean }> }>();
+  const act = useFetcher();
+  const [mode, setMode] = useState(modal.mode);
+  const inboxUrl = `/api/v2/fleet-agents/${modal.fleetAgentId}/waba-inbox?integrationId=${encodeURIComponent(modal.integrationId)}`;
+  // Carga al abrir + recarga cuando una acción (mode/toggle) termina.
+  useEffect(() => { conv.load(inboxUrl); }, [inboxUrl]);
+  useEffect(() => { if (act.state === "idle" && act.data) conv.load(inboxUrl); }, [act.data, act.state]);
+
+  const setModeNow = (m: "off" | "all" | "only") => {
+    setMode(m);
+    act.submit({ intent: "set-waba-mode", fleetAgentId: modal.fleetAgentId, integrationId: modal.integrationId, mode: m }, { method: "post" });
+  };
+  const toggle = (sender: string, list: "muted" | "allowed", on: boolean) =>
+    act.submit({ intent: "toggle-waba-sender", fleetAgentId: modal.fleetAgentId, integrationId: modal.integrationId, sender, list, on: on ? "1" : "0" }, { method: "post" });
+
+  const conversations = conv.data?.conversations ?? [];
+  const loading = conv.state === "loading" && !conv.data;
+  const MODES: Array<{ key: "off" | "all" | "only"; label: string; hint: string }> = [
+    { key: "off", label: "Apagado", hint: "No responde a nadie" },
+    { key: "all", label: "Activo", hint: "Responde a todos, excepto los que silencies" },
+    { key: "only", label: "Solo a…", hint: "Responde solo a los que actives" },
+  ];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      <div className="bg-white border-2 border-black rounded-2xl w-full max-w-md max-h-[85vh] overflow-y-auto p-5" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-1">
+          <h3 className="font-semibold text-lg">Conversaciones</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-black text-xl leading-none">✕</button>
+        </div>
+        <p className="text-sm text-gray-500 mb-4 truncate">{modal.subject}</p>
+
+        {/* MODO — segmentado de 3 estados */}
+        <div className="grid grid-cols-3 gap-1 p-1 bg-gray-100 rounded-xl mb-1">
+          {MODES.map((m) => (
+            <button key={m.key} type="button" onClick={() => setModeNow(m.key)}
+              className={`text-xs font-semibold py-1.5 rounded-lg transition-colors ${mode === m.key ? "bg-white shadow-sm text-black" : "text-gray-500 hover:text-gray-800"}`}>
+              {m.label}
+            </button>
+          ))}
+        </div>
+        <p className="text-[11px] text-gray-400 mb-4">{MODES.find((m) => m.key === mode)?.hint}</p>
+
+        {/* CONVERSACIONES */}
+        {loading ? (
+          <p className="text-xs text-gray-400 py-4 text-center">Cargando…</p>
+        ) : conversations.length === 0 ? (
+          <p className="text-xs text-gray-400 py-4 text-center">Nadie le ha escrito a este número todavía.</p>
+        ) : (
+          <div className="flex flex-col divide-y divide-gray-100">
+            {conversations.map((c) => {
+              // Estado efectivo: en "all" responde salvo muted; en "only" responde si allowed; en "off" nadie.
+              const responds = mode === "all" ? !c.muted : mode === "only" ? c.allowed : false;
+              return (
+                <div key={c.sender} className="flex items-center gap-3 py-2.5">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold truncate">+{c.sender}</p>
+                    <p className="text-[11px] text-gray-400 truncate">{c.lastRole === "agent" ? "↩︎ " : ""}{c.lastText}</p>
+                  </div>
+                  {mode === "off" ? (
+                    <span className="text-[11px] text-gray-300 shrink-0">—</span>
+                  ) : mode === "all" ? (
+                    <button type="button" onClick={() => toggle(c.sender, "muted", !c.muted)}
+                      className={`shrink-0 text-[11px] font-semibold px-2.5 py-1 rounded-full border-2 transition-colors ${c.muted ? "border-gray-200 text-gray-400" : "border-green-200 text-green-600"}`}>
+                      {c.muted ? "Silenciado" : "Responde"}
+                    </button>
+                  ) : (
+                    <button type="button" onClick={() => toggle(c.sender, "allowed", !c.allowed)}
+                      className={`shrink-0 text-[11px] font-semibold px-2.5 py-1 rounded-full border-2 transition-colors ${c.allowed ? "border-brand-300 text-brand-600" : "border-gray-200 text-gray-400"}`}>
+                      {c.allowed ? "Responde" : "Activar"}
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function Pools({ loaderData }: Route.ComponentProps) {
   // HUD en estado local para que el poll de 2.5s lo actualice SIN useRevalidator
   // (que propaga un 5xx transitorio al ErrorBoundary y deja la página muerta).
@@ -796,6 +905,8 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
   const [showAllGroups, setShowAllGroups] = useState<Record<string, boolean>>({});
   // Which group's capabilities modal is open: { fleetAgentId, groupId } | null.
   const [capModal, setCapModal] = useState<{ fleetAgentId: string; groupId: string } | null>(null);
+  // Inbox WABA: ver conversaciones de un número + elegir a quién responde.
+  const [inboxModal, setInboxModal] = useState<{ fleetAgentId: string; integrationId: string; subject: string; mode: "off" | "all" | "only" } | null>(null);
   // Perfil de herramientas: drawer abierto para un agente + borrador de buckets.
   const [profileDrawer, setProfileDrawer] = useState<string | null>(null);
   const [draftBuckets, setDraftBuckets] = useState<Set<string>>(new Set());
@@ -1244,16 +1355,21 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                       {p.wabaNumbers.map((w) => (
                         <div key={w.id} className="flex items-center justify-between gap-2">
                           <div className="min-w-0 flex items-center gap-2">
-                            {/* Master ON/OFF: apagado = el agente no contesta en este
-                                número (el dueño sí lo administra desde su chat admin). */}
-                            <span title={w.enabled ? "Encendido — el agente responde" : "Apagado — el agente no responde (enciéndelo para atender)"} className="shrink-0 flex">
-                              <Switch value={w.enabled}
-                                onChange={(on) => fetcher.submit({ intent: "set-waba-enabled", fleetAgentId: p.id, integrationId: w.integrationId, on: on ? "1" : "0" }, { method: "post" })} />
-                            </span>
-                            <span className={`text-sm font-semibold truncate ${w.enabled ? "" : "text-gray-400"}`}>{w.subject}</span>
-                            {w.mutedCount > 0 && (
-                              <span className="text-[10px] leading-none text-gray-400 shrink-0" title={`${w.mutedCount} conversación(es) silenciada(s)`}>🔇 {w.mutedCount}</span>
-                            )}
+                            <span className={`text-sm font-semibold truncate ${w.mode === "off" ? "text-gray-400" : ""}`}>{w.subject}</span>
+                            {/* Pill de estado → abre Conversaciones (ver quién escribe + a quién responder). */}
+                            {(() => {
+                              const pill =
+                                w.mode === "off" ? { dot: "bg-gray-300", text: "text-gray-500", border: "border-gray-200", label: "Apagado" }
+                                : w.mode === "only" ? { dot: "bg-brand-500", text: "text-brand-600", border: "border-brand-200", label: `Solo${w.allowedCount ? ` · ${w.allowedCount}` : ""}` }
+                                : { dot: "bg-green-500", text: "text-green-600", border: "border-green-200", label: `Activo${w.mutedCount ? ` · ${w.mutedCount} 🔇` : ""}` };
+                              return (
+                                <button type="button" title="Conversaciones — ver quién escribe y a quién responde"
+                                  onClick={() => setInboxModal({ fleetAgentId: p.id, integrationId: w.integrationId, subject: w.subject, mode: w.mode })}
+                                  className={`shrink-0 inline-flex items-center gap-1.5 text-[11px] font-semibold px-2 py-1 rounded-full border-2 ${pill.border} ${pill.text} hover:border-current transition-colors`}>
+                                  <span className={`w-1.5 h-1.5 rounded-full ${pill.dot}`} />{pill.label}
+                                </button>
+                              );
+                            })()}
                           </div>
                           <div className="flex items-center gap-2 shrink-0">
                             <button type="button" title="Capacidades e identidad de este número"
@@ -1407,6 +1523,8 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
           </div>
         );
       })()}
+
+      {inboxModal && <WabaInboxModal key={inboxModal.integrationId} modal={inboxModal} onClose={() => setInboxModal(null)} />}
 
       {capModal && (() => {
         const cp = pools.find((x) => x.id === capModal.fleetAgentId);

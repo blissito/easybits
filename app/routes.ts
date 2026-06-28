@@ -212,6 +212,8 @@ export default [
     // WABA channel — Formmy forwards inbound here; partner writes per-number config
     route("fleet-agents/:fleetAgentId/waba/message", "routes/api/v2/fleet-agents.$fleetAgentId.waba.message.ts"),
     route("fleet-agents/:fleetAgentId/waba/config", "routes/api/v2/fleet-agents.$fleetAgentId.waba.config.ts"),
+    // Inbox WABA — conversaciones de un número (dashboard, on-demand)
+    route("fleet-agents/:fleetAgentId/waba-inbox", "routes/api/v2/fleet-agents.$fleetAgentId.waba-inbox.ts"),
     // WABA connect (EasyBits as Formmy partner) — Embedded Signup popup + callback
     route("fleet-agents/:fleetAgentId/waba/connect/start", "routes/api/v2/fleet-agents.$fleetAgentId.waba.connect-start.ts"),
     route("fleet-agents/:fleetAgentId/waba/connect", "routes/api/v2/fleet-agents.$fleetAgentId.waba.connect.ts"),

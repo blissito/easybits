@@ -21,7 +21,8 @@ import { mergedCapabilities, type GroupConfig } from "~/.server/core/fleetAgentO
 // NOT here — letting an admin turn reassign admin rights would be a footgun.
 
 // Per-number config inside FleetAgent.wabaConfig (subset; mirrors waba.message.ts).
-type WabaOrg = { phoneNumberId?: string; phoneNumber?: string; name?: string; systemPrompt?: string; admin?: boolean; adminSender?: string; enabled?: boolean; mutedSenders?: string[] };
+type WabaOrg = { phoneNumberId?: string; phoneNumber?: string; name?: string; systemPrompt?: string; admin?: boolean; adminSender?: string; enabled?: boolean; responseMode?: "off" | "all" | "only"; mutedSenders?: string[]; allowedSenders?: string[] };
+const resolveMode = (o: WabaOrg | undefined): "off" | "all" | "only" => o?.responseMode ?? (o?.enabled === false ? "off" : "all");
 type WabaConfig = { formmySecret?: string; orgs?: Record<string, WabaOrg> };
 
 const onlyDigits = (s: string) => s.replace(/\D/g, "");
@@ -56,8 +57,9 @@ function buildAdminServer(fleetAgentId: string): McpServer {
         systemPrompt: o.systemPrompt ?? null,
         admin: o.admin !== false, // self-chat admin ON por default (★ Main); false = apagado
         adminSender: o.adminSender ?? null,
-        enabled: o.enabled !== false, // undefined = encendido (compat)
+        responseMode: resolveMode(o), // off | all | only
         mutedSenders: o.mutedSenders ?? [],
+        allowedSenders: o.allowedSenders ?? [],
       }));
       return ok({ numbers });
     }
@@ -130,11 +132,11 @@ function buildAdminServer(fleetAgentId: string): McpServer {
   );
 
   tool(
-    "set_number_enabled",
-    "Enciende o apaga un número WABA. Apagado = el agente NO responde a nadie en ese número (tú lo sigues administrando desde aquí). Útil para preparar un número antes de atender.",
+    "set_number_mode",
+    "Define a quién responde un número WABA: 'off' (a nadie), 'all' (a todos excepto los silenciados) o 'only' (solo a los permitidos / allowlist, ideal para una línea personal). El dueño te administra igual aunque esté en 'off'.",
     {
       integrationId: z.string().describe("integrationId del número"),
-      enabled: z.boolean().describe("true = responde; false = silencioso"),
+      mode: z.enum(["off", "all", "only"]).describe("off | all | only"),
     },
     async (p) => {
       const fa = await load();
@@ -142,19 +144,19 @@ function buildAdminServer(fleetAgentId: string): McpServer {
       const cfg = (fa.wabaConfig as WabaConfig | null) ?? {};
       const org = cfg.orgs?.[p.integrationId];
       if (!org) return fail("número no encontrado");
-      const next: WabaConfig = { ...cfg, orgs: { ...cfg.orgs, [p.integrationId]: { ...org, enabled: p.enabled } } };
+      const next: WabaConfig = { ...cfg, orgs: { ...cfg.orgs, [p.integrationId]: { ...org, responseMode: p.mode } } };
       await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { wabaConfig: next } });
-      return ok({ integrationId: p.integrationId, enabled: p.enabled });
+      return ok({ integrationId: p.integrationId, responseMode: p.mode });
     }
   );
 
   tool(
-    "set_conversation_muted",
-    "Silencia o reactiva una conversación específica (un cliente) de un número WABA. Silenciada = el agente no contesta a ESE contacto, aunque el número esté encendido. Úsalo para conversaciones que atiendes a mano.",
+    "set_conversation_response",
+    "Decide si el agente responde a UNA conversación de un número WABA. En modo 'all' marca a un contacto como silenciado (no responde); en modo 'only' marca a un contacto como permitido (sí responde). Úsalo para conversaciones que atiendes a mano o que sí quieres atender.",
     {
       integrationId: z.string().describe("integrationId del número"),
-      sender: z.string().describe("teléfono del contacto a silenciar/reactivar"),
-      muted: z.boolean().describe("true = silenciar; false = reactivar"),
+      sender: z.string().describe("teléfono del contacto"),
+      respond: z.boolean().describe("true = el agente responde a este contacto; false = no responde"),
     },
     async (p) => {
       const fa = await load();
@@ -164,13 +166,17 @@ function buildAdminServer(fleetAgentId: string): McpServer {
       if (!org) return fail("número no encontrado");
       const target = onlyDigits(p.sender);
       if (!target) return fail("teléfono inválido");
-      const cur = new Set((org.mutedSenders ?? []).map(onlyDigits));
-      if (p.muted) cur.add(target);
-      else cur.delete(target);
-      const mutedSenders = [...cur];
-      const next: WabaConfig = { ...cfg, orgs: { ...cfg.orgs, [p.integrationId]: { ...org, mutedSenders } } };
+      const mode = resolveMode(org);
+      // En 'all' la lista de excepción es mutedSenders (respond=false → silenciar).
+      // En 'only' la lista es allowedSenders (respond=true → permitir).
+      const field = mode === "only" ? "allowedSenders" : "mutedSenders";
+      const inListMeansRespond = mode === "only"; // only: estar en lista = responde; all: estar en lista = NO responde
+      const shouldBeInList = p.respond === inListMeansRespond;
+      const cur = new Set(((org[field] as string[] | undefined) ?? []).map(onlyDigits));
+      if (shouldBeInList) cur.add(target); else cur.delete(target);
+      const next: WabaConfig = { ...cfg, orgs: { ...cfg.orgs, [p.integrationId]: { ...org, [field]: [...cur] } } };
       await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { wabaConfig: next } });
-      return ok({ integrationId: p.integrationId, sender: target, muted: p.muted, mutedSenders });
+      return ok({ integrationId: p.integrationId, sender: target, respond: p.respond, mode });
     }
   );
 
