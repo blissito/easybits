@@ -735,6 +735,7 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
   // Which group's capabilities modal is open: { fleetAgentId, groupId } | null.
   const [capModal, setCapModal] = useState<{ fleetAgentId: string; groupId: string } | null>(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [showIdentity, setShowIdentity] = useState(false);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [editingName, setEditingName] = useState<string | null>(null);
   const [draftName, setDraftName] = useState("");
@@ -956,8 +957,18 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                   )}
                 </div>
                 <span className="flex items-center gap-2 text-sm font-semibold shrink-0">
-                  <span className={`w-2.5 h-2.5 rounded-full ${stale || relinking ? "bg-orange-400" : st.dot} ${relinking ? "animate-pulse" : ""}`} />
-                  {stale ? "Reconectando…" : relinking ? "Se desvinculó, generando QR…" : st.label}
+                  {/* Estado AGREGADO del agente, no de un canal: está "Activo" si
+                      PUEDE recibir por cualquier vía (Baileys vivo o WABA con números).
+                      El estado granular por canal (QR, Falló) vive en su pestaña. Así
+                      un fallo de Baileys no contradice un WABA conectado en el header. */}
+                  {(() => {
+                    const baileysUp = p.status === "connected" && p.live;
+                    const wabaUp = p.wabaNumbers.length > 0;
+                    if (baileysUp || wabaUp) return (<><span className="w-2.5 h-2.5 rounded-full bg-green-500" />Activo</>);
+                    if (stale) return (<><span className="w-2.5 h-2.5 rounded-full bg-orange-400" />Reconectando…</>);
+                    if (relinking) return (<><span className="w-2.5 h-2.5 rounded-full bg-orange-400 animate-pulse" />Se desvinculó, generando QR…</>);
+                    return (<><span className={`w-2.5 h-2.5 rounded-full ${st.dot}`} />{st.label}</>);
+                  })()}
                 </span>
               </div>
 
@@ -1223,21 +1234,34 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
               </div>
               <p className="text-sm text-gray-500 mb-4 truncate">en <b>{cg.subject}</b></p>
 
-              {/* Identidad — solo números WABA. Cada número tiene su propia
-                  persona (nombre + instrucciones) que se appendea a la del fleetAgent. */}
+              {/* Identidad — solo números WABA. Cada número tiene su propia persona
+                  (nombre + instrucciones) que se appendea a la del fleetAgent.
+                  Colapsada por default: una línea con el nombre actual → se expande
+                  para editar, así no empuja las Capacidades hacia abajo. */}
               {waba && (
-                <fetcher.Form method="post" className="mb-4 border-2 border-gray-100 rounded-xl p-3 flex flex-col gap-2">
-                  <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Identidad de este número</span>
-                  <input type="hidden" name="intent" value="set-waba-identity" />
-                  <input type="hidden" name="fleetAgentId" value={cp.id} />
-                  <input type="hidden" name="integrationId" value={waba.integrationId} />
-                  <input name="name" defaultValue={waba.name} placeholder="Nombre (ej. Soporte Marca X)"
-                    className="border-2 border-gray-300 rounded-lg px-2 py-1 text-sm" />
-                  <textarea name="systemPrompt" defaultValue={waba.systemPrompt} rows={3}
-                    placeholder="Instrucciones propias de este número (se suman a la persona del fleetAgent)"
-                    className="border-2 border-gray-300 rounded-lg px-2 py-1 text-sm resize-y" />
-                  <button type="submit" className="self-end border-2 border-black rounded-lg px-3 py-1 text-xs font-semibold">Guardar identidad</button>
-                </fetcher.Form>
+                <div className="mb-4">
+                  <button type="button" onClick={() => setShowIdentity((s) => !s)}
+                    className="w-full flex items-center justify-between gap-2 text-left group">
+                    <span className="min-w-0 truncate">
+                      <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Identidad</span>
+                      <span className="text-sm font-semibold ml-2">{waba.name?.trim() || "Sin nombre"}</span>
+                    </span>
+                    <span className="text-xs font-semibold text-brand-500 shrink-0 group-hover:underline">{showIdentity ? "Cerrar" : "Editar"}</span>
+                  </button>
+                  {showIdentity && (
+                    <fetcher.Form key={waba.integrationId} method="post" className="mt-2 flex flex-col gap-2">
+                      <input type="hidden" name="intent" value="set-waba-identity" />
+                      <input type="hidden" name="fleetAgentId" value={cp.id} />
+                      <input type="hidden" name="integrationId" value={waba.integrationId} />
+                      <input name="name" defaultValue={waba.name} placeholder="Nombre (ej. Soporte Marca X)"
+                        className="border-2 border-gray-300 rounded-lg px-2 py-1 text-sm" />
+                      <textarea name="systemPrompt" defaultValue={waba.systemPrompt} rows={2}
+                        placeholder="Instrucciones propias de este número (se suman a la persona del fleetAgent)"
+                        className="border-2 border-gray-300 rounded-lg px-2 py-1 text-sm resize-y" />
+                      <button type="submit" className="self-end border-2 border-black rounded-lg px-3 py-1 text-xs font-semibold">Guardar identidad</button>
+                    </fetcher.Form>
+                  )}
+                </div>
               )}
 
               {/* Capacidades — builtins (easybits/wa, togglables por grupo) + curadas ∪
@@ -1245,7 +1269,9 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
               <div className="mb-4">
                 <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Capacidades</span>
                 <div className="mt-1 flex flex-col gap-2">
-                    {cp.builtins.map((b) => (
+                    {/* `wa` envía por Baileys (QR) → no aplica a un número WABA;
+                        ocúltalo cuando el target es WABA para no ofrecer canal inerte. */}
+                    {cp.builtins.filter((b) => !(waba && b.name === "wa")).map((b) => (
                       <div key={b.name} className="border-2 border-gray-100 rounded-xl px-3 py-2 flex items-center justify-between gap-2">
                         <p className="text-sm font-semibold min-w-0 truncate">{b.label}</p>
                         <Switch value={!cg.disabledBuiltins.includes(b.name)}
