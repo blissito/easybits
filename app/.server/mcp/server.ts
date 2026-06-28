@@ -5316,15 +5316,17 @@ function registerVideoTools(server: McpServer) {
 
   server.tool(
     "voice_tts_create",
-    "Generate a voice WAV from text using EasyBits' own self-hosted voice engine (kokoro; OpenAI fallback). NO third-party voice. Returns a public File whose `audioUrl` feeds `avatar_video_create`.\n\nNOTE: this is for generating an audio FILE (e.g. for talking-head videos). To simply REPLY by voice on WhatsApp you do NOT call this — just reply in text and the platform voices it automatically with kokoro.\n\nHow to use:\n- Required: `text` (max ~5000 chars per call).\n- Returns `audioUrl` ready to feed into the avatar pipeline.\n\nTypical pipeline: (1) `voice_tts_create({text})` → audioUrl. (2) `avatar_video_create({imageUrl, audioUrl})` → reel mp4.",
+    "Sintetiza una nota de voz desde texto con el motor self-hosted de EasyBits (kokoro). Servicio de flota on-demand, sin proveedores externos. Devuelve un File público cuyo `audioUrl` puedes mandar al chat (con `send_message({url})` sale como nota de voz) o pasar a `avatar_video_create`.\n\nVOZ: elige con `voice` (usa `list_voices` para ver las disponibles). Default em_santa (masculina).\n\nHow to use:\n- Required: `text` (max ~5000 chars).\n- `voice`: id de voz (ej. em_santa, em_alex, ef_dora).\n- `format`: 'ogg' (nota de voz WhatsApp, default-friendly) | 'wav' (para avatar).\n- Returns `audioUrl` + `voice` usado.",
     {
-      text: z.string().min(1).max(5000).describe("Text to synthesize. Spanish recommended."),
-      isPublic: z.boolean().optional().describe("Default true (so the URL is reusable as audioUrl in avatar). Set false for private."),
+      text: z.string().min(1).max(5000).describe("Texto a sintetizar. Español recomendado."),
+      voice: z.string().optional().describe("Id de voz kokoro (ver list_voices). Default em_santa."),
+      format: z.enum(["ogg", "wav"]).optional().describe("'ogg' = nota de voz WhatsApp (default); 'wav' = para avatar_video_create."),
+      isPublic: z.boolean().optional().describe("Default true (URL reusable). false = privado."),
     },
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const { synthesizeVoiceFile } = await import("../core/fleetVoice");
-      const result = await synthesizeVoiceFile(ctx, params.text, { isPublic: params.isPublic });
+      const result = await synthesizeVoiceFile(ctx, params.text, { isPublic: params.isPublic, voice: params.voice, format: params.format ?? "ogg" });
       return {
         content: [{
           type: "text",
@@ -5332,12 +5334,23 @@ function registerVideoTools(server: McpServer) {
             ok: true,
             fileId: result.fileId,
             audioUrl: result.audioUrl,
+            voice: result.voice,
             source: result.source,
             chars: result.chars,
-            hint: `Audio listo (motor: ${result.source === "box" ? "kokoro" : "openai"}). Pasa audioUrl="${result.audioUrl}" a avatar_video_create para generar el reel.`,
+            hint: `Audio listo (kokoro, voz ${result.voice}). Mándalo al chat con send_message({url:"${result.audioUrl}"}) o pásalo a avatar_video_create.`,
           }, null, 2),
         }],
       };
+    })
+  );
+
+  server.tool(
+    "list_voices",
+    "Lista las voces disponibles del servicio de voz de la flota (kokoro, español). Devuelve [{id,label,gender}]. Usa un `id` en `voice_tts_create({voice})` para elegir cómo suena la nota de voz.",
+    {},
+    wrapHandler(async (_params, _extra) => {
+      const { KOKORO_VOICES, KOKORO_VOICE } = await import("../core/fleetVoice");
+      return ok({ voices: KOKORO_VOICES, default: KOKORO_VOICE });
     })
   );
 

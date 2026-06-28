@@ -63,12 +63,25 @@ type VoiceFmt = "ogg" | "wav";
 // Voz kokoro por defecto. El default del box es `ef_dora` (femenina); forzamos
 // `em_santa` (masculina) como default de la flota. Override con KOKORO_VOICE.
 // Voces kokoro: ef_dora (F), em_alex / em_santa (M).
-const KOKORO_VOICE = process.env.KOKORO_VOICE || "em_santa";
+export const KOKORO_VOICE = process.env.KOKORO_VOICE || "em_santa";
 
-async function speakViaBox(speakUrl: string, text: string, fmt: VoiceFmt): Promise<{ buffer: Buffer; waveform?: string; contentType: string } | null> {
+// Voces kokoro español del box (servicio doble vía: STT whisper + TTS kokoro;
+// esto SOLO aplica al TTS). Lista estática hasta tener /voices dinámico en la caja.
+export const KOKORO_VOICES = [
+  { id: "em_santa", label: "Santa (masculina)", gender: "M" },
+  { id: "em_alex", label: "Alex (masculina)", gender: "M" },
+  { id: "ef_dora", label: "Dora (femenina)", gender: "F" },
+] as const;
+
+function resolveVoice(voice?: string): string {
+  if (voice && KOKORO_VOICES.some((v) => v.id === voice)) return voice;
+  return KOKORO_VOICE;
+}
+
+async function speakViaBox(speakUrl: string, text: string, fmt: VoiceFmt, voice?: string): Promise<{ buffer: Buffer; waveform?: string; contentType: string } | null> {
   try {
     // kokoro reads the RAW body as UTF-8 text (NOT JSON); format + voice via query.
-    const q = (fmt === "ogg" ? "?format=ogg_opus" : "?format=wav") + `&voice=${encodeURIComponent(KOKORO_VOICE)}`;
+    const q = (fmt === "ogg" ? "?format=ogg_opus" : "?format=wav") + `&voice=${encodeURIComponent(resolveVoice(voice))}`;
     const r = await fetch(`${speakUrl}${q}`, {
       method: "POST",
       headers: { "content-type": "text/plain; charset=utf-8" },
@@ -99,14 +112,14 @@ export interface SynthResult {
 
 // Synthesize an OGG/opus voice note for WhatsApp PTT. kokoro box PRIMARY, OpenAI
 // fallback. Returns null when neither works (caller sends text instead).
-export async function synthesizeVoice(ownerId: string, text: string): Promise<SynthResult | null> {
+export async function synthesizeVoice(ownerId: string, text: string, opts?: { voice?: string }): Promise<SynthResult | null> {
   const clean = stripForVoice(text);
   if (!clean) return null;
   const ctx = await ctxFor(ownerId);
   if (ctx) {
     const box = await ensureBox(ctx);
     if (box?.speakUrl) {
-      const r = await speakViaBox(box.speakUrl, clean.slice(0, 5000), "ogg");
+      const r = await speakViaBox(box.speakUrl, clean.slice(0, 5000), "ogg", opts?.voice);
       if (r) {
         void touchServiceBox(box.sandboxId);
         return { buffer: r.buffer, waveform: r.waveform, source: "box" };
@@ -125,17 +138,19 @@ export async function synthesizeVoice(ownerId: string, text: string): Promise<Sy
 export async function synthesizeVoiceFile(
   ctx: AuthContext,
   text: string,
-  opts?: { isPublic?: boolean }
-): Promise<{ fileId: string; audioUrl: string; source: "box"; chars: number }> {
+  opts?: { isPublic?: boolean; voice?: string; format?: VoiceFmt }
+): Promise<{ fileId: string; audioUrl: string; source: "box"; voice: string; chars: number }> {
   const clean = stripForVoice(text);
   if (!clean) throw new Error("empty text");
   const source = "box" as const;
-  console.warn(`[voice] voice_tts_create llamado (kokoro-only) chars=${clean.length}`);
+  const fmt: VoiceFmt = opts?.format ?? "wav";
+  const voice = resolveVoice(opts?.voice);
+  console.warn(`[voice] voice_tts_create llamado (kokoro-only) voice=${voice} fmt=${fmt} chars=${clean.length}`);
 
   let audio: { buffer: Buffer; contentType: string } | null = null;
   const box = await ensureBox(ctx);
   if (box?.speakUrl) {
-    const r = await speakViaBox(box.speakUrl, clean.slice(0, 5000), "wav");
+    const r = await speakViaBox(box.speakUrl, clean.slice(0, 5000), fmt, voice);
     if (r) {
       void touchServiceBox(box.sandboxId);
       audio = { buffer: r.buffer, contentType: r.contentType };
@@ -144,7 +159,8 @@ export async function synthesizeVoiceFile(
   if (!audio) throw new Error("voice synthesis failed (kokoro box unavailable; sin fallback)");
 
   const { uploadFile } = await import("./operations");
-  const fileName = `voz-${clean.slice(0, 24).replace(/[^\w]+/g, "-")}.wav`;
+  const ext = fmt === "ogg" ? "ogg" : "wav";
+  const fileName = `voz-${clean.slice(0, 24).replace(/[^\w]+/g, "-")}.${ext}`;
   const { file, putUrl } = await uploadFile(ctx, {
     fileName,
     contentType: audio.contentType,
@@ -158,7 +174,7 @@ export async function synthesizeVoiceFile(
     body: new Uint8Array(audio.buffer),
   });
   if (!put.ok) throw new Error(`audio upload failed: ${put.status}`);
-  return { fileId: file.id, audioUrl: file.url || "", source, chars: clean.length };
+  return { fileId: file.id, audioUrl: file.url || "", source, voice, chars: clean.length };
 }
 
 // Back-compat shim for callers that only need the buffer (Baileys edge).

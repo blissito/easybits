@@ -177,6 +177,7 @@ export const DESIGN_ALLOWLIST = new Set<string>([
   "character_remember", "character_list", "character_delete",
   // Voice
   "voice_tts_create",
+  "list_voices",
   // Research
   "research_scrape", "research_search",
   // Image
@@ -226,6 +227,7 @@ export const CORE_ALLOWLIST = new Set<string>([
   "avatar_video_create",
   "generate_captions", "get_caption_status",
   "voice_tts_create",
+  "list_voices",
   "research_scrape", "research_search",
   // "image_generate", // DESACTIVADA hasta nuevo aviso (fal.ai sin saldo)
   "character_remember", "character_list", "character_delete",
@@ -283,6 +285,7 @@ export const VIDEO_ALLOWLIST = new Set<string>([
 export const AVATAR_ALLOWLIST = new Set<string>([
   "avatar_video_create",
   "voice_tts_create",
+  "list_voices",
   "character_remember",
   "character_list",
   "character_delete",
@@ -294,6 +297,7 @@ export const AVATAR_ALLOWLIST = new Set<string>([
 /** Voice toolset — TTS + (future) STT + cloning. */
 export const VOICE_ALLOWLIST = new Set<string>([
   "voice_tts_create",
+  "list_voices",
   "get_file",
   "list_files",
   "upload_file",

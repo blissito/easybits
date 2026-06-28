@@ -674,10 +674,13 @@ export async function executeWaAction(
           if (!buf.length || buf.length > 25 * 1024 * 1024) return { ok: false, error: "file empty or >25MB" };
           if (/^image\//.test(ct)) {
             await sendTracked(sock, jid, { image: buf, caption }, opts);
+          } else if (/^audio\//.test(ct)) {
+            // Audio → nota de voz REAL (PTT), no documento. Así el agente consume
+            // el servicio de voz (voice_tts_create) y la manda como voice note.
+            // Sin waveform header aquí → Baileys la deriva con audio-decode (dep).
+            log(fleetAgentId, `[voice] wa-action: enviando AUDIO como PTT (ct=${ct}, ${buf.length}b)`);
+            await sendTracked(sock, jid, { audio: buf, ptt: true, mimetype: ct.split(";")[0] || "audio/ogg" }, opts);
           } else {
-            if (/^audio\//.test(ct)) {
-              log(fleetAgentId, `[voice] wa-action: el agente mandó AUDIO por url (ct=${ct}, ${buf.length}b) → se envía como DOCUMENTO (no PTT)`);
-            }
             const fileName =
               args.fileName || decodeURIComponent(String(args.url).split("?")[0].split("/").pop() || "archivo");
             await sendTracked(sock, jid, { document: buf, mimetype: ct.split(";")[0] || "application/octet-stream", fileName, caption }, opts);
