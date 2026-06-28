@@ -307,8 +307,8 @@ export const DEFAULT_MCP_CATALOG: McpCatalogEntry[] = [
 export const CURATED_CAPABILITIES: McpCatalogEntry[] = [
   {
     name: "brightdata",
-    label: "Búsqueda web",
-    description: "Buscar y leer páginas web en tiempo real (Brightdata).",
+    label: "Scraping web (Brightdata)",
+    description: "Lee páginas reales y sitios que bloquean bots (distinto a la búsqueda web nativa del agente).",
     transport: "stdio",
     command: "npx",
     args: ["-y", "@brightdata/mcp"],
