@@ -839,7 +839,15 @@ export async function routeMessage(
             (fleetAgent.groupKeys as Record<string, string> | null)?.[cfgId],
           // Capa 3 (per-org) PRECEDIDA por el guardrail de plataforma fresco —
           // así el guardrail de voz llega a todos los agentes sin rebuild/migración.
-          appendSystemPrompt: [PLATFORM_VOICE_GUARDRAIL, msg.admin ? ADMIN_NOTE : null, msg.appendSystemPrompt]
+          appendSystemPrompt: [
+            PLATFORM_VOICE_GUARDRAIL,
+            // Code Mode: solo si este fleetAgent corre con la superficie lean.
+            (fleetAgent.persona as Persona | null)?.env?.EASYBITS_TOOL_GROUP === "scripting"
+              ? CODE_MODE_GUIDANCE
+              : null,
+            msg.admin ? ADMIN_NOTE : null,
+            msg.appendSystemPrompt,
+          ]
             .filter(Boolean)
             .join("\n\n"),
           // Per-grupo: las capacidades que este grupo habilitó (curadas ∪ custom),
@@ -1037,6 +1045,17 @@ const PLATFORM_VOICE_GUARDRAIL = [
   "VOZ: las notas de voz las maneja AUTOMÁTICAMENTE la plataforma EasyBits con su propio motor self-hosted (kokoro para hablar, whisper para escuchar) — tú NO sintetizas audio ni usas ningún proveedor externo (NUNCA digas que usas OpenAI, ElevenLabs ni Gemini).",
   "Cuando te pidan 'responde con voz', NO llames ninguna herramienta (NO uses voice_tts_create) ni anuncies que vas a hacerlo: simplemente RESPONDE NORMAL EN TEXTO y la plataforma lo convierte en nota de voz sola, al instante.",
   "voice_tts_create es SOLO para generar un ARCHIVO de audio (p.ej. para un video con avatar), nunca para contestar por voz en el chat. Si te preguntan qué voz usas, es la voz propia de EasyBits (kokoro), nada de terceros.",
+].join(" ");
+
+// Code Mode: guía inyectada SOLO cuando el fleetAgent corre con la superficie MCP
+// lean (persona.env.EASYBITS_TOOL_GROUP="scripting"). El tools/list trae apenas
+// ~5 tools (file IO + discover_tools/run_tool) en vez de ~140 → el agente alcanza
+// el resto escribiendo un script. Ahorra el impuesto fijo de contexto (DeepSeek no
+// tolera 140 schemas). Patrón Anthropic "Code execution with MCP" / CF "Code Mode".
+const CODE_MODE_GUIDANCE = [
+  "MODO SCRIPTING: tienes apenas unas pocas tools cargadas (IO de archivos + discover_tools/run_tool). Para cualquier OTRA operación NO esperes una tool dedicada — descúbrela y ejecútala.",
+  "Para encadenar 2+ operaciones, ESCRIBE UN SCRIPT con tu Bash: usa la REST API v2 de EasyBits en $EASYBITS_BASE_URL con `Authorization: Bearer $EASYBITS_API_KEY` (ambos están en tu entorno). Procesa los resultados intermedios DENTRO del script y solo imprime/devuelve lo que necesitas reportar — los pasos intermedios NO deben volver al chat.",
+  "Para descubrir qué endpoint/tool usar, llama discover_tools(query) (busca en las ~140 tools por nombre/descripción) y run_tool(name, params) para ejecutar cualquiera sin reconectar. Para 1 sola operación simple, run_tool directo está bien; no armes un script para algo trivial.",
 ].join(" ");
 
 // Create a fleetAgent for an owner. token is the bearer the Baileys surface presents.

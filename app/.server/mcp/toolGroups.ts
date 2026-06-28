@@ -24,6 +24,7 @@ export type ToolGroupKey =
   | "payments"
   | "email"
   | "public-safe"
+  | "scripting"
   | "all";
 
 export interface ToolGroup {
@@ -119,6 +120,13 @@ export const TOOL_GROUPS: ToolGroup[] = [
     key: "public-safe",
     label: "Public Safe",
     description: "Subset mínimo para agentes públicos (B2C / WhatsApp customer-facing): upload_file, create_share_link, db_select (read-only SQL con anti-stacking, anti-CROSS-JOIN, anti-sqlite_master). Sin listar workspace, sin eliminar, sin webhooks/websites/secrets, sin internet abierto. Diseñado para NanoClaw FORMMY_PUBLIC_TEMPLATE.",
+    toolCount: 3,
+  },
+  {
+    key: "scripting",
+    label: "Scripting (Code Mode)",
+    description:
+      "Superficie mínima para agentes que escriben SCRIPTS en vez de invocar tools. En vez de cargar las ~140 schemas (impuesto fijo de contexto que DeepSeek no admite), el agente usa discover_tools (buscar) + run_tool (ejecutar) y/o la REST API v2 desde su Bash. Solo deja en tools/list el IO de archivos (multipart incómodo por curl); todo lo demás se alcanza sin reconectar. Patrón Anthropic 'Code execution with MCP' / Cloudflare 'Code Mode'.",
     toolCount: 3,
   },
   {
@@ -456,6 +464,22 @@ export const PUBLIC_SAFE_ALLOWLIST = new Set<string>([
 ]);
 
 /**
+ * Scripting (Code Mode) toolset — la superficie MÍNIMA. La idea: el agente
+ * descubre y ejecuta cualquier tool vía `discover_tools` + `run_tool` (siempre
+ * instalados por server.ts, sobreviven a cualquier disable), o llama la REST
+ * API v2 directo desde su Bash con $EASYBITS_API_KEY + $EASYBITS_BASE_URL. Así
+ * el contexto NO carga las ~140 schemas (el impuesto fijo que DeepSeek no
+ * tolera). Solo dejamos visible el IO de archivos porque el upload multipart es
+ * incómodo de armar a mano en un script; todo lo demás se alcanza sin
+ * reconectar. Ver memoria todo_pool_agent_scripting_over_tools.
+ */
+export const SCRIPTING_ALLOWLIST = new Set<string>([
+  "list_files",
+  "get_file",
+  "upload_file",
+]);
+
+/**
  * Dynamic-only tools — registradas (así `discover_tools`/`run_tool` las siguen
  * alcanzando) pero ocultas de `tools/list` en TODOS los grupos, incluido `all`
  * y los grupos sin allowlist (`docs`/`sites`/`brand`). Son tools redundantes o
@@ -488,6 +512,7 @@ export const GROUP_ALLOWLISTS: Partial<Record<ToolGroupKey, Set<string>>> = {
   payments: PAYMENTS_ALLOWLIST,
   email: EMAIL_ALLOWLIST,
   "public-safe": PUBLIC_SAFE_ALLOWLIST,
+  scripting: SCRIPTING_ALLOWLIST,
 };
 
 // Keep `toolCount` honest: derive it from the real allowlist size for every

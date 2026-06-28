@@ -1867,6 +1867,19 @@ export async function createAgent(
       const oauth = await getSecretValue(ctx.user.id, "CLAUDE_CODE_OAUTH_TOKEN").catch(() => null);
       if (oauth) env.CLAUDE_CODE_OAUTH_TOKEN = oauth;
     }
+    // Code Mode: el agente escribe scripts que pegan a la REST API v2 con su
+    // $EASYBITS_API_KEY + esta base. Se inyecta siempre (inofensivo); el grupo
+    // lean se activa per-fleet-agent vía persona.env.EASYBITS_TOOL_GROUP =
+    // "scripting" (ya fluye al env del VM y el worker lo lee → --tools scripting).
+    // NO se fuerza un default aquí para no voltear toda la flota de golpe.
+    if (!env.EASYBITS_BASE_URL) {
+      env.EASYBITS_BASE_URL = (
+        process.env.BASE_URL ||
+        process.env.EASYBITS_URL ||
+        process.env.SITE_URL ||
+        "https://www.easybits.cloud"
+      ).replace(/\/$/, "");
+    }
     // EASYBITS_API_KEY = la llave que le da al worker las tools de EasyBits vía MCP
     // (el runtime arma el server `easybits` cuando esta var existe). Del vault del
     // dueño; si no hay, se mintea una persistente con sus scopes (como ghosty-gc).
