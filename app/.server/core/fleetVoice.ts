@@ -57,10 +57,8 @@ async function ensureBox(ctx: AuthContext): Promise<{ transcribeUrl?: string; sp
 
 // ── TTS ───────────────────────────────────────────────────────────────────────
 // Audio formats: "ogg" → WhatsApp PTT (ogg/opus); "wav" → a File for the avatar
-// pipeline. kokoro takes `format=ogg_opus|wav`; OpenAI takes `response_format`.
+// pipeline. kokoro takes `format=ogg_opus|wav`. SIN proveedores externos.
 type VoiceFmt = "ogg" | "wav";
-const OPENAI_TTS_MODEL = process.env.OPENAI_TTS_MODEL || "gpt-4o-mini-tts";
-const OPENAI_TTS_VOICE = process.env.OPENAI_TTS_VOICE || "alloy";
 
 async function speakViaBox(speakUrl: string, text: string, fmt: VoiceFmt): Promise<{ buffer: Buffer; waveform?: string; contentType: string } | null> {
   try {
@@ -86,38 +84,12 @@ async function speakViaBox(speakUrl: string, text: string, fmt: VoiceFmt): Promi
   }
 }
 
-// Fallback ONLY. OpenAI TTS returns opus (ogg container) or wav directly — no
-// transcode needed (the Fly app has no ffmpeg). Gemini TTS returns raw PCM and
-// would need transcoding in the box; deferred.
-async function speakViaOpenAI(text: string, fmt: VoiceFmt): Promise<{ buffer: Buffer; contentType: string } | null> {
-  const key = process.env.OPENAI_API_KEY;
-  if (!key) return null;
-  try {
-    const r = await fetch("https://api.openai.com/v1/audio/speech", {
-      method: "POST",
-      headers: { authorization: `Bearer ${key}`, "content-type": "application/json" },
-      body: JSON.stringify({
-        model: OPENAI_TTS_MODEL,
-        voice: OPENAI_TTS_VOICE,
-        input: text.slice(0, 4000),
-        response_format: fmt === "ogg" ? "opus" : "wav",
-      }),
-      signal: AbortSignal.timeout(30_000),
-    });
-    if (!r.ok) return null;
-    const buf = Buffer.from(await r.arrayBuffer());
-    return buf.length ? { buffer: buf, contentType: fmt === "ogg" ? "audio/ogg" : "audio/wav" } : null;
-  } catch {
-    return null;
-  }
-}
-
 export interface SynthResult {
   buffer: Buffer;
   /** base64-encoded 64-byte amplitude waveform for WhatsApp PTT (kokoro only;
    *  OpenAI fallback omits it → Baileys derives it via `audio-decode`). */
   waveform?: string;
-  source: "box" | "openai";
+  source: "box";
 }
 
 // Synthesize an OGG/opus voice note for WhatsApp PTT. kokoro box PRIMARY, OpenAI
@@ -136,24 +108,26 @@ export async function synthesizeVoice(ownerId: string, text: string): Promise<Sy
       }
     }
   }
-  console.warn("[voice] synthesizeVoice: box path unavailable → OpenAI fallback");
-  const oa = await speakViaOpenAI(clean, "ogg");
-  return oa ? { buffer: oa.buffer, source: "openai" } : null;
+  // SIN fallback OpenAI (decisión del dueño: kokoro o nada). Si la caja no dio
+  // audio, devolvemos null → el canal responde en TEXTO. NUNCA OpenAI/ElevenLabs.
+  console.warn("[voice] synthesizeVoice: box dio null → respuesta en TEXTO (sin fallback)");
+  return null;
 }
 
 // For the voice_tts_create MCP tool: synthesize a WAV and upload it to the owner's
-// Files, returning a public audioUrl (feeds avatar_video_create). kokoro PRIMARY,
-// OpenAI fallback. Throws if neither produces audio.
+// Files, returning a public audioUrl (feeds avatar_video_create). kokoro ONLY —
+// SIN fallback OpenAI (decisión del dueño). Throws si la caja no produce audio.
 export async function synthesizeVoiceFile(
   ctx: AuthContext,
   text: string,
   opts?: { isPublic?: boolean }
-): Promise<{ fileId: string; audioUrl: string; source: "box" | "openai"; chars: number }> {
+): Promise<{ fileId: string; audioUrl: string; source: "box"; chars: number }> {
   const clean = stripForVoice(text);
   if (!clean) throw new Error("empty text");
-  let audio: { buffer: Buffer; contentType: string } | null = null;
-  let source: "box" | "openai" = "box";
+  const source = "box" as const;
+  console.warn(`[voice] voice_tts_create llamado (kokoro-only) chars=${clean.length}`);
 
+  let audio: { buffer: Buffer; contentType: string } | null = null;
   const box = await ensureBox(ctx);
   if (box?.speakUrl) {
     const r = await speakViaBox(box.speakUrl, clean.slice(0, 5000), "wav");
@@ -162,11 +136,7 @@ export async function synthesizeVoiceFile(
       audio = { buffer: r.buffer, contentType: r.contentType };
     }
   }
-  if (!audio) {
-    const oa = await speakViaOpenAI(clean, "wav");
-    if (oa) { audio = oa; source = "openai"; }
-  }
-  if (!audio) throw new Error("voice synthesis failed (box + OpenAI both unavailable)");
+  if (!audio) throw new Error("voice synthesis failed (kokoro box unavailable; sin fallback)");
 
   const { uploadFile } = await import("./operations");
   const fileName = `voz-${clean.slice(0, 24).replace(/[^\w]+/g, "-")}.wav`;
