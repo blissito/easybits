@@ -165,7 +165,7 @@ async function drainGroup(sock: WASocket, fleetAgentId: string, jid: string) {
     sock.sendPresenceUpdate("composing", jid).catch(() => {});
     if (!sentHeadsUp && ++typingTicks >= 3) {
       sentHeadsUp = true;
-      const filler = "Voy en esto, dame un momento… 🛠️";
+      const filler = "Estoy en ello, dame un minuto… 🛠️";
       sendTracked(sock, jid, { text: hasOwnNumber ? filler : `${assistantName}: ${filler}` }).catch(() => {});
     }
   }, 8000);
@@ -182,6 +182,7 @@ async function drainGroup(sock: WASocket, fleetAgentId: string, jid: string) {
       if (body) {
         const voice = wantsVoiceReply(userText, wasVoice) ? await synthesizeVoice(ownerId, body) : null;
         if (voice) {
+          log(fleetAgentId, `[voice] ENVIANDO PTT kokoro bytes=${voice.buffer.length} jid=${jid} onda=${voice.waveform ? "si" : "no"}`);
           await sendTracked(sock, jid, {
             audio: voice.buffer,
             ptt: true,
@@ -674,6 +675,9 @@ export async function executeWaAction(
           if (/^image\//.test(ct)) {
             await sendTracked(sock, jid, { image: buf, caption }, opts);
           } else {
+            if (/^audio\//.test(ct)) {
+              log(fleetAgentId, `[voice] wa-action: el agente mandó AUDIO por url (ct=${ct}, ${buf.length}b) → se envía como DOCUMENTO (no PTT)`);
+            }
             const fileName =
               args.fileName || decodeURIComponent(String(args.url).split("?")[0].split("/").pop() || "archivo");
             await sendTracked(sock, jid, { document: buf, mimetype: ct.split(";")[0] || "application/octet-stream", fileName, caption }, opts);
