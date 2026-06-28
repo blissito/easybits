@@ -57,7 +57,12 @@ const SERVICE_REGISTRY: Record<string, ServiceSpec> = {
     ports: [9000, 9101], // 9000 = whisper STT (health), 9101 = kokoro TTS
     readyPaths: { 9000: "/health", 9101: "/health" },
     ttlSeconds: 1800, // 30 min host TTL (hard ceiling; reaper kills sooner)
-    idleMin: 10, // destroy after 10 min idle
+    idleMin: 10, // suspend after 10 min idle
+    // Dormir, no matar: los modelos onnx (~2-3GB) quedan calientes en el snapshot
+    // → resume ~1s vs cold boot ~25s. ensureServiceBox ya resume las suspendidas;
+    // se destruye tras 60 min suspendida para reclamar el snapshot.
+    suspendOnIdle: true,
+    hardTtlMin: 60,
   },
   // render: Chromium HTML→PDF/PNG box. Heavy image (~300MB) → snapshot/resume
   // pays off (warm ~700ms vs ~12s cold). Keyed per OWNER like voice, so every
