@@ -37,9 +37,11 @@ type WabaOrg = {
   name?: string;
   systemPrompt?: string;
   denikApiKey?: string;
-  // Conversación designada como ADMIN para este número (sender en dígitos). Vacío =
-  // solo el self-chat (sender === el propio número) es admin. Se fija desde el
-  // dashboard (sesión-autenticado), nunca desde el agente.
+  // Número marcado como ADMIN (estrella ★ "Main" en el dashboard, igual que el
+  // mainGroupJid de Baileys). Opt-in: solo si admin===true su self-chat administra.
+  admin?: boolean;
+  // (Opcional) conversación designada como admin además del self-chat (sender en
+  // dígitos). Solo aplica si admin===true. Sin UI hoy; reservado.
   adminSender?: string;
   // Master ON/OFF del número: el agente NO responde si está apagado (turnos admin
   // sí pasan, para poder re-encenderlo desde el chat). `undefined` = encendido
@@ -102,9 +104,12 @@ export async function action({ request, params }: Route.ActionArgs) {
   // drop de is_from_me/manual_mode (el self-chat del dueño puede estar auto-pausado).
   const org = waba!.orgs?.[integrationId];
   const np = normalizePhone(sender);
+  // Solo un número marcado admin (★ Main) administra; su self-chat (sender === el
+  // propio número) o un adminSender opcional designado.
   const isAdmin =
     !!body.is_from_me &&
     !!np &&
+    org?.admin === true &&
     (np === normalizePhone(org?.phoneNumber) ||
       (!!org?.adminSender && np === normalizePhone(org.adminSender)));
 

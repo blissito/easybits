@@ -21,7 +21,7 @@ import { mergedCapabilities, type GroupConfig } from "~/.server/core/fleetAgentO
 // NOT here — letting an admin turn reassign admin rights would be a footgun.
 
 // Per-number config inside FleetAgent.wabaConfig (subset; mirrors waba.message.ts).
-type WabaOrg = { phoneNumberId?: string; phoneNumber?: string; name?: string; systemPrompt?: string; adminSender?: string; enabled?: boolean; mutedSenders?: string[] };
+type WabaOrg = { phoneNumberId?: string; phoneNumber?: string; name?: string; systemPrompt?: string; admin?: boolean; adminSender?: string; enabled?: boolean; mutedSenders?: string[] };
 type WabaConfig = { formmySecret?: string; orgs?: Record<string, WabaOrg> };
 
 const onlyDigits = (s: string) => s.replace(/\D/g, "");
@@ -54,6 +54,7 @@ function buildAdminServer(fleetAgentId: string): McpServer {
         phoneNumber: o.phoneNumber ?? null,
         name: o.name ?? null,
         systemPrompt: o.systemPrompt ?? null,
+        admin: o.admin === true, // marcado como número admin (★ Main)
         adminSender: o.adminSender ?? null,
         enabled: o.enabled !== false, // undefined = encendido (compat)
         mutedSenders: o.mutedSenders ?? [],

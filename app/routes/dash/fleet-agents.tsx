@@ -97,7 +97,7 @@ export async function loader({ request }: Route.LoaderArgs) {
       // WABA numbers (Meta WhatsApp Business). Each integration is its OWN config
       // unit `waba:<integrationId>` — same shape as a group so the Capacidades
       // modal reuses it. Identity (name/systemPrompt) is per number.
-      const wabaOrgs = ((p.wabaConfig as { orgs?: Record<string, { phoneNumberId?: string; phoneNumber?: string; name?: string; systemPrompt?: string; adminSender?: string; enabled?: boolean; mutedSenders?: string[] }> } | null) ?? {}).orgs ?? {};
+      const wabaOrgs = ((p.wabaConfig as { orgs?: Record<string, { phoneNumberId?: string; phoneNumber?: string; name?: string; systemPrompt?: string; admin?: boolean; enabled?: boolean; mutedSenders?: string[] }> } | null) ?? {}).orgs ?? {};
       const wabaNumbers = Object.entries(wabaOrgs).map(([integrationId, o]) => {
         const id = `waba:${integrationId}`;
         return {
@@ -107,7 +107,8 @@ export async function loader({ request }: Route.LoaderArgs) {
           name: o.name ?? "",
           systemPrompt: o.systemPrompt ?? "",
           phoneNumber: o.phoneNumber ?? "",
-          adminSender: o.adminSender ?? "",
+          // ★ Main: número marcado admin → su self-chat administra (igual que mainGroupJid).
+          main: o.admin === true,
           // undefined = encendido (compat con números ya conectados).
           enabled: o.enabled !== false,
           mutedCount: (o.mutedSenders ?? []).length,
@@ -436,18 +437,16 @@ export async function action({ request }: Route.ActionArgs) {
     await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { wabaConfig: next } });
     return data({ ok: true });
   }
-  if (intent === "set-waba-admin") {
-    // Designa qué conversación administra este número WABA: el `sender` (teléfono)
-    // cuyos mensajes is_from_me se tratan como turno admin. Vacío = solo el
-    // self-chat (sender === el propio número) es admin. Merge en wabaConfig.orgs.
+  if (intent === "set-waba-main") {
+    // Estrella ★ Main por número: marca/desmarca el número como ADMIN — su self-chat
+    // (mensajearte a ti mismo) administra el agente. Espejo de set-main de Baileys.
     const integrationId = String(fd.get("integrationId") || "");
-    const adminSender = String(fd.get("adminSender") || "").replace(/\D/g, "");
     const cfg = (fleetAgent.wabaConfig as { formmySecret?: string; orgs?: Record<string, any> } | null) ?? {};
     const org = cfg.orgs?.[integrationId];
     if (!org) return data({ error: "número no encontrado" }, { status: 404 });
     const next = {
       ...cfg,
-      orgs: { ...cfg.orgs, [integrationId]: { ...org, adminSender: adminSender || undefined } },
+      orgs: { ...cfg.orgs, [integrationId]: { ...org, admin: !org.admin } },
     };
     await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { wabaConfig: next } });
     return data({ ok: true });
@@ -771,7 +770,6 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
   const [capModal, setCapModal] = useState<{ fleetAgentId: string; groupId: string } | null>(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [showIdentity, setShowIdentity] = useState(false);
-  const [showWabaAdmin, setShowWabaAdmin] = useState(false);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [editingName, setEditingName] = useState<string | null>(null);
   const [draftName, setDraftName] = useState("");
@@ -1199,12 +1197,21 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                               <span className="text-[10px] leading-none text-gray-400 shrink-0" title={`${w.mutedCount} conversación(es) silenciada(s)`}>🔇 {w.mutedCount}</span>
                             )}
                           </div>
-                          <button type="button" title="Capacidades e identidad de este número"
-                            onClick={() => setCapModal({ fleetAgentId: p.id, groupId: w.id })}
-                            className="flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-lg border-2 border-gray-200 text-gray-600 hover:border-brand-500 hover:text-brand-500 transition-colors shrink-0">
-                            <span className="text-sm leading-none">⚡</span><span>Capacidades</span>
-                            <span className="text-[10px] leading-none bg-gray-100 text-gray-600 rounded-full px-1.5 py-0.5">{p.builtins.length + w.mcps.length}</span>
-                          </button>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <button type="button" title="Capacidades e identidad de este número"
+                              onClick={() => setCapModal({ fleetAgentId: p.id, groupId: w.id })}
+                              className="flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-lg border-2 border-gray-200 text-gray-600 hover:border-brand-500 hover:text-brand-500 transition-colors">
+                              <span className="text-sm leading-none">⚡</span><span>Capacidades</span>
+                              <span className="text-[10px] leading-none bg-gray-100 text-gray-600 rounded-full px-1.5 py-0.5">{p.builtins.length + w.mcps.length}</span>
+                            </button>
+                            {/* ★ Main = número admin: su self-chat administra el agente (igual que Baileys). */}
+                            <button type="button"
+                              title={w.main ? "Número admin — su self-chat administra el agente. Clic para quitar" : "Marcar como número admin (administras desde su self-chat)"}
+                              onClick={() => fetcher.submit({ intent: "set-waba-main", fleetAgentId: p.id, integrationId: w.integrationId }, { method: "post" })}
+                              className={`flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg border-2 transition-colors ${w.main ? "border-brand-500 bg-brand-500 text-white" : "border-gray-200 text-gray-400 hover:border-gray-400 hover:text-gray-700"}`}>
+                              <span className="text-sm leading-none">{w.main ? "★" : "☆"}</span><span>Main</span>
+                            </button>
+                          </div>
                         </div>
                       ))}
                     </div>
@@ -1321,43 +1328,6 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                 </div>
               )}
 
-              {/* Administración — solo números WABA. Designa QUÉ conversación puede
-                  administrar el agente por WhatsApp (ver/editar números, identidad y
-                  capacidades). Default = el self-chat de este número (mensajearte a
-                  ti mismo). Misma fila colapsable que Identidad. */}
-              {waba && (
-                <div className="mb-4">
-                  <button type="button" onClick={() => setShowWabaAdmin((s) => !s)}
-                    className="w-full flex items-center justify-between gap-2 text-left group">
-                    <span className="min-w-0 truncate">
-                      <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Administración</span>
-                      <span className="text-sm font-semibold ml-2">
-                        {waba.adminSender ? `+${waba.adminSender}` : "Self-chat"}
-                      </span>
-                    </span>
-                    <span className="text-xs font-semibold text-brand-500 shrink-0 group-hover:underline">{showWabaAdmin ? "Cerrar" : "Editar"}</span>
-                  </button>
-                  {showWabaAdmin && (
-                    <fetcher.Form key={`admin-${waba.integrationId}`} method="post" className="mt-2 flex flex-col gap-2">
-                      <input type="hidden" name="intent" value="set-waba-admin" />
-                      <input type="hidden" name="fleetAgentId" value={cp.id} />
-                      <input type="hidden" name="integrationId" value={waba.integrationId} />
-                      <p className="text-[11px] text-gray-400 leading-snug">
-                        Desde la conversación admin, escríbele al agente para gestionar este número
-                        (ver/editar identidad y capacidades). Déjalo vacío para usar el <b>self-chat</b> de
-                        este número — mensajearte a ti mismo.
-                      </p>
-                      <label className="flex flex-col gap-1">
-                        <span className="text-[11px] font-semibold text-gray-500">Número admin (opcional)</span>
-                        <input name="adminSender" defaultValue={waba.adminSender} inputMode="tel"
-                          placeholder="52 55 1234 5678 (vacío = self-chat)"
-                          className="border-2 border-gray-300 rounded-lg px-2 py-1 text-sm" />
-                      </label>
-                      <button type="submit" className="self-end border-2 border-black rounded-lg px-3 py-1 text-xs font-semibold">Guardar admin</button>
-                    </fetcher.Form>
-                  )}
-                </div>
-              )}
 
               {/* Capacidades — builtins (easybits/wa, togglables por grupo) + curadas ∪
                   custom. Apagar easybits fuerza al agente a usar las cajas de la flota. */}
