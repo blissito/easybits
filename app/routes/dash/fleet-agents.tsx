@@ -731,6 +731,7 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
   const [draftName, setDraftName] = useState("");
   const [optimisticNames, setOptimisticNames] = useState<Record<string, string>>({});
   const [wabaConnecting, setWabaConnecting] = useState<string | null>(null);
+  const [wabaError, setWabaError] = useState<string | null>(null);
   // Tabs por canal (baileys/waba/…) + ⚙ ajustes del canal abierto, por fleetAgent.
   const [activeChannel, setActiveChannel] = useState<Record<string, string>>({});
   const [chSettings, setChSettings] = useState<Record<string, boolean>>({});
@@ -740,23 +741,47 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
   // and writes wabaConfig), then revalidate so the new number shows in the card.
   const connectWaba = async (fleetAgentId: string) => {
     setWabaConnecting(fleetAgentId);
+    // Abrir la ventana SÍNCRONO dentro del gesto del clic. Si esperamos al
+    // `await fetch`, el navegador bloquea window.open como popup no iniciado por
+    // el usuario (era el "Business no abre nada"). Abrimos about:blank ya, y
+    // luego la navegamos a la URL firmada de Formmy cuando llega.
+    const popup = window.open("about:blank", "waba-connect", "width=600,height=760");
     try {
       const res = await fetch(`/api/v2/fleet-agents/${fleetAgentId}/waba/connect/start`, { method: "POST" });
       const { popupUrl, error } = await res.json();
       if (!popupUrl) throw new Error(error || "no popup");
-      const popup = window.open(popupUrl, "waba-connect", "width=600,height=760");
+      if (popup) popup.location.href = popupUrl;
+      else window.open(popupUrl, "waba-connect", "width=600,height=760");
       const onMsg = async (e: MessageEvent) => {
         if (!/(^|\.)formmy\.app$/.test(new URL(e.origin).hostname)) return;
-        const d = e.data as { code?: string; phoneNumberId?: string; wabaId?: string };
-        if (!d?.code || !d?.phoneNumberId || !d?.wabaId) return;
+        const d = e.data as { type?: string; error?: string; code?: string; phoneNumberId?: string; wabaId?: string };
+        if (d?.type === "formmy-waba-error") {
+          window.removeEventListener("message", onMsg);
+          try { popup?.close(); } catch {}
+          setWabaConnecting(null);
+          setWabaError(`Meta rechazó la conexión: ${d.error || "error desconocido"}`);
+          return;
+        }
+        // Coexistencia (mismo número que ya usa la app de WhatsApp) NO devuelve
+        // `code`, solo wabaId + phoneNumberId — igual que el contrato de Formmy.
+        // Exigir `code` aquí descartaba el mensaje en silencio (el bug original).
+        if (!d?.phoneNumberId || !d?.wabaId) return;
         window.removeEventListener("message", onMsg);
         try { popup?.close(); } catch {}
-        await fetch(`/api/v2/fleet-agents/${fleetAgentId}/waba/connect`, {
+        // NO tragar el fallo: si provision revienta, el usuario debe enterarse
+        // (antes un .catch(()=>{}) dejaba "todo ok" falso con nada guardado).
+        const r = await fetch(`/api/v2/fleet-agents/${fleetAgentId}/waba/connect`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(d),
-        }).catch(() => {});
+        }).catch(() => null);
         setWabaConnecting(null);
+        if (!r || !r.ok) {
+          const msg = r ? ((await r.json().catch(() => ({}))).error ?? `HTTP ${r.status}`) : "sin conexión";
+          setWabaError(`No se pudo guardar la conexión: ${msg}`);
+          return;
+        }
+        setWabaError(null);
         rev.revalidate();
       };
       window.addEventListener("message", onMsg);
@@ -933,6 +958,11 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                 // Añadir Slack/Web = un descriptor más aquí, cero UI a medida.
                 const activeCh = inFlow ? "baileys" : (activeChannel[p.id] ?? "baileys");
                 const settingsOpen = chSettings[p.id] ?? false;
+                // Solo cuando el surface está vivo de verdad tiene sentido ver/configurar
+                // grupos: desconectado/relinking → la sesión Baileys no existe, así que
+                // los toggles no harían nada hasta reconectar. Los ocultamos para no
+                // ofrecer config inerte (los enabledGroups persisten igual en la DB).
+                const liveConnected = p.status === "connected" && p.live;
                 const channels = [
                   { kind: "baileys", label: "Personal y grupos (QR)", dot: (stale || relinking) ? "bg-orange-400" : st.dot, count: p.conversations },
                   { kind: "waba", label: "WhatsApp Business API", dot: p.wabaNumbers.length ? "bg-green-500" : "bg-gray-300", count: p.wabaNumbers.length },
@@ -965,7 +995,7 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                     </div>
                   )}
 
-                  {(p.groups.length > 0 || (p.status === "connected" && p.live)) && (
+                  {liveConnected ? (
                     <div>
                       <div className="flex items-center justify-between mb-2">
                         <span className="font-semibold text-sm">Grupos que atiende</span>
@@ -1024,7 +1054,13 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                         <p className="text-xs text-amber-600 mt-2">⚠️ Sin grupos activos: el agente no responde a nadie (anti-spam).</p>
                       )}
                     </div>
-                  )}
+                  ) : (!p.qrDataUrl && !p.pairingCode && (
+                    <p className="text-xs text-gray-400 mt-1">
+                      {relinking || stale
+                        ? "Reconectando… los grupos vuelven a aparecer al vincularse."
+                        : "Conecta WhatsApp para ver y configurar los grupos que atiende."}
+                    </p>
+                  ))}
 
                   {p.throttledUntil ? (
                     <p className="mt-3 text-xs text-amber-700 bg-amber-50 border-2 border-amber-300 rounded-lg px-3 py-2">
@@ -1102,10 +1138,11 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                   ) : (
                     <p className="text-xs text-gray-400">Conecta un número de WhatsApp Business para atenderlo con este agente.</p>
                   )}
-                  <button type="button" disabled={wabaConnecting === p.id} onClick={() => connectWaba(p.id)}
+                  <button type="button" disabled={wabaConnecting === p.id} onClick={() => { setWabaError(null); connectWaba(p.id); }}
                     className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-brand-500 hover:underline disabled:opacity-50">
                     {wabaConnecting === p.id ? <><Spinner /> Conectando…</> : "+ Conectar WhatsApp Business"}
                   </button>
+                  {wabaError && <p className="mt-2 text-xs text-red-600">⚠️ {wabaError}</p>}
                 </div>)}
 
                 {/* Footer del agente — Borrar es DESTRUCTIVO e irreversible: lo

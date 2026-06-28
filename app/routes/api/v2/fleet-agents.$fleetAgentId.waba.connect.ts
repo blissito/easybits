@@ -43,8 +43,11 @@ export async function action({ request, params }: Route.ActionArgs) {
     wabaId?: string;
   };
   const { code, phoneNumberId, wabaId } = body;
-  if (!code || !phoneNumberId || !wabaId) {
-    return Response.json({ error: "Faltan code, phoneNumberId o wabaId" }, { status: 400 });
+  // Coexistencia (mismo número que ya usa la app de WhatsApp) NO trae `code`,
+  // solo wabaId + phoneNumberId — Formmy lo acepta así (isCoexistenceFlow). El
+  // code solo aparece en el flujo OAuth puro. Exigir los tres rompía coexistencia.
+  if (!phoneNumberId || !wabaId) {
+    return Response.json({ error: "Faltan phoneNumberId o wabaId" }, { status: 400 });
   }
 
   const current = (fleetAgent.wabaConfig as WabaConfig | null) ?? {};

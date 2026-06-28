@@ -52,8 +52,8 @@ export function buildPopupUrl(origin: string): string {
 }
 
 export type FormmyProvisionParams = {
-  /** `code` from Meta's Embedded Signup. */
-  code: string;
+  /** `code` from Meta's OAuth Embedded Signup. Ausente en coexistencia. */
+  code?: string;
   /** Phone Number ID reported by the WA_EMBEDDED_SIGNUP event. */
   phoneNumberId: string;
   /** WABA ID reported by the WA_EMBEDDED_SIGNUP event. */
