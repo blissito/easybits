@@ -31,11 +31,28 @@ const DEFAULT_OAUTH = "CLAUDE_CODE_OAUTH_TOKEN";
 // the client bundle.
 export async function loader({ request }: Route.LoaderArgs) {
   const user = await getUserOrRedirect(request);
+  // El HUD hace polling cada 2.5s contra /flota/poll (reusa este loader). En el
+  // poll NO refrescamos la lista de grupos en vivo (groupFetchAllParticipating)
+  // — eso es una IQ contra WhatsApp que, repetida cada 2.5s y traslapada, dispara
+  // rate-overlimit y DEGRADA el socket (conexión "Conectando…" colgada). El poll
+  // sirve grupos desde caché + seenGroups; solo la carga de página los refresca.
+  const isPoll = new URL(request.url).pathname.endsWith("/poll");
   // Reconnect any pools that were live before an app restart (lazy, once).
   await ensureRehydrated();
 
   const secretNames = (await listSecrets(user.id)).map((s) => s.name);
-  const rows = await db.fleetAgent.findMany({ where: { ownerId: user.id }, orderBy: { createdAt: "desc" } });
+  // ⚠️ `select` OBLIGATORIO: findMany SIN select sobre FleetAgent tarda ~4.4s por
+  // fila (patología Prisma+Mongo, medido) vs ~100ms con proyección — el doc pesa
+  // solo ~6KB, no es tamaño. Proyectar solo lo que usa el loader.
+  const rows = await db.fleetAgent.findMany({
+    where: { ownerId: user.id },
+    orderBy: { createdAt: "desc" },
+    select: {
+      id: true, name: true, baileys: true, enabledGroups: true, groupConfigs: true,
+      wabaConfig: true, mcpCatalog: true, maxWorkersPerVm: true, vmMemMb: true,
+      mainGroupJid: true, hasOwnNumber: true, workerTemplate: true,
+    },
+  });
   const pools = await Promise.all(
     rows.map(async (p) => {
       const b = (p.baileys ?? {}) as { status?: string; qr?: string; reason?: string; pairBlockedUntil?: string };
@@ -51,7 +68,7 @@ export async function loader({ request }: Route.LoaderArgs) {
       const pairingCode = !connectedNow ? ((b as any).pairingCode as string | undefined) ?? null : null;
       // Merged list (live groupFetch ∪ discovered seenGroups) — shows groups with
       // activity even if metadata sync hasn't listed them yet.
-      const rawGroups = await listFleetAgentGroups(p.id);
+      const rawGroups = await listFleetAgentGroups(p.id, { live: !isPoll });
       // Capabilities for the admin UI. builtins (easybits/wa) are always-on and
       // just listed. capabilities (curated ∪ custom) are togglable per group; each
       // carries whether its required vault secret(s) are present (NAMES only — the

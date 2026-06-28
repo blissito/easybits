@@ -585,8 +585,13 @@ async function recordSeenGroup(fleetAgentId: string, sock: WASocket, jid: string
 // whether the fleetAgent currently answers there. Live socket preferred; falls back
 // to seenGroups so a group with activity always shows up.
 export async function listFleetAgentGroups(
-  fleetAgentId: string
+  fleetAgentId: string,
+  opts: { live?: boolean } = {}
 ): Promise<Array<{ id: string; subject: string; enabled: boolean }>> {
+  // live=false (el poll del HUD cada 2.5s) → NUNCA dispara la IQ groupFetch:
+  // sirve caché + seenGroups. Solo la carga de página (live=true) refresca en
+  // vivo. Sin esto, el poll machaca WhatsApp → rate-overlimit → socket degradado.
+  const live = opts.live !== false;
   const fleetAgent = await db.fleetAgent.findUnique({
     where: { id: fleetAgentId },
     select: { enabledGroups: true, seenGroups: true },
@@ -599,7 +604,11 @@ export async function listFleetAgentGroups(
     // hammering this IQ makes WhatsApp return rate-overlimit (and can degrade the
     // link). One fetch per 60s is plenty — seenGroups covers gaps in between.
     const cached = groupListCache.get(fleetAgentId);
-    if (cached && Date.now() - cached.at < GROUP_CACHE_MS) {
+    if (!live) {
+      // Poll: jamás tocar el socket. Sirve la última caché (aunque esté vieja);
+      // seenGroups (abajo) cubre lo que falte.
+      if (cached) for (const [id, subject] of cached.groups) merged.set(id, subject);
+    } else if (cached && Date.now() - cached.at < GROUP_CACHE_MS) {
       for (const [id, subject] of cached.groups) merged.set(id, subject);
     } else {
       try {
