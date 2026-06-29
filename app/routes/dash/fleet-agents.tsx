@@ -929,12 +929,18 @@ function ConvRow({
   integrationId: string;
   onChanged: () => void;
 }) {
-  const act = useFetcher();
+  const act = useFetcher<{ ok?: boolean; error?: string }>();
   const [ov, setOv] = useState<{ allowed?: boolean; paused?: boolean; admin?: boolean }>({});
   const [asking, setAsking] = useState(false);
   const [pauseOpen, setPauseOpen] = useState(false); // selector de nivel de pausa
   const [directive, setDirective] = useState("");
-  useEffect(() => { if (act.state === "idle" && act.data) onChanged(); }, [act.data, act.state]);
+  // En éxito recarga (verdad del server); en error revierte el optimismo (vuelve a
+  // c.allowed/c.admin) y deja el mensaje visible para que el operador sepa qué pasó.
+  useEffect(() => {
+    if (act.state === "idle" && act.data) {
+      if (act.data.error) setOv({}); else onChanged();
+    }
+  }, [act.data, act.state]);
 
   const allowed = ov.allowed ?? c.allowed;
   const paused = ov.paused ?? c.paused;
@@ -1039,6 +1045,9 @@ function ConvRow({
           </div>
         </div>
       )}
+      {act.state === "idle" && act.data?.error && (
+        <p className="mt-1.5 text-[11px] text-red-600">⚠️ {act.data.error}</p>
+      )}
     </div>
   );
 }
@@ -1056,7 +1065,7 @@ function WabaInboxModal({
   onClose: () => void;
 }) {
   const conv = useFetcher<{ conversations: WabaConv[] }>();
-  const modeAct = useFetcher();
+  const modeAct = useFetcher<{ ok?: boolean; error?: string }>();
   const [mode, setMode] = useState(modal.mode);
   const [q, setQ] = useState("");
   // Cerrar con ESC.
@@ -1072,8 +1081,13 @@ function WabaInboxModal({
     const t = setTimeout(() => conv.load(q ? `${baseUrl}&q=${encodeURIComponent(q)}` : baseUrl), 250);
     return () => clearTimeout(t);
   }, [q, baseUrl]);
-  // Cambio de modo (su propio fetcher) → recarga al confirmar.
-  useEffect(() => { if (modeAct.state === "idle" && modeAct.data) reloadInbox(); }, [modeAct.data, modeAct.state]);
+  // Cambio de modo (su propio fetcher) → recarga al confirmar; en error revierte el
+  // segmentado al modo previo del server y deja el mensaje visible.
+  useEffect(() => {
+    if (modeAct.state === "idle" && modeAct.data) {
+      if (modeAct.data.error) setMode(modal.mode); else reloadInbox();
+    }
+  }, [modeAct.data, modeAct.state]);
 
   const setModeNow = (m: "off" | "all" | "only") => {
     setMode(m);
@@ -1107,6 +1121,9 @@ function WabaInboxModal({
           ))}
         </div>
         <p className="text-[11px] text-gray-400 mb-4">{MODES.find((m) => m.key === mode)?.hint}</p>
+        {modeAct.state === "idle" && modeAct.data?.error && (
+          <p className="text-[11px] text-red-600 mb-4">⚠️ No se pudo cambiar el modo: {modeAct.data.error}</p>
+        )}
 
         {/* Buscador SERVER-side por nombre o dígitos (escala a miles). */}
         <input value={q} onChange={(e) => setQ(e.target.value)}
