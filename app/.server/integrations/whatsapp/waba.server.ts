@@ -156,7 +156,7 @@ async function drainWaba(key: string): Promise<void> {
     const media = batch.map((i) => i.media).find(Boolean) ?? null;
     const last = batch[batch.length - 1];
     const senderName = batch.map((i) => i.senderName).find(Boolean);
-    const ec = await extractWabaContent(combined, media, { ownerId: ctx.ownerId });
+    const ec = await extractWabaContent(combined, media, { ownerId: ctx.ownerId, formmySecret: ctx.formmySecret });
     await runWabaTurn({
       fleetAgentId: ctx.fleetAgentId,
       ownerId: ctx.ownerId,

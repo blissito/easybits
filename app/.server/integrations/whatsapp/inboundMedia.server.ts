@@ -443,10 +443,19 @@ export type WabaInboundMedia = {
 
 const MAX_MEDIA_BYTES = 25 * 1024 * 1024;
 
-// Bounded fetch of an already-hosted (trusted EasyBits) media URL → Buffer.
-async function fetchMedia(url: string): Promise<Buffer> {
+// Bounded fetch of a media URL → Buffer. Formmy reenvía la media como su PROXY
+// (`formmy.app/api/v1/integrations/whatsapp/media/...`), que exige `Authorization:
+// Bearer <formmySecret>` → sin él da 401. Para URLs de Formmy: añade el bearer y
+// reescribe el apex (formmy.app) a www (el apex falla TLS desde Fly).
+async function fetchMedia(url: string, formmySecret?: string): Promise<Buffer> {
+  let target = url;
+  const headers: Record<string, string> = {};
+  if (/\/\/(www\.)?formmy\.app\//i.test(url)) {
+    target = url.replace(/\/\/formmy\.app\//i, "//www.formmy.app/");
+    if (formmySecret) headers.Authorization = `Bearer ${formmySecret}`;
+  }
   const r = await withTimeout(
-    fetch(url, { redirect: "follow" }) as Promise<Response>,
+    fetch(target, { redirect: "follow", headers }) as Promise<Response>,
     DOWNLOAD_TIMEOUT_MS,
     "waba media fetch"
   );
@@ -469,7 +478,7 @@ function extFromMime(mime: string): string {
 export async function extractWabaContent(
   textContent: string,
   media: WabaInboundMedia | null,
-  opts: { ownerId: string }
+  opts: { ownerId: string; formmySecret?: string }
 ): Promise<InboundContent> {
   // The user's typed words (or media caption). For a voice note it's replaced by
   // the transcript below (drives the voice-reply trigger, like Baileys).
@@ -484,11 +493,19 @@ export async function extractWabaContent(
     const type = media.type;
     const mime = media.mimeType || "";
     try {
-      const buf = await fetchMedia(media.url);
+      const buf = await fetchMedia(media.url, opts.formmySecret);
       if (type === "image" || type === "sticker") {
-        // Native Claude vision: base64 bytes for the worker FS; the URL is ALREADY
-        // a hosted EasyBits signed URL so we reuse it (no re-upload) for image tools.
-        imageData = { base64: buf.toString("base64"), ext: extFromMime(mime || "image/jpeg"), url: media.url };
+        // Native Claude vision: base64 bytes for the worker FS. Re-subimos a storage
+        // de EasyBits para una signed URL LIMPIA (la de Formmy es un proxy con auth →
+        // las tools de imagen del agente darían 401). Igual que el path de baileys.
+        const ext = extFromMime(mime || "image/jpeg");
+        imageData = { base64: buf.toString("base64"), ext };
+        try {
+          const key = `wa-media/${opts.ownerId}/${Date.now()}-${randomBytes(16).toString("hex")}.${ext}`;
+          const client = getPlatformDefaultClient();
+          await client.putObject(key, buf, mime || "image/jpeg");
+          imageData.url = await client.getReadUrl(key, 3600);
+        } catch {}
       } else if (type === "audio") {
         const { transcribeAudio } = await import("~/.server/core/fleetVoice");
         const t = await transcribeAudio(opts.ownerId, buf, mime || "audio/ogg");
