@@ -11,7 +11,7 @@ import {
   type InboundContent,
 } from "./inboundMedia.server";
 import { deliverFilesFromReply } from "./outboundMedia.server";
-import { makeWabaFileSender, sendTextToFormmy, sendVoiceToFormmy } from "./wabaSend";
+import { makeWabaFileSender, sendTextToFormmy, sendVoiceToFormmy, sendReactionToFormmy, sendTypingToFormmy } from "./wabaSend";
 import { wantsVoiceReply, synthesizeVoice } from "~/.server/core/fleetVoice";
 
 // Per-integration (per Meta number) config.
@@ -118,8 +118,14 @@ export async function runWabaTurn(args: {
   content: InboundContent;
   admin?: boolean;
   skipUserLog?: boolean;
+  messageId?: string;
 }): Promise<void> {
-  const { fleetAgentId, ownerId, formmySecret, integrationId, sender, senderName, org, content, admin, skipUserLog } = args;
+  const { fleetAgentId, ownerId, formmySecret, integrationId, sender, senderName, org, content, admin, skipUserLog, messageId } = args;
+  // Paridad con baileys: 👀 + "escribiendo…" al empezar el turno. Best-effort.
+  if (messageId) {
+    void sendReactionToFormmy(formmySecret, integrationId, sender, messageId, "👀");
+    void sendTypingToFormmy(formmySecret, integrationId, sender, messageId);
+  }
   // groupId (= sticky session + .jsonl transcript) normalizado por contacto: el
   // mismo número no se parte en dos sesiones (521 vs 52) → memoria continua, como
   // el jid estable de Baileys. El `sender` crudo se conserva SOLO para enviar a Meta.
@@ -141,6 +147,8 @@ export async function runWabaTurn(args: {
   );
   if (!reply) return;
   await deliverWabaReply({ formmySecret, integrationId, sender, ownerId, reply, userText: content.userText, wasVoice: content.wasVoice });
+  // ✅ al terminar (paridad con baileys).
+  if (messageId) void sendReactionToFormmy(formmySecret, integrationId, sender, messageId, "✅");
 }
 
 // Deliver the reply: attach file URLs (stripped from text), then voice note XOR

@@ -19,7 +19,11 @@ export type WabaSendPayload =
       mime_type?: string;
       caption?: string;
       filename?: string;
-    };
+    }
+  // Reacción a un mensaje del usuario (👀/✅, paridad con baileys). emoji "" = quitar.
+  | { type: "reaction"; message_id: string; emoji: string }
+  // Recibo de lectura + indicador de "escribiendo…".
+  | { type: "read"; message_id: string; typing?: boolean };
 
 // phone_number = the sender's digits (strip any @suffix jid and a leading +).
 function phoneOf(sender: string): string {
@@ -90,6 +94,27 @@ export function makeWabaFileSender(
     }
     return false;
   };
+}
+
+// React to the user's message (👀 al empezar, ✅ al terminar). Best-effort.
+export function sendReactionToFormmy(
+  formmySecret: string,
+  integrationId: string,
+  sender: string,
+  messageId: string,
+  emoji: string
+): Promise<boolean> {
+  return sendToFormmy(formmySecret, integrationId, sender, { type: "reaction", message_id: messageId, emoji });
+}
+
+// Read receipt + typing indicator ("escribiendo…") mientras el agente piensa.
+export function sendTypingToFormmy(
+  formmySecret: string,
+  integrationId: string,
+  sender: string,
+  messageId: string
+): Promise<boolean> {
+  return sendToFormmy(formmySecret, integrationId, sender, { type: "read", message_id: messageId, typing: true });
 }
 
 // Voice note (PTT). Kokoro returns an OGG/Opus buffer; Meta draws the waveform.

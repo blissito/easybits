@@ -106,6 +106,7 @@ export async function action({ request, params }: Route.ActionArgs) {
             org,
             content: ec,
             admin: isAdmin,
+            messageId: typeof body.message_id === "string" ? body.message_id : undefined,
           });
         } catch (e) {
           console.error(`[waba] inbound turn ${fleetAgentId} failed:`, e instanceof Error ? e.message : e);
