@@ -94,11 +94,23 @@ export async function persistInboundUserMessage(
 ): Promise<void> {
   try {
     const text = content.trim() || media?.caption?.trim() || (media ? `[${media.type}]` : "");
-    if (!text) return;
+    if (!text && !media) return;
     // groupId normalizado (521→52) = UNA sesión por contacto, no se parte la memoria.
     const convId = normalizePhone(sender);
     await db.fleetAgentMessage.create({
-      data: { fleetAgentId, groupId: `waba:${integrationId}:${convId}`, role: "user", sender: convId, senderName: senderName || null, text },
+      data: {
+        fleetAgentId,
+        groupId: `waba:${integrationId}:${convId}`,
+        role: "user",
+        sender: convId,
+        senderName: senderName || null,
+        text: text || `[${media?.type ?? "media"}]`,
+        // Guarda la media para que "Solicitar respuesta" pueda RE-INCLUIR la imagen/doc
+        // (si no, el replay manda solo texto y el agente ignora lo que mandó el user).
+        mediaUrl: media?.url ?? null,
+        mediaType: media?.type ?? null,
+        mediaMime: media?.mimeType ?? null,
+      },
     });
   } catch (e) {
     console.error(`[waba] persistInbound ${fleetAgentId} failed:`, e instanceof Error ? e.message : e);
@@ -274,13 +286,19 @@ export async function replyToPendingWaba(args: {
     where: { fleetAgentId, groupId: { startsWith: prefix } },
     orderBy: { createdAt: "desc" },
     take: 120,
-    select: { role: true, text: true, sender: true, groupId: true },
+    select: { role: true, text: true, sender: true, groupId: true, mediaUrl: true, mediaType: true, mediaMime: true },
   });
   const mine = rows.filter((r) => normalizePhone(r.sender || r.groupId.slice(prefix.length)) === np);
   const pending: string[] = [];
+  // Recupera la media MÁS RECIENTE entre los pendientes (iterando desc) para
+  // re-incluirla — así el agente VE la foto/doc que mandó el user, no solo el texto.
+  let pendingMedia: WabaInboundMedia | null = null;
   for (const row of mine) {
     if (row.role === "agent") break;
     pending.push(row.text);
+    if (!pendingMedia && row.mediaUrl) {
+      pendingMedia = { type: row.mediaType || "image", url: row.mediaUrl, mimeType: row.mediaMime || undefined };
+    }
   }
   pending.reverse();
   const pendingText = pending.join("\n").trim();
@@ -301,6 +319,12 @@ export async function replyToPendingWaba(args: {
     text = `[El operador te pide ENVIAR UN MENSAJE para retomar esta conversación. Redacta algo natural y útil según el contexto/historial (un saludo o seguimiento breve). NO inventes datos ni asumas que el usuario escribió algo nuevo.]`;
   }
 
+  // Si hubo media pendiente, re-incluirla (fetch + vision nativa) conservando el
+  // texto compuesto; si no, turno de solo texto.
+  const content: InboundContent = pendingMedia
+    ? await extractWabaContent(text, pendingMedia, { ownerId, formmySecret })
+    : { text, userText: pendingText, hasMedia: false };
+
   await runWabaTurn({
     fleetAgentId,
     ownerId,
@@ -308,7 +332,7 @@ export async function replyToPendingWaba(args: {
     integrationId,
     sender,
     org,
-    content: { text, userText: pendingText, hasMedia: false },
+    content,
     skipUserLog: true, // los pendientes ya están logueados
   });
   return { ok: true };

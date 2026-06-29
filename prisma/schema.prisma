@@ -1184,6 +1184,12 @@ model FleetAgentMessage {
   sender       String?  // WhatsApp sender (for "user" rows)
   senderName   String?  // nombre de perfil del contacto (WABA: contacts[].profile.name)
   text         String
+  // Media inbound adjunta (WABA): se guarda al persistir un mensaje que NO corrió
+  // turno (pausa) para que "Solicitar respuesta" pueda RE-INCLUIR la imagen/doc
+  // (si no, el replay manda solo texto y el agente ignora la foto que mandó el user).
+  mediaUrl     String?
+  mediaType    String?  // image | audio | video | document | sticker
+  mediaMime    String?
   createdAt    DateTime @default(now())
 
   @@index([fleetAgentId, groupId])
