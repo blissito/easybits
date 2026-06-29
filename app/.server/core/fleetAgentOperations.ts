@@ -294,7 +294,12 @@ export function resolveDisabledBuiltins(
   groupId: string
 ): string[] {
   const cfg = ((fleetAgent.groupConfigs as Record<string, GroupConfig> | null) ?? {})[groupId] ?? {};
-  return cfg.disabledBuiltins ?? [];
+  const disabled = [...(cfg.disabledBuiltins ?? [])];
+  // WABA NO usa el MCP `wa` (Baileys in-process) — el envío va por Formmy (URLs en el
+  // texto → adjuntos). Sin esto el agente intenta `wa send_message` y habla de
+  // "socket desconectado". Forzado siempre para números WABA.
+  if (groupId.startsWith("waba:") && !disabled.includes("wa")) disabled.push("wa");
+  return disabled;
 }
 
 // Tool group (?tools= surface de EasyBits) PER-NÚMERO/grupo: el override per-grupo

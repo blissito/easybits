@@ -463,7 +463,11 @@ export async function action({ request }: Route.ActionArgs) {
     const bucketList = String(fd.get("buckets") || "").split(",").map((s) => s.trim()).filter(Boolean);
     const configs = { ...((fleetAgent.groupConfigs as Record<string, GroupConfig> | null) ?? {}) };
     const cur = configs[groupId] ?? {};
-    configs[groupId] = { ...cur, toolGroup: inherit ? undefined : bucketsToToolsParam(bucketList) };
+    // Los buckets SON la superficie de easybits → tocar buckets ENCIENDE el MCP
+    // easybits (quita "easybits" de disabledBuiltins). Antes el conector easybits
+    // separado en OFF lo apagaba y dejaba los buckets inertes ("no usa easybits").
+    const disabled = (cur.disabledBuiltins ?? []).filter((n) => n !== "easybits");
+    configs[groupId] = { ...cur, toolGroup: inherit ? undefined : bucketsToToolsParam(bucketList), disabledBuiltins: disabled };
     await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { groupConfigs: configs } });
     return data({ ok: true });
   }
@@ -1808,7 +1812,10 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                 <div className="mt-1 flex flex-col gap-2">
                     {/* `wa` envía por Baileys (QR) → no aplica a un número WABA;
                         ocúltalo cuando el target es WABA para no ofrecer canal inerte. */}
-                    {cp.builtins.filter((b) => !(waba && b.name === "wa")).map((b) => (
+                    {/* easybits NO se muestra como conector: su superficie son los buckets
+                        de arriba (mostrarlo como toggle separado contradecía los buckets).
+                        wa (Baileys) no aplica a un número WABA. */}
+                    {cp.builtins.filter((b) => b.name !== "easybits" && !(waba && b.name === "wa")).map((b) => (
                       <div key={b.name} className="border-2 border-gray-100 rounded-xl px-3 py-2 flex items-center justify-between gap-2">
                         <p className="text-sm font-semibold min-w-0 truncate">{b.label}</p>
                         <Switch value={!cg.disabledBuiltins.includes(b.name)}
