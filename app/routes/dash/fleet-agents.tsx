@@ -964,7 +964,7 @@ function ConvRow({
             allowed ? (
               <button type="button" onClick={() => setAllow(false)}
                 className="text-[11px] font-semibold px-2.5 py-1 rounded-full border-2 border-green-200 text-green-600 hover:border-red-300 hover:text-red-500 transition-colors">
-                Quitar
+                Desactivar
               </button>
             ) : (
               <button type="button" onClick={() => setAllow(true)}
