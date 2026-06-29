@@ -9,7 +9,7 @@ import { PLANS, getUserPlan, getFleetBox, NEXT_PLAN } from "~/lib/plans";
 import { getUserOrRedirect } from "~/.server/getters";
 import { db } from "~/.server/db";
 import { delegatedAccountIds, SCOPES } from "~/.server/delegation";
-import { createFleetAgent, deleteFleetAgent, mergedCapabilities, CURATED_CAPABILITIES, DEFAULT_MCP_CATALOG, type McpCatalogEntry, type GroupConfig } from "~/.server/core/fleetAgentOperations";
+import { createFleetAgent, deleteFleetAgent, clearGroupSession, mergedCapabilities, CURATED_CAPABILITIES, DEFAULT_MCP_CATALOG, type McpCatalogEntry, type GroupConfig } from "~/.server/core/fleetAgentOperations";
 import { FLEET_BUCKETS, toolsParamToBuckets, bucketsToToolsParam } from "~/.server/mcp/toolGroups";
 import { getReservedCapacity } from "~/.server/core/sandboxReservations";
 import { listSecrets, createSecret } from "~/.server/core/secretOperations";
@@ -26,6 +26,7 @@ import {
   setAllowedSenderAtomic,
   setResponseModeAtomic,
   requestWabaReply,
+  normalizePhone,
 } from "~/.server/integrations/whatsapp/waba.server";
 
 const DEFAULT_OAUTH = "CLAUDE_CODE_OAUTH_TOKEN";
@@ -623,6 +624,17 @@ export async function action({ request }: Route.ActionArgs) {
     }).catch((e) => console.error(`[waba] request-reply ${fleetAgentId} failed:`, e instanceof Error ? e.message : e));
     return data({ ok: true });
   }
+  if (intent === "waba-clear") {
+    // Limpia el contexto del agente para ESTA conversación (drop de memoria + rota
+    // sessionUuid). groupId = el mismo que arma runWabaTurn (normalizado por contacto).
+    const integrationId = String(fd.get("integrationId") || "");
+    const sender = String(fd.get("sender") || "");
+    if (!fleetAgent) return data({ error: "agente no encontrado" }, { status: 404 });
+    const np = normalizePhone(sender);
+    if (!integrationId || !np) return data({ error: "conversación no encontrada" }, { status: 400 });
+    const msg = await clearGroupSession(ctx, fleetAgent, `waba:${integrationId}:${np}`);
+    return data({ ok: true, message: msg });
+  }
   return data({ error: "intent inválido" }, { status: 400 });
 }
 
@@ -933,6 +945,7 @@ function ConvRow({
   const [ov, setOv] = useState<{ allowed?: boolean; paused?: boolean; admin?: boolean }>({});
   const [asking, setAsking] = useState(false);
   const [pauseOpen, setPauseOpen] = useState(false); // selector de nivel de pausa
+  const [clearOpen, setClearOpen] = useState(false); // confirm de "Limpiar contexto"
   const [directive, setDirective] = useState("");
   // En éxito recarga (verdad del server); en error revierte el optimismo (vuelve a
   // c.allowed/c.admin) y deja el mensaje visible para que el operador sepa qué pasó.
@@ -963,6 +976,7 @@ function ConvRow({
     setAsking(false);
     setDirective("");
   };
+  const clearSession = () => { setClearOpen(false); submit({ intent: "waba-clear" }); };
 
   return (
     <div className="py-2.5">
@@ -986,6 +1000,20 @@ function ConvRow({
             Apagado) — si está pausada, el envío reactiva primero. Junto a la acción
             de estado: Pausar↔Reactivar (all/coexistencia), Activar↔Desactivar (only). */}
         <div className="flex items-center gap-1.5 shrink-0">
+          {/* Limpiar contexto de ESTA conversación (destructivo → confirm de 2 pasos). */}
+          {clearOpen ? (
+            <span className="flex items-center gap-1 text-[11px]">
+              <span className="text-gray-400">¿Limpiar?</span>
+              <button type="button" onClick={clearSession} disabled={busy} className="font-semibold text-red-600 hover:text-red-700 disabled:opacity-50">Sí</button>
+              <button type="button" onClick={() => setClearOpen(false)} className="font-semibold text-gray-400 hover:text-gray-600">No</button>
+            </span>
+          ) : (
+            <button type="button" onClick={() => setClearOpen(true)} disabled={busy}
+              title="Limpiar el contexto del agente en esta conversación (borra memoria, empieza de cero)"
+              className="text-[11px] text-gray-300 hover:text-gray-500 disabled:opacity-50">
+              {busy && busyIntent === "waba-clear" ? <Spinner /> : "🧹"}
+            </button>
+          )}
           {mode !== "off" && (
             <button type="button" onClick={() => setAsking((v) => !v)}
               className="text-[11px] font-semibold px-2.5 py-1 rounded-full border-2 border-brand-200 text-brand-600 hover:border-brand-500 transition-colors">

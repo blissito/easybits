@@ -728,7 +728,7 @@ function formatContent(msg: InboundMessage): string {
 // sessionUuid so the NEXT message starts a brand-new conversation. Mirrors
 // nanoclaw's /clear ("Sesión limpia. 🧹"). The durable FleetAgentMessage audit log is
 // intentionally kept (it's not fed back to the worker's memory).
-async function clearGroupSession(ctx: AuthContext, fleetAgent: PoolRow, groupId: string): Promise<string> {
+export async function clearGroupSession(ctx: AuthContext, fleetAgent: PoolRow, groupId: string): Promise<string> {
   const route = await db.fleetAgentRoute.findUnique({ where: { fleetAgentId_groupId: { fleetAgentId: fleetAgent.id, groupId } } });
   if (route) {
     await memClient().deleteObject(memKey(fleetAgent.id, route.sessionUuid)).catch(() => {});
@@ -793,10 +793,14 @@ export async function routeMessage(
   //  - /compact: forward the BARE "/compact" (no sender prefix) so the Agent SDK
   //    recognizes its built-in slash command and compacts the transcript.
   const cmd = msg.text.trim().toLowerCase();
-  if (cmd === "/clear" || cmd === "/nueva" || cmd === "/reset") {
+  // En WABA un CLIENTE podría escribir "/clear" y romper su propia sesión. Gateamos
+  // los comandos a admin (el dueño desde el Inbox manda admin:true). Baileys/web sin
+  // cambio. No-admin en WABA → cae a turno normal (el agente lo ve como texto).
+  const cmdOk = !msg.groupId.startsWith("waba:") || msg.admin === true;
+  if (cmdOk && (cmd === "/clear" || cmd === "/nueva" || cmd === "/reset")) {
     return clearGroupSession(ctx, fleetAgent, msg.groupId);
   }
-  const bareCompact = cmd === "/compact";
+  const bareCompact = cmdOk && cmd === "/compact";
 
   // skipUserLog: the caller already persisted the user's message(s) (e.g. WABA
   // "Solicitar respuesta" replays messages logged while paused) → don't double-log.
