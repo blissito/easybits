@@ -100,6 +100,9 @@ export async function loader({ request }: Route.LoaderArgs) {
         ...g,
         mcps: gconf[g.id]?.mcpServers ?? [],
         disabledBuiltins: gconf[g.id]?.disabledBuiltins ?? [],
+        // Buckets per-grupo (null = hereda el default del agente; computado server-side
+        // porque toolsParamToBuckets vive en .server).
+        toolBuckets: gconf[g.id]?.toolGroup ? [...toolsParamToBuckets(gconf[g.id]!.toolGroup!)] : null,
       }));
       // WABA numbers (Meta WhatsApp Business). Each integration is its OWN config
       // unit `waba:<integrationId>` — same shape as a group so the Capacidades
@@ -120,6 +123,7 @@ export async function loader({ request }: Route.LoaderArgs) {
           allowedCount: (o.allowedSenders ?? []).length,
           mcps: gconf[id]?.mcpServers ?? [],
           disabledBuiltins: gconf[id]?.disabledBuiltins ?? [],
+          toolBuckets: gconf[id]?.toolGroup ? [...toolsParamToBuckets(gconf[id]!.toolGroup!)] : null,
         };
       });
       // Per-VM capacity boxes: each worker VM + how many conversations (slots) it
@@ -436,6 +440,20 @@ export async function action({ request }: Route.ActionArgs) {
     if (on) set.delete(name); // on = NOT disabled
     else set.add(name);
     configs[groupId] = { ...cur, disabledBuiltins: [...set] };
+    await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { groupConfigs: configs } });
+    return data({ ok: true });
+  }
+  if (intent === "set-group-toolgroup") {
+    // Buckets de EasyBits POR-NÚMERO/grupo (capacidades finas). Se guarda en
+    // groupConfigs[groupId].toolGroup; el worker lo aplica per-turno (?tools=),
+    // sobreescribiendo el default del agente (persona.env). inherit=1 → limpia
+    // (vuelve a heredar del agente). El worker debe estar rebuildeado (OVH).
+    const groupId = String(fd.get("groupId") || "");
+    const inherit = String(fd.get("inherit") || "") === "1";
+    const bucketList = String(fd.get("buckets") || "").split(",").map((s) => s.trim()).filter(Boolean);
+    const configs = { ...((fleetAgent.groupConfigs as Record<string, GroupConfig> | null) ?? {}) };
+    const cur = configs[groupId] ?? {};
+    configs[groupId] = { ...cur, toolGroup: inherit ? undefined : bucketsToToolsParam(bucketList) };
     await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { groupConfigs: configs } });
     return data({ ok: true });
   }
@@ -1111,6 +1129,10 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
   const [optimisticProfiles, setOptimisticProfiles] = useState<Record<string, { restricted: boolean; buckets: string[]; mcps: string[] }>>({});
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [showIdentity, setShowIdentity] = useState(false);
+  // Borrador optimista de buckets EasyBits del modal Capacidades (por número/grupo).
+  // null = sin tocar esta sesión (usa el estado del server: custom o heredado).
+  const [capBucketDraft, setCapBucketDraft] = useState<Set<string> | null>(null);
+  useEffect(() => { setCapBucketDraft(null); }, [capModal]);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
   const [editingName, setEditingName] = useState<string | null>(null);
   const [draftName, setDraftName] = useState("");
@@ -1682,7 +1704,7 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                 <h3 className="font-semibold text-lg">Perfil de herramientas</h3>
                 <button onClick={() => setProfileDrawer(null)} className="text-gray-400 hover:text-black text-xl leading-none">✕</button>
               </div>
-              <p className="text-sm text-gray-500 mb-4">Qué puede hacer <b>{ap.name || "este agente"}</b>.</p>
+              <p className="text-sm text-gray-500 mb-4">Default de <b>{ap.name || "este agente"}</b> — cada número/grupo lo hereda hasta que lo personalices en su <b>Capacidades</b>.</p>
 
               {/* Interruptor maestro: restringir vs catálogo completo. */}
               <label className="flex items-center justify-between gap-3 mb-4 p-3 border-2 border-black rounded-xl">
@@ -1799,10 +1821,49 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
               )}
 
 
+              {/* Herramientas EasyBits — buckets POR NÚMERO. Por defecto HEREDA el
+                  default del agente (Perfil); personaliza aquí para este número
+                  (override per-turno vía toolGroup). Requiere el worker rebuildeado. */}
+              {(() => {
+                const custom = capBucketDraft !== null || cg.toolBuckets !== null;
+                const effective = capBucketDraft ?? new Set<string>(cg.toolBuckets ?? cp.activeBuckets);
+                const toggle = (key: string, on: boolean) => {
+                  const next = new Set(effective);
+                  if (on) next.add(key); else next.delete(key);
+                  setCapBucketDraft(next);
+                  fetcher.submit({ intent: "set-group-toolgroup", fleetAgentId: cp.id, groupId: cg.id, buckets: [...next].join(","), inherit: "0" }, { method: "post" });
+                };
+                const inherit = () => {
+                  setCapBucketDraft(null);
+                  fetcher.submit({ intent: "set-group-toolgroup", fleetAgentId: cp.id, groupId: cg.id, inherit: "1" }, { method: "post" });
+                };
+                return (
+                  <div className="mb-4">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Herramientas EasyBits</span>
+                      {custom
+                        ? <button type="button" onClick={inherit} className="text-[11px] font-semibold text-brand-500 hover:underline">Heredar del agente</button>
+                        : <span className="text-[10px] text-gray-400">heredado del agente</span>}
+                    </div>
+                    <div className="mt-1 flex flex-col gap-2">
+                      {buckets.map((b) => (
+                        <div key={b.key} className="border-2 border-gray-100 rounded-xl px-3 py-2 flex items-center justify-between gap-2">
+                          <span className="text-sm font-semibold min-w-0 truncate flex items-center gap-1.5">
+                            {b.label}
+                            {b.admin && <span className="text-[10px] px-1 rounded bg-amber-100 text-amber-700 border border-amber-300">admin</span>}
+                          </span>
+                          <Switch value={effective.has(b.key)} className="text-sm items-center shrink-0" onChange={(on) => toggle(b.key, on)} />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
+
               {/* Capacidades — builtins (easybits/wa, togglables por grupo) + curadas ∪
                   custom. Apagar easybits fuerza al agente a usar las cajas de la flota. */}
               <div className="mb-4">
-                <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Capacidades</span>
+                <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Conectores</span>
                 <div className="mt-1 flex flex-col gap-2">
                     {/* `wa` envía por Baileys (QR) → no aplica a un número WABA;
                         ocúltalo cuando el target es WABA para no ofrecer canal inerte. */}

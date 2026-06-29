@@ -105,7 +105,84 @@ export async function persistInboundUserMessage(
   }
 }
 
-// Run ONE WABA turn (route → reply → deliver). Shared by the inbound handler and
+// ── Coalescing por conversación (anti multi-spawn) ───────────────────────────
+// WABA reenvía CADA mensaje por separado. Sin serializar, 3 mensajes rápidos
+// disparaban 3 routeMessage concurrentes → 3 pickOrSpawn en carrera → 3 workers
+// para UNA conversación (memoria partida + VM llena "4/4" → deja de responder).
+// Igual que baileys: bufferizamos por conversación, debounce, y drenamos UN turno
+// a la vez (combinando los mensajes de la ráfaga). El primer turno fija la ruta
+// sticky → los siguientes reusan el MISMO worker (memoria continua).
+const WABA_DEBOUNCE_MS = 1200;
+type WabaCtx = {
+  fleetAgentId: string;
+  ownerId: string;
+  formmySecret: string;
+  integrationId: string;
+  sender: string;
+  org: WabaOrg | undefined;
+  admin?: boolean;
+};
+type WabaItem = { content: string; media: WabaInboundMedia | null; messageId?: string; senderName?: string };
+type WabaBuf = { ctx: WabaCtx; items: WabaItem[]; running: boolean; timer: ReturnType<typeof setTimeout> | null };
+const wabaBuffers = new Map<string, WabaBuf>();
+
+// Entrada del canal WABA: encola un mensaje para su conversación. Reemplaza la
+// llamada directa a runWabaTurn (que causaba la carrera de spawn).
+export function enqueueWabaTurn(ctx: WabaCtx, item: WabaItem): void {
+  const key = `${ctx.fleetAgentId}:waba:${ctx.integrationId}:${normalizePhone(ctx.sender)}`;
+  let buf = wabaBuffers.get(key);
+  if (!buf) {
+    buf = { ctx, items: [], running: false, timer: null };
+    wabaBuffers.set(key, buf);
+  }
+  buf.ctx = ctx; // refresca (org/admin del mensaje más reciente)
+  buf.items.push(item);
+  if (buf.running) return; // se auto-drena al terminar el turno en curso
+  if (buf.timer) clearTimeout(buf.timer);
+  buf.timer = setTimeout(() => void drainWaba(key), WABA_DEBOUNCE_MS);
+}
+
+async function drainWaba(key: string): Promise<void> {
+  const buf = wabaBuffers.get(key);
+  if (!buf || buf.running || buf.items.length === 0) return;
+  buf.running = true;
+  buf.timer = null;
+  const batch = buf.items;
+  buf.items = [];
+  const { ctx } = buf;
+  try {
+    // Coalesce: une el texto de la ráfaga, toma la PRIMERA media y el último messageId.
+    const combined = batch.map((i) => i.content).filter(Boolean).join("\n");
+    const media = batch.map((i) => i.media).find(Boolean) ?? null;
+    const last = batch[batch.length - 1];
+    const senderName = batch.map((i) => i.senderName).find(Boolean);
+    const ec = await extractWabaContent(combined, media, { ownerId: ctx.ownerId });
+    await runWabaTurn({
+      fleetAgentId: ctx.fleetAgentId,
+      ownerId: ctx.ownerId,
+      formmySecret: ctx.formmySecret,
+      integrationId: ctx.integrationId,
+      sender: ctx.sender,
+      senderName,
+      org: ctx.org,
+      content: ec,
+      admin: ctx.admin,
+      messageId: last.messageId,
+    });
+  } catch (e) {
+    console.error(`[waba] drain ${key} failed:`, e instanceof Error ? e.message : e);
+  } finally {
+    buf.running = false;
+    if (buf.items.length > 0) {
+      // Llegaron mensajes durante el turno → drena otra vez (mismo worker sticky).
+      buf.timer = setTimeout(() => void drainWaba(key), WABA_DEBOUNCE_MS);
+    } else {
+      wabaBuffers.delete(key);
+    }
+  }
+}
+
+// Run ONE WABA turn (route → reply → deliver). Shared by the coalescing drainer and
 // the dashboard "Solicitar respuesta" action.
 export async function runWabaTurn(args: {
   fleetAgentId: string;

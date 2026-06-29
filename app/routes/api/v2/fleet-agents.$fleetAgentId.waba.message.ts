@@ -1,6 +1,5 @@
 import type { Route } from "./+types/fleet-agents.$fleetAgentId.waba.message";
 import { db } from "~/.server/db";
-import { extractWabaContent } from "~/.server/integrations/whatsapp/inboundMedia.server";
 import {
   type WabaConfig,
   normalizePhone,
@@ -9,7 +8,7 @@ import {
   parseDropletMedia,
   recordPausedUntil,
   persistInboundUserMessage,
-  runWabaTurn,
+  enqueueWabaTurn,
 } from "~/.server/integrations/whatsapp/waba.server";
 
 // POST /api/v2/fleet-agents/:fleetAgentId/waba/message
@@ -93,25 +92,12 @@ export async function action({ request, params }: Route.ActionArgs) {
   if (integrationId && sender && hasInbound) {
     const willRun = isAdmin || (!body.is_from_me && shouldRespond && !body.manual_mode);
     if (willRun) {
-      void (async () => {
-        try {
-          const ec = await extractWabaContent(content, media, { ownerId: fleetAgent.ownerId });
-          await runWabaTurn({
-            fleetAgentId,
-            ownerId: fleetAgent.ownerId,
-            formmySecret,
-            integrationId,
-            sender,
-            senderName,
-            org,
-            content: ec,
-            admin: isAdmin,
-            messageId: typeof body.message_id === "string" ? body.message_id : undefined,
-          });
-        } catch (e) {
-          console.error(`[waba] inbound turn ${fleetAgentId} failed:`, e instanceof Error ? e.message : e);
-        }
-      })();
+      // Encola (coalescing por conversación) → UN turno a la vez = un solo worker
+      // sticky (sin la carrera que spawneaba varios y partía la memoria).
+      enqueueWabaTurn(
+        { fleetAgentId, ownerId: fleetAgent.ownerId, formmySecret, integrationId, sender, org, admin: isAdmin },
+        { content, media, senderName, messageId: typeof body.message_id === "string" ? body.message_id : undefined }
+      );
     } else if (!body.is_from_me) {
       // No corremos turno (pausa/muted/off) pero NO es nuestro eco → persiste para
       // el Inbox + "Solicitar respuesta".
