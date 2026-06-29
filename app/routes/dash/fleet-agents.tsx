@@ -1782,7 +1782,7 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                       <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Herramientas EasyBits</span>
                       {bucketsBusy && <Spinner />}
                     </div>
-                    <div className={`mt-1 flex flex-col gap-2 ${bucketsBusy ? "opacity-50" : ""}`}>
+                    <div className={`mt-1 flex flex-col gap-2 ${bucketsBusy ? "opacity-50 pointer-events-none" : ""}`}>
                       {buckets.map((b) => (
                         <div key={b.key} className="border-2 border-gray-100 rounded-xl px-3 py-2 flex items-center justify-between gap-2">
                           <span className="text-sm font-semibold min-w-0 truncate flex items-center gap-1.5">
