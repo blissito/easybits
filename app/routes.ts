@@ -211,6 +211,7 @@ export default [
     route("fleet-admin/:fleetAgentId/mcp", "routes/api/v2/fleet-admin.$fleetAgentId.mcp.ts"),
     // WABA channel — Formmy forwards inbound here; partner writes per-number config
     route("fleet-agents/:fleetAgentId/waba/message", "routes/api/v2/fleet-agents.$fleetAgentId.waba.message.ts"),
+    route("fleet-agents/:fleetAgentId/waba/trigger-reply", "routes/api/v2/fleet-agents.$fleetAgentId.waba.trigger-reply.ts"),
     route("fleet-agents/:fleetAgentId/waba/config", "routes/api/v2/fleet-agents.$fleetAgentId.waba.config.ts"),
     // Inbox WABA — conversaciones de un número (dashboard, on-demand)
     route("fleet-agents/:fleetAgentId/waba-inbox", "routes/api/v2/fleet-agents.$fleetAgentId.waba-inbox.ts"),

@@ -252,7 +252,11 @@ async function deliverWabaReply(args: {
 // conversación (los `role:"user"` posteriores al último `role:"agent"`), con una
 // directiva OPCIONAL del operador (one-shot, no persistente). Reactiva primero la
 // pausa de coexistencia (Formmy = fuente única) y limpia el cache local.
-export async function requestWabaReply(args: {
+// Contesta los mensajes PENDIENTES (los `role:user` posteriores al último reply del
+// agente) de una conversación, con una directiva OPCIONAL del operador (one-shot).
+// NO toca la pausa — eso lo decide el caller. Compartido por requestWabaReply (dash)
+// y el endpoint /trigger-reply (wake-up de Formmy al reactivar desde el CRM).
+export async function replyToPendingWaba(args: {
   fleetAgentId: string;
   ownerId: string;
   formmySecret: string;
@@ -260,17 +264,10 @@ export async function requestWabaReply(args: {
   sender: string;
   org: WabaOrg | undefined;
   directive?: string;
-  resume: (formmySecret: string, integrationId: string, sender: string) => Promise<{ ok: boolean; error?: string }>;
 }): Promise<{ ok: boolean; error?: string }> {
-  const { fleetAgentId, ownerId, formmySecret, integrationId, sender, org, directive, resume } = args;
-  // 1) Reactivar (despausar) en Formmy + limpiar el cache local de pausa.
-  const r = await resume(formmySecret, integrationId, sender);
-  if (!r.ok) return { ok: false, error: r.error || "no se pudo reactivar" };
-  await setPausedUntilAtomic(fleetAgentId, integrationId, normalizePhone(sender), null).catch(() => {});
-
-  // 2) Juntar los mensajes pendientes (user) posteriores al último reply del agente.
-  //    Match por teléfono NORMALIZADO sobre el prefijo del número — así toma también
-  //    mensajes guardados bajo el groupId viejo (crudo 521…) antes de la normalización.
+  const { fleetAgentId, ownerId, formmySecret, integrationId, sender, org, directive } = args;
+  // Match por teléfono NORMALIZADO sobre el prefijo del número — toma también
+  // mensajes guardados bajo el groupId viejo (crudo 521…) antes de la normalización.
   const np = normalizePhone(sender);
   const prefix = `waba:${integrationId}:`;
   const rows = await db.fleetAgentMessage.findMany({
@@ -289,7 +286,6 @@ export async function requestWabaReply(args: {
   const pendingText = pending.join("\n").trim();
   if (!pendingText && !directive?.trim()) return { ok: false, error: "no hay mensajes pendientes" };
 
-  // 3) Componer el turno: mensajes pendientes + directiva del operador (one-shot).
   let text = pendingText;
   if (directive?.trim()) {
     text =
@@ -308,6 +304,25 @@ export async function requestWabaReply(args: {
     skipUserLog: true, // los pendientes ya están logueados
   });
   return { ok: true };
+}
+
+// Dashboard "Solicitar respuesta": reactiva (despausa) en Formmy + limpia el cache +
+// contesta lo pendiente.
+export async function requestWabaReply(args: {
+  fleetAgentId: string;
+  ownerId: string;
+  formmySecret: string;
+  integrationId: string;
+  sender: string;
+  org: WabaOrg | undefined;
+  directive?: string;
+  resume: (formmySecret: string, integrationId: string, sender: string) => Promise<{ ok: boolean; error?: string }>;
+}): Promise<{ ok: boolean; error?: string }> {
+  const { fleetAgentId, ownerId, formmySecret, integrationId, sender, org, directive, resume } = args;
+  const r = await resume(formmySecret, integrationId, sender);
+  if (!r.ok) return { ok: false, error: r.error || "no se pudo reactivar" };
+  await setPausedUntilAtomic(fleetAgentId, integrationId, normalizePhone(sender), null).catch(() => {});
+  return replyToPendingWaba({ fleetAgentId, ownerId, formmySecret, integrationId, sender, org, directive });
 }
 
 // ── Atomic per-conversation writes on wabaConfig (anti-clobber) ───────────────
