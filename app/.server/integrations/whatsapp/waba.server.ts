@@ -284,13 +284,21 @@ export async function replyToPendingWaba(args: {
   }
   pending.reverse();
   const pendingText = pending.join("\n").trim();
-  if (!pendingText && !directive?.trim()) return { ok: false, error: "no hay mensajes pendientes" };
 
-  let text = pendingText;
-  if (directive?.trim()) {
-    text =
-      (pendingText ? `${pendingText}\n\n` : "") +
-      `[INSTRUCCIÓN DEL OPERADOR — redacta tu respuesta siguiéndola, NO la repitas literal: ${directive.trim()}]`;
+  // "Solicitar respuesta" SIEMPRE produce un mensaje del agente:
+  //  - hay pendientes → los contesta (+ directiva si la hay).
+  //  - solo directiva → actúa sobre ella.
+  //  - nada → retoma la conversación según el contexto (no queda "muerto").
+  const dir = directive?.trim();
+  let text: string;
+  if (pendingText && dir) {
+    text = `${pendingText}\n\n[INSTRUCCIÓN DEL OPERADOR — redacta tu respuesta siguiéndola, NO la repitas literal: ${dir}]`;
+  } else if (pendingText) {
+    text = pendingText;
+  } else if (dir) {
+    text = `[INSTRUCCIÓN DEL OPERADOR — redacta y ENVÍA un mensaje siguiéndola, NO la repitas literal: ${dir}]`;
+  } else {
+    text = `[El operador te pide ENVIAR UN MENSAJE para retomar esta conversación. Redacta algo natural y útil según el contexto/historial (un saludo o seguimiento breve). NO inventes datos ni asumas que el usuario escribió algo nuevo.]`;
   }
 
   await runWabaTurn({
