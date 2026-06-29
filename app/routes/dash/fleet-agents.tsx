@@ -273,23 +273,32 @@ async function formmyCoexistence(
   mode: "resume" | "permanent" | "30min" | "2h"
 ): Promise<{ ok: boolean; error?: string }> {
   const base = (process.env.FORMMY_BASE_URL || "https://www.formmy.app").replace(/\/$/, "");
-  const phone = sender.replace(/@.*$/, "").replace(/^\+/, "");
-  try {
-    const res = await fetch(`${base}/api/v1/integrations/whatsapp/coexistence/control`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${formmySecret}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ integration_id: integrationId, phone_number: phone, mode }),
-    });
-    if (!res.ok) {
+  const digits = sender.replace(/@.*$/, "").replace(/\D/g, "");
+  // Formmy resuelve la conversación POR TELÉFONO; en coexistencia MX puede tenerla
+  // guardada como 521… o 52…. EasyBits ya normaliza a 52 → probamos AMBAS variantes
+  // (52 y 521) para que el resume/pausa SIEMPRE resuelva. Era la causa del "reactivar
+  // no aplica": mandábamos 52 y Formmy la tenía en 521 → no la encontraba → 502.
+  const variants = new Set<string>([digits]);
+  if (digits.startsWith("521")) variants.add("52" + digits.slice(3));
+  else if (digits.startsWith("52")) variants.add("521" + digits.slice(2));
+  let lastErr = "";
+  for (const phone of variants) {
+    try {
+      const res = await fetch(`${base}/api/v1/integrations/whatsapp/coexistence/control`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${formmySecret}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ integration_id: integrationId, phone_number: phone, mode }),
+      });
+      if (res.ok) return { ok: true };
       const detail = await res.text().catch(() => "");
-      console.error(`[waba] coexistence/control ${mode} failed ${res.status}: ${detail.slice(0, 160)}`);
-      return { ok: false, error: `Formmy ${res.status}` };
+      lastErr = `Formmy ${res.status}`;
+      console.error(`[waba] coexistence/control ${mode} phone=${phone} failed ${res.status}: ${detail.slice(0, 160)}`);
+    } catch (e) {
+      lastErr = "no se pudo contactar Formmy";
+      console.error("[waba] coexistence/control threw:", e instanceof Error ? e.message : e);
     }
-    return { ok: true };
-  } catch (e) {
-    console.error("[waba] coexistence/control threw:", e instanceof Error ? e.message : e);
-    return { ok: false, error: "no se pudo contactar Formmy" };
   }
+  return { ok: false, error: lastErr || "Formmy no resolvió la conversación" };
 }
 
 export async function action({ request }: Route.ActionArgs) {
@@ -915,12 +924,13 @@ function ConvRow({
   const submit = (fields: Record<string, string>) =>
     act.submit({ fleetAgentId, integrationId, sender: c.sender, ...fields }, { method: "post" });
 
-  const pause = () => { setOv((o) => ({ ...o, paused: true })); submit({ intent: "waba-pause" }); };
-  const resume = () => { setOv((o) => ({ ...o, paused: false })); submit({ intent: "waba-resume" }); };
+  // Pausa/reactiva SIN optimismo (a pedido del user): refleja la verdad del server
+  // tras el reload, en vez de mostrar verde y revertir si el resume no aplicó.
+  const pause = () => submit({ intent: "waba-pause" });
+  const resume = () => submit({ intent: "waba-resume" });
   const setAllow = (on: boolean) => { setOv((o) => ({ ...o, allowed: on })); submit({ intent: "toggle-waba-sender", on: on ? "1" : "0" }); };
   const setAdmin = (on: boolean) => { setOv((o) => ({ ...o, admin: on })); submit({ intent: "waba-set-admin", on: on ? "1" : "0" }); };
   const sendRequest = () => {
-    setOv((o) => ({ ...o, paused: false }));
     submit({ intent: "waba-request-reply", directive });
     setAsking(false);
     setDirective("");
@@ -944,20 +954,21 @@ function ConvRow({
           </p>
           <p className="text-[11px] text-gray-400 truncate">{paused ? "El agente no responde aquí (lo atiendes tú)" : `${c.lastRole === "agent" ? "↩︎ " : ""}${c.lastText}`}</p>
         </div>
-        {/* Acción por estado — simétrica: Pausar↔Reactivar (modo all / coexistencia),
-            Activar↔Quitar (modo only = allowlist). El número apagado no tiene acción. */}
+        {/* "Solicitar respuesta" SIEMPRE disponible (cualquier estado/modo, salvo
+            Apagado) — si está pausada, el envío reactiva primero. Junto a la acción
+            de estado: Pausar↔Reactivar (all/coexistencia), Activar↔Desactivar (only). */}
         <div className="flex items-center gap-1.5 shrink-0">
+          {mode !== "off" && (
+            <button type="button" onClick={() => setAsking((v) => !v)}
+              className="text-[11px] font-semibold px-2.5 py-1 rounded-full border-2 border-brand-200 text-brand-600 hover:border-brand-500 transition-colors">
+              Solicitar respuesta
+            </button>
+          )}
           {paused ? (
-            <>
-              <button type="button" onClick={() => setAsking((v) => !v)}
-                className="text-[11px] font-semibold px-2.5 py-1 rounded-full border-2 border-brand-200 text-brand-600 hover:border-brand-500 transition-colors">
-                Solicitar respuesta
-              </button>
-              <button type="button" onClick={resume}
-                className="text-[11px] font-semibold px-2.5 py-1 rounded-full border-2 border-amber-300 text-amber-700 hover:border-amber-500 transition-colors">
-                Reactivar
-              </button>
-            </>
+            <button type="button" onClick={resume}
+              className="text-[11px] font-semibold px-2.5 py-1 rounded-full border-2 border-amber-300 text-amber-700 hover:border-amber-500 transition-colors">
+              Reactivar
+            </button>
           ) : mode === "off" ? (
             <span className="text-[11px] text-gray-300">—</span>
           ) : mode === "only" ? (
