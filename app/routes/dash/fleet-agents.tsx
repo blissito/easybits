@@ -579,9 +579,20 @@ export async function action({ request }: Route.ActionArgs) {
     const org = cfg.orgs?.[integrationId];
     if (!cfg.formmySecret || !org) return data({ error: "número no encontrado" }, { status: 404 });
     const pause = intent === "waba-pause";
-    const r = await formmyCoexistence(cfg.formmySecret, integrationId, sender, pause ? "permanent" : "resume");
-    if (!r.ok) return data({ error: r.error }, { status: 502 });
-    await setPausedUntilAtomic(fleetAgentId, integrationId, np, pause ? "9999-12-31T00:00:00.000Z" : null);
+    // Nivel de pausa (como Formmy): permanent (∞) | 30min | 2h. Resume = reactivar.
+    const duration = String(fd.get("duration") || "permanent");
+    const mode: "resume" | "permanent" | "30min" | "2h" = !pause
+      ? "resume"
+      : duration === "30min" ? "30min" : duration === "2h" ? "2h" : "permanent";
+    const r = await formmyCoexistence(cfg.formmySecret, integrationId, sender, mode);
+    if (!r.ok && pause) return data({ error: r.error }, { status: 502 }); // pausa best-effort solo al reactivar
+    // Cache local de pausa para el Inbox: timestamp futuro según el nivel.
+    const until =
+      !pause ? null
+      : mode === "30min" ? new Date(Date.now() + 30 * 60_000).toISOString()
+      : mode === "2h" ? new Date(Date.now() + 2 * 60 * 60_000).toISOString()
+      : "9999-12-31T00:00:00.000Z";
+    await setPausedUntilAtomic(fleetAgentId, integrationId, np, until);
     return data({ ok: true });
   }
   if (intent === "waba-request-reply") {
@@ -915,6 +926,7 @@ function ConvRow({
   const act = useFetcher();
   const [ov, setOv] = useState<{ allowed?: boolean; paused?: boolean; admin?: boolean }>({});
   const [asking, setAsking] = useState(false);
+  const [pauseOpen, setPauseOpen] = useState(false); // selector de nivel de pausa
   const [directive, setDirective] = useState("");
   useEffect(() => { if (act.state === "idle" && act.data) onChanged(); }, [act.data, act.state]);
 
@@ -930,7 +942,7 @@ function ConvRow({
 
   // Pausa/reactiva SIN optimismo (a pedido del user): refleja la verdad del server
   // tras el reload, en vez de mostrar verde y revertir si el resume no aplicó.
-  const pause = () => submit({ intent: "waba-pause" });
+  const pause = (duration: "permanent" | "30min" | "2h" = "permanent") => { setPauseOpen(false); submit({ intent: "waba-pause", duration }); };
   const resume = () => submit({ intent: "waba-resume" });
   const setAllow = (on: boolean) => { setOv((o) => ({ ...o, allowed: on })); submit({ intent: "toggle-waba-sender", on: on ? "1" : "0" }); };
   const setAdmin = (on: boolean) => { setOv((o) => ({ ...o, admin: on })); submit({ intent: "waba-set-admin", on: on ? "1" : "0" }); };
@@ -987,10 +999,19 @@ function ConvRow({
                 {busy && busyIntent === "toggle-waba-sender" ? <Spinner /> : "Activar"}
               </button>
             )
+          ) : busy && busyIntent === "waba-pause" ? (
+            <span className="px-2.5 py-1"><Spinner /></span>
+          ) : pauseOpen ? (
+            // Nivel de pausa (como Formmy): 30 min / 2 h / permanente (∞).
+            <span className="flex items-center gap-1">
+              <button type="button" onClick={() => pause("30min")} className="text-[11px] font-semibold px-2 py-1 rounded-full border-2 border-amber-200 text-amber-700 hover:border-amber-400">30 min</button>
+              <button type="button" onClick={() => pause("2h")} className="text-[11px] font-semibold px-2 py-1 rounded-full border-2 border-amber-200 text-amber-700 hover:border-amber-400">2 h</button>
+              <button type="button" onClick={() => pause("permanent")} title="Pausa permanente" className="text-[11px] font-semibold px-2 py-1 rounded-full border-2 border-amber-300 text-amber-700 hover:border-amber-500">∞</button>
+            </span>
           ) : (
-            <button type="button" onClick={pause} disabled={busy}
+            <button type="button" onClick={() => setPauseOpen(true)} disabled={busy}
               className="text-[11px] font-semibold px-2.5 py-1 rounded-full border-2 border-green-200 text-green-600 hover:border-amber-400 hover:text-amber-600 transition-colors disabled:opacity-50">
-              {busy && busyIntent === "waba-pause" ? <Spinner /> : "Pausar agente"}
+              {"Pausar agente"}
             </button>
           )}
         </div>
