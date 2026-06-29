@@ -62,6 +62,10 @@ export async function action({ request, params }: Route.ActionArgs) {
   const sender = typeof body.sender === "string" ? body.sender : "";
   const content = typeof body.content === "string" ? body.content : "";
   const media = parseDropletMedia(body.media);
+  // Diagnóstico media (QUITAR tras confirmar): ¿llega media y con url usable?
+  if (body.media) {
+    console.log(`[waba-media] type=${media?.type ?? "?"} url=${media?.url ? "yes" : "NULL"} mime=${media?.mimeType ?? "?"} raw=${JSON.stringify(body.media).slice(0, 160)}`);
+  }
   // Nombre de perfil del contacto. Ignora "Operador" (placeholder de ecos) y los
   // que son solo el teléfono.
   const rawName = typeof body.sender_name === "string" ? body.sender_name.trim() : "";

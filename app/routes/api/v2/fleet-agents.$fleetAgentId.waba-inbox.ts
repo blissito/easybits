@@ -60,14 +60,15 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     select: { groupId: true, sender: true, senderName: true, role: true, text: true, createdAt: true },
   });
 
-  // Agrupar por conversación (groupId). El teléfono = sufijo tras el prefijo.
-  // El nombre = el senderName más reciente no vacío (filas en orden desc).
+  // Agrupar por TELÉFONO NORMALIZADO (no por groupId) — así fusiona conversaciones
+  // viejas (groupId crudo 521…) con nuevas (normalizado 52…) en una sola fila, en
+  // vez de duplicarlas. El nombre = senderName más reciente no vacío (orden desc).
   const byConv = new Map<string, { sender: string; name: string; lastText: string; lastRole: string; lastAt: Date; count: number }>();
   for (const r of rows) {
-    const phone = r.sender || r.groupId.slice(prefix.length);
-    const cur = byConv.get(r.groupId);
+    const phone = onlyDigits(r.sender || r.groupId.slice(prefix.length));
+    const cur = byConv.get(phone);
     if (!cur) {
-      byConv.set(r.groupId, { sender: phone, name: r.senderName ?? "", lastText: r.text, lastRole: r.role, lastAt: r.createdAt, count: 1 });
+      byConv.set(phone, { sender: phone, name: r.senderName ?? "", lastText: r.text, lastRole: r.role, lastAt: r.createdAt, count: 1 });
     } else {
       cur.count++;
       if (!cur.name && r.senderName) cur.name = r.senderName;

@@ -24,6 +24,7 @@ import {
   setPausedUntilAtomic,
   setAdminSenderAtomic,
   setAllowedSenderAtomic,
+  setResponseModeAtomic,
   requestWabaReply,
 } from "~/.server/integrations/whatsapp/waba.server";
 
@@ -540,11 +541,11 @@ export async function action({ request }: Route.ActionArgs) {
     const integrationId = String(fd.get("integrationId") || "");
     const mode = String(fd.get("mode") || "");
     if (!["off", "all", "only"].includes(mode)) return data({ error: "modo inválido" }, { status: 400 });
-    const cfg = (fleetAgent.wabaConfig as { formmySecret?: string; orgs?: Record<string, any> } | null) ?? {};
-    const org = cfg.orgs?.[integrationId];
-    if (!org) return data({ error: "número no encontrado" }, { status: 404 });
-    const next = { ...cfg, orgs: { ...cfg.orgs, [integrationId]: { ...org, responseMode: mode } } };
-    await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { wabaConfig: next } });
+    const cfg = (fleetAgent.wabaConfig as { orgs?: Record<string, any> } | null) ?? {};
+    if (!cfg.orgs?.[integrationId]) return data({ error: "número no encontrado" }, { status: 404 });
+    // Atómico (anti-clobber): un RMW del blob se pisaba con otras escrituras y el
+    // modo "se revertía" a Activo. $set solo toca responseMode.
+    await setResponseModeAtomic(fleetAgentId, integrationId, mode as "off" | "all" | "only");
     return data({ ok: true });
   }
   if (intent === "toggle-waba-sender") {
@@ -1133,7 +1134,22 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
   // null = sin tocar esta sesión (usa el estado del server: custom o heredado).
   const [capBucketDraft, setCapBucketDraft] = useState<Set<string> | null>(null);
   useEffect(() => { setCapBucketDraft(null); }, [capModal]);
+  // Abierto/cerrado por agente — PERSISTIDO en localStorage para que recuerde el
+  // estado entre recargas. Client-only (carga en useEffect, no en el initializer)
+  // para no romper la hidratación SSR.
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  useEffect(() => {
+    try {
+      const s = localStorage.getItem("flota:expanded");
+      if (s) setExpanded(JSON.parse(s));
+    } catch {}
+  }, []);
+  const toggleExpanded = (id: string, open: boolean) =>
+    setExpanded((s) => {
+      const next = { ...s, [id]: open };
+      try { localStorage.setItem("flota:expanded", JSON.stringify(next)); } catch {}
+      return next;
+    });
   const [editingName, setEditingName] = useState<string | null>(null);
   const [draftName, setDraftName] = useState("");
   const [optimisticNames, setOptimisticNames] = useState<Record<string, string>>({});
@@ -1334,7 +1350,7 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
             <div key={p.id} className="border-2 border-black rounded-xl p-4 animate-fade-in">
               <div className="w-full flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2 min-w-0 flex-1">
-                  <button type="button" onClick={() => !inFlow && setExpanded((s) => ({ ...s, [p.id]: !isOpen }))}
+                  <button type="button" onClick={() => !inFlow && toggleExpanded(p.id, !isOpen)}
                     className={`shrink-0 ${inFlow ? "cursor-default" : ""}`} aria-label={isOpen ? "Contraer" : "Expandir"}>
                     <svg className={`w-4 h-4 text-gray-400 transition-transform ${isOpen ? "rotate-90" : ""} ${inFlow ? "opacity-0" : ""}`}
                       viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M7.21 14.77a.75.75 0 0 1 .02-1.06L11.168 10 7.23 6.29a.75.75 0 1 1 1.04-1.08l4.5 4.25a.75.75 0 0 1 0 1.08l-4.5 4.25a.75.75 0 0 1-1.06-.02Z" clipRule="evenodd" /></svg>

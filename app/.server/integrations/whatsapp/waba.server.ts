@@ -269,15 +269,19 @@ export async function requestWabaReply(args: {
   await setPausedUntilAtomic(fleetAgentId, integrationId, normalizePhone(sender), null).catch(() => {});
 
   // 2) Juntar los mensajes pendientes (user) posteriores al último reply del agente.
-  const groupId = `waba:${integrationId}:${normalizePhone(sender)}`;
+  //    Match por teléfono NORMALIZADO sobre el prefijo del número — así toma también
+  //    mensajes guardados bajo el groupId viejo (crudo 521…) antes de la normalización.
+  const np = normalizePhone(sender);
+  const prefix = `waba:${integrationId}:`;
   const rows = await db.fleetAgentMessage.findMany({
-    where: { fleetAgentId, groupId },
+    where: { fleetAgentId, groupId: { startsWith: prefix } },
     orderBy: { createdAt: "desc" },
-    take: 30,
-    select: { role: true, text: true },
+    take: 120,
+    select: { role: true, text: true, sender: true, groupId: true },
   });
+  const mine = rows.filter((r) => normalizePhone(r.sender || r.groupId.slice(prefix.length)) === np);
   const pending: string[] = [];
-  for (const row of rows) {
+  for (const row of mine) {
     if (row.role === "agent") break;
     pending.push(row.text);
   }
@@ -330,6 +334,15 @@ export async function setAdminSenderAtomic(
   const path = `wabaConfig.orgs.${integrationId}.adminSenders`;
   const u = on ? { $addToSet: { [path]: np } } : { $pull: { [path]: np } };
   await db.$runCommandRaw({ update: "FleetAgent", updates: [{ q: { _id: { $oid: fleetAgentId } }, u }] });
+}
+
+export async function setResponseModeAtomic(
+  fleetAgentId: string,
+  integrationId: string,
+  mode: "off" | "all" | "only"
+): Promise<void> {
+  const path = `wabaConfig.orgs.${integrationId}.responseMode`;
+  await db.$runCommandRaw({ update: "FleetAgent", updates: [{ q: { _id: { $oid: fleetAgentId } }, u: { $set: { [path]: mode } } }] });
 }
 
 export async function setAllowedSenderAtomic(
