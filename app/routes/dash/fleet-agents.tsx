@@ -921,6 +921,10 @@ function ConvRow({
   const allowed = ov.allowed ?? c.allowed;
   const paused = ov.paused ?? c.paused;
   const admin = ov.admin ?? c.admin;
+  // Estado de carga (sin optimismo): mientras la acción está en vuelo + recarga,
+  // el botón muestra spinner y se desactiva.
+  const busy = act.state !== "idle";
+  const busyIntent = act.formData?.get("intent") as string | undefined;
   const submit = (fields: Record<string, string>) =>
     act.submit({ fleetAgentId, integrationId, sender: c.sender, ...fields }, { method: "post" });
 
@@ -965,28 +969,28 @@ function ConvRow({
             </button>
           )}
           {paused ? (
-            <button type="button" onClick={resume}
-              className="text-[11px] font-semibold px-2.5 py-1 rounded-full border-2 border-amber-300 text-amber-700 hover:border-amber-500 transition-colors">
-              Reactivar
+            <button type="button" onClick={resume} disabled={busy}
+              className="text-[11px] font-semibold px-2.5 py-1 rounded-full border-2 border-amber-300 text-amber-700 hover:border-amber-500 transition-colors disabled:opacity-50">
+              {busy && busyIntent === "waba-resume" ? <Spinner /> : "Reactivar"}
             </button>
           ) : mode === "off" ? (
             <span className="text-[11px] text-gray-300">—</span>
           ) : mode === "only" ? (
             allowed ? (
-              <button type="button" onClick={() => setAllow(false)}
-                className="text-[11px] font-semibold px-2.5 py-1 rounded-full border-2 border-green-200 text-green-600 hover:border-red-300 hover:text-red-500 transition-colors">
-                Desactivar
+              <button type="button" onClick={() => setAllow(false)} disabled={busy}
+                className="text-[11px] font-semibold px-2.5 py-1 rounded-full border-2 border-green-200 text-green-600 hover:border-red-300 hover:text-red-500 transition-colors disabled:opacity-50">
+                {busy && busyIntent === "toggle-waba-sender" ? <Spinner /> : "Desactivar"}
               </button>
             ) : (
-              <button type="button" onClick={() => setAllow(true)}
-                className="text-[11px] font-semibold px-2.5 py-1 rounded-full border-2 border-gray-200 text-gray-400 hover:border-brand-500 hover:text-brand-500 transition-colors">
-                Activar
+              <button type="button" onClick={() => setAllow(true)} disabled={busy}
+                className="text-[11px] font-semibold px-2.5 py-1 rounded-full border-2 border-gray-200 text-gray-400 hover:border-brand-500 hover:text-brand-500 transition-colors disabled:opacity-50">
+                {busy && busyIntent === "toggle-waba-sender" ? <Spinner /> : "Activar"}
               </button>
             )
           ) : (
-            <button type="button" onClick={pause}
-              className="text-[11px] font-semibold px-2.5 py-1 rounded-full border-2 border-green-200 text-green-600 hover:border-amber-400 hover:text-amber-600 transition-colors">
-              Pausar agente
+            <button type="button" onClick={pause} disabled={busy}
+              className="text-[11px] font-semibold px-2.5 py-1 rounded-full border-2 border-green-200 text-green-600 hover:border-amber-400 hover:text-amber-600 transition-colors disabled:opacity-50">
+              {busy && busyIntent === "waba-pause" ? <Spinner /> : "Pausar agente"}
             </button>
           )}
         </div>
@@ -1001,9 +1005,9 @@ function ConvRow({
           <div className="flex items-center gap-2 justify-end">
             <button type="button" onClick={() => { setAsking(false); setDirective(""); }}
               className="text-[11px] font-semibold text-gray-400 hover:text-gray-700">Cancelar</button>
-            <button type="button" onClick={sendRequest}
-              className="text-[11px] font-semibold px-3 py-1 rounded-full bg-brand-500 text-white hover:bg-brand-600 transition-colors">
-              Enviar respuesta
+            <button type="button" onClick={sendRequest} disabled={busy}
+              className="text-[11px] font-semibold px-3 py-1 rounded-full bg-brand-500 text-white hover:bg-brand-600 transition-colors disabled:opacity-50">
+              {busy && busyIntent === "waba-request-reply" ? <Spinner /> : "Enviar respuesta"}
             </button>
           </div>
         </div>
