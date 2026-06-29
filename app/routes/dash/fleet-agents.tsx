@@ -608,7 +608,10 @@ export async function action({ request }: Route.ActionArgs) {
     const cfg = (fleetAgent.wabaConfig as { formmySecret?: string; orgs?: Record<string, any> } | null) ?? {};
     const org = cfg.orgs?.[integrationId];
     if (!cfg.formmySecret || !org) return data({ error: "número no encontrado" }, { status: 404 });
-    const r = await requestWabaReply({
+    // FIRE-AND-FORGET: el turno (LLM + posible imagen) tarda decenas de segundos.
+    // Awaitarlo dejaba la fila "busy" (verde atenuado) todo ese rato. Corre detached
+    // (como el webhook) y ACK al instante; la respuesta cae en WhatsApp al terminar.
+    void requestWabaReply({
       fleetAgentId,
       ownerId: fleetAgent.ownerId,
       formmySecret: cfg.formmySecret,
@@ -617,8 +620,7 @@ export async function action({ request }: Route.ActionArgs) {
       org,
       directive,
       resume: (secret, intId, snd) => formmyCoexistence(secret, intId, snd, "resume"),
-    });
-    if (!r.ok) return data({ error: r.error }, { status: 502 });
+    }).catch((e) => console.error(`[waba] request-reply ${fleetAgentId} failed:`, e instanceof Error ? e.message : e));
     return data({ ok: true });
   }
   return data({ error: "intent inválido" }, { status: 400 });
