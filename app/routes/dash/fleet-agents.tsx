@@ -1028,6 +1028,12 @@ function WabaInboxModal({
   const modeAct = useFetcher();
   const [mode, setMode] = useState(modal.mode);
   const [q, setQ] = useState("");
+  // Cerrar con ESC.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
   const baseUrl = `/api/v2/fleet-agents/${modal.fleetAgentId}/waba-inbox?integrationId=${encodeURIComponent(modal.integrationId)}`;
   const reloadInbox = () => conv.load(q ? `${baseUrl}&q=${encodeURIComponent(q)}` : baseUrl);
   // Carga al abrir + búsqueda server-side (debounced). Reacciona a q.
@@ -1132,13 +1138,6 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
   const [capModal, setCapModal] = useState<{ fleetAgentId: string; groupId: string } | null>(null);
   // Inbox WABA: ver conversaciones de un número + elegir a quién responde.
   const [inboxModal, setInboxModal] = useState<{ fleetAgentId: string; integrationId: string; subject: string; mode: "off" | "all" | "only" } | null>(null);
-  // Perfil de herramientas: drawer abierto para un agente + borrador de buckets.
-  const [profileDrawer, setProfileDrawer] = useState<string | null>(null);
-  const [draftBuckets, setDraftBuckets] = useState<Set<string>>(new Set());
-  const [draftMcps, setDraftMcps] = useState<Set<string>>(new Set());
-  const [draftRestricted, setDraftRestricted] = useState(true);
-  // Optimistic: refleja el perfil recién guardado en el chip hasta que el loader revalida.
-  const [optimisticProfiles, setOptimisticProfiles] = useState<Record<string, { restricted: boolean; buckets: string[]; mcps: string[] }>>({});
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [showIdentity, setShowIdentity] = useState(false);
   // Borrador optimista de buckets EasyBits del modal Capacidades (por número/grupo).
@@ -1396,30 +1395,21 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                 </span>
               </div>
 
-              {/* Perfil de herramientas: qué puede hacer el agente. Chip siempre visible,
-                  clic abre el drawer para editar por capacidades. Optimistic: el chip
-                  refleja el guardado al instante, antes de que el loader revalide. */}
+              {/* Default del agente (solo lectura) — qué heredan los números/grupos
+                  nuevos. La edición fina ahora vive en "Capacidades" POR NÚMERO. */}
               {(() => {
-                const eff = optimisticProfiles[p.id] ?? { restricted: p.restricted, buckets: p.activeBuckets, mcps: p.defaultMcps };
-                const total = (eff.restricted ? eff.buckets.length : 0) + eff.mcps.length;
+                const total = (p.restricted ? p.activeBuckets.length : 0) + p.defaultMcps.length;
                 return (
                   <div className="mt-2 flex items-center gap-2 text-xs">
-                    <span className="text-gray-400">Perfil:</span>
-                    <button type="button"
-                      onClick={() => {
-                        setProfileDrawer(p.id);
-                        setDraftRestricted(eff.restricted);
-                        setDraftBuckets(new Set(eff.buckets));
-                        setDraftMcps(new Set(eff.mcps));
-                      }}
-                      className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border-2 border-black font-semibold hover:bg-gray-50">
-                      {eff.restricted
+                    <span className="text-gray-400">Default:</span>
+                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border-2 border-gray-200 font-semibold text-gray-600"
+                      title="Lo que heredan los números/grupos nuevos. Edita por número en Capacidades.">
+                      {p.restricted
                         ? `${total} capacidad${total === 1 ? "" : "es"}`
-                        : eff.mcps.length
-                          ? `Completo + ${eff.mcps.length} conector${eff.mcps.length === 1 ? "" : "es"}`
+                        : p.defaultMcps.length
+                          ? `Completo + ${p.defaultMcps.length} conector${p.defaultMcps.length === 1 ? "" : "es"}`
                           : "Sin restricción"}
-                      <span className="text-[10px] text-gray-400">editar</span>
-                    </button>
+                    </span>
                   </div>
                 );
               })()}
@@ -1692,107 +1682,6 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
           </div>
         </div>
       )}
-
-      {/* Drawer de PERFIL de herramientas — slide-over lateral. Edita por capacidades
-          (buckets); apagar la restricción = catálogo completo. Aplica al próximo spawn. */}
-      {profileDrawer && (() => {
-        const ap = pools.find((x) => x.id === profileDrawer);
-        if (!ap) return null;
-        const toggleIn = (setter: typeof setDraftBuckets) => (key: string) =>
-          setter((prev) => {
-            const next = new Set(prev);
-            next.has(key) ? next.delete(key) : next.add(key);
-            return next;
-          });
-        const toggle = toggleIn(setDraftBuckets);
-        const toggleMcp = toggleIn(setDraftMcps);
-        // Conectores del agente = capacidades NO-builtin (custom + curados como denik/brightdata).
-        const connectors = ap.capabilities;
-        const save = () => {
-          const nextBuckets = [...draftBuckets];
-          const nextMcps = [...draftMcps];
-          setOptimisticProfiles((s) => ({ ...s, [ap.id]: { restricted: draftRestricted, buckets: nextBuckets, mcps: nextMcps } }));
-          fetcher.submit(
-            {
-              intent: "set-profile",
-              fleetAgentId: ap.id,
-              restricted: draftRestricted ? "1" : "0",
-              buckets: nextBuckets.join(","),
-              mcps: nextMcps.join(","),
-            },
-            { method: "post" }
-          );
-          setProfileDrawer(null);
-        };
-        return (
-          <div className="fixed inset-0 z-50 flex justify-end bg-black/40" onClick={() => setProfileDrawer(null)}>
-            <div className="bg-white border-l-2 border-black w-full max-w-sm h-full overflow-y-auto p-5 animate-[slideIn_.18s_ease]" onClick={(e) => e.stopPropagation()}>
-              <div className="flex items-center justify-between mb-1">
-                <h3 className="font-semibold text-lg">Perfil de herramientas</h3>
-                <button onClick={() => setProfileDrawer(null)} className="text-gray-400 hover:text-black text-xl leading-none">✕</button>
-              </div>
-              <p className="text-sm text-gray-500 mb-4">Default de <b>{ap.name || "este agente"}</b> — cada número/grupo lo hereda hasta que lo personalices en su <b>Capacidades</b>.</p>
-
-              {/* Interruptor maestro: restringir vs catálogo completo. */}
-              <label className="flex items-center justify-between gap-3 mb-4 p-3 border-2 border-black rounded-xl">
-                <span className="text-sm">
-                  <b>Restringir herramientas</b>
-                  <span className="block text-xs text-gray-500">Apágalo para darle acceso completo (avanzado).</span>
-                </span>
-                <Switch value={draftRestricted} onChange={(v) => setDraftRestricted(v)} />
-              </label>
-
-              {draftRestricted && (
-                <div className="space-y-2">
-                  <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Herramientas EasyBits</span>
-                  {buckets.map((b) => (
-                    <div key={b.key} className="flex items-center justify-between gap-3 p-2.5 border-2 border-black rounded-xl">
-                      <span className="min-w-0">
-                        <span className="text-sm font-semibold flex items-center gap-1.5">
-                          {b.label}
-                          {b.admin && <span className="text-[10px] px-1 rounded bg-amber-100 text-amber-700 border border-amber-300">admin</span>}
-                        </span>
-                        <span className="block text-xs text-gray-500">{b.description}</span>
-                      </span>
-                      <Switch value={draftBuckets.has(b.key)} onChange={() => toggle(b.key)} />
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Conectores: MCPs custom/externos del agente (denik, brightdata, …).
-                  Independientes de la restricción EasyBits — son servers aparte. */}
-              {connectors.length > 0 && (
-                <div className="space-y-2 mt-4">
-                  <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Conectores</span>
-                  {connectors.map((c) => {
-                    const ready = c.secretsPresent;
-                    return (
-                      <div key={c.name} className={`flex items-center justify-between gap-3 p-2.5 border-2 border-black rounded-xl ${ready ? "" : "opacity-60"}`}>
-                        <span className="min-w-0">
-                          <span className="text-sm font-semibold">{c.label}</span>
-                          <span className="block text-xs text-gray-500">
-                            {ready ? (c.description ?? "Conector externo") : "Falta credencial — configúrala en Capacidades."}
-                          </span>
-                        </span>
-                        <Switch value={draftMcps.has(c.name)} onChange={() => ready && toggleMcp(c.name)} />
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-
-              <div className="mt-5 flex items-center gap-2">
-                <button type="button" onClick={save}
-                  className="flex-1 px-4 py-2 rounded-xl bg-black text-white font-semibold hover:opacity-90">Guardar</button>
-                <button type="button" onClick={() => setProfileDrawer(null)}
-                  className="px-4 py-2 rounded-xl border-2 border-black font-semibold hover:bg-gray-50">Cancelar</button>
-              </div>
-              <p className="mt-3 text-[11px] text-gray-400">Se aplica a conversaciones nuevas; las activas siguen hasta reciclarse.</p>
-            </div>
-          </div>
-        );
-      })()}
 
       {inboxModal && <WabaInboxModal key={inboxModal.integrationId} modal={inboxModal} onClose={() => setInboxModal(null)} />}
 
