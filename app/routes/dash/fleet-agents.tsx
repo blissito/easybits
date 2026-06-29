@@ -1169,10 +1169,6 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
   const [inboxModal, setInboxModal] = useState<{ fleetAgentId: string; integrationId: string; subject: string; mode: "off" | "all" | "only" } | null>(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [showIdentity, setShowIdentity] = useState(false);
-  // Borrador optimista de buckets EasyBits del modal Capacidades (por número/grupo).
-  // null = sin tocar esta sesión (usa el estado del server: custom o heredado).
-  const [capBucketDraft, setCapBucketDraft] = useState<Set<string> | null>(null);
-  useEffect(() => { setCapBucketDraft(null); }, [capModal]);
   // Abierto/cerrado por agente — PERSISTIDO en localStorage para que recuerde el
   // estado entre recargas. Client-only (carga en useEffect, no en el initializer)
   // para no romper la hidratación SSR.
@@ -1766,31 +1762,27 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
               )}
 
 
-              {/* Herramientas EasyBits — buckets POR NÚMERO. Por defecto HEREDA el
-                  default del agente (Perfil); personaliza aquí para este número
-                  (override per-turno vía toolGroup). Requiere el worker rebuildeado. */}
+              {/* Herramientas EasyBits — buckets POR NÚMERO. Refleja la verdad del
+                  server (SIN optimismo: el optimismo mostraba el cambio y el poll/
+                  reload lo revertía) → spinner mientras guarda, luego el estado real. */}
               {(() => {
-                const custom = capBucketDraft !== null || cg.toolBuckets !== null;
-                const effective = capBucketDraft ?? new Set<string>(cg.toolBuckets ?? cp.activeBuckets);
+                const bucketsBusy = fetcher.state !== "idle" && fetcher.formData?.get("intent") === "set-group-toolgroup" && fetcher.formData?.get("groupId") === cg.id;
+                // Estado real: lo guardado para este número; si nunca se personalizó,
+                // arranca del default del agente (semilla, ya editable aquí mismo).
+                const effective = new Set<string>(cg.toolBuckets ?? cp.activeBuckets);
                 const toggle = (key: string, on: boolean) => {
+                  if (bucketsBusy) return;
                   const next = new Set(effective);
                   if (on) next.add(key); else next.delete(key);
-                  setCapBucketDraft(next);
                   fetcher.submit({ intent: "set-group-toolgroup", fleetAgentId: cp.id, groupId: cg.id, buckets: [...next].join(","), inherit: "0" }, { method: "post" });
-                };
-                const inherit = () => {
-                  setCapBucketDraft(null);
-                  fetcher.submit({ intent: "set-group-toolgroup", fleetAgentId: cp.id, groupId: cg.id, inherit: "1" }, { method: "post" });
                 };
                 return (
                   <div className="mb-4">
                     <div className="flex items-center justify-between">
                       <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Herramientas EasyBits</span>
-                      {custom
-                        ? <button type="button" onClick={inherit} className="text-[11px] font-semibold text-brand-500 hover:underline">Heredar del agente</button>
-                        : <span className="text-[10px] text-gray-400">heredado del agente</span>}
+                      {bucketsBusy && <Spinner />}
                     </div>
-                    <div className="mt-1 flex flex-col gap-2">
+                    <div className={`mt-1 flex flex-col gap-2 ${bucketsBusy ? "opacity-50" : ""}`}>
                       {buckets.map((b) => (
                         <div key={b.key} className="border-2 border-gray-100 rounded-xl px-3 py-2 flex items-center justify-between gap-2">
                           <span className="text-sm font-semibold min-w-0 truncate flex items-center gap-1.5">
