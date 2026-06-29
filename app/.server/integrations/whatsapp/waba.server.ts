@@ -319,8 +319,11 @@ export async function requestWabaReply(args: {
   resume: (formmySecret: string, integrationId: string, sender: string) => Promise<{ ok: boolean; error?: string }>;
 }): Promise<{ ok: boolean; error?: string }> {
   const { fleetAgentId, ownerId, formmySecret, integrationId, sender, org, directive, resume } = args;
-  const r = await resume(formmySecret, integrationId, sender);
-  if (!r.ok) return { ok: false, error: r.error || "no se pudo reactivar" };
+  // Resume BEST-EFFORT: si Formmy no encuentra la conversación (404), NO abortamos —
+  // el reply (runWabaTurn) bypasea el gate igual. El resume solo despausa Formmy para
+  // los próximos mensajes; su fallo no debe bloquear esta respuesta.
+  const r = await resume(formmySecret, integrationId, sender).catch(() => ({ ok: false } as const));
+  if (!r.ok) console.log(`[waba] requestWabaReply resume best-effort no aplicó para ${sender} (sigo contestando)`);
   await setPausedUntilAtomic(fleetAgentId, integrationId, normalizePhone(sender), null).catch(() => {});
   return replyToPendingWaba({ fleetAgentId, ownerId, formmySecret, integrationId, sender, org, directive });
 }
