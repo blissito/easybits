@@ -150,6 +150,9 @@ export async function openAgentMessageStream(
     // Per-turn builtins to REMOVE (e.g. ["easybits"]) — the worker deletes these
     // from its merged MCP set. Resolved per-group by resolveDisabledBuiltins.
     disabledBuiltins?: string[];
+    // Per-turn EasyBits tool group (?tools=) — per-number capabilities. The worker
+    // applies it to its easybits MCP, overriding the spawn-env default.
+    toolGroup?: string;
     port?: number;
     path?: string;
     rawBody?: unknown;
@@ -165,7 +168,7 @@ export async function openAgentMessageStream(
   if (body.headers) payload.headers = body.headers;
   if (body.rawBody !== undefined) {
     payload.rawBody = body.rawBody;
-  } else if (body.denikApiKey || body.appendSystemPrompt || body.mcpServers || body.disabledBuiltins?.length) {
+  } else if (body.denikApiKey || body.appendSystemPrompt || body.mcpServers || body.disabledBuiltins?.length || body.toolGroup) {
     // ⚠️ El host (sandbox-host /v1/sandbox/:id/agent/message) SOLO reenvía
     // {content, sessionId} de los campos top-level — descarta cualquier extra.
     // Para que campos del worker (denikApiKey, appendSystemPrompt) lleguen al
@@ -178,6 +181,7 @@ export async function openAgentMessageStream(
       ...(body.appendSystemPrompt ? { appendSystemPrompt: body.appendSystemPrompt } : {}),
       ...(body.mcpServers ? { mcpServers: body.mcpServers } : {}),
       ...(body.disabledBuiltins?.length ? { disabledBuiltins: body.disabledBuiltins } : {}),
+      ...(body.toolGroup ? { toolGroup: body.toolGroup } : {}),
     };
   } else {
     payload.content = body.content;
@@ -2853,6 +2857,7 @@ export async function openAgentChunkStream(
     appendSystemPrompt?: string;
     mcpServers?: Record<string, unknown>;
     disabledBuiltins?: string[];
+    toolGroup?: string;
   }
 ): Promise<ReadableStream<Uint8Array>> {
   const protocol = agent.protocol ?? "sse";
@@ -2871,6 +2876,8 @@ export async function openAgentChunkStream(
       mcpServers: body.mcpServers,
       // Per-message builtins apagados por grupo (ej. ["easybits"]).
       disabledBuiltins: body.disabledBuiltins,
+      // Per-message tool group (capacidades per-número).
+      toolGroup: body.toolGroup,
       port: agent.port ?? undefined,
       path: agent.messagePath ?? undefined,
     });

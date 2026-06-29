@@ -21,7 +21,7 @@ import { mergedCapabilities, type GroupConfig } from "~/.server/core/fleetAgentO
 // NOT here — letting an admin turn reassign admin rights would be a footgun.
 
 // Per-number config inside FleetAgent.wabaConfig (subset; mirrors waba.message.ts).
-type WabaOrg = { phoneNumberId?: string; phoneNumber?: string; name?: string; systemPrompt?: string; admin?: boolean; adminSender?: string; enabled?: boolean; responseMode?: "off" | "all" | "only"; mutedSenders?: string[]; allowedSenders?: string[] };
+type WabaOrg = { phoneNumberId?: string; phoneNumber?: string; name?: string; systemPrompt?: string; admin?: boolean; adminSender?: string; adminSenders?: string[]; enabled?: boolean; responseMode?: "off" | "all" | "only"; mutedSenders?: string[]; allowedSenders?: string[] };
 const resolveMode = (o: WabaOrg | undefined): "off" | "all" | "only" => o?.responseMode ?? (o?.enabled === false ? "off" : "all");
 type WabaConfig = { formmySecret?: string; orgs?: Record<string, WabaOrg> };
 
@@ -70,8 +70,9 @@ function buildAdminServer(fleetAgentId: string): McpServer {
         phoneNumber: o.phoneNumber ?? null,
         name: o.name ?? null,
         systemPrompt: o.systemPrompt ?? null,
-        admin: o.admin !== false, // self-chat admin ON por default (★ Main); false = apagado
-        adminSender: o.adminSender ?? null,
+        // Admin POR CONVERSACIÓN (senders designados); el self-chat admin está muerto
+        // en WABA (Meta #100). La designación se hace en el dashboard, no aquí.
+        adminSenders: [...((o.adminSenders ?? [])), ...(o.adminSender ? [o.adminSender] : [])],
         responseMode: resolveMode(o), // off | all | only
         allowedSenders: o.allowedSenders ?? [],
       }));

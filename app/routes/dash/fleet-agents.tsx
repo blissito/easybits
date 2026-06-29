@@ -20,6 +20,12 @@ import {
   isFleetAgentLive,
   ensureRehydrated,
 } from "~/.server/integrations/whatsapp/baileys.server";
+import {
+  setPausedUntilAtomic,
+  setAdminSenderAtomic,
+  setAllowedSenderAtomic,
+  requestWabaReply,
+} from "~/.server/integrations/whatsapp/waba.server";
 
 const DEFAULT_OAUTH = "CLAUDE_CODE_OAUTH_TOKEN";
 
@@ -110,8 +116,6 @@ export async function loader({ request }: Route.LoaderArgs) {
           name: o.name ?? "",
           systemPrompt: o.systemPrompt ?? "",
           phoneNumber: o.phoneNumber ?? "",
-          // ★ Main: el self-chat de este número administra POR DEFAULT (admin !== false).
-          main: o.admin !== false,
           mode,
           allowedCount: (o.allowedSenders ?? []).length,
           mcps: gconf[id]?.mcpServers ?? [],
@@ -500,19 +504,17 @@ export async function action({ request }: Route.ActionArgs) {
     await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { wabaConfig: next } });
     return data({ ok: true });
   }
-  if (intent === "set-waba-main") {
-    // ★ Main por número: su self-chat (mensajearte a ti mismo) administra el agente.
-    // ON por DEFAULT (admin !== false); la ★ solo sirve para APAGARlo.
+  if (intent === "waba-set-admin") {
+    // Admin POR CONVERSACIÓN: marca/desmarca un sender como admin de este número
+    // (sus turnos inyectan mcp__admin__* e ignoran gate/pausa). Reemplaza al ★ Main
+    // / self-chat (muerto en WABA). Escritura atómica (anti-clobber).
     const integrationId = String(fd.get("integrationId") || "");
-    const cfg = (fleetAgent.wabaConfig as { formmySecret?: string; orgs?: Record<string, any> } | null) ?? {};
-    const org = cfg.orgs?.[integrationId];
-    if (!org) return data({ error: "número no encontrado" }, { status: 404 });
-    const effective = org.admin !== false; // estado actual (default ON)
-    const next = {
-      ...cfg,
-      orgs: { ...cfg.orgs, [integrationId]: { ...org, admin: !effective } },
-    };
-    await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { wabaConfig: next } });
+    const sender = String(fd.get("sender") || "").replace(/\D/g, "").replace(/^521/, "52");
+    const on = String(fd.get("on") || "") === "1";
+    if (!sender) return data({ error: "sender requerido" }, { status: 400 });
+    const cfg = (fleetAgent.wabaConfig as { orgs?: Record<string, any> } | null) ?? {};
+    if (!cfg.orgs?.[integrationId]) return data({ error: "número no encontrado" }, { status: 404 });
+    await setAdminSenderAtomic(fleetAgentId, integrationId, sender, on);
     return data({ ok: true });
   }
   if (intent === "set-waba-mode") {
@@ -528,23 +530,20 @@ export async function action({ request }: Route.ActionArgs) {
     return data({ ok: true });
   }
   if (intent === "toggle-waba-sender") {
-    // Allowlist del modo "only": agrega/quita un sender a allowedSenders (EasyBits-side).
+    // Allowlist del modo "only": agrega/quita un sender a allowedSenders (atómico).
     const integrationId = String(fd.get("integrationId") || "");
-    const sender = String(fd.get("sender") || "").replace(/\D/g, "");
+    const sender = String(fd.get("sender") || "").replace(/\D/g, "").replace(/^521/, "52");
     const on = String(fd.get("on") || "") === "1";
     if (!sender) return data({ error: "sender requerido" }, { status: 400 });
-    const cfg = (fleetAgent.wabaConfig as { formmySecret?: string; orgs?: Record<string, any> } | null) ?? {};
-    const org = cfg.orgs?.[integrationId];
-    if (!org) return data({ error: "número no encontrado" }, { status: 404 });
-    const cur = new Set(((org.allowedSenders as string[] | undefined) ?? []).map((s) => s.replace(/\D/g, "")));
-    if (on) cur.add(sender); else cur.delete(sender);
-    const next = { ...cfg, orgs: { ...cfg.orgs, [integrationId]: { ...org, allowedSenders: [...cur] } } };
-    await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { wabaConfig: next } });
+    const cfg = (fleetAgent.wabaConfig as { orgs?: Record<string, any> } | null) ?? {};
+    if (!cfg.orgs?.[integrationId]) return data({ error: "número no encontrado" }, { status: 404 });
+    await setAllowedSenderAtomic(fleetAgentId, integrationId, sender, on);
     return data({ ok: true });
   }
   if (intent === "waba-pause" || intent === "waba-resume") {
     // Pausa/reactiva el agente en una conversación → delega en Formmy (fuente única
-    // de la coexistencia). NO guardamos estado de pausa en EasyBits.
+    // de la coexistencia) y sincroniza el cache local (atómico, anti-clobber): sin
+    // esto el reload del Inbox trae el paused_until viejo y el cambio "se revierte".
     const integrationId = String(fd.get("integrationId") || "");
     const sender = String(fd.get("sender") || "");
     const np = sender.replace(/\D/g, "").replace(/^521/, "52");
@@ -554,13 +553,29 @@ export async function action({ request }: Route.ActionArgs) {
     const pause = intent === "waba-pause";
     const r = await formmyCoexistence(cfg.formmySecret, integrationId, sender, pause ? "permanent" : "resume");
     if (!r.ok) return data({ error: r.error }, { status: 502 });
-    // Sincroniza el cache local de pausa de inmediato (si no, el reload del Inbox
-    // trae el `paused_until` viejo del forward y el cambio "se revierte").
-    const pausedUntil = { ...(org.pausedUntil ?? {}) };
-    if (pause) pausedUntil[np] = "9999-12-31T00:00:00.000Z";
-    else delete pausedUntil[np];
-    const next = { ...cfg, orgs: { ...cfg.orgs, [integrationId]: { ...org, pausedUntil } } };
-    await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { wabaConfig: next } });
+    await setPausedUntilAtomic(fleetAgentId, integrationId, np, pause ? "9999-12-31T00:00:00.000Z" : null);
+    return data({ ok: true });
+  }
+  if (intent === "waba-request-reply") {
+    // "Solicitar respuesta": reactiva la conversación y hace que el agente conteste
+    // los mensajes pendientes, con una directiva OPCIONAL del operador (one-shot).
+    const integrationId = String(fd.get("integrationId") || "");
+    const sender = String(fd.get("sender") || "");
+    const directive = String(fd.get("directive") || "").trim() || undefined;
+    const cfg = (fleetAgent.wabaConfig as { formmySecret?: string; orgs?: Record<string, any> } | null) ?? {};
+    const org = cfg.orgs?.[integrationId];
+    if (!cfg.formmySecret || !org) return data({ error: "número no encontrado" }, { status: 404 });
+    const r = await requestWabaReply({
+      fleetAgentId,
+      ownerId: fleetAgent.ownerId,
+      formmySecret: cfg.formmySecret,
+      integrationId,
+      sender,
+      org,
+      directive,
+      resume: (secret, intId, snd) => formmyCoexistence(secret, intId, snd, "resume"),
+    });
+    if (!r.ok) return data({ error: r.error }, { status: 502 });
     return data({ ok: true });
   }
   return data({ error: "intent inválido" }, { status: 400 });
@@ -834,10 +849,144 @@ function CapacityHud({ capacity }: { capacity: Capacity }) {
   );
 }
 
+type WabaConv = { sender: string; name: string; lastText: string; lastRole: string; lastAt: string; count: number; allowed: boolean; admin: boolean; paused: boolean; permanent: boolean; until: string | null };
+
+// Cuenta regresiva de una pausa temporizada (coexistencia con ventana). Tick cada
+// 30s; null/permanente → no muestra nada.
+function PauseCountdown({ until }: { until: string | null }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!until) return;
+    const t = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(t);
+  }, [until]);
+  if (!until) return null;
+  const ms = Date.parse(until) - now;
+  if (!(ms > 0)) return null;
+  const min = Math.ceil(ms / 60_000);
+  const label = min >= 60 ? `${Math.floor(min / 60)}h ${min % 60}m` : `${min} min`;
+  return <span className="ml-1 text-[10px] font-normal text-amber-500">· {label}</span>;
+}
+
+// Una fila del Inbox = una conversación, con SU PROPIO fetcher: así pausar/activar
+// varias en ráfaga NO se cancelan entre sí (la causa del bug "solo queda la última").
+// El override optimista da feedback instantáneo; al terminar, el padre recarga.
+function ConvRow({
+  c,
+  mode,
+  fleetAgentId,
+  integrationId,
+  onChanged,
+}: {
+  c: WabaConv;
+  mode: "off" | "all" | "only";
+  fleetAgentId: string;
+  integrationId: string;
+  onChanged: () => void;
+}) {
+  const act = useFetcher();
+  const [ov, setOv] = useState<{ allowed?: boolean; paused?: boolean; admin?: boolean }>({});
+  const [asking, setAsking] = useState(false);
+  const [directive, setDirective] = useState("");
+  useEffect(() => { if (act.state === "idle" && act.data) onChanged(); }, [act.data, act.state]);
+
+  const allowed = ov.allowed ?? c.allowed;
+  const paused = ov.paused ?? c.paused;
+  const admin = ov.admin ?? c.admin;
+  const submit = (fields: Record<string, string>) =>
+    act.submit({ fleetAgentId, integrationId, sender: c.sender, ...fields }, { method: "post" });
+
+  const pause = () => { setOv((o) => ({ ...o, paused: true })); submit({ intent: "waba-pause" }); };
+  const resume = () => { setOv((o) => ({ ...o, paused: false })); submit({ intent: "waba-resume" }); };
+  const setAllow = (on: boolean) => { setOv((o) => ({ ...o, allowed: on })); submit({ intent: "toggle-waba-sender", on: on ? "1" : "0" }); };
+  const setAdmin = (on: boolean) => { setOv((o) => ({ ...o, admin: on })); submit({ intent: "waba-set-admin", on: on ? "1" : "0" }); };
+  const sendRequest = () => {
+    setOv((o) => ({ ...o, paused: false }));
+    submit({ intent: "waba-request-reply", directive });
+    setAsking(false);
+    setDirective("");
+  };
+
+  return (
+    <div className="py-2.5">
+      <div className="flex items-center gap-3">
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold truncate">
+            {/* Admin POR CONVERSACIÓN: ★ marca a este contacto como admin del número. */}
+            <button type="button" onClick={() => setAdmin(!admin)}
+              title={admin ? "Es admin de este número (administra el agente). Clic para quitar" : "Marcar como admin (podrá administrar el agente)"}
+              className={`mr-1 text-sm leading-none align-middle ${admin ? "text-brand-500" : "text-gray-300 hover:text-gray-500"}`}>
+              {admin ? "★" : "☆"}
+            </button>
+            {c.name || `+${c.sender}`}
+            {c.name && <span className="ml-1.5 text-[10px] font-normal text-gray-400">+{c.sender}</span>}
+            {admin && <span className="ml-1.5 text-[10px] font-semibold text-brand-600">admin</span>}
+            {paused && <span className="ml-2 text-[10px] font-semibold text-amber-600">⏸ {c.permanent ? "pausado" : "en pausa"}<PauseCountdown until={c.until} /></span>}
+          </p>
+          <p className="text-[11px] text-gray-400 truncate">{paused ? "El agente no responde aquí (lo atiendes tú)" : `${c.lastRole === "agent" ? "↩︎ " : ""}${c.lastText}`}</p>
+        </div>
+        {/* Acción por estado — simétrica: Pausar↔Reactivar (modo all / coexistencia),
+            Activar↔Quitar (modo only = allowlist). El número apagado no tiene acción. */}
+        <div className="flex items-center gap-1.5 shrink-0">
+          {paused ? (
+            <>
+              <button type="button" onClick={() => setAsking((v) => !v)}
+                className="text-[11px] font-semibold px-2.5 py-1 rounded-full border-2 border-brand-200 text-brand-600 hover:border-brand-500 transition-colors">
+                Solicitar respuesta
+              </button>
+              <button type="button" onClick={resume}
+                className="text-[11px] font-semibold px-2.5 py-1 rounded-full border-2 border-amber-300 text-amber-700 hover:border-amber-500 transition-colors">
+                Reactivar
+              </button>
+            </>
+          ) : mode === "off" ? (
+            <span className="text-[11px] text-gray-300">—</span>
+          ) : mode === "only" ? (
+            allowed ? (
+              <button type="button" onClick={() => setAllow(false)}
+                className="text-[11px] font-semibold px-2.5 py-1 rounded-full border-2 border-green-200 text-green-600 hover:border-red-300 hover:text-red-500 transition-colors">
+                Quitar
+              </button>
+            ) : (
+              <button type="button" onClick={() => setAllow(true)}
+                className="text-[11px] font-semibold px-2.5 py-1 rounded-full border-2 border-gray-200 text-gray-400 hover:border-brand-500 hover:text-brand-500 transition-colors">
+                Activar
+              </button>
+            )
+          ) : (
+            <button type="button" onClick={pause}
+              className="text-[11px] font-semibold px-2.5 py-1 rounded-full border-2 border-green-200 text-green-600 hover:border-amber-400 hover:text-amber-600 transition-colors">
+              Pausar agente
+            </button>
+          )}
+        </div>
+      </div>
+      {/* "Solicitar respuesta" → opcional: directiva del operador en 3ª persona
+          (one-shot, no persistente). Vacío = el agente solo contesta lo pendiente. */}
+      {asking && (
+        <div className="mt-2 flex flex-col gap-2">
+          <textarea value={directive} onChange={(e) => setDirective(e.target.value)} rows={2}
+            placeholder='Opcional: dile cómo responder (ej. "dile que estaría chido ver una peli del espacio"). Vacío = solo contesta lo pendiente.'
+            className="w-full border-2 border-gray-200 rounded-lg px-2.5 py-1.5 text-xs focus:border-brand-500 outline-none resize-none" />
+          <div className="flex items-center gap-2 justify-end">
+            <button type="button" onClick={() => { setAsking(false); setDirective(""); }}
+              className="text-[11px] font-semibold text-gray-400 hover:text-gray-700">Cancelar</button>
+            <button type="button" onClick={sendRequest}
+              className="text-[11px] font-semibold px-3 py-1 rounded-full bg-brand-500 text-white hover:bg-brand-600 transition-colors">
+              Enviar respuesta
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // Inbox de un número WABA: ve quién le escribe al agente y elige a quién responde.
 // Misma potencia que un inbox/handoff (respond.io/Chatwoot) pero en un solo modal:
 // arriba el MODO (Apagado / Activo-excepto / Solo), abajo las conversaciones con su
 // toggle. La coexistencia (cuando tú respondes desde tu cel) ya pausa al agente.
+// La búsqueda es SERVER-side (escala a miles de conversaciones).
 function WabaInboxModal({
   modal,
   onClose,
@@ -845,46 +994,30 @@ function WabaInboxModal({
   modal: { fleetAgentId: string; integrationId: string; subject: string; mode: "off" | "all" | "only" };
   onClose: () => void;
 }) {
-  const conv = useFetcher<{ conversations: Array<{ sender: string; name: string; lastText: string; lastRole: string; lastAt: string; count: number; allowed: boolean; paused: boolean; permanent: boolean }> }>();
-  const act = useFetcher();
+  const conv = useFetcher<{ conversations: WabaConv[] }>();
+  const modeAct = useFetcher();
   const [mode, setMode] = useState(modal.mode);
-  // Override optimista por conversación (feedback instantáneo; el reload lo confirma).
-  const [ov, setOv] = useState<Record<string, { allowed?: boolean; paused?: boolean }>>({});
-  const [q, setQ] = useState(""); // buscador por nombre o dígitos
-  const inboxUrl = `/api/v2/fleet-agents/${modal.fleetAgentId}/waba-inbox?integrationId=${encodeURIComponent(modal.integrationId)}`;
-  // Carga al abrir + recarga cuando una acción termina.
-  useEffect(() => { conv.load(inboxUrl); }, [inboxUrl]);
-  useEffect(() => { if (act.state === "idle" && act.data) conv.load(inboxUrl); }, [act.data, act.state]);
+  const [q, setQ] = useState("");
+  const baseUrl = `/api/v2/fleet-agents/${modal.fleetAgentId}/waba-inbox?integrationId=${encodeURIComponent(modal.integrationId)}`;
+  const reloadInbox = () => conv.load(q ? `${baseUrl}&q=${encodeURIComponent(q)}` : baseUrl);
+  // Carga al abrir + búsqueda server-side (debounced). Reacciona a q.
+  useEffect(() => {
+    const t = setTimeout(() => conv.load(q ? `${baseUrl}&q=${encodeURIComponent(q)}` : baseUrl), 250);
+    return () => clearTimeout(t);
+  }, [q, baseUrl]);
+  // Cambio de modo (su propio fetcher) → recarga al confirmar.
+  useEffect(() => { if (modeAct.state === "idle" && modeAct.data) reloadInbox(); }, [modeAct.data, modeAct.state]);
 
   const setModeNow = (m: "off" | "all" | "only") => {
     setMode(m);
-    act.submit({ intent: "set-waba-mode", fleetAgentId: modal.fleetAgentId, integrationId: modal.integrationId, mode: m }, { method: "post" });
-  };
-  // Pausar / Reactivar el agente en una conversación → Formmy (fuente única).
-  const pauseConv = (sender: string) => {
-    setOv((p) => ({ ...p, [sender]: { ...p[sender], paused: true } }));
-    act.submit({ intent: "waba-pause", fleetAgentId: modal.fleetAgentId, integrationId: modal.integrationId, sender }, { method: "post" });
-  };
-  const resumeConv = (sender: string) => {
-    setOv((p) => ({ ...p, [sender]: { ...p[sender], paused: false } }));
-    act.submit({ intent: "waba-resume", fleetAgentId: modal.fleetAgentId, integrationId: modal.integrationId, sender }, { method: "post" });
-  };
-  // Allowlist (modo "only") — EasyBits-side (filtro proactivo de a quién atender).
-  const allow = (sender: string, on: boolean) => {
-    setOv((p) => ({ ...p, [sender]: { ...p[sender], allowed: on } }));
-    act.submit({ intent: "toggle-waba-sender", fleetAgentId: modal.fleetAgentId, integrationId: modal.integrationId, sender, list: "allowed", on: on ? "1" : "0" }, { method: "post" });
+    modeAct.submit({ intent: "set-waba-mode", fleetAgentId: modal.fleetAgentId, integrationId: modal.integrationId, mode: m }, { method: "post" });
   };
 
-  const allConversations = conv.data?.conversations ?? [];
-  const qd = q.replace(/\D/g, "");
-  const ql = q.trim().toLowerCase();
-  const conversations = ql
-    ? allConversations.filter((c) => (qd && c.sender.includes(qd)) || (!!ql && c.name.toLowerCase().includes(ql)))
-    : allConversations;
+  const conversations = conv.data?.conversations ?? [];
   const loading = conv.state === "loading" && !conv.data;
   const MODES: Array<{ key: "off" | "all" | "only"; label: string; hint: string }> = [
     { key: "off", label: "Apagado", hint: "No responde a nadie" },
-    { key: "all", label: "Activo", hint: "Responde a todos, excepto los que silencies" },
+    { key: "all", label: "Activo", hint: "Responde a todos, excepto los pausados" },
     { key: "only", label: "Solo a…", hint: "Responde solo a los que actives" },
   ];
 
@@ -908,63 +1041,28 @@ function WabaInboxModal({
         </div>
         <p className="text-[11px] text-gray-400 mb-4">{MODES.find((m) => m.key === mode)?.hint}</p>
 
-        {/* Buscador — aparece cuando hay varias conversaciones. Filtra por dígitos. */}
-        {allConversations.length > 5 && (
-          <input value={q} onChange={(e) => setQ(e.target.value)}
-            placeholder="Buscar por nombre o número (últimos 4 dígitos)"
-            className="w-full mb-3 border-2 border-gray-200 rounded-lg px-2.5 py-1.5 text-sm focus:border-brand-500 outline-none" />
-        )}
+        {/* Buscador SERVER-side por nombre o dígitos (escala a miles). */}
+        <input value={q} onChange={(e) => setQ(e.target.value)}
+          placeholder="Buscar por nombre o número"
+          className="w-full mb-3 border-2 border-gray-200 rounded-lg px-2.5 py-1.5 text-sm focus:border-brand-500 outline-none" />
 
         {/* CONVERSACIONES */}
         {loading ? (
-          <p className="text-xs text-gray-400 py-4 text-center">Cargando…</p>
-        ) : allConversations.length === 0 ? (
-          <p className="text-xs text-gray-400 py-4 text-center">Nadie le ha escrito a este número todavía.</p>
+          <div className="flex flex-col gap-2 py-2">
+            {[0, 1, 2].map((i) => <div key={i} className="h-9 bg-gray-100 rounded-lg animate-pulse" />)}
+          </div>
         ) : conversations.length === 0 ? (
-          <p className="text-xs text-gray-400 py-4 text-center">Sin resultados para “{q}”.</p>
+          <p className="text-xs text-gray-400 py-4 text-center">{q ? `Sin resultados para “${q}”.` : "Nadie le ha escrito a este número todavía."}</p>
         ) : (
           <div className="flex flex-col divide-y divide-gray-100">
-            {conversations.map((c) => {
-              // Efectivo = override optimista si existe, si no el dato del server.
-              const allowed = ov[c.sender]?.allowed ?? c.allowed;
-              const paused = ov[c.sender]?.paused ?? c.paused;
-              return (
-                <div key={c.sender} className="flex items-center gap-3 py-2.5">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold truncate">
-                      {c.name || `+${c.sender}`}
-                      {c.name && <span className="ml-1.5 text-[10px] font-normal text-gray-400">+{c.sender}</span>}
-                      {paused && <span className="ml-2 text-[10px] font-semibold text-amber-600">⏸ {c.permanent ? "pausado" : "en pausa"}</span>}
-                    </p>
-                    <p className="text-[11px] text-gray-400 truncate">{paused ? "El agente no responde aquí (lo atiendes tú)" : `${c.lastRole === "agent" ? "↩︎ " : ""}${c.lastText}`}</p>
-                  </div>
-                  {/* Un control: Reactivar (si pausada) → Activar (only, no allowed) → Pausar agente. */}
-                  {paused ? (
-                    <button type="button" onClick={() => resumeConv(c.sender)}
-                      className="shrink-0 text-[11px] font-semibold px-2.5 py-1 rounded-full border-2 border-amber-300 text-amber-700 hover:border-amber-500 transition-colors">
-                      Reactivar
-                    </button>
-                  ) : mode === "off" ? (
-                    <span className="text-[11px] text-gray-300 shrink-0">—</span>
-                  ) : mode === "only" && !allowed ? (
-                    <button type="button" onClick={() => allow(c.sender, true)}
-                      className="shrink-0 text-[11px] font-semibold px-2.5 py-1 rounded-full border-2 border-gray-200 text-gray-400 hover:border-brand-500 hover:text-brand-500 transition-colors">
-                      Activar
-                    </button>
-                  ) : (
-                    <button type="button" onClick={() => pauseConv(c.sender)}
-                      className="shrink-0 text-[11px] font-semibold px-2.5 py-1 rounded-full border-2 border-green-200 text-green-600 hover:border-amber-400 hover:text-amber-600 transition-colors">
-                      Pausar agente
-                    </button>
-                  )}
-                </div>
-              );
-            })}
+            {conversations.map((c) => (
+              <ConvRow key={c.sender} c={c} mode={mode} fleetAgentId={modal.fleetAgentId} integrationId={modal.integrationId} onChanged={reloadInbox} />
+            ))}
           </div>
         )}
 
         <p className="mt-4 pt-3 border-t border-gray-100 text-[11px] text-gray-400">
-          La coexistencia siempre está activa: si respondes desde tu teléfono, el agente se pausa solo en esa conversación. Aquí lo reactivas o lo pausas tú.
+          La coexistencia siempre está activa: si respondes desde tu teléfono, el agente se pausa solo en esa conversación. Aquí lo reactivas, le pides que responda, o marcas quién es admin.
         </p>
       </div>
     </div>
@@ -1479,13 +1577,6 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                               className="flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-lg border-2 border-gray-200 text-gray-600 hover:border-brand-500 hover:text-brand-500 transition-colors">
                               <span className="text-sm leading-none">⚡</span><span>Capacidades</span>
                               <span className="text-[10px] leading-none bg-gray-100 text-gray-600 rounded-full px-1.5 py-0.5">{p.builtins.length + w.mcps.length}</span>
-                            </button>
-                            {/* ★ Main = el self-chat administra (ON por default). Clic para apagarlo. */}
-                            <button type="button"
-                              title={w.main ? "Su self-chat (mensajearte a ti mismo) administra el agente. Clic para apagar" : "Admin por self-chat apagado. Clic para activar"}
-                              onClick={() => fetcher.submit({ intent: "set-waba-main", fleetAgentId: p.id, integrationId: w.integrationId }, { method: "post" })}
-                              className={`flex items-center gap-1 text-xs font-semibold px-2.5 py-1.5 rounded-lg border-2 transition-colors ${w.main ? "border-brand-500 bg-brand-500 text-white" : "border-gray-200 text-gray-400 hover:border-gray-400 hover:text-gray-700"}`}>
-                              <span className="text-sm leading-none">{w.main ? "★" : "☆"}</span><span>Main</span>
                             </button>
                           </div>
                         </div>

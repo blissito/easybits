@@ -34,7 +34,7 @@ export async function deliverFilesFromReply(
       const isImage = /^image\//.test(ct);
       if (isPdf && !/\.\w+$/.test(fileName)) fileName += ".pdf";
       const mime = isPdf ? "application/pdf" : ct.split(";")[0] || "application/octet-stream";
-      if (isImage) await send(jid, { image: buf });
+      if (isImage) await send(jid, { image: buf, mimetype: ct.split(";")[0] || "image/jpeg" });
       else await send(jid, { document: buf, mimetype: mime, fileName });
       out = out.split(url).join("").trim();
       sent++;

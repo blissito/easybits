@@ -1187,6 +1187,8 @@ model FleetAgentMessage {
   createdAt    DateTime @default(now())
 
   @@index([fleetAgentId, groupId])
+  // Inbox: prefix-scan por número (groupId startsWith "waba:<int>:") ordenado por recencia.
+  @@index([fleetAgentId, groupId, createdAt])
 }
 
 // Local registry row for a sandbox we track in Mongo. ONE model, keyed by the

@@ -283,7 +283,7 @@ export type McpCatalogEntry = {
   requiredSecrets?: string[]; // vault secret names this capability needs to work
   builtin?: boolean; // easybits/wa — always-on, not togglable
 };
-export type GroupConfig = { mcpServers?: string[]; env?: Record<string, string>; disabledBuiltins?: string[] };
+export type GroupConfig = { mcpServers?: string[]; env?: Record<string, string>; disabledBuiltins?: string[]; toolGroup?: string };
 
 // Builtins (easybits/wa) the group turned OFF. Absent/[] = all builtins ON
 // (backward-compatible default). The worker removes these from its merged MCP set
@@ -295,6 +295,17 @@ export function resolveDisabledBuiltins(
 ): string[] {
   const cfg = ((fleetAgent.groupConfigs as Record<string, GroupConfig> | null) ?? {})[groupId] ?? {};
   return cfg.disabledBuiltins ?? [];
+}
+
+// Tool group (?tools= surface de EasyBits) PER-NÚMERO/grupo: el override per-grupo
+// gana sobre el default del agente (clave "*"). undefined → el worker usa su env
+// EASYBITS_TOOL_GROUP (default del agente, baked al spawn). Keyed por cfgId.
+export function resolveToolGroup(
+  fleetAgent: { groupConfigs?: unknown },
+  groupId: string
+): string | undefined {
+  const all = (fleetAgent.groupConfigs as Record<string, GroupConfig> | null) ?? {};
+  return all[groupId]?.toolGroup ?? all["*"]?.toolGroup ?? undefined;
 }
 
 // $secret:NAME reference shape (same as agentOperations.expandMcpServerSecrets).
@@ -735,7 +746,7 @@ async function clearGroupSession(ctx: AuthContext, fleetAgent: PoolRow, groupId:
 export async function routeMessage(
   fleetAgentId: string,
   msg: InboundMessage,
-  opts: { skipRateLimit?: boolean; hasMedia?: boolean; onChunk?: (s: string) => void } = {}
+  opts: { skipRateLimit?: boolean; hasMedia?: boolean; skipUserLog?: boolean; onChunk?: (s: string) => void } = {}
 ): Promise<string> {
   const fleetAgent = await db.fleetAgent.findUniqueOrThrow({ where: { id: fleetAgentId } });
   const ctx = await ctxForOwner(fleetAgent.ownerId);
@@ -782,9 +793,13 @@ export async function routeMessage(
   }
   const bareCompact = cmd === "/compact";
 
-  await db.fleetAgentMessage.create({
-    data: { fleetAgentId: fleetAgent.id, groupId: msg.groupId, role: "user", sender: msg.sender ?? null, senderName: msg.senderName ?? null, text: msg.text },
-  });
+  // skipUserLog: the caller already persisted the user's message(s) (e.g. WABA
+  // "Solicitar respuesta" replays messages logged while paused) → don't double-log.
+  if (!opts.skipUserLog) {
+    await db.fleetAgentMessage.create({
+      data: { fleetAgentId: fleetAgent.id, groupId: msg.groupId, role: "user", sender: msg.sender ?? null, senderName: msg.senderName ?? null, text: msg.text },
+    });
+  }
 
   let content = bareCompact ? "/compact" : formatContent(msg); // stable UUID → per-conversation .jsonl transcript
   let placed = await pickOrSpawn(ctx, fleetAgent, msg.groupId);
@@ -875,6 +890,10 @@ export async function routeMessage(
           // Per-grupo: builtins apagados (ej. ["easybits"]) → el worker los quita
           // del set MCP de ese turno (forzar uso de cajas de la flota).
           disabledBuiltins: resolveDisabledBuiltins(fleetAgent, cfgId),
+          // Per-NÚMERO/grupo: el tool group de EasyBits (?tools=) que el worker
+          // aplica per-turno al server easybits, sobreescribiendo el default del
+          // agente (persona.env.EASYBITS_TOOL_GROUP). Vacío → el worker usa su env.
+          toolGroup: resolveToolGroup(fleetAgent, cfgId),
         }
       );
       reply = await collectStream(stream, opts.onChunk);

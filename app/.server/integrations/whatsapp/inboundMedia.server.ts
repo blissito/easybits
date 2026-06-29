@@ -425,3 +425,103 @@ export async function extractInboundContent(
 
   return { text: agentPrompt, userText, refImageUrl, wasVoice, hasMedia, image: imageData };
 }
+
+// ── WABA channel (Formmy gateway) ────────────────────────────────────────────
+// Unlike Baileys, the WABA edge never holds a socket or raw encrypted media:
+// Formmy already downloaded the attachment from Meta, re-hosted it on EasyBits,
+// and forwards a single { type, url, mime_type, caption } object alongside the
+// text. So instead of downloadMediaMessage we just fetch(url) and reuse the SAME
+// per-type helpers (geminiInline / readDocText / transcribeAudio) the Baileys path
+// uses — keeping ONE media brain, two edges.
+export type WabaInboundMedia = {
+  type: string; // image | audio | video | document | sticker
+  url: string; // signed EasyBits read URL (already hosted; ~1h)
+  mimeType?: string;
+  caption?: string;
+  fileName?: string;
+};
+
+const MAX_MEDIA_BYTES = 25 * 1024 * 1024;
+
+// Bounded fetch of an already-hosted (trusted EasyBits) media URL → Buffer.
+async function fetchMedia(url: string): Promise<Buffer> {
+  const r = await withTimeout(
+    fetch(url, { redirect: "follow" }) as Promise<Response>,
+    DOWNLOAD_TIMEOUT_MS,
+    "waba media fetch"
+  );
+  if (!r.ok) throw new Error(`media fetch ${r.status}`);
+  const buf = Buffer.from(await r.arrayBuffer());
+  if (!buf.length || buf.length > MAX_MEDIA_BYTES) throw new Error("media empty or too large");
+  return buf;
+}
+
+function extFromMime(mime: string): string {
+  const m = (mime || "").toLowerCase();
+  if (/png/.test(m)) return "png";
+  if (/webp/.test(m)) return "webp";
+  if (/pdf/.test(m)) return "pdf";
+  if (/(jpe?g)/.test(m)) return "jpg";
+  const sub = m.split("/")[1]?.split(";")[0];
+  return (sub || "bin").replace(/[^a-z0-9]/g, "") || "bin";
+}
+
+export async function extractWabaContent(
+  textContent: string,
+  media: WabaInboundMedia | null,
+  opts: { ownerId: string }
+): Promise<InboundContent> {
+  // The user's typed words (or media caption). For a voice note it's replaced by
+  // the transcript below (drives the voice-reply trigger, like Baileys).
+  let userWords = (textContent || media?.caption || "").trim();
+  let text = userWords;
+  let wasVoice = false;
+  let imageData: { base64: string; ext: string; url?: string } | undefined;
+  let hasMedia = false;
+
+  if (media?.url) {
+    hasMedia = true;
+    const type = media.type;
+    const mime = media.mimeType || "";
+    try {
+      const buf = await fetchMedia(media.url);
+      if (type === "image" || type === "sticker") {
+        // Native Claude vision: base64 bytes for the worker FS; the URL is ALREADY
+        // a hosted EasyBits signed URL so we reuse it (no re-upload) for image tools.
+        imageData = { base64: buf.toString("base64"), ext: extFromMime(mime || "image/jpeg"), url: media.url };
+      } else if (type === "audio") {
+        const { transcribeAudio } = await import("~/.server/core/fleetVoice");
+        const t = await transcribeAudio(opts.ownerId, buf, mime || "audio/ogg");
+        if (t) {
+          text = t;
+          userWords = t;
+          wasVoice = true;
+        }
+      } else if (type === "video") {
+        const vt = await geminiInline(
+          "Transcribe el audio de este video en español. Devuelve SOLO lo que se dice, sin comentarios.",
+          mime || "video/mp4",
+          buf.toString("base64")
+        );
+        if (vt) text = text ? `[Video — audio transcrito: ${vt}]\n${text}` : `[Video — audio transcrito: ${vt}]`;
+      } else if (type === "document") {
+        const name = media.fileName || `documento.${extFromMime(mime)}`;
+        const dtext = await readDocText(buf, name, mime);
+        text = dtext
+          ? `[El usuario envió el documento "${name}". Contenido (texto extraído del archivo):\n${dtext}\n---fin del documento---]\n${text || "(sin texto adicional)"}`
+          : `[NOTA: el usuario adjuntó el documento "${name}" que NO pude leer. Pídele que te diga qué contiene o que lo mande como PDF/CSV.]\n${text}`;
+      }
+    } catch (e) {
+      console.error(`[waba] media extract (${type}) failed:`, e instanceof Error ? e.message : e);
+    }
+  }
+
+  // Anti-drop: a media-only message we couldn't process still tells the agent.
+  if (!text.trim()) {
+    text = hasMedia
+      ? "(el usuario envió un archivo que no pude procesar; pídele que lo describa o lo mande de otra forma)"
+      : "";
+  }
+
+  return { text, userText: userWords, refImageUrl: imageData?.url, wasVoice, hasMedia, image: imageData };
+}
