@@ -48,8 +48,12 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   const prefix = `waba:${integrationId}:`;
   const where: any = { fleetAgentId, groupId: { startsWith: prefix } };
   if (q) {
+    // OJO: NO buscar en `groupId` — es `waba:<integrationId>:<sender>` y el
+    // integrationId es hex con dígitos, así que `groupId contains "<dígitos>"`
+    // matcheaba TODAS las conversaciones (p.ej. "4"/"415" viven en el integrationId)
+    // → "el buscador no filtra". El número se busca SOLO contra `sender`.
     where.OR = [
-      ...(qDigits ? [{ sender: { contains: qDigits } }, { groupId: { contains: qDigits } }] : []),
+      ...(qDigits ? [{ sender: { contains: qDigits } }] : []),
       { senderName: { contains: q, mode: "insensitive" } },
     ];
   }

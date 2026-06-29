@@ -1021,10 +1021,21 @@ function ConvRow({
             </button>
           )}
           {paused ? (
-            <button type="button" onClick={resume} disabled={busy}
-              className="text-[11px] font-semibold px-2.5 py-1 rounded-full border-2 border-amber-300 text-amber-700 hover:border-amber-500 transition-colors disabled:opacity-50">
-              {busy && busyIntent === "waba-resume" ? <Spinner /> : "Reactivar"}
-            </button>
+            <>
+              {/* Escalar una pausa TEMPORIZADA a permanente SIN reactivar primero
+                  (el server ya acepta re-pausar). Oculto si ya es permanente. */}
+              {!c.permanent && (
+                <button type="button" onClick={() => pause("permanent")} disabled={busy}
+                  title="Hacer la pausa permanente (que no se reactive sola)"
+                  className="text-[11px] font-semibold px-2.5 py-1 rounded-full border-2 border-amber-200 text-amber-700 hover:border-amber-500 transition-colors disabled:opacity-50">
+                  {busy && busyIntent === "waba-pause" ? <Spinner /> : "∞"}
+                </button>
+              )}
+              <button type="button" onClick={resume} disabled={busy}
+                className="text-[11px] font-semibold px-2.5 py-1 rounded-full border-2 border-amber-300 text-amber-700 hover:border-amber-500 transition-colors disabled:opacity-50">
+                {busy && busyIntent === "waba-resume" ? <Spinner /> : "Reactivar"}
+              </button>
+            </>
           ) : mode === "off" ? (
             <span className="text-[11px] text-gray-300">—</span>
           ) : mode === "only" ? (
