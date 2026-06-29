@@ -871,6 +871,10 @@ export async function routeMessage(
           // así el guardrail de voz llega a todos los agentes sin rebuild/migración.
           appendSystemPrompt: [
             PLATFORM_VOICE_GUARDRAIL,
+            // WABA: NO hay server `wa` (Baileys) ni socket. Corrige la persona
+            // horneada (que dice "usa wa send_message") → en este canal los archivos
+            // se mandan incluyendo su URL en el texto (la plataforma la adjunta).
+            cfgId.startsWith("waba:") ? WABA_DELIVERY_GUARDRAIL : null,
             // Code Mode: si este fleetAgent corre con un perfil (la superficie lean
             // siempre empieza con `scripting`, seguido de los buckets del perfil).
             (fleetAgent.persona as Persona | null)?.env?.EASYBITS_TOOL_GROUP?.startsWith("scripting")
@@ -1080,6 +1084,16 @@ const PLATFORM_VOICE_GUARDRAIL = [
   "VOZ: las notas de voz las maneja AUTOMÁTICAMENTE la plataforma EasyBits con su propio motor self-hosted (kokoro para hablar, whisper para escuchar) — tú NO sintetizas audio ni usas ningún proveedor externo (NUNCA digas que usas OpenAI, ElevenLabs ni Gemini).",
   "Cuando te pidan 'responde con voz', NO llames ninguna herramienta (NO uses voice_tts_create) ni anuncies que vas a hacerlo: simplemente RESPONDE NORMAL EN TEXTO y la plataforma lo convierte en nota de voz sola, al instante.",
   "voice_tts_create es SOLO para generar un ARCHIVO de audio (p.ej. para un video con avatar), nunca para contestar por voz en el chat. Si te preguntan qué voz usas, es la voz propia de EasyBits (kokoro), nada de terceros.",
+].join(" ");
+
+// WABA (WhatsApp Business): este canal NO tiene el server `wa` (Baileys) ni un
+// socket. Inyectado per-turno SOLO para WABA para corregir la persona horneada que
+// dice "usa wa send_message" → de ahí la alucinación "socket caído". En WABA los
+// archivos se entregan incluyendo su URL pública en el TEXTO de la respuesta; la
+// plataforma la descarga y adjunta sola.
+const WABA_DELIVERY_GUARDRAIL = [
+  "CANAL WhatsApp Business (WABA): NO tienes el server MCP `wa` ni un socket. NUNCA intentes `wa send_message`/`wa send_poll`/`wa react_message` ni digas que 'el socket está caído' — eso aquí no aplica.",
+  "Para ENVIAR un archivo (imagen, PDF, etc.): genera/súbelo a EasyBits e incluye su URL pública directamente en tu respuesta de texto. La plataforma la descarga y la adjunta al chat automáticamente — no necesitas ninguna herramienta de envío.",
 ].join(" ");
 
 // Code Mode: guía inyectada SOLO cuando el fleetAgent corre con la superficie MCP
