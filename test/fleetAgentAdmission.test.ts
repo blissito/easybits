@@ -18,8 +18,8 @@ describe("fleetAgent admission backoff policy", () => {
     expect(admitRetryDelay(42)).toBe(30_000);
   });
 
-  it("holds ~3 min before giving up — comfortably past one reaper cycle (60s)", () => {
-    expect(ADMIT_GIVEUP_MS).toBe(180_000);
+  it("holds ~4 min before giving up — comfortably past idleSuspendMin+cadencia", () => {
+    expect(ADMIT_GIVEUP_MS).toBe(240_000);
     expect(ADMIT_GIVEUP_MS).toBeGreaterThan(60_000);
   });
 
