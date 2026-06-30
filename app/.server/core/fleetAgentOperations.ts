@@ -70,6 +70,16 @@ export const admitRetryDelay = (attempt: number) =>
 // nivel de módulo → no rompe el prerender del Docker build.
 export const FLEET_DEFAULT_MODEL = process.env.FLEET_MODEL || "claude-sonnet-5";
 
+// Identidad del modelo, inyectada FRESCA por turno (como el guardrail de voz) para
+// que el agente sepa sobre qué corre y responda bien si le preguntan "¿qué IA eres?".
+// Solo se inyecta cuando el modelo RESUELTO del agente es claude-sonnet-5 (el
+// default) — un agente que overridea ANTHROPIC_MODEL no recibe una afirmación falsa.
+export const MODEL_IDENTITY_SONNET5 = [
+  "MODELO: corres sobre Claude Sonnet 5 (claude-sonnet-5), el modelo Sonnet más reciente de Anthropic — NO eres GPT, Gemini, Llama ni una versión vieja de Claude.",
+  "Tus características: rápido, con calidad cercana a Claude Opus en razonamiento, código y uso de herramientas; ventana de contexto de 1M tokens; razonamiento adaptativo (adaptive thinking) integrado; visión de alta resolución; sigues instrucciones de forma literal y precisa.",
+  "Si te preguntan qué modelo o IA eres, responde: Claude Sonnet 5, de Anthropic.",
+].join(" ");
+
 // ── In-flight turn guard ──────────────────────────────────────────────────────
 // VMs currently servicing a turn (working, or waiting on tools/subagents that
 // emit no chunks). The reaper measures idle by lastMessageAt, which is only
@@ -887,6 +897,13 @@ export async function routeMessage(
           // así el guardrail de voz llega a todos los agentes sin rebuild/migración.
           appendSystemPrompt: [
             PLATFORM_VOICE_GUARDRAIL,
+            // Identidad del modelo: que el agente sepa que corre Sonnet 5 y sus
+            // características. Solo si el modelo resuelto es el default (un agente
+            // que pinea otro modelo vía persona.env no recibe el claim).
+            (((fleetAgent.persona as Persona | null)?.env?.ANTHROPIC_MODEL ??
+              FLEET_DEFAULT_MODEL) === "claude-sonnet-5")
+              ? MODEL_IDENTITY_SONNET5
+              : null,
             // Apariencia oficial de Ghosty (morado + lentes) SOLO si el agente es
             // Ghosty → corrige el auto-retrato genérico sin tocar personas custom.
             (fleetAgent.assistantName === "Ghosty" ||
