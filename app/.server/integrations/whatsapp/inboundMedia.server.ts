@@ -201,7 +201,15 @@ async function resolveQuotedContext(
           refImageUrl: url,
         };
       }
-    } catch {}
+    } catch (e) {
+      // Re-download of the quoted image can 403 once WhatsApp's encrypted link
+      // expires. Don't drop it — tell the agent so it can ask for a resend
+      // instead of replying blind to "edita esta imagen [citada]".
+      console.warn(`[fleet-media] quoted image download failed: ${e instanceof Error ? e.message : e}`);
+      return {
+        frame: `[El usuario CITA una imagen que no pude recuperar (su enlace de WhatsApp caducó). Pídele que la reenvíe.]`,
+      };
+    }
   }
 
   // Quoted voice note / audio → transcribe it (box-first whisper, Gemini fallback).
@@ -214,18 +222,28 @@ async function resolveQuotedContext(
       const { transcribeAudio } = await import("~/.server/core/fleetVoice");
       const t = await transcribeAudio(ownerId, buf, mime);
       if (t) return { frame: `[El usuario CITA una nota de voz. Transcripción: "${t}"]` };
-    } catch {}
+    } catch (e) {
+      console.warn(`[fleet-media] quoted audio download failed: ${e instanceof Error ? e.message : e}`);
+      return {
+        frame: `[El usuario CITA una nota de voz que no pude recuperar/transcribir. Pídele que la reenvíe.]`,
+      };
+    }
   }
 
   // Quoted document → extract its text.
   const qdoc = qm.documentMessage || qm.documentWithCaptionMessage?.message?.documentMessage;
   if (qdoc) {
+    const name = qdoc.fileName || qdoc.title || "documento";
     try {
       const buf = await dl(sock, fake);
-      const name = qdoc.fileName || qdoc.title || "documento";
       const dtext = await readDocText(buf, name, qdoc.mimetype);
       if (dtext) return { frame: `[El usuario CITA el documento "${name}". Contenido:\n${dtext}\n---fin del documento citado---]` };
-    } catch {}
+    } catch (e) {
+      console.warn(`[fleet-media] quoted document download failed: ${e instanceof Error ? e.message : e}`);
+      return {
+        frame: `[El usuario CITA el documento "${name}" pero no pude recuperarlo (enlace caducado). Pídele que lo reenvíe.]`,
+      };
+    }
   }
 
   // Fallback: quoted plain text / caption.
@@ -314,7 +332,9 @@ export async function extractInboundContent(
         text = t;
         wasVoice = true;
       }
-    } catch {}
+    } catch (e) {
+      console.warn(`[fleet-media] voice download failed: ${e instanceof Error ? e.message : e}`);
+    }
   }
 
   // Video → transcribe its audio (Gemini reads the audio track).
@@ -328,7 +348,9 @@ export async function extractInboundContent(
         buf.toString("base64")
       );
       if (vt) prepend(`[Video — audio transcrito: ${vt}]`);
-    } catch {}
+    } catch (e) {
+      console.warn(`[fleet-media] video download failed: ${e instanceof Error ? e.message : e}`);
+    }
   }
 
   // Image / sticker → NATIVE Claude vision. We download the bytes and hand them
@@ -353,18 +375,27 @@ export async function extractInboundContent(
         refImageUrl = await client.getReadUrl(key, 3600); // signed, ~1h
         imageData.url = refImageUrl;
       } catch {}
-    } catch {}
+    } catch (e) {
+      console.warn(`[fleet-media] image download failed: ${e instanceof Error ? e.message : e}`);
+    }
   }
 
   // Document → extracted text.
   let docText = "";
   let docName = "";
+  let docDownloadFailed = false;
   if (docMsg) {
     docName = docMsg.fileName || docMsg.title || "documento";
     try {
       const buf = await dl(sock, m);
       docText = await readDocText(buf, docName, docMsg.mimetype);
-    } catch {}
+    } catch (e) {
+      // Distinguish "couldn't download (expired link → resend helps)" from
+      // "downloaded but unreadable format" (docText stays "" in both, so we
+      // need this flag to give the agent the right ask downstream).
+      docDownloadFailed = true;
+      console.warn(`[fleet-media] document download failed: ${e instanceof Error ? e.message : e}`);
+    }
   }
 
   // Quoted/replied context — resolved BEFORE anti-drop so a reply to media still
@@ -387,7 +418,9 @@ export async function extractInboundContent(
       documentMessage: "un archivo que no pude leer",
       stickerMessage: "un sticker",
     };
-    if (kind && NOTE[kind]) text = `(el usuario te envió ${NOTE[kind]} que no pude procesar; pídele que te lo describa o lo mande de otra forma)`;
+    if (docDownloadFailed)
+      text = `(el usuario envió el documento "${docName}" pero su enlace de WhatsApp caducó y no pude descargarlo; pídele que lo reenvíe)`;
+    else if (kind && NOTE[kind]) text = `(el usuario te envió ${NOTE[kind]} que no pude procesar; pídele que te lo describa o lo mande de otra forma)`;
     else if (hadImage) text = "(el usuario envió un archivo sin texto)";
     else return null; // reaction / protocol / key-distribution noise → skip
   }
@@ -411,6 +444,14 @@ export async function extractInboundContent(
     agentPrompt =
       `[El usuario envió el documento "${docName}". Contenido (texto extraído del archivo):\n${docText}\n---fin del documento---]\n` +
       (text ? `Mensaje del usuario: ${text}` : "(sin texto adicional)");
+  } else if (docDownloadFailed) {
+    // Download failed (expired/Forbidden link) — a resend actually helps, so say so.
+    agentPrompt =
+      `[No pude descargar el documento "${docName}" — su enlace de WhatsApp caducó. Pídele al usuario que lo reenvíe.]\n` +
+      (text ? `Mensaje del usuario: ${text}` : "(sin texto adicional)");
+  } else if (docMsg) {
+    // Downloaded but unreadable format (e.g. docx/xlsx) — a resend won't help; ask for content.
+    agentPrompt = `[NOTA: el usuario adjuntó el documento "${docName}" que no pude leer (formato no soportado). Pídele que te diga qué contiene o que lo mande como PDF/CSV.]\n${agentPrompt}`;
   } else if (hadImage && !refImageUrl) {
     agentPrompt = `[NOTA: el usuario adjuntó un archivo/imagen que NO puedes ver/leer. Pídele que lo describa o que te diga qué contiene.]\n${agentPrompt}`;
   }
@@ -534,10 +575,19 @@ export async function extractWabaContent(
   }
 
   // Anti-drop: a media-only message we couldn't process still tells the agent.
+  // Formmy already re-hosted the file, so there's no expired-link/resend angle —
+  // name what arrived and ask the user to describe/resend it.
   if (!text.trim()) {
-    text = hasMedia
-      ? "(el usuario envió un archivo que no pude procesar; pídele que lo describa o lo mande de otra forma)"
-      : "";
+    if (hasMedia) {
+      const label = media?.fileName
+        ? `el documento "${media.fileName}"`
+        : media?.type
+          ? `un archivo (${media.type})`
+          : "un archivo";
+      text = `(el usuario envió ${label} que no pude procesar; pídele que lo describa o lo reenvíe)`;
+    } else {
+      text = "";
+    }
   }
 
   return { text, userText: userWords, refImageUrl: imageData?.url, wasVoice, hasMedia, image: imageData };
