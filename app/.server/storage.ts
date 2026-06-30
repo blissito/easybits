@@ -295,6 +295,25 @@ function getPlatformS3(): S3Client {
   });
 }
 
+// Tigris Acceleration Gateway endpoint. Deleting an object through this endpoint
+// eagerly purges the edge cache (TAG drops the cache entry before forwarding the
+// DELETE). The direct endpoint (AWS_ENDPOINT_URL_S3 = t3.storage.dev) does NOT —
+// a deleted public object keeps serving a stale 200 from
+// `*.fly.storage.tigris.dev` until the cache TTL ages it out.
+const TIGRIS_GATEWAY_ENDPOINT =
+  process.env.TIGRIS_GATEWAY_ENDPOINT || "https://fly.storage.tigris.dev";
+
+function getPlatformGatewayS3(): S3Client {
+  return new S3Client({
+    region: process.env.AWS_REGION || "auto",
+    endpoint: TIGRIS_GATEWAY_ENDPOINT,
+    credentials: {
+      accessKeyId: process.env.AWS_ACCESS_KEY_ID || "",
+      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || "",
+    },
+  });
+}
+
 export async function copyObjectAcrossBuckets(opts: {
   fromBucket: string;
   toBucket: string;
@@ -315,7 +334,10 @@ export async function deleteObjectFromBucket(opts: {
   bucket: string;
   key: string;
 }) {
-  const s3 = getPlatformS3();
+  // Route PUBLIC bucket deletes through the Tigris gateway so the edge cache is
+  // purged immediately; everything else uses the direct endpoint.
+  const s3 =
+    opts.bucket === PUBLIC_BUCKET ? getPlatformGatewayS3() : getPlatformS3();
   await s3.send(
     new DeleteObjectCommand({
       Bucket: opts.bucket,

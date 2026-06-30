@@ -2,7 +2,7 @@ import { nanoid } from "nanoid";
 import { db } from "../db";
 import type { AuthContext } from "../apiAuth";
 import { requireScope } from "../apiAuth";
-import { getPlatformPublicClient, buildPublicAssetUrl } from "../storage";
+import { getPlatformPublicClient, buildPublicAssetUrl, deleteObjectFromBucket, PUBLIC_BUCKET } from "../storage";
 import { createWebsite } from "./operations";
 import { buildLandingHtml } from "~/lib/buildLandingHtml";
 import { buildLandingHtml2 } from "~/lib/landing2/buildLandingHtml2";
@@ -448,6 +448,13 @@ export async function unpublishLanding(ctx: AuthContext, id: string) {
   if (!website) throwJson("Website not found", 404);
 
   // Soft-delete website files
+  const siteFiles = await db.file.findMany({
+    where: {
+      name: { startsWith: `sites/${website.id}/` },
+      ownerId: ctx.user.id,
+      status: { not: "DELETED" },
+    },
+  });
   await db.file.updateMany({
     where: {
       name: { startsWith: `sites/${website.id}/` },
@@ -456,6 +463,19 @@ export async function unpublishLanding(ctx: AuthContext, id: string) {
     },
     data: { status: "DELETED", deletedAt: new Date() },
   });
+
+  // Stop serving the published assets NOW: purge each public object from the
+  // origin + Tigris edge. These are deploy artifacts (HTML/PDF/images) that get
+  // regenerated on re-publish, so there's nothing to preserve — and a sensitive
+  // unpublished document must stop returning 200 immediately, not at cache TTL.
+  for (const f of siteFiles) {
+    if (f.storageProviderId) continue; // custom provider: not ours to purge
+    const isLegacyMcpUrl = !!f.url && f.url.includes("/mcp/");
+    await deleteObjectFromBucket({
+      bucket: PUBLIC_BUCKET,
+      key: isLegacyMcpUrl ? `mcp/${f.storageKey}` : f.storageKey,
+    }).catch(() => {});
+  }
 
   // Soft-delete website
   await db.website.update({

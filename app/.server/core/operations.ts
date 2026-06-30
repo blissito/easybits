@@ -210,6 +210,11 @@ export async function deleteFile(ctx: AuthContext, fileId: string) {
     });
   }
 
+  // If the file is publicly served, cut the public exposure NOW (move to the
+  // private bucket + purge the Tigris edge) instead of waiting for the 7-day
+  // purge / cache TTL. The record stays soft-deleted (recoverable as private).
+  await depublishPublicObject(file);
+
   await db.file.update({
     where: { id: fileId },
     data: { status: "DELETED", deletedAt: new Date() },
@@ -266,8 +271,22 @@ export async function purgeDeletedFiles() {
 
   for (const file of files) {
     try {
-      const client = await getClientForFile(file.storageProviderId, file.ownerId);
-      await client.deleteObject(file.storageKey);
+      if (!file.storageProviderId && file.access === "public") {
+        // Public platform object lives in PUBLIC_BUCKET at root. Delete it via
+        // the gateway-aware helper so the Tigris edge cache is purged too — the
+        // old code resolved the PRIVATE bucket client here, so the public object
+        // (and its cached edge copy) was never actually removed.
+        const isLegacyMcpUrl = !!file.url && file.url.includes("/mcp/");
+        await deleteObjectFromBucket({
+          bucket: PUBLIC_BUCKET,
+          key: isLegacyMcpUrl ? `mcp/${file.storageKey}` : file.storageKey,
+        });
+      } else {
+        const client = file.storageProviderId
+          ? await getClientForFile(file.storageProviderId, file.ownerId)
+          : getReadClientForPlatformFile(file);
+        await client.deleteObject(file.storageKey);
+      }
     } catch {
       // storage already gone, continue with DB cleanup
     }
@@ -275,6 +294,41 @@ export async function purgeDeletedFiles() {
   }
 
   return { purged: files.length };
+}
+
+/**
+ * Stop serving a PUBLIC platform object immediately: move its bytes to the
+ * private bucket and purge the public copy (origin + Tigris edge). Keeps the
+ * file recoverable (it comes back as `private`) while ensuring a deleted public
+ * URL stops returning 200 NOW instead of at the 7-day purge / cache TTL.
+ * No-op for private files and custom-provider files.
+ */
+async function depublishPublicObject(file: {
+  id: string;
+  storageKey: string;
+  url: string | null;
+  access: string | null;
+  storageProviderId: string | null;
+}): Promise<void> {
+  if (file.storageProviderId || file.access !== "public") return;
+  const isLegacyMcpUrl = !!file.url && file.url.includes("/mcp/");
+  const srcKey = isLegacyMcpUrl ? `mcp/${file.storageKey}` : file.storageKey;
+  const dstKey = `mcp/${file.storageKey}`;
+  try {
+    await copyObjectAcrossBuckets({
+      fromBucket: PUBLIC_BUCKET,
+      toBucket: PRIVATE_BUCKET,
+      key: srcKey,
+      destKey: dstKey,
+    });
+  } catch {
+    // source object may already be gone — still flip the record + purge edge
+  }
+  await deleteObjectFromBucket({ bucket: PUBLIC_BUCKET, key: srcKey }).catch(() => {});
+  await db.file.update({
+    where: { id: file.id },
+    data: { access: "private", url: "" },
+  });
 }
 
 // --- Share File ---
