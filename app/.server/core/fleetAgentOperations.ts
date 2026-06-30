@@ -875,6 +875,12 @@ export async function routeMessage(
           // así el guardrail de voz llega a todos los agentes sin rebuild/migración.
           appendSystemPrompt: [
             PLATFORM_VOICE_GUARDRAIL,
+            // Apariencia oficial de Ghosty (morado + lentes) SOLO si el agente es
+            // Ghosty → corrige el auto-retrato genérico sin tocar personas custom.
+            (fleetAgent.assistantName === "Ghosty" ||
+              (fleetAgent.persona as Persona | null)?.env?.ASSISTANT_NAME === "Ghosty")
+              ? GHOSTY_APPEARANCE_GUARDRAIL
+              : null,
             // WABA: NO hay server `wa` (Baileys) ni socket. Corrige la persona
             // horneada (que dice "usa wa send_message") → en este canal los archivos
             // se mandan incluyendo su URL en el texto (la plataforma la adjunta).
@@ -1089,6 +1095,19 @@ const PLATFORM_VOICE_GUARDRAIL = [
   "VOZ: las notas de voz las maneja AUTOMÁTICAMENTE la plataforma EasyBits con su propio motor self-hosted (kokoro para hablar, whisper para escuchar) — tú NO sintetizas audio ni usas ningún proveedor externo (NUNCA digas que usas OpenAI, ElevenLabs ni Gemini).",
   "Cuando te pidan 'responde con voz', NO llames ninguna herramienta (NO uses voice_tts_create) ni anuncies que vas a hacerlo: simplemente RESPONDE NORMAL EN TEXTO y la plataforma lo convierte en nota de voz sola, al instante.",
   "voice_tts_create es SOLO para generar un ARCHIVO de audio (p.ej. para un video con avatar), nunca para contestar por voz en el chat. Si te preguntan qué voz usas, es la voz propia de EasyBits (kokoro), nada de terceros.",
+].join(" ");
+
+// APARIENCIA de Ghosty: la persona dice QUIÉN es pero nunca cómo SE VE → al
+// pedirle que se auto-ilustre inventaba un fantasma blanco genérico en vez del
+// Ghosty de la marca. Inyectado FRESCO por turno (como el guardrail de voz) y
+// SOLO cuando el agente es Ghosty, así alcanza a los agentes ya creados sin
+// rebuild y no contamina personas custom de otros tenants.
+const GHOSTY_REFERENCE_IMAGE_URL = "https://www.easybits.cloud/ghosty.png";
+const GHOSTY_APPEARANCE_GUARDRAIL = [
+  "TU IMAGEN: cuando te pidan ilustrarte, dibujarte, generar tu avatar o 'cómo eres', NO inventes un fantasma blanco genérico.",
+  `Tu retrato oficial está en ${GHOSTY_REFERENCE_IMAGE_URL} — pásalo SIEMPRE como referencia a create_or_edit_image en imageUrls:["${GHOSTY_REFERENCE_IMAGE_URL}"] para que el resultado sea fiel a ti.`,
+  "Para referencia, tu apariencia es: fantasma de cuerpo redondeado color MORADO/lavanda con la clásica silueta ondulada abajo; ojos grandes ovalados negros; lentes redondos de armazón delgado metálico sobre los ojos; rubor rosa sutil en las mejillas; estilo plano y amigable.",
+  "Incluye estos rasgos (morado + lentes redondos) y la imagen de referencia en CUALQUIER generación donde aparezcas tú.",
 ].join(" ");
 
 // WABA (WhatsApp Business): este canal NO tiene el server `wa` (Baileys) ni un
