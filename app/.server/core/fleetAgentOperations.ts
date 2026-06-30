@@ -61,6 +61,15 @@ export const ADMIT_GIVEUP_MS = 240_000; // hold ~4 min (> idleSuspendMin+cadenci
 export const admitRetryDelay = (attempt: number) =>
   ADMIT_BACKOFFS_MS[Math.min(attempt, ADMIT_BACKOFFS_MS.length - 1)];
 
+// ── Modelo del CLI para los workers de la flota ───────────────────────────────
+// FUENTE ÚNICA. El worker (claude-worker) corre el Agent SDK sobre el OAuth Max
+// del dueño (tarifa plana, no medido); el CLI honra ANTHROPIC_MODEL. Se inyecta
+// UNA vez en el env del spawn (spawnVm). Override por-agente vía
+// persona.env.ANTHROPIC_MODEL. El worker no manda sampling params, así que
+// Sonnet 5 (adaptive thinking on) es un swap limpio. Lectura de env, no throw a
+// nivel de módulo → no rompe el prerender del Docker build.
+export const FLEET_DEFAULT_MODEL = process.env.FLEET_MODEL || "claude-sonnet-5";
+
 // ── In-flight turn guard ──────────────────────────────────────────────────────
 // VMs currently servicing a turn (working, or waiting on tools/subagents that
 // emit no chunks). The reaper measures idle by lastMessageAt, which is only
@@ -566,6 +575,9 @@ async function spawnVm(ctx: AuthContext, fleetAgent: { id: string; name: string 
   // group and gates elevated actions by mainGroupJid.
   env.FLEET_TOKEN = fleetAgent.token;
   env.FLEET_WA_ACTION_URL = `${appBaseUrl()}/api/v2/fleet-agents/wa-action`;
+  // Modelo del worker — persona.env gana (override por-agente), si no el default
+  // de flota. El CLI del worker lo lee de su env (ver FLEET_DEFAULT_MODEL).
+  if (!env.ANTHROPIC_MODEL) env.ANTHROPIC_MODEL = FLEET_DEFAULT_MODEL;
   // TODO(multi-box): target.url must drive createSandbox/callHost; today it uses
   // the single SANDBOX_HOST_URL, so target is recorded but not yet routed.
   const created = await createAgent(ctx, {
