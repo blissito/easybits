@@ -137,6 +137,7 @@ export default [
           route("setup", "routes/dash/developer/setup.tsx"),
           route("mcp", "routes/dash/developer/mcp.tsx"),
           route("websites", "routes/dash/developer/websites.tsx"),
+          route("workspaces", "routes/dash/developer/workspaces.tsx"),
           route("webhooks", "routes/dash/developer/webhooks.tsx"),
           route("databases", "routes/dash/developer/databases.tsx"),
           route("domains", "routes/dash/developer/domains.tsx"),
