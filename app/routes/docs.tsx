@@ -158,8 +158,8 @@ export default function DocsPage() {
               },
               {
                 "@type": "TechArticle",
-                headline: "EasyBits API Documentation",
-                description: "Complete API reference for the EasyBits REST API v2. Files, webhooks, websites, bulk operations, image transforms, and SDK.",
+                headline: "Documentación de la API de EasyBits",
+                description: "Referencia completa de la REST API v2 de EasyBits. Archivos, webhooks, sitios web, operaciones en lote, transformación de imágenes y SDK.",
                 url: "https://www.easybits.cloud/docs",
                 author: { "@type": "Organization", name: "EasyBits" },
                 about: [
@@ -522,67 +522,67 @@ ghosty --yolo` },
           <section id="sdk" className="mb-16">
             <h2 className="text-2xl font-bold mb-4">SDK</h2>
             <p className="text-gray-600 mb-4 text-sm">
-              The typed SDK wraps the entire REST API. Install and use it in any Node.js/Bun/Deno project.
+              El SDK tipado envuelve toda la REST API. Instálalo y úsalo en cualquier proyecto Node.js/Bun/Deno.
             </p>
-            <CodeExample title="Install" code="npm install @easybits.cloud/sdk" />
+            <CodeExample title="Instalar" code="npm install @easybits.cloud/sdk" />
 
-            <h3 className="text-lg font-bold mt-8 mb-4">All Methods</h3>
+            <h3 className="text-lg font-bold mt-8 mb-4">Todos los métodos</h3>
 
-            <SdkMethodTable title="Files" methods={[
-              ["listFiles(params?)", "List files (paginated)"],
-              ["getFile(fileId)", "Get file + download URL"],
-              ["uploadFile(params)", "Create file + get upload URL"],
-              ["updateFile(fileId, params)", "Update name, access, metadata, status"],
-              ["deleteFile(fileId)", "Soft-delete (7-day retention)"],
-              ["restoreFile(fileId)", "Restore from trash"],
-              ["listDeletedFiles(params?)", "List trash with days until purge"],
-              ["searchFiles(query)", "AI-powered natural language search"],
-              ["duplicateFile(fileId, name?)", "Copy file (new storage object)"],
-              ["listPermissions(fileId)", "List sharing permissions"],
+            <SdkMethodTable title="Archivos" methods={[
+              ["listFiles(params?)", "Lista archivos (paginado)"],
+              ["getFile(fileId)", "Obtén el archivo + URL de descarga"],
+              ["uploadFile(params)", "Crea el archivo + obtén URL de subida"],
+              ["updateFile(fileId, params)", "Actualiza nombre, acceso, metadata, status"],
+              ["deleteFile(fileId)", "Borrado suave (retención 7 días)"],
+              ["restoreFile(fileId)", "Restaura desde la papelera"],
+              ["listDeletedFiles(params?)", "Lista la papelera con días hasta la purga"],
+              ["searchFiles(query)", "Búsqueda en lenguaje natural con IA"],
+              ["duplicateFile(fileId, name?)", "Copia el archivo (nuevo objeto de storage)"],
+              ["listPermissions(fileId)", "Lista los permisos de compartición"],
             ]} />
 
-            <SdkMethodTable title="Bulk Operations" methods={[
-              ["bulkUploadFiles(items)", "Upload up to 20 files at once"],
-              ["bulkDeleteFiles(fileIds)", "Delete up to 100 files at once"],
+            <SdkMethodTable title="Operaciones en lote" methods={[
+              ["bulkUploadFiles(items)", "Sube hasta 20 archivos a la vez"],
+              ["bulkDeleteFiles(fileIds)", "Borra hasta 100 archivos a la vez"],
             ]} />
 
-            <SdkMethodTable title="Images" methods={[
-              ["optimizeImage(params)", "Convert to WebP/AVIF"],
-              ["transformImage(params)", "Resize, rotate, flip, convert, grayscale"],
+            <SdkMethodTable title="Imágenes" methods={[
+              ["optimizeImage(params)", "Convierte a WebP/AVIF"],
+              ["transformImage(params)", "Redimensiona, rota, voltea, convierte, escala de grises"],
             ]} />
 
-            <SdkMethodTable title="Sharing" methods={[
-              ["shareFile(params)", "Share with another user by email"],
-              ["generateShareToken(fileId, expiresIn?)", "Temporary download URL"],
-              ["listShareTokens(params?)", "List tokens (paginated)"],
+            <SdkMethodTable title="Compartir" methods={[
+              ["shareFile(params)", "Comparte con otro usuario por email"],
+              ["generateShareToken(fileId, expiresIn?)", "URL de descarga temporal"],
+              ["listShareTokens(params?)", "Lista tokens (paginado)"],
             ]} />
 
             <SdkMethodTable title="Webhooks" methods={[
-              ["listWebhooks()", "List configured webhooks"],
-              ["createWebhook(params)", "Create webhook (returns secret once)"],
-              ["getWebhook(webhookId)", "Get webhook details"],
-              ["updateWebhook(webhookId, params)", "Update URL, events, or status"],
-              ["deleteWebhook(webhookId)", "Delete permanently"],
+              ["listWebhooks()", "Lista los webhooks configurados"],
+              ["createWebhook(params)", "Crea un webhook (devuelve el secret una vez)"],
+              ["getWebhook(webhookId)", "Obtén los detalles del webhook"],
+              ["updateWebhook(webhookId, params)", "Actualiza URL, eventos o status"],
+              ["deleteWebhook(webhookId)", "Borra permanentemente"],
             ]} />
 
-            <SdkMethodTable title="Websites" methods={[
-              ["listWebsites()", "List static websites"],
-              ["createWebsite(name)", "Create website, get id + URL"],
-              ["getWebsite(websiteId)", "Get website details"],
-              ["updateWebsite(websiteId, params)", "Update name/status"],
-              ["deleteWebsite(websiteId)", "Delete website + files"],
+            <SdkMethodTable title="Sitios web" methods={[
+              ["listWebsites()", "Lista los sitios estáticos"],
+              ["createWebsite(name)", "Crea un sitio, obtén id + URL"],
+              ["getWebsite(websiteId)", "Obtén los detalles del sitio"],
+              ["updateWebsite(websiteId, params)", "Actualiza nombre/status"],
+              ["deleteWebsite(websiteId)", "Borra el sitio + archivos"],
             ]} />
             <p className="text-xs text-gray-500 -mt-4 mb-6">
-              Deploy files by uploading with <code className="bg-gray-100 px-1 rounded">fileName: "sites/&#123;websiteId&#125;/path"</code> — see <a href="#websites" className="underline">Websites section</a> for full example.
+              Despliega archivos subiéndolos con <code className="bg-gray-100 px-1 rounded">fileName: "sites/&#123;websiteId&#125;/path"</code> — ve la <a href="#websites" className="underline">sección Sitios web</a> para el ejemplo completo.
             </p>
 
-            <SdkMethodTable title="Account" methods={[
-              ["getUsageStats()", "Storage, file counts, plan info"],
-              ["listProviders()", "Storage providers"],
+            <SdkMethodTable title="Cuenta" methods={[
+              ["getUsageStats()", "Storage, conteo de archivos, info del plan"],
+              ["listProviders()", "Proveedores de storage"],
               ["listKeys()", "API keys"],
             ]} />
 
-            <h3 className="text-lg font-bold mt-8 mb-4">Error Handling</h3>
+            <h3 className="text-lg font-bold mt-8 mb-4">Manejo de errores</h3>
             <CodeExample title="SDK" code={`import { EasybitsError } from "@easybits.cloud/sdk";
 
 try {
@@ -1769,7 +1769,7 @@ agent_run({ prompt: "scrapea ...", secrets: ["BRIGHTDATA_API_TOKEN"] })`}
           <section id="calls" className="mb-16">
             <h2 className="text-2xl font-bold mb-4">Llamadas</h2>
             <p className="text-gray-600 mb-4 text-sm">
-              Salas de videollamada con <strong>grabación en HD</strong>, self-hosted (template <code className="bg-gray-100 px-1 rounded">livekit-svc</code>). Tu agente crea la sala, los participantes se unen <strong>desde el navegador</strong> (cámara + pantalla compartida, sin instalar nada), y el servidor graba el layout completo en 1080p. Al terminar, el MP4 se sube a tus <a href="#files" className="underline font-medium">Files</a>. Sin servidores de terceros, sin límite de duración.
+              Salas de videollamada con <strong>grabación en HD</strong>, self-hosted (template <code className="bg-gray-100 px-1 rounded">livekit-svc</code>). Tu agente crea la sala, los participantes se unen <strong>desde el navegador</strong> (cámara + pantalla compartida, sin instalar nada), y el servidor graba el layout completo en 1080p. Al terminar, el MP4 se sube a tus <a href="#files" className="underline font-medium">Archivos</a>. Sin servidores de terceros, sin límite de duración.
             </p>
 
             <div className="mb-6 bg-green-50 border-2 border-green-300 rounded-xl p-4 text-sm">
@@ -1794,7 +1794,7 @@ console.log(call.roomUrl); // https://...sandboxes.easybits.cloud/room?room=entr
 // 2. Iniciar grabación server-side
 await eb.calls.record(call.sandboxId, { room: call.room });
 
-// 3. Detener — sube el MP4 a Files y devuelve el link
+// 3. Detener — sube el MP4 a Archivos y devuelve el link
 const { url, fileId } = await eb.calls.stop(call.sandboxId);` },
                 { label: "REST", code: `# 1. Crear la sala
 POST /api/v2/calls                 { "room": "entrevista" }
@@ -1804,12 +1804,12 @@ POST /api/v2/calls                 { "room": "entrevista" }
 POST /api/v2/calls/:id/record      { "room": "entrevista" }
 # → { recording: true }
 
-# 3. Detener (sube el MP4 a Files)
+# 3. Detener (sube el MP4 a Archivos)
 POST /api/v2/calls/:id/stop
 # → { url, fileId }` },
                 { label: "MCP", code: `call_create({ room: "entrevista" })   // → { sandboxId, room, roomUrl }
 call_record({ sandboxId, room })      // inicia grabación HD
-call_stop({ sandboxId })              // → { url, fileId } (MP4 en Files)` },
+call_stop({ sandboxId })              // → { url, fileId } (MP4 en Archivos)` },
               ]}
             />
 
@@ -1823,7 +1823,7 @@ call_stop({ sandboxId })              // → { url, fileId } (MP4 en Files)` },
 const st = await eb.calls.status(call.sandboxId);
 // → { recording, room, startedAt, participants: ["Ana", "Beto"] }
 
-// Listar las grabaciones (en tus Files, source: "studio")
+// Listar las grabaciones (en tus Archivos, source: "studio")
 const recs = await eb.calls.files();
 // → [{ id, name, url, source, createdAt }]
 
@@ -1833,14 +1833,14 @@ await eb.calls.destroy(call.sandboxId);` },
 GET  /api/v2/calls/:id/status
 # → { recording, room, startedAt, participants[] }
 
-# Grabaciones (en Files)
+# Grabaciones (en Archivos)
 GET  /api/v2/calls/files
 # → [{ id, name, url, source, createdAt }]
 
 # Cerrar (sube pendientes + destruye)
 POST /api/v2/calls/:id/destroy` },
                 { label: "MCP", code: `call_status({ sandboxId })    // ¿grabando? ¿quién está conectado?
-call_files()                  // lista las grabaciones en Files
+call_files()                  // lista las grabaciones en Archivos
 call_destroy({ sandboxId })   // cierra la sala y libera la VM` },
               ]}
             />
