@@ -334,6 +334,7 @@ export async function purgeDeletedFiles() {
     where: { status: "DELETED", deletedAt: { lt: cutoff } },
   });
 
+  let purged = 0;
   for (const file of files) {
     try {
       if (!file.storageProviderId && file.access === "public") {
@@ -355,10 +356,21 @@ export async function purgeDeletedFiles() {
     } catch {
       // storage already gone, continue with DB cleanup
     }
-    await db.file.delete({ where: { id: file.id } });
+    // DB cleanup must be resilient: one bad row can't abort the whole batch.
+    // ShareToken.file is a REQUIRED relation → Prisma (Mongo emulates referential
+    // integrity) throws P2014 on file.delete while any token still points at it,
+    // which used to 500 the cron and leave every later file stuck at "0 days".
+    // Remove dependents first, then the file.
+    try {
+      await db.shareToken.deleteMany({ where: { fileId: file.id } });
+      await db.file.delete({ where: { id: file.id } });
+      purged++;
+    } catch (e) {
+      console.error(`purgeDeletedFiles: failed to delete file ${file.id}:`, e);
+    }
   }
 
-  return { purged: files.length };
+  return { purged, eligible: files.length };
 }
 
 /**
