@@ -17,29 +17,49 @@ jobs:
           node-version: 20
           registry-url: https://registry.npmjs.org
 
+      # Publica cada paquete SOLO si su versión aún no está en npm. Así un re-run
+      # (versión sin cambios) salta limpio, pero un error REAL de publish — auth
+      # (token muerto → npm devuelve 404), red o build — hace FALLAR el job en vez
+      # de mentir "verde". `npm view` es lectura pública: funciona aunque el token
+      # esté muerto, así que el skip por-versión es fiable.
       - name: Publish SDK
-        continue-on-error: true
         working-directory: packages/sdk
         run: |
           npm ci
-          npm publish
+          NAME=$(node -p "require('./package.json').name")
+          VERSION=$(node -p "require('./package.json').version")
+          if npm view "$NAME@$VERSION" version >/dev/null 2>&1; then
+            echo "$NAME@$VERSION ya está publicado — se salta."
+          else
+            npm publish
+          fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish MCP
-        continue-on-error: true
         working-directory: packages/mcp
         run: |
           npm ci
-          npm publish
+          NAME=$(node -p "require('./package.json').name")
+          VERSION=$(node -p "require('./package.json').version")
+          if npm view "$NAME@$VERSION" version >/dev/null 2>&1; then
+            echo "$NAME@$VERSION ya está publicado — se salta."
+          else
+            npm publish
+          fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish CLI
-        continue-on-error: true
         working-directory: cli
         run: |
           npm ci
-          npm publish
+          NAME=$(node -p "require('./package.json').name")
+          VERSION=$(node -p "require('./package.json').version")
+          if npm view "$NAME@$VERSION" version >/dev/null 2>&1; then
+            echo "$NAME@$VERSION ya está publicado — se salta."
+          else
+            npm publish
+          fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
