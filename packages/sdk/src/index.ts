@@ -176,6 +176,52 @@ export interface UpdateWebsiteParams {
   status?: string;
 }
 
+export interface Workspace {
+  id: string;
+  name: string;
+  slug: string;
+  status: string;
+  /** Per-workspace storage cap in bytes; null = only the account plan ceiling applies. */
+  quotaBytes: number | null;
+  usedBytes: number;
+  fileCount: number;
+  createdAt: string;
+}
+
+export interface CreateWorkspaceParams {
+  name: string;
+  slug?: string;
+  quotaBytes?: number;
+}
+
+export interface UpdateWorkspaceParams {
+  name?: string;
+  status?: string;
+  quotaBytes?: number | null;
+}
+
+export interface WorkspaceUsage {
+  workspaceId: string;
+  usedBytes: number;
+  quotaBytes: number | null;
+  fileCount: number;
+}
+
+export interface ListWorkspacesResponse {
+  items: Workspace[];
+  nextCursor: string | null;
+  hasMore: boolean;
+}
+
+export interface WorkspaceKey {
+  id: string;
+  /** The raw API key — returned exactly once. Store it now. */
+  key: string;
+  prefix: string;
+  scopes: string[];
+  workspaceId: string;
+}
+
 export interface StorageProvider {
   id: string;
   name: string;
@@ -747,6 +793,57 @@ export class EasybitsClient {
     if (params?.cursor) search.set("cursor", params.cursor);
     const qs = search.toString();
     return this.request<ListFilesResponse>(`/websites/${websiteId}/files${qs ? `?${qs}` : ""}`);
+  }
+
+  // ── Workspaces ──────────────────────────────────────────────
+  // Namespaced, quota-bounded containers of files. Create one per tenant, then
+  // mint a workspace-scoped key so that tenant can only touch its own files.
+
+  async listWorkspaces(params?: { limit?: number; cursor?: string }): Promise<ListWorkspacesResponse> {
+    const search = new URLSearchParams();
+    if (params?.limit) search.set("limit", String(params.limit));
+    if (params?.cursor) search.set("cursor", params.cursor);
+    const qs = search.toString();
+    return this.request<ListWorkspacesResponse>(`/workspaces${qs ? `?${qs}` : ""}`);
+  }
+
+  async createWorkspace(params: CreateWorkspaceParams): Promise<{ workspace: Workspace }> {
+    return this.request<{ workspace: Workspace }>("/workspaces", {
+      method: "POST",
+      body: JSON.stringify(params),
+    });
+  }
+
+  async getWorkspace(workspaceId: string): Promise<Workspace> {
+    return this.request<Workspace>(`/workspaces/${workspaceId}`);
+  }
+
+  async updateWorkspace(workspaceId: string, params: UpdateWorkspaceParams): Promise<{ ok: boolean; workspace: Workspace }> {
+    return this.request<{ ok: boolean; workspace: Workspace }>(`/workspaces/${workspaceId}`, {
+      method: "PATCH",
+      body: JSON.stringify(params),
+    });
+  }
+
+  async deleteWorkspace(workspaceId: string): Promise<{ ok: boolean }> {
+    return this.request<{ ok: boolean }>(`/workspaces/${workspaceId}`, {
+      method: "DELETE",
+    });
+  }
+
+  async getWorkspaceUsage(workspaceId: string): Promise<WorkspaceUsage> {
+    return this.request<WorkspaceUsage>(`/workspaces/${workspaceId}/usage`);
+  }
+
+  /** Mint a workspace-scoped API key. The raw `key` is returned exactly once. */
+  async createWorkspaceKey(
+    workspaceId: string,
+    params?: { name?: string; scopes?: ("READ" | "WRITE" | "DELETE")[] }
+  ): Promise<WorkspaceKey> {
+    return this.request<WorkspaceKey>(`/workspaces/${workspaceId}/keys`, {
+      method: "POST",
+      body: JSON.stringify(params ?? {}),
+    });
   }
 
   // ── Providers ───────────────────────────────────────────────

@@ -1233,7 +1233,7 @@ console.log(website.url); // https://my-docs.easybits.cloud`}
             </p>
 
             <div className="mb-6 bg-green-50 border-2 border-green-300 rounded-xl p-4 text-sm">
-              <strong>30 herramientas MCP</strong> en el grupo <code className="bg-gray-100 px-1 rounded">sandbox</code>.{" "}
+              <strong>34 herramientas MCP</strong> en el grupo <code className="bg-gray-100 px-1 rounded">sandbox</code>.{" "}
               Agrega <code className="bg-gray-100 px-1 rounded">--tools sandbox</code> para habilitarlas.{" "}
               <a href="#tool-groups" className="underline">Ver tool groups</a>.
             </div>
@@ -1316,6 +1316,53 @@ await eb.destroySandbox(sb.sandboxId);` },
 # sandbox_create(template:"python")
 # sandbox_exec(sandboxId, command:"python3 -c 'print(2+2)'")
 # sandbox_destroy(sandboxId)` },
+              ]}
+            />
+
+            <h3 className="text-lg font-bold mt-8 mb-3">Snapshot &amp; fork (clonado copy-on-write)</h3>
+            <p className="text-gray-600 text-sm mb-3">
+              Congela el estado de una caja <strong>viva</strong> en una imagen nombrada (<code className="bg-gray-100 px-1 rounded">snapshot</code>) y arranca <strong>N hijos</strong> desde ella (<code className="bg-gray-100 px-1 rounded">fork</code>). Cada hijo es una caja independiente con su propia IP. Patrón estrella: prepara el entorno una vez (deps instaladas, proyecto listo), snapshotea, y bifurca en paralelo para probar N variantes — sin repetir el setup en cada una.
+            </p>
+            <div className="mb-4 bg-blue-50 border-2 border-blue-200 rounded-xl p-4 text-sm">
+              <strong>El snapshot NO detiene la caja</strong> — sigue corriendo. El fork la clona; los hijos heredan el disco completo al momento del snapshot y cuentan contra tu límite de sandboxes concurrentes.
+            </div>
+            <TabbedCode
+              tabs={[
+                { label: "SDK", code: `import { EasybitsClient } from "@easybits.cloud/sdk";
+const eb = new EasybitsClient({ apiKey: "eb_sk_live_..." });
+
+// 1. Caja base: instala deps una sola vez
+const base = await eb.sandboxes.create({ template: "node" });
+await base.exec("npm i -g cowsay");
+
+// 2. Snapshot del estado listo (la caja sigue viva)
+const snap = await base.snapshot("deps-listas");
+
+// 3. Fork en 3 hijos que corren en paralelo
+const kids = await base.fork({ count: 3 });
+for (const k of kids) {
+  await k.waitUntilReady();
+  const { stdout } = await k.exec("cowsay hola");
+  console.log(k.sandboxId, stdout); // cada hijo ya trae cowsay
+}
+
+// Reusar el snapshot después, sin la caja base:
+const more = await eb.sandboxes.forkFromSnapshot(snap.snapshotId, { count: 2 });
+
+// Catálogo + limpieza
+await eb.sandboxes.snapshots.list();
+await eb.sandboxes.snapshots.delete(snap.snapshotId);` },
+                { label: "MCP", code: `# Congela una caja viva en una imagen nombrada:
+# sandbox_snapshot(sandboxId, name:"deps-listas")
+
+# Bifurca en N hijos (snapshotea y forkea en un paso):
+# sandbox_fork(sandboxId, count:3)
+#   → o desde un snapshot existente:
+# sandbox_fork(snapshotId:"snap_...", count:3)
+
+# Catálogo y limpieza:
+# list_snapshots()
+# delete_snapshot(snapshotId)` },
               ]}
             />
 

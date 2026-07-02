@@ -334,6 +334,49 @@ SDK: \`eb.deleteWebsite(websiteId)\`
 \`\`\`
 `,
 
+  workspaces: `## Workspaces (namespaced storage + per-tenant quota)
+
+A **Workspace** is an owner-scoped, namespaced container of files with its own
+storage quota. Use it to carve isolated tenants inside a single account: each
+workspace gets a \`ws/{id}/\` storage prefix, an optional per-workspace
+\`quotaBytes\`, and can mint **workspace-scoped API keys** that can only read or
+write that workspace's files. Ideal for platforms integrating EasyBits that need
+to give each of their own customers isolated, metered storage.
+
+### Multi-tenant flow (recommended)
+1. \`POST /workspaces\` with your ADMIN key → get \`workspaceId\`.
+2. \`POST /workspaces/{id}/keys\` → get a **workspace-scoped key** (raw, once).
+3. Hand that scoped key to (or use it for) the tenant. Every \`POST /files\` with
+   it lands in the workspace automatically; the tenant can never see other files.
+4. \`GET /workspaces/{id}/usage\` → \`{ usedBytes, quotaBytes, fileCount }\`.
+
+### Create a workspace
+\`POST /workspaces\` — body \`{ name, slug?, quotaBytes? }\`. \`quotaBytes\` must be
+≤ the account plan storage ceiling; null/omitted = no per-workspace cap.
+\`\`\`json
+{ "workspace": { "id": "...", "name": "acme", "slug": "acme", "status": "ACTIVE", "quotaBytes": 52428800, "usedBytes": 0, "fileCount": 0, "createdAt": "..." } }
+\`\`\`
+
+### List / get / update / delete
+- \`GET /workspaces\` → cursor page \`{ items, nextCursor, hasMore }\`.
+- \`GET /workspaces/{id}\`.
+- \`PATCH /workspaces/{id}\` — \`{ name?, status?, quotaBytes? }\`.
+- \`DELETE /workspaces/{id}\` — soft-deletes the workspace and all its files (7-day retention).
+
+### Mint a scoped key
+\`POST /workspaces/{id}/keys\` — body \`{ name?, scopes? }\` (scopes default
+\`["READ","WRITE","DELETE"]\`). Requires an ADMIN key. Returns the raw key once:
+\`\`\`json
+{ "id": "...", "key": "eb_sk_live_...", "prefix": "eb_sk_live_xxxx", "scopes": ["READ","WRITE","DELETE"], "workspaceId": "..." }
+\`\`\`
+
+### Uploading into a workspace
+With a workspace-scoped key, just call \`POST /files\` normally — the file is
+namespaced and counted against the workspace automatically. Exceeding
+\`quotaBytes\` returns 400 "Workspace quota exceeded". With an account key you may
+instead pass \`workspaceId\` in the \`POST /files\` body.
+`,
+
   account: `## Account & Usage
 
 ### Get usage stats

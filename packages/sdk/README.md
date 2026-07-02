@@ -100,6 +100,20 @@ const eb = await createClientFromEnv();
 | `updateWebsite(websiteId, params)` | Update website name/status |
 | `deleteWebsite(websiteId)` | Delete website and its files |
 
+### Workspaces
+
+Namespaced, quota-bounded containers of files. Create one per tenant, mint a workspace-scoped key, and that key can only ever touch its own workspace's files.
+
+| Method | Description |
+|--------|-------------|
+| `listWorkspaces(params?)` | List workspaces (cursor paginated) |
+| `createWorkspace({ name, slug?, quotaBytes? })` | Create a workspace |
+| `getWorkspace(workspaceId)` | Get workspace details |
+| `updateWorkspace(workspaceId, params)` | Update name/status/quota |
+| `deleteWorkspace(workspaceId)` | Delete workspace and its files |
+| `getWorkspaceUsage(workspaceId)` | Get `{ usedBytes, quotaBytes, fileCount }` |
+| `createWorkspaceKey(workspaceId, params?)` | Mint a workspace-scoped API key (raw returned once) |
+
 ### Documents
 
 | Method | Description |
@@ -150,6 +164,8 @@ console.log(webhook.secret); // whsec_...
 | `file.restored` | File restored from trash |
 | `website.created` | Website created |
 | `website.deleted` | Website deleted |
+| `workspace.created` | Workspace created |
+| `workspace.deleted` | Workspace deleted |
 
 ### Verifying signatures
 
@@ -290,6 +306,36 @@ const { content } = await sbx.files.read("/tmp/data.json");
 // Lifecycle
 await sbx.extend(600);   // add 10 min to the TTL
 await sbx.destroy();
+```
+
+### Snapshot & fork (copy-on-write clone)
+
+Freeze a **running** box into a named image, then boot **N children** from it —
+each an independent sandbox with its own IP. Prep the environment once (deps
+installed, project set up), snapshot it, and fork in parallel to try N variants
+without repeating the setup.
+
+```ts
+// Base box: install deps once
+const base = await eb.sandboxes.create({ template: "node" });
+await base.exec("npm i -g cowsay");
+
+// Snapshot the ready state — the box keeps running
+const snap = await base.snapshot("deps-ready");
+
+// Fork into 3 children that run in parallel (each inherits the disk)
+const kids = await base.fork({ count: 3 });
+for (const k of kids) {
+  await k.waitUntilReady();
+  console.log(k.sandboxId, (await k.exec("cowsay hi")).stdout);
+}
+
+// Reuse the snapshot later, without the base box
+const more = await eb.sandboxes.forkFromSnapshot(snap.snapshotId, { count: 2 });
+
+// Catalog + cleanup
+await eb.sandboxes.snapshots.list();
+await eb.sandboxes.snapshots.delete(snap.snapshotId);
 ```
 
 Templates: `code-interpreter` (Python + Jupyter kernel + numpy/pandas/matplotlib),

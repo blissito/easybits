@@ -20,7 +20,16 @@ export function generateApiKey(): {
 
 export async function createApiKey(
   userId: string,
-  opts: { name: string; scopes: ApiKeyScope[]; expiresAt?: Date }
+  opts: {
+    name: string;
+    scopes: ApiKeyScope[];
+    expiresAt?: Date;
+    /**
+     * Bind this key to a single workspace. A workspace-scoped key can only
+     * read/write files of that workspace (enforced in apiAuth + operations).
+     */
+    workspaceId?: string;
+  }
 ) {
   const { raw, prefix, hashed } = generateApiKey();
   const key = await db.apiKey.create({
@@ -31,9 +40,17 @@ export async function createApiKey(
       scopes: opts.scopes,
       expiresAt: opts.expiresAt,
       userId,
+      workspaceId: opts.workspaceId ?? null,
     },
   });
-  return { id: key.id, prefix, raw, scopes: key.scopes, name: key.name };
+  return {
+    id: key.id,
+    prefix,
+    raw,
+    scopes: key.scopes,
+    name: key.name,
+    workspaceId: key.workspaceId,
+  };
 }
 
 export async function validateApiKey(raw: string) {
