@@ -1051,9 +1051,11 @@ export async function createWorkspaceKey(
   workspaceId: string,
   opts?: { name?: string; scopes?: ("READ" | "WRITE" | "DELETE")[] }
 ) {
-  // Minting keys is sensitive → require ADMIN (session users have it; account
-  // ADMIN keys have it). A workspace-scoped key cannot mint further keys.
-  requireScope(ctx, "ADMIN");
+  // Minting a workspace-scoped key creates a *more-restricted* credential inside
+  // the caller's own account (confined to one workspace, scopes ≤ the caller's),
+  // so WRITE is enough — no privilege escalation is possible. A workspace-scoped
+  // key still cannot mint further keys.
+  requireScope(ctx, "WRITE");
   if (ctx.workspaceId) {
     throw new Response(JSON.stringify({ error: "A workspace-scoped key cannot mint keys" }), {
       status: 403,
@@ -1061,9 +1063,18 @@ export async function createWorkspaceKey(
     });
   }
   const ws = await loadOwnedWorkspace(ctx, workspaceId);
+
+  // Clamp the new key's scopes to what the caller actually holds (a key can
+  // never grant more than it has). ADMIN callers may grant any of R/W/D.
+  const requested = opts?.scopes ?? ["READ", "WRITE", "DELETE"];
+  const callerHasAdmin = ctx.scopes.includes("ADMIN");
+  const scopes = (["READ", "WRITE", "DELETE"] as const).filter(
+    (s) => requested.includes(s) && (callerHasAdmin || ctx.scopes.includes(s))
+  );
+
   const key = await createApiKey(ctx.user.id, {
     name: opts?.name || `workspace-${ws.slug}`,
-    scopes: opts?.scopes ?? ["READ", "WRITE", "DELETE"],
+    scopes: scopes.length ? scopes : ["READ"],
     workspaceId: ws.id,
   });
   // raw is returned exactly once — the caller must store it now.
