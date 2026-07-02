@@ -231,7 +231,6 @@ export default function DocsPage() {
         </aside>
 
         {/* Content */}
-        {/* TODO(bliss): terminar traducción — Files, Bulk, Images, Sharing, Webhooks, Websites, Documents, Account y Errors siguen en inglés. Solo sidebar + Quick Start + Auth + Ghosty Code + Tool Groups están en español. */}
         <main className="flex-1 min-w-0 px-6 md:px-12 py-10 max-w-4xl [&_section[id]]:scroll-mt-20">
           {/* Quick Start */}
           <section id="quickstart" className="mb-16">
@@ -598,17 +597,17 @@ try {
 
           {/* Archivos */}
           <section id="files" className="mb-16">
-            <h2 className="text-2xl font-bold mb-6">Files</h2>
+            <h2 className="text-2xl font-bold mb-6">Archivos</h2>
 
             <Endpoint
               method="GET"
               path="/files"
-              description="List your files (paginated)"
+              description="Lista tus archivos (paginado)"
               params={[
-                { name: "assetId", type: "string", desc: "Filter by asset ID" },
-                { name: "limit", type: "number", desc: "Max results (default 50, max 100)" },
-                { name: "cursor", type: "string", desc: "Pagination cursor" },
-                { name: "status", type: "string", desc: "Set to 'DELETED' to list deleted files" },
+                { name: "assetId", type: "string", desc: "Filtra por ID de asset" },
+                { name: "limit", type: "number", desc: "Máx resultados (default 50, máx 100)" },
+                { name: "cursor", type: "string", desc: "Cursor de paginación" },
+                { name: "status", type: "string", desc: "Pon 'DELETED' para listar archivos borrados" },
               ]}
               response={`{ "items": [...], "nextCursor": "...", "hasMore": true }`}
               sdk={`const { items, nextCursor, hasMore } = await eb.listFiles({ limit: 10 });`}
@@ -617,25 +616,25 @@ try {
             <Endpoint
               method="GET"
               path="/files/:fileId"
-              description="Get file details with a temporary download URL"
+              description="Obtén los detalles del archivo con una URL de descarga temporal"
               response={`{ "id": "...", "name": "photo.jpg", "readUrl": "https://..." }`}
               sdk={`const file = await eb.getFile("file_id");
-console.log(file.readUrl); // presigned URL (1h)`}
+console.log(file.readUrl); // URL prefirmada (1h)`}
             />
 
             <Endpoint
               method="POST"
               path="/files"
-              description="Create a file record and get a presigned upload URL"
+              description="Crea un registro de archivo y obtén una URL de subida prefirmada"
               body={[
-                { name: "fileName", type: "string", desc: "Required" },
-                { name: "contentType", type: "string", desc: "MIME type (required)" },
-                { name: "size", type: "number", desc: "File size in bytes (required, 1B–5GB)" },
-                { name: "access", type: "string", desc: "'public' or 'private' (default)" },
-                { name: "region", type: "string", desc: "'LATAM', 'US', or 'EU'" },
+                { name: "fileName", type: "string", desc: "Requerido" },
+                { name: "contentType", type: "string", desc: "Tipo MIME (requerido)" },
+                { name: "size", type: "number", desc: "Tamaño en bytes (requerido, 1B–5GB)" },
+                { name: "access", type: "string", desc: "'public' o 'private' (default)" },
+                { name: "region", type: "string", desc: "'LATAM', 'US' o 'EU'" },
               ]}
               response={`{ "file": {...}, "putUrl": "https://..." }`}
-              note="Upload bytes via PUT to putUrl, then PATCH the file status to 'DONE'."
+              note="Sube los bytes con PUT a putUrl, luego haz PATCH del status del archivo a 'DONE'."
               sdk={`const { file, putUrl } = await eb.uploadFile({
   fileName: "photo.jpg",
   contentType: "image/jpeg",
@@ -648,12 +647,12 @@ await eb.updateFile(file.id, { status: "DONE" });`}
             <Endpoint
               method="PATCH"
               path="/files/:fileId"
-              description="Update file name, access level, metadata, or status"
+              description="Actualiza nombre, nivel de acceso, metadata o status del archivo"
               body={[
-                { name: "name", type: "string", desc: "New file name" },
-                { name: "access", type: "string", desc: "'public' or 'private'" },
-                { name: "metadata", type: "object", desc: "Key-value pairs (merged, max 10KB)" },
-                { name: "status", type: "string", desc: "Only 'DONE' (from PENDING)" },
+                { name: "name", type: "string", desc: "Nuevo nombre" },
+                { name: "access", type: "string", desc: "'public' o 'private'" },
+                { name: "metadata", type: "object", desc: "Pares clave-valor (se fusionan, máx 10KB)" },
+                { name: "status", type: "string", desc: "Solo 'DONE' (desde PENDING)" },
               ]}
               sdk={`await eb.updateFile("file_id", {
   name: "renamed.jpg",
@@ -665,7 +664,7 @@ await eb.updateFile(file.id, { status: "DONE" });`}
             <Endpoint
               method="DELETE"
               path="/files/:fileId"
-              description="Soft-delete a file (7-day retention)"
+              description="Borrado suave (retención de 7 días)"
               response={`{ "success": true }`}
               sdk={`await eb.deleteFile("file_id");`}
             />
@@ -673,7 +672,7 @@ await eb.updateFile(file.id, { status: "DONE" });`}
             <Endpoint
               method="POST"
               path="/files/:fileId/restore"
-              description="Restore a soft-deleted file"
+              description="Restaura un archivo borrado (soft-delete)"
               response={`{ "success": true }`}
               sdk={`await eb.restoreFile("file_id");`}
             />
@@ -681,18 +680,18 @@ await eb.updateFile(file.id, { status: "DONE" });`}
             <Endpoint
               method="GET"
               path="/files/search?q=..."
-              description="AI-powered natural language file search (requires AI key)"
-              params={[{ name: "q", type: "string", desc: "Natural language query (required)" }]}
+              description="Búsqueda de archivos en lenguaje natural con IA (requiere AI key)"
+              params={[{ name: "q", type: "string", desc: "Consulta en lenguaje natural (requerida)" }]}
               response={`{ "items": [...] }`}
-              sdk={`const { items } = await eb.searchFiles("all PDF invoices");`}
+              sdk={`const { items } = await eb.searchFiles("todas las facturas PDF");`}
             />
 
             <Endpoint
               method="POST"
               path="/files/:fileId/duplicate"
-              description="Create a copy of an existing file (new storage object)"
+              description="Crea una copia de un archivo existente (nuevo objeto de storage)"
               body={[
-                { name: "name", type: "string", desc: "Name for the copy (optional, defaults to 'Copy of ...')" },
+                { name: "name", type: "string", desc: "Nombre de la copia (opcional, default 'Copy of ...')" },
               ]}
               response={`{ "id": "...", "name": "Copy of photo.jpg", ... }`}
               sdk={`const copy = await eb.duplicateFile("file_id", "backup.jpg");`}
@@ -701,7 +700,7 @@ await eb.updateFile(file.id, { status: "DONE" });`}
             <Endpoint
               method="GET"
               path="/files/:fileId/permissions"
-              description="List sharing permissions for a file"
+              description="Lista los permisos de compartición de un archivo"
               response={`{ "items": [{ "email": "...", "canRead": true, "canWrite": false, ... }] }`}
               sdk={`const { items } = await eb.listPermissions("file_id");`}
             />
@@ -709,17 +708,17 @@ await eb.updateFile(file.id, { status: "DONE" });`}
 
           {/* Bulk Operations */}
           <section id="bulk" className="mb-16">
-            <h2 className="text-2xl font-bold mb-6">Bulk Operations</h2>
+            <h2 className="text-2xl font-bold mb-6">Operaciones en lote</h2>
 
             <Endpoint
               method="POST"
               path="/files/bulk-upload"
-              description="Create multiple file records and get presigned upload URLs (max 20)"
+              description="Crea varios registros de archivo y obtén URLs de subida prefirmadas (máx 20)"
               body={[
-                { name: "items", type: "array", desc: "Array of { fileName, contentType, size, access? }" },
+                { name: "items", type: "array", desc: "Arreglo de { fileName, contentType, size, access? }" },
               ]}
               response={`{ "items": [{ "file": {...}, "putUrl": "https://..." }, ...] }`}
-              note="Each file must be uploaded via PUT to its putUrl, then status set to DONE."
+              note="Cada archivo se sube con PUT a su putUrl, luego se pone el status en DONE."
               sdk={`const { items } = await eb.bulkUploadFiles([
   { fileName: "a.pdf", contentType: "application/pdf", size: 50000 },
   { fileName: "b.png", contentType: "image/png", size: 120000 },
@@ -733,9 +732,9 @@ for (const { file, putUrl } of items) {
             <Endpoint
               method="POST"
               path="/files/bulk-delete"
-              description="Soft-delete multiple files at once (max 100)"
+              description="Borra varios archivos a la vez (soft-delete, máx 100)"
               body={[
-                { name: "fileIds", type: "string[]", desc: "Array of file IDs to delete" },
+                { name: "fileIds", type: "string[]", desc: "Arreglo de IDs de archivo a borrar" },
               ]}
               response={`{ "deleted": 5, "ids": ["...", "..."] }`}
               sdk={`const result = await eb.bulkDeleteFiles(["id1", "id2", "id3"]);
@@ -745,14 +744,14 @@ console.log(result.deleted); // 3`}
 
           {/* Images */}
           <section id="images" className="mb-16">
-            <h2 className="text-2xl font-bold mb-6">Images</h2>
+            <h2 className="text-2xl font-bold mb-6">Imágenes</h2>
 
             <Endpoint
               method="POST"
               path="/files/:fileId/optimize"
-              description="Convert image to WebP or AVIF (creates a new file)"
+              description="Convierte la imagen a WebP o AVIF (crea un archivo nuevo)"
               body={[
-                { name: "format", type: "string", desc: "'webp' (default) or 'avif'" },
+                { name: "format", type: "string", desc: "'webp' (default) o 'avif'" },
                 { name: "quality", type: "number", desc: "1–100 (default: 80 webp, 50 avif)" },
               ]}
               response={`{ "file": {...}, "originalSize": 1024000, "optimizedSize": 256000, "savings": "75%" }`}
@@ -767,16 +766,16 @@ console.log(result.savings); // "75%"`}
             <Endpoint
               method="POST"
               path="/files/:fileId/transform"
-              description="Resize, crop, rotate, flip, or convert an image (creates a new file)"
+              description="Redimensiona, recorta, rota, voltea o convierte una imagen (crea un archivo nuevo)"
               body={[
-                { name: "width", type: "number", desc: "Target width in px" },
-                { name: "height", type: "number", desc: "Target height in px" },
+                { name: "width", type: "number", desc: "Ancho objetivo en px" },
+                { name: "height", type: "number", desc: "Alto objetivo en px" },
                 { name: "fit", type: "string", desc: "'cover', 'contain', 'fill', 'inside', 'outside'" },
                 { name: "format", type: "string", desc: "'webp', 'avif', 'png', 'jpeg'" },
                 { name: "quality", type: "number", desc: "1–100" },
-                { name: "rotate", type: "number", desc: "Degrees" },
-                { name: "flip", type: "boolean", desc: "Vertical flip" },
-                { name: "grayscale", type: "boolean", desc: "Convert to grayscale" },
+                { name: "rotate", type: "number", desc: "Grados" },
+                { name: "flip", type: "boolean", desc: "Voltea vertical" },
+                { name: "grayscale", type: "boolean", desc: "Convierte a escala de grises" },
               ]}
               response={`{ "file": {...}, "originalSize": ..., "transformedSize": ..., "transforms": [...] }`}
               sdk={`const result = await eb.transformImage({
@@ -791,14 +790,14 @@ console.log(result.savings); // "75%"`}
 
           {/* Sharing */}
           <section id="sharing" className="mb-16">
-            <h2 className="text-2xl font-bold mb-6">Sharing</h2>
+            <h2 className="text-2xl font-bold mb-6">Compartir</h2>
 
             <Endpoint
               method="POST"
               path="/files/:fileId/share"
-              description="Share a file with another user by email"
+              description="Comparte un archivo con otro usuario por email"
               body={[
-                { name: "targetEmail", type: "string", desc: "Recipient email (required)" },
+                { name: "targetEmail", type: "string", desc: "Email del destinatario (requerido)" },
                 { name: "canRead", type: "boolean", desc: "Default: true" },
                 { name: "canWrite", type: "boolean", desc: "Default: false" },
                 { name: "canDelete", type: "boolean", desc: "Default: false" },
@@ -813,23 +812,23 @@ console.log(result.savings); // "75%"`}
             <Endpoint
               method="POST"
               path="/files/:fileId/share-token"
-              description="Generate a temporary download URL"
+              description="Genera una URL de descarga temporal"
               body={[
-                { name: "expiresIn", type: "number", desc: "Seconds (60–604800, default 3600)" },
+                { name: "expiresIn", type: "number", desc: "Segundos (60–604800, default 3600)" },
               ]}
               response={`{ "url": "https://...", "token": { "id": "...", "expiresAt": "..." } }`}
               sdk={`const { url } = await eb.generateShareToken("file_id", 3600);
-// url is a presigned download link valid for 1 hour`}
+// url es un enlace de descarga prefirmado válido por 1 hora`}
             />
 
             <Endpoint
               method="GET"
               path="/share-tokens"
-              description="List share tokens (paginated)"
+              description="Lista los share tokens (paginado)"
               params={[
-                { name: "fileId", type: "string", desc: "Filter by file" },
-                { name: "limit", type: "number", desc: "Max results" },
-                { name: "cursor", type: "string", desc: "Pagination cursor" },
+                { name: "fileId", type: "string", desc: "Filtra por archivo" },
+                { name: "limit", type: "number", desc: "Máx resultados" },
+                { name: "cursor", type: "string", desc: "Cursor de paginación" },
               ]}
               sdk={`const { items } = await eb.listShareTokens({ fileId: "file_id" });`}
             />
@@ -839,19 +838,19 @@ console.log(result.savings); // "75%"`}
           <section id="webhooks" className="mb-16">
             <h2 className="text-2xl font-bold mb-4">Webhooks</h2>
             <p className="text-gray-600 mb-4 text-sm">
-              Receive real-time POST notifications when events occur. Payloads are signed with HMAC SHA-256 via the{" "}
-              <code className="bg-gray-100 px-1 rounded">X-Easybits-Signature</code> header. Webhooks auto-pause after 5 consecutive delivery failures.
+              Recibe notificaciones POST en tiempo real cuando ocurren eventos. Los payloads se firman con HMAC SHA-256 en el header{" "}
+              <code className="bg-gray-100 px-1 rounded">X-Easybits-Signature</code>. Los webhooks se pausan solos tras 5 fallos de entrega consecutivos.
             </p>
 
             <div className="mb-6 bg-gray-50 border-2 border-gray-300 rounded-xl p-4 text-sm">
-              <strong>Events:</strong>{" "}
+              <strong>Eventos:</strong>{" "}
               <code>file.created</code>, <code>file.updated</code>, <code>file.deleted</code>, <code>file.restored</code>, <code>website.created</code>, <code>website.deleted</code>, <code>form.submitted</code>, <code>payment.paid</code>, <code>broadcast.sent</code>
             </div>
 
             <Endpoint
               method="GET"
               path="/webhooks"
-              description="List your configured webhooks"
+              description="Lista tus webhooks configurados"
               response={`{ "items": [{ "id": "...", "url": "https://...", "events": [...], "status": "ACTIVE" }] }`}
               sdk={`const { items } = await eb.listWebhooks();`}
             />
@@ -859,49 +858,49 @@ console.log(result.savings); // "75%"`}
             <Endpoint
               method="POST"
               path="/webhooks"
-              description="Create a webhook. The secret is only returned on creation — save it."
+              description="Crea un webhook. El secret solo se devuelve al crearlo — guárdalo."
               body={[
-                { name: "url", type: "string", desc: "HTTPS URL to receive POST notifications (required)" },
-                { name: "events", type: "string[]", desc: "Events to subscribe to (required)" },
+                { name: "url", type: "string", desc: "URL HTTPS para recibir las notificaciones POST (requerida)" },
+                { name: "events", type: "string[]", desc: "Eventos a los que suscribirse (requerido)" },
               ]}
               response={`{ "id": "...", "url": "...", "events": [...], "secret": "whsec_...", "status": "ACTIVE" }`}
-              note="Max 10 webhooks per account. URL must use HTTPS."
+              note="Máx 10 webhooks por cuenta. La URL debe usar HTTPS."
               sdk={`const webhook = await eb.createWebhook({
-  url: "https://your-server.com/hooks/easybits",
+  url: "https://tu-servidor.com/hooks/easybits",
   events: ["file.created", "file.deleted"],
 });
-console.log(webhook.secret); // save this — shown only once`}
+console.log(webhook.secret); // guárdalo — se muestra una sola vez`}
             />
 
             <Endpoint
               method="GET"
               path="/webhooks/:webhookId"
-              description="Get webhook details (excluding secret)"
+              description="Obtén los detalles del webhook (sin el secret)"
               sdk={`const webhook = await eb.getWebhook("webhook_id");`}
             />
 
             <Endpoint
               method="PATCH"
               path="/webhooks/:webhookId"
-              description="Update webhook URL, events, or status"
+              description="Actualiza URL, eventos o status del webhook"
               body={[
-                { name: "url", type: "string", desc: "New HTTPS URL" },
-                { name: "events", type: "string[]", desc: "New events list" },
-                { name: "status", type: "string", desc: "'ACTIVE' or 'PAUSED'. Reactivating resets fail counter." },
+                { name: "url", type: "string", desc: "Nueva URL HTTPS" },
+                { name: "events", type: "string[]", desc: "Nueva lista de eventos" },
+                { name: "status", type: "string", desc: "'ACTIVE' o 'PAUSED'. Reactivar resetea el contador de fallos." },
               ]}
-              sdk={`// Reactivate a paused webhook
+              sdk={`// Reactivar un webhook pausado
 await eb.updateWebhook("webhook_id", { status: "ACTIVE" });`}
             />
 
             <Endpoint
               method="DELETE"
               path="/webhooks/:webhookId"
-              description="Permanently delete a webhook"
+              description="Borra un webhook permanentemente"
               response={`{ "success": true }`}
               sdk={`await eb.deleteWebhook("webhook_id");`}
             />
 
-            <h3 className="text-lg font-bold mt-8 mb-4">Verifying Signatures</h3>
+            <h3 className="text-lg font-bold mt-8 mb-4">Verificar firmas</h3>
             <CodeExample
               title="Node.js"
               code={`import { createHmac } from "crypto";
@@ -912,12 +911,12 @@ function verifyWebhook(body, signature, secret) {
   return signature === expected;
 }
 
-// In your handler:
+// En tu handler:
 const sig = req.headers["x-easybits-signature"];
 const valid = verifyWebhook(rawBody, sig, "whsec_...");`}
             />
 
-            <h3 className="text-lg font-bold mt-8 mb-4">Payload Format</h3>
+            <h3 className="text-lg font-bold mt-8 mb-4">Formato del payload</h3>
             <CodeExample
               title="JSON"
               code={`{
@@ -1036,25 +1035,25 @@ send_broadcast({ broadcastId: "<id>" })
 
           {/* Websites */}
           <section id="websites" className="mb-16">
-            <h2 className="text-2xl font-bold mb-6">Websites</h2>
+            <h2 className="text-2xl font-bold mb-6">Sitios web</h2>
 
             <div className="mb-6 bg-green-50 border-2 border-green-300 rounded-xl p-4 text-sm space-y-2">
-              <strong>How website deploys work:</strong>
+              <strong>Cómo funcionan los deploys de sitios:</strong>
               <ol className="list-decimal list-inside space-y-1 text-gray-700">
-                <li>Create a website — you get an <code className="bg-gray-100 px-1 rounded">id</code> and a URL like <code className="bg-gray-100 px-1 rounded">https://my-site.easybits.cloud</code></li>
-                <li>Upload files with <code className="bg-gray-100 px-1 rounded">fileName</code> set to <code className="bg-gray-100 px-1 rounded">{`sites/{websiteId}/path`}</code> (e.g. <code className="bg-gray-100 px-1 rounded">{`sites/{id}/index.html`}</code>)</li>
-                <li>PUT the bytes to each <code className="bg-gray-100 px-1 rounded">putUrl</code>, then set status to DONE</li>
-                <li>Your site is live — SPA fallback to <code className="bg-gray-100 px-1 rounded">index.html</code> is built-in</li>
+                <li>Crea un sitio — obtienes un <code className="bg-gray-100 px-1 rounded">id</code> y una URL tipo <code className="bg-gray-100 px-1 rounded">https://my-site.easybits.cloud</code></li>
+                <li>Sube archivos con <code className="bg-gray-100 px-1 rounded">fileName</code> puesto en <code className="bg-gray-100 px-1 rounded">{`sites/{websiteId}/path`}</code> (ej. <code className="bg-gray-100 px-1 rounded">{`sites/{id}/index.html`}</code>)</li>
+                <li>Haz PUT de los bytes a cada <code className="bg-gray-100 px-1 rounded">putUrl</code>, luego pon el status en DONE</li>
+                <li>Tu sitio está en vivo — el fallback SPA a <code className="bg-gray-100 px-1 rounded">index.html</code> viene incluido</li>
               </ol>
             </div>
 
-            <h3 className="text-lg font-bold mb-4">Deploy Example</h3>
+            <h3 className="text-lg font-bold mb-4">Ejemplo de deploy</h3>
             <CodeExample
               title="SDK"
-              code={`// 1. Create website
+              code={`// 1. Crear el sitio
 const { website } = await eb.createWebsite("my-docs");
 
-// 2. Upload files with the website prefix
+// 2. Subir archivos con el prefijo del sitio
 const files = [
   { path: "index.html", content: htmlBuffer, type: "text/html" },
   { path: "style.css", content: cssBuffer, type: "text/css" },
@@ -1071,7 +1070,7 @@ for (const f of files) {
   await eb.updateFile(file.id, { status: "DONE" });
 }
 
-// 3. Live at: https://my-docs.easybits.cloud`}
+// 3. En vivo en: https://my-docs.easybits.cloud`}
             />
 
             <h3 className="text-lg font-bold mt-8 mb-4">Endpoints</h3>
@@ -1079,14 +1078,14 @@ for (const f of files) {
             <Endpoint
               method="GET"
               path="/websites"
-              description="List your static websites"
+              description="Lista tus sitios web estáticos"
               sdk={`const { items } = await eb.listWebsites();`}
             />
             <Endpoint
               method="POST"
               path="/websites"
-              description="Create a new website"
-              body={[{ name: "name", type: "string", desc: "Website name (required)" }]}
+              description="Crea un sitio nuevo"
+              body={[{ name: "name", type: "string", desc: "Nombre del sitio (requerido)" }]}
               response={`{ "website": { "id": "...", "slug": "my-site", "url": "https://my-site.easybits.cloud" } }`}
               sdk={`const { website } = await eb.createWebsite("my-docs");
 console.log(website.url); // https://my-docs.easybits.cloud`}
@@ -1094,38 +1093,38 @@ console.log(website.url); // https://my-docs.easybits.cloud`}
             <Endpoint
               method="GET"
               path="/websites/:websiteId"
-              description="Get website details"
+              description="Obtén los detalles del sitio"
               sdk={`const site = await eb.getWebsite("website_id");`}
             />
             <Endpoint
               method="PATCH"
               path="/websites/:websiteId"
-              description="Update website name or status"
+              description="Actualiza el nombre o status del sitio"
               body={[
-                { name: "name", type: "string", desc: "New name" },
-                { name: "status", type: "string", desc: "e.g. 'DEPLOYED'" },
+                { name: "name", type: "string", desc: "Nuevo nombre" },
+                { name: "status", type: "string", desc: "ej. 'DEPLOYED'" },
               ]}
               sdk={`await eb.updateWebsite("website_id", { name: "new-name" });`}
             />
             <Endpoint
               method="DELETE"
               path="/websites/:websiteId"
-              description="Delete website and soft-delete all its files"
+              description="Borra el sitio y hace soft-delete de todos sus archivos"
               sdk={`await eb.deleteWebsite("website_id");`}
             />
           </section>
 
           {/* Documentos */}
           <section id="documents" className="mb-16">
-            <h2 className="text-2xl font-bold mb-6">Documents</h2>
+            <h2 className="text-2xl font-bold mb-6">Documentos</h2>
             <p className="text-gray-600 mb-6 text-sm">
-              AI-generated professional documents (reports, brochures, catalogs, proposals, CVs) with parallel page generation, design directions, and semantic color themes.
+              Documentos profesionales generados con IA (reportes, folletos, catálogos, propuestas, CVs) con generación de páginas en paralelo, direcciones de diseño y temas de color semánticos.
             </p>
 
             <Endpoint
               method="GET"
               path="/documents"
-              description="List all your documents"
+              description="Lista todos tus documentos"
               response={`{ "items": [{ "id": "doc123", "name": "Q1 Report", "status": "DRAFT", "pageCount": 5 }] }`}
               sdk={`const { items } = await eb.listDocuments();`}
             />
@@ -1133,7 +1132,7 @@ console.log(website.url); // https://my-docs.easybits.cloud`}
             <Endpoint
               method="GET"
               path="/documents/:id"
-              description="Get a document with full page/section data"
+              description="Obtén un documento con todos sus datos de páginas/secciones"
               response={`{ "id": "doc123", "name": "Q1 Report", "theme": "minimal", "sections": [...], "pageCount": 5 }`}
               sdk={`const doc = await eb.getDocument("doc123");`}
             />
@@ -1141,12 +1140,12 @@ console.log(website.url); // https://my-docs.easybits.cloud`}
             <Endpoint
               method="POST"
               path="/documents"
-              description="Create a new document"
+              description="Crea un documento nuevo"
               body={[
-                { name: "name", type: "string", desc: "Document name (required)" },
-                { name: "prompt", type: "string", desc: "Description for AI generation" },
-                { name: "theme", type: "string", desc: "Theme: minimal, calido, oceano, noche, bosque, rosa" },
-                { name: "customColors", type: "object", desc: "Custom palette: { primary, secondary, accent, surface }" },
+                { name: "name", type: "string", desc: "Nombre del documento (requerido)" },
+                { name: "prompt", type: "string", desc: "Descripción para la generación con IA" },
+                { name: "theme", type: "string", desc: "Tema: minimal, calido, oceano, noche, bosque, rosa" },
+                { name: "customColors", type: "object", desc: "Paleta personalizada: { primary, secondary, accent, surface }" },
               ]}
               response={`{ "id": "doc123", "name": "Q1 Report", "status": "DRAFT" }`}
               sdk={`const doc = await eb.createDocument({ name: "Q1 Report", prompt: "Quarterly review" });`}
@@ -1155,12 +1154,12 @@ console.log(website.url); // https://my-docs.easybits.cloud`}
             <Endpoint
               method="PATCH"
               path="/documents/:id"
-              description="Update document metadata (name, theme, colors). Use page tools for content changes."
+              description="Actualiza la metadata del documento (nombre, tema, colores). Usa las tools de página para cambios de contenido."
               body={[
-                { name: "name", type: "string", desc: "New name" },
-                { name: "prompt", type: "string", desc: "Updated prompt" },
-                { name: "theme", type: "string", desc: "Theme name" },
-                { name: "customColors", type: "object", desc: "Custom color palette" },
+                { name: "name", type: "string", desc: "Nuevo nombre" },
+                { name: "prompt", type: "string", desc: "Prompt actualizado" },
+                { name: "theme", type: "string", desc: "Nombre del tema" },
+                { name: "customColors", type: "object", desc: "Paleta de color personalizada" },
               ]}
               sdk={`await eb.updateDocument("doc123", { theme: "noche" });`}
             />
@@ -1168,14 +1167,14 @@ console.log(website.url); // https://my-docs.easybits.cloud`}
             <Endpoint
               method="DELETE"
               path="/documents/:id"
-              description="Delete a document"
+              description="Borra un documento"
               sdk={`await eb.deleteDocument("doc123");`}
             />
 
             <Endpoint
               method="POST"
               path="/documents/:id/deploy"
-              description="Publish as a live website at slug.easybits.cloud"
+              description="Publica como sitio en vivo en slug.easybits.cloud"
               response={`{ "url": "https://my-report.easybits.cloud", "websiteId": "...", "slug": "my-report" }`}
               sdk={`const { url } = await eb.deployDocument("doc123");`}
             />
@@ -1183,45 +1182,45 @@ console.log(website.url); // https://my-docs.easybits.cloud`}
             <Endpoint
               method="POST"
               path="/documents/:id/unpublish"
-              description="Remove the live website and revert to draft"
+              description="Quita el sitio en vivo y vuelve a borrador"
               sdk={`await eb.unpublishDocument("doc123");`}
             />
 
-            <h3 className="text-lg font-bold mt-8 mb-4">Page Management (MCP)</h3>
+            <h3 className="text-lg font-bold mt-8 mb-4">Gestión de páginas (MCP)</h3>
             <p className="text-gray-600 mb-4 text-sm">
-              These tools are available via MCP for surgical page-level editing.
+              Estas tools están disponibles vía MCP para edición quirúrgica a nivel de página.
             </p>
 
             <div className="space-y-4 mb-8">
-              <McpTool name="get_page_html" params="documentId, pageId" description="Get the HTML and metadata of a single page." />
-              <McpTool name="set_page_html" params="documentId, pageId, html" description="Update a single page's full HTML. Preferred over update_document for content edits." />
-              <McpTool name="get_section_html" params="documentId, pageId, cssSelector" description="Get the outerHTML of a specific element within a page by CSS selector." />
-              <McpTool name="set_section_html" params="documentId, pageId, cssSelector, html" description="Replace a specific element within a page. Enables surgical edits." />
-              <McpTool name="add_page" params="documentId, html?, afterPageIndex?, label?" description="Add a new page. Optionally provide HTML and insertion position." />
-              <McpTool name="delete_page" params="documentId, pageId" description="Remove a page. Cannot delete the last remaining page." />
-              <McpTool name="reorder_pages" params="documentId, pageIds" description="Reorder all pages. pageIds must contain every page ID exactly once." />
-              <McpTool name="get_page_screenshot" params="documentId, pageIndex?" description="Take a screenshot of a page. Returns a PNG image (letter-sized). Prefer this tool to verify edits visually." />
+              <McpTool name="get_page_html" params="documentId, pageId" description="Obtén el HTML y la metadata de una sola página." />
+              <McpTool name="set_page_html" params="documentId, pageId, html" description="Actualiza el HTML completo de una página. Preferible a update_document para editar contenido." />
+              <McpTool name="get_section_html" params="documentId, pageId, cssSelector" description="Obtén el outerHTML de un elemento específico dentro de una página por selector CSS." />
+              <McpTool name="set_section_html" params="documentId, pageId, cssSelector, html" description="Reemplaza un elemento específico dentro de una página. Permite ediciones quirúrgicas." />
+              <McpTool name="add_page" params="documentId, html?, afterPageIndex?, label?" description="Agrega una página nueva. Opcionalmente pasa el HTML y la posición de inserción." />
+              <McpTool name="delete_page" params="documentId, pageId" description="Elimina una página. No se puede borrar la última que queda." />
+              <McpTool name="reorder_pages" params="documentId, pageIds" description="Reordena todas las páginas. pageIds debe contener cada ID de página exactamente una vez." />
+              <McpTool name="get_page_screenshot" params="documentId, pageIndex?" description="Toma un screenshot de una página. Devuelve una imagen PNG (tamaño carta). Úsala para verificar las ediciones visualmente." />
             </div>
 
-            <h3 className="text-lg font-bold mt-8 mb-4">AI Generation (MCP)</h3>
+            <h3 className="text-lg font-bold mt-8 mb-4">Generación con IA (MCP)</h3>
             <div className="space-y-4 mb-8">
-              <McpTool name="generate_document" params="documentId, prompt, skipCover?" description="Generate all pages with AI via streaming. Use skipCover: true to add pages without regenerating the cover." />
-              <McpTool name="refine_document_section" params="documentId, sectionId, instruction" description="Surgical AI changes to a specific page. Use get_page_html to see the result." />
-              <McpTool name="regenerate_document_page" params="documentId, sectionId" description="Completely redesign a page while keeping the same content intent." />
-              <McpTool name="enhance_document_prompt" params="name, prompt?, action?" description="Auto-generate a description from the title or improve an existing prompt." />
-              <McpTool name="get_document_directions" params="prompt, pageCount?, sourceContent?" description="Get 4 design directions (fonts, colors, mood). Pass one to generate_document." />
-              <McpTool name="clone_document" params="documentId, name?" description="Duplicate a document with all its pages." />
+              <McpTool name="generate_document" params="documentId, prompt, skipCover?" description="Genera todas las páginas con IA vía streaming. Usa skipCover: true para agregar páginas sin regenerar la portada." />
+              <McpTool name="refine_document_section" params="documentId, sectionId, instruction" description="Cambios quirúrgicos con IA a una página específica. Usa get_page_html para ver el resultado." />
+              <McpTool name="regenerate_document_page" params="documentId, sectionId" description="Rediseña una página por completo manteniendo la misma intención de contenido." />
+              <McpTool name="enhance_document_prompt" params="name, prompt?, action?" description="Auto-genera una descripción desde el título o mejora un prompt existente." />
+              <McpTool name="get_document_directions" params="prompt, pageCount?, sourceContent?" description="Obtén 4 direcciones de diseño (fuentes, colores, mood). Pasa una a generate_document." />
+              <McpTool name="clone_document" params="documentId, name?" description="Duplica un documento con todas sus páginas." />
             </div>
 
-            <h3 className="text-lg font-bold mt-8 mb-4">Workflow</h3>
+            <h3 className="text-lg font-bold mt-8 mb-4">Flujo de trabajo</h3>
             <div className="text-sm text-gray-700 space-y-1 mb-4">
-              <p>1. <code className="bg-gray-100 px-1 rounded">enhance_document_prompt</code> — auto-generate a description</p>
-              <p>2. <code className="bg-gray-100 px-1 rounded">get_document_directions</code> — get 4 design directions</p>
-              <p>3. <code className="bg-gray-100 px-1 rounded">create_document</code> — create the document</p>
-              <p>4. <code className="bg-gray-100 px-1 rounded">generate_document</code> — AI generates all pages</p>
-              <p>5. <code className="bg-gray-100 px-1 rounded">get_page_screenshot</code> — verify pages visually</p>
-              <p>6. <code className="bg-gray-100 px-1 rounded">refine_document_section</code> — tweak individual pages</p>
-              <p>7. <code className="bg-gray-100 px-1 rounded">deploy_document</code> — publish at slug.easybits.cloud</p>
+              <p>1. <code className="bg-gray-100 px-1 rounded">enhance_document_prompt</code> — auto-genera una descripción</p>
+              <p>2. <code className="bg-gray-100 px-1 rounded">get_document_directions</code> — obtén 4 direcciones de diseño</p>
+              <p>3. <code className="bg-gray-100 px-1 rounded">create_document</code> — crea el documento</p>
+              <p>4. <code className="bg-gray-100 px-1 rounded">generate_document</code> — la IA genera todas las páginas</p>
+              <p>5. <code className="bg-gray-100 px-1 rounded">get_page_screenshot</code> — verifica las páginas visualmente</p>
+              <p>6. <code className="bg-gray-100 px-1 rounded">refine_document_section</code> — ajusta páginas individuales</p>
+              <p>7. <code className="bg-gray-100 px-1 rounded">deploy_document</code> — publica en slug.easybits.cloud</p>
             </div>
           </section>
 
@@ -1853,12 +1852,12 @@ call_destroy({ sandboxId })   // cierra la sala y libera la VM` },
 
           {/* Account & Usage */}
           <section id="account" className="mb-16">
-            <h2 className="text-2xl font-bold mb-6">Account & Usage</h2>
+            <h2 className="text-2xl font-bold mb-6">Cuenta & Uso</h2>
 
             <Endpoint
               method="GET"
               path="/usage"
-              description="Get account usage statistics: storage, file counts, plan info"
+              description="Obtén las estadísticas de uso de la cuenta: storage, conteo de archivos, info del plan"
               response={`{ "plan": "Byte", "storage": { "usedGB": 0.05, "maxGB": 0.1, "percentUsed": 50 }, "counts": { "files": 42, "webhooks": 2 } }`}
               sdk={`const stats = await eb.getUsageStats();
 console.log(\`\${stats.storage.usedGB}/\${stats.storage.maxGB} GB\`);`}
@@ -1867,7 +1866,7 @@ console.log(\`\${stats.storage.usedGB}/\${stats.storage.maxGB} GB\`);`}
             <Endpoint
               method="GET"
               path="/providers"
-              description="List your configured storage providers"
+              description="Lista tus proveedores de storage configurados"
               response={`{ "providers": [...], "defaultProvider": { "type": "TIGRIS" } }`}
               sdk={`const { providers } = await eb.listProviders();`}
             />
@@ -1875,41 +1874,41 @@ console.log(\`\${stats.storage.usedGB}/\${stats.storage.maxGB} GB\`);`}
             <Endpoint
               method="GET"
               path="/keys"
-              description="List your API keys (session auth only)"
+              description="Lista tus API keys (solo con auth de sesión)"
               sdk={`const { keys } = await eb.listKeys();`}
             />
           </section>
 
           {/* Errors */}
           <section id="errors" className="mb-16">
-            <h2 className="text-2xl font-bold mb-6">Errors & Rate Limits</h2>
+            <h2 className="text-2xl font-bold mb-6">Errores & Límites</h2>
             <div className="space-y-4 text-sm">
               <div className="border-2 border-black rounded-xl overflow-hidden">
                 <table className="w-full text-left">
                   <thead className="bg-gray-100 border-b-2 border-black">
                     <tr>
                       <th className="px-4 py-2 font-bold">Status</th>
-                      <th className="px-4 py-2 font-bold">Meaning</th>
+                      <th className="px-4 py-2 font-bold">Significado</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200">
-                    <tr><td className="px-4 py-2 font-mono">400</td><td className="px-4 py-2">Bad request (invalid params)</td></tr>
-                    <tr><td className="px-4 py-2 font-mono">401</td><td className="px-4 py-2">Unauthorized (missing/invalid API key)</td></tr>
-                    <tr><td className="px-4 py-2 font-mono">403</td><td className="px-4 py-2">Forbidden (insufficient scope)</td></tr>
-                    <tr><td className="px-4 py-2 font-mono">404</td><td className="px-4 py-2">Resource not found</td></tr>
-                    <tr><td className="px-4 py-2 font-mono">429</td><td className="px-4 py-2">Rate limited (too many requests)</td></tr>
-                    <tr><td className="px-4 py-2 font-mono">500</td><td className="px-4 py-2">Server error</td></tr>
+                    <tr><td className="px-4 py-2 font-mono">400</td><td className="px-4 py-2">Petición inválida (params incorrectos)</td></tr>
+                    <tr><td className="px-4 py-2 font-mono">401</td><td className="px-4 py-2">No autorizado (API key faltante/inválida)</td></tr>
+                    <tr><td className="px-4 py-2 font-mono">403</td><td className="px-4 py-2">Prohibido (scope insuficiente)</td></tr>
+                    <tr><td className="px-4 py-2 font-mono">404</td><td className="px-4 py-2">Recurso no encontrado</td></tr>
+                    <tr><td className="px-4 py-2 font-mono">429</td><td className="px-4 py-2">Rate limited (demasiadas peticiones)</td></tr>
+                    <tr><td className="px-4 py-2 font-mono">500</td><td className="px-4 py-2">Error del servidor</td></tr>
                   </tbody>
                 </table>
               </div>
               <p className="text-gray-600">
-                All error responses share one shape: a JSON body <code className="bg-gray-100 px-1 rounded">{`{ "error": "message" }`}</code>, optionally with extra fields (e.g. <code className="bg-gray-100 px-1 rounded">code</code>, <code className="bg-gray-100 px-1 rounded">status</code>). Over MCP the same payload is returned with <code className="bg-gray-100 px-1 rounded">isError: true</code>.
+                Todas las respuestas de error tienen la misma forma: un JSON <code className="bg-gray-100 px-1 rounded">{`{ "error": "message" }`}</code>, opcionalmente con campos extra (ej. <code className="bg-gray-100 px-1 rounded">code</code>, <code className="bg-gray-100 px-1 rounded">status</code>). Por MCP se devuelve el mismo payload con <code className="bg-gray-100 px-1 rounded">isError: true</code>.
               </p>
               <p className="text-gray-600">
-                Every list endpoint returns the same envelope: <code className="bg-gray-100 px-1 rounded">{`{ items, nextCursor, hasMore, total? }`}</code>. When <code className="bg-gray-100 px-1 rounded">hasMore</code> is true, pass <code className="bg-gray-100 px-1 rounded">nextCursor</code> back as <code className="bg-gray-100 px-1 rounded">cursor</code> (or <code className="bg-gray-100 px-1 rounded">offset</code> for documents/websites) to fetch the next page.
+                Todo endpoint de lista devuelve el mismo envelope: <code className="bg-gray-100 px-1 rounded">{`{ items, nextCursor, hasMore, total? }`}</code>. Cuando <code className="bg-gray-100 px-1 rounded">hasMore</code> es true, regresa <code className="bg-gray-100 px-1 rounded">nextCursor</code> como <code className="bg-gray-100 px-1 rounded">cursor</code> (u <code className="bg-gray-100 px-1 rounded">offset</code> para documentos/sitios) para traer la siguiente página.
               </p>
               <p className="text-gray-600">
-                Rate limits: 100 requests per 15 minutes for all plans.
+                Límites: 100 peticiones cada 15 minutos en todos los planes.
               </p>
             </div>
           </section>
