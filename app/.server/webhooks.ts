@@ -8,6 +8,8 @@ export type WebhookEvent =
   | "file.restored"
   | "website.created"
   | "website.deleted"
+  | "workspace.created"
+  | "workspace.deleted"
   | "database.created"
   | "database.deleted"
   | "form.submitted"

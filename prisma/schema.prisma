@@ -217,6 +217,7 @@ model User {
   storageProviders StorageProvider[]
   aiKeys           UserAiKey[]
   websites         Website[]
+  workspaces       Workspace[]
   webhooks         Webhook[]
   databases        Database[]
   presentations      Presentation[]
@@ -370,11 +371,16 @@ model File {
   assetId               String?    @db.ObjectId // deprecate!
   storageProviderId     String?    @db.ObjectId
   shareTokens           ShareToken[]
+  // ^ optional workspace this file belongs to (namespaced storage + per-ws quota).
+  // Null = account-level (legacy / no workspace) — fully backward compatible.
+  workspaceId           String?    @db.ObjectId
+  workspace             Workspace? @relation(fields: [workspaceId], references: [id])
 
   @@index([ownerId])
   @@index([status])
   @@index([ownerId, status])
   @@index([deletedAt])
+  @@index([workspaceId, status])
 }
 
 /// Template for structured_doc MCP tool. Stored as JSON-DSL (not code) — a tree
@@ -465,10 +471,15 @@ model ApiKey {
   revokedAt DateTime?
   userId    String       @db.ObjectId
   user      User         @relation(fields: [userId], references: [id])
+  // ^ optional: a workspace-scoped key can only read/write files of this workspace.
+  // Null = account-wide key (legacy behavior, full access to the owner's resources).
+  workspaceId String?    @db.ObjectId
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id])
   createdAt DateTime     @default(now())
   updatedAt DateTime     @updatedAt
 
   @@index([userId])
+  @@index([workspaceId])
 }
 
 model Permission {
@@ -624,6 +635,36 @@ model Website {
   deletedAt      DateTime?
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
+
+  @@unique([ownerId, slug])
+  @@index([ownerId])
+}
+
+/// A Workspace is an owner-scoped, namespaced container of files with its own
+/// storage quota. It lets a single account (e.g. a platform integrating EasyBits)
+/// carve isolated tenants: each workspace gets a `ws/{id}/` storage prefix, a
+/// per-workspace `quotaBytes`, and can mint workspace-scoped API keys that can
+/// only touch its own files. Modeled on `Website` but files are associated by a
+/// real FK (`File.workspaceId`) rather than a name-prefix convention.
+model Workspace {
+  id         String    @id @default(auto()) @map("_id") @db.ObjectId
+  name       String
+  slug       String
+  ownerId    String    @db.ObjectId
+  owner      User      @relation(fields: [ownerId], references: [id])
+  status     String    @default("ACTIVE")
+  /// Per-workspace storage cap in bytes. Null = no workspace cap (only the
+  /// account plan ceiling applies). Bytes as Float to match File.size/Website.totalSize.
+  quotaBytes Float?
+  /// Denormalized running usage, kept in sync on upload/delete/restore/purge.
+  usedBytes  Float     @default(0)
+  fileCount  Int       @default(0)
+  metadata   Json?
+  deletedAt  DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  files      File[]
+  apiKeys    ApiKey[]
 
   @@unique([ownerId, slug])
   @@index([ownerId])

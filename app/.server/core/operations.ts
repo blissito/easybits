@@ -21,6 +21,38 @@ import { fileEvents } from "./fileEvents";
 import { PLANS, NEXT_PLAN, getUserPlan, formatPrice, type PlanKey } from "~/lib/plans";
 import { dispatchWebhooks } from "../webhooks";
 import { checkAiGenerationLimit } from "../aiGenerationLimit";
+import { requireWorkspace } from "../apiAuth";
+import { createApiKey } from "../iam";
+
+// --- Workspace helpers ---
+
+/** Load a workspace owned by the caller (404 if missing / not owned / deleted). */
+async function loadOwnedWorkspace(ctx: AuthContext, workspaceId: string) {
+  const ws = await db.workspace.findUnique({ where: { id: workspaceId } });
+  if (!ws || ws.ownerId !== ctx.user.id || ws.deletedAt || ws.status === "DELETED") {
+    throw new Response(JSON.stringify({ error: "Workspace not found" }), {
+      status: 404,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+  return ws;
+}
+
+/** Adjust a workspace's denormalized usage counters (never below zero). */
+async function bumpWorkspaceUsage(workspaceId: string, deltaBytes: number, deltaCount: number) {
+  const ws = await db.workspace.findUnique({
+    where: { id: workspaceId },
+    select: { usedBytes: true, fileCount: true },
+  });
+  if (!ws) return;
+  await db.workspace.update({
+    where: { id: workspaceId },
+    data: {
+      usedBytes: Math.max(0, ws.usedBytes + deltaBytes),
+      fileCount: Math.max(0, ws.fileCount + deltaCount),
+    },
+  });
+}
 
 // --- List Files ---
 
@@ -35,6 +67,8 @@ export async function listFiles(
   if (opts?.assetId) {
     where.assetIds = { has: opts.assetId };
   }
+  // A workspace-scoped key only ever lists its own workspace's files.
+  if (ctx.workspaceId) where.workspaceId = ctx.workspaceId;
 
   const files = await db.file.findMany({
     where,
@@ -73,6 +107,8 @@ export async function getFile(ctx: AuthContext, fileId: string) {
       headers: { "Content-Type": "application/json" },
     });
   }
+  // A workspace-scoped key can only read files inside its workspace (404 else).
+  requireWorkspace(ctx, file.workspaceId);
   if (file.ownerId !== ctx.user.id) {
     // Check permissions
     const perm = await db.permission.findFirst({
@@ -111,9 +147,18 @@ export async function uploadFile(
     access?: "public" | "private";
     region?: StorageRegion;
     source?: string;
+    /** Upload into this workspace (namespaced storage + per-ws quota). */
+    workspaceId?: string;
   }
 ) {
   requireScope(ctx, "WRITE");
+
+  // Effective workspace: a workspace-scoped key forces its own workspace; an
+  // account key may target one explicitly via opts. `requireWorkspace` guards
+  // against a scoped key trying to write to a different workspace via opts.
+  const workspaceId = ctx.workspaceId ?? opts.workspaceId ?? null;
+  requireWorkspace(ctx, workspaceId);
+  const workspace = workspaceId ? await loadOwnedWorkspace(ctx, workspaceId) : null;
 
   if (opts.size <= 0 || opts.size > 5_368_709_120) {
     throw new Response(JSON.stringify({ error: "Invalid file size (must be 1 byte to 5GB)" }), {
@@ -147,14 +192,25 @@ export async function uploadFile(
     );
   }
 
+  // Per-workspace quota (in addition to the account plan ceiling above).
+  if (workspace && workspace.quotaBytes != null && workspace.usedBytes + opts.size > workspace.quotaBytes) {
+    throw new Response(
+      JSON.stringify({ error: `Workspace quota exceeded (${Math.round(workspace.quotaBytes / 1048576)}MB).` }),
+      { status: 400, headers: { "Content-Type": "application/json" } }
+    );
+  }
+
   const provider = await resolveProvider(ctx.user.id, {
     access: opts.access,
     region: opts.region,
   });
 
-  const storageKey = opts.assetId
+  // Workspace files are namespaced under `ws/{workspaceId}/…` (mirrors the
+  // `sites/{websiteId}/` convention) so a workspace is a real folder in storage.
+  const baseKey = opts.assetId
     ? `${ctx.user.id}/${opts.assetId}/${nanoid(3)}`
     : `${ctx.user.id}/${nanoid(3)}`;
+  const storageKey = workspaceId ? `ws/${workspaceId}/${baseKey}` : baseKey;
 
   // Public platform uploads must land in PUBLIC_BUCKET at root prefix —
   // the `mcp/` prefix is unreadable by the public bucket policy and would
@@ -181,10 +237,13 @@ export async function uploadFile(
       url,
       status: "DONE",
       storageProviderId: provider?.id ?? null,
+      ...(workspaceId ? { workspaceId } : {}),
       ...(opts.source ? { source: opts.source } : {}),
       ...(opts.assetId ? { assetIds: [opts.assetId] } : {}),
     },
   });
+
+  if (workspaceId) await bumpWorkspaceUsage(workspaceId, opts.size, 1);
 
   fileEvents.emit("file:changed", ctx.user.id);
   dispatchWebhooks(ctx.user.id, "file.created", { id: file.id, name: file.name, size: file.size, contentType: file.contentType, access: file.access });
@@ -209,6 +268,7 @@ export async function deleteFile(ctx: AuthContext, fileId: string) {
       headers: { "Content-Type": "application/json" },
     });
   }
+  requireWorkspace(ctx, file.workspaceId);
 
   // If the file is publicly served, cut the public exposure NOW (move to the
   // private bucket + purge the Tigris edge) instead of waiting for the 7-day
@@ -219,6 +279,8 @@ export async function deleteFile(ctx: AuthContext, fileId: string) {
     where: { id: fileId },
     data: { status: "DELETED", deletedAt: new Date() },
   });
+
+  if (file.workspaceId) await bumpWorkspaceUsage(file.workspaceId, -file.size, -1);
 
   fileEvents.emit("file:changed", ctx.user.id);
   dispatchWebhooks(ctx.user.id, "file.deleted", { id: file.id, name: file.name });
@@ -249,11 +311,14 @@ export async function restoreFile(ctx: AuthContext, fileId: string) {
       headers: { "Content-Type": "application/json" },
     });
   }
+  requireWorkspace(ctx, file.workspaceId);
 
   await db.file.update({
     where: { id: fileId },
     data: { status: "DONE", deletedAt: null },
   });
+
+  if (file.workspaceId) await bumpWorkspaceUsage(file.workspaceId, file.size, 1);
 
   fileEvents.emit("file:changed", ctx.user.id);
   dispatchWebhooks(ctx.user.id, "file.restored", { id: file.id, name: file.name });
@@ -805,6 +870,206 @@ export async function deleteWebsite(ctx: AuthContext, websiteId: string) {
   return { ok: true };
 }
 
+// --- Workspaces ---
+
+function slugifyWorkspace(input: string): string {
+  return (
+    input
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 48) || "workspace"
+  );
+}
+
+function serializeWorkspace(w: {
+  id: string;
+  name: string;
+  slug: string;
+  status: string;
+  quotaBytes: number | null;
+  usedBytes: number;
+  fileCount: number;
+  createdAt: Date;
+}) {
+  return {
+    id: w.id,
+    name: w.name,
+    slug: w.slug,
+    status: w.status,
+    quotaBytes: w.quotaBytes,
+    usedBytes: w.usedBytes,
+    fileCount: w.fileCount,
+    createdAt: w.createdAt,
+  };
+}
+
+/** Account plan storage ceiling in bytes (the hard cap workspace quotas sum under). */
+function accountMaxBytes(ctx: AuthContext): number {
+  return PLANS[getUserPlan(ctx.user)].storageGB * 1024 * 1024 * 1024;
+}
+
+export async function listWorkspaces(
+  ctx: AuthContext,
+  opts?: { limit?: number; cursor?: string }
+) {
+  requireScope(ctx, "READ");
+  const limit = Math.min(opts?.limit ?? 50, 100);
+  const where: any = {
+    ownerId: ctx.user.id,
+    OR: [{ deletedAt: null }, { deletedAt: { isSet: false } }],
+  };
+  // A workspace-scoped key can only ever see its own workspace.
+  if (ctx.workspaceId) where.id = ctx.workspaceId;
+
+  const rows = await db.workspace.findMany({
+    where,
+    take: limit + 1,
+    ...(opts?.cursor ? { cursor: { id: opts.cursor }, skip: 1 } : {}),
+    orderBy: { createdAt: "desc" },
+  });
+  const hasMore = rows.length > limit;
+  const items = rows.slice(0, limit).map(serializeWorkspace);
+  return { items, nextCursor: hasMore ? items[items.length - 1].id : null, hasMore };
+}
+
+export async function createWorkspace(
+  ctx: AuthContext,
+  opts: { name: string; slug?: string; quotaBytes?: number }
+) {
+  requireScope(ctx, "WRITE");
+  // Managing workspaces is an account-level concern — a workspace-scoped key
+  // (which is confined to one workspace's files) cannot create new ones.
+  if (ctx.workspaceId) {
+    throw new Response(JSON.stringify({ error: "A workspace-scoped key cannot manage workspaces" }), {
+      status: 403,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+  const name = (opts.name || "").trim();
+  if (!name) {
+    throw new Response(JSON.stringify({ error: "Name required" }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+  if (opts.quotaBytes != null && (opts.quotaBytes < 0 || opts.quotaBytes > accountMaxBytes(ctx))) {
+    throw new Response(JSON.stringify({ error: "quotaBytes must be between 0 and the account plan ceiling" }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  const base = slugifyWorkspace(opts.slug || name);
+  let ws;
+  const MAX_ATTEMPTS = 10;
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    const slug = attempt === 0 ? base : `${base}-${nanoid(4)}`;
+    try {
+      ws = await db.workspace.create({
+        data: { name, slug, ownerId: ctx.user.id, quotaBytes: opts.quotaBytes ?? null },
+      });
+      break;
+    } catch (err: unknown) {
+      const isUnique = err && typeof err === "object" && "code" in err && (err as { code: string }).code === "P2002";
+      if (!isUnique || attempt === MAX_ATTEMPTS - 1) throw err;
+    }
+  }
+  if (!ws) throw new Error("Could not generate a unique workspace slug");
+
+  const result = serializeWorkspace(ws);
+  dispatchWebhooks(ctx.user.id, "workspace.created", result);
+  return result;
+}
+
+export async function getWorkspace(ctx: AuthContext, workspaceId: string) {
+  requireScope(ctx, "READ");
+  requireWorkspace(ctx, workspaceId);
+  const ws = await loadOwnedWorkspace(ctx, workspaceId);
+  return serializeWorkspace(ws);
+}
+
+export async function updateWorkspace(
+  ctx: AuthContext,
+  workspaceId: string,
+  opts: { name?: string; status?: string; quotaBytes?: number | null }
+) {
+  requireScope(ctx, "WRITE");
+  requireWorkspace(ctx, workspaceId);
+  await loadOwnedWorkspace(ctx, workspaceId);
+
+  const updates: Record<string, unknown> = {};
+  if (opts.name !== undefined) updates.name = opts.name;
+  if (opts.status !== undefined) updates.status = opts.status;
+  if (opts.quotaBytes !== undefined) {
+    if (opts.quotaBytes != null && (opts.quotaBytes < 0 || opts.quotaBytes > accountMaxBytes(ctx))) {
+      throw new Response(JSON.stringify({ error: "quotaBytes must be between 0 and the account plan ceiling" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    updates.quotaBytes = opts.quotaBytes;
+  }
+
+  const updated = await db.workspace.update({ where: { id: workspaceId }, data: updates });
+  return serializeWorkspace(updated);
+}
+
+export async function deleteWorkspace(ctx: AuthContext, workspaceId: string) {
+  requireScope(ctx, "DELETE");
+  requireWorkspace(ctx, workspaceId);
+  const ws = await loadOwnedWorkspace(ctx, workspaceId);
+
+  // Soft-delete every file in the workspace (recoverable within the 7-day window).
+  await db.file.updateMany({
+    where: { workspaceId, status: { not: "DELETED" } },
+    data: { status: "DELETED", deletedAt: new Date() },
+  });
+  await db.workspace.update({
+    where: { id: workspaceId },
+    data: { status: "DELETED", deletedAt: new Date(), usedBytes: 0, fileCount: 0 },
+  });
+  dispatchWebhooks(ctx.user.id, "workspace.deleted", { id: ws.id, name: ws.name, slug: ws.slug });
+  return { ok: true };
+}
+
+export async function getWorkspaceUsage(ctx: AuthContext, workspaceId: string) {
+  requireScope(ctx, "READ");
+  requireWorkspace(ctx, workspaceId);
+  const ws = await loadOwnedWorkspace(ctx, workspaceId);
+  return {
+    workspaceId: ws.id,
+    usedBytes: ws.usedBytes,
+    quotaBytes: ws.quotaBytes,
+    fileCount: ws.fileCount,
+  };
+}
+
+export async function createWorkspaceKey(
+  ctx: AuthContext,
+  workspaceId: string,
+  opts?: { name?: string; scopes?: ("READ" | "WRITE" | "DELETE")[] }
+) {
+  // Minting keys is sensitive → require ADMIN (session users have it; account
+  // ADMIN keys have it). A workspace-scoped key cannot mint further keys.
+  requireScope(ctx, "ADMIN");
+  if (ctx.workspaceId) {
+    throw new Response(JSON.stringify({ error: "A workspace-scoped key cannot mint keys" }), {
+      status: 403,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+  const ws = await loadOwnedWorkspace(ctx, workspaceId);
+  const key = await createApiKey(ctx.user.id, {
+    name: opts?.name || `workspace-${ws.slug}`,
+    scopes: opts?.scopes ?? ["READ", "WRITE", "DELETE"],
+    workspaceId: ws.id,
+  });
+  // raw is returned exactly once — the caller must store it now.
+  return { id: key.id, key: key.raw, prefix: key.prefix, scopes: key.scopes, workspaceId: ws.id };
+}
+
 // --- Usage Stats ---
 
 export async function getUsageStats(ctx: AuthContext) {
@@ -976,9 +1241,23 @@ export async function duplicateFile(ctx: AuthContext, fileId: string, newName?: 
       headers: { "Content-Type": "application/json" },
     });
   }
+  requireWorkspace(ctx, file.workspaceId);
 
-  // Create a new storage key and copy the object
-  const newStorageKey = `${ctx.user.id}/${nanoid(3)}`;
+  // The copy inherits the source's workspace; enforce that workspace's quota.
+  if (file.workspaceId) {
+    const ws = await loadOwnedWorkspace(ctx, file.workspaceId);
+    if (ws.quotaBytes != null && ws.usedBytes + file.size > ws.quotaBytes) {
+      throw new Response(
+        JSON.stringify({ error: `Workspace quota exceeded (${Math.round(ws.quotaBytes / 1048576)}MB).` }),
+        { status: 400, headers: { "Content-Type": "application/json" } }
+      );
+    }
+  }
+
+  // Create a new storage key (namespaced to the workspace if any) and copy the object
+  const newStorageKey = file.workspaceId
+    ? `ws/${file.workspaceId}/${ctx.user.id}/${nanoid(3)}`
+    : `${ctx.user.id}/${nanoid(3)}`;
   const client = await getClientForFile(file.storageProviderId, ctx.user.id);
 
   const bucket = file.access === "public" ? PUBLIC_BUCKET : PRIVATE_BUCKET;
@@ -1012,8 +1291,11 @@ export async function duplicateFile(ctx: AuthContext, fileId: string, newName?: 
       storageProviderId: file.storageProviderId,
       metadata: file.metadata,
       source: "duplicate",
+      ...(file.workspaceId ? { workspaceId: file.workspaceId } : {}),
     },
   });
+
+  if (file.workspaceId) await bumpWorkspaceUsage(file.workspaceId, file.size, 1);
 
   fileEvents.emit("file:changed", ctx.user.id);
   dispatchWebhooks(ctx.user.id, "file.created", { id: copy.id, name: copy.name, size: copy.size, contentType: copy.contentType, access: copy.access });

@@ -9,6 +9,13 @@ export type AuthContext = {
   apiKey?: ApiKey;
   scopes: ApiKeyScope[];
   /**
+   * When the authenticating API key is workspace-scoped, the workspace it is
+   * bound to. Operations must confine every read/write to this workspace (a
+   * scoped key can never see or touch resources outside it). Null/undefined =
+   * account-wide key (legacy) with access to all of the owner's resources.
+   */
+  workspaceId?: string | null;
+  /**
    * Per-request provider keys supplied by the caller (e.g. via MCP connector
    * URL query params or request headers). Not persisted — only valid for the
    * duration of the current request.
@@ -43,7 +50,7 @@ export async function authenticateRequest(
     if (!apiKey) return null;
     const user = await db.user.findUnique({ where: { id: apiKey.userId } });
     if (!user) return null;
-    return { user, apiKey, scopes: apiKey.scopes };
+    return { user, apiKey, scopes: apiKey.scopes, workspaceId: apiKey.workspaceId };
   }
 
   // 2. Fallback to session cookie
@@ -57,6 +64,25 @@ export function requireScope(ctx: AuthContext, scope: ApiKeyScope): void {
   if (!hasScope(ctx.scopes, scope)) {
     throw new Response(JSON.stringify({ error: "Forbidden", requiredScope: scope }), {
       status: 403,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+}
+
+/**
+ * When the request is authenticated with a workspace-scoped key, assert the
+ * resource being accessed belongs to that same workspace. Returns 404 (not 403)
+ * on mismatch to avoid leaking existence — same convention as ownership checks.
+ * No-op for account-wide keys / session users (ctx.workspaceId null).
+ */
+export function requireWorkspace(
+  ctx: AuthContext,
+  resourceWorkspaceId: string | null | undefined
+): void {
+  if (!ctx.workspaceId) return;
+  if (resourceWorkspaceId !== ctx.workspaceId) {
+    throw new Response(JSON.stringify({ error: "Not found" }), {
+      status: 404,
       headers: { "Content-Type": "application/json" },
     });
   }
