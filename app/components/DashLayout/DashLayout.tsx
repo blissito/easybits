@@ -3,6 +3,7 @@ import { HeaderMobile, SideBar } from "./SideBar";
 import { ImpersonationBanner } from "./ImpersonationBanner";
 import { getRealUserOrNull, getUserOrNull, isAdminUser } from "~/.server/getters";
 import { clearShareCookie, hasValidShareCookie } from "~/.server/shareLinks";
+import { countUnread } from "~/.server/core/notificationOperations";
 import type { Route } from "./+types/DashLayout";
 
 export const loader = async ({ request }: Route.LoaderArgs) => {
@@ -37,6 +38,7 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
     return redirect("/onboarding");
   }
   const isAdmin = isAdminUser(user);
+  const unreadCount = await countUnread(user.id).catch(() => 0);
 
   // Limpieza proactiva: si el user logueado todavía trae cookie de share
   // pegada (de una visita previa al share link), la borramos para que no
@@ -45,17 +47,18 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
   const cookieHeader = request.headers.get("Cookie") || "";
   if (cookieHeader.includes("eb_share=")) {
     return data(
-      { isAdmin, isShareSession: false, impersonating },
+      { isAdmin, isShareSession: false, impersonating, unreadCount },
       { headers: { "Set-Cookie": clearShareCookie() } }
     );
   }
-  return { isAdmin, isShareSession: false, impersonating };
+  return { isAdmin, isShareSession: false, impersonating, unreadCount };
 };
 
 export default function DashLayout({ loaderData }: Route.ComponentProps) {
   const isAdmin = loaderData?.isAdmin ?? false;
   const isShareSession = loaderData?.isShareSession ?? false;
   const impersonating = loaderData?.impersonating ?? null;
+  const unreadCount = loaderData?.unreadCount ?? 0;
   if (isShareSession) {
     return (
       <main className="flex relative min-h-svh bg-pattern">
@@ -76,7 +79,7 @@ export default function DashLayout({ loaderData }: Route.ComponentProps) {
         />
       )}
       <HeaderMobile isAdmin={isAdmin} />
-      <SideBar isAdmin={isAdmin} />
+      <SideBar isAdmin={isAdmin} unreadCount={unreadCount} />
       <Outlet />
     </main>
   );

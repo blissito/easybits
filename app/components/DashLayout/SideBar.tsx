@@ -4,6 +4,7 @@ import { Link, NavLink, useLocation } from "react-router";
 import { AnimatePresence, motion, useAnimate } from "motion/react";
 import { ITEMS } from "./DashLayout.constants";
 import { cn } from "~/utils/cn";
+import { NotificationBell } from "./NotificationBell";
 import Logo from "/logo-purple.svg";
 
 interface MenuItemProps {
@@ -19,18 +20,30 @@ interface MenuItemProps {
   external?: boolean;
 }
 
-export const SideBar = ({ isAdmin = false }: { isAdmin?: boolean }) => {
+export const SideBar = ({
+  isAdmin = false,
+  unreadCount = 0,
+}: {
+  isAdmin?: boolean;
+  unreadCount?: number;
+}) => {
   return (
     <>
       <section className="fixed right-4 bottom-16 z-20 block md:hidden  ">
         <FoldMenu />
       </section>
-      <SideBarWeb isAdmin={isAdmin} />
+      <SideBarWeb isAdmin={isAdmin} unreadCount={unreadCount} />
     </>
   );
 };
 
-const SideBarWeb = ({ isAdmin = false }: { isAdmin?: boolean }) => {
+const SideBarWeb = ({
+  isAdmin = false,
+  unreadCount = 0,
+}: {
+  isAdmin?: boolean;
+  unreadCount?: number;
+}) => {
   const location = useLocation();
   const middleItems = isAdmin
     ? [ITEMS.adminItem, ITEMS.cuentasItem, ...ITEMS.middleItems]
@@ -58,6 +71,9 @@ const SideBarWeb = ({ isAdmin = false }: { isAdmin?: boolean }) => {
 
       {/* Divider + meta items */}
       <hr className="bg-white/10 h-[1px] w-8 mx-auto mt-3 mb-0" />
+      <div className="flex justify-center pt-2">
+        <NotificationBell unreadCount={unreadCount} />
+      </div>
       <ul className="flex flex-col gap-3 pt-2 items-center">
         {middleItems.map((item, key) => (
           <SideBarItem
