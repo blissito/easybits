@@ -315,6 +315,7 @@ export default [
     route("characters/:id", "routes/api/v2/character.ts"),
     route("webhooks", "routes/api/v2/webhooks.ts"),
     route("webhooks/:webhookId", "routes/api/v2/webhook.ts"),
+    route("notifications", "routes/api/v2/notifications.ts"),
     route("databases", "routes/api/v2/databases.ts"),
     route("databases/:dbId", "routes/api/v2/database.ts"),
     route("databases/:dbId/query", "routes/api/v2/database-query.ts"),

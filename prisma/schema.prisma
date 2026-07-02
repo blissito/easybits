@@ -202,6 +202,7 @@ model User {
   // subscriptions
   newsletters    NewsLetter[]
   notifications  Notifications?
+  notificationInbox Notification[] // in-app notification center (distinct from the `notifications` email prefs above)
   assetIds       String[] // experiment
   customer       String?
   // dates
@@ -1365,4 +1366,23 @@ model SandboxReservation {
   updatedAt            DateTime @updatedAt
 
   @@index([ownerId])
+}
+
+// In-app notification center (per-user). `type` is a category key that maps to
+// an icon in the UI (e.g. "file.purged"). `metadata` carries context like the
+// list of purged file names. Distinct from the embedded `Notifications` type,
+// which stores email preferences.
+model Notification {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String   @db.ObjectId
+  user      User     @relation(fields: [userId], references: [id])
+  type      String
+  title     String
+  body      String?
+  metadata  Json?
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId, read])
+  @@index([userId, createdAt])
 }

@@ -20,6 +20,7 @@ import { createHost } from "~/lib/fly_certs/certs_getters";
 import { fileEvents } from "./fileEvents";
 import { PLANS, NEXT_PLAN, getUserPlan, formatPrice, type PlanKey } from "~/lib/plans";
 import { dispatchWebhooks } from "../webhooks";
+import { notifyFilesPurged } from "./notificationOperations";
 import { checkAiGenerationLimit } from "../aiGenerationLimit";
 import { requireWorkspace } from "../apiAuth";
 import { createApiKey } from "../iam";
@@ -327,6 +328,76 @@ export async function restoreFile(ctx: AuthContext, fileId: string) {
 
 // --- Purge Deleted Files (7+ days) ---
 
+/**
+ * Permanently delete a File leaving ZERO residue — the single source of truth
+ * for hard-deleting a file. Removes the storage object AND every DB row / loose
+ * pointer that referenced it, in an order that satisfies Prisma's (Mongo-emulated)
+ * referential integrity.
+ *
+ * Why this exists: `ShareToken.file` is a REQUIRED relation, so a bare
+ * `db.file.delete` throws P2014 while any token still points at the file — that
+ * used to 500 the purge cron and leave every later file stuck at "PURGE IN: 0 days".
+ * The other references (Permission, VideoGeneration, PresentationStyle,
+ * McpStructuredDoc, Character) are loose ObjectId pointers that don't block the
+ * delete but would dangle forever — we null/pull them so nothing is left behind.
+ *
+ * NOTE (documented follow-up): HLS files also store `chunks/{storageKey}/` in the
+ * `video-converter-hono` bucket; deleting that folder needs an S3 list primitive
+ * we don't have yet, so those segments are not purged here.
+ */
+async function hardDeleteFile(file: {
+  id: string;
+  ownerId: string;
+  storageKey: string;
+  storageProviderId: string | null;
+  access: string;
+  url: string;
+}) {
+  // 1) Storage: the primary object. Best-effort — if it's already gone we still
+  //    proceed with DB cleanup.
+  try {
+    if (!file.storageProviderId && file.access === "public") {
+      // Public platform object lives in PUBLIC_BUCKET at root. Delete it via the
+      // gateway-aware helper so the Tigris edge cache is purged too.
+      const isLegacyMcpUrl = !!file.url && file.url.includes("/mcp/");
+      await deleteObjectFromBucket({
+        bucket: PUBLIC_BUCKET,
+        key: isLegacyMcpUrl ? `mcp/${file.storageKey}` : file.storageKey,
+      });
+    } else {
+      const client = file.storageProviderId
+        ? await getClientForFile(file.storageProviderId, file.ownerId)
+        : getReadClientForPlatformFile(file as any);
+      await client.deleteObject(file.storageKey);
+    }
+  } catch {
+    // storage already gone, continue with DB cleanup
+  }
+
+  // 2) DB dependents + dangling pointers, all scoped to this file id.
+  await db.shareToken.deleteMany({ where: { fileId: file.id } }); // required relation (P2014)
+  await db.permission.deleteMany({ where: { resourceType: "file", resourceId: file.id } });
+  await db.videoGeneration.updateMany({ where: { stillFileId: file.id }, data: { stillFileId: null } });
+  await db.videoGeneration.updateMany({ where: { videoFileId: file.id }, data: { videoFileId: null } });
+  await db.presentationStyle.updateMany({ where: { sourceFileId: file.id }, data: { sourceFileId: null } });
+  await db.mcpStructuredDoc.updateMany({ where: { lastPdfFileId: file.id }, data: { lastPdfFileId: null } });
+  // Character.referenceFileIds is a String[] scalar list — Mongo/Prisma has no
+  // element "pull", so load the (rare) rows holding this id and rewrite the array.
+  const chars = await db.character.findMany({
+    where: { referenceFileIds: { has: file.id } },
+    select: { id: true, referenceFileIds: true },
+  });
+  for (const c of chars) {
+    await db.character.update({
+      where: { id: c.id },
+      data: { referenceFileIds: c.referenceFileIds.filter((x) => x !== file.id) },
+    });
+  }
+
+  // 3) The file row itself.
+  await db.file.delete({ where: { id: file.id } });
+}
+
 export async function purgeDeletedFiles() {
   const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
@@ -334,42 +405,32 @@ export async function purgeDeletedFiles() {
     where: { status: "DELETED", deletedAt: { lt: cutoff } },
   });
 
-  let purged = 0;
+  // Group successfully purged file names by owner so we send ONE notification per
+  // owner per run (anti-spam), not one per file.
+  const purgedByOwner = new Map<string, string[]>();
   for (const file of files) {
     try {
-      if (!file.storageProviderId && file.access === "public") {
-        // Public platform object lives in PUBLIC_BUCKET at root. Delete it via
-        // the gateway-aware helper so the Tigris edge cache is purged too — the
-        // old code resolved the PRIVATE bucket client here, so the public object
-        // (and its cached edge copy) was never actually removed.
-        const isLegacyMcpUrl = !!file.url && file.url.includes("/mcp/");
-        await deleteObjectFromBucket({
-          bucket: PUBLIC_BUCKET,
-          key: isLegacyMcpUrl ? `mcp/${file.storageKey}` : file.storageKey,
-        });
-      } else {
-        const client = file.storageProviderId
-          ? await getClientForFile(file.storageProviderId, file.ownerId)
-          : getReadClientForPlatformFile(file);
-        await client.deleteObject(file.storageKey);
-      }
-    } catch {
-      // storage already gone, continue with DB cleanup
-    }
-    // DB cleanup must be resilient: one bad row can't abort the whole batch.
-    // ShareToken.file is a REQUIRED relation → Prisma (Mongo emulates referential
-    // integrity) throws P2014 on file.delete while any token still points at it,
-    // which used to 500 the cron and leave every later file stuck at "0 days".
-    // Remove dependents first, then the file.
-    try {
-      await db.shareToken.deleteMany({ where: { fileId: file.id } });
-      await db.file.delete({ where: { id: file.id } });
-      purged++;
+      await hardDeleteFile(file);
+      const arr = purgedByOwner.get(file.ownerId) ?? [];
+      arr.push(file.name);
+      purgedByOwner.set(file.ownerId, arr);
     } catch (e) {
+      // One bad row can't abort the whole batch.
       console.error(`purgeDeletedFiles: failed to delete file ${file.id}:`, e);
     }
   }
 
+  // Notify each owner that their trash was permanently emptied. Best-effort:
+  // a notification failure must never fail the purge.
+  for (const [ownerId, names] of purgedByOwner) {
+    try {
+      await notifyFilesPurged(ownerId, names);
+    } catch (e) {
+      console.error(`purgeDeletedFiles: notify ${ownerId} failed:`, e);
+    }
+  }
+
+  const purged = [...purgedByOwner.values()].reduce((n, a) => n + a.length, 0);
   return { purged, eligible: files.length };
 }
 

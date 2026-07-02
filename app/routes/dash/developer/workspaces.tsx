@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useLoaderData, useFetcher, Link, data } from "react-router";
 import { motion, AnimatePresence } from "motion/react";
 import { getUserOrRedirect } from "~/.server/getters";
@@ -215,36 +215,86 @@ function FileList({ files }: { files: Array<{ id: string; name: string; size: nu
   );
 }
 
+function fileKind(name: string, contentType: string) {
+  const ext = (name.split(".").pop() || "").toLowerCase();
+  const ct = (contentType || "").toLowerCase();
+  if (ct.includes("pdf") || ext === "pdf") return { label: "PDF", cls: "bg-red-100 text-red-700" };
+  if (ct.includes("word") || ["doc", "docx"].includes(ext)) return { label: "DOC", cls: "bg-blue-100 text-blue-700" };
+  if (ct.includes("sheet") || ct.includes("excel") || ["xls", "xlsx", "csv"].includes(ext))
+    return { label: "XLS", cls: "bg-green-100 text-green-700" };
+  if (ct.startsWith("text/") || ["txt", "md"].includes(ext)) return { label: "TXT", cls: "bg-gray-100 text-gray-600" };
+  return { label: (ext || "FILE").slice(0, 4).toUpperCase(), cls: "bg-gray-100 text-gray-500" };
+}
+
+function FileThumb({ name, contentType, imageUrl, onClick }: { name: string; contentType: string; imageUrl: string | null; onClick: () => void }) {
+  const isImage = (contentType || "").startsWith("image/");
+  const kind = fileKind(name, contentType);
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="w-11 h-11 rounded-lg overflow-hidden shrink-0 flex items-center justify-center border-2 border-black bg-white"
+      aria-label="Ver"
+    >
+      {isImage && imageUrl ? (
+        <img src={imageUrl} alt="" className="w-full h-full object-cover" />
+      ) : (
+        <span className={`text-[10px] font-bold px-1 py-0.5 rounded ${kind.cls}`}>{kind.label}</span>
+      )}
+    </button>
+  );
+}
+
 function FileRow({ file }: { file: { id: string; name: string; size: number; contentType: string } }) {
   const del = useFetcher();
-  const read = useFetcher<{ url?: string }>();
+  const dl = useFetcher<{ url?: string }>();
+  const thumb = useFetcher<{ url?: string }>();
   const [confirm, setConfirm] = useState(false);
 
-  // Open the signed read URL as soon as it comes back.
-  if (read.data?.url && typeof window !== "undefined") {
-    window.open(read.data.url, "_blank", "noopener");
-    read.data.url = undefined;
-  }
+  const isImage = (file.contentType || "").startsWith("image/");
+
+  // Prefetch the signed URL for image thumbnails (not for download).
+  useEffect(() => {
+    if (isImage && thumb.state === "idle" && !thumb.data) {
+      thumb.submit({ intent: "read-url", fileId: file.id }, { method: "post" });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isImage]);
+
+  // Open the download URL when it comes back.
+  useEffect(() => {
+    if (dl.data?.url && typeof window !== "undefined") window.open(dl.data.url, "_blank", "noopener");
+  }, [dl.data]);
+
+  const thumbUrl = thumb.data?.url ?? null;
+  const open = () => {
+    // Reuse the already-fetched image URL to avoid minting a second signed URL.
+    if (thumbUrl && typeof window !== "undefined") window.open(thumbUrl, "_blank", "noopener");
+    else dl.submit({ intent: "read-url", fileId: file.id }, { method: "post" });
+  };
 
   const shortName = file.name.split("/").pop() || file.name;
   const isDeleting = del.state !== "idle";
 
   return (
     <div className={`flex items-center justify-between gap-3 text-sm ${isDeleting ? "opacity-50" : ""}`}>
-      <div className="min-w-0">
-        <p className="font-medium truncate">{shortName}</p>
-        <p className="text-xs text-gray-500">
-          {formatSize(file.size)} · {file.contentType}
-        </p>
+      <div className="flex items-center gap-3 min-w-0">
+        <FileThumb name={shortName} contentType={file.contentType} imageUrl={thumbUrl} onClick={open} />
+        <div className="min-w-0">
+          <p className="font-medium truncate">{shortName}</p>
+          <p className="text-xs text-gray-500">
+            {formatSize(file.size)} · {file.contentType}
+          </p>
+        </div>
       </div>
       <div className="flex items-center gap-2 shrink-0">
         <button
           type="button"
-          disabled={read.state !== "idle"}
-          onClick={() => read.submit({ intent: "read-url", fileId: file.id }, { method: "post" })}
+          disabled={dl.state !== "idle"}
+          onClick={open}
           className="px-2.5 py-1 text-xs font-bold rounded-lg border-2 border-black bg-white hover:bg-gray-100"
         >
-          {read.state !== "idle" ? "…" : "Descargar"}
+          {dl.state !== "idle" ? "…" : "Descargar"}
         </button>
         <button
           type="button"
