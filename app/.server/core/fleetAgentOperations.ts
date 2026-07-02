@@ -910,6 +910,13 @@ export async function routeMessage(
               (fleetAgent.persona as Persona | null)?.env?.ASSISTANT_NAME === "Ghosty")
               ? GHOSTY_APPEARANCE_GUARDRAIL
               : null,
+            // Búsqueda web: desbloquea el rechazo a preguntas por datos externos
+            // (precios/tiendas/info pública) — el worker trae WebSearch/WebFetch. Solo
+            // Ghosty (como la apariencia), para no alterar personas custom de tenants.
+            (fleetAgent.assistantName === "Ghosty" ||
+              (fleetAgent.persona as Persona | null)?.env?.ASSISTANT_NAME === "Ghosty")
+              ? WEB_RESEARCH_GUARDRAIL
+              : null,
             // WABA: NO hay server `wa` (Baileys) ni socket. Corrige la persona
             // horneada (que dice "usa wa send_message") → en este canal los archivos
             // se mandan incluyendo su URL en el texto (la plataforma la adjunta).
@@ -1137,6 +1144,19 @@ const GHOSTY_APPEARANCE_GUARDRAIL = [
   `Tu retrato oficial está en ${GHOSTY_REFERENCE_IMAGE_URL} — pásalo SIEMPRE como referencia a create_or_edit_image en imageUrls:["${GHOSTY_REFERENCE_IMAGE_URL}"] para que el resultado sea fiel a ti.`,
   "Para referencia, tu apariencia es: fantasma de cuerpo redondeado color MORADO/lavanda con la clásica silueta ondulada abajo; ojos grandes ovalados negros; lentes redondos de armazón delgado metálico sobre los ojos; rubor rosa sutil en las mejillas; estilo plano y amigable.",
   "Incluye estos rasgos (morado + lentes redondos) y la imagen de referencia en CUALQUIER generación donde aparezcas tú.",
+].join(" ");
+
+// Búsqueda web: la persona horneada enmarca a Ghosty como asistente SOLO de archivos/
+// docs de EasyBits, y la línea "si te piden algo fuera de tu alcance, dilo con
+// honestidad" lo empuja a DECLINAR preguntas por datos externos (precios, dónde
+// comprar algo, info pública) — aunque el worker SÍ trae WebSearch/WebFetch nativos y
+// funcionan (verificado en vivo: devuelve precios/tiendas reales cuando se le pide
+// explícito). Inyectado FRESCO por turno (como voz/apariencia) SOLO para Ghosty, así
+// alcanza a los agentes ya creados sin rebuild y no toca personas custom de otros
+// tenants. Desbloquea el rechazo sin cambiar la persona base.
+const WEB_RESEARCH_GUARDRAIL = [
+  "BÚSQUEDA WEB: si te preguntan por datos EXTERNOS a EasyBits (precios, dónde comprar algo, disponibilidad en tiendas, info pública, noticias), SÍ puedes ayudarte de la web con tus herramientas WebSearch/WebFetch — ÚSALAS en vez de declinar.",
+  "Da el dato concreto y, si aplica, la fuente. NUNCA digas que 'no manejas' ese tema como excusa para no buscar; solo aclara que no vendes ni gestionas productos físicos si te lo preguntan directamente.",
 ].join(" ");
 
 // WABA (WhatsApp Business): este canal NO tiene el server `wa` (Baileys) ni un

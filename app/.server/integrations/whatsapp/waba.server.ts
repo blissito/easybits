@@ -138,6 +138,18 @@ type WabaItem = { content: string; media: WabaInboundMedia | null; messageId?: s
 type WabaBuf = { ctx: WabaCtx; items: WabaItem[]; running: boolean; timer: ReturnType<typeof setTimeout> | null };
 const wabaBuffers = new Map<string, WabaBuf>();
 
+// In-flight guard para el path "Solicitar respuesta" / trigger-reply. A diferencia
+// del webhook (que pasa por enqueueWabaTurn y su lock de buffer), replyToPendingWaba
+// llama runWabaTurn DIRECTO — sin serialización. Formmy lo dispara desde DOS lugares
+// descoordinados (resume auto-wake + botón del dashboard, que además reintenta al
+// dar 502), y la acción del dash es fire-and-forget sin busy-state → clics repetidos.
+// Cada disparo = un turno completo = un mensaje más (y si ya no hay pendientes, un
+// "¿sigues ahí?"). Este Set colapsa los disparos concurrentes por conversación en uno.
+// LIMITACIÓN: es per-proceso (in-memory), como el coalescing del webhook — dos
+// disparos en instancias distintas de Fly se cuelan; el fix cross-instance sería una
+// idempotency key en DB.
+const wabaPendingInFlight = new Set<string>();
+
 // Entrada del canal WABA: encola un mensaje para su conversación. Reemplaza la
 // llamada directa a runWabaTurn (que causaba la carrera de spawn).
 export function enqueueWabaTurn(ctx: WabaCtx, item: WabaItem): void {
@@ -281,6 +293,15 @@ export async function replyToPendingWaba(args: {
   // Match por teléfono NORMALIZADO sobre el prefijo del número — toma también
   // mensajes guardados bajo el groupId viejo (crudo 521…) antes de la normalización.
   const np = normalizePhone(sender);
+  // In-flight guard: si ya corre un turno de "Solicitar respuesta" para esta
+  // conversación, no arranques otro — así clics repetidos / los dos llamadores de
+  // Formmy (resume + dashboard) colapsan en un solo mensaje en vez de N.
+  const inFlightKey = `${fleetAgentId}:${integrationId}:${np}`;
+  if (wabaPendingInFlight.has(inFlightKey)) {
+    return { ok: false, error: "reply already in flight for this conversation" };
+  }
+  wabaPendingInFlight.add(inFlightKey);
+  try {
   const prefix = `waba:${integrationId}:`;
   const rows = await db.fleetAgentMessage.findMany({
     where: { fleetAgentId, groupId: { startsWith: prefix } },
@@ -336,6 +357,9 @@ export async function replyToPendingWaba(args: {
     skipUserLog: true, // los pendientes ya están logueados
   });
   return { ok: true };
+  } finally {
+    wabaPendingInFlight.delete(inFlightKey);
+  }
 }
 
 // Dashboard "Solicitar respuesta": reactiva (despausa) en Formmy + limpia el cache +
