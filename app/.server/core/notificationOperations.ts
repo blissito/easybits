@@ -63,3 +63,21 @@ export async function markNotificationsRead(
   const res = await db.notification.updateMany({ where, data: { read: true } });
   return res.count;
 }
+
+// Retention: the notification center only shows the latest 20 (listNotifications
+// limit), so anything older than ~a quarter is dead weight nobody sees. Without a
+// reaper the collection grows unbounded (one row per purge run per owner, etc.).
+export const NOTIFICATION_RETENTION_DAYS = 90;
+
+// Hard-delete notifications older than the retention window (read or not — a
+// 90-day-old "unread" is stale). Run by the purge-notifications cron. Returns
+// how many were deleted.
+export async function purgeOldNotifications(
+  retentionDays = NOTIFICATION_RETENTION_DAYS
+): Promise<{ purged: number }> {
+  const cutoff = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000);
+  const res = await db.notification.deleteMany({
+    where: { createdAt: { lt: cutoff } },
+  });
+  return { purged: res.count };
+}

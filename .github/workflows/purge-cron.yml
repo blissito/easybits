@@ -27,3 +27,8 @@ jobs:
           curl -fsS -X GET \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             https://easybits.cloud/api/cron/purge-machines
+      - name: Purge notifications older than 90 days
+        run: |
+          curl -fsS -X GET \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            https://easybits.cloud/api/cron/purge-notifications
