@@ -53,6 +53,11 @@ const SideBarWeb = ({
     <section className="w-20 h-full hidden md:flex bg-black border-r-[2px] border-black fixed z-50 py-2 flex-col gap-0 overflow-y-auto overflow-x-hidden">
       <SideBarItem isLogo />
 
+      {/* Notificaciones — arriba, junto al logo */}
+      <div className="flex justify-center pt-1">
+        <NotificationBell unreadCount={unreadCount} />
+      </div>
+
       {/* Secciones con micro-labels */}
       {ITEMS.sections.map((section) => (
         <div key={section.label} className="w-full">
@@ -71,9 +76,6 @@ const SideBarWeb = ({
 
       {/* Divider + meta items */}
       <hr className="bg-white/10 h-[1px] w-8 mx-auto mt-3 mb-0" />
-      <div className="flex justify-center pt-2">
-        <NotificationBell unreadCount={unreadCount} />
-      </div>
       <ul className="flex flex-col gap-3 pt-2 items-center">
         {middleItems.map((item, key) => (
           <SideBarItem

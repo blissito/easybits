@@ -59,12 +59,32 @@ export function NotificationBell({ unreadCount = 0 }: { unreadCount?: number }) 
   const fetcher = useFetcher<{ notifications: Notification[]; unreadCount: number }>();
   const markFetcher = useFetcher();
   const wrapRef = useRef<HTMLDivElement>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  // Anchor the portal dropdown to the bell button so it opens beside it,
+  // wherever the bell sits in the sidebar (not a hardcoded top offset).
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
 
   // Load the list lazily on first open (don't bloat every dashboard load).
   useEffect(() => {
     if (open && fetcher.state === "idle" && !fetcher.data) {
       fetcher.load("/api/v2/notifications");
     }
+  }, [open]);
+
+  // Compute the dropdown position from the bell's rect each time it opens.
+  useEffect(() => {
+    if (!open) return;
+    const place = () => {
+      const rect = btnRef.current?.getBoundingClientRect();
+      if (rect) setPos({ top: rect.top, left: rect.right + 12 });
+    };
+    place();
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    return () => {
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
+    };
   }, [open]);
 
   // Close on click-outside (same pattern as FoldMenu).
@@ -94,6 +114,7 @@ export function NotificationBell({ unreadCount = 0 }: { unreadCount?: number }) 
   return (
     <div ref={wrapRef} className="relative w-full flex justify-center">
       <button
+        ref={btnRef}
         type="button"
         onClick={() => setOpen((v) => !v)}
         title="Notificaciones"
@@ -110,13 +131,13 @@ export function NotificationBell({ unreadCount = 0 }: { unreadCount?: number }) 
       {typeof document !== "undefined" &&
         createPortal(
           <AnimatePresence>
-            {open && (
+            {open && pos && (
               <motion.div
                 initial={{ opacity: 0, x: -8, scale: 0.98 }}
                 animate={{ opacity: 1, x: 0, scale: 1 }}
                 exit={{ opacity: 0, x: -8, scale: 0.98 }}
                 transition={{ duration: 0.15 }}
-                style={{ left: "5rem", top: "0.75rem" }}
+                style={{ left: pos.left, top: pos.top }}
                 className="fixed z-[9999] w-80 max-h-[70vh] overflow-y-auto bg-white border-2 border-black rounded-2xl shadow-xl"
               >
                 <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 sticky top-0 bg-white">
