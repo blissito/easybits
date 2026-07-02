@@ -2,6 +2,7 @@ import type { Route } from "./+types/fleet-agents.$fleetAgentId.message";
 import { db } from "~/.server/db";
 import { routeMessage, FleetAgentAtCapacity, FleetAgentRateLimited } from "~/.server/core/fleetAgentOperations";
 import { checkFleetAgentWebIp } from "~/.server/rateLimiter";
+import type { WabaConfig } from "~/.server/integrations/whatsapp/waba.server";
 
 // POST /api/v2/fleet-agents/:fleetAgentId/message
 //
@@ -24,7 +25,14 @@ export async function action({ request, params }: Route.ActionArgs) {
   const fleetAgentId = params.fleetAgentId!;
   const bearer = request.headers.get("Authorization")?.replace(/^Bearer\s+/i, "") ?? "";
   const fleetAgent = await db.fleetAgent.findUnique({ where: { id: fleetAgentId } });
-  if (!fleetAgent || !bearer || fleetAgent.token !== bearer) {
+  // Two owner-level bearers authorize this route:
+  //  - fleetAgent.token: the Baileys/web surface (denik widget, admin assistant).
+  //  - wabaConfig.formmySecret: the secret Formmy already holds from the WABA
+  //    connect. Ghosty reuses it to drive ADMIN turns — no new credential.
+  const formmySecret = (fleetAgent?.wabaConfig as WabaConfig | null)?.formmySecret ?? "";
+  const byToken = !!fleetAgent && !!bearer && bearer === fleetAgent.token;
+  const byFormmy = !!fleetAgent && !!bearer && !!formmySecret && bearer === formmySecret;
+  if (!byToken && !byFormmy) {
     return Response.json({ error: "Unauthorized" }, { status: 401, headers: CORS });
   }
 
@@ -42,6 +50,10 @@ export async function action({ request, params }: Route.ActionArgs) {
   if (!groupId || !text.trim()) {
     return Response.json({ error: "groupId and text required" }, { status: 400, headers: CORS });
   }
+  // ADMIN turn: inject the admin MCP + note so the agent self-administers (numbers,
+  // identity, capabilities). Honored ONLY when the caller proved it holds the
+  // formmySecret — the public widget token must never escalate to admin.
+  const admin = byFormmy && body?.admin === true;
 
   // Rate-limit lives in routeMessage now (per (fleetAgent, group)) so it covers both
   // this HTTP surface and the in-process Baileys path. FleetAgentRateLimited → 429.
@@ -57,6 +69,7 @@ export async function action({ request, params }: Route.ActionArgs) {
       // Per-org personalization (layer 3) appended to the fleetAgent persona by the worker.
       appendSystemPrompt:
         typeof body?.appendSystemPrompt === "string" ? body.appendSystemPrompt : undefined,
+      admin,
     });
     return Response.json({ reply }, { headers: CORS });
   } catch (e) {
