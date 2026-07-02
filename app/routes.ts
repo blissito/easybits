@@ -232,6 +232,9 @@ export default [
     route("sandboxes/:id/bg/:execId", "routes/api/v2/sandbox-bg-detail.ts"),
     route("sandboxes/:id/files/:op", "routes/api/v2/sandbox-files.ts"),
     route("sandboxes/:id/:action", "routes/api/v2/sandbox-action.ts"),
+    // Snapshots catalog (copy-on-write clone sources) — backs eb.sandboxes.snapshots.*
+    route("snapshots", "routes/api/v2/snapshots-collection.ts"),
+    route("snapshots/:id", "routes/api/v2/snapshot-item.ts"),
     // Always-on hosting (máquinas permanentes) — backs eb.machines.*
     route("machines/tiers", "routes/api/v2/machines-tiers.ts"),
     route("machines", "routes/api/v2/machines-collection.ts"),

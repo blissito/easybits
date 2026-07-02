@@ -13,6 +13,8 @@ import {
   extendSandbox,
   suspendSandbox,
   resumeSandbox,
+  snapshotSandbox,
+  forkSandbox,
   execCommand,
   runCode,
   runCell,
@@ -32,8 +34,8 @@ const invalid = (issues: unknown) =>
   Response.json({ error: "Invalid body", issues }, { status: 400 });
 
 // POST /api/v2/sandboxes/:id/:action
-// action ∈ extend | suspend | resume | exec | run-code | run-cell |
-//          kernel-restart | logs | runtime | apply-patch | expose |
+// action ∈ extend | suspend | resume | snapshot | fork | exec | run-code |
+//          run-cell | kernel-restart | logs | runtime | apply-patch | expose |
 //          domain-add | domain-remove | domain-list | domain-verify
 export async function action({ request, params }: Route.ActionArgs) {
   if (request.method !== "POST") {
@@ -55,6 +57,18 @@ export async function action({ request, params }: Route.ActionArgs) {
       return Response.json(await suspendSandbox(ctx, id));
     case "resume":
       return Response.json(await resumeSandbox(ctx, id));
+    case "snapshot":
+      return Response.json(await snapshotSandbox(ctx, id, { name: body.name }));
+    case "fork":
+      return Response.json(
+        await forkSandbox(ctx, {
+          sandboxId: id,
+          count: body.count,
+          name: body.name,
+          metadata: body.metadata,
+          timeoutSeconds: body.timeoutSeconds,
+        })
+      );
     case "exec": {
       const p = SandboxExecBody.safeParse(body);
       if (!p.success) return invalid(p.error.issues);

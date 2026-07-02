@@ -105,6 +105,10 @@ import {
   extendSandbox,
   suspendSandbox,
   resumeSandbox,
+  snapshotSandbox,
+  listSnapshots,
+  deleteSnapshot,
+  forkSandbox,
   execCommand,
   runCode,
   writeFile as sandboxWriteFile,
@@ -1713,6 +1717,67 @@ How to embed safely (the only reliable rule):
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await resumeSandbox(ctx, params.sandboxId);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "sandbox_snapshot",
+    "Capture a named, persisted copy-on-write image of a RUNNING sandbox WITHOUT stopping it (the box keeps running). The snapshot can later be forked into N independent children with sandbox_fork — use it to freeze a known-good state (deps installed, project set up) and branch parallel experiments from it. Returns the snapshot record (snapshotId, sizeBytes).",
+    {
+      sandboxId: z.string().describe("Sandbox ID to snapshot"),
+      name: z.string().optional().describe("Human label for the snapshot"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await snapshotSandbox(ctx, params.sandboxId, { name: params.name });
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "sandbox_fork",
+    "Boot N copy-on-write children from a sandbox (fresh IP each, collision-free), to explore variations in parallel. Pass sandboxId to snapshot a live box then fork it (Morph-style branch), OR snapshotId to fork an existing snapshot. count 1–16 (default 1). Children are ephemeral (auto-reaped at TTL) and count against your concurrent-sandbox budget. Returns the child records (still starting — poll sandbox_status until running).",
+    {
+      sandboxId: z.string().optional().describe("Live box to snapshot-then-fork"),
+      snapshotId: z.string().optional().describe("Existing snapshot to fork from"),
+      count: z.number().int().min(1).max(16).optional().describe("How many children (default 1)"),
+      name: z.string().optional().describe("Name applied to each child"),
+      timeoutSeconds: z.number().int().optional().describe("Child TTL seconds (clamped to your plan)"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await forkSandbox(ctx, {
+        sandboxId: params.sandboxId,
+        snapshotId: params.snapshotId,
+        count: params.count,
+        name: params.name,
+        timeoutSeconds: params.timeoutSeconds,
+      });
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "list_snapshots",
+    "List your saved sandbox snapshots (copy-on-write clone sources): snapshotId, name, source box, size, created date.",
+    {},
+    wrapHandler(async (_params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await listSnapshots(ctx);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "delete_snapshot",
+    "Delete a sandbox snapshot, freeing its stored image. Does not affect the source box or any children already forked from it.",
+    {
+      snapshotId: z.string().describe("Snapshot ID to delete"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await deleteSnapshot(ctx, params.snapshotId);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     })
   );

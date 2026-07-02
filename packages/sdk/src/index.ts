@@ -1324,6 +1324,28 @@ export class EasybitsClient {
         const { machines } = await req<{ machines: SandboxRecord[] }>("/machines");
         return machines.map((r) => new Sandbox(r, req));
       },
+      /** Boot N copy-on-write children from an existing snapshot. */
+      forkFromSnapshot: async (
+        snapshotId: string,
+        opts?: ForkOptions,
+      ): Promise<Sandbox[]> => {
+        const children = await req<SandboxRecord[]>(`/snapshots/${snapshotId}`, {
+          method: "POST",
+          body: JSON.stringify(opts ?? {}),
+        });
+        return children.map((r) => new Sandbox(r, req));
+      },
+      /** Saved copy-on-write snapshots (clone sources). */
+      snapshots: {
+        /** List the caller's snapshots. */
+        list: async (): Promise<SnapshotRecord[]> => {
+          const { items } = await req<{ items: SnapshotRecord[] }>("/snapshots");
+          return items;
+        },
+        /** Delete a snapshot (frees its stored image). */
+        delete: (snapshotId: string): Promise<{ ok: boolean }> =>
+          req(`/snapshots/${snapshotId}`, { method: "DELETE" }),
+      },
     };
   }
 
@@ -1488,6 +1510,24 @@ export class Sandbox {
   /** Destroy the microVM. */
   destroy(): Promise<{ ok: true }> {
     return this.req(this.base(), { method: "DELETE" });
+  }
+
+  // ── Snapshot + fork (copy-on-write clone) ──
+  /**
+   * Capture a named, persisted image of this running box WITHOUT stopping it.
+   * The image can later be forked into N copy-on-write children.
+   */
+  snapshot(name?: string): Promise<SnapshotRecord> {
+    return this.post("/snapshot", { name });
+  }
+  /**
+   * Snapshot this box, then boot N copy-on-write children from that image
+   * (Morph-style "branch"). Each child is an independent ephemeral sandbox with
+   * its own IP. Returns the child handles (still starting — await waitUntilReady).
+   */
+  async fork(opts?: ForkOptions): Promise<Sandbox[]> {
+    const children = await this.post<SandboxRecord[]>("/fork", opts ?? {});
+    return children.map((r) => new Sandbox(r, this.req));
   }
 
   // ── Always-on (permanent machine) ──
@@ -1762,6 +1802,28 @@ export interface SandboxRecord {
   tier?: string;
   cpuMode?: "shared" | "reserved";
   monthlyMxn?: number;
+}
+
+/** A named, persisted copy-on-write image captured from a running sandbox. */
+export interface SnapshotRecord {
+  snapshotId: string;
+  name?: string;
+  sourceId: string;
+  ownerId: string;
+  template: string;
+  vcpus: number;
+  memMb: number;
+  hasMem: boolean;
+  sizeBytes: number;
+  createdAt: string;
+}
+
+export interface ForkOptions {
+  /** Number of children to boot (1–16). Default 1. */
+  count?: number;
+  name?: string;
+  metadata?: Record<string, string>;
+  timeoutSeconds?: number;
 }
 
 // ─── Hosting (always-on machines) ────────────────────────────────

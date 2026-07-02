@@ -875,6 +875,199 @@ export async function resumeSandbox(
   );
 }
 
+// ─────────────── snapshot + fork (copy-on-write clone) ───────────────
+
+// A named, persisted image captured from a running box. Mirrors the host's
+// SnapshotMeta. The image can be forked into N children (see forkSandbox).
+export interface SnapshotRecord {
+  snapshotId: string;
+  name?: string;
+  sourceId: string;
+  ownerId: string;
+  template: string;
+  vcpus: number;
+  memMb: number;
+  cpuMode?: string;
+  volumes?: { name: string; mountPath: string }[];
+  hasMem: boolean;
+  sizeBytes: number;
+  createdAt: string;
+}
+
+// Authorize a snapshot-addressed op AND resolve its owner in one shot — the
+// snapshot analogue of effectiveOwnerId, keyed by snapshotId via the
+// SandboxSnapshot row (owner / MACHINES-delegate / else 404).
+export async function effectiveSnapshotOwnerId(
+  ctx: AuthContext,
+  snapshotId: string
+): Promise<string> {
+  const row = await db.sandboxSnapshot.findUnique({
+    where: { snapshotId },
+    select: { ownerId: true },
+  });
+  if (!row) return ctx.user.id; // untracked → caller owns it
+  if (row.ownerId === ctx.user.id) return row.ownerId;
+  if (await can(ctx, row.ownerId, SCOPES.MACHINES)) return row.ownerId;
+  throw new Response(
+    JSON.stringify({ error: "SnapshotNotFound", message: "Snapshot no encontrado." }),
+    { status: 404, headers: { "content-type": "application/json" } }
+  );
+}
+
+// Capture a named image of a RUNNING sandbox without tearing it down (pause →
+// snapshot → freeze disks → resume). The source box keeps running. Records a
+// SandboxSnapshot row for the owner's catalog; the host holds the real files.
+export async function snapshotSandbox(
+  ctx: AuthContext,
+  sandboxId: string,
+  opts?: { name?: string }
+): Promise<SnapshotRecord> {
+  requireScope(ctx, "WRITE");
+  const ownerId = await effectiveOwnerId(ctx, sandboxId);
+  const meta = await callHost<SnapshotRecord>(
+    "POST",
+    `/v1/sandbox/${sandboxId}/snapshot`,
+    { name: opts?.name },
+    ownerId
+  );
+  const src = await db.sandbox
+    .findUnique({ where: { sandboxId }, select: { tier: true } })
+    .catch(() => null);
+  await db.sandboxSnapshot
+    .upsert({
+      where: { snapshotId: meta.snapshotId },
+      create: {
+        ownerId,
+        snapshotId: meta.snapshotId,
+        sourceSandboxId: sandboxId,
+        name: opts?.name,
+        template: meta.template,
+        tier: src?.tier,
+        vcpus: meta.vcpus,
+        memMb: meta.memMb,
+        sizeBytes: BigInt(Math.round(meta.sizeBytes ?? 0)),
+        hasMem: meta.hasMem ?? true,
+      },
+      update: {
+        sizeBytes: BigInt(Math.round(meta.sizeBytes ?? 0)),
+        name: opts?.name,
+      },
+    })
+    .catch(() => {});
+  return meta;
+}
+
+// List the caller's snapshots (owner catalog, from SandboxSnapshot rows).
+export async function listSnapshots(ctx: AuthContext): Promise<SnapshotRecord[]> {
+  requireScope(ctx, "READ");
+  const rows = await db.sandboxSnapshot.findMany({
+    where: { ownerId: ctx.user.id, status: "available" },
+    orderBy: { createdAt: "desc" },
+  });
+  return rows.map((r) => ({
+    snapshotId: r.snapshotId,
+    name: r.name ?? undefined,
+    sourceId: r.sourceSandboxId,
+    ownerId: r.ownerId,
+    template: r.template ?? "",
+    vcpus: r.vcpus ?? 0,
+    memMb: r.memMb ?? 0,
+    hasMem: r.hasMem,
+    sizeBytes: Number(r.sizeBytes),
+    createdAt: r.createdAt.toISOString(),
+  }));
+}
+
+// Delete a snapshot: remove the host files + the catalog row. Owner-scoped.
+export async function deleteSnapshot(
+  ctx: AuthContext,
+  snapshotId: string
+): Promise<{ ok: boolean }> {
+  requireScope(ctx, "DELETE");
+  const ownerId = await effectiveSnapshotOwnerId(ctx, snapshotId);
+  const res = await callHost<{ ok: boolean }>(
+    "DELETE",
+    `/v1/snapshot/${snapshotId}`,
+    undefined,
+    ownerId
+  );
+  await db.sandboxSnapshot.deleteMany({ where: { snapshotId } }).catch(() => {});
+  return res;
+}
+
+// Fork N copy-on-write children from a snapshot (`snapshotId`) OR snapshot-then-
+// fork a live box (`sandboxId`, Morph-style branch). Children are ephemeral boxes
+// booted with fresh IPs (collision-free); the whole fan-out counts against the
+// SAME per-plan concurrency budget as createSandbox.
+export async function forkSandbox(
+  ctx: AuthContext,
+  params: {
+    snapshotId?: string;
+    sandboxId?: string;
+    count?: number;
+    name?: string;
+    metadata?: Record<string, string>;
+    timeoutSeconds?: number;
+  }
+): Promise<SandboxRecord[]> {
+  requireScope(ctx, "WRITE");
+  if (!params.snapshotId && !params.sandboxId) {
+    throw new Response(
+      JSON.stringify({ error: "BadRequest", message: "fork requires snapshotId or sandboxId" }),
+      { status: 400, headers: { "content-type": "application/json" } }
+    );
+  }
+  const plan = PLANS[getUserPlan(ctx.user)];
+  const count = Math.min(Math.max(params.count ?? 1, 1), 16);
+
+  // Same anti-runaway budget as createSandbox — a fork of `count` boots `count`
+  // concurrent ephemeral boxes. fail-open if listing the fleet fails.
+  const list = await listSandboxes(ctx).catch(() => [] as SandboxRecord[]);
+  const active = (Array.isArray(list) ? list : []).filter(
+    (s) => s.status === "running" || s.status === "starting"
+  ).length;
+  const { getReservedCapacity } = await import("./sandboxReservations");
+  const reserved = await getReservedCapacity(ctx.user.id).catch(() => ({
+    machines: 0,
+    agents: 0,
+  }));
+  const budget = plan.concurrentSandboxes + reserved.machines;
+  if (active + count > budget) {
+    throw new Response(
+      JSON.stringify({
+        error: "SandboxLimitReached",
+        message: `Fork de ${count} excede tu límite de ${budget} cajas activas (${active} en uso). Suspende/borra algunas o sube de plan.`,
+        active,
+        requested: count,
+        max: budget,
+      }),
+      { status: 403, headers: { "content-type": "application/json" } }
+    );
+  }
+
+  const body = {
+    count,
+    name: params.name,
+    metadata: params.metadata,
+    timeoutSeconds: params.timeoutSeconds,
+    maxTtlSeconds: plan.maxSandboxTtlSeconds,
+  };
+  let resp: { snapshotId: string; count: number; children: SandboxRecord[] };
+  if (params.snapshotId) {
+    const ownerId = await effectiveSnapshotOwnerId(ctx, params.snapshotId);
+    resp = await callHost(
+      "POST",
+      `/v1/snapshot/${params.snapshotId}/fork`,
+      body,
+      ownerId
+    );
+  } else {
+    const ownerId = await effectiveOwnerId(ctx, params.sandboxId!);
+    resp = await callHost("POST", `/v1/sandbox/${params.sandboxId}/fork`, body, ownerId);
+  }
+  return resp.children ?? [];
+}
+
 // Poll the ghostyclaw VM's /chat/ready endpoint via exec curl-from-inside.
 // We can't HTTP the VM directly from EasyBits (Fly has no route to the
 // Firecracker subnet), so we exec curl on the VM via sandbox-agent.

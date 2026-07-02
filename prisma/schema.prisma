@@ -251,6 +251,7 @@ model User {
   agents               Agent[]
   computeKeys          ComputeKey[]
   sandboxes            Sandbox[]
+  sandboxSnapshots     SandboxSnapshot[]
   fleetAgents          FleetAgent[]
 }
 
@@ -1231,6 +1232,35 @@ model Sandbox {
   // "pending_deletion" + deletionScheduledAt=now. Fully restorable for 7 days;
   // a cron hard-destroys after the grace window. Null = not scheduled.
   deletionScheduledAt DateTime?
+  // Fork lineage: when this box was booted from a snapshot (clone/fork), the
+  // snapshotId it descends from. Null for boxes created from a template.
+  parentSnapshotId String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([ownerId])
+}
+
+// A named, persisted image captured from a running sandbox (copy-on-write clone
+// source). The host holds the actual disk+memory files under
+// /var/lib/sandbox-host/snapshots/named/<snapshotId>/; this row is the thin
+// ownership/billing/listing pointer (mirrors how Sandbox points at a host VM).
+// One row per snapshot; forking a snapshot boots N new Sandbox boxes that carry
+// parentSnapshotId back here.
+model SandboxSnapshot {
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  ownerId         String   @db.ObjectId
+  owner           User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  snapshotId      String   @unique // host snapshot handle ("snap_…")
+  sourceSandboxId String   // the box this image was captured from
+  name            String?
+  template        String?  // template the source box ran (for forked-child rows)
+  tier            String?  // catalog tier of the source box (billing/listing)
+  vcpus           Int?
+  memMb           Int?
+  sizeBytes       BigInt   @default(0) // on-disk size of the frozen image (bytes)
+  hasMem          Boolean  @default(true) // full snapshot (memory + disk) vs disk-only
+  status          String   @default("available") // available | deleting
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 

@@ -99,8 +99,8 @@ export const TOOL_GROUPS: ToolGroup[] = [
   {
     key: "sandbox",
     label: "Sandbox",
-    description: "MicroVMs Firecracker para correr agentes y código aislado. Ciclo de vida (spawn/extend/suspend/resume/destroy), exec (sync + background), run-code, kernel Jupyter persistente (run_cell con estado + charts), archivos (write/read/list/delete/move/mkdir), expose_port (URL pública), sandbox_admin (passthrough admin :8787) + agent_run (Claude managed con billing por token). Ideal para harness de agentes (Claude Code, Codex) y ejecución segura.",
-    toolCount: 23,
+    description: "MicroVMs Firecracker para correr agentes y código aislado. Ciclo de vida (spawn/extend/suspend/resume/destroy), snapshot + fork (clonar una caja viva en N hijos copy-on-write para explorar variantes en paralelo), exec (sync + background), run-code, kernel Jupyter persistente (run_cell con estado + charts), archivos (write/read/list/delete/move/mkdir), expose_port (URL pública), sandbox_admin (passthrough admin :8787) + agent_run (Claude managed con billing por token). Ideal para harness de agentes (Claude Code, Codex) y ejecución segura.",
+    toolCount: 27,
   },
   {
     key: "hosting",
@@ -360,6 +360,10 @@ export const SANDBOX_ALLOWLIST = new Set<string>([
   "sandbox_extend",
   "sandbox_suspend",
   "sandbox_resume",
+  "sandbox_snapshot",
+  "sandbox_fork",
+  "list_snapshots",
+  "delete_snapshot",
   "sandbox_exec",
   "sandbox_run_code",
   "sandbox_files_write",
