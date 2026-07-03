@@ -5,6 +5,7 @@ import {
   openAgentMessageStream,
   exposeSandboxPort,
   exposeSandboxRawPort,
+  extendSandbox,
   type RawForwardResult,
 } from "./sandboxOperations";
 
@@ -192,9 +193,10 @@ export async function spawnStudio(
   // 6. Registrar el box para el idle reaper (reapIdleStudios). lastActiveAt=ahora
   //    arranca el reloj de gracia de 30 min "esperando primera llamada". Si nadie
   //    entra, el reaper lo apaga; si entra una llamada, refresca el reloj y al
-  //    colgar baja a 5 min. best-effort: si falla, el box sigue vivo hasta el TTL.
+  //    colgar baja a 1h. Sembramos la sala inicial en `rooms` para que el reaper
+  //    sepa qué sondear. best-effort: si falla, el box sigue vivo hasta el TTL.
   await db.studioBox
-    .create({ data: { ownerId: ctx.user.id, sandboxId: sb.sandboxId } })
+    .create({ data: { ownerId: ctx.user.id, sandboxId: sb.sandboxId, rooms: [result.room] } })
     .catch((e) => console.error("studio reaper: register failed:", e));
 
   return { ...result, sandboxId: sb.sandboxId };
@@ -221,6 +223,17 @@ export async function createRoom(
     preExposedMedia ? Promise.resolve(preExposedMedia) : exposeSandboxRawPort(ctx, row.sandboxId, MEDIA_PORT, "udp"),
   ]);
   const base = control.url.replace(/\/$/, "");
+  // Registrar la sala en la fila del box para que el reaper la sondee (caso
+  // "añadir sala a una caja existente"; el primer room lo siembra spawnStudio).
+  // best-effort + idempotente: no re-pushea si ya está. Si la fila no existe
+  // aún (createRoom llamado dentro de spawnStudio, antes del create), no pasa
+  // nada — spawnStudio siembra rooms:[result.room] justo después.
+  await db.studioBox
+    .updateMany({
+      where: { sandboxId: row.sandboxId, NOT: { rooms: { has: roomName } } },
+      data: { rooms: { push: roomName } },
+    })
+    .catch((e) => console.error("studio reaper: room register failed:", e));
   return { room: roomName, roomUrl: `${base}/room?room=${encodeURIComponent(roomName)}` };
 }
 
@@ -379,6 +392,19 @@ export async function getCallStatus(ctx: AuthContext, sandboxId: string) {
   return { recording: recState.recording, room: recState.room, startedAt: recState.startedAt, participants: participants.participants ?? [] };
 }
 
+// ¿Hay alguien en esta sala? El endpoint /participants del box es room-scoped
+// (sin ?room= devuelve []), así que el reaper debe consultar sala por sala.
+// best-effort: cualquier fallo (box caído, sala inexistente) cuenta como vacía.
+export async function roomHasParticipants(ctx: AuthContext, sandboxId: string, roomName: string): Promise<boolean> {
+  const row = await loadStudioRow(ctx, sandboxId);
+  const r = await boxAdmin<{ participants?: string[] }>(
+    row,
+    "GET",
+    `/participants?room=${encodeURIComponent(roomName)}`
+  ).catch(() => ({ participants: [] as string[] }));
+  return (r.participants?.length ?? 0) > 0;
+}
+
 // ── call_files ───────────────────────────────────────────────────────────────
 // Grabaciones y transcripts permanentes en EasyBits Files (source=studio).
 // Filtra directamente en DB — sobreviven aunque la VM ya haya sido destruida.
@@ -445,8 +471,8 @@ export async function destroyCall(ctx: AuthContext, sandboxId: string) {
 //     llamada nueva vuelve a suspender el contador.
 // Si el box ya no existe (lo mató el TTL del host, o error persistente pasado el
 // TTL) se borra la fila huérfana. Devuelve {checked, destroyed}.
-const STUDIO_IDLE_BOOT_MIN = 30; // gracia esperando la primera llamada
-const STUDIO_IDLE_AFTER_CALL_MIN = 5; // gracia tras colgar
+const STUDIO_IDLE_BOOT_MIN = 30; // gracia esperando la primera llamada (caja que nadie usó)
+const STUDIO_IDLE_AFTER_CALL_MIN = 60; // gracia tras colgar — 1h antes de reciclar
 const STUDIO_HOST_TTL_MIN = 3 * 60; // TTL del host (spawnStudio): pasado esto el box ya murió
 
 export async function reapIdleStudios(): Promise<{ checked: number; destroyed: number }> {
@@ -458,14 +484,34 @@ export async function reapIdleStudios(): Promise<{ checked: number; destroyed: n
     if (!ctx) continue;
     try {
       const st = await getCallStatus(ctx, box.sandboxId);
-      const active = (st.participants?.length ?? 0) > 0 || st.recording;
+      // Activo = grabando, o CUALQUIER sala del box con participantes. /participants
+      // es room-scoped (sin ?room= devuelve []), así que sondeamos sala por sala:
+      // con varios links, la caja vive hasta que TODAS estén vacías.
+      let active = st.recording;
+      if (!active) {
+        for (const roomName of box.rooms ?? []) {
+          if (await roomHasParticipants(ctx, box.sandboxId, roomName)) {
+            active = true;
+            break;
+          }
+        }
+      }
       if (active) {
         // Llamada en curso → suspende el apagado (refresca el reloj) y marca que
-        // ya hubo llamada (a partir de aquí la gracia idle baja a 5 min).
+        // ya hubo llamada (a partir de aquí la gracia idle baja a 1h).
         await db.studioBox.update({
           where: { id: box.id },
           data: { lastActiveAt: new Date(), everHadCall: true },
         });
+        // …y empuja el TTL DURO del host hacia adelante. El reaper protege la
+        // llamada del idle-shutdown, pero el techo de 3h de spawnStudio mata la
+        // caja incondicionalmente (incluso a media llamada). Extendemos cada
+        // ciclo (60s) mientras haya participantes → la caja NUNCA muere en vivo.
+        // best-effort: un 403 por cap de plan o error transitorio no debe tumbar
+        // el reaper (el techo original sigue aplicando como fallback).
+        await extendSandbox(ctx, box.sandboxId).catch((e) =>
+          console.error(`studio reaper: extend ${box.sandboxId} failed:`, (e as Error).message)
+        );
         continue;
       }
       const graceMin = box.everHadCall ? STUDIO_IDLE_AFTER_CALL_MIN : STUDIO_IDLE_BOOT_MIN;

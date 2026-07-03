@@ -1322,8 +1322,9 @@ model StudioBox {
   id           String   @id @default(auto()) @map("_id") @db.ObjectId
   ownerId      String   @db.ObjectId
   sandboxId    String   @unique // host VM id — the box handle
+  rooms        String[] @default([]) // salas creadas en esta caja — el reaper sondea participantes por sala
   lastActiveAt DateTime @default(now()) // last tick we saw an active call (or boot)
-  everHadCall  Boolean  @default(false) // flips true on first participant → 5min grace
+  everHadCall  Boolean  @default(false) // flips true on first participant → grace de 1h
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
