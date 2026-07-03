@@ -1212,7 +1212,11 @@ export async function createFleetAgent(
       token: "pool_" + randomBytes(24).toString("hex"),
       workerTemplate: opts.workerTemplate ?? "claude-worker",
       persona,
-      assistantName: "Ghosty",
+      // Deriva la identidad de la persona (ASSISTANT_NAME > persona.name). El
+      // default (GHOSTY_PERSONA) trae ASSISTANT_NAME="Ghosty" → sigue siendo
+      // "Ghosty"; los agentes creados con persona custom (p.ej. desde Formmy)
+      // aparecen con su nombre real en la flota en vez de todos como "Ghosty".
+      assistantName: persona.env?.ASSISTANT_NAME ?? basePersona.name ?? "Ghosty",
       oauthSecretName: opts.oauthSecretName ?? null,
       // Seed the MCP menu with the builtins so the UI/agent can immediately see
       // the surface and start enabling custom servers per group.
