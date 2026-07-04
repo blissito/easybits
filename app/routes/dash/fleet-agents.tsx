@@ -696,30 +696,21 @@ function GhostyMascot({ className = "", blink = true, sleeping = false, offset =
   // begin negativo = arranca desfasado; period distinto = derivan y NUNCA vuelven a
   // unísono (cubre el caso de despertar simultáneo, donde el begin negativo se clampa).
   const Blink = blink && !sleeping ? (
-    <animate attributeName="ry" values="11;11;1.5;1.5;11;11" dur={`${period}s`} begin={`-${offset}s`} repeatCount="indefinite" keyTimes="0;0.88;0.91;0.965;0.99;1" />
+    <animate attributeName="ry" values="6;6;1;1;6;6" dur={`${period}s`} begin={`-${offset}s`} repeatCount="indefinite" keyTimes="0;0.88;0.91;0.965;0.99;1" />
   ) : null;
   return (
     <svg viewBox="0 0 84 96" className={className} fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
       {/* cuerpo + blush afelpados: el contorno pasa por #feltEdge (fibras de fieltro).
           Los lentes/ojos quedan FUERA del filtro para que se lean nítidos. */}
       <g filter="url(#feltEdge)">
-        {/* Estado por COLOR del fantasma (no por los lentes): activo morado,
-            suspendido gris. Mantiene siempre la identidad de fantasma + lentes. */}
+        {/* Fantasma SIN lentes. Estado por COLOR: activo morado, suspendido gris. */}
         <path d="M11 80 L11 41 C11 21 23 5 42 5 C61 5 73 21 73 41 L73 80 Q65.25 88 57.5 80 Q49.75 88 42 80 Q34.25 88 26.5 80 Q18.75 88 11 80 Z" fill={sleeping ? "#B8B2C6" : "#9870ED"} />
-        <ellipse cx="23" cy="50" rx="5" ry="3" fill={sleeping ? "#CFCAD9" : "#B79BF2"} />
-        <ellipse cx="61" cy="50" rx="5" ry="3" fill={sleeping ? "#CFCAD9" : "#B79BF2"} />
+        <ellipse cx="24" cy="54" rx="5" ry="3" fill={sleeping ? "#CFCAD9" : "#B79BF2"} />
+        <ellipse cx="60" cy="54" rx="5" ry="3" fill={sleeping ? "#CFCAD9" : "#B79BF2"} />
       </g>
-      {/* patas de los lentes */}
-      <path d="M16 37 L4 33" stroke="#EAE7F4" strokeWidth="4" strokeLinecap="round" />
-      <path d="M68 37 L80 33" stroke="#EAE7F4" strokeWidth="4" strokeLinecap="round" />
-      {/* puente */}
-      <path d="M37 36 Q42 32 47 36" stroke="#EAE7F4" strokeWidth="4" strokeLinecap="round" fill="none" />
-      {/* lentes oscuros SIEMPRE (parpadeo solo cuando está despierto) */}
-      <ellipse cx="29" cy="41" rx="8" ry="11" fill="#1C1726">{Blink}</ellipse>
-      <ellipse cx="55" cy="41" rx="8" ry="11" fill="#1C1726">{Blink}</ellipse>
-      {/* marcos */}
-      <circle cx="29" cy="40" r="13.5" stroke="#EAE7F4" strokeWidth="4" />
-      <circle cx="55" cy="40" r="13.5" stroke="#EAE7F4" strokeWidth="4" />
+      {/* ojitos simples de fantasma (SIN lentes); parpadeo solo cuando está despierto */}
+      <ellipse cx="31" cy="43" rx="4.5" ry="6" fill="#1C1726">{Blink}</ellipse>
+      <ellipse cx="53" cy="43" rx="4.5" ry="6" fill="#1C1726">{Blink}</ellipse>
     </svg>
   );
 }

@@ -1,5 +1,13 @@
 # Agregar un cerebro (provider) a la flota
 
+> ## TODO / Próximos proveedores
+> - [ ] **2026-07-05**: crear un agente con **GLM 5.2** (Zhipu). Es un proveedor nuevo
+>   — seguir el runbook de abajo (Camino B con el adaptador `server.js`, config
+>   `provider`/`base_url`/`api_key` estilo `ghosty-gc`, o Camino A nativo). Registrar
+>   en `SANDBOX_TEMPLATES` + inyección de secreto en `createAgent` + opción en el
+>   selector `BRAINS` del form.
+
+
 Un **cerebro** (worker template) es el runtime que corre DENTRO de la microVM del
 FleetAgent y responde los mensajes. El edge de EasyBits es **agnóstico al cerebro**:
 convierte media→texto, mantiene el `sessionId` sticky por conversación, y habla un
