@@ -173,7 +173,7 @@ export async function loader({ request }: Route.LoaderArgs) {
         ((p.persona as { env?: Record<string, string> } | null)?.env?.EASYBITS_TOOL_GROUP) ?? "";
       const activeBuckets = [...toolsParamToBuckets(toolGroup)];
       return {
-        id: p.id, name: p.name, token: p.token, status, live, qrDataUrl, pairingCode, groups,
+        id: p.id, name: p.name, token: p.token, mascotColor, status, live, qrDataUrl, pairingCode, groups,
         wabaNumbers,
         enabledCount: p.enabledGroups.length, machines, vms: machines.length,
         conversations, maxWorkersPerVm: p.maxWorkersPerVm, vmMemMb: p.vmMemMb,
@@ -1679,6 +1679,8 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                     <svg className={`w-4 h-4 text-gray-400 transition-transform ${isOpen ? "rotate-90" : ""} ${inFlow ? "opacity-0" : ""}`}
                       viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M7.21 14.77a.75.75 0 0 1 .02-1.06L11.168 10 7.23 6.29a.75.75 0 1 1 1.04-1.08l4.5 4.25a.75.75 0 0 1 0 1.08l-4.5 4.25a.75.75 0 0 1-1.06-.02Z" clipRule="evenodd" /></svg>
                   </button>
+                  {/* Fantasmita del agente (tamaño form), color persistente por tipo de cerebro. */}
+                  {(() => { const t = blinkTiming(p.id); return <GhostyMascot className="w-10 h-12 shrink-0" color={p.mascotColor} offset={t.offset} period={t.period} />; })()}
                   {editingName === p.id ? (
                     <input autoFocus value={draftName} onChange={(e) => setDraftName(e.target.value)}
                       onBlur={() => { const v = draftName.trim(); if (v !== displayName) { setOptimisticNames((s) => ({ ...s, [p.id]: v })); fetcher.submit({ intent: "rename", fleetAgentId: p.id, name: v }, { method: "post" }); } setEditingName(null); }}
