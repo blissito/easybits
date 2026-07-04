@@ -1222,6 +1222,7 @@ function TestChatDrawer({
   const [msgs, setMsgs] = useState<Array<{ role: "user" | "bot"; text: string }>>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
+  const [loadingHistory, setLoadingHistory] = useState(true);
   const bodyRef = useRef<HTMLDivElement>(null);
   // groupId ESTABLE por agente (no aleatorio) → la conversación persiste server-side
   // en FleetAgentMessage (igual que los canales) y el cerebro la resume por sessionUuid.
@@ -1239,7 +1240,8 @@ function TestChatDrawer({
           setMsgs(d.messages.map((m) => ({ role: m.role === "user" ? "user" : "bot", text: m.text })));
         }
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => { if (alive) setLoadingHistory(false); });
     return () => { alive = false; };
   }, [agent.id, agent.token, groupId]);
 
@@ -1336,7 +1338,18 @@ function TestChatDrawer({
           <button onClick={onClose} className="text-gray-400 hover:text-black text-xl leading-none">✕</button>
         </header>
         <div ref={bodyRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-3 bg-gray-50">
-          {msgs.length === 0 ? (
+          {loadingHistory ? (
+            // Skeleton mientras carga el historial persistido (FleetAgentMessage).
+            <div className="space-y-3 animate-pulse" aria-label="Cargando conversación">
+              {[["left", "w-2/3"], ["right", "w-1/2"], ["left", "w-3/4"], ["right", "w-1/3"]].map(
+                ([side, w], i) => (
+                  <div key={i} className={`flex ${side === "right" ? "justify-end" : "justify-start"}`}>
+                    <div className={`h-9 ${w} rounded-2xl ${side === "right" ? "bg-brand-500/20 rounded-br-md" : "bg-gray-200 rounded-bl-md"}`} />
+                  </div>
+                ),
+              )}
+            </div>
+          ) : msgs.length === 0 ? (
             <p className="h-full flex items-center justify-center text-sm text-gray-400 text-center">
               Escribe para probar tu agente.
               <br />
