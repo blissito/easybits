@@ -1289,9 +1289,27 @@ function TestChatDrawer({
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end" role="dialog" aria-modal="true">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative w-full max-w-md h-full bg-white shadow-2xl flex flex-col animate-fade-in">
+    // Padre orquesta open/exit con variants → AnimatePresence espera la salida
+    // (backdrop fade + panel slide) antes de desmontar. Sin props animables propias.
+    <motion.div
+      className="fixed inset-0 z-50 flex justify-end"
+      role="dialog"
+      aria-modal="true"
+      initial="closed"
+      animate="open"
+      exit="closed"
+    >
+      <motion.div
+        className="absolute inset-0 bg-black/40"
+        onClick={onClose}
+        variants={{ open: { opacity: 1 }, closed: { opacity: 0 } }}
+        transition={{ duration: 0.25, ease: "easeOut" }}
+      />
+      <motion.div
+        className="relative w-full max-w-md h-full bg-white shadow-2xl flex flex-col"
+        variants={{ open: { x: 0 }, closed: { x: "100%" } }}
+        transition={{ type: "tween", ease: [0.22, 1, 0.36, 1], duration: 0.34 }}
+      >
         <header className="flex items-center gap-2 px-4 py-3 border-b-2 border-black">
           <div className="w-8 h-8 rounded-full bg-brand-500 flex items-center justify-center text-white text-sm">🤖</div>
           <div className="min-w-0 flex-1">
@@ -1331,8 +1349,8 @@ function TestChatDrawer({
             {busy ? "…" : "Enviar"}
           </button>
         </form>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   );
 }
 
@@ -2101,7 +2119,11 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
           </div>
         );
       })()}
-      {chatAgent && <TestChatDrawer agent={chatAgent} onClose={() => setChatAgent(null)} />}
+      <AnimatePresence>
+        {chatAgent && (
+          <TestChatDrawer key="test-chat-drawer" agent={chatAgent} onClose={() => setChatAgent(null)} />
+        )}
+      </AnimatePresence>
     </div>
   );
 }
