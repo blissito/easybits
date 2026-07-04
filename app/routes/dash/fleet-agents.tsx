@@ -70,6 +70,8 @@ export async function loader({ request }: Route.LoaderArgs) {
       id: true, name: true, baileys: true, enabledGroups: true, groupConfigs: true,
       wabaConfig: true, mcpCatalog: true, maxWorkersPerVm: true, vmMemMb: true,
       mainGroupJid: true, hasOwnNumber: true, workerTemplate: true, persona: true,
+      // token: bearer del surface web/Baileys — lo usa el drawer de prueba (message-stream).
+      token: true,
     },
   });
   const pools = await Promise.all(
@@ -163,7 +165,7 @@ export async function loader({ request }: Route.LoaderArgs) {
         ((p.persona as { env?: Record<string, string> } | null)?.env?.EASYBITS_TOOL_GROUP) ?? "";
       const activeBuckets = [...toolsParamToBuckets(toolGroup)];
       return {
-        id: p.id, name: p.name, status, live, qrDataUrl, pairingCode, groups,
+        id: p.id, name: p.name, token: p.token, status, live, qrDataUrl, pairingCode, groups,
         wabaNumbers,
         enabledCount: p.enabledGroups.length, machines, vms: machines.length,
         conversations, maxWorkersPerVm: p.maxWorkersPerVm, vmMemMb: p.vmMemMb,
@@ -1206,6 +1208,134 @@ function WabaInboxModal({
   );
 }
 
+// Drawer de prueba: chatea con un fleet agent SIN canales conectados. POSTea a
+// /api/v2/fleet-agents/:id/message-stream (Bearer = token del agente) y stremea la
+// respuesta token-por-token. El primer mensaje levanta el VM del cerebro (~segundos).
+// Portado del AgentLivePreview de ghosty-studio, autocontenido (texto plano, sin deps).
+function TestChatDrawer({
+  agent,
+  onClose,
+}: {
+  agent: { id: string; name: string | null; token: string };
+  onClose: () => void;
+}) {
+  const [msgs, setMsgs] = useState<Array<{ role: "user" | "bot"; text: string }>>([]);
+  const [input, setInput] = useState("");
+  const [busy, setBusy] = useState(false);
+  const bodyRef = useRef<HTMLDivElement>(null);
+  // groupId estable por apertura del drawer → conversación de prueba aislada.
+  const [groupId] = useState(() => `web-test-${Math.random().toString(36).slice(2, 10)}`);
+
+  useEffect(() => {
+    bodyRef.current?.scrollTo({ top: bodyRef.current.scrollHeight });
+  }, [msgs]);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  async function send() {
+    const text = input.trim();
+    if (!text || busy) return;
+    setBusy(true);
+    setInput("");
+    setMsgs((m) => [...m, { role: "user", text }, { role: "bot", text: "" }]);
+    const setLastBot = (fn: (prev: string) => string) =>
+      setMsgs((m) => {
+        const n = [...m];
+        n[n.length - 1] = { role: "bot", text: fn(n[n.length - 1].text) };
+        return n;
+      });
+    try {
+      const res = await fetch(`/api/v2/fleet-agents/${agent.id}/message-stream`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${agent.token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ groupId, sender: "web-test", text }),
+      });
+      if (!res.ok || !res.body) {
+        const errText = await res.text().catch(() => "");
+        setLastBot(() => `⚠️ Error ${res.status}${errText ? ` — ${errText.slice(0, 140)}` : ""}`);
+        return;
+      }
+      const reader = res.body.getReader();
+      const dec = new TextDecoder();
+      let buf = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += dec.decode(value, { stream: true });
+        let nl: number;
+        while ((nl = buf.indexOf("\n\n")) !== -1) {
+          const dl = buf.slice(0, nl).split("\n").find((l) => l.startsWith("data: "));
+          buf = buf.slice(nl + 2);
+          if (!dl) continue;
+          try {
+            const e = JSON.parse(dl.slice(6));
+            if (e.type === "chunk" && typeof e.value === "string") setLastBot((p) => p + e.value);
+            // done trae la respuesta autoritativa completa → reemplaza (por si hubo re-emisión).
+            else if (e.type === "done" && typeof e.value === "string") setLastBot(() => e.value);
+            else if (e.type === "error") setLastBot(() => `⚠️ ${e.message || "error"}`);
+          } catch {
+            /* ignore malformed event */
+          }
+        }
+      }
+    } catch (err) {
+      setLastBot(() => `⚠️ ${err instanceof Error ? err.message : "error de red"}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex justify-end" role="dialog" aria-modal="true">
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div className="relative w-full max-w-md h-full bg-white shadow-2xl flex flex-col animate-fade-in">
+        <header className="flex items-center gap-2 px-4 py-3 border-b-2 border-black">
+          <div className="w-8 h-8 rounded-full bg-brand-500 flex items-center justify-center text-white text-sm">🤖</div>
+          <div className="min-w-0 flex-1">
+            <p className="font-bold truncate">{agent.name || "Agente"}</p>
+            <p className="text-[11px] text-gray-400">prueba en vivo · sin canales</p>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-black text-xl leading-none">✕</button>
+        </header>
+        <div ref={bodyRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-3 bg-gray-50">
+          {msgs.length === 0 ? (
+            <p className="h-full flex items-center justify-center text-sm text-gray-400 text-center">
+              Escribe para probar tu agente.
+              <br />
+              El primer mensaje levanta el cerebro (~unos segundos).
+            </p>
+          ) : (
+            msgs.map((m, i) => (
+              <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
+                <div
+                  className={`max-w-[80%] px-3.5 py-2 rounded-2xl text-sm whitespace-pre-wrap break-words ${
+                    m.role === "user"
+                      ? "bg-brand-500 text-white rounded-br-md"
+                      : "bg-white border-2 border-gray-200 text-gray-900 rounded-bl-md"
+                  }`}
+                >
+                  {m.text || (m.role === "bot" ? <span className="text-gray-400">escribiendo…</span> : "")}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+        <form className="p-3 border-t-2 border-black flex gap-2" onSubmit={(e) => { e.preventDefault(); send(); }}>
+          <input value={input} onChange={(e) => setInput(e.target.value)} placeholder="Escribe un mensaje…"
+            className="flex-1 px-4 py-2.5 border-2 border-black rounded-xl text-sm focus:outline-none" />
+          <button type="submit" disabled={busy || !input.trim()}
+            className="px-4 py-2.5 bg-brand-500 text-white rounded-xl text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed">
+            {busy ? "…" : "Enviar"}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 export default function Pools({ loaderData }: Route.ComponentProps) {
   // HUD en estado local para que el poll de 2.5s lo actualice SIN useRevalidator
   // (que propaga un 5xx transitorio al ErrorBoundary y deja la página muerta).
@@ -1246,6 +1376,8 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
   // estado entre recargas. Client-only (carga en useEffect, no en el initializer)
   // para no romper la hidratación SSR.
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  // Agente abierto en el drawer de prueba (chat instantáneo sin canales).
+  const [chatAgent, setChatAgent] = useState<{ id: string; name: string | null; token: string } | null>(null);
   useEffect(() => {
     try {
       const s = localStorage.getItem("flota:expanded");
@@ -1488,6 +1620,11 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                     </button>
                   )}
                 </div>
+                <button type="button" onClick={() => setChatAgent({ id: p.id, name: p.name, token: p.token })}
+                  title="Probar el agente en un chat, sin conectar canales"
+                  className="shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full border-2 border-brand-500/40 text-brand-600 hover:bg-brand-500/5">
+                  💬 Probar
+                </button>
                 <span className="flex items-center gap-2 text-sm font-semibold shrink-0">
                   {/* Estado AGREGADO del agente, no de un canal: está "Activo" si
                       PUEDE recibir por cualquier vía (Baileys vivo o WABA con números).
@@ -1964,6 +2101,7 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
           </div>
         );
       })()}
+      {chatAgent && <TestChatDrawer agent={chatAgent} onClose={() => setChatAgent(null)} />}
     </div>
   );
 }
