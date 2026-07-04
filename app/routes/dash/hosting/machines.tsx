@@ -142,16 +142,31 @@ const fmtLeft = (ms: number) => {
   return `${sec}s`;
 };
 
+// Un expiresAt "cero" (0001-01-01, año ≤ 1) = sandbox persistente: no expira.
+const isPermanentExpiry = (expiresAt: string | null) => {
+  if (!expiresAt) return true;
+  const d = new Date(expiresAt);
+  return Number.isNaN(d.getTime()) || d.getUTCFullYear() <= 1;
+};
+
 // Contador vivo: re-renderiza cada segundo para que el TTL baje a la vista.
+// Si el sandbox es persistente, muestra "Permanente" en vez del countdown.
 const Countdown = ({ expiresAt }: { expiresAt: string | null }) => {
+  const permanent = isPermanentExpiry(expiresAt);
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
-    if (!expiresAt) return;
+    if (permanent) return;
     const id = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(id);
-  }, [expiresAt]);
-  if (!expiresAt) return null;
-  const ms = new Date(expiresAt).getTime() - now;
+  }, [permanent]);
+  if (permanent) {
+    return (
+      <span className="flex items-center gap-1 font-bold text-brand-600" title="No expira">
+        <LuRocket size={13} /> Permanente
+      </span>
+    );
+  }
+  const ms = new Date(expiresAt!).getTime() - now;
   return (
     <span className="flex items-center gap-1 tabular-nums" title="Se auto-destruye al llegar a 0">
       <LuClock size={13} /> {fmtLeft(ms)}
@@ -344,13 +359,15 @@ export default function HostingMachines({ loaderData }: Route.ComponentProps) {
                       ) : (
                         <IconBtn title="Suspender" onClick={() => submit({ intent: "suspend", sandboxId: s.sandboxId })}><LuPause size={16} /></IconBtn>
                       )}
-                      <button
-                        type="button" title="Hacer permanente (cobro flat al mes)"
-                        onClick={() => { if (paid) setModal({ promoteId: s.sandboxId }); else window.location.assign("/planes"); }}
-                        className="flex items-center gap-1 px-2.5 py-2 rounded-lg border-2 border-black bg-brand-500 text-white text-xs font-bold transition-all hover:-translate-x-0.5 hover:-translate-y-0.5"
-                      >
-                        <LuRocket size={14} /> Permanente
-                      </button>
+                      {!isPermanentExpiry(s.expiresAt) && (
+                        <button
+                          type="button" title="Hacer permanente (cobro flat al mes)"
+                          onClick={() => { if (paid) setModal({ promoteId: s.sandboxId }); else window.location.assign("/planes"); }}
+                          className="flex items-center gap-1 px-2.5 py-2 rounded-lg border-2 border-black bg-brand-500 text-white text-xs font-bold transition-all hover:-translate-x-0.5 hover:-translate-y-0.5"
+                        >
+                          <LuRocket size={14} /> Permanente
+                        </button>
+                      )}
                       {isDestroying ? (
                         <span className="p-2 text-brand-red animate-spin"><LuLoader size={16} /></span>
                       ) : (
