@@ -31,6 +31,16 @@ import {
 
 const DEFAULT_OAUTH = "CLAUDE_CODE_OAUTH_TOKEN";
 
+// Cerebros seleccionables al crear un agente. Client-safe (subconjunto curado de
+// SANDBOX_TEMPLATES; el default es claude-worker). `value` = workerTemplate real.
+// - claude-worker: LLM por OAuth Max del dueño (tarifa plana, off-meter).
+// - ghosty-gc: cerebro propio (ghostycode, Rust) — LLM por el proxy MEDIDO de EasyBits.
+const BRAINS: { value: string; label: string }[] = [
+  { value: "claude-worker", label: "Ghosty (Claude)" },
+  { value: "ghosty-gc", label: "Ghosty propio (ghostycode)" },
+];
+const DEFAULT_BRAIN = "claude-worker";
+
 // The live HUD poll (routes/dash/fleet-agents.poll.tsx) reuses THIS loader on the server
 // to return the EXACT same shape as JSON, so the page can poll it with a plain
 // `fetch` instead of useRevalidator → a transient 5xx (e.g. the ~50s window while
@@ -310,6 +320,7 @@ export async function action({ request }: Route.ActionArgs) {
 
   if (intent === "create") {
     const name = String(fd.get("name") || "").trim() || undefined;
+    const workerTemplate = String(fd.get("workerTemplate") || "").trim() || undefined;
     let oauthSecretName = String(fd.get("oauthSecretName") || "").trim();
     const newOauth = String(fd.get("newOauth") || "").trim();
     // Pasting a new token saves it to the vault under the given (or default) name.
@@ -318,8 +329,11 @@ export async function action({ request }: Route.ActionArgs) {
       await createSecret(user.id, { name: secretName, value: newOauth });
       oauthSecretName = secretName;
     }
-    if (!oauthSecretName) return data({ error: "Elige o pega un OAuth" }, { status: 400 });
-    const fleetAgent = await createFleetAgent(ctx, { name, oauthSecretName });
+    // Claude-based brains need a Claude Max OAuth; DeepSeek brains (rust-ghosty)
+    // run on DEEPSEEK_API_KEY (injected at spawn) and don't require one.
+    const needsOauth = !workerTemplate || workerTemplate === "claude-worker";
+    if (needsOauth && !oauthSecretName) return data({ error: "Elige o pega un OAuth" }, { status: 400 });
+    const fleetAgent = await createFleetAgent(ctx, { name, oauthSecretName: oauthSecretName || undefined, workerTemplate });
     return data({ ok: true, fleetAgentId: fleetAgent.id });
   }
 
@@ -1204,6 +1218,7 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState("");
   const [oauthChoice, setOauthChoice] = useState(secretNames.includes(DEFAULT_OAUTH) ? DEFAULT_OAUTH : secretNames[0] ?? "__new__");
+  const [brain, setBrain] = useState(DEFAULT_BRAIN);
   const [newOauth, setNewOauth] = useState("");
   const hasSecrets = secretNames.length > 0;
   const pasteNew = oauthChoice === "__new__" || !hasSecrets;
@@ -1398,23 +1413,34 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
           <input name="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Atención a cliente"
             className="border-2 border-black rounded-lg px-3 py-2" />
 
-          <label className="text-sm font-semibold">OAuth de Claude (cuenta Max)</label>
-          {hasSecrets && (
-            <select name="oauthSecretName" value={oauthChoice} onChange={(e) => setOauthChoice(e.target.value)}
-              className="border-2 border-black rounded-lg px-3 py-2 bg-white">
-              {secretNames.map((n) => <option key={n} value={n}>{n}</option>)}
-              <option value="__new__">➕ Pegar nuevo…</option>
-            </select>
-          )}
-          {pasteNew && (
-            <div className="flex flex-col gap-2">
-              <input name="newOauth" value={newOauth} onChange={(e) => setNewOauth(e.target.value)} type="password"
-                placeholder="sk-ant-oat..." className="border-2 border-black rounded-lg px-3 py-2 font-mono text-sm" />
-              <input name="newOauthName" defaultValue={DEFAULT_OAUTH}
-                className="border-2 border-black rounded-lg px-3 py-2 font-mono text-xs text-gray-500"
-                title="Nombre del secreto en el vault" />
-              <span className="text-xs text-gray-400">Se guarda cifrado en Secretos.</span>
-            </div>
+          <label className="text-sm font-semibold">Cerebro</label>
+          <select name="workerTemplate" value={brain} onChange={(e) => setBrain(e.target.value)}
+            className="border-2 border-black rounded-lg px-3 py-2 bg-white">
+            {BRAINS.map((b) => <option key={b.value} value={b.value}>{b.label}</option>)}
+          </select>
+
+          {/* OAuth de Claude solo aplica a cerebros Claude; los DeepSeek corren con DEEPSEEK_API_KEY. */}
+          {brain === "claude-worker" && (
+            <>
+              <label className="text-sm font-semibold">OAuth de Claude (cuenta Max)</label>
+              {hasSecrets && (
+                <select name="oauthSecretName" value={oauthChoice} onChange={(e) => setOauthChoice(e.target.value)}
+                  className="border-2 border-black rounded-lg px-3 py-2 bg-white">
+                  {secretNames.map((n) => <option key={n} value={n}>{n}</option>)}
+                  <option value="__new__">➕ Pegar nuevo…</option>
+                </select>
+              )}
+              {pasteNew && (
+                <div className="flex flex-col gap-2">
+                  <input name="newOauth" value={newOauth} onChange={(e) => setNewOauth(e.target.value)} type="password"
+                    placeholder="sk-ant-oat..." className="border-2 border-black rounded-lg px-3 py-2 font-mono text-sm" />
+                  <input name="newOauthName" defaultValue={DEFAULT_OAUTH}
+                    className="border-2 border-black rounded-lg px-3 py-2 font-mono text-xs text-gray-500"
+                    title="Nombre del secreto en el vault" />
+                  <span className="text-xs text-gray-400">Se guarda cifrado en Secretos.</span>
+                </div>
+              )}
+            </>
           )}
 
           <div className="flex items-center gap-3">
