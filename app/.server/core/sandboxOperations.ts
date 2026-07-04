@@ -2192,7 +2192,10 @@ export async function createAgent(
         env.EASYBITS_API_KEY = minted.raw;
       }
     }
-    if (!env.DEEPSEEK_API_KEY) {
+    // Motor LLM (form): "easybits" (medido) NO inyecta la DeepSeek key → ghosty-gc-start
+    // cae al proxy medido. Default / "deepseek" → inyecta la key del vault (off-meter,
+    // gana en ghosty-gc-start por la precedencia BYOK) si el dueño la tiene.
+    if (env.GHOSTY_LLM !== "easybits" && !env.DEEPSEEK_API_KEY) {
       const dsKey = await getSecretValue(ctx.user.id, "DEEPSEEK_API_KEY").catch(() => null);
       if (dsKey) env.DEEPSEEK_API_KEY = dsKey;
     }

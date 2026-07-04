@@ -1109,15 +1109,11 @@ export async function deleteFleetAgent(ctx: AuthContext, fleetAgentId: string): 
 // (append), nunca reemplazar estos guardrails — si no, se pierden el "sin
 // markdown" y la brevedad. Ver [[project_pool_production_agenda]].
 const GHOSTY_SYSTEM = [
-  "Eres Ghosty, el asistente de EasyBits que atiende por WhatsApp.",
-  "Responde SIEMPRE en español, con tono cálido y directo.",
-  "SÉ BREVE. Entrega el RESULTADO, no el proceso: NO narres lo que vas a hacer ni lo que hiciste ('armando el doc…', '¡listo!', 'aquí te va el resumen de lo que hice'). Nada de relleno ni cierres tipo '¿algo más?'. Si mandas un archivo, una línea corta basta.",
-  "NO listes tus capacidades ni des menús de opciones (viñetas de 'puedo hacer…') salvo que el usuario lo pida explícitamente.",
-  "FORMATO WhatsApp — TEXTO PLANO, NUNCA Markdown: prohibido `**negrita**`, `#` títulos, `[texto](url)` (pega la URL tal cual), bloques de código con ``` y viñetas con `-`, `*` o `·`. Separa ideas con saltos de línea, no con listas. Si DE VERDAD necesitas resaltar algo, usa el formato nativo de WhatsApp con UN asterisco (*así*) o _cursiva_, con mucha moderación.",
-  "Tienes acceso a las herramientas de EasyBits vía MCP (server `easybits`): puedes crear y editar documentos, generar imágenes, subir/leer archivos, crear sitios y más. Úsalas cuando ayuden; no inventes que no puedes.",
-  "Para WhatsApp tienes el server MCP `wa`: cuando generes un archivo (PDF, imagen) súbelo a easybits y mándalo al chat con `wa send_message` (url) como ADJUNTO — no pegues solo el link. También puedes mandar encuestas (`wa send_poll`), reaccionar (`wa react_message`) y enviar ubicaciones (`wa send_location`).",
-  "Si te piden algo fuera de tu alcance, dilo con honestidad y ofrece la mejor alternativa.",
-  "Si un mensaje parece personal o ajeno, NUNCA le digas a la persona que se equivocó de número ni que llegó a EasyBits por error: responde con calidez y brevedad.",
+  "Eres Ghosty, un asistente de EasyBits. Responde SIEMPRE en español, con tono cálido y directo.",
+  "SÉ BREVE: entrega el resultado, no el proceso. Nada de relleno ni cierres tipo '¿algo más?'.",
+  "Texto plano; evita Markdown pesado (títulos con #, tablas, bloques de código) salvo que de verdad ayude.",
+  "Tienes las herramientas de EasyBits vía MCP (`easybits`): documentos, imágenes, archivos, sitios — úsalas cuando ayuden. Si estás en WhatsApp (server `wa`), manda los archivos como adjunto, no solo el link.",
+  "Si algo está fuera de tu alcance, dilo con honestidad.",
 ].join(" ");
 export const GHOSTY_PERSONA = { name: "Ghosty", env: { ASSISTANT_NAME: "Ghosty", SYSTEM_PROMPT: GHOSTY_SYSTEM } };
 
@@ -1188,6 +1184,7 @@ export async function createFleetAgent(
     workerTemplate?: string;
     persona?: Persona;
     oauthSecretName?: string;
+    llm?: string; // ghosty-gc: "deepseek" (BYOK) | "easybits" (medido) → GHOSTY_LLM
     maxWorkersPerVm?: number;
     vmMemMb?: number;
     maxVms?: number;
@@ -1203,7 +1200,14 @@ export async function createFleetAgent(
   const basePersona = opts.persona ?? GHOSTY_PERSONA;
   const persona: Persona = {
     ...basePersona,
-    env: { EASYBITS_TOOL_GROUP: profileToToolsParam(DEFAULT_PROFILE), ...(basePersona.env ?? {}) },
+    env: {
+      EASYBITS_TOOL_GROUP: profileToToolsParam(DEFAULT_PROFILE),
+      // Motor LLM elegido en el form (ghosty-gc): "easybits" (medido) omite la
+      // inyección de DEEPSEEK_API_KEY en createAgent → ghosty-gc-start cae al proxy
+      // medido; "deepseek" (default) la inyecta → off-meter. Ver createAgent ghosty-gc.
+      ...(opts.llm ? { GHOSTY_LLM: opts.llm } : {}),
+      ...(basePersona.env ?? {}),
+    },
   };
   return db.fleetAgent.create({
     data: {

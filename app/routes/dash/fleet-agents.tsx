@@ -323,6 +323,7 @@ export async function action({ request }: Route.ActionArgs) {
   if (intent === "create") {
     const name = String(fd.get("name") || "").trim() || undefined;
     const workerTemplate = String(fd.get("workerTemplate") || "").trim() || undefined;
+    const llm = String(fd.get("llm") || "").trim() || undefined; // ghosty-gc: "deepseek" | "easybits"
     let oauthSecretName = String(fd.get("oauthSecretName") || "").trim();
     const newOauth = String(fd.get("newOauth") || "").trim();
     // Pasting a new token saves it to the vault under the given (or default) name.
@@ -335,7 +336,7 @@ export async function action({ request }: Route.ActionArgs) {
     // run on DEEPSEEK_API_KEY (injected at spawn) and don't require one.
     const needsOauth = !workerTemplate || workerTemplate === "claude-worker";
     if (needsOauth && !oauthSecretName) return data({ error: "Elige o pega un OAuth" }, { status: 400 });
-    const fleetAgent = await createFleetAgent(ctx, { name, oauthSecretName: oauthSecretName || undefined, workerTemplate });
+    const fleetAgent = await createFleetAgent(ctx, { name, oauthSecretName: oauthSecretName || undefined, workerTemplate, llm });
     return data({ ok: true, fleetAgentId: fleetAgent.id });
   }
 
@@ -702,28 +703,20 @@ function GhostyMascot({ className = "", blink = true, sleeping = false, offset =
       {/* cuerpo + blush afelpados: el contorno pasa por #feltEdge (fibras de fieltro).
           Los lentes/ojos quedan FUERA del filtro para que se lean nítidos. */}
       <g filter="url(#feltEdge)">
-        <path d="M11 80 L11 41 C11 21 23 5 42 5 C61 5 73 21 73 41 L73 80 Q65.25 88 57.5 80 Q49.75 88 42 80 Q34.25 88 26.5 80 Q18.75 88 11 80 Z" fill="#9870ED" />
-        <ellipse cx="23" cy="50" rx="5" ry="3" fill="#B79BF2" />
-        <ellipse cx="61" cy="50" rx="5" ry="3" fill="#B79BF2" />
+        {/* Estado por COLOR del fantasma (no por los lentes): activo morado,
+            suspendido gris. Mantiene siempre la identidad de fantasma + lentes. */}
+        <path d="M11 80 L11 41 C11 21 23 5 42 5 C61 5 73 21 73 41 L73 80 Q65.25 88 57.5 80 Q49.75 88 42 80 Q34.25 88 26.5 80 Q18.75 88 11 80 Z" fill={sleeping ? "#B8B2C6" : "#9870ED"} />
+        <ellipse cx="23" cy="50" rx="5" ry="3" fill={sleeping ? "#CFCAD9" : "#B79BF2"} />
+        <ellipse cx="61" cy="50" rx="5" ry="3" fill={sleeping ? "#CFCAD9" : "#B79BF2"} />
       </g>
       {/* patas de los lentes */}
       <path d="M16 37 L4 33" stroke="#EAE7F4" strokeWidth="4" strokeLinecap="round" />
       <path d="M68 37 L80 33" stroke="#EAE7F4" strokeWidth="4" strokeLinecap="round" />
       {/* puente */}
       <path d="M37 36 Q42 32 47 36" stroke="#EAE7F4" strokeWidth="4" strokeLinecap="round" fill="none" />
-      {sleeping ? (
-        <>
-          {/* dormido — ojitos cerrados (arcos hacia abajo) */}
-          <path d="M22 41 Q29 47 36 41" stroke="#1C1726" strokeWidth="3.5" strokeLinecap="round" fill="none" />
-          <path d="M48 41 Q55 47 62 41" stroke="#1C1726" strokeWidth="3.5" strokeLinecap="round" fill="none" />
-        </>
-      ) : (
-        <>
-          {/* lentes oscuros (ojitos despiertos) */}
-          <ellipse cx="29" cy="41" rx="8" ry="11" fill="#1C1726">{Blink}</ellipse>
-          <ellipse cx="55" cy="41" rx="8" ry="11" fill="#1C1726">{Blink}</ellipse>
-        </>
-      )}
+      {/* lentes oscuros SIEMPRE (parpadeo solo cuando está despierto) */}
+      <ellipse cx="29" cy="41" rx="8" ry="11" fill="#1C1726">{Blink}</ellipse>
+      <ellipse cx="55" cy="41" rx="8" ry="11" fill="#1C1726">{Blink}</ellipse>
       {/* marcos */}
       <circle cx="29" cy="40" r="13.5" stroke="#EAE7F4" strokeWidth="4" />
       <circle cx="55" cy="40" r="13.5" stroke="#EAE7F4" strokeWidth="4" />
@@ -1397,6 +1390,7 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
   const [name, setName] = useState("");
   const [oauthChoice, setOauthChoice] = useState(secretNames.includes(DEFAULT_OAUTH) ? DEFAULT_OAUTH : secretNames[0] ?? "__new__");
   const [brain, setBrain] = useState(DEFAULT_BRAIN);
+  const [llm, setLlm] = useState("deepseek");
   const [newOauth, setNewOauth] = useState("");
   const hasSecrets = secretNames.length > 0;
   const pasteNew = oauthChoice === "__new__" || !hasSecrets;
@@ -1598,6 +1592,19 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
             className="border-2 border-black rounded-lg px-3 py-2 bg-white">
             {BRAINS.map((b) => <option key={b.value} value={b.value}>{b.label}</option>)}
           </select>
+
+          {/* ghostycode corre con la key que elijas: DeepSeek (tu key, off-meter) o el
+              proxy medido de EasyBits. Requiere el secret correspondiente en Secretos. */}
+          {brain === "ghosty-gc" && (
+            <>
+              <label className="text-sm font-semibold">Motor del LLM</label>
+              <select name="llm" value={llm} onChange={(e) => setLlm(e.target.value)}
+                className="border-2 border-black rounded-lg px-3 py-2 bg-white">
+                <option value="deepseek">DeepSeek — tu propia key (off-meter). Necesita el secret DEEPSEEK_API_KEY.</option>
+                <option value="easybits">EasyBits — medido, se cobra a tu plan.</option>
+              </select>
+            </>
+          )}
 
           {/* OAuth de Claude solo aplica a cerebros Claude; los DeepSeek corren con DEEPSEEK_API_KEY. */}
           {brain === "claude-worker" && (
