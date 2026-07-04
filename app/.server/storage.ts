@@ -18,6 +18,26 @@ const DEFAULT_PREFIX = "API_EXPERIMENT/";
 export const PRIVATE_BUCKET = process.env.BUCKET_NAME || "easybits-dev";
 export const PUBLIC_BUCKET = process.env.PUBLIC_BUCKET_NAME || "easybits-public";
 
+// Public assets are served straight from the Tigris direct endpoint
+// (`<bucket>.t3.storage.dev`). The legacy Acceleration Gateway host
+// (`<bucket>.fly.storage.tigris.dev`) is no longer used for serving: it
+// regressed to returning `200` + a correct `content-length` but streaming ZERO
+// bytes for the `easybits-public` bucket (data intact at origin — the same
+// objects serve fine via `t3.storage.dev`). Override with PUBLIC_ASSET_HOST.
+export const PUBLIC_ASSET_HOST = process.env.PUBLIC_ASSET_HOST || "t3.storage.dev";
+const LEGACY_PUBLIC_HOST_SUFFIX = ".fly.storage.tigris.dev";
+
+// Rewrite any URL still pointing at the broken legacy gateway to the working
+// direct host. Safe on any string (unchanged if it doesn't match). Call this
+// wherever a possibly-old stored URL is handed back to a client/agent so
+// historical `File.url` rows keep resolving even before the DB migration runs.
+export function normalizePublicAssetUrl(url: string): string;
+export function normalizePublicAssetUrl(url: null | undefined): "";
+export function normalizePublicAssetUrl(url: string | null | undefined): string {
+  if (!url) return "";
+  return url.split(LEGACY_PUBLIC_HOST_SUFFIX).join(`.${PUBLIC_ASSET_HOST}`);
+}
+
 // --- Types ---
 
 export type StorageClient = {
@@ -226,7 +246,9 @@ export function getReadClientForPlatformFile(file: { storageProviderId?: string 
   // Public files live in PUBLIC_BUCKET at root prefix.
   const isPublicBucketFile =
     file.access === "public" ||
-    (!!file.url && file.url.includes(`${PUBLIC_BUCKET}.fly.storage.tigris.dev`));
+    (!!file.url &&
+      (file.url.includes(`${PUBLIC_BUCKET}.${PUBLIC_ASSET_HOST}`) ||
+        file.url.includes(`${PUBLIC_BUCKET}.fly.storage.tigris.dev`)));
   if (isPublicBucketFile) {
     return getPlatformDefaultClient({ bucket: PUBLIC_BUCKET, prefix: "" });
   }
@@ -253,7 +275,7 @@ export function getPlatformPublicClient(): StorageClient {
  * publicly. Pair this with `getPlatformPublicClient().putObject(key, ...)`.
  */
 export function buildPublicAssetUrl(storageKey: string): string {
-  return `https://${PUBLIC_BUCKET}.fly.storage.tigris.dev/${storageKey}`;
+  return `https://${PUBLIC_BUCKET}.${PUBLIC_ASSET_HOST}/${storageKey}`;
 }
 
 export async function resolveProvider(

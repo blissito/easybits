@@ -1,6 +1,9 @@
 import type { Route } from "./+types/s.$slug.$";
 import { db } from "~/.server/db";
-import { getPlatformDefaultClient } from "~/.server/storage";
+import {
+  getPlatformDefaultClient,
+  normalizePublicAssetUrl,
+} from "~/.server/storage";
 import { getContentType } from "~/utils/mime";
 
 function isImmutable(path: string): boolean {
@@ -119,10 +122,12 @@ export async function loader({ params, request }: Route.LoaderArgs) {
         // SPA fallback — serve index.html with no-cache.
         // Inject <base> so relative assets resolve against the site root.
         const readUrl = file.access === "public" && file.url
-          ? file.url
+          ? normalizePublicAssetUrl(file.url)
           : await client.getReadUrl(file.storageKey);
         const upstream = await fetch(readUrl);
-        const html = await upstream.text();
+        // Rewrite any legacy Tigris gateway URLs baked into the stored HTML
+        // (e.g. <img src="…fly.storage.tigris.dev…">) to the working t3 host.
+        const html = normalizePublicAssetUrl(await upstream.text());
         const patched = injectBaseTag(html, `/s/${website.slug}/`);
         return new Response(patched, {
           headers: {
@@ -136,7 +141,7 @@ export async function loader({ params, request }: Route.LoaderArgs) {
   }
 
   const readUrl = file.access === "public" && file.url
-    ? file.url
+    ? normalizePublicAssetUrl(file.url)
     : await client.getReadUrl(file.storageKey);
   const upstream = await fetch(readUrl);
 
@@ -148,7 +153,9 @@ export async function loader({ params, request }: Route.LoaderArgs) {
   // Inject social preview meta tags into HTML responses so WhatsApp/Twitter
   // unfurls show a rich preview. Assets (CSS/JS/images) pass through as stream.
   if (contentType.startsWith("text/html") && !isOgBot) {
-    const html = await upstream.text();
+    // Rewrite any legacy Tigris gateway URLs baked into the stored HTML
+    // (e.g. <img src="…fly.storage.tigris.dev…">) to the working t3 host.
+    const html = normalizePublicAssetUrl(await upstream.text());
 
     // Pick the best og:image available:
     // 1) cached screenshot from a prior background job on Website.metadata

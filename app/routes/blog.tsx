@@ -462,7 +462,7 @@ export const meta = () => {
     {
       property: "og:image",
       content:
-        "https://brendiwebsite.fly.storage.tigris.dev/metaImage-easybits.webp",
+        "https://brendiwebsite.t3.storage.dev/metaImage-easybits.webp",
     },
 
     // Twitter Card
@@ -475,7 +475,7 @@ export const meta = () => {
     {
       name: "twitter:image",
       content:
-        "https://brendiwebsite.fly.storage.tigris.dev/metaImage-easybits.webp",
+        "https://brendiwebsite.t3.storage.dev/metaImage-easybits.webp",
     },
   ];
 };
@@ -522,7 +522,7 @@ export default function Blog({ loaderData }: Route.ComponentProps) {
               name: "EasyBits",
               logo: {
                 "@type": "ImageObject",
-                url: "https://brendiwebsite.fly.storage.tigris.dev/logo-easybits.webp",
+                url: "https://brendiwebsite.t3.storage.dev/logo-easybits.webp",
               },
             },
             blogPost: posts.slice(0, 10).map((post: any) => ({

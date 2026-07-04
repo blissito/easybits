@@ -47,7 +47,10 @@ const s3 = new S3Client({
 });
 
 const keyFromUrl = (url) => {
-  const m = url && url.split(".tigris.dev/")[1];
+  if (!url) return null;
+  // Handle both the legacy `*.fly.storage.tigris.dev/<key>` host and the
+  // current `*.t3.storage.dev/<key>` host: take the path after the bucket host.
+  const m = url.split(/\.(?:fly\.storage\.tigris|t3\.storage)\.dev\//)[1];
   return m || null;
 };
 

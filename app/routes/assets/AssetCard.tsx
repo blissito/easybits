@@ -10,7 +10,7 @@ import { cn } from "~/utils/cn";
 // Helper function to get the metaImage URL for an asset
 const getMetaImageUrl = (asset: Asset): string => {
   // Use the standard metaImage path that gets generated automatically
-  return `https://easybits-public.fly.storage.tigris.dev/${asset.userId}/gallery/${asset.id}/metaImage`;
+  return `https://easybits-public.t3.storage.dev/${asset.userId}/gallery/${asset.id}/metaImage`;
 };
 
 export const AssetCard = ({

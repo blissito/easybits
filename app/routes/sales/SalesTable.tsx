@@ -55,7 +55,7 @@ const Row = ({ order }: { order: Order }) => {
       <section className={cn("col-span-1", "text-brand-gray flex flex-col")}>
         <img
           // @todo remove the merchantId from the url urgent! if you see this fix it!
-          src={`https://easybits-public.fly.storage.tigris.dev/${order.merchantId}/gallery/${order.asset?.id}/metaImage`}
+          src={`https://easybits-public.t3.storage.dev/${order.merchantId}/gallery/${order.asset?.id}/metaImage`}
           alt="meta image"
           className="aspect-square w-10"
         />

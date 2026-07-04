@@ -17,7 +17,7 @@ export type GetBasicMetaTagsPros = {
 export default function getBasicMetaTags({
   title,
   description = "Convierte esas ilustraciones, ese libro, ese cuento o esas conferencias en assets digitales", // description should be at least 100 chars
-  image = "https://brendiwebsite.fly.storage.tigris.dev/metaImage-easybits.webp",
+  image = "https://brendiwebsite.t3.storage.dev/metaImage-easybits.webp",
   twitterCard = "summary_large_image",
   url = "https://www.easybits.cloud",
   others = [],

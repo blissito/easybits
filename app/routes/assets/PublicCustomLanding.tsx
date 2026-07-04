@@ -21,7 +21,7 @@ export const meta = ({ data }: Route.MetaArgs) => {
     description: asset.description
       ? asset.description.slice(0, 80).replace("#", "") + "..."
       : "Hecha un vistazo a este increíble asset 🚀",
-    image: `https://easybits-public.fly.storage.tigris.dev/${asset.userId}/gallery/${asset.id}/metaImage`,
+    image: `https://easybits-public.t3.storage.dev/${asset.userId}/gallery/${asset.id}/metaImage`,
   });
 };
 

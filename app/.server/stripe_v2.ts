@@ -246,7 +246,7 @@ export const updateOrCreateProductAndPrice = async (
   if (!accountId) return { ok: false, error: "Cuenta de Stripe no encontrada" };
 
   // Construir la URL de la meta imagen
-  const metaImageUrl = `https://easybits-public.fly.storage.tigris.dev/${asset.userId}/gallery/${asset.id}/metaImage`;
+  const metaImageUrl = `https://easybits-public.t3.storage.dev/${asset.userId}/gallery/${asset.id}/metaImage`;
 
   if (asset.stripeProduct && asset.stripePrice) {
     try {

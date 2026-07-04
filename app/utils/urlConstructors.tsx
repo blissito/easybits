@@ -2,9 +2,12 @@ export const createURLFromStorageKey = (
   storageKey: string,
   isPrivate?: boolean
 ) => {
+  // Serve straight from the Tigris direct endpoint (`*.t3.storage.dev`). The
+  // legacy `*.fly.storage.tigris.dev` gateway regressed to serving empty bodies
+  // for the public bucket; t3 serves the identical objects.
   const location = isPrivate
-    ? "https://easybits-dev.fly.storage.tigris.dev/"
-    : "https://easybits-public.fly.storage.tigris.dev";
+    ? "https://easybits-dev.t3.storage.dev"
+    : "https://easybits-public.t3.storage.dev";
   return `${location}/${storageKey}`;
 };
 

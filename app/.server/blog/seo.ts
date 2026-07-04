@@ -47,9 +47,9 @@ export class BlogSEOService {
   private static readonly SITE_NAME = "EasyBits";
   private static readonly SITE_URL = "https://www.easybits.cloud";
   private static readonly DEFAULT_OG_IMAGE =
-    "https://brendiwebsite.fly.storage.tigris.dev/metaImage-easybits.webp";
+    "https://brendiwebsite.t3.storage.dev/metaImage-easybits.webp";
   private static readonly PUBLISHER_LOGO =
-    "https://brendiwebsite.fly.storage.tigris.dev/logo-easybits.webp";
+    "https://brendiwebsite.t3.storage.dev/logo-easybits.webp";
 
   /**
    * Generate comprehensive meta tags for a blog post
