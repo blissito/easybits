@@ -116,6 +116,8 @@ export default [
       route("archivos", "routes/files.tsx"),
       route("chime-poc", "routes/dash/chime-poc.tsx"),
       route("perfil", "routes/profile/profile.tsx"),
+      // Ghosty Teams — lanzar/abrir el chat de equipo (redirige a la instancia)
+      route("teams", "routes/dash/teams.tsx"),
       // Hosting — máquinas permanentes + sandboxes
       route("hosting", "routes/dash/hosting/machines.tsx"),
       route("hosting/wa/:id", "routes/dash/hosting/wa.tsx"),

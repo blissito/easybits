@@ -157,6 +157,16 @@ export const ITEMS = {
     {
       icon: (
         <svg className="scale" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M8 12h.01M12 12h.01M16 12h.01" />
+          <path d="M21 12c0 4.418-4.03 8-9 8a9.8 9.8 0 0 1-4-.83l-4 1.83 1.3-3.9A7.6 7.6 0 0 1 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+        </svg>
+      ),
+      path: "/dash/teams",
+      title: "Ghosty Teams",
+    },
+    {
+      icon: (
+        <svg className="scale" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <rect x="2" y="4" width="20" height="16" rx="2" />
           <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
         </svg>
