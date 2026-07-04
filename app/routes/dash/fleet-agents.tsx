@@ -1223,8 +1223,25 @@ function TestChatDrawer({
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const bodyRef = useRef<HTMLDivElement>(null);
-  // groupId estable por apertura del drawer → conversación de prueba aislada.
-  const [groupId] = useState(() => `web-test-${Math.random().toString(36).slice(2, 10)}`);
+  // groupId ESTABLE por agente (no aleatorio) → la conversación persiste server-side
+  // en FleetAgentMessage (igual que los canales) y el cerebro la resume por sessionUuid.
+  const groupId = `web-test-${agent.id}`;
+
+  // Carga el historial persistido al abrir → no se pierde el hilo al cerrar/reabrir.
+  useEffect(() => {
+    let alive = true;
+    fetch(`/api/v2/fleet-agents/${agent.id}/message-stream?groupId=${encodeURIComponent(groupId)}`, {
+      headers: { Authorization: `Bearer ${agent.token}` },
+    })
+      .then((r) => (r.ok ? r.json() : { messages: [] }))
+      .then((d: { messages?: Array<{ role: string; text: string }> }) => {
+        if (alive && Array.isArray(d.messages) && d.messages.length) {
+          setMsgs(d.messages.map((m) => ({ role: m.role === "user" ? "user" : "bot", text: m.text })));
+        }
+      })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [agent.id, agent.token, groupId]);
 
   useEffect(() => {
     bodyRef.current?.scrollTo({ top: bodyRef.current.scrollHeight });

@@ -21,9 +21,27 @@ const CORS = {
   "Access-Control-Allow-Headers": "Authorization, Content-Type",
 };
 
-export async function loader({ request }: Route.LoaderArgs) {
+export async function loader({ request, params }: Route.LoaderArgs) {
   if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
-  return Response.json({ error: "Method not allowed" }, { status: 405, headers: CORS });
+  // GET ?groupId=… → historial persistido de la conversación (mismo store que los
+  // canales, FleetAgentMessage). Lo usa el drawer de prueba para NO perder el hilo
+  // al cerrar/reabrir. Auth = mismo bearer que el POST (token del agente).
+  const url = new URL(request.url);
+  const groupId = url.searchParams.get("groupId") ?? "";
+  if (!groupId) return Response.json({ error: "Method not allowed" }, { status: 405, headers: CORS });
+  const fleetAgentId = params.fleetAgentId!;
+  const bearer = request.headers.get("Authorization")?.replace(/^Bearer\s+/i, "") ?? "";
+  const fleetAgent = await db.fleetAgent.findUnique({ where: { id: fleetAgentId } });
+  const formmySecret = (fleetAgent?.wabaConfig as WabaConfig | null)?.formmySecret ?? "";
+  const authed = !!fleetAgent && !!bearer && (bearer === fleetAgent.token || (!!formmySecret && bearer === formmySecret));
+  if (!authed) return Response.json({ error: "Unauthorized" }, { status: 401, headers: CORS });
+  const rows = await db.fleetAgentMessage.findMany({
+    where: { fleetAgentId, groupId },
+    orderBy: { createdAt: "asc" },
+    take: 200,
+    select: { role: true, text: true, createdAt: true },
+  });
+  return Response.json({ messages: rows }, { headers: CORS });
 }
 
 export async function action({ request, params }: Route.ActionArgs) {
