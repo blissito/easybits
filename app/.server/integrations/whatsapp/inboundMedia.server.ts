@@ -230,6 +230,27 @@ async function resolveQuotedContext(
     }
   }
 
+  // Quoted video → transcribe its audio track (Gemini reads audio), same as the
+  // direct-video path. Without this, replying to a video reached the agent with
+  // only the (usually empty) video caption → no idea what was said in it.
+  if (qm.videoMessage) {
+    try {
+      const buf = await dl(sock, fake);
+      const mime = qm.videoMessage.mimetype || "video/mp4";
+      const vt = await geminiInline(
+        "Transcribe el audio de este video en español. Devuelve SOLO lo que se dice, sin comentarios.",
+        mime,
+        buf.toString("base64")
+      );
+      if (vt) return { frame: `[El usuario CITA un video. Audio transcrito: "${vt}"]` };
+    } catch (e) {
+      console.warn(`[fleet-media] quoted video download failed: ${e instanceof Error ? e.message : e}`);
+      return {
+        frame: `[El usuario CITA un video que no pude recuperar (su enlace de WhatsApp caducó). Pídele que lo reenvíe.]`,
+      };
+    }
+  }
+
   // Quoted document → extract its text.
   const qdoc = qm.documentMessage || qm.documentWithCaptionMessage?.message?.documentMessage;
   if (qdoc) {

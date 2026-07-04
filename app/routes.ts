@@ -203,6 +203,7 @@ export default [
     // FleetAgent — superficie WhatsApp always-on que rutea a workers efímeros
     route("fleet-agents", "routes/api/v2/fleet-agents.ts"),
     route("fleet-agents/wa-action", "routes/api/v2/fleet-agents.wa-action.ts"),
+    route("fleet-agents/:fleetAgentId/delete", "routes/api/v2/fleet-agents.$fleetAgentId.delete.ts"),
     route("fleet-agents/:fleetAgentId/message", "routes/api/v2/fleet-agents.$fleetAgentId.message.ts"),
     route("fleet-agents/:fleetAgentId/message-stream", "routes/api/v2/fleet-agents.$fleetAgentId.message-stream.ts"),
     route("fleet-agents/:fleetAgentId/group", "routes/api/v2/fleet-agents.$fleetAgentId.group.ts"),
