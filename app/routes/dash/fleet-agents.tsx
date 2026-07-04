@@ -711,12 +711,11 @@ function GhostyMascot({ className = "", blink = true, sleeping = false, offset =
       {/* cuerpo + blush afelpados: el contorno pasa por #feltEdge (fibras de fieltro).
           Los lentes/ojos quedan FUERA del filtro para que se lean nítidos. */}
       <g filter="url(#feltEdge)">
-        {/* Color del cuerpo = TIPO de agente (claude-worker vs deepseek). Lentes,
-            parpadeo y dormido (Zzz) intactos — es la identidad de Ghosty. Blush blanco
-            translúcido para que funcione sobre cualquier color. */}
+        {/* SOLO el color del cuerpo cambia por tipo de cerebro; el resto (lentes, blush,
+            parpadeo, dormido) es el fantasma original, intacto. */}
         <path d="M11 80 L11 41 C11 21 23 5 42 5 C61 5 73 21 73 41 L73 80 Q65.25 88 57.5 80 Q49.75 88 42 80 Q34.25 88 26.5 80 Q18.75 88 11 80 Z" fill={color} />
-        <ellipse cx="23" cy="50" rx="5" ry="3" fill="#ffffff" opacity="0.3" />
-        <ellipse cx="61" cy="50" rx="5" ry="3" fill="#ffffff" opacity="0.3" />
+        <ellipse cx="23" cy="50" rx="5" ry="3" fill="#B79BF2" />
+        <ellipse cx="61" cy="50" rx="5" ry="3" fill="#B79BF2" />
       </g>
       {/* patas de los lentes */}
       <path d="M16 37 L4 33" stroke="#EAE7F4" strokeWidth="4" strokeLinecap="round" />
