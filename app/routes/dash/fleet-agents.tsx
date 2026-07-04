@@ -146,15 +146,23 @@ export async function loader({ request }: Route.LoaderArgs) {
         where: { fleetAgentId: p.id, status: { in: ["running", "suspended", "building"] } },
         select: { id: true, status: true, sandboxId: true },
       });
-      // Ghosty = cerebro claude-worker → en las cajitas los agentes se dibujan
-      // como fantasmitas; cualquier otro template usa los ojitos genéricos.
-      const ghosty = p.workerTemplate === "claude-worker";
+      // Todos los agentes de flota se dibujan como fantasmita; el COLOR = tipo de agente:
+      // claude-worker = coral Anthropic, ghostycode/deepseek = morado Ghosty, cualquier
+      // otro = gris.
+      const ghosty = true;
+      const mascotColor =
+        p.workerTemplate === "claude-worker"
+          ? "#D97757"
+          : p.workerTemplate === "ghosty-gc"
+            ? "#9870ED"
+            : "#9CA3AF";
       const machines = await Promise.all(
         workers.map(async (w) => ({
           id: w.id,
           sandboxId: w.sandboxId,
           status: w.status,
           ghosty,
+          mascotColor,
           slots: await db.fleetAgentRoute.count({ where: { agentId: w.id } }),
         }))
       );
@@ -669,7 +677,7 @@ function Spinner() {
 }
 
 type Capacity = {
-  machines: { id: string; status: string; slots: number; ghosty?: boolean }[];
+  machines: { id: string; status: string; slots: number; ghosty?: boolean; mascotColor?: string }[];
   extraMachines: { id: string; status: string; kind: "system" | "custom"; label: string }[];
   vms: number; maxMachines: number; plan: string; planName: string;
   nextPlan: string | null; maxWorkersPerVm: number; vmMemMb: number; vcpus: number;
@@ -692,25 +700,45 @@ function blinkTiming(seed: string): { offset: number; period: number } {
 // Ghosty — la mascota de la marca (fantasma morado + lentes), el agente INSIGNIA
 // que el fleetAgent ofrece por default. Inline SVG (no hay asset suelto del fantasma;
 // /logo-purple.svg es solo los ojitos). Parpadea sutil para sentirse vivo.
-function GhostyMascot({ className = "", blink = true, sleeping = false, offset = 0, period = 5 }: { className?: string; blink?: boolean; sleeping?: boolean; offset?: number; period?: number }) {
+function GhostyMascot({ className = "", blink = true, sleeping = false, offset = 0, period = 5, color = "#9870ED" }: { className?: string; blink?: boolean; sleeping?: boolean; offset?: number; period?: number; color?: string }) {
   // begin negativo = arranca desfasado; period distinto = derivan y NUNCA vuelven a
   // unísono (cubre el caso de despertar simultáneo, donde el begin negativo se clampa).
   const Blink = blink && !sleeping ? (
-    <animate attributeName="ry" values="6;6;1;1;6;6" dur={`${period}s`} begin={`-${offset}s`} repeatCount="indefinite" keyTimes="0;0.88;0.91;0.965;0.99;1" />
+    <animate attributeName="ry" values="11;11;1.5;1.5;11;11" dur={`${period}s`} begin={`-${offset}s`} repeatCount="indefinite" keyTimes="0;0.88;0.91;0.965;0.99;1" />
   ) : null;
   return (
     <svg viewBox="0 0 84 96" className={className} fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
       {/* cuerpo + blush afelpados: el contorno pasa por #feltEdge (fibras de fieltro).
           Los lentes/ojos quedan FUERA del filtro para que se lean nítidos. */}
       <g filter="url(#feltEdge)">
-        {/* Fantasma SIN lentes. Estado por COLOR: activo morado, suspendido gris. */}
-        <path d="M11 80 L11 41 C11 21 23 5 42 5 C61 5 73 21 73 41 L73 80 Q65.25 88 57.5 80 Q49.75 88 42 80 Q34.25 88 26.5 80 Q18.75 88 11 80 Z" fill={sleeping ? "#B8B2C6" : "#9870ED"} />
-        <ellipse cx="24" cy="54" rx="5" ry="3" fill={sleeping ? "#CFCAD9" : "#B79BF2"} />
-        <ellipse cx="60" cy="54" rx="5" ry="3" fill={sleeping ? "#CFCAD9" : "#B79BF2"} />
+        {/* Color del cuerpo = TIPO de agente (claude-worker vs deepseek). Lentes,
+            parpadeo y dormido (Zzz) intactos — es la identidad de Ghosty. Blush blanco
+            translúcido para que funcione sobre cualquier color. */}
+        <path d="M11 80 L11 41 C11 21 23 5 42 5 C61 5 73 21 73 41 L73 80 Q65.25 88 57.5 80 Q49.75 88 42 80 Q34.25 88 26.5 80 Q18.75 88 11 80 Z" fill={color} />
+        <ellipse cx="23" cy="50" rx="5" ry="3" fill="#ffffff" opacity="0.3" />
+        <ellipse cx="61" cy="50" rx="5" ry="3" fill="#ffffff" opacity="0.3" />
       </g>
-      {/* ojitos simples de fantasma (SIN lentes); parpadeo solo cuando está despierto */}
-      <ellipse cx="31" cy="43" rx="4.5" ry="6" fill="#1C1726">{Blink}</ellipse>
-      <ellipse cx="53" cy="43" rx="4.5" ry="6" fill="#1C1726">{Blink}</ellipse>
+      {/* patas de los lentes */}
+      <path d="M16 37 L4 33" stroke="#EAE7F4" strokeWidth="4" strokeLinecap="round" />
+      <path d="M68 37 L80 33" stroke="#EAE7F4" strokeWidth="4" strokeLinecap="round" />
+      {/* puente */}
+      <path d="M37 36 Q42 32 47 36" stroke="#EAE7F4" strokeWidth="4" strokeLinecap="round" fill="none" />
+      {sleeping ? (
+        <>
+          {/* dormido — ojitos cerrados (arcos hacia abajo) */}
+          <path d="M22 41 Q29 47 36 41" stroke="#1C1726" strokeWidth="3.5" strokeLinecap="round" fill="none" />
+          <path d="M48 41 Q55 47 62 41" stroke="#1C1726" strokeWidth="3.5" strokeLinecap="round" fill="none" />
+        </>
+      ) : (
+        <>
+          {/* lentes oscuros (ojitos despiertos) — parpadean */}
+          <ellipse cx="29" cy="41" rx="8" ry="11" fill="#1C1726">{Blink}</ellipse>
+          <ellipse cx="55" cy="41" rx="8" ry="11" fill="#1C1726">{Blink}</ellipse>
+        </>
+      )}
+      {/* marcos */}
+      <circle cx="29" cy="40" r="13.5" stroke="#EAE7F4" strokeWidth="4" />
+      <circle cx="55" cy="40" r="13.5" stroke="#EAE7F4" strokeWidth="4" />
     </svg>
   );
 }
@@ -718,7 +746,7 @@ function GhostyMascot({ className = "", blink = true, sleeping = false, offset =
 // One sandbox = a CONTAINER box; the agents (workers) inside it are the ojitos.
 // Color climbs with occupancy: empty→gray, healthy→green, full→amber (no room);
 // building pulses violet; an unspawned slot is a dashed "mount" ready on demand.
-function VmBox({ id, status, slots, max, ghosty, addon, kind, sysLabel }: { id: string; status: string | null; slots: number; max: number; ghosty?: boolean; addon?: boolean; kind?: "system" | "custom"; sysLabel?: string }) {
+function VmBox({ id, status, slots, max, ghosty, mascotColor, addon, kind, sysLabel }: { id: string; status: string | null; slots: number; max: number; ghosty?: boolean; mascotColor?: string; addon?: boolean; kind?: "system" | "custom"; sysLabel?: string }) {
   const system = kind === "system";
   const custom = kind === "custom";
   const extra = system || custom;
@@ -817,7 +845,7 @@ function VmBox({ id, status, slots, max, ghosty, addon, kind, sysLabel }: { id: 
                 exit={{ scale: 0.2, opacity: 0, y: -16, rotate: -10, transition: { duration: 0.35, ease: "easeIn" } }}
                 transition={waking ? { duration: 0.7, ease: "easeOut", times: [0, 0.3, 0.6, 1], delay: j * 0.06 } : { duration: 0.3 }}
                 className="w-10 h-10 flex items-center justify-center">
-                {ghosty ? (() => { const t = blinkTiming(`${id}:${j}`); return <GhostyMascot className="w-8 h-10" sleeping={status === "suspended"} offset={t.offset} period={t.period} />; })() : <img src="/logo-purple.svg" alt="" className={`w-10 h-10 ${status === "suspended" ? "grayscale" : ""}`} />}
+                {ghosty ? (() => { const t = blinkTiming(`${id}:${j}`); return <GhostyMascot className="w-8 h-10" sleeping={status === "suspended"} offset={t.offset} period={t.period} color={mascotColor} />; })() : <img src="/logo-purple.svg" alt="" className={`w-10 h-10 ${status === "suspended" ? "grayscale" : ""}`} />}
               </motion.div>
             ) : (
               <motion.span key={`e${j}`}
@@ -878,7 +906,7 @@ function CapacityHud({ capacity }: { capacity: Capacity }) {
           }
           if (cell.item.kind === "machine") {
             const m = cell.item.m;
-            return <VmBox key={`cell-${cell.p}`} id={m.id} status={m.status} slots={m.slots} max={capacity.maxWorkersPerVm} ghosty={m.ghosty} addon={isAddon} />;
+            return <VmBox key={`cell-${cell.p}`} id={m.id} status={m.status} slots={m.slots} max={capacity.maxWorkersPerVm} ghosty={m.ghosty} mascotColor={m.mascotColor} addon={isAddon} />;
           }
           const s = cell.item.s;
           return <VmBox key={`cell-${cell.p}`} id={s.id} status={s.status} slots={0} max={capacity.maxWorkersPerVm} kind={s.kind} sysLabel={s.label} />;
