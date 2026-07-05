@@ -521,6 +521,10 @@ export async function createSandbox(
     metadata?: Record<string, string>;
     persistent?: boolean;
     size?: "s" | "m" | "l" | "xl";
+    // Sleep/wake: suspender al idle (snapshot) en vez de destruir; destruir a
+    // hardTtlSeconds. Reenviados verbatim al host (/v1/sandbox).
+    suspendOnIdle?: boolean;
+    hardTtlSeconds?: number;
     // Explicit resource override (wins over `size`/template default). Used by the
     // fleetAgent to size workers per channel (e.g. 512MB tiny VMs). Firecracker sets RAM
     // at boot — not hot-resizable; to "grow" you spawn a bigger/another VM.
@@ -617,6 +621,8 @@ export async function createSandbox(
       metadata: params.metadata,
       persistent,
       maxTtlSeconds: plan.maxSandboxTtlSeconds,
+      suspendOnIdle: params.suspendOnIdle,
+      hardTtlSeconds: params.hardTtlSeconds,
       env: params.env,
       ...resources,
     },

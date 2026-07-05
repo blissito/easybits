@@ -29,6 +29,11 @@ export const SandboxCreateBody = z.object({
   // Clase de tamaño de la VM. Mapea a vcpus/memoryMb/diskMb en createSandbox
   // y se gatea por plan. Omitido → "s" (el default del template).
   size: z.enum(["s", "m", "l", "xl"]).optional(),
+  // Sleep/wake: al idlear (timeoutSeconds), SUSPENDER (snapshot, wake ~0.2s) en
+  // vez de destruir; destruir recién a hardTtlSeconds. Para cajas long-lived con
+  // wake barato (team boxes de Ghosty). Se reenvía verbatim al host.
+  suspendOnIdle: z.boolean().optional(),
+  hardTtlSeconds: z.number().int().min(60).optional(),
 });
 
 // ── Hosting (always-on machines) ──────────────────────────────────────────
