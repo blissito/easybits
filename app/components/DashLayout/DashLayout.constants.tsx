@@ -161,7 +161,9 @@ export const ITEMS = {
           <path d="M21 12c0 4.418-4.03 8-9 8a9.8 9.8 0 0 1-4-.83l-4 1.83 1.3-3.9A7.6 7.6 0 0 1 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
         </svg>
       ),
-      path: "/dash/teams",
+      // URL completa → SideBar lo detecta como external y abre en pestaña nueva
+      // (<a target="_blank">). Directo al ingress estable con revive/provisión.
+      path: "https://teams.formmy.app",
       title: "Ghosty Teams",
     },
     {
