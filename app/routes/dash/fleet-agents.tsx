@@ -816,10 +816,19 @@ function VmBox({ id, status, slots, max, ghosty, mascotColor, addon, kind, sysLa
           </svg>
         )
       ) : custom ? (
-        <svg className="w-12 h-12 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
-          <path d="m3.3 7 8.7 5 8.7-5" /><path d="M12 22V12" />
-        </svg>
+        /chat/i.test(sysLabel ?? "") ? (
+          // Chat (ej. ghosty-chat): burbuja de conversación con puntos, NO cubo.
+          <svg className="w-12 h-12 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+            <line x1="8.5" y1="11.5" x2="8.51" y2="11.5" /><line x1="12" y1="11.5" x2="12.01" y2="11.5" /><line x1="15.5" y1="11.5" x2="15.51" y2="11.5" />
+          </svg>
+        ) : (
+          // Otros custom (ubuntu, code-interpreter, etc.): cubo genérico.
+          <svg className="w-12 h-12 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+            <path d="m3.3 7 8.7 5 8.7-5" /><path d="M12 22V12" />
+          </svg>
+        )
       ) : (
         <div className="relative grid grid-cols-2 gap-2.5 place-items-center">
           <AnimatePresence>
