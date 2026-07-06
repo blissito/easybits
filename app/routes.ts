@@ -389,6 +389,10 @@ export default [
   // auth gate for a room + Yjs binary state persistence (externalized to storage).
   route("api/v2/collab/authenticate", "routes/api/v2/collab.authenticate.ts"),
   route("api/v2/collab/:docId/state", "routes/api/v2/collab.$docId.state.ts"),
+  // Collaborative Tiptap+Yjs editor (embeddable) + the client's room-resolver
+  // (spawns/resumes the owner's collab box, returns the ws URL).
+  route("collab/document/:token", "routes/collab.document.$token.tsx"),
+  route("api/v2/collab/:token/room", "routes/api/v2/collab.$token.room.ts"),
 
   // OAuth 2.1 (MCP connector flow for Claude.ai / Cowork)
   route("/.well-known/oauth-protected-resource", "routes/api/wellknown/oauth-protected-resource.ts"),

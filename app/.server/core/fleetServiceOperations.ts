@@ -85,11 +85,11 @@ const SERVICE_REGISTRY: Record<string, ServiceSpec> = {
     suspendOnIdle: true,
     hardTtlMin: 60,
   },
-  // collab: servidor Hocuspocus/Yjs para co-edición de documentos. Ligero (sin
-  // browser) → 1GB. Una caja por owner, compartida por toda su flota. Suspende a
-  // los 10 min (snapshot ~1s resume) y se destruye tras 60 min suspendida. Auth y
-  // persistencia las delega a EasyBits, por eso necesita EASYBITS_BASE_URL +
-  // COLLAB_SECRET en su env (única caja que llama de vuelta).
+  // collab: servidor Hocuspocus/Yjs para co-edición de documentos. Caja estándar
+  // (2GB) por owner, compartida por toda su flota. Suspende a los 10 min (snapshot
+  // ~1s resume) y se destruye tras 60 min suspendida. Auth y persistencia las
+  // delega a EasyBits, por eso necesita EASYBITS_BASE_URL + COLLAB_SECRET en su
+  // env (única caja que llama de vuelta).
   collab: {
     template: "collab-svc",
     unit: "collab-svc-runtime",
@@ -369,7 +369,7 @@ export async function reapIdleServiceBoxes(): Promise<{ checked: number; destroy
 
 // Background AuthContext for the box owner (the reaper runs outside any HTTP
 // request). Same pattern as ctxForStudioOwner / the pool reaper's ctxForOwner.
-async function ctxForServiceOwner(ownerId: string): Promise<AuthContext> {
+export async function ctxForServiceOwner(ownerId: string): Promise<AuthContext> {
   const user = await db.user.findUnique({ where: { id: ownerId } });
   if (!user) throw new Error(`service owner ${ownerId} not found`);
   return { user, scopes: ["READ", "WRITE", "DELETE"] };

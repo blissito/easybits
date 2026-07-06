@@ -8,7 +8,7 @@
 // The editor (Tiptap Collaboration) connects its HocuspocusProvider to the
 // returned ws:// URL, room = landingId, token = the share JWT.
 import type { AuthContext } from "../apiAuth";
-import { ensureServiceBox, touchServiceBox } from "./fleetServiceOperations";
+import { ensureServiceBox, touchServiceBox, ctxForServiceOwner } from "./fleetServiceOperations";
 
 export interface CollabHandle {
   sandboxId: string;
@@ -25,4 +25,11 @@ export async function ensureCollabBox(ctx: AuthContext): Promise<CollabHandle> {
   }
   await touchServiceBox(box.sandboxId).catch(() => {});
   return { sandboxId: box.sandboxId, wsUrl: box.collabWsUrl };
+}
+
+// Igual pero resolviendo el AuthContext desde el ownerId (para loaders/endpoints
+// del share que solo tienen el ownerId del documento, no una sesión del owner).
+export async function ensureCollabBoxForOwner(ownerId: string): Promise<CollabHandle> {
+  const ctx = await ctxForServiceOwner(ownerId);
+  return ensureCollabBox(ctx);
 }
