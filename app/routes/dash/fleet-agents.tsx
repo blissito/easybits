@@ -9,7 +9,7 @@ import { PLANS, getUserPlan, getFleetBox, NEXT_PLAN } from "~/lib/plans";
 import { getUserOrRedirect } from "~/.server/getters";
 import { db } from "~/.server/db";
 import { delegatedAccountIds, SCOPES } from "~/.server/delegation";
-import { createFleetAgent, deleteFleetAgent, clearGroupSession, mergedCapabilities, CURATED_CAPABILITIES, DEFAULT_MCP_CATALOG, type McpCatalogEntry, type GroupConfig } from "~/.server/core/fleetAgentOperations";
+import { createFleetAgent, deleteFleetAgent, clearGroupSession, mergedCapabilities, CURATED_CAPABILITIES, DEFAULT_MCP_CATALOG, fleetSkills, type McpCatalogEntry, type GroupConfig, type FleetSkill } from "~/.server/core/fleetAgentOperations";
 import { FLEET_BUCKETS, toolsParamToBuckets, bucketsToToolsParam } from "~/.server/mcp/toolGroups";
 import { getReservedCapacity } from "~/.server/core/sandboxReservations";
 import { listSecrets, createSecret } from "~/.server/core/secretOperations";
@@ -68,7 +68,7 @@ export async function loader({ request }: Route.LoaderArgs) {
     orderBy: { createdAt: "desc" },
     select: {
       id: true, name: true, baileys: true, enabledGroups: true, groupConfigs: true,
-      wabaConfig: true, mcpCatalog: true, maxWorkersPerVm: true, vmMemMb: true,
+      wabaConfig: true, mcpCatalog: true, maxWorkersPerVm: true, vmMemMb: true, skills: true,
       mainGroupJid: true, hasOwnNumber: true, workerTemplate: true, persona: true,
       // token: bearer del surface web/Baileys — lo usa el drawer de prueba (message-stream).
       token: true,
@@ -204,6 +204,11 @@ export async function loader({ request }: Route.LoaderArgs) {
         restricted: toolGroup.startsWith("scripting"), activeBuckets,
         // Conectores (MCPs custom) ON por default del agente — clave reservada "*".
         defaultMcps: (gconf["*"]?.mcpServers) ?? [],
+        // Skills del agente (custom-tools empaquetados) — objetos de 1ª clase.
+        skills: fleetSkills(p).map((s) => ({
+          id: s.id, name: s.name, description: s.description,
+          enabled: s.enabled !== false, fileCount: (s.files ?? []).length,
+        })),
       };
     })
   );
@@ -812,6 +817,56 @@ export async function action({ request }: Route.ActionArgs) {
     const msg = await clearGroupSession(ctx, fleetAgent, `waba:${integrationId}:${np}`);
     return data({ ok: true, message: msg });
   }
+  if (intent === "add-skill") {
+    // Sube un skill como BUNDLE: el SKILL.md (obligatorio, frontmatter name+desc) +
+    // scripts/assets opcionales. Todos como archivos públicos; se agrupan en un
+    // objeto Skill de 1ª clase. name/description salen del frontmatter.
+    const files = fd.getAll("files").filter((f): f is File => f instanceof File);
+    const md = files.find((f) => /\.md$/i.test(f.name)) ?? files[0];
+    if (!md) return data({ error: "sube al menos el SKILL.md" }, { status: 400 });
+    const mdText = await md.text();
+    // Frontmatter YAML mínimo: name + description entre los --- iniciales.
+    const fm = /^---\s*\n([\s\S]*?)\n---/.exec(mdText)?.[1] ?? "";
+    const pick = (k: string) => new RegExp(`^${k}\\s*:\\s*(.+)$`, "m").exec(fm)?.[1]?.trim().replace(/^["']|["']$/g, "");
+    const name = pick("name") || md.name.replace(/\.md$/i, "");
+    const description = pick("description") || "";
+    const { getPlatformPublicClient, buildPublicAssetUrl } = await import("~/.server/storage");
+    const { randomUUID } = await import("node:crypto");
+    // Sube el SKILL.md primero (files[0]) → luego el resto (scripts/assets).
+    const ordered = [md, ...files.filter((f) => f !== md)];
+    const fileIds: string[] = [];
+    for (const file of ordered) {
+      const buf = Buffer.from(await file.arrayBuffer());
+      const safe = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+      const storageKey = `${user.id}/${randomUUID()}-${safe}`;
+      const ctype = file.type || (/\.mjs$|\.js$/i.test(file.name) ? "text/javascript" : /\.md$/i.test(file.name) ? "text/markdown" : "application/octet-stream");
+      await getPlatformPublicClient().putObject(storageKey, buf, ctype);
+      const created = await db.file.create({
+        data: { storageKey, slug: storageKey, name: file.name, size: buf.length, contentType: ctype, status: "DONE", url: buildPublicAssetUrl(storageKey), access: "public", ownerId: user.id, assetIds: [] },
+        select: { id: true },
+      });
+      fileIds.push(created.id);
+    }
+    const skill: FleetSkill = { id: randomUUID().slice(0, 8), name, description, files: fileIds, enabled: true };
+    const skills = [...fleetSkills(fleetAgent), skill];
+    await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { skills } });
+    return data({ ok: true, skillId: skill.id });
+  }
+  if (intent === "toggle-skill") {
+    const skillId = String(fd.get("skillId") || "");
+    const on = String(fd.get("on") || "") === "1";
+    const skills = fleetSkills(fleetAgent).map((s) => (s.id === skillId ? { ...s, enabled: on } : s));
+    await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { skills } });
+    return data({ ok: true });
+  }
+  if (intent === "delete-skill") {
+    // Quita el skill del agente. Los archivos quedan en Archivos (no se borran).
+    const skillId = String(fd.get("skillId") || "");
+    const skills = fleetSkills(fleetAgent).filter((s) => s.id !== skillId);
+    await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { skills } });
+    return data({ ok: true });
+  }
+
   return data({ error: "intent inválido" }, { status: 400 });
 }
 
@@ -2511,6 +2566,49 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                   className="shrink-0 border-2 border-black rounded-lg px-3 py-1.5 text-xs font-semibold hover:bg-gray-50">
                   Administrar
                 </button>
+              </div>
+
+              {/* 🧩 Skills — custom-tools empaquetados (SKILL.md + script). Objeto de 1ª
+                  clase: nombre/descripción del frontmatter, on/off, agregar bundle. A
+                  nivel AGENTE (todos los canales). Progressive disclosure: el
+                  name+description entra al prompt; el SKILL.md/script se lee on-demand. */}
+              <div className="mb-4">
+                <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">🧩 Skills <span className="normal-case text-gray-400 font-normal">· capacidades empaquetadas del agente</span></span>
+                <div className="mt-1 flex flex-col gap-1.5">
+                  {(cp.skills ?? []).length === 0 && (
+                    <p className="text-[11px] text-gray-400 border-2 border-dashed border-gray-200 rounded-lg px-3 py-2">
+                      Aún no hay skills. Un skill = un <code>SKILL.md</code> (nombre + descripción) + su script. El agente lo usa cuando el caso lo pide.
+                    </p>
+                  )}
+                  {(cp.skills ?? []).map((sk) => (
+                    <div key={sk.id} className="border-2 border-gray-100 rounded-xl px-3 py-2 flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold truncate">{sk.name} <span className="text-[10px] font-normal text-gray-400">· {sk.fileCount} archivo{sk.fileCount === 1 ? "" : "s"}</span></p>
+                        {sk.description && <p className="text-[11px] text-gray-500 line-clamp-2">{sk.description}</p>}
+                      </div>
+                      <div className="shrink-0 flex items-center gap-2">
+                        <Switch value={sk.enabled} className="text-sm items-center" onChange={(on) =>
+                          fetcher.submit({ intent: "toggle-skill", fleetAgentId: cp.id, skillId: sk.id, on: on ? "1" : "0" }, { method: "post" })} />
+                        <button type="button" title="Quitar skill (los archivos quedan en Archivos)"
+                          onClick={() => { if (window.confirm(`¿Quitar el skill "${sk.name}"? Los archivos no se borran.`)) fetcher.submit({ intent: "delete-skill", fleetAgentId: cp.id, skillId: sk.id }, { method: "post" }); }}
+                          className="text-gray-300 hover:text-red-500 text-sm">🗑</button>
+                      </div>
+                    </div>
+                  ))}
+                  <label className="text-xs font-semibold text-brand-500 border-2 border-dashed border-brand-200 rounded-lg px-3 py-2 cursor-pointer hover:bg-brand-50/40 text-center">
+                    {fetcher.state !== "idle" && fetcher.formData?.get("intent") === "add-skill" ? "Subiendo skill…" : "+ Agregar skill (SKILL.md + script)"}
+                    <input type="file" multiple accept=".md,.mjs,.js,.txt,.html,.json,text/markdown,text/javascript" className="hidden"
+                      onChange={(e) => {
+                        const files = e.target.files; if (!files?.length) return;
+                        const fdata = new FormData();
+                        fdata.set("intent", "add-skill");
+                        fdata.set("fleetAgentId", cp.id);
+                        for (const f of Array.from(files)) fdata.append("files", f);
+                        fetcher.submit(fdata, { method: "post", encType: "multipart/form-data" });
+                        e.currentTarget.value = "";
+                      }} />
+                  </label>
+                </div>
               </div>
 
               {/* Instrucciones del AGENTE — UNA, multicanal (Baileys + WABA), como el

@@ -632,10 +632,14 @@ export async function resolveGroupCodeCaps(
 // over the agent default ("*"). Returns null if none configured.
 export async function resolveGroupAssetManifest(
   fleetAgent: { groupConfigs?: unknown },
-  groupId: string
+  groupId: string,
+  extraFileIds: string[] = []
 ): Promise<string | null> {
   const all = (fleetAgent.groupConfigs as Record<string, GroupConfig> | null) ?? {};
-  const ids = all[groupId]?.assets ?? all["*"]?.assets;
+  const channel = all[groupId]?.assets ?? all["*"]?.assets ?? [];
+  // Los files de los skills encendidos entran SIEMPRE al manifiesto (aunque el canal
+  // no adjunte assets) → el agente puede leer el SKILL.md + descargar el script.
+  const ids = [...new Set([...channel, ...extraFileIds])];
   if (!ids?.length) return null;
   const files = await db.file
     .findMany({ where: { id: { in: ids }, status: { not: "DELETED" } }, select: { name: true, storageKey: true, access: true } })
@@ -649,6 +653,43 @@ export async function resolveGroupAssetManifest(
     "Estos archivos ya están hospedados. Para enviarlos, incluye su URL en el mensaje (la plataforma los adjunta). NO los regeneres.",
     ...lines,
   ].join("\n");
+}
+
+// Agent Skill (custom-tool por tenant). Bundle de archivos + metadata del frontmatter.
+export type FleetSkill = {
+  id: string;
+  name: string;
+  description: string;
+  files: string[]; // fileIds; [0] = SKILL.md, el resto scripts/assets
+  enabled?: boolean;
+};
+
+export function fleetSkills(fleetAgent: { skills?: unknown }): FleetSkill[] {
+  return ((fleetAgent.skills as FleetSkill[] | null) ?? []).filter((s) => s && s.id && s.name);
+}
+
+// Progressive disclosure: los name+description de los skills ENCENDIDOS se inyectan
+// al prompt del turno; el SKILL.md completo + scripts se leen on-demand (sus files
+// van al manifiesto de assets). Devuelve el bloque de prompt + los fileIds a mergear.
+export async function resolveSkillsPrompt(
+  fleetAgent: { skills?: unknown }
+): Promise<{ prompt: string | null; fileIds: string[] }> {
+  const skills = fleetSkills(fleetAgent).filter((s) => s.enabled !== false);
+  if (!skills.length) return { prompt: null, fileIds: [] };
+  const fileIds = [...new Set(skills.flatMap((s) => s.files ?? []))];
+  const firstIds = skills.map((s) => s.files?.[0]).filter(Boolean) as string[];
+  const mdFiles = firstIds.length
+    ? await db.file.findMany({ where: { id: { in: firstIds } }, select: { id: true, name: true } }).catch(() => [])
+    : [];
+  const nameById = new Map(mdFiles.map((f) => [f.id, f.name]));
+  const lines = skills.map((s) => {
+    const md = s.files?.[0] ? nameById.get(s.files[0]) : null;
+    return `- **${s.name}**: ${s.description}${md ? ` → cuando aplique, LEE '${md}' de tus archivos y síguela al pie (corre el script que indique; no improvises ni calcules a mano).` : ""}`;
+  });
+  return {
+    prompt: ["## Skills disponibles", "Tienes estas capacidades empaquetadas. Úsalas cuando el caso lo pida:", ...lines].join("\n"),
+    fileIds,
+  };
 }
 
 // Scope de bases de datos por canal → nota para el prompt del turno ("decirle CUÁL
@@ -1117,7 +1158,10 @@ export async function routeMessage(
       // for the worker via turnEnv (consumed once the worker template supports it).
       const groupCfg = ((fleetAgent.groupConfigs as Record<string, GroupConfig> | null) ?? {})[cfgId] ?? {};
       const codeCaps = await resolveGroupCodeCaps(fleetAgent, cfgId, fleetAgent.ownerId);
-      const assetManifest = await resolveGroupAssetManifest(fleetAgent, cfgId);
+      // Skills encendidos: name/description al prompt (progressive disclosure) + sus
+      // files al manifiesto (para que el agente lea el SKILL.md y baje el script).
+      const skillsRes = await resolveSkillsPrompt(fleetAgent);
+      const assetManifest = await resolveGroupAssetManifest(fleetAgent, cfgId, skillsRes.fileIds);
       const dbScope = resolveGroupDbScope(fleetAgent, cfgId);
       const stream = await openAgentChunkStream(
         {
@@ -1181,6 +1225,8 @@ export async function routeMessage(
             // de las capacidades code-mode habilitadas (cómo pegarle a su API).
             groupCfg.systemPrompt || null,
             ...(codeCaps?.skillDocs ?? []),
+            // Skills del agente (name+description; el SKILL.md se lee on-demand).
+            skillsRes.prompt,
             assetManifest,
             dbScope,
             msg.appendSystemPrompt,

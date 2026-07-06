@@ -1181,6 +1181,14 @@ model FleetAgent {
   // allowlist. Lets the UI surface a group to enable as soon as it has activity,
   // even before WhatsApp's metadata sync lists it. Merged with groupFetchAll.
   seenGroups    Json?
+  // Agent Skills (custom-tool por tenant). Cada skill agrupa su bundle de archivos:
+  //   { id, name, description, files: string[] (fileIds; el 1º es el SKILL.md),
+  //     enabled: boolean }
+  // name/description salen del frontmatter del SKILL.md (progressive disclosure:
+  // se inyectan al prompt del turno; el SKILL.md + scripts se leen on-demand vía el
+  // manifiesto de assets). Un skill encendido = sus files entran al manifiesto + su
+  // name/description al prompt. Ver skills/README.md.
+  skills        Json?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
