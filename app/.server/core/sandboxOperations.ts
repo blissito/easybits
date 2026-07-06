@@ -153,6 +153,9 @@ export async function openAgentMessageStream(
     // Per-turn EasyBits tool group (?tools=) — per-number capabilities. The worker
     // applies it to its easybits MCP, overriding the spawn-env default.
     toolGroup?: string;
+    // Per-turn env vars injected into the worker's shell (code-mode capabilities).
+    // Consumed by the worker template; forwarded verbatim via rawBody.
+    turnEnv?: Record<string, string>;
     port?: number;
     path?: string;
     rawBody?: unknown;
@@ -168,7 +171,7 @@ export async function openAgentMessageStream(
   if (body.headers) payload.headers = body.headers;
   if (body.rawBody !== undefined) {
     payload.rawBody = body.rawBody;
-  } else if (body.denikApiKey || body.appendSystemPrompt || body.mcpServers || body.disabledBuiltins?.length || body.toolGroup) {
+  } else if (body.denikApiKey || body.appendSystemPrompt || body.mcpServers || body.disabledBuiltins?.length || body.toolGroup || body.turnEnv) {
     // ⚠️ El host (sandbox-host /v1/sandbox/:id/agent/message) SOLO reenvía
     // {content, sessionId} de los campos top-level — descarta cualquier extra.
     // Para que campos del worker (denikApiKey, appendSystemPrompt) lleguen al
@@ -182,6 +185,7 @@ export async function openAgentMessageStream(
       ...(body.mcpServers ? { mcpServers: body.mcpServers } : {}),
       ...(body.disabledBuiltins?.length ? { disabledBuiltins: body.disabledBuiltins } : {}),
       ...(body.toolGroup ? { toolGroup: body.toolGroup } : {}),
+      ...(body.turnEnv && Object.keys(body.turnEnv).length ? { turnEnv: body.turnEnv } : {}),
     };
   } else {
     payload.content = body.content;
@@ -3060,6 +3064,7 @@ export async function openAgentChunkStream(
     mcpServers?: Record<string, unknown>;
     disabledBuiltins?: string[];
     toolGroup?: string;
+    turnEnv?: Record<string, string>;
   }
 ): Promise<ReadableStream<Uint8Array>> {
   const protocol = agent.protocol ?? "sse";
@@ -3080,6 +3085,8 @@ export async function openAgentChunkStream(
       disabledBuiltins: body.disabledBuiltins,
       // Per-message tool group (capacidades per-número).
       toolGroup: body.toolGroup,
+      // Per-turn env for code-mode capabilities (e.g. ELEVENLABS_API_KEY).
+      turnEnv: body.turnEnv,
       port: agent.port ?? undefined,
       path: agent.messagePath ?? undefined,
     });

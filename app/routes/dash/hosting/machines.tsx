@@ -18,7 +18,7 @@ import {
   restoreMachine,
   makePermanent,
 } from "~/.server/core/machineOperations";
-import { HOSTING_CATALOG, SELLABLE_TIERS, DISK_ADDON_GB, DISK_ADDON_PRICE } from "~/lib/hostingCatalog";
+import { HOSTING_CATALOG, SELLABLE_TIERS, DISK_ADDON_GB, DISK_ADDON_PRICE, FLEET_BOX } from "~/lib/hostingCatalog";
 import { getUserPlan, isPaidPlan } from "~/lib/plans";
 import { WaPanel } from "./WaPanel";
 import { BrutalButton } from "~/components/common/BrutalButton";
@@ -71,10 +71,28 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
   const { PLANS: plansMap } = await import("~/lib/plans");
   // Total concurrent-sandbox budget = plan + add-ons reservados (mismos add-ons
   // que la flota). Así hosting y flota muestran el MISMO número (no 3 vs 5).
-  const { getReservedCapacity } = await import("~/.server/core/sandboxReservations");
+  const { getReservedCapacity, getUserReservations } = await import("~/.server/core/sandboxReservations");
   const reserved = await getReservedCapacity(user.id);
   const sandboxLimit = (plansMap[plan]?.concurrentSandboxes ?? 1) + reserved.machines;
   const activeSandboxes = ephemerals.filter((s) => s.status === "running" || s.status === "starting").length;
+
+  // Fleet boxes (lo que realmente se compra para la flota) = SandboxReservation.
+  // Cada fila con quantity N se expande a N cajas genéricas. próx. cobro sale de
+  // la suscripción dedicada (trial_end en periodo de gracia, si no period_end).
+  const reservationRows = await getUserReservations(user.id).catch(() => []);
+  const { getStripe } = await import("~/.server/stripe");
+  const stripe = getStripe();
+  const fleetBoxes: { id: string; reservationId: string; nextChargeAt: string | null }[] = [];
+  for (const r of reservationRows) {
+    let charge: string | null = null;
+    if (r.stripeSubscriptionId?.startsWith("sub_")) {
+      const s = await stripe.subscriptions.retrieve(r.stripeSubscriptionId).catch(() => null);
+      if (s) charge = new Date((s.trial_end || s.current_period_end) * 1000).toISOString();
+    }
+    const count = Math.max(1, Math.round(r.agents / FLEET_BOX.agents));
+    for (let i = 0; i < count; i++) fleetBoxes.push({ id: `${r.id}-${i}`, reservationId: r.id, nextChargeAt: charge });
+  }
+  const fleetBox = { agents: FLEET_BOX.agents, vcpus: FLEET_BOX.vcpus, memoryMb: FLEET_BOX.memoryMb, priceMxn: FLEET_BOX.priceMxn };
   // Next charge = the plan subscription's period end (all machines bill on that
   // same invoice cycle). One Stripe read, only when there are machines billing.
   let nextChargeAt: string | null = null;
@@ -88,6 +106,7 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
     reservedEnabled: process.env.HOSTING_RESERVED_ENABLED === "1",
     tiers, diskAddon: { gb: DISK_ADDON_GB, price: DISK_ADDON_PRICE },
     sandboxLimit, activeSandboxes, nextChargeAt,
+    fleetBoxes, fleetBox,
   };
 };
 
@@ -214,7 +233,9 @@ const monthly = (t: Tier, mode: "shared" | "reserved", diskGB: number, diskPrice
 };
 
 export default function HostingMachines({ loaderData }: Route.ComponentProps) {
-  const { permanents, ephemerals, paid, reservedEnabled, tiers, diskAddon, sandboxLimit, activeSandboxes, nextChargeAt } = loaderData;
+  const { permanents, ephemerals, paid, reservedEnabled, tiers, diskAddon, sandboxLimit, activeSandboxes, nextChargeAt, fleetBoxes, fleetBox } = loaderData;
+  // Heredadas: solo las vivas. Al liberar pasan a pending_deletion → salen de la vista.
+  const legacyPerms = permanents.filter((p) => p.status !== "pending_deletion");
   const fetcher = useFetcher<typeof action>();
   const busy = fetcher.state !== "idle";
   const [modal, setModal] = useState<null | { promoteId?: string }>(null);
@@ -391,12 +412,12 @@ export default function HostingMachines({ loaderData }: Route.ComponentProps) {
           transition={{ duration: 0.3, delay: 0.22 }}
         >
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-sm font-black uppercase tracking-wider text-iron">Permanentes</h2>
+            <h2 className="text-sm font-black uppercase tracking-wider text-iron">Cajas extra para flota</h2>
             {paid && (
-              <button type="button" onClick={() => setModal({})}
+              <a href="/dash/packs?tab=sandboxes"
                 className="text-xs font-bold text-brand-500 hover:underline flex items-center gap-1">
-                <LuPlus size={13} /> Nueva
-              </button>
+                <LuPlus size={13} /> Comprar
+              </a>
             )}
           </div>
 
@@ -407,12 +428,45 @@ export default function HostingMachines({ loaderData }: Route.ComponentProps) {
             </div>
           )}
 
+          {/* Cajas de flota compradas (SandboxReservation) — genéricas, sin nombre */}
           <AnimatePresence mode="popLayout">
-            {permanents.length === 0 ? (
-              <motion.div key="empty-perm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                <Empty>Sin sandboxes permanentes.</Empty>
+            {fleetBoxes.length === 0 ? (
+              <motion.div key="empty-fleet" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                <Empty>Sin cajas extra. Compra capacidad para tu flota.</Empty>
               </motion.div>
-            ) : permanents.map((m, i) => {
+            ) : fleetBoxes.map((b, i) => (
+              <motion.div
+                key={b.id}
+                layout="position"
+                initial={{ opacity: 0, y: 16, scale: 0.97 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, x: -80, scale: 0.88, filter: "blur(4px)" }}
+                transition={{ duration: 0.3, delay: i * 0.06, ease: "easeOut" }}
+                className="mb-3"
+              >
+                <Card status="running">
+                  <div className="flex-1 min-w-0">
+                    <span className="font-bold text-sm truncate block">Caja de flota</span>
+                    <p className="text-sm text-iron mt-0.5 flex items-center gap-3 flex-wrap">
+                      <span className="flex items-center gap-1"><LuRocket size={13} /> {fleetBox.agents} agentes</span>
+                      <span className="flex items-center gap-1"><LuCpu size={13} /> {fleetBox.vcpus} vCPU</span>
+                      <span className="flex items-center gap-1"><LuMemoryStick size={13} /> {gb(fleetBox.memoryMb)}</span>
+                    </p>
+                    <p className="text-xs font-black mt-1">
+                      ${fleetBox.priceMxn.toLocaleString("es-MX")}/mes
+                      {b.nextChargeAt && <span className="block text-[10px] font-normal text-iron mt-0.5">próx. cobro: {fmtDate(b.nextChargeAt)}</span>}
+                    </p>
+                  </div>
+                </Card>
+              </motion.div>
+            ))}
+          </AnimatePresence>
+
+          {legacyPerms.length > 0 && (
+            <p className="text-[11px] font-black uppercase tracking-wider text-iron mt-6 mb-2">Heredadas · a deprecar</p>
+          )}
+          <AnimatePresence mode="popLayout">
+            {legacyPerms.map((m, i) => {
               const isDestroying = destroyingIds.has(m.sandboxId);
               return (
                 <motion.div
@@ -427,16 +481,6 @@ export default function HostingMachines({ loaderData }: Route.ComponentProps) {
                   <Card status={m.status}>
                     <div className="flex-1 min-w-0">
                       <span className="font-bold text-sm truncate block">{m.name || m.sandboxId}</span>
-                      <div className="flex items-center gap-2 flex-wrap mt-1">
-                        <StatusPill status={m.status} />
-                        {m.cpuMode === "reserved" && (
-                          <span className="text-[10px] font-bold bg-brand-500 text-white px-1.5 py-0.5 rounded-full">RESERVED</span>
-                        )}
-                        {m.shared && (
-                          <span className="text-[10px] font-bold bg-white text-black border-2 border-black px-1.5 py-0.5 rounded-full">compartida</span>
-                        )}
-                        {m.status !== "pending_deletion" && <RuntimePill status={m.runtimeStatus} />}
-                      </div>
                       <Specs vcpus={m.vcpus} memoryMb={m.memoryMb} diskMb={m.diskMb} />
                       {m.status === "pending_deletion" ? (
                         <p className="mt-1 text-xs font-bold text-brand-red flex items-center gap-1">

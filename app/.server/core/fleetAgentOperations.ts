@@ -28,7 +28,7 @@ import { getSecretValue } from "~/.server/core/secretOperations";
 import { getReservedCapacity } from "~/.server/core/sandboxReservations";
 import { getUserPlan, PLANS } from "~/lib/plans";
 import { profileToToolsParam, DEFAULT_PROFILE } from "~/.server/mcp/toolGroups";
-import { getPlatformDefaultClient } from "~/.server/storage";
+import { getPlatformDefaultClient, buildPublicAssetUrl } from "~/.server/storage";
 import { checkSandboxRateLimit } from "~/.server/rateLimiter";
 
 export class FleetAgentAtCapacity extends Error {
@@ -292,17 +292,60 @@ export type McpCatalogEntry = {
   name: string; // unique key + Claude tool prefix (mcp__<name>__*)
   label?: string; // human label for the UI
   description?: string; // one-line explainer for the UI
-  transport: "stdio" | "http";
+  // How the capability reaches the agent:
+  //  "mcp"  → an MCP server (stdio/http) exposes tools (default; kommo/skydropx/brightdata)
+  //  "code" → NO server. The owner's API key is injected into the worker env and a
+  //           skillDoc tells the agent to hit the REST API from Bash (elevenlabs, any API).
+  //           The leanest replicable connector: most vendors have API+key, not an MCP.
+  mode?: "mcp" | "code";
+  transport?: "stdio" | "http";
   command?: string; // stdio: e.g. "npx"
   args?: string[]; // stdio: e.g. ["-y", "@brightdata/mcp"]
   url?: string; // http: remote MCP endpoint
   // env values may reference a vault secret as "$secret:NAME" — resolved per-turn
   // from the owner's vault (never stored raw). Non-secret values pass through.
+  // For mode:"code" these are injected into the worker's turn env verbatim.
   env?: Record<string, string>;
   requiredSecrets?: string[]; // vault secret names this capability needs to work
+  // Human-facing metadata for each secret so the OWNER never sees the internal env
+  // var name — the UI asks for "Access token de Kommo" (+ where to find it) and we
+  // store it under the internal name automatically. Keyed by the internal name.
+  secretFields?: Record<string, { label: string; help?: string }>;
+  // Access LEVELS declared by the connector — NOT a fixed read/write. Each level
+  // maps to a set of toolset names emitted as `<SERVER>_TOOLSETS`, and MAY be
+  // scoped per-conversation (scopeByJid). Kommo's ladder mirrors sofi-0's WABA:
+  // Lectura → Acotada (create + edit ONLY leads THIS conversation created, via
+  // scopeByJid) → Admin (everything, no scope). The UI renders whatever levels the
+  // connector declares (+ implicit Off). Absent = simple on/off capability.
+  toolsets?: {
+    envVar: string;
+    levels: { key: string; label: string; toolsets: string[]; scopeByJid?: boolean }[];
+    // When a level is scoped, emit these env vars: `flag`=1 + `jid`=<groupId> so
+    // the connector tags/verifies ownership per conversation.
+    scopeEnv?: { flag: string; jid: string };
+  };
+  // mode:"code" — markdown appended to the turn's system prompt telling the agent
+  // how to call the API (base URL, auth header, key env var, common endpoints).
+  skillDoc?: string;
   builtin?: boolean; // easybits/wa — always-on, not togglable
 };
-export type GroupConfig = { mcpServers?: string[]; env?: Record<string, string>; disabledBuiltins?: string[]; toolGroup?: string };
+export type GroupConfig = {
+  mcpServers?: string[];
+  env?: Record<string, string>;
+  disabledBuiltins?: string[];
+  toolGroup?: string;
+  // Per enabled capability, the chosen LEVEL KEY (declared by the connector, e.g.
+  // kommo: "read" | "scoped" | "admin"). Absent → the connector's first level.
+  // Drives <SERVER>_TOOLSETS (+ scope env). This is how "admin desde baileys /
+  // acotado desde waba" becomes pure config.
+  capLevels?: Record<string, string>;
+  // Per-channel append to the system prompt (layer 3, appended never overwritten).
+  systemPrompt?: string;
+  // S3 asset library: file IDs (EasyBits public files) the agent may deliver in
+  // this channel. Reemplaza el group-FS de nanoclaw (catálogos/imágenes). Se
+  // inyecta como manifiesto (nombre → URL) en el prompt del turno.
+  assets?: string[];
+};
 
 // Builtins (easybits/wa) the group turned OFF. Absent/[] = all builtins ON
 // (backward-compatible default). The worker removes these from its merged MCP set
@@ -334,6 +377,11 @@ export function resolveToolGroup(
 
 // $secret:NAME reference shape (same as agentOperations.expandMcpServerSecrets).
 const SECRET_REF_RE = /^\$secret:([A-Z_][A-Z0-9_]*)$/;
+
+// Base URL for EasyBits-hosted connector MCP endpoints (kommo/skydropx proxies).
+// Defined here (above CURATED_CAPABILITIES) so module-level catalog URLs resolve.
+const appBaseUrl = () =>
+  (process.env.BASE_URL || process.env.EASYBITS_URL || process.env.SITE_URL || "https://www.easybits.cloud").replace(/\/$/, "");
 
 // Builtins seeded on every fleetAgent: easybits + wa are ALWAYS active in the worker
 // (baked env / in-process), not togglable. NO denik here — denik's per-group org
@@ -373,6 +421,105 @@ export const CURATED_CAPABILITIES: McpCatalogEntry[] = [
     env: { DENIK_API_KEY: "$secret:DENIK_API_KEY" },
     requiredSecrets: ["DENIK_API_KEY"],
   },
+  {
+    // Kommo CRM — MCP hospedado por EasyBits (proxy a la API de Kommo con la llave
+    // del owner). Tri-estado: Lectura = leer leads/contactos; Escritura = crear/mover
+    // leads, notas, pipeline. Emitido como KOMMO_TOOLSETS al server.
+    // stdio npx — el server MCP de kommo (portado de nanoclaw, publicado a npm).
+    // Las ~20 tools se auto-descubren; NO se registran a mano. Tri-estado → KOMMO_TOOLSETS.
+    name: "kommo",
+    label: "Kommo CRM — leads, contactos, pipeline",
+    description: "Leer y gestionar leads, contactos y pipeline de tu cuenta Kommo.",
+    mode: "mcp",
+    transport: "stdio",
+    command: "npx",
+    args: ["-y", "nanoclaw-kommo-mcp"],
+    env: {
+      KOMMO_ACCESS_TOKEN: "$secret:KOMMO_ACCESS_TOKEN",
+      KOMMO_BASE_URL: "$secret:KOMMO_BASE_URL",
+    },
+    requiredSecrets: ["KOMMO_ACCESS_TOKEN", "KOMMO_BASE_URL"],
+    secretFields: {
+      KOMMO_ACCESS_TOKEN: { label: "Access token de Kommo", help: "Kommo → Ajustes → Integraciones → tu integración privada → Token de larga duración" },
+      KOMMO_BASE_URL: { label: "URL de tu cuenta Kommo", help: "Ej. https://tuempresa.kommo.com" },
+    },
+    toolsets: {
+      envVar: "KOMMO_TOOLSETS",
+      scopeEnv: { flag: "KOMMO_SCOPE_BY_JID", jid: "NANOCLAW_CHAT_JID" },
+      levels: [
+        { key: "read", label: "Lectura", toolsets: ["read"] },
+        // Acotado = el default de los WABA de sofi-0: crea y edita/mueve SOLO los
+        // leads que creó en ESTA conversación (scopeByJid), nunca los de otros.
+        { key: "scoped", label: "Acotado", toolsets: ["read", "create", "scoped-mutate"], scopeByJid: true },
+        { key: "admin", label: "Admin", toolsets: ["read", "read-leads", "create", "scoped-mutate", "admin"] },
+      ],
+    },
+  },
+  {
+    name: "skydropx",
+    label: "Skydropx — cotizar y generar envíos",
+    description: "Cotizar guías y generar envíos con Skydropx.",
+    mode: "mcp",
+    transport: "stdio",
+    command: "npx",
+    args: ["-y", "nanoclaw-skydropx-mcp"],
+    env: {
+      SKYDROPX_CLIENT_ID: "$secret:SKYDROPX_CLIENT_ID",
+      SKYDROPX_CLIENT_SECRET: "$secret:SKYDROPX_CLIENT_SECRET",
+    },
+    requiredSecrets: ["SKYDROPX_CLIENT_ID", "SKYDROPX_CLIENT_SECRET"],
+    secretFields: {
+      SKYDROPX_CLIENT_ID: { label: "Client ID de Skydropx", help: "Skydropx PRO → Conexiones → API" },
+      SKYDROPX_CLIENT_SECRET: { label: "Client Secret de Skydropx", help: "Mismo panel de Conexiones > API" },
+    },
+    toolsets: {
+      envVar: "SKYDROPX_TOOLSETS",
+      levels: [
+        { key: "quote", label: "Cotizar", toolsets: ["quote"] },
+        { key: "create", label: "Cotizar + generar", toolsets: ["quote", "create"] },
+      ],
+    },
+  },
+  {
+    // MercadoPago — code-mode. Links de cobro vía API con la llave del owner.
+    name: "mercadopago",
+    label: "MercadoPago — links de cobro",
+    description: "Generar links de pago con MercadoPago (usa tu access token).",
+    mode: "code",
+    env: { MP_ACCESS_TOKEN: "$secret:MP_ACCESS_TOKEN" },
+    requiredSecrets: ["MP_ACCESS_TOKEN"],
+    skillDoc: [
+      "## MercadoPago — link de cobro (code-mode)",
+      "Tienes `$MP_ACCESS_TOKEN`. Para un link de pago corre por Bash:",
+      '```bash',
+      'curl -s -X POST "https://api.mercadopago.com/checkout/preferences" \\',
+      '  -H "Authorization: Bearer $MP_ACCESS_TOKEN" -H "Content-Type: application/json" \\',
+      `  -d '{"items":[{"title":"Cotización","quantity":1,"unit_price":1234.0,"currency_id":"MXN"}]}'`,
+      '```',
+      "La respuesta trae `init_point` (URL de pago). Mándasela al cliente en el mensaje.",
+    ].join("\n"),
+  },
+  {
+    // ElevenLabs — code-mode. Sin MCP: la llave se inyecta al env del turno y el
+    // skillDoc le dice al agente cómo pegarle a la API por Bash. Kokoro sigue
+    // canal-side; esto es TTS premium que el agente invoca a voluntad.
+    name: "elevenlabs",
+    label: "ElevenLabs — voz premium (TTS)",
+    description: "Texto a voz con las voces premium de ElevenLabs (usa tu llave).",
+    mode: "code",
+    env: { ELEVENLABS_API_KEY: "$secret:ELEVENLABS_API_KEY" },
+    requiredSecrets: ["ELEVENLABS_API_KEY"],
+    skillDoc: [
+      "## ElevenLabs TTS (code-mode)",
+      "Tienes `$ELEVENLABS_API_KEY` en el env. Para generar audio, corre por Bash:",
+      '```bash',
+      'curl -s -X POST "https://api.elevenlabs.io/v1/text-to-speech/{voice_id}" \\',
+      '  -H "xi-api-key: $ELEVENLABS_API_KEY" -H "Content-Type: application/json" \\',
+      `  -d '{"text":"...","model_id":"eleven_multilingual_v2"}' -o /tmp/out.mp3`,
+      '```',
+      "Lista voces: `GET https://api.elevenlabs.io/v1/voices`. Sube el mp3 con upload_file y envíalo.",
+    ].join("\n"),
+  },
 ];
 
 // The full capability menu for a fleetAgent: curated (code) ∪ the owner's custom entries
@@ -407,9 +554,11 @@ export async function resolveGroupMcpServers(
   // env del grupo: el del grupo específico, o el del default si hereda.
   const cfgEnv = cfg.mcpServers ? cfg.env : (cfg.env ?? all["*"]?.env);
   const caps = mergedCapabilities(fleetAgent);
+  const levels = (cfg.mcpServers ? cfg.capLevels : (cfg.capLevels ?? all["*"]?.capLevels)) ?? {};
   const out: Record<string, unknown> = {};
   for (const e of caps) {
     if (e.builtin || !enabled.includes(e.name)) continue;
+    if (e.mode === "code") continue; // code-mode = no MCP server (see resolveGroupCodeCaps)
     const rawEnv = { ...(e.env ?? {}), ...(cfgEnv ?? {}) };
     const env: Record<string, string> = {};
     let missing = false;
@@ -421,12 +570,82 @@ export async function resolveGroupMcpServers(
       env[k] = val;
     }
     if (missing) continue;
+    // Chosen level → <SERVER>_TOOLSETS (+ per-conversation scope env when the level
+    // is scoped, e.g. kommo "acotado" = KOMMO_SCOPE_BY_JID=1 + NANOCLAW_CHAT_JID).
+    if (e.toolsets) {
+      const lvl =
+        e.toolsets.levels.find((l) => l.key === levels[e.name]) ?? e.toolsets.levels[0];
+      env[e.toolsets.envVar] = lvl.toolsets.join(",");
+      if (lvl.scopeByJid && e.toolsets.scopeEnv) {
+        env[e.toolsets.scopeEnv.flag] = "1";
+        env[e.toolsets.scopeEnv.jid] = groupId;
+      }
+    }
     out[e.name] =
       e.transport === "http"
         ? { type: "http", url: e.url, ...(Object.keys(env).length ? { env } : {}) }
         : { type: "stdio", command: e.command, args: e.args ?? [], env };
   }
   return Object.keys(out).length ? out : undefined;
+}
+
+// Code-mode capabilities enabled for this group → the plaintext env vars to inject
+// into the worker's turn + the skillDocs to append to the system prompt. Same
+// enable/inherit/secret-resolution rules as resolveGroupMcpServers; a cap whose
+// required secret is missing is skipped. Returns null if none.
+export async function resolveGroupCodeCaps(
+  fleetAgent: { mcpCatalog?: unknown; groupConfigs?: unknown },
+  groupId: string,
+  ownerId: string
+): Promise<{ env: Record<string, string>; skillDocs: string[] } | null> {
+  const all = (fleetAgent.groupConfigs as Record<string, GroupConfig> | null) ?? {};
+  const cfg = all[groupId] ?? {};
+  const enabled = cfg.mcpServers ?? all["*"]?.mcpServers;
+  if (!enabled?.length) return null;
+  const caps = mergedCapabilities(fleetAgent);
+  const env: Record<string, string> = {};
+  const skillDocs: string[] = [];
+  for (const e of caps) {
+    if (e.mode !== "code" || !enabled.includes(e.name)) continue;
+    const resolved: Record<string, string> = {};
+    let missing = false;
+    for (const [k, v] of Object.entries(e.env ?? {})) {
+      const m = SECRET_REF_RE.exec(v);
+      if (!m) { resolved[k] = v; continue; }
+      const val = await getSecretValue(ownerId, m[1]).catch(() => null);
+      if (val == null) { missing = true; break; }
+      resolved[k] = val;
+    }
+    if (missing) continue;
+    Object.assign(env, resolved);
+    if (e.skillDoc) skillDocs.push(e.skillDoc);
+  }
+  return Object.keys(env).length || skillDocs.length ? { env, skillDocs } : null;
+}
+
+// S3 asset library → a manifest string for the turn's system prompt. The owner
+// picks which public EasyBits files this channel may deliver; the agent sends the
+// listed URLs (replaces nanoclaw's group filesystem catalogs). Group override wins
+// over the agent default ("*"). Returns null if none configured.
+export async function resolveGroupAssetManifest(
+  fleetAgent: { groupConfigs?: unknown },
+  groupId: string
+): Promise<string | null> {
+  const all = (fleetAgent.groupConfigs as Record<string, GroupConfig> | null) ?? {};
+  const ids = all[groupId]?.assets ?? all["*"]?.assets;
+  if (!ids?.length) return null;
+  const files = await db.file
+    .findMany({ where: { id: { in: ids }, status: { not: "DELETED" } }, select: { name: true, storageKey: true, access: true } })
+    .catch(() => []);
+  const lines = files
+    .filter((f) => f.access === "public")
+    .map((f) => `- ${f.name}: ${buildPublicAssetUrl(f.storageKey)}`);
+  if (!lines.length) return null;
+  return [
+    "## Archivos disponibles para enviar",
+    "Estos archivos ya están hospedados. Para enviarlos, incluye su URL en el mensaje (la plataforma los adjunta). NO los regeneres.",
+    ...lines,
+  ].join("\n");
 }
 
 // The always-on `render` MCP server (PDF/screenshots via the on-demand Gotenberg
@@ -533,8 +752,6 @@ function workersOnVm(agentId: string): Promise<number> {
 }
 
 // Spawn a fresh VM for the fleetAgent, branded from persona, RAM-gated.
-const appBaseUrl = () =>
-  (process.env.BASE_URL || process.env.EASYBITS_URL || process.env.SITE_URL || "https://www.easybits.cloud").replace(/\/$/, "");
 
 async function spawnVm(ctx: AuthContext, fleetAgent: { id: string; name: string | null; workerTemplate: string; persona: unknown; vmMemMb: number; maxVms: number; oauthSecretName: string | null; token: string }) {
   // ── Account sandbox budget (la fuente de verdad, consistente con el HUD) ──
@@ -870,6 +1087,12 @@ export async function routeMessage(
           (e) => console.error(`fleetAgent image write ${imgPath} failed:`, e)
         );
       }
+      // Per-channel config: system-prompt append (layer 3) + code-mode capabilities
+      // (elevenlabs & co.) → their skillDocs go into the prompt; their env is ready
+      // for the worker via turnEnv (consumed once the worker template supports it).
+      const groupCfg = ((fleetAgent.groupConfigs as Record<string, GroupConfig> | null) ?? {})[cfgId] ?? {};
+      const codeCaps = await resolveGroupCodeCaps(fleetAgent, cfgId, fleetAgent.ownerId);
+      const assetManifest = await resolveGroupAssetManifest(fleetAgent, cfgId);
       const stream = await openAgentChunkStream(
         {
           agentId: worker.id,
@@ -886,6 +1109,7 @@ export async function routeMessage(
         {
           content,
           sessionId: placed.sessionUuid,
+          turnEnv: codeCaps?.env,
           // Per-grupo: la dnk_pub_ del org dueño de este grupo. El body gana
           // (canales web la mandan por turno); cae a fleetAgent.groupKeys[cfgId]
           // (registrado al crear el grupo, ruta WhatsApp). cfgId = configGroupId
@@ -927,6 +1151,11 @@ export async function routeMessage(
               ? CODE_MODE_GUIDANCE
               : null,
             msg.admin ? ADMIN_NOTE : null,
+            // Per-canal: system prompt del dueño (editable por número/grupo) + docs
+            // de las capacidades code-mode habilitadas (cómo pegarle a su API).
+            groupCfg.systemPrompt || null,
+            ...(codeCaps?.skillDocs ?? []),
+            assetManifest,
             msg.appendSystemPrompt,
           ]
             .filter(Boolean)

@@ -31,6 +31,8 @@ export type ToolGroupKey =
   | "documentos"
   | "investigacion"
   | "db"
+  | "db-write"
+  | "db-del"
   | "sitios"
   | "all";
 
@@ -509,10 +511,18 @@ export const INVESTIGACION_ALLOWLIST = new Set<string>([
   "list_files", "upload_file",
 ]);
 
-/** Bases de datos — el set DB completo (crear/consultar/escribir). Administrativo. */
+/** Bases de datos — granular por nivel (cumulativo). Administrativo.
+ * Lectura = listar/consultar; Escritura = + crear/exec/import; Borrado = + db_delete. */
+export const DB_READ_ALLOWLIST = new Set<string>([
+  "db_list", "db_get", "db_query", "db_select",
+]);
+export const DB_WRITE_ALLOWLIST = new Set<string>([
+  "db_create", "db_exec", "db_import",
+]);
+export const DB_DEL_ALLOWLIST = new Set<string>(["db_delete"]);
+/** Compat: el set completo (algún consumidor legacy lo espera). */
 export const DB_ALLOWLIST = new Set<string>([
-  "db_list", "db_create", "db_get", "db_delete",
-  "db_query", "db_select", "db_exec", "db_import",
+  ...DB_READ_ALLOWLIST, ...DB_WRITE_ALLOWLIST, ...DB_DEL_ALLOWLIST,
 ]);
 
 /** Sitios — websites CRUD + deploy de archivos + inyección de HTML. Administrativo. */
@@ -575,7 +585,9 @@ export const GROUP_ALLOWLISTS: Partial<Record<ToolGroupKey, Set<string>>> = {
   imagenes: IMAGENES_ALLOWLIST,
   documentos: DOCUMENTOS_ALLOWLIST,
   investigacion: INVESTIGACION_ALLOWLIST,
-  db: DB_ALLOWLIST,
+  db: DB_READ_ALLOWLIST,
+  "db-write": DB_WRITE_ALLOWLIST,
+  "db-del": DB_DEL_ALLOWLIST,
   sitios: SITIOS_ALLOWLIST,
 };
 
@@ -625,14 +637,26 @@ export const DEFAULT_PROFILE = "publico";
  * (escribe/borra/infra) — la UI la pinta aparte y apagada por defecto en Público.
  * Orden = orden en la UI.
  */
-export const FLEET_BUCKETS: Array<{ key: ToolGroupKey; label: string; description: string; admin?: boolean }> = [
+// `levels` (cumulativo, opcional) → el bucket se rinde como selector Off/…/… en vez
+// de un switch. Cada nivel activa un SET de bucket keys (unión de allowlists).
+export const FLEET_BUCKETS: Array<{
+  key: ToolGroupKey; label: string; description: string; admin?: boolean;
+  levels?: { key: string; label: string; buckets: ToolGroupKey[] }[];
+}> = [
   { key: "imagenes", label: "Imágenes", description: "Generar, editar y describir imágenes." },
   { key: "documentos", label: "Documentos", description: "Crear, editar y publicar documentos." },
   { key: "investigacion", label: "Investigación", description: "Buscar y leer información de la web." },
   { key: "video", label: "Video", description: "Generar video y personajes." },
   { key: "email", label: "Email", description: "Enviar correos y newsletters." },
   { key: "payments", label: "Pagos", description: "Links de cobro con MercadoPago.", admin: true },
-  { key: "db", label: "Bases de datos", description: "Crear y consultar bases de datos.", admin: true },
+  {
+    key: "db", label: "Bases de datos", description: "Consultar y administrar bases de datos.", admin: true,
+    levels: [
+      { key: "read", label: "Lectura", buckets: ["db"] },
+      { key: "write", label: "Escritura", buckets: ["db", "db-write"] },
+      { key: "del", label: "Borrado", buckets: ["db", "db-write", "db-del"] },
+    ],
+  },
   { key: "sitios", label: "Sitios web", description: "Crear y publicar sitios.", admin: true },
 ];
 

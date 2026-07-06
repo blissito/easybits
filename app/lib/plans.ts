@@ -52,7 +52,7 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
     storageGB: 0.1,
     aiGenerationsPerMonth: PLAN_CREDITS.Byte,
     llmTokensIncluded: 5_000_000, // 5M tokens gratis — promo junio 2026, una sola vez (no recarga). Cierre: BYTE_PROMO_END en llmTokenLimit.ts
-    concurrentSandboxes: 1, // Byte = 1 sola caja (free tier). Mega=3, Tera=5.
+    concurrentSandboxes: 1, // Byte = 1 sola caja (free tier). Mega=2, Tera=5.
     maxSandboxTtlSeconds: 3600,
     maxSandboxSize: "s",
     stripeIntent: null,
@@ -78,7 +78,7 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
     storageGB: 10,
     aiGenerationsPerMonth: PLAN_CREDITS.Mega,
     llmTokensIncluded: 10_000_000, // 10M tokens/mes — ~39% del precio a costo real DeepSeek
-    concurrentSandboxes: 3,
+    concurrentSandboxes: 2,
     maxSandboxTtlSeconds: 14400,
     maxSandboxSize: "l",
     stripeIntent: "flow_plan",
@@ -88,7 +88,7 @@ export const PLANS: Record<PlanKey, PlanConfig> = {
       "10M tokens LLM/mes para tus agentes",
       "Todo lo de Byte",
       "10 bases de datos",
-      "3 cajas · 12 agentes Ghosty simultáneos · sesiones de 4h · kernel Python + URLs públicas",
+      "2 cajas · 8 agentes Ghosty simultáneos · sesiones de 4h · kernel Python + URLs públicas",
       "Subidas ilimitadas",
       "Sin branding en landings",
       "Websites estáticos",

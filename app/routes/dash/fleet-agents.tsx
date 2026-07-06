@@ -104,16 +104,33 @@ export async function loader({ request }: Route.LoaderArgs) {
           label: e.label ?? e.name,
           description: e.description ?? null,
           requiredSecrets: e.requiredSecrets ?? [],
+          // Which of the required secrets are still missing (per-secret inputs).
+          missingSecrets: (e.requiredSecrets ?? []).filter((n) => !secretsSet.has(n)),
           secretsPresent: (e.requiredSecrets ?? []).every((n) => secretsSet.has(n)),
+          // Friendly per-secret label/help so the owner never sees the env var name.
+          secretFields: e.secretFields ?? {},
+          // Access levels declared by the connector (Off implicit). null = on/off.
+          levels: e.toolsets?.levels?.map((l) => ({ key: l.key, label: l.label })) ?? null,
           // curated capabilities (code) can't be removed; custom (added by the
           // owner, stored in mcpCatalog) can.
           custom: !CURATED_CAPABILITIES.some((c) => c.name === e.name),
         }));
+      // Biblioteca de assets S3: archivos PÚBLICOS del owner que el agente puede
+      // entregar (reemplaza el group-FS de nanoclaw). Picker por canal.
+      const ownerFiles = await db.file.findMany({
+        where: { ownerId: user.id, access: "public", status: { not: "DELETED" } },
+        select: { id: true, name: true, contentType: true },
+        orderBy: { createdAt: "desc" },
+        take: 100,
+      }).catch(() => []);
       const gconf = (p.groupConfigs as Record<string, GroupConfig> | null) ?? {};
       const groups = rawGroups.map((g: { id: string; subject: string; enabled: boolean }) => ({
         ...g,
         mcps: gconf[g.id]?.mcpServers ?? [],
         disabledBuiltins: gconf[g.id]?.disabledBuiltins ?? [],
+        capLevels: gconf[g.id]?.capLevels ?? {},
+        systemPrompt: gconf[g.id]?.systemPrompt ?? "",
+        assets: gconf[g.id]?.assets ?? [],
         // Buckets per-grupo (null = hereda el default del agente; computado server-side
         // porque toolsParamToBuckets vive en .server).
         toolBuckets: gconf[g.id]?.toolGroup ? [...toolsParamToBuckets(gconf[g.id]!.toolGroup!)] : null,
@@ -137,6 +154,8 @@ export async function loader({ request }: Route.LoaderArgs) {
           allowedCount: (o.allowedSenders ?? []).length,
           mcps: gconf[id]?.mcpServers ?? [],
           disabledBuiltins: gconf[id]?.disabledBuiltins ?? [],
+          capLevels: gconf[id]?.capLevels ?? {},
+          assets: gconf[id]?.assets ?? [],
           toolBuckets: gconf[id]?.toolGroup ? [...toolsParamToBuckets(gconf[id]!.toolGroup!)] : null,
         };
       });
@@ -178,7 +197,10 @@ export async function loader({ request }: Route.LoaderArgs) {
         enabledCount: p.enabledGroups.length, machines, vms: machines.length,
         conversations, maxWorkersPerVm: p.maxWorkersPerVm, vmMemMb: p.vmMemMb,
         throttledUntil, connReason: b.reason ?? null, mainGroupJid: p.mainGroupJid,
-        hasOwnNumber: p.hasOwnNumber, builtins, capabilities,
+        hasOwnNumber: p.hasOwnNumber, builtins, capabilities, ownerFiles,
+        // Prompt del AGENTE (persona.SYSTEM_PROMPT) — UNO, multicanal (Baileys+WABA).
+        // Es el CLAUDE.md del agente; los canales lo heredan. Editado en un solo lugar.
+        agentPrompt: ((p.persona as { env?: Record<string, string> } | null)?.env?.SYSTEM_PROMPT) ?? "",
         // restricted = perfil activo (lean). activeBuckets = qué capacidades tiene.
         restricted: toolGroup.startsWith("scripting"), activeBuckets,
         // Conectores (MCPs custom) ON por default del agente — clave reservada "*".
@@ -190,7 +212,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   // channel's worker VMs into a single general view instead of per-card cajitas.
   const machines = pools.flatMap((p) => p.machines);
   // Account capacity = the plan's concurrent-sandbox budget. A fleetAgent worker VM IS
-  // a sandbox, so "Mega = 3 máquinas" maps 1:1. Each VM holds maxWorkersPerVm
+  // a sandbox, so "Mega = 2 máquinas" maps 1:1. Each VM holds maxWorkersPerVm
   // agents (workers), so agent capacity = maxMachines × maxWorkersPerVm.
   const plan = getUserPlan(user);
   const planCfg = PLANS[plan];
@@ -231,13 +253,34 @@ export async function loader({ request }: Route.LoaderArgs) {
       for (const m of drifted) m.status = "suspended";
     }
   }
-  const extraMachines = (hostVms as any[])
-    .filter((v) => !workerSandboxIds.has(v.sandboxId) && (v.status === "running" || v.status === "starting"))
-    .map((v) =>
-      SYSTEM_TEMPLATES[v.template]
-        ? { id: v.sandboxId, status: v.status as string, kind: "system" as const, label: SYSTEM_TEMPLATES[v.template] }
-        : { id: v.sandboxId, status: v.status as string, kind: "custom" as const, label: v.template as string }
-    );
+  // Cajas de servicio (voice/render) llaveadas por (ownerId, kind) — su verdad de
+  // existencia vive en DB, no en el host: al DORMIRLAS (snapshot Firecracker) el host
+  // las OMITE de su listing → sin esto desaparecerían del HUD en vez de verse dormidas.
+  const serviceBoxes = await db.serviceBox.findMany({
+    where: { ownerId: user.id }, select: { sandboxId: true, kind: true },
+  });
+  const SERVICE_KIND_LABEL: Record<string, string> = { voice: "voz", render: "render" };
+  const liveVmIds = new Set((hostVms as any[]).map((v) => v.sandboxId));
+  const extraMachines = [
+    ...(hostVms as any[])
+      .filter((v) => !workerSandboxIds.has(v.sandboxId) && (v.status === "running" || v.status === "starting"))
+      .map((v) =>
+        SYSTEM_TEMPLATES[v.template]
+          ? { id: v.sandboxId, status: v.status as string, kind: "system" as const, label: SYSTEM_TEMPLATES[v.template] }
+          : { id: v.sandboxId, status: v.status as string, kind: "custom" as const, label: v.template as string }
+      ),
+    // Cajas de servicio dormidas: en DB pero ausentes del listing vivo del host ⇒
+    // suspendida. Solo si el host respondió (hostReachable) — un error transitorio no
+    // debe pintar todo dormido. Dedup contra las ya emitidas por el host (vivas).
+    ...(hostReachable
+      ? serviceBoxes
+          .filter((sb) => !liveVmIds.has(sb.sandboxId) && !workerSandboxIds.has(sb.sandboxId))
+          .map((sb) => ({
+            id: sb.sandboxId, status: "suspended", kind: "system" as const,
+            label: SERVICE_KIND_LABEL[sb.kind] ?? sb.kind,
+          }))
+      : []),
+  ];
   const capacity = {
     machines,
     extraMachines,
@@ -461,6 +504,98 @@ export async function action({ request }: Route.ActionArgs) {
     await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { groupConfigs: configs } });
     return data({ ok: true });
   }
+  if (intent === "set-cap-level") {
+    // Tri-estado de una capacidad por grupo: "off" | "read" | "write".
+    // off → la quita de mcpServers; read/write → la agrega + fija capLevels[name].
+    // Traduce a <SERVER>_TOOLSETS en resolveGroupMcpServers. Esto ES el gate
+    // "admin desde baileys / lectura desde waba" hecho pura config.
+    const groupId = String(fd.get("groupId") || "");
+    const name = String(fd.get("cap") || "");
+    const level = String(fd.get("level") || ""); // off | read | write
+    if (!mergedCapabilities(fleetAgent).some((e) => e.name === name && !e.builtin)) {
+      return data({ error: "esa capacidad no existe" }, { status: 400 });
+    }
+    const configs = { ...((fleetAgent.groupConfigs as Record<string, GroupConfig> | null) ?? {}) };
+    const cur = configs[groupId] ?? {};
+    const set = new Set(cur.mcpServers ?? []);
+    const levels = { ...(cur.capLevels ?? {}) };
+    if (level === "off") { set.delete(name); delete levels[name]; }
+    else { set.add(name); levels[name] = level; }
+    configs[groupId] = { ...cur, mcpServers: [...set], capLevels: levels };
+    await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { groupConfigs: configs } });
+    return data({ ok: true });
+  }
+  if (intent === "upload-asset") {
+    // Drag-drop: sube un archivo PÚBLICO del owner y lo adjunta al set entregable
+    // del canal. Público = deliverable (URL alcanzable por el cliente final).
+    const file = fd.get("file");
+    const groupId = String(fd.get("groupId") || "");
+    if (!(file instanceof File)) return data({ error: "no file" }, { status: 400 });
+    const buf = Buffer.from(await file.arrayBuffer());
+    const { getPlatformPublicClient, buildPublicAssetUrl } = await import("~/.server/storage");
+    const { randomUUID } = await import("node:crypto");
+    const safe = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+    const storageKey = `${user.id}/${randomUUID()}-${safe}`;
+    const ctype = file.type || "application/octet-stream";
+    await getPlatformPublicClient().putObject(storageKey, buf, ctype);
+    const created = await db.file.create({
+      data: {
+        storageKey, slug: storageKey, name: file.name, size: buf.length, contentType: ctype,
+        status: "DONE", url: buildPublicAssetUrl(storageKey), access: "public", ownerId: user.id, assetIds: [],
+      },
+      select: { id: true },
+    });
+    if (groupId) {
+      const configs = { ...((fleetAgent.groupConfigs as Record<string, GroupConfig> | null) ?? {}) };
+      const cur = configs[groupId] ?? {};
+      configs[groupId] = { ...cur, assets: [...new Set([...(cur.assets ?? []), created.id])] };
+      await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { groupConfigs: configs } });
+    }
+    return data({ ok: true, fileId: created.id });
+  }
+  if (intent === "toggle-group-asset") {
+    // Añade/quita un archivo público del owner al set entregable de este canal.
+    const groupId = String(fd.get("groupId") || "");
+    const fileId = String(fd.get("fileId") || "");
+    const on = String(fd.get("on") || "") === "1";
+    const configs = { ...((fleetAgent.groupConfigs as Record<string, GroupConfig> | null) ?? {}) };
+    const cur = configs[groupId] ?? {};
+    const set = new Set(cur.assets ?? []);
+    if (on) set.add(fileId); else set.delete(fileId);
+    configs[groupId] = { ...cur, assets: [...set] };
+    await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { groupConfigs: configs } });
+    return data({ ok: true });
+  }
+  if (intent === "set-group-prompt") {
+    // System prompt por número/grupo (capa 3, se APPENDEA nunca reemplaza).
+    // WABA (groupId "waba:<id>") → wabaConfig.orgs[id].systemPrompt; Baileys →
+    // groupConfigs[groupId].systemPrompt. Ambos convergen en el mismo turno.
+    const groupId = String(fd.get("groupId") || "");
+    const systemPrompt = String(fd.get("systemPrompt") || "").slice(0, 8000);
+    if (groupId.startsWith("waba:")) {
+      const integrationId = groupId.slice("waba:".length);
+      const wc = { ...((fleetAgent.wabaConfig as { orgs?: Record<string, unknown> } | null) ?? {}) };
+      const orgs = { ...((wc.orgs as Record<string, Record<string, unknown>> | undefined) ?? {}) };
+      orgs[integrationId] = { ...(orgs[integrationId] ?? {}), systemPrompt };
+      await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { wabaConfig: { ...wc, orgs } as object } });
+      return data({ ok: true });
+    }
+    const configs = { ...((fleetAgent.groupConfigs as Record<string, GroupConfig> | null) ?? {}) };
+    const cur = configs[groupId] ?? {};
+    configs[groupId] = { ...cur, systemPrompt: systemPrompt || undefined };
+    await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { groupConfigs: configs } });
+    return data({ ok: true });
+  }
+  if (intent === "set-agent-prompt") {
+    // Prompt del AGENTE (persona.env.SYSTEM_PROMPT) — UNO, multicanal (Baileys+WABA).
+    // El worker lo appendea SIEMPRE al preset base → Brenda edita un solo CLAUDE.md.
+    const systemPrompt = String(fd.get("systemPrompt") || "").slice(0, 20000);
+    const persona = ((fleetAgent.persona ?? {}) as { env?: Record<string, string> });
+    const env = { ...(persona.env ?? {}) };
+    if (systemPrompt) env.SYSTEM_PROMPT = systemPrompt; else delete env.SYSTEM_PROMPT;
+    await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { persona: { ...persona, env } as object } });
+    return data({ ok: true });
+  }
   if (intent === "toggle-group-builtin") {
     // Turn a BUILTIN (easybits/wa) on/off for one group. `on=0` adds it to
     // disabledBuiltins → the worker removes it from the merged MCP set that turn.
@@ -551,13 +686,14 @@ export async function action({ request }: Route.ActionArgs) {
     // that integration's turns). Merges into wabaConfig.orgs[integrationId].
     const integrationId = String(fd.get("integrationId") || "");
     const name = String(fd.get("name") || "").trim();
-    const systemPrompt = String(fd.get("systemPrompt") || "").trim();
     const cfg = (fleetAgent.wabaConfig as { formmySecret?: string; orgs?: Record<string, any> } | null) ?? {};
     const org = cfg.orgs?.[integrationId];
     if (!org) return data({ error: "número no encontrado" }, { status: 404 });
+    // Solo el nombre — el systemPrompt del número vive en el override por-canal
+    // (set-group-prompt); NO lo tocamos aquí para no borrarlo al renombrar.
     const next = {
       ...cfg,
-      orgs: { ...cfg.orgs, [integrationId]: { ...org, name: name || undefined, systemPrompt: systemPrompt || undefined } },
+      orgs: { ...cfg.orgs, [integrationId]: { ...org, name: name || undefined } },
     };
     await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { wabaConfig: next } });
     return data({ ok: true });
@@ -750,23 +886,35 @@ function VmBox({ id, status, slots, max, ghosty, mascotColor, addon, kind, sysLa
   const custom = kind === "custom";
   const extra = system || custom;
   const full = slots >= max;
+  // Estado compartido por cajas de agentes Y de servicio: dormida (snapshot) /
+  // arrancando (boot). Antes el color de una caja de servicio era FIJO por tipo e
+  // ignoraba el status → no se veía ni iniciando ni durmiendo.
+  const sleeping = status === "suspended";
+  const starting = status === "building" || status === "starting";
   // Tonos de FIELTRO por estado (mismo gradiente de salud que antes, en lana). La
   // textura/borde/sombra los pone la clase `.felt`; aquí sólo el relleno + el hilo.
   // OJO: NO cambiar la semántica — verde lleno = "a tope y bien", no advertencia.
+  // Dormida/arrancando GANAN sobre el color por tipo → una caja de servicio también
+  // se pinta índigo-apagada (dormida) o violeta-pulso (arrancando).
   const [fill, stitch] =
-    system ? ["#bcd3ea", "#5a86b0"]
+    sleeping ? ["#c8c6e6", "#a6a3d6"]
+    : starting ? ["#d7c9ef", "#9b86d6"]
+    : system ? ["#bcd3ea", "#5a86b0"]
     : custom ? ["#cfd4dc", "#8a95a6"]
-    : status === "building" ? ["#d7c9ef", "#9b86d6"]
     // Libre (sin add-on): fieltro GRIS — "espacio por llenar" neutro que contrasta
     // sobre el tapete claro sin competir con el verde (activo) ni el índigo (dormida).
     : status == null ? (addon ? ["#e7dcf6", "#9870ED"] : ["#c4c2cc", "rgba(70,66,86,0.45)"])
-    // Dormida (suspended): congelada, capacidad casi-libre → índigo apagado.
-    : status === "suspended" ? ["#c8c6e6", "#a6a3d6"]
     : full ? ["#a9c79b", "#6f9a63"]
     : slots > 0 ? ["#cfe0bf", "#9bbf8f"]
     : ["#dcd2bb", "rgba(60,42,16,0.3)"];
   const feltStyle = { "--felt-fill": fill, "--felt-stitch": stitch } as CSSProperties;
-  const label = extra ? (sysLabel ?? (system ? "llamadas" : "sandbox")) : status == null ? (addon ? "add-on" : "libre") : status === "building" ? "booteando" : `${slots}/${max} agentes`;
+  const label = extra
+    ? (sleeping ? `${sysLabel ?? "servicio"} · dormida`
+      : starting ? `${sysLabel ?? "servicio"} · arrancando`
+      : (sysLabel ?? (system ? "llamadas" : "sandbox")))
+    : status == null ? (addon ? "add-on" : "libre")
+    : status === "building" ? "booteando"
+    : `${slots}/${max} agentes`;
   // Despertar: cuando una caja pasa de suspended → running (un mensaje la resucitó),
   // el ghosty se despereza (stretch pop) y el "Zzz" se va flotando. Detectamos la
   // transición con un ref al status anterior; el poll de 2.5s la dispara en vivo.
@@ -797,11 +945,29 @@ function VmBox({ id, status, slots, max, ghosty, mascotColor, addon, kind, sysLa
           fill (el "segundo bg"). Aquí el felt nunca se transforma; el padre solo
           escala su raster YA redondeado, así que las esquinas quedan limpias. */}
       <div
-        title={extra ? `Sandbox de ${system ? "llamadas/voz" : "sistema"} — no atiende agentes` : status == null ? "Sandbox disponible — se levanta bajo demanda" : status === "suspended" ? `Dormida — congelada, 0 CPU/RAM, resume en <1s. Solo ocupa disco; se destruye a los 45 min sin actividad. ${slots}/${max} conversaciones en memoria` : `Sandbox ${status} · ${slots}/${max} agentes`}
+        title={extra
+          ? (sleeping ? `${sysLabel ?? "Servicio"} dormida — snapshot congelado, 0 CPU/RAM, resume ~1s bajo demanda`
+            : starting ? `${sysLabel ?? "Servicio"} arrancando…`
+            : `Sandbox de ${system ? "llamadas/voz/render" : "sistema"} — no atiende agentes`)
+          : status == null ? "Sandbox disponible — se levanta bajo demanda"
+          : sleeping ? `Dormida — congelada, 0 CPU/RAM, resume en <1s. Solo ocupa disco; se destruye a los 45 min sin actividad. ${slots}/${max} conversaciones en memoria`
+          : `Sandbox ${status} · ${slots}/${max} agentes`}
         style={feltStyle}
-        className={`w-full h-full felt flex flex-col items-center justify-center gap-3 cursor-default ${status === "building" ? "animate-pulse" : ""}`}
+        className={`w-full h-full felt flex flex-col items-center justify-center gap-3 cursor-default ${starting ? "animate-pulse" : ""}`}
       >
-      {system ? (
+      {extra ? (
+        // Caja de servicio/custom: el icono refleja el estado — dormida = apagado
+        // (grayscale + Zzz); arrancando = pulso (lo pone el contenedor .felt).
+        <div className={`relative flex items-center justify-center transition-[filter,opacity] ${sleeping ? "opacity-50 grayscale" : ""}`}>
+          <AnimatePresence>
+            {sleeping && (
+              <motion.span key="zzz-svc"
+                initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -12, scale: 1.4 }} transition={{ duration: 0.45 }}
+                className="pointer-events-none absolute -top-3 -right-3 font-jersey text-sm leading-none text-indigo-400 select-none -rotate-6">Zzz</motion.span>
+            )}
+          </AnimatePresence>
+          {system ? (
         sysLabel === "render" ? (
           // Render (PDF/PNG): hoja con líneas de texto, NO teléfono.
           <svg className="w-12 h-12 text-blue-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -821,7 +987,7 @@ function VmBox({ id, status, slots, max, ghosty, mascotColor, addon, kind, sysLa
             <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z" />
           </svg>
         )
-      ) : custom ? (
+      ) : (
         /chat/i.test(sysLabel ?? "") ? (
           // Chat (ej. ghosty-chat): burbuja de conversación con puntos, NO cubo.
           <svg className="w-12 h-12 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -841,6 +1007,8 @@ function VmBox({ id, status, slots, max, ghosty, mascotColor, addon, kind, sysLa
             <path d="m3.3 7 8.7 5 8.7-5" /><path d="M12 22V12" />
           </svg>
         )
+          )}
+        </div>
       ) : (
         <div className="relative grid grid-cols-2 gap-2.5 place-items-center">
           <AnimatePresence>
@@ -1453,6 +1621,21 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
   const [inboxModal, setInboxModal] = useState<{ fleetAgentId: string; integrationId: string; subject: string; mode: "off" | "all" | "only" } | null>(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [showIdentity, setShowIdentity] = useState(false);
+  // Archivos: modal grande con buscador (no lista inline). fileMgr = groupId abierto.
+  const [fileMgr, setFileMgr] = useState<string | null>(null);
+  const [fileQ, setFileQ] = useState("");
+  // Instrucciones: editor a pantalla (no textarea de 5 líneas).
+  const [promptFull, setPromptFull] = useState<string | null>(null);
+  // Optimistic UI: override local `${groupId}:${key}` → valor, aplicado en el
+  // render para feedback INSTANTÁNEO; el loader (poll/revalidate) lo alcanza.
+  const [optim, setOptim] = useState<Record<string, string>>({});
+  const setOpt = (k: string, v: string) => setOptim((o) => ({ ...o, [k]: v }));
+  // Dirty guard del panel de config: si hay texto sin guardar, cerrar advierte.
+  const [capDirty, setCapDirty] = useState(false);
+  const closeCap = () => {
+    if (capDirty && !window.confirm("Tienes cambios sin guardar. ¿Cerrar de todos modos?")) return;
+    setCapDirty(false); setOptim({}); setCapModal(null);
+  };
   // Abierto/cerrado por agente — PERSISTIDO en localStorage para que recuerde el
   // estado entre recargas. Client-only (carga en useEffect, no en el initializer)
   // para no romper la hidratación SSR.
@@ -1477,7 +1660,17 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
   const [wabaConnecting, setWabaConnecting] = useState<string | null>(null);
   const [wabaError, setWabaError] = useState<string | null>(null);
   // Tabs por canal (baileys/waba/…) + ⚙ ajustes del canal abierto, por fleetAgent.
-  const [activeChannel, setActiveChannel] = useState<Record<string, string>>({});
+  // Pestaña de canal por agente — persistida en localStorage para sobrevivir refresh.
+  const [activeChannel, setActiveChannel] = useState<Record<string, string>>(() => {
+    if (typeof window === "undefined") return {};
+    try { return JSON.parse(localStorage.getItem("fleetChannelTab") || "{}"); } catch { return {}; }
+  });
+  const setChannelTab = (pid: string, kind: string) =>
+    setActiveChannel((s) => {
+      const next = { ...s, [pid]: kind };
+      try { localStorage.setItem("fleetChannelTab", JSON.stringify(next)); } catch { /* ignore */ }
+      return next;
+    });
   const [chSettings, setChSettings] = useState<Record<string, boolean>>({});
   // Connect a WhatsApp Business number: ask our server for Formmy's signed popup
   // URL, open it, and wait for the popup to postMessage { code, phoneNumberId,
@@ -1781,7 +1974,7 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                 {/* Tabs por canal */}
                 <div className="mt-4 flex items-center gap-1 border-b-2 border-gray-100">
                   {channels.map((c) => { const on = activeCh === c.kind; return (
-                    <button key={c.kind} type="button" onClick={() => setActiveChannel((s) => ({ ...s, [p.id]: c.kind }))}
+                    <button key={c.kind} type="button" onClick={() => setChannelTab(p.id, c.kind)}
                       className={`flex items-center gap-1.5 px-3 py-2 text-sm font-semibold border-b-2 -mb-0.5 transition-colors ${on ? "border-brand-500 text-brand-600" : "border-transparent text-gray-400 hover:text-gray-700"}`}>
                       <span className={`w-2 h-2 rounded-full ${c.dot}`} /><span>{c.label}</span>
                       {c.count > 0 && <span className="text-[10px] leading-none bg-gray-100 text-gray-600 rounded-full px-1.5 py-0.5">{c.count}</span>}
@@ -2040,15 +2233,20 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
         if (!cp || !cg) return null;
         const waba = cgWaba ?? null;
         return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setCapModal(null)}>
-            <div className="bg-white border-2 border-black rounded-2xl w-full max-w-md max-h-[85vh] overflow-y-auto p-5" onClick={(e) => e.stopPropagation()}>
-              <div className="flex items-center justify-between mb-1">
-                <h3 className="font-semibold text-lg">Capacidades</h3>
-                <button onClick={() => setCapModal(null)} className="text-gray-400 hover:text-black text-xl leading-none">✕</button>
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={closeCap}>
+            <div className="bg-white border-2 border-black rounded-2xl w-full max-w-4xl max-h-[88vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between px-5 py-4 border-b-2 border-gray-100 shrink-0">
+                <div className="min-w-0">
+                  <h3 className="font-semibold text-lg">Capacidades</h3>
+                  <p className="text-sm text-gray-500 truncate">en <b>{cg.subject}</b></p>
+                </div>
+                <button onClick={closeCap} className="text-gray-400 hover:text-black text-xl leading-none">✕</button>
               </div>
-              <p className="text-sm text-gray-500 mb-4 truncate">en <b>{cg.subject}</b></p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-5 overflow-y-auto">
+                <div className="flex flex-col gap-4 min-w-0">
 
-              {/* Identidad — solo números WABA. Cada número tiene su propia persona
+              {/* Identidad — solo números WABA (SOLO nombre; las instrucciones viven en
+                  el editor único del agente, a la derecha — antes se duplicaba aquí).
                   (nombre + instrucciones) que se appendea a la del fleetAgent.
                   Colapsada por default: una línea con el nombre actual → se expande
                   para editar, así no empuja las Capacidades hacia abajo. */}
@@ -2069,10 +2267,7 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                       <input type="hidden" name="integrationId" value={waba.integrationId} />
                       <input name="name" defaultValue={waba.name} placeholder="Nombre (ej. Soporte Marca X)"
                         className="border-2 border-gray-300 rounded-lg px-2 py-1 text-sm" />
-                      <textarea name="systemPrompt" defaultValue={waba.systemPrompt} rows={2}
-                        placeholder="Instrucciones propias de este número (se suman a la persona del fleetAgent)"
-                        className="border-2 border-gray-300 rounded-lg px-2 py-1 text-sm resize-y" />
-                      <button type="submit" className="self-end border-2 border-black rounded-lg px-3 py-1 text-xs font-semibold">Guardar identidad</button>
+                      <button type="submit" className="self-end border-2 border-black rounded-lg px-3 py-1 text-xs font-semibold">Guardar nombre</button>
                     </fetcher.Form>
                   )}
                 </div>
@@ -2083,30 +2278,53 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                   server (SIN optimismo: el optimismo mostraba el cambio y el poll/
                   reload lo revertía) → spinner mientras guarda, luego el estado real. */}
               {(() => {
-                const bucketsBusy = fetcher.state !== "idle" && fetcher.formData?.get("intent") === "set-group-toolgroup" && fetcher.formData?.get("groupId") === cg.id;
-                // Estado real: lo guardado para este número; si nunca se personalizó,
-                // arranca del default del agente (semilla, ya editable aquí mismo).
-                const effective = new Set<string>(cg.toolBuckets ?? cp.activeBuckets);
-                const toggle = (key: string, on: boolean) => {
-                  if (bucketsBusy) return;
-                  const next = new Set(effective);
-                  if (on) next.add(key); else next.delete(key);
+                // Optimistic: override local del set de buckets → feedback instantáneo.
+                const oKey = `${cg.id}:buckets`;
+                const effective = new Set<string>(
+                  optim[oKey] != null
+                    ? optim[oKey].split(",").filter(Boolean)
+                    : (cg.toolBuckets ?? cp.activeBuckets)
+                );
+                const commit = (next: Set<string>) => {
+                  setOpt(oKey, [...next].join(","));
                   fetcher.submit({ intent: "set-group-toolgroup", fleetAgentId: cp.id, groupId: cg.id, buckets: [...next].join(","), inherit: "0" }, { method: "post" });
                 };
+                const toggle = (key: string, on: boolean) => {
+                  const next = new Set(effective);
+                  if (on) next.add(key); else next.delete(key);
+                  commit(next);
+                };
+                // Bucket con niveles (DB): deriva el nivel actual del set + lo cambia.
+                const levelOf = (b: typeof buckets[number]) =>
+                  !b.levels ? null : ([...b.levels].reverse().find((l) => l.buckets.every((k) => effective.has(k)))?.key ?? "off");
+                const setLevel = (b: typeof buckets[number], level: string) => {
+                  const next = new Set(effective);
+                  b.levels!.flatMap((l) => l.buckets).forEach((k) => next.delete(k));
+                  if (level !== "off") b.levels!.find((l) => l.key === level)!.buckets.forEach((k) => next.add(k));
+                  commit(next);
+                };
                 return (
-                  <div className="mb-4">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Herramientas EasyBits</span>
-                      {bucketsBusy && <Spinner />}
-                    </div>
-                    <div className={`mt-1 flex flex-col gap-2 ${bucketsBusy ? "opacity-50 pointer-events-none" : ""}`}>
+                  <div>
+                    <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Herramientas EasyBits</span>
+                    <div className="mt-1 flex flex-col gap-2">
                       {buckets.map((b) => (
                         <div key={b.key} className="border-2 border-gray-100 rounded-xl px-3 py-2 flex items-center justify-between gap-2">
                           <span className="text-sm font-semibold min-w-0 truncate flex items-center gap-1.5">
                             {b.label}
                             {b.admin && <span className="text-[10px] px-1 rounded bg-amber-100 text-amber-700 border border-amber-300">admin</span>}
                           </span>
-                          <Switch value={effective.has(b.key)} className="text-sm items-center shrink-0" onChange={(on) => toggle(b.key, on)} />
+                          {b.levels ? (
+                            <div className="shrink-0 flex rounded-lg border-2 border-black overflow-hidden divide-x-2 divide-black text-[11px] font-semibold">
+                              {[{ key: "off", label: "Off" }, ...b.levels].map((l) => (
+                                <button key={l.key} type="button" onClick={() => setLevel(b, l.key)}
+                                  className={`px-2 py-1 transition-colors ${levelOf(b) === l.key ? "bg-black text-white" : "bg-white text-gray-500 hover:bg-gray-100"}`}>
+                                  {l.label}
+                                </button>
+                              ))}
+                            </div>
+                          ) : (
+                            <Switch value={effective.has(b.key)} className="text-sm items-center shrink-0" onChange={(on) => toggle(b.key, on)} />
+                          )}
                         </div>
                       ))}
                     </div>
@@ -2132,43 +2350,129 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                           onChange={(on) => fetcher.submit({ intent: "toggle-group-builtin", fleetAgentId: cp.id, groupId: cg.id, builtin: b.name, on: on ? "1" : "0" }, { method: "post" })} />
                       </div>
                     ))}
-                    {cp.capabilities.map((m) => (
-                      <div key={m.name} className="border-2 border-gray-100 rounded-xl px-3 py-2">
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="min-w-0">
-                            <p className="text-sm font-semibold flex items-center gap-1.5">
-                              {m.label}
-                              {m.custom && (
-                                <button type="button" title="Quitar capacidad"
-                                  onClick={() => fetcher.submit({ intent: "remove-mcp", fleetAgentId: cp.id, name: m.name }, { method: "post" })}
-                                  className="text-[10px] text-red-400 hover:text-red-600 font-normal">quitar</button>
-                              )}
-                            </p>
-                            {m.description && <p className="text-[11px] text-gray-400">{m.description}</p>}
+                    {cp.capabilities.map((m) => {
+                      // Uniforme: el CONTROL siempre visible. La llave se pide SOLO si
+                      // lo enciendes y falta el secret (no "Falta configurar" de entrada).
+                      const oKey = `${cg.id}:${m.name}`;
+                      const realOn = cg.mcps.includes(m.name);
+                      const realLevel = m.levels ? (realOn ? (cg.capLevels?.[m.name] ?? m.levels[0].key) : "off") : (realOn ? "on" : "off");
+                      const cur = optim[oKey] ?? realLevel;
+                      const enabled = cur !== "off";
+                      const setLevel = (val: string) => {
+                        setOpt(oKey, val);
+                        if (m.levels) fetcher.submit({ intent: "set-cap-level", fleetAgentId: cp.id, groupId: cg.id, cap: m.name, level: val }, { method: "post" });
+                        else fetcher.submit({ intent: "toggle-group-mcp", fleetAgentId: cp.id, groupId: cg.id, mcp: m.name, on: val === "on" ? "1" : "0" }, { method: "post" });
+                      };
+                      const opts = m.levels ? [{ key: "off", label: "Off" }, ...m.levels] : [{ key: "off", label: "Off" }, { key: "on", label: "On" }];
+                      return (
+                        <div key={m.name} className="border-2 border-gray-100 rounded-xl px-3 py-2">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="min-w-0">
+                              <p className="text-sm font-semibold flex items-center gap-1.5">
+                                {m.label}
+                                {m.custom && (
+                                  <button type="button" title="Quitar capacidad"
+                                    onClick={() => fetcher.submit({ intent: "remove-mcp", fleetAgentId: cp.id, name: m.name }, { method: "post" })}
+                                    className="text-[10px] text-red-400 hover:text-red-600 font-normal">quitar</button>
+                                )}
+                              </p>
+                              {m.description && <p className="text-[11px] text-gray-400">{m.description}</p>}
+                            </div>
+                            <div className="shrink-0 flex rounded-lg border-2 border-black overflow-hidden divide-x-2 divide-black">
+                              {opts.map((l) => (
+                                <button key={l.key} type="button" onClick={() => setLevel(l.key)}
+                                  className={`px-2 py-1 text-[11px] font-semibold transition-colors ${cur === l.key ? "bg-black text-white" : "bg-white text-gray-500 hover:bg-gray-100"}`}>
+                                  {l.label}
+                                </button>
+                              ))}
+                            </div>
                           </div>
-                          {m.secretsPresent ? (
-                            <Switch value={cg.mcps.includes(m.name)}
-                              className="text-sm items-center shrink-0"
-                              onChange={(on) => fetcher.submit({ intent: "toggle-group-mcp", fleetAgentId: cp.id, groupId: cg.id, mcp: m.name, on: on ? "1" : "0" }, { method: "post" })} />
-                          ) : (
-                            <span className="text-[10px] font-semibold text-amber-600 shrink-0 whitespace-nowrap">Falta configurar</span>
-                          )}
+                          {enabled && !m.secretsPresent && (m.missingSecrets ?? m.requiredSecrets).map((sec) => {
+                            const meta = (m.secretFields ?? {})[sec];
+                            return (
+                              <fetcher.Form key={sec} method="post" className="mt-2"
+                                onSubmit={(e) => { const f = e.currentTarget; requestAnimationFrame(() => f.reset()); }}>
+                                <input type="hidden" name="intent" value="set-secret" />
+                                <input type="hidden" name="fleetAgentId" value={cp.id} />
+                                <input type="hidden" name="name" value={sec} />
+                                <div className="flex items-center gap-2">
+                                  <input type="password" name="value" required autoComplete="off"
+                                    placeholder={meta?.label ? `Pega tu ${meta.label.toLowerCase()}` : "Pega tu llave"}
+                                    className="flex-1 min-w-0 border-2 border-gray-300 rounded-lg px-2 py-1 text-sm" />
+                                  <button type="submit" className="shrink-0 border-2 border-black rounded-lg px-2.5 py-1 text-xs font-semibold">Guardar</button>
+                                </div>
+                                <p className="mt-0.5 text-[10px] text-amber-600">{meta?.help ? meta.help : "Falta la llave para que funcione."}</p>
+                              </fetcher.Form>
+                            );
+                          })}
                         </div>
-                        {!m.secretsPresent && (
-                          <fetcher.Form method="post" className="mt-2 flex items-center gap-2"
-                            onSubmit={(e) => { const f = e.currentTarget; requestAnimationFrame(() => f.reset()); }}>
-                            <input type="hidden" name="intent" value="set-secret" />
-                            <input type="hidden" name="fleetAgentId" value={cp.id} />
-                            <input type="hidden" name="name" value={m.requiredSecrets[0] ?? ""} />
-                            <input type="password" name="value" required autoComplete="off"
-                              placeholder={`Pega tu ${m.requiredSecrets[0] ?? "key"}`}
-                              className="flex-1 min-w-0 border-2 border-gray-300 rounded-lg px-2 py-1 text-sm font-mono" />
-                            <button type="submit" className="shrink-0 border-2 border-black rounded-lg px-2.5 py-1 text-xs font-semibold">Guardar</button>
-                          </fetcher.Form>
-                        )}
-                      </div>
-                    ))}
+                      );
+                    })}
                 </div>
+              </div>
+              {/* fin columna izquierda → columna derecha */}
+              </div>
+              <div className="flex flex-col gap-4 min-w-0">
+
+              {/* Archivos que puede entregar — resumen compacto; el picker vive en un
+                  modal con buscador (escala a millones, no estira este modal). */}
+              <div className="mb-4 flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide block">Archivos que puede entregar</span>
+                  <span className="text-sm">{(cg.assets ?? []).length} seleccionado{(cg.assets ?? []).length === 1 ? "" : "s"}</span>
+                </div>
+                <button type="button" onClick={() => { setFileQ(""); setFileMgr(cg.id); }}
+                  className="shrink-0 border-2 border-black rounded-lg px-3 py-1.5 text-xs font-semibold hover:bg-gray-50">
+                  Administrar
+                </button>
+              </div>
+
+              {/* Instrucciones del AGENTE — UNA, multicanal (Baileys + WABA), como el
+                  CLAUDE.md de nanoclaw. Editor real: alto, importar .md/.txt, Expandir. */}
+              <div>
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Instrucciones del agente <span className="normal-case text-gray-400 font-normal">· todos los canales</span></span>
+                  <button type="button" onClick={() => setPromptFull(cp.id)}
+                    className="text-[11px] font-semibold text-brand-500 hover:underline">Expandir ⤢</button>
+                </div>
+                <fetcher.Form method="post" className="mt-1" key={`ap-${cp.id}`}
+                  onSubmit={() => setCapDirty(false)}>
+                  <input type="hidden" name="intent" value="set-agent-prompt" />
+                  <input type="hidden" name="fleetAgentId" value={cp.id} />
+                  <textarea name="systemPrompt" rows={12} defaultValue={cp.agentPrompt ?? ""}
+                    onChange={() => setCapDirty(true)}
+                    placeholder="Personalidad, reglas, catálogo, tono… Se agrega sobre la base de EasyBits (no la reemplaza). Aplica a todos los canales de este agente."
+                    className="w-full min-h-[18rem] border-2 border-gray-300 rounded-lg px-2 py-1.5 text-sm resize-y font-mono leading-relaxed" />
+                  <div className="mt-1.5 flex items-center gap-2">
+                    <button type="submit" className="border-2 border-black rounded-lg px-3 py-1 text-xs font-semibold">Guardar instrucciones</button>
+                    <label className="text-xs font-semibold text-gray-500 border-2 border-gray-200 rounded-lg px-2.5 py-1 cursor-pointer hover:bg-gray-50">
+                      Importar .md/.txt
+                      <input type="file" accept=".md,.txt,text/markdown,text/plain" className="hidden"
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0]; if (!file) return;
+                          const txt = await file.text();
+                          const ta = e.currentTarget.closest("form")?.querySelector("textarea[name=systemPrompt]") as HTMLTextAreaElement | null;
+                          if (ta) { ta.value = txt; setCapDirty(true); }
+                          e.currentTarget.value = "";
+                        }} />
+                    </label>
+                  </div>
+                </fetcher.Form>
+                {/* Override por-canal (opcional, colapsado) — se SUMA al del agente */}
+                <details className="mt-2">
+                  <summary className="text-[11px] font-semibold text-gray-400 cursor-pointer hover:text-gray-600">+ Instrucciones extra solo para este canal</summary>
+                  <fetcher.Form method="post" className="mt-1" key={`sp-${cg.id}-${cg.systemPrompt ?? ""}`}
+                    onSubmit={() => setCapDirty(false)}>
+                    <input type="hidden" name="intent" value="set-group-prompt" />
+                    <input type="hidden" name="fleetAgentId" value={cp.id} />
+                    <input type="hidden" name="groupId" value={cg.id} />
+                    <textarea name="systemPrompt" rows={4} defaultValue={cg.systemPrompt ?? ""}
+                      onChange={() => setCapDirty(true)}
+                      placeholder="Solo para este número/grupo. Se suma a las instrucciones del agente."
+                      className="w-full border-2 border-gray-200 rounded-lg px-2 py-1.5 text-sm resize-y" />
+                    <button type="submit" className="mt-1 border-2 border-gray-300 rounded-lg px-3 py-1 text-xs font-semibold">Guardar override</button>
+                  </fetcher.Form>
+                </details>
               </div>
 
               {/* Avanzado — agregar un MCP custom (npm o URL), declarando su secret */}
@@ -2193,7 +2497,94 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                   </fetcher.Form>
                 )}
               </div>
+              </div>
+              </div>
             </div>
+
+            {/* Modal de Archivos con BUSCADOR — escala a millones, no estira Capacidades */}
+            {fileMgr === cg.id && (
+              <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-4" onClick={(e) => { e.stopPropagation(); setFileMgr(null); }}>
+                <div className="bg-white rounded-2xl border-2 border-black w-full max-w-lg max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+                  <div className="p-4 border-b-2 border-gray-100">
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="font-semibold">Archivos que puede entregar</h4>
+                      <button type="button" onClick={() => setFileMgr(null)} className="text-gray-400 hover:text-black">✕</button>
+                    </div>
+                    <input autoFocus value={fileQ} onChange={(e) => setFileQ(e.target.value)}
+                      placeholder="Buscar por nombre…"
+                      className="w-full border-2 border-gray-300 rounded-lg px-3 py-2 text-sm" />
+                    {(() => {
+                      const up = (files: FileList | null) => {
+                        if (!files?.length) return;
+                        const fdata = new FormData();
+                        fdata.set("intent", "upload-asset");
+                        fdata.set("fleetAgentId", cp.id);
+                        fdata.set("groupId", cg.id);
+                        fdata.set("file", files[0]);
+                        fetcher.submit(fdata, { method: "post", encType: "multipart/form-data" });
+                      };
+                      const uploading = fetcher.state !== "idle" && fetcher.formData?.get("intent") === "upload-asset";
+                      return (
+                        <div onDragOver={(e) => e.preventDefault()} onDrop={(e) => { e.preventDefault(); up(e.dataTransfer.files); }}
+                          className="mt-2 border-2 border-dashed border-gray-300 rounded-lg px-3 py-3 text-center text-xs text-gray-500">
+                          {uploading ? "Subiendo…" : <>Arrastra un archivo aquí o <label className="font-semibold text-brand-500 cursor-pointer hover:underline">elígelo<input type="file" className="hidden" onChange={(e) => up(e.target.files)} /></label> (se sube público)</>}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                  <div className="flex-1 overflow-y-auto p-2">
+                    {cp.ownerFiles.filter((f) => f.name.toLowerCase().includes(fileQ.toLowerCase())).slice(0, 200).map((f) => {
+                      const on = (cg.assets ?? []).includes(f.id);
+                      return (
+                        <label key={f.id} className="flex items-center gap-3 text-sm cursor-pointer hover:bg-gray-50 rounded-lg px-2 py-1.5">
+                          <input type="checkbox" checked={on}
+                            onChange={(e) => fetcher.submit({ intent: "toggle-group-asset", fleetAgentId: cp.id, groupId: cg.id, fileId: f.id, on: e.target.checked ? "1" : "0" }, { method: "post" })} />
+                          <span className="truncate min-w-0 flex-1">{f.name}</span>
+                          <span className="text-[10px] text-gray-400 shrink-0 uppercase">{(f.contentType || "").split("/")[1] || ""}</span>
+                        </label>
+                      );
+                    })}
+                    {cp.ownerFiles.length === 0 && <p className="p-4 text-center text-sm text-gray-400">Sube archivos públicos en Archivos para ofrecerlos aquí.</p>}
+                  </div>
+                  <div className="p-3 border-t-2 border-gray-100 flex items-center justify-between text-sm">
+                    <span className="text-gray-500">{(cg.assets ?? []).length} seleccionados</span>
+                    <button type="button" onClick={() => setFileMgr(null)} className="border-2 border-black rounded-lg px-4 py-1.5 text-xs font-semibold">Listo</button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Editor de Instrucciones del AGENTE a PANTALLA (multicanal) */}
+            {promptFull === cp.id && (
+              <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-4" onClick={(e) => { e.stopPropagation(); setPromptFull(null); }}>
+                <fetcher.Form method="post" className="bg-white rounded-2xl border-2 border-black w-full max-w-3xl h-[85vh] flex flex-col" onClick={(e) => e.stopPropagation()}
+                  onSubmit={() => { setPromptFull(null); setCapDirty(false); }}>
+                  <input type="hidden" name="intent" value="set-agent-prompt" />
+                  <input type="hidden" name="fleetAgentId" value={cp.id} />
+                  <div className="p-4 border-b-2 border-gray-100 flex items-center justify-between">
+                    <h4 className="font-semibold">Instrucciones del agente — {cp.name}</h4>
+                    <button type="button" onClick={() => setPromptFull(null)} className="text-gray-400 hover:text-black">✕</button>
+                  </div>
+                  <textarea name="systemPrompt" defaultValue={cp.agentPrompt ?? ""}
+                    placeholder="Personalidad, reglas, catálogo, tono… Se agrega sobre la base de EasyBits. Aplica a todos los canales."
+                    className="flex-1 w-full px-4 py-3 text-sm font-mono leading-relaxed resize-none outline-none" />
+                  <div className="p-3 border-t-2 border-gray-100 flex items-center gap-2">
+                    <button type="submit" className="border-2 border-black rounded-lg px-4 py-1.5 text-sm font-semibold">Guardar</button>
+                    <label className="text-xs font-semibold text-gray-500 border-2 border-gray-200 rounded-lg px-2.5 py-1.5 cursor-pointer hover:bg-gray-50">
+                      Importar .md/.txt
+                      <input type="file" accept=".md,.txt,text/markdown,text/plain" className="hidden"
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0]; if (!file) return;
+                          const txt = await file.text();
+                          const ta = e.currentTarget.closest("form")?.querySelector("textarea[name=systemPrompt]") as HTMLTextAreaElement | null;
+                          if (ta) ta.value = txt;
+                          e.currentTarget.value = "";
+                        }} />
+                    </label>
+                  </div>
+                </fetcher.Form>
+              </div>
+            )}
           </div>
         );
       })()}
