@@ -1,5 +1,5 @@
 import type { Route } from "./+types/fleet-agents";
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, lazy, Suspense, type CSSProperties } from "react";
 import { useFetcher, useRevalidator, data } from "react-router";
 import { motion, AnimatePresence } from "motion/react";
 import QRCode from "qrcode";
@@ -30,6 +30,12 @@ import {
 } from "~/.server/integrations/whatsapp/waba.server";
 
 const DEFAULT_OAUTH = "CLAUDE_CODE_OAUTH_TOKEN";
+
+// Editor de prompts markdown (CodeMirror + preview) — lazy para NO importar MDEditor
+// (usa window) en el bundle SSR; solo carga en cliente al abrir el modal Expandir.
+const PromptEditor = lazy(() =>
+  import("./PromptEditor.client").then((m) => ({ default: m.PromptEditor }))
+);
 
 // Cerebros seleccionables al crear un agente. Client-safe (subconjunto curado de
 // SANDBOX_TEMPLATES; el default es claude-worker). `value` = workerTemplate real.
@@ -620,7 +626,9 @@ export async function action({ request }: Route.ActionArgs) {
   if (intent === "set-agent-prompt") {
     // Prompt del AGENTE (persona.env.SYSTEM_PROMPT) — UNO, multicanal (Baileys+WABA).
     // El worker lo appendea SIEMPRE al preset base → Brenda edita un solo CLAUDE.md.
-    const systemPrompt = String(fd.get("systemPrompt") || "").slice(0, 20000);
+    // Cap 120k: cabe un CLAUDE.md operativo completo (tania-mkt ~70KB). El host
+    // colapsa newlines al spawn (EnvironmentFile de una línea).
+    const systemPrompt = String(fd.get("systemPrompt") || "").slice(0, 120000);
     const persona = ((fleetAgent.persona ?? {}) as { env?: Record<string, string> });
     const env = { ...(persona.env ?? {}) };
     if (systemPrompt) env.SYSTEM_PROMPT = systemPrompt; else delete env.SYSTEM_PROMPT;
@@ -2820,33 +2828,25 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
               </div>
             )}
 
-            {/* Editor de Instrucciones del AGENTE a PANTALLA (multicanal) */}
+            {/* Editor de Instrucciones del AGENTE a PANTALLA (multicanal) — MDEditor
+                (markdown + preview en vivo + fullscreen). Near-fullscreen para editar
+                un CLAUDE.md completo de verdad. */}
             {promptFull === cp.id && (
-              <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-4" onClick={(e) => { e.stopPropagation(); setPromptFull(null); }}>
-                <fetcher.Form method="post" className="bg-white rounded-2xl border-2 border-black w-full max-w-3xl h-[85vh] flex flex-col" onClick={(e) => e.stopPropagation()}
+              <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-3 sm:p-6" onClick={(e) => { e.stopPropagation(); setPromptFull(null); }}>
+                <fetcher.Form method="post" className="bg-white rounded-2xl border-2 border-black w-full max-w-6xl h-[92vh] flex flex-col p-4" onClick={(e) => e.stopPropagation()}
                   onSubmit={() => { setPromptFull(null); setCapDirty(false); }}>
                   <input type="hidden" name="intent" value="set-agent-prompt" />
                   <input type="hidden" name="fleetAgentId" value={cp.id} />
-                  <div className="p-4 border-b-2 border-gray-100 flex items-center justify-between">
-                    <h4 className="font-semibold">Instrucciones del agente — {cp.name}</h4>
+                  <div className="pb-3 mb-3 border-b-2 border-gray-100 flex items-center justify-between">
+                    <h4 className="font-semibold">Instrucciones del agente — {cp.name} <span className="font-normal text-gray-400 text-xs">· CLAUDE.md · todos los canales</span></h4>
                     <button type="button" onClick={() => setPromptFull(null)} className="text-gray-400 hover:text-black">✕</button>
                   </div>
-                  <textarea name="systemPrompt" defaultValue={cp.agentPrompt ?? ""}
-                    placeholder="Personalidad, reglas, catálogo, tono… Se agrega sobre la base de EasyBits. Aplica a todos los canales."
-                    className="flex-1 w-full px-4 py-3 text-sm font-mono leading-relaxed resize-none outline-none" />
-                  <div className="p-3 border-t-2 border-gray-100 flex items-center gap-2">
+                  <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Spinner /></div>}>
+                    <PromptEditor name="systemPrompt" defaultValue={cp.agentPrompt ?? ""} onDirty={() => setCapDirty(true)} />
+                  </Suspense>
+                  <div className="pt-3 mt-3 border-t-2 border-gray-100 flex items-center gap-2">
                     <button type="submit" className="border-2 border-black rounded-lg px-4 py-1.5 text-sm font-semibold">Guardar</button>
-                    <label className="text-xs font-semibold text-gray-500 border-2 border-gray-200 rounded-lg px-2.5 py-1.5 cursor-pointer hover:bg-gray-50">
-                      Importar .md/.txt
-                      <input type="file" accept=".md,.txt,text/markdown,text/plain" className="hidden"
-                        onChange={async (e) => {
-                          const file = e.target.files?.[0]; if (!file) return;
-                          const txt = await file.text();
-                          const ta = e.currentTarget.closest("form")?.querySelector("textarea[name=systemPrompt]") as HTMLTextAreaElement | null;
-                          if (ta) ta.value = txt;
-                          e.currentTarget.value = "";
-                        }} />
-                    </label>
+                    <span className="text-[11px] text-gray-400">Se agrega sobre la base de EasyBits. Aplica a todos los canales.</span>
                   </div>
                 </fetcher.Form>
               </div>
