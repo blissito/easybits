@@ -385,6 +385,11 @@ export default [
   // Persistence endpoint for share-edit sessions
   route("api/v2/share/documents/:token/section", "routes/api/v2/share.documents.$token.section.ts"),
 
+  // Collab (Yjs) — the collab-svc box calls these server-to-server (Bearer COLLAB_SECRET):
+  // auth gate for a room + Yjs binary state persistence (externalized to storage).
+  route("api/v2/collab/authenticate", "routes/api/v2/collab.authenticate.ts"),
+  route("api/v2/collab/:docId/state", "routes/api/v2/collab.$docId.state.ts"),
+
   // OAuth 2.1 (MCP connector flow for Claude.ai / Cowork)
   route("/.well-known/oauth-protected-resource", "routes/api/wellknown/oauth-protected-resource.ts"),
   route("/.well-known/oauth-authorization-server", "routes/api/wellknown/oauth-authorization-server.ts"),

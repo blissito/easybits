@@ -45,6 +45,10 @@ interface ServiceSpec {
   // hardTtlMin: once suspended, destroy after this long to reclaim snapshot disk.
   // Measured from lastActiveAt (= suspended-since, since we don't touch it while parked).
   hardTtlMin?: number;
+  // Env inyectado al env_file en el spawn (startAgent → EnvironmentFile). Para
+  // cajas que llaman de vuelta a EasyBits (collab: auth + persistencia). Default
+  // {} (voice/render son self-contained, no necesitan credenciales).
+  env?: () => Record<string, string>;
 }
 
 // Registro de servicios. Añadir un servicio nuevo = una entrada aquí + (si hace
@@ -81,6 +85,26 @@ const SERVICE_REGISTRY: Record<string, ServiceSpec> = {
     suspendOnIdle: true,
     hardTtlMin: 60,
   },
+  // collab: servidor Hocuspocus/Yjs para co-edición de documentos. Ligero (sin
+  // browser) → 1GB. Una caja por owner, compartida por toda su flota. Suspende a
+  // los 10 min (snapshot ~1s resume) y se destruye tras 60 min suspendida. Auth y
+  // persistencia las delega a EasyBits, por eso necesita EASYBITS_BASE_URL +
+  // COLLAB_SECRET en su env (única caja que llama de vuelta).
+  collab: {
+    template: "collab-svc",
+    unit: "collab-svc-runtime",
+    envFile: "/etc/collab-svc-runtime/.env",
+    ports: [9400],
+    readyPaths: { 9400: "/health" },
+    ttlSeconds: 1800,
+    idleMin: 10,
+    suspendOnIdle: true,
+    hardTtlMin: 60,
+    env: () => ({
+      EASYBITS_BASE_URL: process.env.EASYBITS_BASE_URL || "https://www.easybits.cloud",
+      COLLAB_SECRET: process.env.COLLAB_SECRET || "",
+    }),
+  },
 };
 
 export type ServiceKind = keyof typeof SERVICE_REGISTRY;
@@ -106,6 +130,8 @@ export interface ServiceBoxHandle {
   speakUrl?: string;
   // render: base URL for the box's HTTP API (POST /render/pdf, /render/screenshot).
   renderUrl?: string;
+  // collab: ws:// URL del servidor Hocuspocus (para el HocuspocusProvider del editor).
+  collabWsUrl?: string;
 }
 
 function buildUrls(kind: string, sandboxId: string, status: string, urls: Record<number, string>): ServiceBoxHandle {
@@ -119,6 +145,10 @@ function buildUrls(kind: string, sandboxId: string, status: string, urls: Record
   if (kind === "render") {
     const r = urls[9300];
     if (r) h.renderUrl = r.replace(/\/$/, "");
+  }
+  if (kind === "collab") {
+    const c = urls[9400];
+    if (c) h.collabWsUrl = c.replace(/\/$/, "").replace(/^http/, "ws");
   }
   return h;
 }
@@ -228,7 +258,9 @@ export async function spawnServiceBox(ctx: AuthContext, kind: string): Promise<S
     port: spec.ports[0],
     healthPath: spec.readyPaths[spec.ports[0]],
     timeoutSeconds: 45,
-    env: {},
+    // Casi todas las cajas son self-contained (env {}); collab necesita
+    // EASYBITS_BASE_URL + COLLAB_SECRET para llamar de vuelta (auth + persistencia).
+    env: spec.env?.() ?? {},
   });
 
   // 3. Expose every port as a public capability URL.
