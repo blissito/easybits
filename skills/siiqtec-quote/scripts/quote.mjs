@@ -21,7 +21,6 @@
  * Salida (stdout, última línea): JSON { pdfUrl, folio, total, paymentUrl, pages }
  */
 
-import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 
 const ITEMS_PER_PRODUCT_PAGE = 6;
@@ -379,38 +378,56 @@ export function buildPages(input, totals, paymentUrl) {
   return pages;
 }
 
-/** Llama a create_quotation (pages) vía el MCP proxy de EasyBits → { pdfUrl }. */
-async function createQuotationViaMcp(name, pages) {
-  const messages = [
-    { jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'siiqtec-quote', version: '2' } } },
-    { jsonrpc: '2.0', method: 'notifications/initialized' },
-    { jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'create_quotation', arguments: { name, pages } } },
-  ];
-  return new Promise((resolve, reject) => {
-    const child = spawn('npx', ['-y', '@easybits.cloud/mcp'], { env: process.env });
-    let stdout = '', stderr = '';
-    const timer = setTimeout(() => { child.kill('SIGKILL'); reject(new QuoteError('create_quotation timed out after 120s')); }, 120000);
-    child.stdout.on('data', (d) => (stdout += d));
-    child.stderr.on('data', (d) => (stderr += d));
-    child.on('error', (e) => { clearTimeout(timer); reject(new QuoteError(`MCP spawn failed: ${e.message}`)); });
-    child.on('close', () => {
-      clearTimeout(timer);
-      let last;
-      for (const line of stdout.split('\n').filter(Boolean)) {
-        try { const o = JSON.parse(line); if (o.id === 2) last = o; } catch { /* skip */ }
-      }
-      if (!last) return reject(new QuoteError(`create_quotation: no result. stderr=${stderr.slice(0, 300)}`));
-      if (last.error) return reject(new QuoteError(`create_quotation error: ${JSON.stringify(last.error)}`));
-      const text = (last.result?.content || []).map((c) => c.text || '').join('\n');
-      // La respuesta trae dos bloques JSON: { id, name } y { pdfUrl }.
-      const m = text.match(/"pdfUrl"\s*:\s*"([^"]+)"/);
-      if (!m) return reject(new QuoteError(`create_quotation: sin pdfUrl en la respuesta: ${text.slice(0, 300)}`));
-      const idm = text.match(/"id"\s*:\s*"([^"]+)"/);
-      resolve({ pdfUrl: m[1], documentId: idm?.[1] });
-    });
-    child.stdin.write(messages.map((m) => JSON.stringify(m)).join('\n') + '\n');
-    child.stdin.end();
+// REST API v2 de EasyBits (convención oficial de la flota — `$EASYBITS_API_KEY` +
+// `$EASYBITS_BASE_URL` ya en el env del worker). create_quotation está oculto por
+// default (LEGACY_DOC_TOOLS), así que usamos create_document (visible) + export PDF
+// + subida pública para obtener una URL sendeable.
+function apiBase() {
+  return (process.env.EASYBITS_BASE_URL || process.env.EASYBITS_URL || 'https://www.easybits.cloud').replace(/\/$/, '');
+}
+function apiKey() {
+  const k = process.env.EASYBITS_API_KEY;
+  if (!k) throw new QuoteError('falta EASYBITS_API_KEY en el env');
+  return k;
+}
+
+/** Crea el documento (pages → sections) vía REST. Devuelve el id. */
+async function createDocumentRest(name, pages) {
+  const sections = pages.map((html, i) => ({ id: `p${i + 1}`, order: i, html }));
+  const res = await fetch(`${apiBase()}/api/v2/documents`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${apiKey()}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, sections }),
   });
+  if (!res.ok) throw new QuoteError(`create_document ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  const j = await res.json();
+  const id = j.document?.id;
+  if (!id) throw new QuoteError(`create_document sin id: ${JSON.stringify(j).slice(0, 200)}`);
+  return id;
+}
+
+/** Exporta el PDF del documento (Playwright server-side) → Buffer. */
+async function exportPdfRest(documentId) {
+  const res = await fetch(`${apiBase()}/api/v2/documents/${documentId}/pdf`, {
+    headers: { Authorization: `Bearer ${apiKey()}` },
+  });
+  if (!res.ok) throw new QuoteError(`export pdf ${res.status}: ${(await res.text()).slice(0, 200)}`);
+  return Buffer.from(await res.arrayBuffer());
+}
+
+/** Sube el PDF como archivo PÚBLICO (2-step presigned) → URL sendeable. */
+async function uploadPublicPdf(buf, fileName) {
+  const create = await fetch(`${apiBase()}/api/v2/files`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${apiKey()}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ fileName, contentType: 'application/pdf', size: buf.length, access: 'public' }),
+  });
+  if (!create.ok) throw new QuoteError(`upload create ${create.status}: ${(await create.text()).slice(0, 200)}`);
+  const { file, putUrl } = await create.json();
+  if (!putUrl || !file?.url) throw new QuoteError(`upload sin putUrl/url: ${JSON.stringify(file).slice(0, 200)}`);
+  const put = await fetch(putUrl, { method: 'PUT', headers: { 'Content-Type': 'application/pdf' }, body: buf });
+  if (!put.ok) throw new QuoteError(`upload PUT ${put.status}`);
+  return file.url;
 }
 
 export async function runQuote(input) {
@@ -420,7 +437,9 @@ export async function runQuote(input) {
   const paymentUrl = input.include_payment_link ? await createMpLink(totals.total, input.folio) : null;
   const pages = buildPages(input, totals, paymentUrl);
   const name = `COT-${input.folio} — ${input.cliente.nombre}`;
-  const { pdfUrl, documentId } = await createQuotationViaMcp(name, pages);
+  const documentId = await createDocumentRest(name, pages);
+  const pdf = await exportPdfRest(documentId);
+  const pdfUrl = await uploadPublicPdf(pdf, `COT-${input.folio}.pdf`);
   return { pdfUrl, documentId, folio: input.folio, total: totals.total, paymentUrl, pages: pages.length };
 }
 

@@ -820,6 +820,16 @@ async function spawnVm(ctx: AuthContext, fleetAgent: { id: string; name: string 
   // Modelo del worker — persona.env gana (override por-agente), si no el default
   // de flota. El CLI del worker lo lee de su env (ver FLEET_DEFAULT_MODEL).
   if (!env.ANTHROPIC_MODEL) env.ANTHROPIC_MODEL = FLEET_DEFAULT_MODEL;
+  // El host escribe el env como EnvironmentFile de systemd (una línea KEY=VALUE) y
+  // RECHAZA valores con newline (400 "env value ... contains newline") → el spawn
+  // falla y el worker nunca arranca. Un SYSTEM_PROMPT multi-línea (o cualquier valor)
+  // rompía TODOS los spawns. Colapsa newlines a espacio — semánticamente inocuo para
+  // un prompt, y el único choke point donde pasa cualquier fuente de env.
+  for (const k of Object.keys(env)) {
+    if (typeof env[k] === "string" && /[\r\n]/.test(env[k])) {
+      env[k] = env[k].replace(/[\r\n]+/g, " ").replace(/[ \t]{2,}/g, " ").trim();
+    }
+  }
   // TODO(multi-box): target.url must drive createSandbox/callHost; today it uses
   // the single SANDBOX_HOST_URL, so target is recorded but not yet routed.
   const created = await createAgent(ctx, {
