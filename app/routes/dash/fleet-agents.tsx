@@ -1811,6 +1811,20 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
   }, [capModal?.fleetAgentId]);
   const modalFiles = capFetcher.data?.ownerFiles ?? [];
   const modalDbs = capFetcher.data?.ownerDbs ?? [];
+  // Búsqueda server-side del picker de Archivos (debounced). Recarga capFetcher con
+  // ?q= al teclear, SOLO con el picker abierto → lista ligera (seleccionados + matches),
+  // sin cargar 1400+ archivos. fileMgr = groupId del picker abierto (o null).
+  useEffect(() => {
+    if (!capModal || !fileMgr) return;
+    const p = pools.find((x) => x.id === capModal.fleetAgentId);
+    if (!p) return;
+    const t = setTimeout(() => {
+      const qs = fileQ.trim() ? `&q=${encodeURIComponent(fileQ.trim())}` : "";
+      capFetcher.load(`/api/v2/fleet-agents/${p.id}/capabilities?token=${encodeURIComponent(p.token)}${qs}`);
+    }, 250);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fileQ, fileMgr]);
   // Conector cuyo editor de llave está abierto (para CAMBIAR una llave ya puesta).
   const [editKey, setEditKey] = useState<string | null>(null);
   // Flash "✓ Guardado" tras cualquier guardado OK del panel (feedback de botón).
@@ -2806,8 +2820,10 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                       );
                     })()}
                   </div>
+                  {/* Lista = seleccionados (siempre, arriba) + resultados de búsqueda
+                      (server-side). Sin filtro client-side ni carga de 200 archivos. */}
                   <div className="flex-1 overflow-y-auto p-2">
-                    {modalFiles.filter((f) => f.name.toLowerCase().includes(fileQ.toLowerCase())).slice(0, 200).map((f) => {
+                    {modalFiles.map((f) => {
                       const on = (cg.assets ?? []).includes(f.id);
                       return (
                         <label key={f.id} className="flex items-center gap-3 text-sm cursor-pointer hover:bg-gray-50 rounded-lg px-2 py-1.5">
@@ -2818,7 +2834,12 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                         </label>
                       );
                     })}
-                    {modalFiles.length === 0 && <p className="p-4 text-center text-sm text-gray-400">Sube archivos públicos en Archivos para ofrecerlos aquí.</p>}
+                    {capFetcher.state === "loading" && <p className="p-4 text-center text-xs text-gray-400">Buscando…</p>}
+                    {capFetcher.state !== "loading" && modalFiles.length === 0 && (
+                      <p className="p-4 text-center text-sm text-gray-400">
+                        {fileQ.trim() ? `Sin resultados para "${fileQ}".` : "Busca un archivo por nombre, o súbelo arriba."}
+                      </p>
+                    )}
                   </div>
                   <div className="p-3 border-t-2 border-gray-100 flex items-center justify-between text-sm">
                     <span className="text-gray-500">{(cg.assets ?? []).length} seleccionados</span>

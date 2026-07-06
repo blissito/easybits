@@ -61,25 +61,27 @@ export async function loader({ request, params }: Route.LoaderArgs) {
       levels: e.toolsets?.levels?.map((l) => ({ key: l.key, label: l.label })) ?? null,
       curated: CURATED_CAPABILITIES.some((c) => c.name === e.name),
     }));
-  // On-demand (pesado): archivos públicos + bases del owner — para el picker de
-  // Archivos y el scope DB. Se cargan al ABRIR el modal, no en la lista/poll.
-  // Los archivos SELECCIONADOS (en cualquier canal, incl. el default "*") se unen
-  // SIEMPRE aunque caigan fuera del top-200 → un asset adjunto viejo se ve marcado,
-  // no como "N seleccionados" con la lista vacía.
+  // Picker de Archivos = SEARCH-DRIVEN (ligero). NO cargamos 200 archivos (siiqtec
+  // tiene 1400+ COT-*.pdf → lista inútil y pesada). Devolvemos SIEMPRE los archivos
+  // SELECCIONADOS (para que se vean marcados) + los que matcheen `?q=` (búsqueda
+  // server-side, cap 40). Sin `q` y sin selección → lista vacía + el buscador.
+  const q = (new URL(request.url).searchParams.get("q") || "").trim();
   const selectedIds = [
     ...new Set(
       Object.values(cfgs(fa)).flatMap((g) => (g as GroupConfig).assets ?? [])
     ),
   ];
-  const [recentFiles, selectedFiles, ownerDbs] = await Promise.all([
-    db.file.findMany({ where: { ownerId: fa.ownerId, access: "public", status: { not: "DELETED" } }, select: { id: true, name: true, contentType: true }, orderBy: { createdAt: "desc" }, take: 200 }).catch(() => []),
+  const [matchFiles, selectedFiles, ownerDbs] = await Promise.all([
+    q
+      ? db.file.findMany({ where: { ownerId: fa.ownerId, access: "public", status: { not: "DELETED" }, name: { contains: q, mode: "insensitive" } }, select: { id: true, name: true, contentType: true }, orderBy: { createdAt: "desc" }, take: 40 }).catch(() => [])
+      : Promise.resolve([]),
     selectedIds.length
       ? db.file.findMany({ where: { id: { in: selectedIds }, ownerId: fa.ownerId, status: { not: "DELETED" } }, select: { id: true, name: true, contentType: true } }).catch(() => [])
       : Promise.resolve([]),
     db.database.findMany({ where: { userId: fa.ownerId }, select: { name: true, namespace: true }, orderBy: { createdAt: "desc" } }).catch(() => []),
   ]);
-  const seen = new Set(recentFiles.map((f) => f.id));
-  const ownerFiles = [...selectedFiles.filter((f) => !seen.has(f.id)), ...recentFiles];
+  const seen = new Set(matchFiles.map((f) => f.id));
+  const ownerFiles = [...selectedFiles.filter((f) => !seen.has(f.id)), ...matchFiles];
   return json({
     builtins: DEFAULT_MCP_CATALOG.map((e) => ({ name: e.name, label: e.label ?? e.name })),
     capabilities,
