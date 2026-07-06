@@ -648,7 +648,8 @@ export const FLEET_BUCKETS: Array<{
   { key: "investigacion", label: "Investigación", description: "Buscar y leer información de la web." },
   { key: "video", label: "Video", description: "Generar video y personajes." },
   { key: "email", label: "Email", description: "Enviar correos y newsletters." },
-  { key: "payments", label: "Pagos", description: "Links de cobro con MercadoPago.", admin: true },
+  // "Pagos" (bucket nativo EasyBits) se solapa con el conector MercadoPago code-mode
+  // (llave del tenant, lo que usa la flota) → quitado del menú para no duplicar.
   {
     key: "db", label: "Bases de datos", description: "Consultar y administrar bases de datos.", admin: true,
     levels: [

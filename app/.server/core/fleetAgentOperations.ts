@@ -345,6 +345,9 @@ export type GroupConfig = {
   // this channel. Reemplaza el group-FS de nanoclaw (catálogos/imágenes). Se
   // inyecta como manifiesto (nombre → URL) en el prompt del turno.
   assets?: string[];
+  // Scope del bucket DB: namespaces permitidos ("decirle CUÁL base"). Vacío/ausente
+  // = todas. Se inyecta al prompt del turno (enforcement duro en el MCP = follow-up).
+  dbAllow?: string[];
 };
 
 // Builtins (easybits/wa) the group turned OFF. Absent/[] = all builtins ON
@@ -646,6 +649,18 @@ export async function resolveGroupAssetManifest(
     "Estos archivos ya están hospedados. Para enviarlos, incluye su URL en el mensaje (la plataforma los adjunta). NO los regeneres.",
     ...lines,
   ].join("\n");
+}
+
+// Scope de bases de datos por canal → nota para el prompt del turno ("decirle CUÁL
+// base"). Enforcement duro (rechazo en el MCP) = follow-up; hoy es prompt-scoped.
+export function resolveGroupDbScope(
+  fleetAgent: { groupConfigs?: unknown },
+  groupId: string
+): string | null {
+  const all = (fleetAgent.groupConfigs as Record<string, GroupConfig> | null) ?? {};
+  const allow = all[groupId]?.dbAllow ?? all["*"]?.dbAllow;
+  if (!allow?.length) return null;
+  return `## Bases de datos permitidas\nSOLO puedes usar estas bases de datos (namespaces): ${allow.join(", ")}. NO toques ninguna otra.`;
 }
 
 // The always-on `render` MCP server (PDF/screenshots via the on-demand Gotenberg
@@ -1093,6 +1108,7 @@ export async function routeMessage(
       const groupCfg = ((fleetAgent.groupConfigs as Record<string, GroupConfig> | null) ?? {})[cfgId] ?? {};
       const codeCaps = await resolveGroupCodeCaps(fleetAgent, cfgId, fleetAgent.ownerId);
       const assetManifest = await resolveGroupAssetManifest(fleetAgent, cfgId);
+      const dbScope = resolveGroupDbScope(fleetAgent, cfgId);
       const stream = await openAgentChunkStream(
         {
           agentId: worker.id,
@@ -1156,6 +1172,7 @@ export async function routeMessage(
             groupCfg.systemPrompt || null,
             ...(codeCaps?.skillDocs ?? []),
             assetManifest,
+            dbScope,
             msg.appendSystemPrompt,
           ]
             .filter(Boolean)

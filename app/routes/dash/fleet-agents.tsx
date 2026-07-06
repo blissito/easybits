@@ -115,14 +115,9 @@ export async function loader({ request }: Route.LoaderArgs) {
           // owner, stored in mcpCatalog) can.
           custom: !CURATED_CAPABILITIES.some((c) => c.name === e.name),
         }));
-      // Biblioteca de assets S3: archivos PÚBLICOS del owner que el agente puede
-      // entregar (reemplaza el group-FS de nanoclaw). Picker por canal.
-      const ownerFiles = await db.file.findMany({
-        where: { ownerId: user.id, access: "public", status: { not: "DELETED" } },
-        select: { id: true, name: true, contentType: true },
-        orderBy: { createdAt: "desc" },
-        take: 100,
-      }).catch(() => []);
+      // NOTA: ownerFiles/ownerDbs (pesados) NO se cargan aquí — se piden ON-DEMAND
+      // al abrir el modal (GET /api/v2/fleet-agents/:id/capabilities), para no
+      // trabar la lista ni el poll de 2.5s.
       const gconf = (p.groupConfigs as Record<string, GroupConfig> | null) ?? {};
       const groups = rawGroups.map((g: { id: string; subject: string; enabled: boolean }) => ({
         ...g,
@@ -130,7 +125,10 @@ export async function loader({ request }: Route.LoaderArgs) {
         disabledBuiltins: gconf[g.id]?.disabledBuiltins ?? [],
         capLevels: gconf[g.id]?.capLevels ?? {},
         systemPrompt: gconf[g.id]?.systemPrompt ?? "",
-        assets: gconf[g.id]?.assets ?? [],
+        // Sin selección propia → hereda los archivos del agente ("*") — así la
+        // factura (adjunta al default) se ve seleccionada en cada canal.
+        assets: (gconf[g.id]?.assets?.length ? gconf[g.id]!.assets : gconf["*"]?.assets) ?? [],
+        dbAllow: (gconf[g.id]?.dbAllow?.length ? gconf[g.id]!.dbAllow : gconf["*"]?.dbAllow) ?? [],
         // Buckets per-grupo (null = hereda el default del agente; computado server-side
         // porque toolsParamToBuckets vive en .server).
         toolBuckets: gconf[g.id]?.toolGroup ? [...toolsParamToBuckets(gconf[g.id]!.toolGroup!)] : null,
@@ -155,7 +153,8 @@ export async function loader({ request }: Route.LoaderArgs) {
           mcps: gconf[id]?.mcpServers ?? [],
           disabledBuiltins: gconf[id]?.disabledBuiltins ?? [],
           capLevels: gconf[id]?.capLevels ?? {},
-          assets: gconf[id]?.assets ?? [],
+          assets: (gconf[id]?.assets?.length ? gconf[id]!.assets : gconf["*"]?.assets) ?? [],
+          dbAllow: (gconf[id]?.dbAllow?.length ? gconf[id]!.dbAllow : gconf["*"]?.dbAllow) ?? [],
           toolBuckets: gconf[id]?.toolGroup ? [...toolsParamToBuckets(gconf[id]!.toolGroup!)] : null,
         };
       });
@@ -197,7 +196,7 @@ export async function loader({ request }: Route.LoaderArgs) {
         enabledCount: p.enabledGroups.length, machines, vms: machines.length,
         conversations, maxWorkersPerVm: p.maxWorkersPerVm, vmMemMb: p.vmMemMb,
         throttledUntil, connReason: b.reason ?? null, mainGroupJid: p.mainGroupJid,
-        hasOwnNumber: p.hasOwnNumber, builtins, capabilities, ownerFiles,
+        hasOwnNumber: p.hasOwnNumber, builtins, capabilities,
         // Prompt del AGENTE (persona.SYSTEM_PROMPT) — UNO, multicanal (Baileys+WABA).
         // Es el CLAUDE.md del agente; los canales lo heredan. Editado en un solo lugar.
         agentPrompt: ((p.persona as { env?: Record<string, string> } | null)?.env?.SYSTEM_PROMPT) ?? "",
@@ -253,25 +252,28 @@ export async function loader({ request }: Route.LoaderArgs) {
       for (const m of drifted) m.status = "suspended";
     }
   }
-  // Cajas de servicio (voice/render) llaveadas por (ownerId, kind) — su verdad de
-  // existencia vive en DB, no en el host: al DORMIRLAS (snapshot Firecracker) el host
-  // las OMITE de su listing → sin esto desaparecerían del HUD en vez de verse dormidas.
+  // Cajas de servicio (voice/render) llaveadas por (ownerId, kind). El host SÍ las
+  // lista dormidas (store.List devuelve todos los status), pero si por reconcile/reinicio
+  // se cayeran del listing las recuperamos de DB para que se vean DORMIDAS, no que
+  // desaparezcan. Fuente de la existencia = DB; el estado vivo lo pinta el host.
   const serviceBoxes = await db.serviceBox.findMany({
     where: { ownerId: user.id }, select: { sandboxId: true, kind: true },
   });
   const SERVICE_KIND_LABEL: Record<string, string> = { voice: "voz", render: "render" };
   const liveVmIds = new Set((hostVms as any[]).map((v) => v.sandboxId));
   const extraMachines = [
+    // Cajas NO-worker del host: sistema (voz/render/llamadas) o custom. Incluye
+    // DORMIDAS (suspended) → así una caja de servicio parada se ve dormida en el HUD.
     ...(hostVms as any[])
-      .filter((v) => !workerSandboxIds.has(v.sandboxId) && (v.status === "running" || v.status === "starting"))
+      .filter((v) => !workerSandboxIds.has(v.sandboxId) && ["running", "starting", "building", "suspended"].includes(v.status))
       .map((v) =>
         SYSTEM_TEMPLATES[v.template]
           ? { id: v.sandboxId, status: v.status as string, kind: "system" as const, label: SYSTEM_TEMPLATES[v.template] }
           : { id: v.sandboxId, status: v.status as string, kind: "custom" as const, label: v.template as string }
       ),
-    // Cajas de servicio dormidas: en DB pero ausentes del listing vivo del host ⇒
-    // suspendida. Solo si el host respondió (hostReachable) — un error transitorio no
-    // debe pintar todo dormido. Dedup contra las ya emitidas por el host (vivas).
+    // Fallback: cajas de servicio en DB que el host YA no lista (reconcile las sacó) ⇒
+    // dormidas. Solo si el host respondió (hostReachable) — un error transitorio no
+    // debe pintar todo dormido. Dedup contra las ya emitidas por el host.
     ...(hostReachable
       ? serviceBoxes
           .filter((sb) => !liveVmIds.has(sb.sandboxId) && !workerSandboxIds.has(sb.sandboxId))
@@ -552,6 +554,20 @@ export async function action({ request }: Route.ActionArgs) {
       await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { groupConfigs: configs } });
     }
     return data({ ok: true, fileId: created.id });
+  }
+  if (intent === "set-db-allow") {
+    // Scope por-base del bucket DB ("decirle CUÁL"): añade/quita un namespace del
+    // set permitido de este canal. Vacío = todas. Se inyecta al prompt del turno.
+    const groupId = String(fd.get("groupId") || "");
+    const ns = String(fd.get("namespace") || "");
+    const on = String(fd.get("on") || "") === "1";
+    const configs = { ...((fleetAgent.groupConfigs as Record<string, GroupConfig> | null) ?? {}) };
+    const cur = configs[groupId] ?? {};
+    const set = new Set(cur.dbAllow ?? []);
+    if (on) set.add(ns); else set.delete(ns);
+    configs[groupId] = { ...cur, dbAllow: [...set] };
+    await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { groupConfigs: configs } });
+    return data({ ok: true });
   }
   if (intent === "toggle-group-asset") {
     // Añade/quita un archivo público del owner al set entregable de este canal.
@@ -915,6 +931,16 @@ function VmBox({ id, status, slots, max, ghosty, mascotColor, addon, kind, sysLa
     : status == null ? (addon ? "add-on" : "libre")
     : status === "building" ? "booteando"
     : `${slots}/${max} agentes`;
+  // Color del icono/label de las cajas EXTRA: sigue el estado (dormida índigo,
+  // arrancando violeta) en vez de quedarse fijo azul/gris. Los SVG heredan por
+  // currentColor desde el wrapper; el Ubuntu (naranja de marca) va aparte.
+  const iconTone = sleeping ? "text-indigo-400" : starting ? "text-brand-500" : system ? "text-blue-500" : "text-slate-500";
+  const labelTone = extra
+    ? (sleeping ? "text-indigo-500" : starting ? "text-brand-600" : system ? "text-blue-700" : "text-slate-600")
+    : addon && status == null ? "text-brand-600"
+    : sleeping ? "text-indigo-500"
+    : status == null ? "text-[#55525f]"
+    : "text-[#4a3f2c]";
   // Despertar: cuando una caja pasa de suspended → running (un mensaje la resucitó),
   // el ghosty se despereza (stretch pop) y el "Zzz" se va flotando. Detectamos la
   // transición con un ref al status anterior; el poll de 2.5s la dispara en vivo.
@@ -958,7 +984,7 @@ function VmBox({ id, status, slots, max, ghosty, mascotColor, addon, kind, sysLa
       {extra ? (
         // Caja de servicio/custom: el icono refleja el estado — dormida = apagado
         // (grayscale + Zzz); arrancando = pulso (lo pone el contenedor .felt).
-        <div className={`relative flex items-center justify-center transition-[filter,opacity] ${sleeping ? "opacity-50 grayscale" : ""}`}>
+        <div className={`relative flex items-center justify-center transition-[filter,opacity,color] ${iconTone} ${sleeping ? "opacity-50 grayscale" : ""}`}>
           <AnimatePresence>
             {sleeping && (
               <motion.span key="zzz-svc"
@@ -970,27 +996,27 @@ function VmBox({ id, status, slots, max, ghosty, mascotColor, addon, kind, sysLa
           {system ? (
         sysLabel === "render" ? (
           // Render (PDF/PNG): hoja con líneas de texto, NO teléfono.
-          <svg className="w-12 h-12 text-blue-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg className="w-12 h-12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
             <polyline points="14 2 14 8 20 8" />
             <line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /><line x1="10" y1="9" x2="8" y2="9" />
           </svg>
         ) : sysLabel === "voz" ? (
           // Voz (whisper STT + kokoro TTS): micrófono, NO teléfono.
-          <svg className="w-12 h-12 text-blue-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg className="w-12 h-12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" />
             <path d="M19 10v1a7 7 0 0 1-14 0v-1" /><line x1="12" y1="18" x2="12" y2="22" /><line x1="8" y1="22" x2="16" y2="22" />
           </svg>
         ) : (
           // Llamadas (livekit): teléfono.
-          <svg className="w-12 h-12 text-blue-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg className="w-12 h-12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z" />
           </svg>
         )
       ) : (
         /chat/i.test(sysLabel ?? "") ? (
           // Chat (ej. ghosty-chat): burbuja de conversación con puntos, NO cubo.
-          <svg className="w-12 h-12 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg className="w-12 h-12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
             <line x1="8.5" y1="11.5" x2="8.51" y2="11.5" /><line x1="12" y1="11.5" x2="12.01" y2="11.5" /><line x1="15.5" y1="11.5" x2="15.51" y2="11.5" />
           </svg>
@@ -1002,7 +1028,7 @@ function VmBox({ id, status, slots, max, ghosty, mascotColor, addon, kind, sysLa
           </svg>
         ) : (
           // Otros custom (code-interpreter, etc.): cubo genérico.
-          <svg className="w-12 h-12 text-slate-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg className="w-12 h-12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
             <path d="m3.3 7 8.7 5 8.7-5" /><path d="M12 22V12" />
           </svg>
@@ -1046,7 +1072,7 @@ function VmBox({ id, status, slots, max, ghosty, mascotColor, addon, kind, sysLa
           </AnimatePresence>
         </div>
       )}
-      <span className={`font-jersey text-base leading-none truncate max-w-full px-2 ${system ? "text-blue-700 font-bold" : custom ? "text-slate-600 font-bold" : addon && status == null ? "text-brand-600 font-bold" : status == null ? "text-[#55525f] font-bold" : "text-[#4a3f2c] font-bold"}`}>{label}</span>
+      <span className={`font-jersey text-base leading-none truncate max-w-full px-2 font-bold ${labelTone} ${sleeping ? "opacity-80" : ""}`}>{label}</span>
       </div>
     </motion.div>
   );
@@ -1636,6 +1662,30 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
     if (capDirty && !window.confirm("Tienes cambios sin guardar. ¿Cerrar de todos modos?")) return;
     setCapDirty(false); setOptim({}); setCapModal(null);
   };
+  // Carga ON-DEMAND del modal (archivos + bases del owner) — pesado, fuera del poll.
+  const capFetcher = useFetcher<{ ownerFiles?: { id: string; name: string; contentType: string | null }[]; ownerDbs?: { name: string; namespace: string }[] }>();
+  useEffect(() => {
+    if (!capModal) return;
+    const p = pools.find((x) => x.id === capModal.fleetAgentId);
+    if (p) capFetcher.load(`/api/v2/fleet-agents/${p.id}/capabilities?token=${encodeURIComponent(p.token)}`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [capModal?.fleetAgentId]);
+  const modalFiles = capFetcher.data?.ownerFiles ?? [];
+  const modalDbs = capFetcher.data?.ownerDbs ?? [];
+  // Conector cuyo editor de llave está abierto (para CAMBIAR una llave ya puesta).
+  const [editKey, setEditKey] = useState<string | null>(null);
+  // Flash "✓ Guardado" tras cualquier guardado OK del panel (feedback de botón).
+  const [savedFlash, setSavedFlash] = useState(false);
+  const prevFetch = useRef("idle");
+  useEffect(() => {
+    if (prevFetch.current !== "idle" && fetcher.state === "idle" && (fetcher.data as { ok?: boolean } | undefined)?.ok) {
+      setSavedFlash(true);
+      const t = setTimeout(() => setSavedFlash(false), 1800);
+      prevFetch.current = fetcher.state;
+      return () => clearTimeout(t);
+    }
+    prevFetch.current = fetcher.state;
+  }, [fetcher.state, fetcher.data]);
   // Abierto/cerrado por agente — PERSISTIDO en localStorage para que recuerde el
   // estado entre recargas. Client-only (carga en useEffect, no en el initializer)
   // para no romper la hidratación SSR.
@@ -1660,11 +1710,12 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
   const [wabaConnecting, setWabaConnecting] = useState<string | null>(null);
   const [wabaError, setWabaError] = useState<string | null>(null);
   // Tabs por canal (baileys/waba/…) + ⚙ ajustes del canal abierto, por fleetAgent.
-  // Pestaña de canal por agente — persistida en localStorage para sobrevivir refresh.
-  const [activeChannel, setActiveChannel] = useState<Record<string, string>>(() => {
-    if (typeof window === "undefined") return {};
-    try { return JSON.parse(localStorage.getItem("fleetChannelTab") || "{}"); } catch { return {}; }
-  });
+  // Pestaña de canal por agente — persistida en localStorage. Se carga en useEffect
+  // (NO en el initializer) para no romper la hidratación SSR → antes se reseteaba.
+  const [activeChannel, setActiveChannel] = useState<Record<string, string>>({});
+  useEffect(() => {
+    try { const s = localStorage.getItem("fleetChannelTab"); if (s) setActiveChannel(JSON.parse(s)); } catch { /* ignore */ }
+  }, []);
   const setChannelTab = (pid: string, kind: string) =>
     setActiveChannel((s) => {
       const next = { ...s, [pid]: kind };
@@ -2307,26 +2358,53 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                   <div>
                     <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Herramientas EasyBits</span>
                     <div className="mt-1 flex flex-col gap-2">
-                      {buckets.map((b) => (
-                        <div key={b.key} className="border-2 border-gray-100 rounded-xl px-3 py-2 flex items-center justify-between gap-2">
-                          <span className="text-sm font-semibold min-w-0 truncate flex items-center gap-1.5">
-                            {b.label}
-                            {b.admin && <span className="text-[10px] px-1 rounded bg-amber-100 text-amber-700 border border-amber-300">admin</span>}
-                          </span>
-                          {b.levels ? (
-                            <div className="shrink-0 flex rounded-lg border-2 border-black overflow-hidden divide-x-2 divide-black text-[11px] font-semibold">
-                              {[{ key: "off", label: "Off" }, ...b.levels].map((l) => (
-                                <button key={l.key} type="button" onClick={() => setLevel(b, l.key)}
-                                  className={`px-2 py-1 transition-colors ${levelOf(b) === l.key ? "bg-black text-white" : "bg-white text-gray-500 hover:bg-gray-100"}`}>
-                                  {l.label}
-                                </button>
-                              ))}
+                      {buckets.map((b) => {
+                        const lvl = levelOf(b);
+                        return (
+                          <div key={b.key} className="border-2 border-gray-100 rounded-xl px-3 py-2">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-sm font-semibold min-w-0 truncate flex items-center gap-1.5">
+                                {b.label}
+                                {b.admin && <span className="text-[10px] px-1 rounded bg-amber-100 text-amber-700 border border-amber-300">admin</span>}
+                              </span>
+                              {b.levels ? (
+                                <div className="shrink-0 flex rounded-lg border-2 border-black overflow-hidden divide-x-2 divide-black text-[11px] font-semibold">
+                                  {[{ key: "off", label: "Off" }, ...b.levels].map((l) => (
+                                    <button key={l.key} type="button" onClick={() => setLevel(b, l.key)}
+                                      className={`px-2 py-1 transition-colors ${lvl === l.key ? "bg-black text-white" : "bg-white text-gray-500 hover:bg-gray-100"}`}>
+                                      {l.label}
+                                    </button>
+                                  ))}
+                                </div>
+                              ) : (
+                                <Switch value={effective.has(b.key)} className="text-sm items-center shrink-0" onChange={(on) => toggle(b.key, on)} />
+                              )}
                             </div>
-                          ) : (
-                            <Switch value={effective.has(b.key)} className="text-sm items-center shrink-0" onChange={(on) => toggle(b.key, on)} />
-                          )}
-                        </div>
-                      ))}
+                            {/* Scope por-base: qué bases puede tocar (vacío = todas) */}
+                            {b.key === "db" && lvl && lvl !== "off" && (
+                              <div className="mt-2 border-t border-gray-100 pt-2">
+                                <p className="text-[10px] text-gray-400 mb-1">¿Cuáles bases? (vacío = todas)</p>
+                                {modalDbs.length === 0 ? (
+                                  <p className="text-[11px] text-gray-400">No tienes bases aún.</p>
+                                ) : (
+                                  <div className="flex flex-col gap-1 max-h-32 overflow-y-auto">
+                                    {modalDbs.map((d) => {
+                                      const on = (cg.dbAllow ?? []).includes(d.namespace);
+                                      return (
+                                        <label key={d.namespace} className="flex items-center gap-2 text-xs cursor-pointer hover:bg-gray-50 rounded px-1">
+                                          <input type="checkbox" checked={on}
+                                            onChange={(e) => fetcher.submit({ intent: "set-db-allow", fleetAgentId: cp.id, groupId: cg.id, namespace: d.namespace, on: e.target.checked ? "1" : "0" }, { method: "post" })} />
+                                          <span className="truncate">{d.name}</span>
+                                        </label>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 );
@@ -2378,30 +2456,38 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                               </p>
                               {m.description && <p className="text-[11px] text-gray-400">{m.description}</p>}
                             </div>
-                            <div className="shrink-0 flex rounded-lg border-2 border-black overflow-hidden divide-x-2 divide-black">
-                              {opts.map((l) => (
-                                <button key={l.key} type="button" onClick={() => setLevel(l.key)}
-                                  className={`px-2 py-1 text-[11px] font-semibold transition-colors ${cur === l.key ? "bg-black text-white" : "bg-white text-gray-500 hover:bg-gray-100"}`}>
-                                  {l.label}
-                                </button>
-                              ))}
+                            <div className="shrink-0 flex items-center gap-1.5">
+                              {(m.requiredSecrets?.length ?? 0) > 0 && (
+                                <button type="button" title={m.secretsPresent ? "Cambiar llave" : "Falta configurar la llave"}
+                                  onClick={() => setEditKey(editKey === m.name ? null : m.name)}
+                                  className={`text-xs px-1.5 py-1 rounded-lg border-2 ${editKey === m.name ? "border-black bg-black text-white" : m.secretsPresent ? "border-gray-200 text-gray-400 hover:text-black" : "border-amber-300 text-amber-600"}`}>🔑</button>
+                              )}
+                              <div className="flex rounded-lg border-2 border-black overflow-hidden divide-x-2 divide-black">
+                                {opts.map((l) => (
+                                  <button key={l.key} type="button" onClick={() => setLevel(l.key)}
+                                    className={`px-2 py-1 text-[11px] font-semibold transition-colors ${cur === l.key ? "bg-black text-white" : "bg-white text-gray-500 hover:bg-gray-100"}`}>
+                                    {l.label}
+                                  </button>
+                                ))}
+                              </div>
                             </div>
                           </div>
-                          {enabled && !m.secretsPresent && (m.missingSecrets ?? m.requiredSecrets).map((sec) => {
+                          {(editKey === m.name || (enabled && !m.secretsPresent)) && m.requiredSecrets.map((sec) => {
                             const meta = (m.secretFields ?? {})[sec];
+                            const has = !(m.missingSecrets ?? m.requiredSecrets).includes(sec);
                             return (
                               <fetcher.Form key={sec} method="post" className="mt-2"
-                                onSubmit={(e) => { const f = e.currentTarget; requestAnimationFrame(() => f.reset()); }}>
+                                onSubmit={(e) => { const f = e.currentTarget; requestAnimationFrame(() => f.reset()); setEditKey(null); }}>
                                 <input type="hidden" name="intent" value="set-secret" />
                                 <input type="hidden" name="fleetAgentId" value={cp.id} />
                                 <input type="hidden" name="name" value={sec} />
                                 <div className="flex items-center gap-2">
                                   <input type="password" name="value" required autoComplete="off"
-                                    placeholder={meta?.label ? `Pega tu ${meta.label.toLowerCase()}` : "Pega tu llave"}
+                                    placeholder={(has ? "Reemplaza tu " : "Pega tu ") + (meta?.label ? meta.label.toLowerCase() : "llave")}
                                     className="flex-1 min-w-0 border-2 border-gray-300 rounded-lg px-2 py-1 text-sm" />
                                   <button type="submit" className="shrink-0 border-2 border-black rounded-lg px-2.5 py-1 text-xs font-semibold">Guardar</button>
                                 </div>
-                                <p className="mt-0.5 text-[10px] text-amber-600">{meta?.help ? meta.help : "Falta la llave para que funcione."}</p>
+                                <p className={`mt-0.5 text-[10px] ${has ? "text-gray-400" : "text-amber-600"}`}>{meta?.help ? meta.help : has ? "Ya hay una llave guardada; escribe una nueva para reemplazarla." : "Falta la llave para que funcione."}</p>
                               </fetcher.Form>
                             );
                           })}
@@ -2444,7 +2530,10 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                     placeholder="Personalidad, reglas, catálogo, tono… Se agrega sobre la base de EasyBits (no la reemplaza). Aplica a todos los canales de este agente."
                     className="w-full min-h-[18rem] border-2 border-gray-300 rounded-lg px-2 py-1.5 text-sm resize-y font-mono leading-relaxed" />
                   <div className="mt-1.5 flex items-center gap-2">
-                    <button type="submit" className="border-2 border-black rounded-lg px-3 py-1 text-xs font-semibold">Guardar instrucciones</button>
+                    <button type="submit" disabled={fetcher.state !== "idle" && fetcher.formData?.get("intent") === "set-agent-prompt"}
+                      className="border-2 border-black rounded-lg px-3 py-1 text-xs font-semibold disabled:opacity-60">
+                      {fetcher.state !== "idle" && fetcher.formData?.get("intent") === "set-agent-prompt" ? "Guardando…" : savedFlash ? "✓ Guardado" : "Guardar instrucciones"}
+                    </button>
                     <label className="text-xs font-semibold text-gray-500 border-2 border-gray-200 rounded-lg px-2.5 py-1 cursor-pointer hover:bg-gray-50">
                       Importar .md/.txt
                       <input type="file" accept=".md,.txt,text/markdown,text/plain" className="hidden"
@@ -2533,7 +2622,7 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                     })()}
                   </div>
                   <div className="flex-1 overflow-y-auto p-2">
-                    {cp.ownerFiles.filter((f) => f.name.toLowerCase().includes(fileQ.toLowerCase())).slice(0, 200).map((f) => {
+                    {modalFiles.filter((f) => f.name.toLowerCase().includes(fileQ.toLowerCase())).slice(0, 200).map((f) => {
                       const on = (cg.assets ?? []).includes(f.id);
                       return (
                         <label key={f.id} className="flex items-center gap-3 text-sm cursor-pointer hover:bg-gray-50 rounded-lg px-2 py-1.5">
@@ -2544,7 +2633,7 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                         </label>
                       );
                     })}
-                    {cp.ownerFiles.length === 0 && <p className="p-4 text-center text-sm text-gray-400">Sube archivos públicos en Archivos para ofrecerlos aquí.</p>}
+                    {modalFiles.length === 0 && <p className="p-4 text-center text-sm text-gray-400">Sube archivos públicos en Archivos para ofrecerlos aquí.</p>}
                   </div>
                   <div className="p-3 border-t-2 border-gray-100 flex items-center justify-between text-sm">
                     <span className="text-gray-500">{(cg.assets ?? []).length} seleccionados</span>
