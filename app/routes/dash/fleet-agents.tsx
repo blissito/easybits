@@ -190,6 +190,12 @@ export async function loader({ request }: Route.LoaderArgs) {
       const toolGroup =
         ((p.persona as { env?: Record<string, string> } | null)?.env?.EASYBITS_TOOL_GROUP) ?? "";
       const activeBuckets = [...toolsParamToBuckets(toolGroup)];
+      // Archivos de los skills (para el modal Administrar) — resueltos a nombre/tipo.
+      const skillFileIds = [...new Set(fleetSkills(p).flatMap((s) => s.files ?? []))];
+      const skillFiles = skillFileIds.length
+        ? await db.file.findMany({ where: { id: { in: skillFileIds } }, select: { id: true, name: true, contentType: true, url: true } }).catch(() => [])
+        : [];
+      const skillFileById = new Map(skillFiles.map((f) => [f.id, f]));
       return {
         id: p.id, name: p.name, token: p.token, mascotColor, status, live, qrDataUrl, pairingCode, groups,
         wabaNumbers,
@@ -207,7 +213,11 @@ export async function loader({ request }: Route.LoaderArgs) {
         // Skills del agente (custom-tools empaquetados) — objetos de 1ª clase.
         skills: fleetSkills(p).map((s) => ({
           id: s.id, name: s.name, description: s.description,
-          enabled: s.enabled !== false, fileCount: (s.files ?? []).length,
+          enabled: s.enabled !== false,
+          files: (s.files ?? []).map((fid) => {
+            const f = skillFileById.get(fid);
+            return { id: fid, name: f?.name ?? "(archivo)", contentType: f?.contentType ?? null, url: f?.url ?? null };
+          }),
         })),
       };
     })
@@ -863,6 +873,70 @@ export async function action({ request }: Route.ActionArgs) {
     // Quita el skill del agente. Los archivos quedan en Archivos (no se borran).
     const skillId = String(fd.get("skillId") || "");
     const skills = fleetSkills(fleetAgent).filter((s) => s.id !== skillId);
+    await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { skills } });
+    return data({ ok: true });
+  }
+  if (intent === "update-skill") {
+    // Edita nombre + descripción del skill (lo que el agente ve para decidir usarlo).
+    const skillId = String(fd.get("skillId") || "");
+    const name = String(fd.get("name") || "").trim();
+    const description = String(fd.get("description") || "").trim();
+    const skills = fleetSkills(fleetAgent).map((s) =>
+      s.id === skillId ? { ...s, name: name || s.name, description } : s
+    );
+    await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { skills } });
+    return data({ ok: true });
+  }
+  if (intent === "replace-skill-file") {
+    // Reemplaza el CONTENIDO de un archivo del bundle (ej. actualizar quote.mjs)
+    // SOBREESCRIBIENDO el mismo storageKey → la URL no cambia (el manifiesto sigue
+    // válido, VMs vivas lo re-descargan en el próximo turno).
+    const skillId = String(fd.get("skillId") || "");
+    const fileId = String(fd.get("fileId") || "");
+    const file = fd.get("file");
+    if (!(file instanceof File)) return data({ error: "no file" }, { status: 400 });
+    const skill = fleetSkills(fleetAgent).find((s) => s.id === skillId);
+    if (!skill || !(skill.files ?? []).includes(fileId)) return data({ error: "archivo no pertenece al skill" }, { status: 404 });
+    const rec = await db.file.findUnique({ where: { id: fileId }, select: { storageKey: true, ownerId: true } });
+    if (!rec || rec.ownerId !== user.id) return data({ error: "archivo no encontrado" }, { status: 404 });
+    const buf = Buffer.from(await file.arrayBuffer());
+    const { getPlatformPublicClient } = await import("~/.server/storage");
+    const ctype = file.type || (/\.mjs$|\.js$/i.test(file.name) ? "text/javascript" : /\.md$/i.test(file.name) ? "text/markdown" : "application/octet-stream");
+    await getPlatformPublicClient().putObject(rec.storageKey, buf, ctype);
+    await db.file.update({ where: { id: fileId }, data: { size: buf.length, contentType: ctype } });
+    return data({ ok: true });
+  }
+  if (intent === "add-skill-file") {
+    // Agrega un archivo al bundle del skill (ej. una plantilla extra).
+    const skillId = String(fd.get("skillId") || "");
+    const file = fd.get("file");
+    if (!(file instanceof File)) return data({ error: "no file" }, { status: 400 });
+    const buf = Buffer.from(await file.arrayBuffer());
+    const { getPlatformPublicClient, buildPublicAssetUrl } = await import("~/.server/storage");
+    const { randomUUID } = await import("node:crypto");
+    const safe = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+    const storageKey = `${user.id}/${randomUUID()}-${safe}`;
+    const ctype = file.type || (/\.mjs$|\.js$/i.test(file.name) ? "text/javascript" : /\.md$/i.test(file.name) ? "text/markdown" : "application/octet-stream");
+    await getPlatformPublicClient().putObject(storageKey, buf, ctype);
+    const created = await db.file.create({
+      data: { storageKey, slug: storageKey, name: file.name, size: buf.length, contentType: ctype, status: "DONE", url: buildPublicAssetUrl(storageKey), access: "public", ownerId: user.id, assetIds: [] },
+      select: { id: true },
+    });
+    const skills = fleetSkills(fleetAgent).map((s) =>
+      s.id === skillId ? { ...s, files: [...(s.files ?? []), created.id] } : s
+    );
+    await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { skills } });
+    return data({ ok: true, fileId: created.id });
+  }
+  if (intent === "remove-skill-file") {
+    // Quita un archivo del bundle (no lo borra de Archivos). Guarda contra dejar 0.
+    const skillId = String(fd.get("skillId") || "");
+    const fileId = String(fd.get("fileId") || "");
+    const skills = fleetSkills(fleetAgent).map((s) => {
+      if (s.id !== skillId) return s;
+      const files = (s.files ?? []).filter((f) => f !== fileId);
+      return { ...s, files: files.length ? files : (s.files ?? []) };
+    });
     await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { skills } });
     return data({ ok: true });
   }
@@ -1707,6 +1781,8 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
   const [fileQ, setFileQ] = useState("");
   // Instrucciones: editor a pantalla (no textarea de 5 líneas).
   const [promptFull, setPromptFull] = useState<string | null>(null);
+  // Administrar skill: { fleetAgentId, skillId } del skill abierto en el modal.
+  const [manageSkill, setManageSkill] = useState<{ fleetAgentId: string; skillId: string } | null>(null);
   // Optimistic UI: override local `${groupId}:${key}` → valor, aplicado en el
   // render para feedback INSTANTÁNEO; el loader (poll/revalidate) lo alcanza.
   const [optim, setOptim] = useState<Record<string, string>>({});
@@ -2583,10 +2659,13 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                   {(cp.skills ?? []).map((sk) => (
                     <div key={sk.id} className="border-2 border-gray-100 rounded-xl px-3 py-2 flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <p className="text-sm font-semibold truncate">{sk.name} <span className="text-[10px] font-normal text-gray-400">· {sk.fileCount} archivo{sk.fileCount === 1 ? "" : "s"}</span></p>
+                        <p className="text-sm font-semibold truncate">{sk.name} <span className="text-[10px] font-normal text-gray-400">· {sk.files.length} archivo{sk.files.length === 1 ? "" : "s"}</span></p>
                         {sk.description && <p className="text-[11px] text-gray-500 line-clamp-2">{sk.description}</p>}
                       </div>
                       <div className="shrink-0 flex items-center gap-2">
+                        <button type="button" title="Administrar: editar nombre/descripción, ver y reemplazar archivos"
+                          onClick={() => setManageSkill({ fleetAgentId: cp.id, skillId: sk.id })}
+                          className="text-gray-400 hover:text-black text-sm">✎</button>
                         <Switch value={sk.enabled} className="text-sm items-center" onChange={(on) =>
                           fetcher.submit({ intent: "toggle-skill", fleetAgentId: cp.id, skillId: sk.id, on: on ? "1" : "0" }, { method: "post" })} />
                         <button type="button" title="Quitar skill (los archivos quedan en Archivos)"
@@ -2780,6 +2859,81 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
           <TestChatDrawer key="test-chat-drawer" agent={chatAgent} onClose={() => setChatAgent(null)} />
         )}
       </AnimatePresence>
+
+      {/* Administrar skill: editar nombre/descripción + ver/reemplazar/agregar archivos
+          del bundle. Reemplazar un archivo sobreescribe su contenido (misma URL) →
+          actualizar el script del skill sin re-cablear nada. */}
+      {manageSkill && (() => {
+        const ag = pools.find((p) => p.id === manageSkill.fleetAgentId);
+        const sk = ag?.skills?.find((s) => s.id === manageSkill.skillId);
+        if (!ag || !sk) return null;
+        const busy = (i: string) => fetcher.state !== "idle" && fetcher.formData?.get("intent") === i;
+        const submitFile = (intent: string, fileId: string | null, files: FileList | null) => {
+          if (!files?.length) return;
+          const f = new FormData();
+          f.set("intent", intent); f.set("fleetAgentId", ag.id); f.set("skillId", sk.id);
+          if (fileId) f.set("fileId", fileId);
+          f.set("file", files[0]);
+          fetcher.submit(f, { method: "post", encType: "multipart/form-data" });
+        };
+        return (
+          <div className="fixed inset-0 z-[70] bg-black/50 flex items-center justify-center p-4" onClick={() => setManageSkill(null)}>
+            <div className="bg-white rounded-2xl border-2 border-black w-full max-w-lg max-h-[88vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between p-4 border-b-2 border-gray-100 sticky top-0 bg-white">
+                <h4 className="font-semibold">🧩 Administrar skill</h4>
+                <button type="button" onClick={() => setManageSkill(null)} className="text-gray-400 hover:text-black">✕</button>
+              </div>
+              <div className="p-4 flex flex-col gap-4">
+                {/* Nombre + descripción */}
+                <fetcher.Form method="post" className="flex flex-col gap-2" key={`us-${sk.id}`}>
+                  <input type="hidden" name="intent" value="update-skill" />
+                  <input type="hidden" name="fleetAgentId" value={ag.id} />
+                  <input type="hidden" name="skillId" value={sk.id} />
+                  <label className="text-[11px] font-semibold text-gray-400 uppercase">Nombre</label>
+                  <input name="name" defaultValue={sk.name} className="border-2 border-gray-300 rounded-lg px-3 py-1.5 text-sm" />
+                  <label className="text-[11px] font-semibold text-gray-400 uppercase">Descripción <span className="normal-case font-normal">· esto ve el agente para decidir usar el skill</span></label>
+                  <textarea name="description" defaultValue={sk.description} rows={3} className="border-2 border-gray-300 rounded-lg px-3 py-1.5 text-sm resize-y" />
+                  <button type="submit" disabled={busy("update-skill")} className="self-start border-2 border-black rounded-lg px-3 py-1 text-xs font-semibold disabled:opacity-60">
+                    {busy("update-skill") ? "Guardando…" : "Guardar"}
+                  </button>
+                </fetcher.Form>
+
+                {/* Archivos del bundle */}
+                <div>
+                  <label className="text-[11px] font-semibold text-gray-400 uppercase block mb-1">Archivos del bundle</label>
+                  <div className="flex flex-col gap-1.5">
+                    {sk.files.map((f, i) => (
+                      <div key={f.id} className="flex items-center justify-between gap-2 border-2 border-gray-100 rounded-lg px-3 py-1.5">
+                        <div className="min-w-0 flex items-center gap-2">
+                          <span className="text-sm">{/\.md$/i.test(f.name) ? "📄" : /\.mjs$|\.js$/i.test(f.name) ? "⚙️" : "📎"}</span>
+                          <span className="text-sm truncate">{f.name}</span>
+                          {i === 0 && <span className="text-[9px] px-1 rounded bg-gray-100 text-gray-500 border border-gray-200 shrink-0">SKILL.md</span>}
+                        </div>
+                        <div className="shrink-0 flex items-center gap-2 text-xs">
+                          {f.url && <a href={f.url} target="_blank" rel="noreferrer" className="text-gray-400 hover:text-black" title="Ver/descargar">↗</a>}
+                          <label className="font-semibold text-brand-500 cursor-pointer hover:underline">
+                            Reemplazar
+                            <input type="file" className="hidden" onChange={(e) => { submitFile("replace-skill-file", f.id, e.target.files); e.currentTarget.value = ""; }} />
+                          </label>
+                          {sk.files.length > 1 && (
+                            <button type="button" title="Quitar del bundle" className="text-gray-300 hover:text-red-500"
+                              onClick={() => fetcher.submit({ intent: "remove-skill-file", fleetAgentId: ag.id, skillId: sk.id, fileId: f.id }, { method: "post" })}>✕</button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                    <label className="text-xs font-semibold text-brand-500 border-2 border-dashed border-brand-200 rounded-lg px-3 py-1.5 cursor-pointer hover:bg-brand-50/40 text-center">
+                      {busy("add-skill-file") ? "Subiendo…" : "+ Agregar archivo al bundle"}
+                      <input type="file" className="hidden" onChange={(e) => { submitFile("add-skill-file", null, e.target.files); e.currentTarget.value = ""; }} />
+                    </label>
+                  </div>
+                  <p className="text-[10px] text-gray-400 mt-1.5">Reemplazar sobreescribe el contenido del archivo (misma URL) → el agente usa la versión nueva en el próximo turno. Ideal para actualizar el script.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
