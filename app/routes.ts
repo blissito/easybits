@@ -298,6 +298,7 @@ export default [
     route("documents/:id", "routes/api/v2/document.ts"),
     route("documents/:id/deploy", "routes/api/v2/document-deploy.ts"),
     route("documents/:id/pdf", "routes/api/v2/document-pdf.ts"),
+    route("documents/:id/docx", "routes/api/v2/document-docx.ts"),
     route("documents/:id/images", "routes/api/v2/document-images.ts"),
     route("documents/:id/thumbnail", "routes/api/v2/document-thumbnail.ts"),
     route("presentations/:id/pdf", "routes/api/v2/presentation-pdf.ts"),

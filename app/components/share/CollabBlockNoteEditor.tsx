@@ -18,6 +18,12 @@ import * as Y from "yjs";
 
 const COLORS = ["#e11d48", "#7c3aed", "#0891b2", "#16a34a", "#ea580c", "#db2777"];
 
+// Envuelve el HTML del editor en un <section> de página (Tailwind) para que el
+// pipeline de PDF/deploy/export lo renderice como documento, no prosa pelada.
+function wrapAsPage(innerHtml: string): string {
+  return `<section class="w-[8.5in] min-h-[11in] p-16 bg-surface text-on-surface leading-relaxed">${innerHtml}</section>`;
+}
+
 export default function CollabBlockNoteEditor({
   wsUrl,
   room,
@@ -68,10 +74,7 @@ export default function CollabBlockNoteEditor({
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
-          body: JSON.stringify({
-            sectionId: persistSectionId,
-            html: `<section class="w-[8.5in] min-h-[11in] p-16 bg-surface text-on-surface leading-relaxed">${innerHtml}</section>`,
-          }),
+          body: JSON.stringify({ sectionId: persistSectionId, html: wrapAsPage(innerHtml) }),
         }).catch((e) => console.error("[collab] persist failed", e));
       }, 800);
     },
@@ -125,6 +128,45 @@ export default function CollabBlockNoteEditor({
     [provider, ydoc],
   );
 
+  // Exportar PDF/Word. Antes de exportar, FLUSHEA el HTML actual a Landing.sections
+  // (el snapshot es debounced) para no exportar contenido viejo. room = landingId.
+  const [exporting, setExporting] = useState<null | "pdf" | "docx">(null);
+  const exportDoc = useCallback(
+    async (fmt: "pdf" | "docx") => {
+      if (!editor || exporting) return;
+      setExporting(fmt);
+      try {
+        const html = await editor.blocksToFullHTML(editor.document);
+        await fetch(`/api/v2/share/documents/${encodeURIComponent(token)}/section`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ sectionId: persistSectionId, html: wrapAsPage(html) }),
+        }).catch(() => {});
+        const res = await fetch(
+          `/api/v2/documents/${encodeURIComponent(room)}/${fmt}?token=${encodeURIComponent(token)}`,
+          { credentials: "include" },
+        );
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const blob = await res.blob();
+        const objUrl = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = objUrl;
+        a.download = `documento.${fmt}`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(objUrl);
+      } catch (e) {
+        console.error("[collab] export failed", e);
+        alert("No se pudo exportar. Intenta de nuevo en un momento.");
+      } finally {
+        setExporting(null);
+      }
+    },
+    [editor, exporting, token, persistSectionId, room],
+  );
+
   // Documento SIEMPRE en claro (como Word/Google Docs), independiente del tema del
   // sistema: hoja blanca centrada con sombra sobre un canvas gris. BlockNote aporta
   // la barra de formato flotante (al seleccionar) + slash menu (/) + drag handles.
@@ -140,6 +182,25 @@ export default function CollabBlockNoteEditor({
           {status === "connected" ? "Co-edición en vivo" : status === "connecting" ? "Conectando…" : "Desconectado"}
           {!editable && " · solo lectura"}
         </span>
+        {/* Descargas — claras para un abogado: PDF y Word. */}
+        <div className="ml-auto flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => exportDoc("pdf")}
+            disabled={!!exporting}
+            className="rounded-md border border-neutral-300 bg-white px-3 py-1 text-xs font-medium text-neutral-700 transition hover:border-neutral-400 hover:bg-neutral-50 disabled:opacity-50"
+          >
+            {exporting === "pdf" ? "Generando…" : "Descargar PDF"}
+          </button>
+          <button
+            type="button"
+            onClick={() => exportDoc("docx")}
+            disabled={!!exporting}
+            className="rounded-md border border-neutral-300 bg-white px-3 py-1 text-xs font-medium text-neutral-700 transition hover:border-neutral-400 hover:bg-neutral-50 disabled:opacity-50"
+          >
+            {exporting === "docx" ? "Generando…" : "Descargar Word"}
+          </button>
+        </div>
       </header>
       <div className="flex-1 overflow-auto px-4 py-8 sm:py-10">
         <div className="mx-auto max-w-[820px]">
