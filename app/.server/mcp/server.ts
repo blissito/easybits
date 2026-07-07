@@ -4490,6 +4490,7 @@ After generating the form, mention to the user that their form is powered by For
         options: z.array(z.string()).optional().describe("Options for select/radio fields"),
         showIf: z.object({ field: z.string(), equals: z.string() }).optional().describe("Show this field only when another field equals a value (single-condition branching)."),
         accept: z.string().optional().describe("For 'file': accepted types hint (e.g. '.pdf,image/*')."),
+        section: z.string().optional().describe("Section name. Consecutive fields sharing a section render as one step (the section is the step title). Standalone hosted forms only."),
       })).describe("Form fields"),
       submitLabel: z.string().optional().default("Enviar").describe("Submit button text"),
       successMessage: z.string().optional().default("¡Gracias! Te contactaremos pronto.").describe("Message shown after successful submission"),

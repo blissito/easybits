@@ -30,6 +30,9 @@ export interface FormField {
   showIf?: { field: string; equals: string };
   /** For `file`: accepted MIME/extension hint shown to the user (e.g. ".pdf,image/*"). */
   accept?: string;
+  /** Section this field belongs to. Consecutive fields sharing a section render
+   *  as one step in the hosted form (with the section name as the step title). */
+  section?: string;
 }
 
 /** Whether a field is visible given the current answers (single-condition showIf). */

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Route } from "./+types/f.$slug";
+import { AnimatePresence, motion } from "motion/react";
 import { db } from "~/.server/db";
 import { FlipLetters } from "~/components/animated/FlipLetters";
 
@@ -13,6 +14,7 @@ type RawField = {
   options?: string[] | null;
   showIf?: { field: string; equals: string } | null;
   accept?: string | null;
+  section?: string | null;
 };
 
 /** Single-condition showIf — mirrors isFieldVisible in formOperations (kept local
@@ -41,6 +43,7 @@ export async function loader({ params }: Route.LoaderArgs) {
     options: f.options ?? null,
     showIf: f.showIf ?? null,
     accept: f.accept ?? null,
+    section: f.section ?? null,
   }));
   return {
     formId: form.id,
@@ -52,6 +55,7 @@ export async function loader({ params }: Route.LoaderArgs) {
 }
 
 type LoadedField = Awaited<ReturnType<typeof loader>>["fields"][number];
+type Step = { title: string | null; fields: LoadedField[] };
 
 const STEP_SIZE = 5;
 
@@ -61,7 +65,9 @@ export default function HostedForm({ loaderData }: Route.ComponentProps) {
 
   const [values, setValues] = useState<Record<string, string>>({});
   const [fileMeta, setFileMeta] = useState<Record<string, { name: string; uploading?: boolean }>>({});
+  const [started, setStarted] = useState(false);
   const [step, setStep] = useState(0);
+  const [dir, setDir] = useState(1); // animation direction: 1 = forward, -1 = back
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -77,6 +83,7 @@ export default function HostedForm({ loaderData }: Route.ComponentProps) {
           setValues(saved.values || {});
           setFileMeta(saved.fileMeta || {});
           if (typeof saved.step === "number") setStep(saved.step);
+          if (saved.started) setStarted(true);
         }
       }
     } catch {
@@ -89,27 +96,42 @@ export default function HostedForm({ loaderData }: Route.ComponentProps) {
   useEffect(() => {
     if (!restored.current || done) return;
     try {
-      localStorage.setItem(storageKey, JSON.stringify({ values, fileMeta, step }));
+      localStorage.setItem(storageKey, JSON.stringify({ values, fileMeta, step, started }));
     } catch {
       /* ignore */
     }
-  }, [values, fileMeta, step, done, storageKey]);
+  }, [values, fileMeta, step, started, done, storageKey]);
 
   const isVisible = useCallback(
     (f: LoadedField) => fieldVisible(f, values),
     [values]
   );
 
-  const steps = useMemo(() => {
-    const chunks: LoadedField[][] = [];
-    for (let i = 0; i < fields.length; i += STEP_SIZE) {
-      chunks.push(fields.slice(i, i + STEP_SIZE));
+  // Group fields into steps by section (consecutive same-section = one step).
+  // Falls back to fixed chunks when no field declares a section.
+  const steps = useMemo<Step[]>(() => {
+    const hasSections = fields.some((f) => f.section);
+    if (!hasSections) {
+      const chunks: Step[] = [];
+      for (let i = 0; i < fields.length; i += STEP_SIZE) {
+        chunks.push({ title: null, fields: fields.slice(i, i + STEP_SIZE) });
+      }
+      return chunks.length ? chunks : [{ title: null, fields: [] }];
     }
-    return chunks.length ? chunks : [[]];
+    const out: Step[] = [];
+    for (const f of fields) {
+      const sec = f.section || "General";
+      const last = out[out.length - 1];
+      if (last && last.title === sec) last.fields.push(f);
+      else out.push({ title: sec, fields: [f] });
+    }
+    return out;
   }, [fields]);
 
+  const sectioned = steps.length > 0 && steps[0].title !== null;
   const totalSteps = steps.length;
-  const currentFields = steps[step] || [];
+  const currentStep = steps[step] || { title: null, fields: [] };
+  const currentFields = currentStep.fields;
 
   // Progress = share of visible required fields answered across the whole form.
   const progress = useMemo(() => {
@@ -119,6 +141,8 @@ export default function HostedForm({ loaderData }: Route.ComponentProps) {
     return Math.round((filled / req.length) * 100);
   }, [fields, values, isVisible, step, totalSteps]);
 
+  const estMinutes = Math.max(2, Math.round(fields.length * 0.4));
+
   const setVal = (nameKey: string, v: string) =>
     setValues((prev) => ({ ...prev, [nameKey]: v }));
 
@@ -126,6 +150,9 @@ export default function HostedForm({ loaderData }: Route.ComponentProps) {
     currentFields.every(
       (f) => !f.required || !isVisible(f) || (values[f.name] || "").trim()
     );
+
+  const goNext = () => { setDir(1); setStep((s) => Math.min(s + 1, totalSteps - 1)); };
+  const goBack = () => { setDir(-1); setStep((s) => Math.max(s - 1, 0)); };
 
   async function onFile(f: LoadedField, file: File | null) {
     if (!file) return;
@@ -178,6 +205,7 @@ export default function HostedForm({ loaderData }: Route.ComponentProps) {
   }
 
   const isLast = step === totalSteps - 1;
+  const stepLabel = sectioned ? "Sección" : "Paso";
 
   return (
     <div className="eb-form-root" data-theme={theme}>
@@ -188,65 +216,91 @@ export default function HostedForm({ loaderData }: Route.ComponentProps) {
           <FlipLetters word="EasyBits" type="light" />
         </div>
 
-        {done ? (
-          <div className="sheet done">
-            <div className="check">✓</div>
-            <h1>{successMessage}</h1>
-            <p className="muted">Tus respuestas se guardaron correctamente.</p>
-          </div>
-        ) : (
-          <div className="sheet">
-            <div className="sheet-head">
-              <h1>{name}</h1>
-              <div className="progress">
-                <div className="pbar">
-                  <span style={{ width: `${progress}%` }} />
+        <AnimatePresence mode="wait" initial={false}>
+          {done ? (
+            <motion.div key="done" className="sheet done"
+              initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }}>
+              <motion.div className="check" initial={{ scale: 0.4, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+                transition={{ type: "spring", stiffness: 260, damping: 18, delay: 0.05 }}>✓</motion.div>
+              <h1>{successMessage}</h1>
+              <p className="muted">Tus respuestas se guardaron correctamente.</p>
+            </motion.div>
+          ) : !started ? (
+            // ── Start screen: title + total questions + sections ──
+            <motion.div key="intro" className="sheet"
+              initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -12 }} transition={{ duration: 0.25 }}>
+              <div className="sheet-head intro-head">
+                <h1>{name}</h1>
+                <div className="intro-meta">
+                  <span><b>{fields.length}</b> preguntas</span>
+                  {sectioned ? <span><b>{totalSteps}</b> secciones</span> : null}
+                  <span>≈ <b>{estMinutes} min</b></span>
                 </div>
-                <span className="pmeta">
-                  Paso {step + 1} de {totalSteps} · {progress}%
-                </span>
               </div>
-            </div>
+              {sectioned ? (
+                <ol className="intro-sections">
+                  {steps.map((s, i) => (
+                    <li key={i}><span className="isn">{String(i + 1).padStart(2, "0")}</span>{s.title}</li>
+                  ))}
+                </ol>
+              ) : null}
+              <div className="foot intro-foot">
+                <span className="foot-note">Puedes pausar y retomar: tus respuestas se guardan en este dispositivo.</span>
+                <button className="btn cta" onClick={() => { setDir(1); setStarted(true); }}>Comenzar</button>
+              </div>
+            </motion.div>
+          ) : (
+            <motion.div key={`step-${step}`} className="sheet"
+              initial={{ opacity: 0, x: dir * 40 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: dir * -40 }}
+              transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}>
+              <div className="sheet-head">
+                {currentStep.title ? <span className="kick">{stepLabel} {step + 1} de {totalSteps}</span> : null}
+                <h1>{currentStep.title || name}</h1>
+                <div className="progress">
+                  <div className="pbar"><motion.span animate={{ width: `${progress}%` }} transition={{ duration: 0.4 }} /></div>
+                  <span className="pmeta">{progress}%</span>
+                </div>
+              </div>
 
-            <div className="body">
-              {currentFields.map((f, i) =>
-                isVisible(f) ? (
-                  <FieldView
-                    key={f.name}
-                    field={f}
-                    index={step * STEP_SIZE + i}
-                    value={values[f.name] || ""}
-                    error={errors[f.name]}
-                    fileMeta={fileMeta[f.name]}
-                    onChange={(v) => setVal(f.name, v)}
-                    onFile={(file) => onFile(f, file)}
-                  />
-                ) : null
-              )}
-            </div>
+              <div className="body">
+                {currentFields.map((f, i) =>
+                  isVisible(f) ? (
+                    <motion.div key={f.name}
+                      initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.25, delay: Math.min(i * 0.04, 0.24) }}>
+                      <FieldView
+                        field={f}
+                        index={fields.indexOf(f)}
+                        value={values[f.name] || ""}
+                        error={errors[f.name]}
+                        fileMeta={fileMeta[f.name]}
+                        onChange={(v) => setVal(f.name, v)}
+                        onFile={(file) => onFile(f, file)}
+                      />
+                    </motion.div>
+                  ) : null
+                )}
+              </div>
 
-            {errors._form ? <p className="formerr">{errors._form}</p> : null}
+              {errors._form ? <p className="formerr">{errors._form}</p> : null}
 
-            <div className="foot">
-              {step > 0 ? (
-                <button className="btn ghost" onClick={() => setStep((s) => s - 1)} disabled={submitting}>
-                  Atrás
-                </button>
-              ) : (
-                <span />
-              )}
-              {isLast ? (
-                <button className="btn cta" onClick={submit} disabled={submitting || !stepValid()}>
-                  {submitting ? "Enviando…" : "Enviar respuestas"}
-                </button>
-              ) : (
-                <button className="btn cta" onClick={() => setStep((s) => s + 1)} disabled={!stepValid()}>
-                  Continuar
-                </button>
-              )}
-            </div>
-          </div>
-        )}
+              <div className="foot">
+                {step > 0 ? (
+                  <button className="btn ghost" onClick={goBack} disabled={submitting}>Atrás</button>
+                ) : (
+                  <button className="btn ghost" onClick={() => { setDir(-1); setStarted(false); }} disabled={submitting}>Inicio</button>
+                )}
+                {isLast ? (
+                  <button className="btn cta" onClick={submit} disabled={submitting || !stepValid()}>
+                    {submitting ? "Enviando…" : "Enviar respuestas"}
+                  </button>
+                ) : (
+                  <button className="btn cta" onClick={goNext} disabled={!stepValid()}>Continuar</button>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
         <div className="powered">Powered by formmy.app</div>
       </div>
     </div>
@@ -356,13 +410,9 @@ function FieldView({
 const FORM_CSS = String.raw`
 .eb-form-root{--paper:#f9f9f9;--panel:#fff;--ink:#1a1a1a;--muted:#6b6575;--hair:#e8e2f4;--accent:#9870ED;--accent-ink:#7c5ce0;--accent-tint:#f4edfd;--req:#c2410c;--ok:#15803d;--border-w:2px;--border-col:#1a1a1a;--radius:2px;--shadow:3px 3px 0 #1a1a1a;--head-font:"Helvetica Neue",ui-sans-serif,system-ui,sans-serif;--head-weight:800;--card-gap:14px;color-scheme:light;min-height:100vh;background:var(--paper);color:var(--ink);font:15px/1.55 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}
 .eb-form-root *{box-sizing:border-box}
-/* Formal (default): hairline, soft, serif headings, airy */
 .eb-form-root[data-theme="formal"]{--border-w:1px;--border-col:var(--hair);--radius:8px;--shadow:0 1px 3px rgba(26,23,32,.08),0 8px 24px rgba(26,23,32,.05);--head-font:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,ui-serif,serif;--head-weight:600;--card-gap:18px}
-/* Brutalista discreto: EasyBits ink border + hard shadow */
 .eb-form-root[data-theme="brutalista"]{--border-w:2px;--border-col:#1a1a1a;--radius:2px;--shadow:3px 3px 0 #1a1a1a;--head-font:"Helvetica Neue",ui-sans-serif,system-ui,sans-serif;--head-weight:800}
-/* Institucional: banded header, sober sans, corporate */
 .eb-form-root[data-theme="institucional"]{--border-w:1px;--border-col:#d8d3e4;--radius:4px;--shadow:0 1px 2px rgba(26,23,32,.06);--head-font:"Georgia",ui-serif,serif;--head-weight:700;--card-gap:16px}
-/* Editorial: serif display, magazine air */
 .eb-form-root[data-theme="editorial"]{--border-w:1px;--border-col:#1a1a1a;--radius:0;--shadow:none;--head-font:"Iowan Old Style",Georgia,ui-serif,serif;--head-weight:700;--card-gap:20px}
 .eb-form-root .wrap{max-width:640px;margin:0 auto;padding:34px 20px 60px}
 .eb-form-root .brand{display:flex;align-items:center;gap:4px;margin-bottom:2px}
@@ -371,11 +421,23 @@ const FORM_CSS = String.raw`
 .eb-form-root[data-theme="institucional"] .sheet-head{background:var(--accent-tint);border-bottom:2px solid var(--accent)}
 .eb-form-root .sheet-head{padding:24px 28px 20px;border-bottom:var(--border-w) solid var(--border-col)}
 .eb-form-root[data-theme="formal"] .sheet-head{border-bottom:1px solid var(--hair)}
+.eb-form-root .kick{display:block;font:600 11px/1 ui-monospace,monospace;letter-spacing:.14em;text-transform:uppercase;color:var(--accent-ink);margin-bottom:10px}
 .eb-form-root .sheet-head h1{font-family:var(--head-font);font-weight:var(--head-weight);letter-spacing:-.01em;text-wrap:balance;font-size:25px;line-height:1.15;margin:0 0 14px}
 .eb-form-root .progress{display:flex;align-items:center;gap:12px}
 .eb-form-root .pbar{flex:1;height:8px;background:var(--hair);border-radius:99px;overflow:hidden}
-.eb-form-root .pbar span{display:block;height:100%;background:var(--accent);transition:width .3s ease}
+.eb-form-root .pbar span{display:block;height:100%;background:var(--accent)}
 .eb-form-root .pmeta{font:600 12px/1 ui-monospace,monospace;color:var(--muted);white-space:nowrap}
+/* Start screen */
+.eb-form-root .intro-head h1{margin-bottom:16px}
+.eb-form-root .intro-meta{display:flex;gap:18px;flex-wrap:wrap}
+.eb-form-root .intro-meta span{font:600 13px/1 ui-monospace,monospace;color:var(--muted)}
+.eb-form-root .intro-meta b{color:var(--accent-ink);font-size:15px}
+.eb-form-root .intro-sections{list-style:none;margin:0;padding:20px 28px 6px;display:flex;flex-direction:column;gap:10px;counter-reset:sec}
+.eb-form-root .intro-sections li{display:flex;align-items:center;gap:12px;font-weight:600;font-size:14.5px;color:var(--ink)}
+.eb-form-root .intro-sections .isn{font:700 12px/1 ui-monospace,monospace;color:#fff;background:var(--accent);width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex:none}
+.eb-form-root[data-theme="editorial"] .intro-sections .isn{border-radius:0}
+.eb-form-root .intro-foot{flex-direction:column;align-items:stretch;gap:14px}
+.eb-form-root .foot-note{font-size:12.5px;color:var(--muted);text-align:center}
 .eb-form-root .body{padding:22px 28px 6px;display:flex;flex-direction:column;gap:var(--card-gap)}
 .eb-form-root .q{border:var(--border-w) solid var(--border-col);border-radius:var(--radius);padding:15px 16px;background:var(--paper)}
 .eb-form-root[data-theme="formal"] .q,.eb-form-root[data-theme="institucional"] .q{background:var(--panel);border-color:var(--hair)}

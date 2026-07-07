@@ -13,11 +13,12 @@ export default defineConfig({
   },
   plugins: [reactRouter(), tsconfigPaths()],
   build: {
-    minify: "terser",
+    // esbuild minify: several× faster than terser, negligible size delta.
+    minify: "esbuild",
     assetsInlineLimit: 4096,
     sourcemap: process.env.NODE_ENV === "development",
     rollupOptions: {
-      external: ["react-hook-multipart", "html2pdf.js"],
+      external: ["react-hook-multipart"],
     },
   },
 });

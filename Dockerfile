@@ -29,7 +29,9 @@ RUN npx prisma generate
 ARG CACHEBUST=0
 COPY . .
 ENV NODE_OPTIONS="--max-old-space-size=4096"
-RUN npm run build
+# BuildKit cache mount: persists Vite's transform cache across builds even though
+# CACHEBUST invalidates this layer → warm incremental builds (faster than cold).
+RUN --mount=type=cache,target=/app/node_modules/.vite npm run build
 
 # 4. Prune dev dependencies
 RUN npm prune --omit=dev
