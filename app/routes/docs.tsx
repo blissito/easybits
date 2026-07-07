@@ -853,7 +853,7 @@ console.log(result.savings); // "75%"`}
 
             <div className="mb-6 bg-gray-50 border-2 border-gray-300 rounded-xl p-4 text-sm">
               <strong>Tipos de campo:</strong>{" "}
-              <code>text</code>, <code>email</code>, <code>tel</code>, <code>textarea</code>, <code>select</code>, <code>date</code>, <code>number</code>, <code>checkbox</code>, <code>radio</code>, <code>file</code>.
+              <code>text</code>, <code>email</code>, <code>tel</code>, <code>textarea</code>, <code>select</code>, <code>date</code>, <code>number</code>, <code>checkbox</code>, <code>radio</code>, <code>file</code>, <code>matrix</code> (cuadrícula filas × columnas).
               {" "}<strong>Templates:</strong> <code>formal</code>, <code>brutalista</code>, <code>institucional</code>, <code>editorial</code>.
             </div>
 

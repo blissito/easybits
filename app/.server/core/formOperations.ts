@@ -17,7 +17,8 @@ export type FormFieldType =
   | "number"
   | "checkbox" // consent / boolean — stored "true"/""
   | "radio" // single choice from options (or Sí/No if none)
-  | "file"; // uploaded via /api/v2/forms/:id/upload → value is the fileId
+  | "file" // uploaded via /api/v2/forms/:id/upload → value is the fileId
+  | "matrix"; // grid: rows × columns (options), one choice per row. Value = JSON {row: choice}
 
 export interface FormField {
   name: string;
@@ -30,6 +31,9 @@ export interface FormField {
   showIf?: { field: string; equals: string };
   /** For `file`: accepted MIME/extension hint shown to the user (e.g. ".pdf,image/*"). */
   accept?: string;
+  /** For `matrix`: the row labels. Columns come from `options`. Value is a JSON
+   *  object string mapping each row label to the chosen column. */
+  rows?: string[];
   /** Section this field belongs to. Consecutive fields sharing a section render
    *  as one step in the hosted form (with the section name as the step title). */
   section?: string;
@@ -282,6 +286,28 @@ export async function handleFormSubmission(
       if ((field.type === "select" || field.type === "radio") && field.options?.length && !field.options.includes(strValue)) {
         errors[field.name] = "Opción inválida";
         continue;
+      }
+      if (field.type === "matrix") {
+        let parsed: Record<string, string> | null = null;
+        try {
+          parsed = JSON.parse(strValue);
+        } catch {
+          parsed = null;
+        }
+        if (!parsed || typeof parsed !== "object") {
+          errors[field.name] = "Respuesta inválida";
+          continue;
+        }
+        const cols = field.options || [];
+        const badCol = Object.values(parsed).some((v) => cols.length && !cols.includes(v as string));
+        if (badCol) {
+          errors[field.name] = "Opción inválida";
+          continue;
+        }
+        if (field.required && (field.rows || []).some((r) => !parsed![r])) {
+          errors[field.name] = `${field.label}: responde todas las filas`;
+          continue;
+        }
       }
     }
 

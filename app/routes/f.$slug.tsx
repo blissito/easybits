@@ -14,6 +14,7 @@ type RawField = {
   options?: string[] | null;
   showIf?: { field: string; equals: string } | null;
   accept?: string | null;
+  rows?: string[] | null;
   section?: string | null;
 };
 
@@ -43,6 +44,7 @@ export async function loader({ params }: Route.LoaderArgs) {
     options: f.options ?? null,
     showIf: f.showIf ?? null,
     accept: f.accept ?? null,
+    rows: f.rows ?? null,
     section: f.section ?? null,
   }));
   return {
@@ -368,6 +370,34 @@ function FieldView({
         <span>{field.placeholder || "Acepto"}</span>
       </label>
     );
+  } else if (field.type === "matrix") {
+    const cols = field.options || [];
+    const rows = field.rows || [];
+    let sel: Record<string, string> = {};
+    try { sel = value ? JSON.parse(value) : {}; } catch { sel = {}; }
+    const answered = Object.keys(sel).length;
+    const setRow = (row: string, col: string) => onChange(JSON.stringify({ ...sel, [row]: col }));
+    const gridCols = `minmax(120px,1.7fr) repeat(${cols.length}, 1fr)`;
+    control = (
+      <div className="matrix" role="group">
+        <div className="matrix-row matrix-head" style={{ gridTemplateColumns: gridCols }}>
+          <span />
+          {cols.map((c) => <span key={c} className="mcol">{c}</span>)}
+        </div>
+        {rows.map((r) => (
+          <div key={r} className="matrix-row" style={{ gridTemplateColumns: gridCols }}>
+            <span className="mrow">{r}</span>
+            {cols.map((c) => (
+              <label key={c} className={`mcell${sel[r] === c ? " on" : ""}`}>
+                <input type="radio" name={`${field.name}::${r}`} checked={sel[r] === c} onChange={() => setRow(r, c)} />
+                <span className="mdot" />
+              </label>
+            ))}
+          </div>
+        ))}
+        <div className="matrix-count">{answered} / {rows.length} respondidas</div>
+      </div>
+    );
   } else if (field.type === "file") {
     control = (
       <label className="filedrop">
@@ -461,6 +491,19 @@ const FORM_CSS = String.raw`
 .eb-form-root .filedrop{display:flex;flex-direction:column;gap:4px;align-items:center;justify-content:center;text-align:center;cursor:pointer;border:1.5px dashed var(--accent);border-radius:calc(var(--radius) + 2px);padding:18px;background:var(--accent-tint);color:var(--accent-ink);font-weight:600;font-size:13.5px}
 .eb-form-root .filedrop input{position:absolute;opacity:0;width:0;height:0}
 .eb-form-root .fdhint{font:500 11px/1 ui-monospace,monospace;color:var(--muted);letter-spacing:.04em}
+.eb-form-root .matrix{display:flex;flex-direction:column;border:1.5px solid var(--hair);border-radius:calc(var(--radius) + 2px);overflow:hidden}
+.eb-form-root .matrix-row{display:grid;align-items:center;gap:6px;padding:9px 12px;border-bottom:1px solid var(--hair)}
+.eb-form-root .matrix-row:last-of-type{border-bottom:none}
+.eb-form-root .matrix-head{background:var(--accent-tint);position:sticky;top:0}
+.eb-form-root .matrix-head .mcol{font:700 10.5px/1.1 ui-monospace,monospace;letter-spacing:.02em;text-transform:uppercase;color:var(--accent-ink);text-align:center}
+.eb-form-root .matrix-row .mrow{font-size:13px;font-weight:600;color:var(--ink);line-height:1.25}
+.eb-form-root .mcell{display:flex;align-items:center;justify-content:center;cursor:pointer;padding:6px 0}
+.eb-form-root .mcell input{position:absolute;opacity:0;pointer-events:none}
+.eb-form-root .mcell .mdot{width:20px;height:20px;border-radius:50%;border:2px solid var(--muted);transition:all .12s}
+.eb-form-root .mcell:hover .mdot{border-color:var(--accent)}
+.eb-form-root .mcell.on .mdot{border-color:var(--accent);background:radial-gradient(circle,var(--accent) 0 45%,transparent 48%)}
+.eb-form-root .matrix-count{padding:8px 12px;font:600 11px/1 ui-monospace,monospace;color:var(--muted);text-align:right;background:var(--paper)}
+@media(max-width:520px){.eb-form-root .matrix-head .mcol{font-size:9px}.eb-form-root .matrix-row .mrow{font-size:12px}}
 .eb-form-root .err{color:var(--req);font-size:12.5px;margin-top:7px;font-weight:600}
 .eb-form-root .formerr{color:var(--req);text-align:center;padding:0 28px;font-weight:600;font-size:13.5px}
 .eb-form-root .foot{padding:20px 28px 24px;display:flex;align-items:center;justify-content:space-between;gap:12px}

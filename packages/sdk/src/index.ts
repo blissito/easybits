@@ -632,7 +632,8 @@ export type FormFieldType =
   | "number"
   | "checkbox"
   | "radio"
-  | "file";
+  | "file"
+  | "matrix";
 
 export interface FormFieldInput {
   name: string;
@@ -640,7 +641,10 @@ export interface FormFieldInput {
   label: string;
   required?: boolean;
   placeholder?: string;
+  /** Options for select/radio, or the COLUMN headers for a matrix. */
   options?: string[];
+  /** For `matrix`: the row labels (each row gets one choice among `options`). */
+  rows?: string[];
   /** Show this field only when another field currently equals `equals`. */
   showIf?: { field: string; equals: string };
   /** For `file`: accepted types hint, e.g. ".pdf,image/*". */
