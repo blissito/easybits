@@ -1537,6 +1537,15 @@ const DOC_ROUTING_GUARDRAIL = [
   "Entrega: genera en /tmp, sube con upload_file (te da file.url) y comparte la URL en tu respuesta.",
 ].join(" ");
 
+// Estilo de respuesta: el checklist de la plataforma YA muestra cada tool que usas
+// (✓ Buscó en la web, ✓ Subió un archivo). Sin esto el agente NARRA cada paso ("ahora
+// subo…", "subida exitosa", "ahora lo envío…") → muro de texto corrido y feo. Inyectado
+// fresco por turno. Meta: respuesta terse tipo Claude (✓ lista + 1 frase + URL).
+const REPLY_STYLE_GUARDRAIL = [
+  "RESPUESTA CONCISA: la plataforma ya muestra un checklist con cada paso que das (✓ por tool). Por eso NO narres tus pasos: nada de 'ahora busco…', 'ahora subo el archivo', 'subida exitosa', 'ahora lo envío…', 'déjame…'.",
+  "Cuando termines, responde BREVE y directo: 1-2 frases + la URL del archivo si generaste uno. No repitas lo que ya hiciste ni describas el proceso; solo el resultado.",
+].join(" ");
+
 // APARIENCIA de Ghosty: la persona dice QUIÉN es pero nunca cómo SE VE → al
 // pedirle que se auto-ilustre inventaba un fantasma blanco genérico en vez del
 // Ghosty de la marca. Inyectado FRESCO por turno (como el guardrail de voz) y
