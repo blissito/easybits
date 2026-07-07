@@ -1281,6 +1281,9 @@ export async function routeMessage(
           // así el guardrail de voz llega a todos los agentes sin rebuild/migración.
           appendSystemPrompt: [
             PLATFORM_VOICE_GUARDRAIL,
+            // Ruteo de documentos: fuerza el motor correcto (docs-router/oficio/xlsx/
+            // pptx/structured_doc) y prohíbe create_document+set_page_html a mano.
+            DOC_ROUTING_GUARDRAIL,
             // Identidad del modelo: que el agente sepa que corre Sonnet 5 y sus
             // características. Solo si el modelo resuelto es el default (un agente
             // que pinea otro modelo vía persona.env no recibe el claim).
@@ -1519,6 +1522,19 @@ const PLATFORM_VOICE_GUARDRAIL = [
   "VOZ: las notas de voz las maneja AUTOMÁTICAMENTE la plataforma EasyBits con su propio motor self-hosted (kokoro para hablar, whisper para escuchar) — tú NO sintetizas audio ni usas ningún proveedor externo (NUNCA digas que usas OpenAI, ElevenLabs ni Gemini).",
   "Cuando te pidan 'responde con voz', NO llames ninguna herramienta (NO uses voice_tts_create) ni anuncies que vas a hacerlo: simplemente RESPONDE NORMAL EN TEXTO y la plataforma lo convierte en nota de voz sola, al instante.",
   "voice_tts_create es SOLO para generar un ARCHIVO de audio (p.ej. para un video con avatar), nunca para contestar por voz en el chat. Si te preguntan qué voz usas, es la voz propia de EasyBits (kokoro), nada de terceros.",
+].join(" ");
+
+// Ruteo de DOCUMENTOS: cierra el hueco de que el agente vaya directo a
+// create_document+set_page_html (se cuelga, pagina mal, tabla improvisada) sin ver la
+// prohibición que vive DENTRO del skill. Inyectado FRESCO cada turno → aplica a todos
+// los agentes. La suite de doc-gen (oficio→docx, xlsx-gen, pptx-gen, doc-remix,
+// readers) vive baked en el worker (Bash local) + el motor de PDF con marca es
+// structured_doc. El skill `docs-router` tiene el árbol completo.
+const DOC_ROUTING_GUARDRAIL = [
+  "DOCUMENTOS: para generar CUALQUIER documento con formato (oficio, carta, circular, memo, contrato, NDA, dictamen, cotización, factura, reporte, informe, hoja de cálculo, presentación) usa PRIMERO el skill `docs-router` (te dice el motor correcto).",
+  "Reglas: prosa/oficio/carta/contrato/dictamen → skill `oficio` (python3 oficio-docx.py → .docx editable). Tabla/hoja de cálculo → skill `xlsx-gen` (.xlsx). Slides/presentación → skill `pptx-gen` (.pptx). PDF con marca (factura/cotización/reporte/informe) → tool `structured_doc` (@react-pdf, template+data). Clonar/versión de un PDF → skill `doc-remix`.",
+  "PROHIBIDO armar documentos con formato a mano con create_document + set_page_html: ese HTML gigante se CUELGA y pagina mal (2 hojas para media carilla). Ese path es solo para HTML libre corto sin formato.",
+  "Entrega: genera en /tmp, sube con upload_file (te da file.url) y comparte la URL en tu respuesta.",
 ].join(" ");
 
 // APARIENCIA de Ghosty: la persona dice QUIÉN es pero nunca cómo SE VE → al
