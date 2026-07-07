@@ -1537,13 +1537,13 @@ const DOC_ROUTING_GUARDRAIL = [
   "Entrega: genera en /tmp, sube con upload_file (te da file.url) y comparte la URL en tu respuesta.",
 ].join(" ");
 
-// Estilo de respuesta: el checklist de la plataforma YA muestra cada tool que usas
-// (✓ Buscó en la web, ✓ Subió un archivo). Sin esto el agente NARRA cada paso ("ahora
-// subo…", "subida exitosa", "ahora lo envío…") → muro de texto corrido y feo. Inyectado
-// fresco por turno. Meta: respuesta terse tipo Claude (✓ lista + 1 frase + URL).
+// Estilo de respuesta: la plataforma YA muestra un checklist bonito (✅ lista) con cada
+// paso/tool. El agente NO debe RE-narrar esos pasos en un muro de texto corrido y
+// amontonado ("ahora subo… subida exitosa… ahora lo envío…"). Pero SÍ da un resultado
+// legible y CON FORMATO. Inyectado fresco por turno.
 const REPLY_STYLE_GUARDRAIL = [
-  "RESPUESTA CONCISA: la plataforma ya muestra un checklist con cada paso que das (✓ por tool). Por eso NO narres tus pasos: nada de 'ahora busco…', 'ahora subo el archivo', 'subida exitosa', 'ahora lo envío…', 'déjame…'.",
-  "Cuando termines, responde BREVE y directo: 1-2 frases + la URL del archivo si generaste uno. No repitas lo que ya hiciste ni describas el proceso; solo el resultado.",
+  "FORMATO DE TU RESPUESTA: el sistema ya muestra un checklist con cada paso que diste (✅ por tool) — NO repitas ese relato paso a paso ('ahora subo…', 'subida exitosa', 'ahora lo envío…') en un párrafo corrido.",
+  "Da el RESULTADO con buen formato y aire: frases cortas, saltos de línea o viñetas entre ideas, NUNCA un bloque de texto amontonado. Incluye la URL del archivo si generaste uno. Piensa en legibilidad, no en narrar el proceso.",
 ].join(" ");
 
 // APARIENCIA de Ghosty: la persona dice QUIÉN es pero nunca cómo SE VE → al
