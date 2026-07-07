@@ -104,6 +104,24 @@ export default function HostedForm({ loaderData }: Route.ComponentProps) {
     }
   }, [values, fileMeta, step, started, done, storageKey]);
 
+  // Subtle confetti once, when the form is submitted (client-only, lazy).
+  useEffect(() => {
+    if (!done) return;
+    if (typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+    let cancelled = false;
+    import("js-confetti")
+      .then(({ default: JSConfetti }) => {
+        if (cancelled) return;
+        new JSConfetti().addConfetti({
+          confettiColors: ["#9870ED", "#7c5ce0", "#c4b1f7"],
+          confettiNumber: 55,
+          confettiRadius: 4,
+        });
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [done]);
+
   const isVisible = useCallback(
     (f: LoadedField) => fieldVisible(f, values),
     [values]
