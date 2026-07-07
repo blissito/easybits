@@ -3,6 +3,7 @@ import { db } from "~/.server/db";
 import { routeMessage, FleetAgentAtCapacity, FleetAgentRateLimited } from "~/.server/core/fleetAgentOperations";
 import { checkFleetAgentWebIp } from "~/.server/rateLimiter";
 import type { WabaConfig } from "~/.server/integrations/whatsapp/waba.server";
+import { getUserOrNull } from "~/.server/getters";
 
 // POST /api/v2/fleet-agents/:fleetAgentId/message
 //
@@ -62,9 +63,12 @@ export async function action({ request, params }: Route.ActionArgs) {
     return Response.json({ error: "groupId and (text or media) required" }, { status: 400, headers: CORS });
   }
   // ADMIN turn: inject the admin MCP + note so the agent self-administers (numbers,
-  // identity, capabilities). Honored ONLY when the caller proved it holds the
-  // formmySecret — the public widget token must never escalate to admin.
-  const admin = byFormmy && body?.admin === true;
+  // identity, capabilities, set_agent_prompt). Honored ONLY cuando el caller probó ser
+  // DUEÑO: formmySecret (Ghosty) O sesión web autenticada del owner. Token de widget
+  // público NUNCA escala a admin.
+  const sessionUser = body?.admin === true ? await getUserOrNull(request).catch(() => null) : null;
+  const byOwnerSession = !!sessionUser && !!fleetAgent && sessionUser.id === fleetAgent.ownerId;
+  const admin = body?.admin === true && (byFormmy || byOwnerSession);
 
   // Rate-limit lives in routeMessage now (per (fleetAgent, group)) so it covers both
   // this HTTP surface and the in-process Baileys path. FleetAgentRateLimited → 429.

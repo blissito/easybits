@@ -106,6 +106,28 @@ function buildAdminServer(fleetAgentId: string): McpServer {
   );
 
   tool(
+    "set_agent_prompt",
+    "Edita tus INSTRUCCIONES BASE (tu CLAUDE.md / persona — aplica a TODOS tus canales). Úsalo cuando el dueño te pida cambiar tu forma de trabajar, agregar/quitar una regla, o ajustar tu tono. append=true agrega al final; sin append REEMPLAZA todo (pasa el texto completo). El cambio aplica en tu PRÓXIMA conversación (esta sesión sigue con las instrucciones actuales) — avísale al dueño. Máx 120k caracteres.",
+    {
+      systemPrompt: z.string().describe("las nuevas instrucciones completas (o el texto a agregar si append=true)"),
+      append: z.boolean().optional().describe("true = agrega al final de tus instrucciones actuales; false/omitido = reemplaza todo"),
+    },
+    async (p) => {
+      const fa = await load();
+      if (!fa) return fail("agente no encontrado");
+      const incoming = String(p.systemPrompt ?? "").slice(0, 120000);
+      if (!incoming.trim()) return fail("systemPrompt vacío");
+      const persona = ((fa.persona ?? {}) as { env?: Record<string, string> });
+      const env = { ...(persona.env ?? {}) };
+      const current = env.SYSTEM_PROMPT ?? "";
+      const next = (p.append && current ? `${current}\n\n${incoming}` : incoming).slice(0, 120000);
+      env.SYSTEM_PROMPT = next;
+      await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { persona: { ...persona, env } as object } });
+      return ok({ updated: true, mode: p.append ? "append" : "replace", length: next.length, appliesOn: "next conversation/spawn" });
+    }
+  );
+
+  tool(
     "list_capabilities",
     "Lista el catálogo de capacidades (MCPs) del agente y, para un número WABA, cuáles tiene habilitadas. Los builtin (easybits/render) están siempre activos.",
     { integrationId: z.string().optional().describe("integrationId para ver el set habilitado de ese número") },

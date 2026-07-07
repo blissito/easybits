@@ -1586,6 +1586,9 @@ function TestChatDrawer({
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [loadingHistory, setLoadingHistory] = useState(true);
+  // Modo admin: el turno inyecta el MCP admin (self-config + set_agent_prompt). Solo
+  // aquí (drawer del dueño, sesión web validada server-side) — nunca un canal público.
+  const [adminMode, setAdminMode] = useState(false);
   const bodyRef = useRef<HTMLDivElement>(null);
   // groupId ESTABLE por agente (no aleatorio) → la conversación persiste server-side
   // en FleetAgentMessage (igual que los canales) y el cerebro la resume por sessionUuid.
@@ -1633,7 +1636,7 @@ function TestChatDrawer({
       const res = await fetch(`/api/v2/fleet-agents/${agent.id}/message-stream`, {
         method: "POST",
         headers: { Authorization: `Bearer ${agent.token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ groupId, sender: "web-test", text }),
+        body: JSON.stringify({ groupId, sender: "web-test", text, admin: adminMode }),
       });
       if (!res.ok || !res.body) {
         const errText = await res.text().catch(() => "");
@@ -1698,6 +1701,13 @@ function TestChatDrawer({
             <p className="font-bold truncate">{agent.name || "Agente"}</p>
             <p className="text-[11px] text-gray-400">prueba en vivo · sin canales</p>
           </div>
+          {/* Modo admin: habilita el MCP admin (self-config + editar tu propio prompt).
+              Solo aquí, validado por tu sesión de dueño server-side. */}
+          <button type="button" onClick={() => setAdminMode((v) => !v)}
+            title={adminMode ? "Modo admin ON — el agente puede autoconfigurarse y editar su prompt" : "Actívalo para pedirle al agente que cambie su propio prompt / config"}
+            className={`text-[10px] font-semibold px-2 py-1 rounded-lg border-2 ${adminMode ? "border-amber-400 bg-amber-100 text-amber-700" : "border-gray-200 text-gray-400 hover:bg-gray-50"}`}>
+            {adminMode ? "⚡ Admin ON" : "Admin"}
+          </button>
           <button onClick={onClose} className="text-gray-400 hover:text-black text-xl leading-none">✕</button>
         </header>
         <div ref={bodyRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-3 bg-gray-50">

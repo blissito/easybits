@@ -139,10 +139,14 @@ async function drainGroup(sock: WASocket, fleetAgentId: string, jid: string) {
 
   const fleetAgent = await db.fleetAgent.findUnique({
     where: { id: fleetAgentId },
-    select: { hasOwnNumber: true, assistantName: true, ownerId: true },
+    select: { hasOwnNumber: true, assistantName: true, ownerId: true, mainGroupJid: true },
   });
   const hasOwnNumber = fleetAgent?.hasOwnNumber ?? false;
   const assistantName = fleetAgent?.assistantName || "Asistente";
+  // El grupo MAIN (designado por el dueño en el dashboard) es la superficie ADMIN de
+  // Baileys → sus turnos inyectan el MCP admin (self-config, set_agent_prompt). Los
+  // demás grupos NO. WABA público nunca es admin (ese gate vive en waba.server).
+  const isAdminTurn = !!fleetAgent?.mainGroupJid && jid === fleetAgent.mainGroupJid;
   const ownerId = fleetAgent?.ownerId ?? "";
 
   const last = batch[batch.length - 1];
@@ -172,7 +176,7 @@ async function drainGroup(sock: WASocket, fleetAgentId: string, jid: string) {
   try {
     const reply = await routeMessage(
       fleetAgentId,
-      { groupId: jid, sender: last.sender, text: combinedText, image: batch.map((it) => it.content.image).find(Boolean) },
+      { groupId: jid, sender: last.sender, text: combinedText, image: batch.map((it) => it.content.image).find(Boolean), admin: isAdminTurn },
       { skipRateLimit: true, hasMedia: batch.some((it) => it.content.hasMedia) }
     );
     if (reply) {

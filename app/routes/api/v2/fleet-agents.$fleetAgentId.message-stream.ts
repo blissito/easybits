@@ -3,6 +3,7 @@ import { db } from "~/.server/db";
 import { routeMessage, FleetAgentAtCapacity, FleetAgentRateLimited } from "~/.server/core/fleetAgentOperations";
 import { checkFleetAgentWebIp } from "~/.server/rateLimiter";
 import type { WabaConfig } from "~/.server/integrations/whatsapp/waba.server";
+import { getUserOrNull } from "~/.server/getters";
 
 // POST /api/v2/fleet-agents/:fleetAgentId/message-stream
 //
@@ -87,9 +88,13 @@ export async function action({ request, params }: Route.ActionArgs) {
     return Response.json({ error: "groupId and (text or media) required" }, { status: 400, headers: CORS });
   }
   // ADMIN turn: inject the admin MCP + note so the agent self-administers (numbers,
-  // identity, capabilities). Honored ONLY when the caller proved it holds the
-  // formmySecret — the public widget token must never escalate to admin.
-  const admin = byFormmy && body?.admin === true;
+  // identity, capabilities, set_agent_prompt). Honored ONLY cuando el caller probó
+  // ser DUEÑO: tiene el formmySecret (Ghosty) O una sesión web autenticada del owner
+  // del agente (el drawer de prueba en /dash/flota). El token del widget público NUNCA
+  // escala a admin — sin sesión + sin formmySecret = admin false.
+  const sessionUser = body?.admin === true ? await getUserOrNull(request).catch(() => null) : null;
+  const byOwnerSession = !!sessionUser && !!fleetAgent && sessionUser.id === fleetAgent.ownerId;
+  const admin = body?.admin === true && (byFormmy || byOwnerSession);
 
   const encoder = new TextEncoder();
   const sse = (obj: unknown) => encoder.encode(`data: ${JSON.stringify(obj)}\n\n`);
