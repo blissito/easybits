@@ -370,10 +370,13 @@ export function resolveDisabledBuiltins(
 ): string[] {
   const cfg = ((fleetAgent.groupConfigs as Record<string, GroupConfig> | null) ?? {})[groupId] ?? {};
   const disabled = [...(cfg.disabledBuiltins ?? [])];
-  // WABA NO usa el MCP `wa` (Baileys in-process) — el envío va por Formmy (URLs en el
-  // texto → adjuntos). Sin esto el agente intenta `wa send_message` y habla de
-  // "socket desconectado". Forzado siempre para números WABA.
-  if (groupId.startsWith("waba:") && !disabled.includes("wa")) disabled.push("wa");
+  // WABA y Teams NO usan el MCP `wa` (Baileys in-process): el envío va por otra vía
+  // (WABA→Formmy, Teams→A2A/GTeams; URLs en el texto → adjuntos). Sin esto el agente
+  // VE `wa` en su toolset → la heurística de canal del prompt ("si tengo wa, estoy en
+  // WhatsApp") misfirea en Teams → responde texto plano + intenta `wa send_message`.
+  // Forzado siempre para esos canales (mismo criterio que la entrega no-Baileys).
+  const noWaChannel = groupId.startsWith("waba:") || groupId === "teams";
+  if (noWaChannel && !disabled.includes("wa")) disabled.push("wa");
   return disabled;
 }
 
