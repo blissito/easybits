@@ -3286,6 +3286,13 @@ function mapSSETokenToChunk(
                     `data: ${JSON.stringify({ type: "chunk", value: evt.value })}\n\n`
                   )
                 );
+              } else if (evt.type === "tool" && typeof (evt as { name?: string }).name === "string") {
+                // Tool que el agente empezó a usar → checklist en vivo (passthrough).
+                controller.enqueue(
+                  encoder.encode(
+                    `data: ${JSON.stringify({ type: "tool", name: (evt as { name?: string }).name })}\n\n`
+                  )
+                );
               } else if (evt.type === "done") {
                 controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "done" })}\n\n`));
               } else if (evt.type === "error") {

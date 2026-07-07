@@ -128,6 +128,7 @@ export async function action({ request, params }: Route.ActionArgs) {
           admin,
         }, {
           onChunk: (value) => controller.enqueue(sse({ type: "chunk", value })),
+          onTool: (name) => controller.enqueue(sse({ type: "tool", name })),
         });
         controller.enqueue(sse({ type: "done", value: reply }));
       } catch (e) {

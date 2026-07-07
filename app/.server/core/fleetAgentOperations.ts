@@ -770,7 +770,8 @@ async function waitAgentRunning(agentId: string, timeoutMs = 120_000) {
 // also lets us log the full reply as FleetAgentMessage.
 async function collectStream(
   stream: ReadableStream<Uint8Array>,
-  onChunk?: (s: string) => void
+  onChunk?: (s: string) => void,
+  onTool?: (name: string) => void
 ): Promise<string> {
   const reader = stream.getReader();
   const decoder = new TextDecoder();
@@ -783,10 +784,12 @@ async function collectStream(
       const json = t.slice(5).trim();
       if (!json || json === "[DONE]") continue;
       try {
-        const evt = JSON.parse(json) as { type?: string; value?: string; message?: string };
+        const evt = JSON.parse(json) as { type?: string; value?: string; message?: string; name?: string };
         if (evt.type === "chunk" && typeof evt.value === "string") {
           reply += evt.value;
           onChunk?.(evt.value);
+        } else if (evt.type === "tool" && typeof evt.name === "string") {
+          onTool?.(evt.name);
         } else if (evt.type === "error") throw new Error(evt.message || "agent stream error");
       } catch (e) {
         if (e instanceof Error && e.message.includes("agent stream")) throw e;
@@ -1080,7 +1083,7 @@ export async function clearGroupSession(ctx: AuthContext, fleetAgent: PoolRow, g
 export async function routeMessage(
   fleetAgentId: string,
   msg: InboundMessage,
-  opts: { skipRateLimit?: boolean; hasMedia?: boolean; skipUserLog?: boolean; onChunk?: (s: string) => void } = {}
+  opts: { skipRateLimit?: boolean; hasMedia?: boolean; skipUserLog?: boolean; onChunk?: (s: string) => void; onTool?: (name: string) => void } = {}
 ): Promise<string> {
   const fleetAgent = await db.fleetAgent.findUniqueOrThrow({ where: { id: fleetAgentId } });
   const ctx = await ctxForOwner(fleetAgent.ownerId);
@@ -1323,7 +1326,7 @@ export async function routeMessage(
           toolGroup: resolveToolGroup(fleetAgent, cfgId),
         }
       );
-      reply = await collectStream(stream, opts.onChunk);
+      reply = await collectStream(stream, opts.onChunk, opts.onTool);
       auditLog("turn.ok", {
         groupId: msg.groupId,
         agentId: worker.id,
