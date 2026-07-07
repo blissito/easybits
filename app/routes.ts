@@ -305,6 +305,7 @@ export default [
     route("documents/:id/unpublish", "routes/api/v2/document-unpublish.ts"),
     route("documents/:id/clone", "routes/api/v2/document-clone.ts"),
     route("document-from-cfdi", "routes/api/v2/document-from-cfdi.ts"),
+    route("documents/from-office", "routes/api/v2/documents.from-office.ts"),
     route("public/cfdi-preview", "routes/api/v2/public-cfdi-preview.ts"),
     route("documents/:id/pages", "routes/api/v2/document-pages.ts"),
     route("documents/:id/pages/reorder", "routes/api/v2/document-pages-reorder.ts"),
