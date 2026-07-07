@@ -2205,7 +2205,10 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                 const channels = [
                   { kind: "baileys", label: "Personal y grupos (QR)", dot: (stale || relinking) ? "bg-orange-400" : st.dot, count: p.conversations },
                   { kind: "waba", label: "WhatsApp Business API", dot: p.wabaNumbers.length ? "bg-green-500" : "bg-gray-300", count: p.wabaNumbers.length },
-                  { kind: "teams", label: "Ghosty Teams", dot: p.teamsChannel.connected ? "bg-green-500" : "bg-gray-300", count: 0 },
+                  // Teams: la tab aparece SOLO en agentes ya conectados desde Teams
+                  // (connectedAt del primer turno). La conexión se hace en GTeams; no
+                  // tiene sentido ofrecer config de un canal que este agente no usa.
+                  ...(p.teamsChannel.connected ? [{ kind: "teams", label: "Ghosty Teams", dot: "bg-green-500", count: 0 }] : []),
                 ];
                 return (<>
                 {/* Tabs por canal */}
@@ -2412,9 +2415,8 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                   <div className="flex items-center justify-between gap-2">
                     <div className="min-w-0 flex items-center gap-2">
                       <span className="text-sm font-semibold truncate">{p.teamsChannel.subject}</span>
-                      <span className={`shrink-0 inline-flex items-center gap-1.5 text-[11px] font-semibold px-2 py-1 rounded-full border-2 ${p.teamsChannel.connected ? "border-green-200 text-green-600" : "border-gray-200 text-gray-500"}`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${p.teamsChannel.connected ? "bg-green-500" : "bg-gray-300"}`} />
-                        {p.teamsChannel.connected ? "Configurado" : "Sin configurar"}
+                      <span className="shrink-0 inline-flex items-center gap-1.5 text-[11px] font-semibold px-2 py-1 rounded-full border-2 border-green-200 text-green-600">
+                        <span className="w-1.5 h-1.5 rounded-full bg-green-500" />Conectado
                       </span>
                     </div>
                     <button type="button" title="Capacidades y comportamiento en Teams"
