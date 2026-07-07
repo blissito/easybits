@@ -68,7 +68,9 @@ export async function action({ request }: Route.ActionArgs) {
     expiresIn: 365 * 24 * 3600,
   });
 
-  const base = new URL(request.url).origin;
+  // Force https: el request interno en Fly puede llegar como http → el iframe en
+  // teams.formmy.app (https) bloquearía mixed-content.
+  const base = new URL(request.url).origin.replace(/^http:/, "https:");
   return new Response(
     JSON.stringify({
       ok: true,
