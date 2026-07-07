@@ -312,6 +312,8 @@ export default [
     route("documents/from-office", "routes/api/v2/documents.from-office.ts"),
     route("documents/office-to-html", "routes/api/v2/documents.office-to-html.ts"),
     route("documents/md-to-docx", "routes/api/v2/documents.md-to-docx.ts"),
+    route("artifacts", "routes/api/v2/artifacts.ts"),
+    route("artifacts/:id", "routes/api/v2/artifacts.$id.ts"),
     route("public/cfdi-preview", "routes/api/v2/public-cfdi-preview.ts"),
     route("documents/:id/pages", "routes/api/v2/document-pages.ts"),
     route("documents/:id/pages/reorder", "routes/api/v2/document-pages-reorder.ts"),
