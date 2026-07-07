@@ -561,6 +561,8 @@ ghosty --yolo` },
             <SdkMethodTable title="Formularios" methods={[
               ["createForm(params)", "Crea un formulario hospedado (/f/:slug)"],
               ["listForms()", "Lista tus formularios con conteo de respuestas"],
+              ["getForm(formId)", "Obtén la config del formulario (campos, theme)"],
+              ["updateForm(formId, patch)", "Actualiza nombre, theme, campos o mensaje"],
               ["getFormSubmissions(formId, opts?)", "Lista las respuestas de un formulario"],
             ]} />
 
@@ -889,6 +891,19 @@ console.log(form.url); // https://www.easybits.cloud/f/diagnostico-situacional`}
               description="Lista tus formularios con el conteo de respuestas."
               response={`{ "items": [{ "id": "...", "name": "...", "slug": "...", "url": "...", "submissionCount": 12, "createdAt": "..." }] }`}
               sdk={`const { items } = await eb.listForms();`}
+            />
+
+            <Endpoint
+              method="PATCH"
+              path="/forms/:formId"
+              description="Actualiza nombre, theme, campos o mensaje de éxito de un formulario."
+              body={[
+                { name: "name", type: "string", desc: "Nuevo nombre (opcional)" },
+                { name: "theme", type: "string", desc: "Nuevo template (opcional)" },
+                { name: "fields", type: "FormField[]", desc: "Reemplaza los campos (opcional)" },
+                { name: "successMessage", type: "string", desc: "Nuevo mensaje al enviar (opcional)" },
+              ]}
+              sdk={`await eb.updateForm("form_id", { theme: "institucional" });`}
             />
 
             <Endpoint

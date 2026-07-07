@@ -360,7 +360,7 @@ export async function handleFormSubmission(
   });
 
   // Notify the form owner by email (fire-and-forget — never fails the submission)
-  notifyOwnerOfSubmission(formConfig.ownerId, formConfig.name, cleanData).catch(
+  notifyOwnerOfSubmission(formConfig.ownerId, formConfig.name, cleanData, fields).catch(
     (err) => console.error("Form owner email failed:", err)
   );
 
@@ -399,6 +399,40 @@ export async function listForms(ctx: AuthContext) {
       submissionCount: countMap[f.id] ?? 0,
       createdAt: f.createdAt,
     })),
+  };
+}
+
+export async function updateForm(
+  ctx: AuthContext,
+  formId: string,
+  patch: { name?: string; theme?: string; successMessage?: string; deliveryUrl?: string | null; fields?: FormField[] }
+) {
+  requireScope(ctx, "WRITE");
+  const form = await db.formConfig.findUnique({ where: { id: formId } });
+  if (!form || form.ownerId !== ctx.user.id) {
+    throw new Response(JSON.stringify({ error: "Form not found" }), {
+      status: 404,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+  // NOTE: editing fields updates Mongo only; the per-form libSQL table keeps its
+  // columns (new fields land in Mongo `data`, the libSQL mirror lags — acceptable).
+  const updated = await db.formConfig.update({
+    where: { id: formId },
+    data: {
+      ...(patch.name !== undefined ? { name: patch.name } : {}),
+      ...(patch.theme !== undefined ? { theme: patch.theme } : {}),
+      ...(patch.successMessage !== undefined ? { successMessage: patch.successMessage } : {}),
+      ...(patch.deliveryUrl !== undefined ? { deliveryUrl: patch.deliveryUrl } : {}),
+      ...(patch.fields !== undefined ? { fields: patch.fields as any } : {}),
+    },
+  });
+  return {
+    id: updated.id,
+    slug: updated.slug,
+    theme: updated.theme,
+    name: updated.name,
+    url: updated.slug ? `https://www.easybits.cloud/f/${updated.slug}` : null,
   };
 }
 
@@ -573,21 +607,50 @@ export async function enrichRecentFormSubmission(
   return { ok: true };
 }
 
+// Render a submitted field value as readable HTML (matrices → mini-table,
+// checkbox → Sí/—, everything else → text). Shared shape with the dashboard viewer.
+function renderValueHtml(field: FormField, value: string): string {
+  if (field.type === "matrix") {
+    const rows = field.rows || [];
+    let sel: Record<string, string> = {};
+    try { sel = value ? JSON.parse(value) : {}; } catch { sel = {}; }
+    const trs = rows
+      .map(
+        (r) =>
+          `<tr><td style="padding:3px 8px;border-top:1px solid #f0f0f0;color:#444">${escapeHtml(r)}</td><td style="padding:3px 8px;border-top:1px solid #f0f0f0;text-align:right;font-weight:600;color:${sel[r] ? "#7c5ce0" : "#ccc"}">${escapeHtml(sel[r] || "—")}</td></tr>`
+      )
+      .join("");
+    return `<table style="border-collapse:collapse;width:100%;font-size:12px">${trs}</table>`;
+  }
+  if (field.type === "checkbox") return value === "true" ? "Sí" : "—";
+  if (field.type === "file") return value ? "📎 archivo adjunto" : "—";
+  return escapeHtml(value || "—");
+}
+
 // ─── Owner notification ────────────────────────────────────────
 async function notifyOwnerOfSubmission(
   ownerId: string,
   formName: string,
-  data: Record<string, string>
+  data: Record<string, string>,
+  fields?: FormField[]
 ): Promise<void> {
   const owner = await db.user.findUnique({ where: { id: ownerId } });
   if (!owner?.email) return;
 
-  const rows = Object.entries(data)
-    .map(
-      ([k, v]) =>
-        `<tr><td style="padding:6px 12px;border:1px solid #eee;font-weight:600">${escapeHtml(k)}</td><td style="padding:6px 12px;border:1px solid #eee">${escapeHtml(v)}</td></tr>`
-    )
-    .join("");
+  // Prefer field order + labels + pretty rendering; fall back to raw entries.
+  const rows = (fields && fields.length)
+    ? fields
+        .map(
+          (f) =>
+            `<tr><td style="padding:6px 12px;border:1px solid #eee;font-weight:600;vertical-align:top">${escapeHtml(f.label)}</td><td style="padding:6px 12px;border:1px solid #eee">${renderValueHtml(f, data[f.name] || "")}</td></tr>`
+        )
+        .join("")
+    : Object.entries(data)
+        .map(
+          ([k, v]) =>
+            `<tr><td style="padding:6px 12px;border:1px solid #eee;font-weight:600">${escapeHtml(k)}</td><td style="padding:6px 12px;border:1px solid #eee">${escapeHtml(v)}</td></tr>`
+        )
+        .join("");
 
   await getSesTransport().sendMail({
     from: "EasyBits@easybits.cloud",

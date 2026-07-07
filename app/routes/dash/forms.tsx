@@ -95,10 +95,10 @@ export default function FormsPage({ loaderData }: Route.ComponentProps) {
                   </div>
                 </div>
 
-                <div className="text-center px-3">
-                  <div className="text-2xl font-bold tabular-nums">{f.submissions}</div>
+                <a href={`/dash/forms/${f.id}`} className="text-center px-3 rounded-lg hover:bg-[#f4edfd] py-1" title="Ver respuestas">
+                  <div className="text-2xl font-bold tabular-nums text-[#7c5ce0]">{f.submissions}</div>
                   <div className="text-[10px] uppercase tracking-wide text-gray-400">respuestas</div>
-                </div>
+                </a>
 
                 {url ? (
                   <div className="flex items-center gap-2">

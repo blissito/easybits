@@ -983,6 +983,22 @@ export class EasybitsClient {
     return this.request(`/forms/${formId}/submissions${qs}`);
   }
 
+  /** Get a form's config (fields, theme, hosted URL). */
+  async getForm(formId: string): Promise<CreateFormResponse & { fields: FormFieldInput[]; successMessage: string }> {
+    return this.request(`/forms/${formId}`);
+  }
+
+  /** Update a form's name, theme, fields or success message. */
+  async updateForm(
+    formId: string,
+    patch: Partial<Pick<CreateFormParams, "name" | "theme" | "fields" | "successMessage" | "deliveryUrl">>
+  ): Promise<CreateFormResponse> {
+    return this.request<CreateFormResponse>(`/forms/${formId}`, {
+      method: "PATCH",
+      body: JSON.stringify(patch),
+    });
+  }
+
   // ── Usage & Bulk ───────────────────────────────────────────
 
   async getUsageStats(): Promise<UsageStats> {
