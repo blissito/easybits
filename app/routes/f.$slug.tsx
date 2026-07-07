@@ -456,7 +456,7 @@ function FieldView({
 }
 
 const FORM_CSS = String.raw`
-.eb-form-root{--paper:#f9f9f9;--panel:#fff;--ink:#1a1a1a;--muted:#6b6575;--hair:#e8e2f4;--accent:#9870ED;--accent-ink:#7c5ce0;--accent-tint:#f4edfd;--req:#c2410c;--ok:#15803d;--border-w:2px;--border-col:#1a1a1a;--radius:2px;--shadow:3px 3px 0 #1a1a1a;--head-font:"Helvetica Neue",ui-sans-serif,system-ui,sans-serif;--head-weight:800;--card-gap:14px;color-scheme:light;min-height:100vh;background:var(--paper);color:var(--ink);font:15px/1.55 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}
+.eb-form-root{--paper:#f9f9f9;--panel:#fff;--ink:#1a1a1a;--muted:#6b6575;--hair:#e8e2f4;--accent:#9870ED;--accent-ink:#7c5ce0;--accent-tint:#f4edfd;--req:#c2410c;--ok:#15803d;--border-w:2px;--border-col:#1a1a1a;--radius:2px;--shadow:3px 3px 0 #1a1a1a;--head-font:"Helvetica Neue",ui-sans-serif,system-ui,sans-serif;--head-weight:800;--card-gap:14px;color-scheme:light;min-height:100vh;overflow-x:hidden;background:var(--paper);color:var(--ink);font:15px/1.55 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}
 .eb-form-root *{box-sizing:border-box}
 .eb-form-root[data-theme="formal"]{--border-w:1px;--border-col:var(--hair);--radius:8px;--shadow:0 1px 3px rgba(26,23,32,.08),0 8px 24px rgba(26,23,32,.05);--head-font:"Iowan Old Style","Palatino Linotype",Palatino,Georgia,ui-serif,serif;--head-weight:600;--card-gap:18px}
 .eb-form-root[data-theme="brutalista"]{--border-w:2px;--border-col:#1a1a1a;--radius:2px;--shadow:3px 3px 0 #1a1a1a;--head-font:"Helvetica Neue",ui-sans-serif,system-ui,sans-serif;--head-weight:800}
@@ -509,8 +509,8 @@ const FORM_CSS = String.raw`
 .eb-form-root .filedrop{display:flex;flex-direction:column;gap:4px;align-items:center;justify-content:center;text-align:center;cursor:pointer;border:1.5px dashed var(--accent);border-radius:calc(var(--radius) + 2px);padding:18px;background:var(--accent-tint);color:var(--accent-ink);font-weight:600;font-size:13.5px}
 .eb-form-root .filedrop input{position:absolute;opacity:0;width:0;height:0}
 .eb-form-root .fdhint{font:500 11px/1 ui-monospace,monospace;color:var(--muted);letter-spacing:.04em}
-.eb-form-root .matrix{display:flex;flex-direction:column;border:1.5px solid var(--hair);border-radius:calc(var(--radius) + 2px);overflow:hidden}
-.eb-form-root .matrix-row{display:grid;align-items:center;gap:6px;padding:9px 12px;border-bottom:1px solid var(--hair)}
+.eb-form-root .matrix{display:flex;flex-direction:column;border:1.5px solid var(--hair);border-radius:calc(var(--radius) + 2px);overflow-x:auto;-webkit-overflow-scrolling:touch}
+.eb-form-root .matrix-row{display:grid;align-items:center;gap:6px;padding:9px 12px;border-bottom:1px solid var(--hair);min-width:300px}
 .eb-form-root .matrix-row:last-of-type{border-bottom:none}
 .eb-form-root .matrix-head{background:var(--accent-tint);position:sticky;top:0}
 .eb-form-root .matrix-head .mcol{font:700 10.5px/1.1 ui-monospace,monospace;letter-spacing:.02em;text-transform:uppercase;color:var(--accent-ink);text-align:center}
@@ -521,7 +521,14 @@ const FORM_CSS = String.raw`
 .eb-form-root .mcell:hover .mdot{border-color:var(--accent)}
 .eb-form-root .mcell.on .mdot{border-color:var(--accent);background:radial-gradient(circle,var(--accent) 0 45%,transparent 48%)}
 .eb-form-root .matrix-count{padding:8px 12px;font:600 11px/1 ui-monospace,monospace;color:var(--muted);text-align:right;background:var(--paper)}
-@media(max-width:520px){.eb-form-root .matrix-head .mcol{font-size:9px}.eb-form-root .matrix-row .mrow{font-size:12px}}
+@media(max-width:520px){
+.eb-form-root .matrix-head .mcol{font-size:9px}.eb-form-root .matrix-row .mrow{font-size:12px}
+.eb-form-root .wrap{padding:20px 12px 48px}
+.eb-form-root .sheet-head{padding:20px 16px 16px}
+.eb-form-root .body{padding:16px 16px 4px}
+.eb-form-root .foot{padding:16px}
+.eb-form-root .formerr{padding:0 16px}
+}
 .eb-form-root .err{color:var(--req);font-size:12.5px;margin-top:7px;font-weight:600}
 .eb-form-root .formerr{color:var(--req);text-align:center;padding:0 28px;font-weight:600;font-size:13.5px}
 .eb-form-root .foot{padding:20px 28px 24px;display:flex;align-items:center;justify-content:space-between;gap:12px}
@@ -532,9 +539,10 @@ const FORM_CSS = String.raw`
 .eb-form-root[data-theme="formal"] .btn.cta,.eb-form-root[data-theme="institucional"] .btn.cta{box-shadow:none}
 .eb-form-root .btn.cta:not(:disabled):active{transform:translate(2px,2px);box-shadow:none}
 .eb-form-root .powered{margin-top:24px;text-align:center;font:500 11.5px/1 ui-monospace,monospace;letter-spacing:.06em;color:var(--muted)}
-.eb-form-root .sheet.done{padding:48px 30px;text-align:center}
-.eb-form-root .sheet.done .check{width:56px;height:56px;margin:0 auto 18px;border-radius:50%;background:var(--ok);color:#fff;display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:800}
-.eb-form-root .sheet.done h1{font-family:var(--head-font);font-weight:var(--head-weight);font-size:22px;margin:0 0 8px;text-wrap:balance}
+.eb-form-root .sheet.done{padding:52px 32px;text-align:center}
+.eb-form-root .sheet.done .check{width:64px;height:64px;margin:0 auto 22px;border-radius:50%;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-size:32px;font-weight:800;box-shadow:0 0 0 8px var(--accent-tint)}
+.eb-form-root .sheet.done h1{font-family:var(--head-font);font-weight:var(--head-weight);font-size:23px;line-height:1.2;margin:0 0 10px;text-wrap:balance;color:var(--ink)}
+.eb-form-root .sheet.done .muted{font-size:14px;max-width:36ch;margin:0 auto}
 .eb-form-root .muted{color:var(--muted)}
 @media (prefers-reduced-motion:reduce){.eb-form-root *{transition:none!important}}
 `;
