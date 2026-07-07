@@ -85,7 +85,7 @@ export default function CollabBlockNoteEditor({
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
-          body: JSON.stringify({ sectionId: persistSectionId, html: wrapAsPage(innerHtml) }),
+          body: JSON.stringify({ sectionId: persistSectionId, html: wrapAsPage(innerHtml), replaceAll: true }),
         }).catch((e) => console.error("[collab] persist failed", e));
       }, 800);
     },
@@ -152,7 +152,7 @@ export default function CollabBlockNoteEditor({
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
-          body: JSON.stringify({ sectionId: persistSectionId, html: wrapAsPage(html) }),
+          body: JSON.stringify({ sectionId: persistSectionId, html: wrapAsPage(html), replaceAll: true }),
         }).catch(() => {});
         const res = await fetch(
           `/api/v2/documents/${encodeURIComponent(room)}/${fmt}?token=${encodeURIComponent(token)}`,

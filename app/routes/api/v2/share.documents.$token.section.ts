@@ -50,7 +50,7 @@ export async function action({ request, params }: Route.ActionArgs) {
     return Response.json({ error: "Resource is not a document" }, { status: 400 });
   }
 
-  let body: { sectionId?: string; html?: string };
+  let body: { sectionId?: string; html?: string; replaceAll?: boolean };
   try {
     body = await request.json();
   } catch {
@@ -59,6 +59,10 @@ export async function action({ request, params }: Route.ActionArgs) {
 
   const sectionId = typeof body.sectionId === "string" ? body.sectionId : null;
   const html = typeof body.html === "string" ? body.html : null;
+  // Los editores de PROSA (SimpleDocEditor/CollabBlockNoteEditor) tratan el doc como
+  // UN blob: siembran uniendo todas las secciones y guardan el blob entero. Sin esto,
+  // el blob va a sections[0] y las secciones originales quedan → el export las repite.
+  const replaceAll = body.replaceAll === true;
   if (!sectionId || html === null) {
     return Response.json({ error: "sectionId and html are required" }, { status: 400 });
   }
@@ -75,12 +79,21 @@ export async function action({ request, params }: Route.ActionArgs) {
   }
 
   const sections = ((landing.sections as unknown) as Section3[]) || [];
-  const idx = sections.findIndex((s) => s.id === sectionId);
-  if (idx === -1) {
-    return Response.json({ error: "Section not found" }, { status: 404 });
-  }
 
-  const updated: Section3[] = sections.map((s, i) => (i === idx ? { ...s, html } : s));
+  let updated: Section3[];
+  if (replaceAll) {
+    // Colapsa a UNA sola sección de prosa (preserva el CSS de GrapesJS si lo hay).
+    // Mata la duplicación: el doc pasa a tener exactamente el contenido editado, sin
+    // secciones originales rezagadas.
+    const cssSections = sections.filter((s) => s.id === "__grapes_css__");
+    updated = [...cssSections, { id: sectionId, order: 0, html } as Section3];
+  } else {
+    const idx = sections.findIndex((s) => s.id === sectionId);
+    if (idx === -1) {
+      return Response.json({ error: "Section not found" }, { status: 404 });
+    }
+    updated = sections.map((s, i) => (i === idx ? { ...s, html } : s));
+  }
 
   await withRetry(() =>
     db.landing.update({
