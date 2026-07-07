@@ -309,6 +309,7 @@ export default [
     route("document-from-cfdi", "routes/api/v2/document-from-cfdi.ts"),
     route("documents/from-office", "routes/api/v2/documents.from-office.ts"),
     route("documents/office-to-html", "routes/api/v2/documents.office-to-html.ts"),
+    route("documents/md-to-docx", "routes/api/v2/documents.md-to-docx.ts"),
     route("public/cfdi-preview", "routes/api/v2/public-cfdi-preview.ts"),
     route("documents/:id/pages", "routes/api/v2/document-pages.ts"),
     route("documents/:id/pages/reorder", "routes/api/v2/document-pages-reorder.ts"),
