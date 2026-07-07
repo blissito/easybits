@@ -390,6 +390,9 @@ export default [
   // auth gate for a room + Yjs binary state persistence (externalized to storage).
   route("api/v2/collab/authenticate", "routes/api/v2/collab.authenticate.ts"),
   route("api/v2/collab/:docId/state", "routes/api/v2/collab.$docId.state.ts"),
+  // Simple (server-less) document editor — instant seed, no Hocuspocus box. The
+  // artifact in Teams opens THIS; co-editing (cursors) is the "Compartir" surface below.
+  route("document/:token", "routes/document.$token.tsx"),
   // Collaborative Tiptap+Yjs editor (embeddable) + the client's room-resolver
   // (spawns/resumes the owner's collab box, returns the ws URL).
   route("collab/document/:token", "routes/collab.document.$token.tsx"),

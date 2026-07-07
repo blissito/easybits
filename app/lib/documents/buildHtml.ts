@@ -388,6 +388,10 @@ export function buildDocumentPrintHtml(
     format?: { width: number; height: number };
     /** If true, injects a client-side script that waits for Tailwind CDN + images, then calls window.print(). Use this for the editor's "Imprimir" flow — Playwright-based renderers should leave it off. */
     autoPrint?: boolean;
+    /** Flow mode: prose documents (collab/BlockNote) that must paginate NATURALLY like
+     * Word — content flows across pages instead of being clipped into fixed 11in boxes.
+     * Neutralizes the page-box wrapper and lets `@page { margin }` drive pagination. */
+    flow?: boolean;
   }
 ): string {
   const sorted = [...sections]
@@ -395,6 +399,46 @@ export function buildDocumentPrintHtml(
     .sort((a, b) => a.order - b.order);
   const title = options?.title || "Documento";
   const format = options?.format;
+
+  // Flow mode — prose that paginates naturally. No fixed-height `.page-section`
+  // (which clips to one page); instead `@page { margin }` provides the page box and
+  // content breaks between paragraphs (orphans/widows), matching Word / html-to-docx.
+  if (options?.flow) {
+    const cssSection = sections.find((s) => s.id === "__grapes_css__");
+    let grapesCss = "";
+    if (cssSection) {
+      const match = cssSection.html.match(/<style[^>]*>([\s\S]*?)<\/style>/i);
+      grapesCss = match?.[1] || "";
+    }
+    const pageSize = format ? `${format.width}px ${format.height}px` : "letter";
+    const flowHtml = sorted.map((s) => s.html).join("\n");
+    return `<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>${title}</title>
+  <script src="https://cdn.tailwindcss.com"><\/script>
+  ${options?.tailwindConfig ? `<script>tailwind.config = ${options.tailwindConfig}<\/script>` : ""}
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    @page { size: ${pageSize}; margin: 1in; }
+    ${options?.themeCss || DEFAULT_THEME_CSS}
+    ${grapesCss}
+    html, body { margin: 0; padding: 0; }
+    body { font-family: 'Inter', sans-serif; color: var(--color-on-surface, #111); font-size: 11pt; line-height: 1.55; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    /* Neutralize the on-screen page-box (fixed 8.5×11in + padding) so content flows
+       over @page; the print margin becomes the document margin. */
+    [data-doc-flow] { width: auto !important; max-width: none !important; min-height: 0 !important; height: auto !important; padding: 0 !important; margin: 0 !important; box-shadow: none !important; background: transparent !important; }
+    [data-doc-flow] p, [data-doc-flow] li { orphans: 2; widows: 2; }
+    [data-doc-flow] h1, [data-doc-flow] h2, [data-doc-flow] h3, [data-doc-flow] h4 { break-after: avoid; page-break-after: avoid; }
+    [data-doc-flow] img, [data-doc-flow] table, [data-doc-flow] figure, [data-doc-flow] pre { break-inside: avoid; page-break-inside: avoid; max-width: 100%; }
+  </style>
+</head>
+<body>
+${flowHtml}
+</body>
+</html>`;
+  }
   const pageCss = format
     ? `@page { size: ${format.width}px ${format.height}px; margin: 0; }`
     : `@page { size: letter; margin: 0; }`;

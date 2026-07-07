@@ -76,7 +76,10 @@ export async function action({ request }: Route.ActionArgs) {
       ok: true,
       documentId: landing.id,
       title: landing.name,
-      embedUrl: `${base}/collab/document/${token}?embed=1`,
+      // Artefacto = editor SIMPLE (siembra instantánea, sin caja collab). La co-edición
+      // (cursores) vive en /collab/document/:token, que abre el botón "Compartir".
+      embedUrl: `${base}/document/${token}?embed=1`,
+      collabUrl: `${base}/collab/document/${token}`,
     }),
     { status: 200, headers: { "content-type": "application/json" } },
   );

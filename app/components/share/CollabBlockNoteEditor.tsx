@@ -20,8 +20,11 @@ const COLORS = ["#e11d48", "#7c3aed", "#0891b2", "#16a34a", "#ea580c", "#db2777"
 
 // Envuelve el HTML del editor en un <section> de página (Tailwind) para que el
 // pipeline de PDF/deploy/export lo renderice como documento, no prosa pelada.
+// `data-doc-flow` marca la sección como PROSA que fluye (no una página diseñada de
+// altura fija). El pipeline de PDF lo usa para paginar en flujo natural (como Word)
+// en vez de recortar a una caja de 11in. Fuente única del marcador.
 function wrapAsPage(innerHtml: string): string {
-  return `<section class="w-[8.5in] min-h-[11in] p-16 bg-surface text-on-surface leading-relaxed">${innerHtml}</section>`;
+  return `<section data-doc-flow="1" class="w-[8.5in] min-h-[11in] p-16 bg-surface text-on-surface leading-relaxed">${innerHtml}</section>`;
 }
 
 export default function CollabBlockNoteEditor({

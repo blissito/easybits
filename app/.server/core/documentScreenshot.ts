@@ -233,23 +233,35 @@ export async function takeDocumentPdf(
   }
 
   const format = metadata?.format as { width: number; height: number } | undefined;
-  const html = buildDocumentPrintHtml(sectionsForPrint, { themeCss, tailwindConfig, title: doc.name || "Document", format });
+
+  // Prose docs (collab/BlockNote) carry `data-doc-flow` → paginate naturally like Word
+  // instead of clipping into fixed 11in page-sections. See buildDocumentPrintHtml(flow).
+  const isFlow = filteredContent.some((s) => (s.html || "").includes("data-doc-flow"));
+
+  const html = buildDocumentPrintHtml(sectionsForPrint, { themeCss, tailwindConfig, title: doc.name || "Document", format, flow: isFlow });
   const optimizedHtml = await replaceCdnWithCompiledCSS(html);
 
-  // page.pdf() options, identical for box and in-process paths.
+  // page.pdf() options. Flow docs let CSS @page (size + 1in margin) drive pagination.
   const isLandscape = filteredContent.some((s) => s.html?.includes('w-[11in]'));
-  const pdfOpts: Record<string, unknown> = format?.width && format?.height
+  const pdfOpts: Record<string, unknown> = isFlow
+    ? { format: "Letter", printBackground: true, preferCSSPageSize: true }
+    : format?.width && format?.height
     ? { width: `${format.width}px`, height: `${format.height}px`, printBackground: true }
     : { format: "Letter", printBackground: true, ...(isLandscape && { landscape: true }) };
 
   try {
-    const boxed = await renderViaBox("pdf", {
-      html: optimizedHtml,
-      optimizeImages: true,
-      replaceBroken: true,
-      pdf: pdfOpts,
-    }, userId);
-    if (boxed) return { pdf: boxed.bytes, brokenImages: boxed.broken };
+    // Flow docs render on EasyBits' own in-process Fly browser (which paginates prose
+    // correctly) — NOT the render box, whose flow pagination diverged (+ cold-start
+    // latency). Designed docs keep the box-first fast path.
+    if (!isFlow) {
+      const boxed = await renderViaBox("pdf", {
+        html: optimizedHtml,
+        optimizeImages: true,
+        replaceBroken: true,
+        pdf: pdfOpts,
+      }, userId);
+      if (boxed) return { pdf: boxed.bytes, brokenImages: boxed.broken };
+    }
 
     return await withPage(async (page) => {
       await setContentAndWaitForAssets(page, optimizedHtml);
