@@ -47,7 +47,19 @@ export async function action({ request, params }: Route.ActionArgs) {
 
   const body = await request.json().catch(() => ({}));
   const groupId = typeof body?.groupId === "string" ? body.groupId : "";
-  const text = typeof body?.text === "string" ? body.text : "";
+  // A2A parts (FileParts + TextParts) — canal GTeams (ver message-stream). FileParts
+  // → `files` (media por MIME); TextParts se funden al texto.
+  const parts: any[] = Array.isArray(body?.parts) ? body.parts : [];
+  const files = parts
+    .filter((p) => p?.kind === "file" && p?.file && typeof p.file.mimeType === "string" && (typeof p.file.uri === "string" || typeof p.file.bytes === "string"))
+    .map((p) => ({
+      name: typeof p.file.name === "string" ? p.file.name : undefined,
+      mimeType: p.file.mimeType as string,
+      uri: typeof p.file.uri === "string" ? p.file.uri : undefined,
+      bytes: typeof p.file.bytes === "string" ? p.file.bytes : undefined,
+    }));
+  const partText = parts.filter((p) => p?.kind === "text" && typeof p.text === "string").map((p) => p.text).join("\n");
+  const text = (typeof body?.text === "string" ? body.text : "") || partText;
   // Full media surface (same as message-stream): inbound image → native vision,
   // audio → transcribed, mediaUrl → attachment. Valid if text OR any media.
   const image =
@@ -59,7 +71,7 @@ export async function action({ request, params }: Route.ActionArgs) {
       ? { base64: body.audio.base64, mimeType: body.audio.mimeType }
       : undefined;
   const mediaUrl = typeof body?.mediaUrl === "string" ? body.mediaUrl : undefined;
-  if (!groupId || (!text.trim() && !image && !audio && !mediaUrl)) {
+  if (!groupId || (!text.trim() && !image && !audio && !mediaUrl && files.length === 0)) {
     return Response.json({ error: "groupId and (text or media) required" }, { status: 400, headers: CORS });
   }
   // ADMIN turn: inject the admin MCP + note so the agent self-administers (numbers,
@@ -79,6 +91,7 @@ export async function action({ request, params }: Route.ActionArgs) {
       text,
       image,
       audio,
+      files,
       mediaUrl,
       // Web channels (denik admin) scope the org per turn instead of pre-registering
       // a groupKey; WhatsApp omits it and falls back to fleetAgent.groupKeys.

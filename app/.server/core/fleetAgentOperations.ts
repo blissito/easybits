@@ -269,6 +269,12 @@ type InboundMessage = {
   // ANY channel (web/WABA/Slack) gets voice input — not just Baileys (which
   // pre-transcribes in its media extractor and omits this).
   audio?: { base64: string; mimeType: string };
+  // Full media surface (A2A FileParts) — canales como GTeams entregan CUALQUIER
+  // media (imagen/audio/video/pdf/doc/desconocido) uniformemente por MIME, con los
+  // bytes inline (`bytes`, base64) o por URL firmada (`uri`). routeMessage los resuelve:
+  // audio sin texto → transcribe; el resto se escribe al worker (Read). Contrato:
+  // ghosty-chat/docs/AGENT-MEDIA-CONTRACT.md.
+  files?: { name?: string; mimeType: string; uri?: string; bytes?: string }[];
   // Per-message MCP key override (the org's dnk_pub_/admin key). Web channels
   // (denik widget/admin) pass it per turn instead of pre-registering one per
   // ephemeral conversation; wins over fleetAgent.groupKeys[groupId]. WhatsApp omits it
@@ -1028,6 +1034,24 @@ function formatContent(msg: InboundMessage): string {
   return lines.join(" ").trim();
 }
 
+// Extensión de archivo desde el MIME (o el nombre original) — para nombrar el archivo
+// que se escribe al worker con una extensión que el agente/Read reconozca.
+function extFromMime(mimeType: string, name?: string): string {
+  const fromName = name?.match(/\.([a-z0-9]{1,8})$/i)?.[1];
+  if (fromName) return fromName.toLowerCase();
+  const map: Record<string, string> = {
+    "application/pdf": "pdf",
+    "image/png": "png", "image/jpeg": "jpg", "image/gif": "gif", "image/webp": "webp", "image/svg+xml": "svg",
+    "audio/mpeg": "mp3", "audio/ogg": "ogg", "audio/wav": "wav", "audio/mp4": "m4a", "audio/webm": "weba",
+    "video/mp4": "mp4", "video/webm": "webm", "video/quicktime": "mov",
+    "text/plain": "txt", "text/markdown": "md", "text/csv": "csv",
+    "application/json": "json", "application/zip": "zip",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "xlsx",
+  };
+  return map[mimeType.toLowerCase()] ?? "bin";
+}
+
 // Session command — `/clear` (and aliases) resets a group's conversation: drops
 // the externalized memory blob, wipes the workspace on a live VM, and rotates the
 // sessionUuid so the NEXT message starts a brand-new conversation. Mirrors
@@ -1074,12 +1098,36 @@ export async function routeMessage(
     if (t) msg = { ...msg, text: t };
   }
 
+  // Full media surface (A2A FileParts): resuelve cada archivo a base64 (bytes inline
+  // o fetch de la uri firmada) UNA vez. Audio sin texto → transcribe (canal-agnóstico)
+  // y no se escribe a disco; el resto queda pendiente de escribir al worker (Read).
+  const inboundFiles: { base64: string; mimeType: string; name?: string }[] = [];
+  for (const f of msg.files ?? []) {
+    let base64 = f.bytes || null;
+    if (!base64 && f.uri) {
+      try {
+        const r = await fetch(f.uri);
+        if (r.ok) base64 = Buffer.from(await r.arrayBuffer()).toString("base64");
+      } catch (e) {
+        console.error("fleetAgent inbound file fetch failed:", e);
+      }
+    }
+    if (!base64) continue;
+    if (f.mimeType.startsWith("audio/") && !msg.text.trim()) {
+      const { transcribeAudio } = await import("./fleetVoice");
+      const t = await transcribeAudio(fleetAgent.ownerId, Buffer.from(base64, "base64"), f.mimeType).catch(() => null);
+      if (t) msg = { ...msg, text: t };
+      continue;
+    }
+    inboundFiles.push({ base64, mimeType: f.mimeType, name: f.name });
+  }
+
   auditLog("route.in", {
     groupId: msg.groupId,
     sender: msg.sender ?? null,
     textLen: msg.text.length,
     // Truthful flag from the edge's extraction; falls back to mediaUrl presence.
-    hasMedia: opts.hasMedia ?? !!msg.mediaUrl,
+    hasMedia: opts.hasMedia ?? (!!msg.mediaUrl || !!msg.image || inboundFiles.length > 0),
   });
 
   // Per-(fleetAgent, group) rate limit so one chatty group can't drain the fleet. The
@@ -1131,6 +1179,21 @@ export async function routeMessage(
     content = `[El usuario envió una IMAGEN. Está guardada en ${imgPath} — ÁBRELA con la tool Read para verla antes de responder.${urlNote}]\n${content}`;
   }
 
+  // Archivos A2A (FileParts) → asigna un path por archivo y anótalos en el prompt; se
+  // escriben al worker DENTRO del loop (self-heal). Cubre imagen/video/pdf/doc/desconocido.
+  const filePaths: { path: string; base64: string }[] = [];
+  if (inboundFiles.length && !bareCompact) {
+    const notes: string[] = [];
+    inboundFiles.forEach((f, i) => {
+      const path = `/tmp/gt-file-${placed.sessionUuid}-${i}-${Date.now()}.${extFromMime(f.mimeType, f.name)}`;
+      filePaths.push({ path, base64: f.base64 });
+      const kind = f.mimeType.startsWith("image/") ? "IMAGEN" : "ARCHIVO";
+      const named = f.name ? `, "${f.name}"` : "";
+      notes.push(`[El usuario envió un ${kind} (${f.mimeType}${named}) guardado en ${path} — ÁBRELO con la tool Read.]`);
+    });
+    content = `${notes.join("\n")}\n${content}`;
+  }
+
   let reply = "";
   // Turn loop with self-heal: if the worker's box is DEAD (host unreachable / VM
   // gone via crash/restart/TTL — not a manual delete), mark it "lost" and
@@ -1151,6 +1214,13 @@ export async function routeMessage(
       if (imgPath && msg.image) {
         await writeFile(ctx, worker.sandboxId, { path: imgPath, content: msg.image.base64, encoding: "base64" }).catch(
           (e) => console.error(`fleetAgent image write ${imgPath} failed:`, e)
+        );
+      }
+      // Archivos A2A (imagen/video/pdf/doc/desconocido) → al worker (re-escritos en el
+      // self-heal), para que Read los encuentre antes de abrir el turno.
+      for (const f of filePaths) {
+        await writeFile(ctx, worker.sandboxId, { path: f.path, content: f.base64, encoding: "base64" }).catch(
+          (e) => console.error(`fleetAgent file write ${f.path} failed:`, e)
         );
       }
       // Per-channel config: system-prompt append (layer 3) + code-mode capabilities
