@@ -1003,8 +1003,10 @@ model FormConfig {
   id             String   @id @default(auto()) @map("_id") @db.ObjectId
   websiteId      String?  @db.ObjectId // raw-HTML Website this form lives on
   landingId      String?  @db.ObjectId // OR a Landing (editor: landings v3/v5, documents v4) — form is inserted as a section and survives re-deploy
+  slug           String?  // Standalone hosted form — served at /f/:slug (no website/landing parent). Uniqueness enforced in code (createFormConfig), not via a DB unique index — many legacy rows have slug=null which would break a Mongo unique index.
+  theme          String?  // Hosted template: "formal" (default) | "brutalista" | "institucional" | "editorial"
   name           String   @default("Contacto")
-  fields         Json     // FormField[] — [{name, type, label, required, placeholder, options}]
+  fields         Json     // FormField[] — [{name, type, label, required, placeholder, options, showIf, accept}]
   dbId           String?  // EasyBits DB ID to insert submissions
   tableName      String?  // Table name in the DB
   successMessage String   @default("¡Gracias! Te contactaremos pronto.")
@@ -1017,6 +1019,7 @@ model FormConfig {
   @@index([websiteId])
   @@index([landingId])
   @@index([ownerId])
+  @@index([slug])
 }
 
 model FormSubmission {

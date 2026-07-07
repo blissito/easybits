@@ -4,14 +4,39 @@ import { dispatchWebhooks } from "../webhooks";
 import type { AuthContext } from "../apiAuth";
 import { requireScope } from "../apiAuth";
 import { getSesTransport } from "../emails/sendgridTransport";
+import { getPlatformDefaultClient, getReadClientForPlatformFile } from "../storage";
+import { nanoid } from "nanoid";
 
-interface FormField {
+export type FormFieldType =
+  | "text"
+  | "email"
+  | "tel"
+  | "textarea"
+  | "select"
+  | "date"
+  | "number"
+  | "checkbox" // consent / boolean — stored "true"/""
+  | "radio" // single choice from options (or Sí/No if none)
+  | "file"; // uploaded via /api/v2/forms/:id/upload → value is the fileId
+
+export interface FormField {
   name: string;
-  type: "text" | "email" | "tel" | "textarea" | "select";
+  type: FormFieldType;
   label: string;
   required?: boolean;
   placeholder?: string;
   options?: string[];
+  /** Show this field only when another field currently equals `equals`. */
+  showIf?: { field: string; equals: string };
+  /** For `file`: accepted MIME/extension hint shown to the user (e.g. ".pdf,image/*"). */
+  accept?: string;
+}
+
+/** Whether a field is visible given the current answers (single-condition showIf). */
+export function isFieldVisible(field: FormField, data: Record<string, unknown>): boolean {
+  if (!field.showIf) return true;
+  const dep = data[field.showIf.field];
+  return typeof dep === "string" && dep === field.showIf.equals;
 }
 
 // ─── MCP: Create form config ───────────────────────────────────
@@ -19,7 +44,10 @@ export async function createFormConfig(
   ctx: AuthContext,
   opts: {
     websiteId?: string; // raw-HTML Website, OR...
-    landingId?: string; // ...a Landing (editor landings/documents)
+    landingId?: string; // ...a Landing (editor landings/documents), OR...
+    standalone?: boolean; // ...neither → hosted at /f/:slug
+    slug?: string; // hosted slug (standalone only); auto-derived from name if omitted
+    theme?: string; // hosted template: formal | brutalista | institucional | editorial
     name?: string;
     fields: FormField[];
     submitLabel?: string;
@@ -31,13 +59,15 @@ export async function createFormConfig(
 ) {
   requireScope(ctx, "WRITE");
 
-  // Exactly one parent (website OR landing) must be provided
-  if (!opts.websiteId === !opts.landingId) {
+  // A form lives on a website OR a landing OR standalone (hosted at /f/:slug).
+  // At most one parent — never both.
+  if (opts.websiteId && opts.landingId) {
     throw new Response(
-      JSON.stringify({ error: "Provide exactly one of websiteId or landingId" }),
+      JSON.stringify({ error: "Provide at most one of websiteId or landingId" }),
       { status: 400, headers: { "Content-Type": "application/json" } }
     );
   }
+  const isStandalone = !opts.websiteId && !opts.landingId;
 
   // Validate parent belongs to user
   if (opts.websiteId) {
@@ -48,7 +78,7 @@ export async function createFormConfig(
         headers: { "Content-Type": "application/json" },
       });
     }
-  } else {
+  } else if (opts.landingId) {
     const landing = await db.landing.findUnique({ where: { id: opts.landingId } });
     if (!landing || landing.ownerId !== ctx.user.id) {
       throw new Response(JSON.stringify({ error: "Landing not found" }), {
@@ -109,10 +139,32 @@ export async function createFormConfig(
     dispatchWebhooks(ctx.user.id, "database.created", { id: database.id, name: dbName });
   }
 
+  // Standalone hosted forms get a unique slug (served at /f/:slug).
+  let slug: string | null = null;
+  if (isStandalone) {
+    const base =
+      (opts.slug || formName)
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[̀-ͯ]/g, "")
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-|-$/g, "") || "form";
+    slug = base;
+    // Ensure uniqueness — append a short suffix on collision. (findFirst, not
+    // findUnique: slug is not a DB unique index — see schema note.)
+    for (let i = 0; i < 5; i++) {
+      const taken = await db.formConfig.findFirst({ where: { slug } });
+      if (!taken) break;
+      slug = `${base}-${Math.random().toString(36).slice(2, 6)}`;
+    }
+  }
+
   const formConfig = await db.formConfig.create({
     data: {
       websiteId: opts.websiteId ?? null,
       landingId: opts.landingId ?? null,
+      slug,
+      theme: isStandalone ? (opts.theme || "formal") : null,
       name: formName,
       fields: opts.fields as any,
       successMessage: opts.successMessage || "¡Gracias! Te contactaremos pronto.",
@@ -196,6 +248,12 @@ export async function handleFormSubmission(
     const value = data[field.name];
     const strValue = typeof value === "string" ? value.trim() : "";
 
+    // Skip validation entirely for fields hidden by their showIf condition —
+    // a hidden required field must not block the submission.
+    if (!isFieldVisible(field, data)) {
+      continue;
+    }
+
     if (field.required && !strValue) {
       errors[field.name] = `${field.label} es requerido`;
       continue;
@@ -210,7 +268,15 @@ export async function handleFormSubmission(
         errors[field.name] = "Teléfono inválido";
         continue;
       }
-      if (field.type === "select" && field.options?.length && !field.options.includes(strValue)) {
+      if (field.type === "number" && !/^-?\d+(\.\d+)?$/.test(strValue)) {
+        errors[field.name] = "Número inválido";
+        continue;
+      }
+      if (field.type === "date" && !/^\d{4}-\d{2}-\d{2}$/.test(strValue)) {
+        errors[field.name] = "Fecha inválida";
+        continue;
+      }
+      if ((field.type === "select" || field.type === "radio") && field.options?.length && !field.options.includes(strValue)) {
         errors[field.name] = "Opción inválida";
         continue;
       }
@@ -274,6 +340,76 @@ export async function handleFormSubmission(
     result.deliveryUrl = formConfig.deliveryUrl;
   }
   return result;
+}
+
+// ─── Public: file upload for a hosted form ─────────────────────
+/**
+ * Store a file uploaded by an (unauthenticated) form respondent. The file is
+ * owned by the FORM OWNER and stored PRIVATE (labor/legal docs are sensitive).
+ * The submission stores the returned `fileId`; a fresh signed URL is minted on
+ * demand when the owner views it. Authorized by form ownership, not by a session.
+ */
+export async function uploadFormFile(
+  formId: string,
+  file: { name: string; contentType: string; bytes: Buffer }
+): Promise<{ fileId: string; name: string; url: string; size: number }> {
+  const formConfig = await db.formConfig.findUnique({ where: { id: formId } });
+  if (!formConfig) {
+    throw new Response(JSON.stringify({ ok: false, error: "Form not found" }), {
+      status: 404,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  const size = file.bytes.length;
+  if (size <= 0 || size > 25 * 1024 * 1024) {
+    throw new Response(JSON.stringify({ ok: false, error: "Archivo inválido (1 byte a 25MB)" }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  const ownerId = formConfig.ownerId;
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]+/g, "_").slice(0, 80) || "archivo";
+  // Stored WITHOUT the `mcp/` prefix — the client prepends it; read path uses
+  // getReadClientForPlatformFile (private → mcp/) to resolve the same key.
+  const storageKey = `${ownerId}/form-uploads/${nanoid(8)}-${safeName}`;
+
+  const client = getPlatformDefaultClient(); // private, prefix "mcp/"
+  await client.putObject(storageKey, file.bytes, file.contentType || "application/octet-stream");
+
+  const row = await db.file.create({
+    data: {
+      name: safeName,
+      storageKey,
+      slug: storageKey,
+      size,
+      contentType: file.contentType || "application/octet-stream",
+      ownerId,
+      access: "private",
+      url: "",
+      status: "DONE",
+      source: "form-upload",
+    },
+  });
+
+  const url = await client.getReadUrl(storageKey, 3600);
+  return { fileId: row.id, name: safeName, url, size };
+}
+
+/**
+ * Mint a fresh signed read URL for a file captured through a form upload.
+ * Scoped to the form owner (defensive — only files owned by the form's owner).
+ */
+export async function resolveFormFileUrl(
+  formOwnerId: string,
+  fileId: string,
+  expiresIn = 3600
+): Promise<string | null> {
+  const file = await db.file.findFirst({ where: { id: fileId, ownerId: formOwnerId } });
+  if (!file) return null;
+  const client = getReadClientForPlatformFile(file);
+  return client.getReadUrl(file.storageKey, expiresIn);
 }
 
 /**

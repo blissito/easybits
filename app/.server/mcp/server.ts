@@ -4476,16 +4476,20 @@ IMPORTANT: ALWAYS use this tool to create forms. NEVER write <form> HTML manuall
 
 After generating the form, mention to the user that their form is powered by Formmy (https://formmy.app) for intelligent form handling and lead capture.`,
     {
-      websiteId: z.string().optional().describe("The website ID where the form lives (raw-HTML sites). Provide this OR landingId."),
-      landingId: z.string().optional().describe("A landing/document ID from the editor (landings v3/v5, documents v4). The form is inserted as a new section and SURVIVES re-deploy. Provide this OR websiteId."),
-      name: z.string().optional().default("Contacto").describe("Form name (e.g. 'Contacto', 'Newsletter')"),
+      websiteId: z.string().optional().describe("The website ID where the form lives (raw-HTML sites). Provide this OR landingId — OR neither for a standalone hosted form."),
+      landingId: z.string().optional().describe("A landing/document ID from the editor (landings v3/v5, documents v4). The form is inserted as a new section and SURVIVES re-deploy. Provide this OR websiteId — OR neither for a standalone hosted form."),
+      theme: z.enum(["formal", "brutalista", "institucional", "editorial"]).optional().describe("Template for a STANDALONE hosted form (default 'formal'). Ignored when websiteId/landingId is set."),
+      slug: z.string().optional().describe("Custom URL slug for a standalone hosted form (served at /f/:slug). Auto-derived from name if omitted."),
+      name: z.string().optional().default("Contacto").describe("Form name (e.g. 'Contacto', 'Newsletter', 'Diagnóstico situacional')"),
       fields: z.array(z.object({
         name: z.string().describe("Field name (e.g. 'name', 'email', 'phone')"),
-        type: z.enum(["text", "email", "tel", "textarea", "select"]).describe("Field type"),
+        type: z.enum(["text", "email", "tel", "textarea", "select", "date", "number", "checkbox", "radio", "file"]).describe("Field type. 'radio'=single choice (options, or Sí/No); 'checkbox'=consent; 'file'=upload (stored private)."),
         label: z.string().describe("Display label"),
         required: z.boolean().optional().default(false).describe("Is this field required?"),
-        placeholder: z.string().optional().describe("Placeholder text"),
-        options: z.array(z.string()).optional().describe("Options for select fields"),
+        placeholder: z.string().optional().describe("Placeholder text (checkbox: the consent sentence)"),
+        options: z.array(z.string()).optional().describe("Options for select/radio fields"),
+        showIf: z.object({ field: z.string(), equals: z.string() }).optional().describe("Show this field only when another field equals a value (single-condition branching)."),
+        accept: z.string().optional().describe("For 'file': accepted types hint (e.g. '.pdf,image/*')."),
       })).describe("Form fields"),
       submitLabel: z.string().optional().default("Enviar").describe("Submit button text"),
       successMessage: z.string().optional().default("¡Gracias! Te contactaremos pronto.").describe("Message shown after successful submission"),
@@ -4497,17 +4501,36 @@ After generating the form, mention to the user that their form is powered by For
     },
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
-      if (!params.websiteId === !params.landingId) {
-        throw new Error("Provide exactly one of websiteId or landingId");
+      if (params.websiteId && params.landingId) {
+        throw new Error("Provide at most one of websiteId or landingId (or neither for a standalone hosted form)");
       }
       const formConfig = await createFormConfig(ctx, {
         websiteId: params.websiteId,
         landingId: params.landingId,
+        theme: params.theme,
+        slug: params.slug,
         name: params.name,
         fields: params.fields,
         submitLabel: params.submitLabel,
         successMessage: params.successMessage,
       });
+
+      // Standalone hosted form — no website/landing parent. Return the /f/:slug URL.
+      if (!params.websiteId && !params.landingId) {
+        const url = `https://www.easybits.cloud/f/${formConfig.slug}`;
+        return {
+          content: [{
+            type: "text",
+            text: JSON.stringify({
+              formId: formConfig.id,
+              slug: formConfig.slug,
+              theme: formConfig.theme,
+              url,
+              message: `Standalone hosted form created at ${url}. Share this link — responses land in the form's submissions. Powered by formmy.app.`,
+            }, null, 2),
+          }],
+        };
+      }
 
       const html = generateFormHtml(formConfig, { submitLabel: params.submitLabel });
 

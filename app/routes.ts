@@ -40,6 +40,8 @@ export default [
   route("/aviso-de-privacidad", "routes/aviso.tsx"),
   // public video link @todo revisit private only? tokens?
   route("/videos/:storageKey", "routes/videos/public.tsx"),
+  // Hosted standalone form (intake) — served at /f/:slug
+  route("/f/:slug", "routes/f.$slug.tsx"),
   // embed share
   route("/embed/video/:storageKey", "routes/videos/video.tsx"),
   // AI Chat
@@ -306,6 +308,7 @@ export default [
     route("documents/:id/clone", "routes/api/v2/document-clone.ts"),
     route("document-from-cfdi", "routes/api/v2/document-from-cfdi.ts"),
     route("documents/from-office", "routes/api/v2/documents.from-office.ts"),
+    route("documents/office-to-html", "routes/api/v2/documents.office-to-html.ts"),
     route("public/cfdi-preview", "routes/api/v2/public-cfdi-preview.ts"),
     route("documents/:id/pages", "routes/api/v2/document-pages.ts"),
     route("documents/:id/pages/reorder", "routes/api/v2/document-pages-reorder.ts"),
@@ -339,6 +342,7 @@ export default [
     route("brand-kits/:id", "routes/api/v2/brand-kit.ts"),
     route("forms/:formId/submit", "routes/api/v2/forms.$formId.submit.ts"),
     route("forms/:formId/enrich", "routes/api/v2/forms.$formId.enrich.ts"),
+    route("forms/:formId/upload", "routes/api/v2/forms.$formId.upload.ts"),
     route("quiz-checkout", "routes/api/v2/quiz-checkout.tsx"),
     route("quiz-cotizacion-pdf", "routes/api/v2/quiz-cotizacion-pdf.tsx"),
     route("quiz-lead-submit", "routes/api/v2/quiz-lead-submit.tsx"),
