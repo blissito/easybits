@@ -3,6 +3,9 @@ import "@blocknote/mantine/style.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BlockNoteView } from "@blocknote/mantine";
 import { useCreateBlockNote } from "@blocknote/react";
+import { BlockNoteSchema } from "@blocknote/core";
+import { en as blockNoteEn } from "@blocknote/core/locales";
+import { withMultiColumn, multiColumnDropCursor, locales as multiColumnLocales } from "@blocknote/xl-multi-column";
 import { HocuspocusProvider } from "@hocuspocus/provider";
 import * as Y from "yjs";
 
@@ -58,6 +61,11 @@ export default function CollabBlockNoteEditor({
 
   const editor = useCreateBlockNote(
     {
+      // Columnas (mínimo de Word) — mismo schema que el editor simple para que el
+      // round-trip HTML y el Yjs coincidan.
+      schema: withMultiColumn(BlockNoteSchema.create()),
+      dropCursor: multiColumnDropCursor,
+      dictionary: { ...blockNoteEn, multi_column: multiColumnLocales.en },
       collaboration: {
         fragment: ydoc.getXmlFragment("document-store"),
         user,

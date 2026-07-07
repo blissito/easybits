@@ -3,6 +3,9 @@ import "@blocknote/mantine/style.css";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { BlockNoteView } from "@blocknote/mantine";
 import { useCreateBlockNote } from "@blocknote/react";
+import { BlockNoteSchema } from "@blocknote/core";
+import { en as blockNoteEn } from "@blocknote/core/locales";
+import { withMultiColumn, multiColumnDropCursor, locales as multiColumnLocales } from "@blocknote/xl-multi-column";
 import type { Section3 } from "~/lib/landing3/types";
 
 // Editor de documento SIMPLE — BlockNote SIN colaboración (sin Yjs, sin caja
@@ -36,7 +39,14 @@ export default function SimpleDocEditor({
   const [exporting, setExporting] = useState<null | "pdf" | "docx">(null);
   const [shared, setShared] = useState(false);
 
-  const editor = useCreateBlockNote();
+  // Columnas (mínimo de Word): arrastrar un bloque al costado de otro crea 2+ columnas
+  // (firmas Empleador/Trabajador lado a lado). `withMultiColumn` extiende el schema y
+  // `multiColumnDropCursor` habilita el drop lateral (no solo arriba/abajo).
+  const editor = useCreateBlockNote({
+    schema: withMultiColumn(BlockNoteSchema.create()),
+    dropCursor: multiColumnDropCursor,
+    dictionary: { ...blockNoteEn, multi_column: multiColumnLocales.en },
+  });
 
   // Compartir = co-edición. Levanta la caja collab SOLO ahora (no en el visor). El
   // link /collab/document/:token abre el editor en vivo con cursores para el externo.
