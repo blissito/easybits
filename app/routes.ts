@@ -393,6 +393,8 @@ export default [
   // (spawns/resumes the owner's collab box, returns the ws URL).
   route("collab/document/:token", "routes/collab.document.$token.tsx"),
   route("api/v2/collab/:token/room", "routes/api/v2/collab.$token.room.ts"),
+  // GTeams calls this when @ghosty makes a doc → mints an embeddable collab editor URL.
+  route("api/v2/documents/collab-embed-link", "routes/api/v2/documents.collab-embed-link.ts"),
 
   // OAuth 2.1 (MCP connector flow for Claude.ai / Cowork)
   route("/.well-known/oauth-protected-resource", "routes/api/wellknown/oauth-protected-resource.ts"),
