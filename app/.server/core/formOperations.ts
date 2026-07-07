@@ -351,12 +351,21 @@ export async function handleFormSubmission(
     }
   }
 
-  // Dispatch webhook
+  // Dispatch webhook — self-describing: include field metadata so consumers
+  // (e.g. GTeams) can render labels + matrices without fetching the form config.
   dispatchWebhooks(formConfig.ownerId, "form.submitted", {
     formId,
+    formName: formConfig.name,
     websiteId: formConfig.websiteId,
     landingId: formConfig.landingId,
     data: cleanData,
+    fields: fields.map((f) => ({
+      name: f.name,
+      label: f.label,
+      type: f.type,
+      ...(f.options ? { options: f.options } : {}),
+      ...(f.rows ? { rows: f.rows } : {}),
+    })),
   });
 
   // Notify the form owner by email (fire-and-forget — never fails the submission)
