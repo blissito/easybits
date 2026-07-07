@@ -345,6 +345,75 @@ export async function handleFormSubmission(
   return result;
 }
 
+// ─── List forms + submissions (REST API v2 + SDK) ──────────────
+export async function listForms(ctx: AuthContext) {
+  requireScope(ctx, "READ");
+  const forms = await db.formConfig.findMany({
+    where: { ownerId: ctx.user.id },
+    orderBy: { createdAt: "desc" },
+  });
+  const formIds = forms.map((f) => f.id);
+  const counts = formIds.length
+    ? await db.formSubmission.groupBy({
+        by: ["formConfigId"],
+        _count: true,
+        where: { formConfigId: { in: formIds } },
+      })
+    : [];
+  const countMap = Object.fromEntries(counts.map((c) => [c.formConfigId, c._count]));
+  return {
+    items: forms.map((f) => ({
+      id: f.id,
+      name: f.name,
+      slug: f.slug,
+      theme: f.theme,
+      websiteId: f.websiteId,
+      landingId: f.landingId,
+      url: f.slug ? `https://www.easybits.cloud/f/${f.slug}` : null,
+      submissionCount: countMap[f.id] ?? 0,
+      createdAt: f.createdAt,
+    })),
+  };
+}
+
+export async function listFormSubmissions(ctx: AuthContext, formId?: string, limit = 50) {
+  requireScope(ctx, "READ");
+  const take = Math.min(Math.max(1, limit), 200);
+  if (formId) {
+    const formConfig = await db.formConfig.findUnique({ where: { id: formId } });
+    if (!formConfig || formConfig.ownerId !== ctx.user.id) {
+      throw new Response(JSON.stringify({ error: "Form not found" }), {
+        status: 404,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    const submissions = await db.formSubmission.findMany({
+      where: { formConfigId: formId },
+      orderBy: { createdAt: "desc" },
+      take,
+    });
+    return {
+      formName: formConfig.name,
+      items: submissions.map((s) => ({ id: s.id, data: s.data, createdAt: s.createdAt })),
+      total: submissions.length,
+    };
+  }
+  const forms = await db.formConfig.findMany({
+    where: { ownerId: ctx.user.id },
+    select: { id: true },
+  });
+  if (!forms.length) return { items: [], total: 0 };
+  const submissions = await db.formSubmission.findMany({
+    where: { formConfigId: { in: forms.map((f) => f.id) } },
+    orderBy: { createdAt: "desc" },
+    take,
+  });
+  return {
+    items: submissions.map((s) => ({ id: s.id, formId: s.formConfigId, data: s.data, createdAt: s.createdAt })),
+    total: submissions.length,
+  };
+}
+
 // ─── Public: file upload for a hosted form ─────────────────────
 /**
  * Store a file uploaded by an (unauthenticated) form respondent. The file is

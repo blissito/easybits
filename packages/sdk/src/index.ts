@@ -620,6 +620,73 @@ export interface ComputeChatResponse {
   };
 }
 
+// ─── Forms ───────────────────────────────────────────────────────
+
+export type FormFieldType =
+  | "text"
+  | "email"
+  | "tel"
+  | "textarea"
+  | "select"
+  | "date"
+  | "number"
+  | "checkbox"
+  | "radio"
+  | "file";
+
+export interface FormFieldInput {
+  name: string;
+  type: FormFieldType;
+  label: string;
+  required?: boolean;
+  placeholder?: string;
+  options?: string[];
+  /** Show this field only when another field currently equals `equals`. */
+  showIf?: { field: string; equals: string };
+  /** For `file`: accepted types hint, e.g. ".pdf,image/*". */
+  accept?: string;
+  /** Section name — consecutive fields sharing a section render as one step. */
+  section?: string;
+}
+
+export interface CreateFormParams {
+  name: string;
+  fields: FormFieldInput[];
+  /** Hosted template: "formal" (default) | "brutalista" | "institucional" | "editorial". */
+  theme?: "formal" | "brutalista" | "institucional" | "editorial";
+  slug?: string;
+  successMessage?: string;
+  deliveryUrl?: string;
+}
+
+export interface CreateFormResponse {
+  id: string;
+  slug: string | null;
+  theme: string | null;
+  name: string;
+  /** Public hosted URL, e.g. https://www.easybits.cloud/f/:slug */
+  url: string | null;
+}
+
+export interface FormSummary {
+  id: string;
+  name: string;
+  slug: string | null;
+  theme: string | null;
+  websiteId: string | null;
+  landingId: string | null;
+  url: string | null;
+  submissionCount: number;
+  createdAt: string;
+}
+
+export interface FormSubmissionRecord {
+  id: string;
+  formId?: string;
+  data: Record<string, string>;
+  createdAt: string;
+}
+
 // ─── Client ──────────────────────────────────────────────────────
 
 const DEFAULT_BASE_URL = "https://www.easybits.cloud";
@@ -886,6 +953,30 @@ export class EasybitsClient {
     return this.request<{ success: boolean }>(`/webhooks/${webhookId}`, {
       method: "DELETE",
     });
+  }
+
+  // ── Forms ──────────────────────────────────────────────────
+
+  /** Create a standalone hosted form, served at /f/:slug. */
+  async createForm(params: CreateFormParams): Promise<CreateFormResponse> {
+    return this.request<CreateFormResponse>("/forms", {
+      method: "POST",
+      body: JSON.stringify(params),
+    });
+  }
+
+  /** List your forms with submission counts. */
+  async listForms(): Promise<{ items: FormSummary[] }> {
+    return this.request<{ items: FormSummary[] }>("/forms");
+  }
+
+  /** List submissions for a form (most recent first). */
+  async getFormSubmissions(
+    formId: string,
+    opts?: { limit?: number }
+  ): Promise<{ formName?: string; items: FormSubmissionRecord[]; total: number }> {
+    const qs = opts?.limit ? `?limit=${opts.limit}` : "";
+    return this.request(`/forms/${formId}/submissions${qs}`);
   }
 
   // ── Usage & Bulk ───────────────────────────────────────────

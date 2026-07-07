@@ -27,6 +27,7 @@ const SECTIONS = [
   { id: "bulk", label: "Operaciones en lote" },
   { id: "images", label: "Imágenes" },
   { id: "sharing", label: "Compartir" },
+  { id: "forms", label: "Formularios" },
   { id: "webhooks", label: "Webhooks" },
   { id: "payments", label: "Pagos" },
   { id: "email", label: "Email & Broadcasts" },
@@ -557,6 +558,12 @@ ghosty --yolo` },
               ["listShareTokens(params?)", "Lista tokens (paginado)"],
             ]} />
 
+            <SdkMethodTable title="Formularios" methods={[
+              ["createForm(params)", "Crea un formulario hospedado (/f/:slug)"],
+              ["listForms()", "Lista tus formularios con conteo de respuestas"],
+              ["getFormSubmissions(formId, opts?)", "Lista las respuestas de un formulario"],
+            ]} />
+
             <SdkMethodTable title="Webhooks" methods={[
               ["listWebhooks()", "Lista los webhooks configurados"],
               ["createWebhook(params)", "Crea un webhook (devuelve el secret una vez)"],
@@ -835,6 +842,72 @@ console.log(result.savings); // "75%"`}
           </section>
 
           {/* Webhooks */}
+          <section id="forms" className="mb-16">
+            <h2 className="text-2xl font-bold mb-4">Formularios</h2>
+            <p className="text-gray-600 mb-4 text-sm">
+              Crea formularios de captura <strong>hospedados</strong> — servidos en{" "}
+              <code className="bg-gray-100 px-1 rounded">/f/:slug</code>, sin que el usuario final necesite cuenta.
+              Cada envío se guarda, dispara el webhook <code className="bg-gray-100 px-1 rounded">form.submitted</code> y
+              (si configuraste una) inserta la fila en tu base de datos. Multi-paso por secciones, condicionales y subida de archivos incluidos.
+            </p>
+
+            <div className="mb-6 bg-gray-50 border-2 border-gray-300 rounded-xl p-4 text-sm">
+              <strong>Tipos de campo:</strong>{" "}
+              <code>text</code>, <code>email</code>, <code>tel</code>, <code>textarea</code>, <code>select</code>, <code>date</code>, <code>number</code>, <code>checkbox</code>, <code>radio</code>, <code>file</code>.
+              {" "}<strong>Templates:</strong> <code>formal</code>, <code>brutalista</code>, <code>institucional</code>, <code>editorial</code>.
+            </div>
+
+            <Endpoint
+              method="POST"
+              path="/forms"
+              description="Crea un formulario hospedado standalone. Devuelve la URL pública /f/:slug."
+              body={[
+                { name: "name", type: "string", desc: "Nombre del formulario (requerido)" },
+                { name: "fields", type: "FormField[]", desc: "Campos: { name, type, label, required?, placeholder?, options?, showIf?, accept?, section? }" },
+                { name: "theme", type: "string", desc: "Template: formal (default) | brutalista | institucional | editorial" },
+                { name: "slug", type: "string", desc: "Slug personalizado (opcional; se deriva del nombre)" },
+                { name: "successMessage", type: "string", desc: "Mensaje al enviar (opcional)" },
+              ]}
+              response={`{ "id": "...", "slug": "contacto", "theme": "formal", "url": "https://www.easybits.cloud/f/contacto" }`}
+              sdk={`const form = await eb.createForm({
+  name: "Diagnóstico situacional",
+  theme: "formal",
+  fields: [
+    { name: "razon_social", type: "text", label: "Razón social", required: true, section: "Datos generales" },
+    { name: "tipo", type: "radio", label: "Tipo de persona moral", options: ["Sociedad mercantil", "Sociedad civil"], section: "Datos generales" },
+    { name: "vehiculo", type: "radio", label: "¿Asignó vehículo?", options: ["Sí", "No"], section: "Riesgo" },
+    { name: "poliza", type: "text", label: "Número de póliza", showIf: { field: "vehiculo", equals: "Sí" }, section: "Riesgo" },
+    { name: "expediente", type: "file", label: "Sube el expediente", accept: ".pdf,image/*", section: "Riesgo" },
+  ],
+});
+console.log(form.url); // https://www.easybits.cloud/f/diagnostico-situacional`}
+            />
+
+            <Endpoint
+              method="GET"
+              path="/forms"
+              description="Lista tus formularios con el conteo de respuestas."
+              response={`{ "items": [{ "id": "...", "name": "...", "slug": "...", "url": "...", "submissionCount": 12, "createdAt": "..." }] }`}
+              sdk={`const { items } = await eb.listForms();`}
+            />
+
+            <Endpoint
+              method="GET"
+              path="/forms/:formId/submissions"
+              description="Lista las respuestas de un formulario (más recientes primero)."
+              body={[
+                { name: "limit", type: "number", desc: "Query param. Máx 200, default 50." },
+              ]}
+              response={`{ "formName": "...", "items": [{ "id": "...", "data": { "razon_social": "..." }, "createdAt": "..." }], "total": 12 }`}
+              sdk={`const { items } = await eb.getFormSubmissions("form_id", { limit: 100 });`}
+            />
+
+            <div className="mt-4 bg-purple-50 border-2 border-purple-200 rounded-xl p-4 text-sm text-gray-700">
+              Los archivos subidos (<code>type: "file"</code>) se guardan privados; la respuesta almacena el <code>fileId</code>.
+              El envío público es <code>POST /forms/:formId/submit</code> (JSON) y la subida <code>POST /forms/:formId/upload</code> (multipart) — ambos sin auth, embebibles en cualquier dominio.
+            </div>
+          </section>
+
           <section id="webhooks" className="mb-16">
             <h2 className="text-2xl font-bold mb-4">Webhooks</h2>
             <p className="text-gray-600 mb-4 text-sm">
