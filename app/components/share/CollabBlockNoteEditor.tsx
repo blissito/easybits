@@ -125,22 +125,27 @@ export default function CollabBlockNoteEditor({
     [provider, ydoc],
   );
 
+  // Documento SIEMPRE en claro (como Word/Google Docs), independiente del tema del
+  // sistema: hoja blanca centrada con sombra sobre un canvas gris. BlockNote aporta
+  // la barra de formato flotante (al seleccionar) + slash menu (/) + drag handles.
   return (
-    <div className="min-h-screen bg-surface-2">
-      <div className="sticky top-0 z-10 flex items-center gap-2 border-b border-border bg-surface px-4 py-1.5">
+    <div className="flex min-h-screen flex-col bg-[#f3f3f5]">
+      <header className="sticky top-0 z-10 flex items-center gap-2 border-b border-neutral-200 bg-white/90 px-4 py-2 backdrop-blur">
         <span
           className={`inline-block size-2 rounded-full ${
-            status === "connected" ? "bg-green-500" : status === "connecting" ? "bg-amber-500" : "bg-red-500"
+            status === "connected" ? "bg-green-500" : status === "connecting" ? "bg-amber-400" : "bg-red-500"
           }`}
         />
-        <span className="text-xs text-muted">
+        <span className="text-xs font-medium text-neutral-500">
           {status === "connected" ? "Co-edición en vivo" : status === "connecting" ? "Conectando…" : "Desconectado"}
           {!editable && " · solo lectura"}
         </span>
-      </div>
-      <div className="mx-auto max-w-[8.5in] px-4 py-8">
-        <div className="rounded-lg border border-border bg-surface py-10 shadow-sm">
-          <BlockNoteView editor={editor} editable={editable} />
+      </header>
+      <div className="flex-1 overflow-auto px-4 py-8 sm:py-10">
+        <div className="mx-auto max-w-[820px]">
+          <div className="min-h-[1000px] rounded-md bg-white px-6 py-12 shadow-[0_1px_2px_rgba(0,0,0,0.06),0_12px_32px_-12px_rgba(0,0,0,0.18)] ring-1 ring-neutral-200/70 sm:px-14">
+            <BlockNoteView editor={editor} editable={editable} theme="light" />
+          </div>
         </div>
       </div>
     </div>
