@@ -116,6 +116,9 @@ export async function action({ request, params }: Route.ActionArgs) {
       try {
         const reply = await routeMessage(fleetAgentId, {
           groupId,
+          // Config unit key estable por canal (Teams manda "teams", WABA "waba:<id>");
+          // sin él cae al groupId (por conversación → solo el default `*`). Ver cfgId.
+          configGroupId: typeof body?.configGroupId === "string" ? body.configGroupId : undefined,
           sender: typeof body?.sender === "string" ? body.sender : undefined,
           text,
           image,

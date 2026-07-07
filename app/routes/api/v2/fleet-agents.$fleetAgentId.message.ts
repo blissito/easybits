@@ -87,6 +87,11 @@ export async function action({ request, params }: Route.ActionArgs) {
   try {
     const reply = await routeMessage(fleetAgentId, {
       groupId,
+      // Config unit key (systemPrompt + mcps + toolBuckets): un canal manda un
+      // configGroupId ESTABLE (WABA: "waba:<id>", Teams: "teams") para compartir
+      // una config entre todas sus conversaciones. Sin él, cae al groupId (por
+      // conversación → solo el default `*`). Ver cfgId en routeMessage.
+      configGroupId: typeof body?.configGroupId === "string" ? body.configGroupId : undefined,
       sender: typeof body?.sender === "string" ? body.sender : undefined,
       text,
       image,

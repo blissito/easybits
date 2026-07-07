@@ -354,6 +354,10 @@ export type GroupConfig = {
   // Scope del bucket DB: namespaces permitidos ("decirle CUÁL base"). Vacío/ausente
   // = todas. Se inyecta al prompt del turno (enforcement duro en el MCP = follow-up).
   dbAllow?: string[];
+  // Marca de "canal en uso" — ISO del primer turno visto en este cfgId. Solo la usa
+  // el canal Teams (cfgId "teams") hoy: EasyBits no sabe de la conexión (vive en
+  // GTeams), así que la infiere del primer mensaje. Prende el indicador en /dash/flota.
+  connectedAt?: string;
 };
 
 // Builtins (easybits/wa) the group turned OFF. Absent/[] = all builtins ON
@@ -1170,6 +1174,16 @@ export async function routeMessage(
   let placed = await pickOrSpawn(ctx, fleetAgent, msg.groupId);
   // Config unit for key + capabilities: the number (WABA) or the conversation itself.
   const cfgId = msg.configGroupId ?? msg.groupId;
+  // Teams: EasyBits no sabe de la conexión (vive en GTeams). La INFERIMOS del primer
+  // turno con cfgId "teams" → estampa connectedAt (idempotente: un solo write) para
+  // prender el indicador del canal en /dash/flota. Guarded (.catch): jamás tumba el turno.
+  if (cfgId === "teams") {
+    const gc = (fleetAgent.groupConfigs as Record<string, GroupConfig> | null) ?? {};
+    if (!gc["teams"]?.connectedAt) {
+      const next = { ...gc, teams: { ...(gc["teams"] ?? {}), connectedAt: new Date().toISOString() } };
+      await db.fleetAgent.update({ where: { id: fleetAgent.id }, data: { groupConfigs: next } }).catch(() => {});
+    }
+  }
 
   // NATIVE Claude vision: drop the inbound image onto the worker's disk and tell
   // the agent to open it with Read (Claude is multimodal — no Gemini describe).

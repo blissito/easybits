@@ -164,6 +164,28 @@ export async function loader({ request }: Route.LoaderArgs) {
           toolBuckets: gconf[id]?.toolGroup ? [...toolsParamToBuckets(gconf[id]!.toolGroup!)] : null,
         };
       });
+      // Teams (Ghosty Teams): un solo canal por FleetAgent — la conexión vive del
+      // lado de GTeams (OAuth → gc_agent con fleet_id/token). Config unit ESTABLE
+      // "teams" (GTeams manda configGroupId:"teams" por turno) → mismo shape que un
+      // grupo/número, así el modal de Capacidades lo reusa igual. Se ofrece siempre;
+      // "conectado" real = configurado desde Teams. connected = tiene config propia.
+      const teamsCfg = gconf["teams"] ?? {};
+      // "Conectado" = hubo al menos un turno desde Teams (connectedAt, estampado por
+      // routeMessage). NO "tiene config": configurar tools sin haber conectado no
+      // debe verse verde, y conectar sin config sí.
+      const teamsConnected = !!teamsCfg.connectedAt;
+      const teamsChannel = {
+        id: "teams",
+        subject: "Ghosty Teams",
+        mcps: teamsCfg.mcpServers ?? [],
+        disabledBuiltins: teamsCfg.disabledBuiltins ?? [],
+        capLevels: teamsCfg.capLevels ?? {},
+        systemPrompt: teamsCfg.systemPrompt ?? "",
+        assets: (teamsCfg.assets?.length ? teamsCfg.assets : gconf["*"]?.assets) ?? [],
+        dbAllow: (teamsCfg.dbAllow?.length ? teamsCfg.dbAllow : gconf["*"]?.dbAllow) ?? [],
+        toolBuckets: teamsCfg.toolGroup ? [...toolsParamToBuckets(teamsCfg.toolGroup)] : null,
+        connected: teamsConnected,
+      };
       // Per-VM capacity boxes: each worker VM + how many conversations (slots) it
       // holds vs maxWorkersPerVm. Drives the "cajitas encendidas" capacity view.
       const workers = await db.agent.findMany({
@@ -204,7 +226,7 @@ export async function loader({ request }: Route.LoaderArgs) {
       const skillFileById = new Map(skillFiles.map((f) => [f.id, f]));
       return {
         id: p.id, name: p.name, token: p.token, mascotColor, status, live, qrDataUrl, pairingCode, groups,
-        wabaNumbers,
+        wabaNumbers, teamsChannel,
         enabledCount: p.enabledGroups.length, machines, vms: machines.length,
         conversations, maxWorkersPerVm: p.maxWorkersPerVm, vmMemMb: p.vmMemMb,
         throttledUntil, connReason: b.reason ?? null, mainGroupJid: p.mainGroupJid,
@@ -2183,6 +2205,7 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                 const channels = [
                   { kind: "baileys", label: "Personal y grupos (QR)", dot: (stale || relinking) ? "bg-orange-400" : st.dot, count: p.conversations },
                   { kind: "waba", label: "WhatsApp Business API", dot: p.wabaNumbers.length ? "bg-green-500" : "bg-gray-300", count: p.wabaNumbers.length },
+                  { kind: "teams", label: "Ghosty Teams", dot: p.teamsChannel.connected ? "bg-green-500" : "bg-gray-300", count: 0 },
                 ];
                 return (<>
                 {/* Tabs por canal */}
@@ -2384,6 +2407,29 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                   {wabaError && <p className="mt-2 text-xs text-red-600">⚠️ {wabaError}</p>}
                 </div>)}
 
+                {/* ── Canal Ghosty Teams ─────────────────────────────────── */}
+                {activeCh === "teams" && (<div className="mt-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0 flex items-center gap-2">
+                      <span className="text-sm font-semibold truncate">{p.teamsChannel.subject}</span>
+                      <span className={`shrink-0 inline-flex items-center gap-1.5 text-[11px] font-semibold px-2 py-1 rounded-full border-2 ${p.teamsChannel.connected ? "border-green-200 text-green-600" : "border-gray-200 text-gray-500"}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${p.teamsChannel.connected ? "bg-green-500" : "bg-gray-300"}`} />
+                        {p.teamsChannel.connected ? "Configurado" : "Sin configurar"}
+                      </span>
+                    </div>
+                    <button type="button" title="Capacidades y comportamiento en Teams"
+                      onClick={() => setCapModal({ fleetAgentId: p.id, groupId: "teams" })}
+                      className="flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-lg border-2 border-gray-200 text-gray-600 hover:border-brand-500 hover:text-brand-500 transition-colors">
+                      <span className="text-sm leading-none">⚡</span><span>Capacidades</span>
+                      <span className="text-[10px] leading-none bg-gray-100 text-gray-600 rounded-full px-1.5 py-0.5">{p.builtins.length + p.teamsChannel.mcps.length}</span>
+                    </button>
+                  </div>
+                  <p className="mt-3 text-xs text-gray-400">
+                    La conexión se hace desde Ghosty Teams (Ajustes → Agentes → conectar este agente de la flota).
+                    Aquí configuras las tools y el comportamiento que usa en ese canal.
+                  </p>
+                </div>)}
+
                 {/* Footer del agente — Borrar es DESTRUCTIVO e irreversible: lo
                     dejamos discreto (no un botón rojo prominente) para que no se
                     dispare por accidente. Mantiene el confirm reforzado. */}
@@ -2443,7 +2489,11 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
         // subject, mcps}, so the modal reuses the same body. A WABA hit also
         // carries integrationId/name/systemPrompt → an extra Identity section.
         const cgWaba = cp?.wabaNumbers.find((x) => x.id === capModal.groupId);
-        const cg = cp?.groups.find((x) => x.id === capModal.groupId) ?? cgWaba;
+        // Teams: unidad de config "teams" (mismo shape que grupo/número → el modal
+        // la reusa; tools por toggle-group-mcp y comportamiento por set-group-prompt,
+        // ambos keyean por groupId="teams").
+        const cgTeams = capModal.groupId === "teams" ? cp?.teamsChannel : undefined;
+        const cg = cp?.groups.find((x) => x.id === capModal.groupId) ?? cgWaba ?? cgTeams;
         if (!cp || !cg) return null;
         const waba = cgWaba ?? null;
         return (
