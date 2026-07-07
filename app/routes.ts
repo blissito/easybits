@@ -115,6 +115,7 @@ export default [
       route("characters", "routes/dash/characters.tsx"),
       route("brand-kits", "routes/dash/brand-kits.tsx"),
       route("packs", "routes/dash/packs.tsx"),
+      route("forms", "routes/dash/forms.tsx"),
       route("archivos", "routes/files.tsx"),
       route("chime-poc", "routes/dash/chime-poc.tsx"),
       route("perfil", "routes/profile/profile.tsx"),

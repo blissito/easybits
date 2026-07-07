@@ -43,6 +43,18 @@ export const ITEMS = {
         {
           icon: (
             <svg className="scale" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="4" y="3" width="16" height="18" rx="2" />
+              <path d="M9 7h6" />
+              <path d="M9 11h6" />
+              <path d="M9 15h3" />
+            </svg>
+          ),
+          path: "/dash/forms",
+          title: "Formularios",
+        },
+        {
+          icon: (
+            <svg className="scale" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <rect x="3" y="3" width="18" height="18" rx="2" />
               <path d="M3 9h18" />
               <path d="M9 21V9" />
