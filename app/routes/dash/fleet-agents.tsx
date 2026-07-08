@@ -269,7 +269,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   // las de SISTEMA (llamadas livekit / voz kokoro) en azul, y cualquier otra
   // (custom: code-interpreter, etc.) en gris con su template. Dedup contra los
   // worker del fleetAgent (ya están en `machines`). Consistente con el gate de budget.
-  const { listSandboxes } = await import("~/.server/core/sandboxOperations");
+  const { listSandboxes, getSandbox } = await import("~/.server/core/sandboxOperations");
   const SYSTEM_TEMPLATES: Record<string, string> = { "livekit-svc": "llamadas", "voice-svc": "voz", "render-svc": "render" };
   const workerSandboxIds = new Set(machines.map((m) => m.sandboxId).filter(Boolean) as string[]);
   // El listing del host es la VERDAD de qué VMs están vivas: una VM suspendida se
@@ -304,6 +304,36 @@ export async function loader({ request }: Route.LoaderArgs) {
   });
   const SERVICE_KIND_LABEL: Record<string, string> = { voice: "voz", render: "render" };
   const liveVmIds = new Set((hostVms as any[]).map((v) => v.sandboxId));
+  // Cajas de servicio en DB ausentes del listing del host: el listing OMITE las
+  // suspendidas, así que ausencia ≠ destruida. Antes se pintaban SIEMPRE como
+  // "dormida" → fantasma "render · dormida" cuando la caja ya no existía. Ahora
+  // verificamos cada una por-id contra el host (getSandbox SÍ devuelve el estado
+  // real de una suspendida): viva → su estado real; gone (throw/stopped/error/
+  // lost) → la OMITIMOS y limpiamos la fila huérfana (self-heal). Solo si el host
+  // respondió (hostReachable); un error transitorio no borra ni pinta nada.
+  type ServiceTile = { id: string; status: string; kind: "system"; label: string };
+  let serviceTiles: ServiceTile[] = [];
+  if (hostReachable) {
+    const svcCtx = { user, scopes: ["READ" as const] } as any;
+    const orphans = serviceBoxes.filter(
+      (sb) => !liveVmIds.has(sb.sandboxId) && !workerSandboxIds.has(sb.sandboxId)
+    );
+    serviceTiles = (
+      await Promise.all(
+        orphans.map(async (sb): Promise<ServiceTile | null> => {
+          const live = await getSandbox(svcCtx, sb.sandboxId).catch(() => null);
+          if (!live || ["stopped", "error", "lost"].includes(live.status as string)) {
+            await db.serviceBox.deleteMany({ where: { sandboxId: sb.sandboxId } }).catch(() => {});
+            return null;
+          }
+          return {
+            id: sb.sandboxId, status: live.status as string, kind: "system",
+            label: SERVICE_KIND_LABEL[sb.kind] ?? sb.kind,
+          };
+        })
+      )
+    ).filter((x): x is ServiceTile => x !== null);
+  }
   const extraMachines = [
     // Cajas NO-worker del host: sistema (voz/render/llamadas) o custom. Incluye
     // DORMIDAS (suspended) → así una caja de servicio parada se ve dormida en el HUD.
@@ -314,17 +344,8 @@ export async function loader({ request }: Route.LoaderArgs) {
           ? { id: v.sandboxId, status: v.status as string, kind: "system" as const, label: SYSTEM_TEMPLATES[v.template] }
           : { id: v.sandboxId, status: v.status as string, kind: "custom" as const, label: v.template as string }
       ),
-    // Fallback: cajas de servicio en DB que el host YA no lista (reconcile las sacó) ⇒
-    // dormidas. Solo si el host respondió (hostReachable) — un error transitorio no
-    // debe pintar todo dormido. Dedup contra las ya emitidas por el host.
-    ...(hostReachable
-      ? serviceBoxes
-          .filter((sb) => !liveVmIds.has(sb.sandboxId) && !workerSandboxIds.has(sb.sandboxId))
-          .map((sb) => ({
-            id: sb.sandboxId, status: "suspended", kind: "system" as const,
-            label: SERVICE_KIND_LABEL[sb.kind] ?? sb.kind,
-          }))
-      : []),
+    // Verificadas contra el host (dedup contra las ya emitidas por el listing).
+    ...serviceTiles,
   ];
   const capacity = {
     machines,
