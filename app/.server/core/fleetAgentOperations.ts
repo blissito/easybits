@@ -729,6 +729,17 @@ function renderMcpServer(fleetAgent: { id: string; token: string }): Record<stri
   };
 }
 
+// Artifact MCP server — edit-in-place de artefactos vivos (doc). Mismo patrón que
+// renderMcpServer (HTTP, auth = fleetAgent token), inyectado INCONDICIONAL en todo
+// turno → el agente crea/actualiza documentos con identidad + versiones.
+function artifactMcpServer(fleetAgent: { id: string; token: string }): Record<string, unknown> {
+  const base = (process.env.BASE_URL || "https://www.easybits.cloud").replace(/\/$/, "");
+  const url = `${base}/api/v2/fleet-artifact/${fleetAgent.id}/mcp?token=${encodeURIComponent(fleetAgent.token)}`;
+  return {
+    artifact: { type: "http", url, headers: { Authorization: `Bearer ${fleetAgent.token}` } },
+  };
+}
+
 // Admin MCP server — gestiona números/identidad/capacidades del propio FleetAgent.
 // Mismo patrón que renderMcpServer (HTTP, auth = fleetAgent token), pero inyectado
 // SOLO en turnos admin (msg.admin) → el dueño administra el agente desde su
@@ -1334,6 +1345,7 @@ export async function routeMessage(
           mcpServers: {
             ...(await resolveGroupMcpServers(fleetAgent, cfgId, fleetAgent.ownerId)),
             ...renderMcpServer(fleetAgent),
+            ...artifactMcpServer(fleetAgent),
             // admin = SOLO en turnos admin (dueño en su conversación admin de WABA).
             ...(msg.admin ? adminMcpServer(fleetAgent) : {}),
           },
