@@ -118,7 +118,15 @@ export async function loader({ request, params }: Route.LoaderArgs) {
       hasOwnNumber: !!fa.hasOwnNumber,
       buckets: [...toolsParamToBuckets(bucketsParam)],
     },
-    buckets: FLEET_BUCKETS.map((b) => ({ key: b.key, label: b.label, description: b.description, admin: !!b.admin })),
+    buckets: FLEET_BUCKETS.map((b) => ({
+      key: b.key,
+      label: b.label,
+      description: b.description,
+      admin: !!b.admin,
+      // Buckets con niveles granulares (ej. db: lectura/escritura/borrado). Cada nivel
+      // declara el SET de sub-buckets que activa → el cliente arma el ?tools= completo.
+      levels: b.levels?.map((l) => ({ key: l.key, label: l.label, buckets: l.buckets })) ?? null,
+    })),
     models: [
       { key: "claude-sonnet-5", label: "Sonnet 5 (equilibrado)" },
       { key: "claude-opus-4-8", label: "Opus 4.8 (máxima capacidad)" },
