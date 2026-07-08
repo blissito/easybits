@@ -309,7 +309,11 @@ export async function action({ request, params }: Route.ActionArgs) {
   } else if (action === "set-db-allow") {
     // Scope del bucket DB: qué namespaces puede tocar el agente. [] / ausente = todas.
     // Se inyecta al prompt del turno (enforcement en el MCP db = follow-up).
-    const dbs = Array.isArray(b?.dbAllow) ? (b.dbAllow as unknown[]).map((s) => String(s)) : [];
+    // Filtra vacíos/whitespace: un "" colado (toggle sin namespace) quedaba como
+    // [""], que downstream era truthy y pisaba el wildcard con una allowlist vacía.
+    const dbs = Array.isArray(b?.dbAllow)
+      ? (b.dbAllow as unknown[]).map((s) => String(s)).filter((s) => s.trim())
+      : [];
     configs[groupId] = { ...cur, dbAllow: dbs };
   } else if (action === "set-toolgroup") {
     // EasyBits tool buckets for this group (GTeams uses "*" = agent default). Touching

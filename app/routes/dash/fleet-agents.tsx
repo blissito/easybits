@@ -627,8 +627,8 @@ export async function action({ request }: Route.ActionArgs) {
     const on = String(fd.get("on") || "") === "1";
     const configs = { ...((fleetAgent.groupConfigs as Record<string, GroupConfig> | null) ?? {}) };
     const cur = configs[groupId] ?? {};
-    const set = new Set(cur.dbAllow ?? []);
-    if (on) set.add(ns); else set.delete(ns);
+    const set = new Set((cur.dbAllow ?? []).filter((s) => s && s.trim()));
+    if (on && ns.trim()) set.add(ns); else set.delete(ns);
     configs[groupId] = { ...cur, dbAllow: [...set] };
     await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { groupConfigs: configs } });
     return data({ ok: true });
