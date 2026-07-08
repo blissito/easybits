@@ -4,8 +4,13 @@ import {
   mergedCapabilities,
   DEFAULT_MCP_CATALOG,
   CURATED_CAPABILITIES,
+  FLEET_DEFAULT_MODEL,
+  FLEET_DEFAULT_EFFORT,
+  fleetSkills,
   type GroupConfig,
+  type McpCatalogEntry,
 } from "~/.server/core/fleetAgentOperations";
+import { FLEET_BUCKETS, bucketsToToolsParam, toolsParamToBuckets } from "~/.server/mcp/toolGroups";
 import { createSecret, listSecrets } from "~/.server/core/secretOperations";
 
 // API-first capability config for a FleetAgent. Both the EasyBits dashboard AND
@@ -13,13 +18,24 @@ import { createSecret, listSecrets } from "~/.server/core/secretOperations";
 // just one client. Auth = fleetAgent.token (owner-trusted bearer). GET returns the
 // catalog + per-channel state; POST applies one mutation.
 //
-//   GET  → { builtins, capabilities, secretsPresent, groups: {id: config} }
-//   POST { action, groupId, ... }
+//   GET  → { builtins, capabilities, secretsPresent, groups, agent, buckets, models, skills, customMcps }
+//   POST { action, groupId?, ... }
+//     — per-group (need groupId; GTeams uses "*" = agent default) —
 //     set-cap-level   { cap, level: off|read|write }
 //     toggle-builtin  { builtin, on }
-//     set-prompt      { systemPrompt }
+//     set-prompt      { systemPrompt }        (per-channel append, layer 3)
 //     toggle-asset    { fileId, on }
-//     set-secret      { name, value }   (owner vault; no groupId)
+//     set-toolgroup   { buckets: string[], inherit? }
+//     — agent-level (no groupId) —
+//     set-secret       { name, value }        (owner vault)
+//     set-agent-prompt { systemPrompt }       (persona.env.SYSTEM_PROMPT, layer 2, all channels)
+//     set-model        { model }
+//     set-effort       { effort: low|medium|high|xhigh }
+//     toggle-own-number{ on }
+//     add-mcp          { name, label?, pkg?|url?, requiredSecret?, envVar? }
+//     remove-mcp       { name }
+//     toggle-skill     { skillId, on }
+//     delete-skill     { skillId }
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -82,13 +98,35 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   ]);
   const seen = new Set(matchFiles.map((f) => f.id));
   const ownerFiles = [...selectedFiles.filter((f) => !seen.has(f.id)), ...matchFiles];
+  // Agent-level config (persona/model/effort/buckets) — the fields GTeams ports to
+  // give any agent the same panel. Buckets default = groupConfigs["*"] then persona env.
+  const persona = ((fa.persona ?? {}) as { env?: Record<string, string> });
+  const env = persona.env ?? {};
+  const groupCfgs = cfgs(fa);
+  const bucketsParam = groupCfgs["*"]?.toolGroup ?? env.EASYBITS_TOOL_GROUP;
   return json({
     builtins: DEFAULT_MCP_CATALOG.map((e) => ({ name: e.name, label: e.label ?? e.name })),
     capabilities,
     secretsPresent: [...secretNames],
-    groups: cfgs(fa),
+    groups: groupCfgs,
     ownerFiles,
     ownerDbs,
+    agent: {
+      systemPrompt: env.SYSTEM_PROMPT ?? "",
+      model: env.ANTHROPIC_MODEL ?? FLEET_DEFAULT_MODEL,
+      effort: env.FLEET_EFFORT ?? FLEET_DEFAULT_EFFORT,
+      hasOwnNumber: !!fa.hasOwnNumber,
+      buckets: [...toolsParamToBuckets(bucketsParam)],
+    },
+    buckets: FLEET_BUCKETS.map((b) => ({ key: b.key, label: b.label, description: b.description, admin: !!b.admin })),
+    models: [
+      { key: "claude-sonnet-5", label: "Sonnet 5 (equilibrado)" },
+      { key: "claude-opus-4-8", label: "Opus 4.8 (máxima capacidad)" },
+      { key: "claude-haiku-4-5-20251001", label: "Haiku 4.5 (rápido y barato)" },
+    ],
+    efforts: ["low", "medium", "high", "xhigh"],
+    skills: fleetSkills(fa).map((s) => ({ id: s.id, name: s.name, description: s.description, enabled: s.enabled !== false, fileCount: (s.files ?? []).length })),
+    customMcps: mergedCapabilities(fa).filter((e) => !e.builtin && !CURATED_CAPABILITIES.some((c) => c.name === e.name)).map((e) => ({ name: e.name, label: e.label ?? e.name, transport: e.transport ?? "stdio", requiredSecrets: e.requiredSecrets ?? [] })),
   });
 }
 
@@ -109,6 +147,82 @@ export async function action({ request, params }: Route.ActionArgs) {
     } catch (e) {
       return json({ error: e instanceof Error ? e.message : "bad secret" }, 400);
     }
+    return json({ ok: true });
+  }
+
+  // ── Agent-level actions (no groupId): persona / model / effort / catalog / skills ──
+  const persona = ((fa.persona ?? {}) as { env?: Record<string, string> });
+  const setEnv = async (patch: Record<string, string | undefined>) => {
+    const env = { ...(persona.env ?? {}) };
+    for (const [k, v] of Object.entries(patch)) { if (v) env[k] = v; else delete env[k]; }
+    await db.fleetAgent.update({ where: { id: fa.id }, data: { persona: { ...persona, env } as object } });
+  };
+
+  if (action === "set-agent-prompt") {
+    await setEnv({ SYSTEM_PROMPT: String(b?.systemPrompt ?? "").slice(0, 120000) || undefined });
+    return json({ ok: true });
+  }
+  if (action === "set-model") {
+    const model = String(b?.model ?? "").trim();
+    if (model && !/^claude-/.test(model)) return json({ error: "modelo inválido" }, 400);
+    await setEnv({ ANTHROPIC_MODEL: model || undefined });
+    return json({ ok: true });
+  }
+  if (action === "set-effort") {
+    const effort = String(b?.effort ?? "").trim();
+    if (effort && !["low", "medium", "high", "xhigh"].includes(effort)) return json({ error: "effort inválido" }, 400);
+    await setEnv({ FLEET_EFFORT: effort || undefined });
+    return json({ ok: true });
+  }
+  if (action === "toggle-own-number") {
+    await db.fleetAgent.update({ where: { id: fa.id }, data: { hasOwnNumber: !!b?.on } });
+    return json({ ok: true });
+  }
+  if (action === "add-mcp") {
+    const name = String(b?.name ?? "").trim().toLowerCase().replace(/[^a-z0-9_-]/g, "");
+    const label = String(b?.label ?? "").trim() || name;
+    const pkg = String(b?.pkg ?? "").trim();
+    const url = String(b?.url ?? "").trim();
+    const secretName = String(b?.requiredSecret ?? "").trim();
+    const envVar = String(b?.envVar ?? "").trim() || secretName;
+    if (!name) return json({ error: "nombre requerido" }, 400);
+    if (CURATED_CAPABILITIES.some((e) => e.name === name)) return json({ error: "ese nombre es una capacidad incluida" }, 400);
+    const catalog = (fa.mcpCatalog as McpCatalogEntry[] | null) ?? [];
+    if (catalog.some((e) => e.name === name)) return json({ error: "ya existe ese MCP" }, 400);
+    if (!pkg && !url) return json({ error: "da un paquete npm (stdio) o una URL (http)" }, 400);
+    if (secretName && !/^[A-Z_][A-Z0-9_]*$/.test(secretName)) return json({ error: "el secret debe ser MAYÚSCULAS_CON_GUION_BAJO" }, 400);
+    const cenv = secretName ? { [envVar]: `$secret:${secretName}` } : undefined;
+    const entry: McpCatalogEntry = url
+      ? { name, label, transport: "http", url, ...(cenv ? { env: cenv } : {}), ...(secretName ? { requiredSecrets: [secretName] } : {}) }
+      : { name, label, transport: "stdio", command: "npx", args: ["-y", pkg], ...(cenv ? { env: cenv } : {}), ...(secretName ? { requiredSecrets: [secretName] } : {}) };
+    await db.fleetAgent.update({ where: { id: fa.id }, data: { mcpCatalog: [...catalog, entry] } });
+    return json({ ok: true });
+  }
+  if (action === "remove-mcp") {
+    const name = String(b?.name ?? "");
+    if (CURATED_CAPABILITIES.some((e) => e.name === name)) return json({ error: "no se puede quitar una capacidad incluida" }, 400);
+    const catalog = (fa.mcpCatalog as McpCatalogEntry[] | null) ?? [];
+    const target = catalog.find((e) => e.name === name);
+    if (!target) return json({ error: "no existe" }, 404);
+    if (target.builtin) return json({ error: "no se puede quitar un MCP builtin" }, 400);
+    const configs = cfgs(fa);
+    for (const jid of Object.keys(configs)) {
+      const list = configs[jid].mcpServers;
+      if (list?.includes(name)) configs[jid] = { ...configs[jid], mcpServers: list.filter((n) => n !== name) };
+    }
+    await db.fleetAgent.update({ where: { id: fa.id }, data: { mcpCatalog: catalog.filter((e) => e.name !== name), groupConfigs: configs } });
+    return json({ ok: true });
+  }
+  if (action === "toggle-skill") {
+    const skillId = String(b?.skillId ?? "");
+    const skills = fleetSkills(fa).map((s) => (s.id === skillId ? { ...s, enabled: !!b?.on } : s));
+    await db.fleetAgent.update({ where: { id: fa.id }, data: { skills } });
+    return json({ ok: true });
+  }
+  if (action === "delete-skill") {
+    const skillId = String(b?.skillId ?? "");
+    const skills = fleetSkills(fa).filter((s) => s.id !== skillId);
+    await db.fleetAgent.update({ where: { id: fa.id }, data: { skills } });
     return json({ ok: true });
   }
 
@@ -139,6 +253,13 @@ export async function action({ request, params }: Route.ActionArgs) {
     const set = new Set(cur.assets ?? []);
     if (b?.on) set.add(fileId); else set.delete(fileId);
     configs[groupId] = { ...cur, assets: [...set] };
+  } else if (action === "set-toolgroup") {
+    // EasyBits tool buckets for this group (GTeams uses "*" = agent default). Touching
+    // buckets IS the easybits surface → re-enable the easybits builtin for this group.
+    const inherit = !!b?.inherit;
+    const list = Array.isArray(b?.buckets) ? (b.buckets as unknown[]).map((s) => String(s)) : [];
+    const disabled = (cur.disabledBuiltins ?? []).filter((n) => n !== "easybits");
+    configs[groupId] = { ...cur, toolGroup: inherit ? undefined : bucketsToToolsParam(list), disabledBuiltins: disabled };
   } else {
     return json({ error: "unknown action" }, 400);
   }
