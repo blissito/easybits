@@ -900,6 +900,13 @@ async function spawnVm(ctx: AuthContext, fleetAgent: { id: string; name: string 
   // Effort del worker — mismo patrón: persona.env gana, si no el default de flota.
   // Baja el thinking-antes-del-primer-token (snappy). Ver FLEET_DEFAULT_EFFORT.
   if (!env.FLEET_EFFORT) env.FLEET_EFFORT = FLEET_DEFAULT_EFFORT;
+  // Sesión persistente: default ON para claude-worker (UN subproceso claude por
+  // conversación → turnos 2..N ~2× más rápidos, validado A/B en prod ~8s→~3.8s). El
+  // código vive SOLO en el template claude-worker → excluido por template (ghosty-gc/
+  // deepseek se hará después). persona.env.FLEET_PERSISTENT_SESSION gana (override/apagar).
+  if (!env.FLEET_PERSISTENT_SESSION && fleetAgent.workerTemplate === "claude-worker") {
+    env.FLEET_PERSISTENT_SESSION = "1";
+  }
   // El host escribe el env como EnvironmentFile de systemd (una línea KEY=VALUE) y
   // RECHAZA valores con newline (400 "env value ... contains newline") → el spawn
   // falla y el worker nunca arranca. Un SYSTEM_PROMPT multi-línea (o cualquier valor)
