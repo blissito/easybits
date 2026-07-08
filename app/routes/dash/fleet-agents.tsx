@@ -1717,27 +1717,19 @@ function TestChatDrawer({
   }
 
   return (
-    // Padre orquesta open/exit con variants → AnimatePresence espera la salida
-    // (backdrop fade + panel slide) antes de desmontar. Sin props animables propias.
-    <motion.div
-      className="fixed inset-0 z-50 flex justify-end"
-      role="dialog"
-      aria-modal="true"
-      initial="closed"
-      animate="open"
-      exit="closed"
+    // Dock lateral (NO modal): sin backdrop que atrape clics ni oscurezca la página.
+    // Ancla a la derecha del viewport; el contenedor principal reserva su ancho con
+    // mr-[28rem] → el HUD/lista de la flota se empujan y siguen 100% usables sin cerrar
+    // el chat. AnimatePresence espera el slide de salida antes de desmontar.
+    <motion.aside
+      className="fixed top-0 right-0 z-40 h-full w-full max-w-md bg-white shadow-2xl flex flex-col border-l-2 border-black"
+      role="complementary"
+      aria-label="Chat de prueba del agente"
+      initial={{ x: "100%" }}
+      animate={{ x: 0 }}
+      exit={{ x: "100%" }}
+      transition={{ type: "tween", ease: [0.22, 1, 0.36, 1], duration: 0.34 }}
     >
-      <motion.div
-        className="absolute inset-0 bg-black/40"
-        onClick={onClose}
-        variants={{ open: { opacity: 1 }, closed: { opacity: 0 } }}
-        transition={{ duration: 0.25, ease: "easeOut" }}
-      />
-      <motion.div
-        className="relative w-full max-w-md h-full bg-white shadow-2xl flex flex-col"
-        variants={{ open: { x: 0 }, closed: { x: "100%" } }}
-        transition={{ type: "tween", ease: [0.22, 1, 0.36, 1], duration: 0.34 }}
-      >
         <header className="flex items-center gap-2 px-4 py-3 border-b-2 border-black">
           <div className="w-8 h-8 rounded-full bg-brand-500 flex items-center justify-center text-white text-sm">🤖</div>
           <div className="min-w-0 flex-1">
@@ -1795,8 +1787,7 @@ function TestChatDrawer({
             {busy ? "…" : "Enviar"}
           </button>
         </form>
-      </motion.div>
-    </motion.div>
+    </motion.aside>
   );
 }
 
@@ -2016,7 +2007,10 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
   }, [capModal]);
 
   return (
-    <div className="max-w-7xl mx-auto p-6">
+    // Cuando el chat de prueba está abierto reservamos su ancho (28rem = max-w-md del
+    // dock) a la derecha en lg+ → el contenido se empuja en vez de quedar tapado, y la
+    // flota sigue interactiva. En mobile el dock se superpone (sin espacio que reservar).
+    <div className={`max-w-7xl mx-auto p-6 transition-[margin] duration-300 ease-out ${chatAgent ? "lg:mr-[28rem]" : ""}`}>
       <div className="flex items-center gap-2 mb-1">
         <h1 className="text-2xl font-bold">Tu flota de agentes</h1>
         <span className="group relative inline-flex">
