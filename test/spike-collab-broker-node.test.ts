@@ -14,7 +14,9 @@ import { withMultiColumn } from "@blocknote/xl-multi-column";
 const FRAG = "document-store";
 const schema = withMultiColumn(BlockNoteSchema.create());
 
-function headlessEditor() {
+// `any` a propósito: los genéricos de la schema multi-column producen un tipo unión que
+// las utils Yjs de BlockNote no aceptan directo (quirk de tipos, no de runtime).
+function headlessEditor(): any {
   // Editor headless (sin montar en DOM) — solo para prestar su schema a las utils Yjs.
   return BlockNoteEditor.create({ schema } as any);
 }

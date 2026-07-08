@@ -62,33 +62,48 @@ export async function action({ request }: Route.ActionArgs) {
   // la caja para DB y files. Reemplaza la platform key en /app/secrets.env.
   const key = await createApiKey(target.id, { name: `ghosty-teams:${database.name}`, scopes: ["READ", "WRITE", "DELETE"] });
 
-  // Re-keyear la caja + restart. Charset seguro (eb_sk_live_ = [A-Za-z0-9_-]; ownerId
-  // = hex). systemd re-lee /app/secrets.env al reiniciar el servicio ghosty-chat.
-  if (sandboxId) {
-    const safeKey = key.raw.replace(/[^A-Za-z0-9_-]/g, "");
-    const safeOwner = target.id.replace(/[^A-Za-z0-9]/g, "");
-    const cmd = [
-      "set -e",
-      'f=/app/secrets.env',
-      'touch "$f"',
-      `grep -vE '^(EASYBITS_API_KEY|EASYBITS_OWNER)=' "$f" > "$f.new" || true`,
-      `printf 'EASYBITS_API_KEY=%s\\nEASYBITS_OWNER=%s\\n' '${safeKey}' '${safeOwner}' >> "$f.new"`,
-      'mv "$f.new" "$f"',
-      "systemctl restart ghosty-chat",
-    ].join("\n");
-    await execCommand(ctx, sandboxId, { command: cmd, timeoutSeconds: 90 });
-    // Mueve la caja al cupo del user (el host lista por owner).
-    await reassignSandboxOwnerHost(sandboxId, target.id);
-  }
-
-  // Reasignar la DB al user (namespace/datos intactos). Colisión (userId,name) → sufijo.
+  // Nombre destino (colisión (userId,name) → sufijo). El namespace/datos NO cambian.
+  let name = database.name;
   if (!alreadyOwned) {
-    let name = database.name;
     const clash = await db.database.findUnique({ where: { userId_name: { userId: target.id, name } } });
     if (clash) name = `${name}-${dbId.slice(0, 6)}`;
-    await db.database.update({ where: { id: dbId }, data: { userId: target.id, name } });
-    return json({ ok: true, ebUserId: target.id, dbName: name, keyPrefix: key.prefix });
   }
 
-  return json({ ok: true, ebUserId: target.id, already: true, keyPrefix: key.prefix });
+  // TRANSACCIONAL: reasigna DB + owner del host, luego re-keyea la caja + restart.
+  // Si el rekey/restart falla, ROLLBACK de la DB a plataforma → el box nunca queda
+  // roto (sigue operando con la platform key). El restart mata el proceso que llamó
+  // (setup.ts), por eso el disparo es fire-and-forget; este endpoint completa igual.
+  const prevOwner = database.userId;
+  if (!alreadyOwned) {
+    await db.database.update({ where: { id: dbId }, data: { userId: target.id, name } });
+  }
+  if (sandboxId) {
+    try {
+      await reassignSandboxOwnerHost(sandboxId, target.id);
+      const safeKey = key.raw.replace(/[^A-Za-z0-9_-]/g, "");
+      const safeOwner = target.id.replace(/[^A-Za-z0-9]/g, "");
+      const cmd = [
+        "set -e",
+        'f=/app/secrets.env',
+        'touch "$f"',
+        `grep -vE '^(EASYBITS_API_KEY|EASYBITS_OWNER)=' "$f" > "$f.new" || true`,
+        `printf 'EASYBITS_API_KEY=%s\\nEASYBITS_OWNER=%s\\n' '${safeKey}' '${safeOwner}' >> "$f.new"`,
+        'mv "$f.new" "$f"',
+        "touch /app/.eb_adopted",
+        "systemctl restart ghosty-chat",
+        "sleep 2 && systemctl is-active ghosty-chat",
+      ].join("\n");
+      const res = await execCommand(ctx, sandboxId, { command: cmd, timeoutSeconds: 90 });
+      if (!String((res as { output?: string })?.output ?? "").includes("active")) {
+        throw new Error("ghosty-chat no volvió active tras el restart");
+      }
+    } catch (e) {
+      // Rollback: devuelve la DB + el owner a plataforma → box vuelve a operar.
+      if (!alreadyOwned) await db.database.update({ where: { id: dbId }, data: { userId: prevOwner, name: database.name } }).catch(() => {});
+      await reassignSandboxOwnerHost(sandboxId, prevOwner).catch(() => {});
+      return json({ error: "adopt_failed", message: e instanceof Error ? e.message : String(e), rolledBack: true }, 502);
+    }
+  }
+
+  return json({ ok: true, ebUserId: target.id, dbName: name, already: alreadyOwned || undefined, keyPrefix: key.prefix });
 }
