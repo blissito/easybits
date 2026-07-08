@@ -101,6 +101,14 @@ The digital asset platform where AI agents can store, manage, and consume files 
 - **MCP**: tools `db_create`/`db_query`/`db_list`/`db_exec` consumen este cliente.
 - **Clonar sobre sandbox-host**: la arquitectura mapea 1:1 (es sqld puro) — correr el mismo binario `sqld` en microVM Firecracker o en el host KS-5, disco montado en `/data`, exponer `:8080` (y `:9090` solo interno). Decisión pendiente: sqld central (namespaces = tenants, como hoy en Fly) vs sqld por sandbox (DB embebida por microVM, más aislamiento, sin pooling).
 
+## GTeams: adopción formal de recursos (transferir a la cuenta del user)
+GTeams provisiona cada team con la **key de PLATAFORMA** (cuenta fixtergeek, ApiKey scope ADMIN) porque la caja existe antes de que el user conecte su EasyBits (el wizard corre DENTRO de la caja). Al conectar, la **adopción** transfiere la DB del team + la caja a la cuenta del user, respetando su **tier**. SHIPPED 2026-07-08.
+- **`POST /api/v2/admin/adopt-team`** (`app/routes/api/v2/admin.adopt-team.ts`): auth ADMIN (platform key) + `targetUserToken` (JWT OAuth del user vía `tryVerifyOAuthJwt`) = consentimiento + identidad. Gates de tier (`DB_LIMITS` + `PLANS[plan].concurrentSandboxes`+reservados). Mint `createApiKey` scoped (READ/WRITE/DELETE) = credencial operativa durable del user.
+- **⚠️ Swap de credencial OBLIGATORIO**: `queryDatabase`/`execDatabase` hacen `database.userId !== ctx.user.id → 404` **sin bypass ADMIN**. Reasignar `Database.userId` sin cambiar la key operativa del box lo ROMPE. Por eso el endpoint reasigna DB+owner → re-keyea `/app/secrets.env` (`EASYBITS_API_KEY`+`EASYBITS_OWNER`) + `systemctl restart ghosty-chat`, **transaccional con ROLLBACK** si el restart no confirma `is-active` (la caja nunca queda rota). El restart mata al proceso que llamó → el disparo es **fire-and-forget**.
+- **Sandbox**: no hay fila Prisma `Sandbox` para el box efímero de team; el owner es tag host-side. Reasignar = **`PATCH /v1/sandbox/:id/owner`** en sandbox-host (`internal/api/handlers.go` reassignOwner) → mueve el cupo (host lista por owner). Helpers `reassignSandboxOwnerHost`/`countOwnerHostSandboxes` en `sandboxOperations.ts`.
+- **Trigger** (`~/ghosty-chat/src/server/setup.ts` `finishEasybitsConnect`): tras `exchangeCode`, la caja llama adopt con SU platform key + el token del user. Solo si hay `EASYBITS_SANDBOX_ID` (inyectado por `~/formmy_rrv7/provision.server.ts`, **forward-only**). Sin él → skip; sin `PATCH owner` en el host → rollback (fail-safe).
+- **Files** ya iban a la cuenta del user (token OAuth). **FleetAgents NO se tocan** (viven aparte). Backfill de teams existentes = correr el mismo endpoint con un token fresco del user (forzar re-wizard limpiando `eb_connected`+`fleet_agent_id` en su `gc_config`). Detalle en memoria `project_gteams_formal_adoption`.
+
 ## Admin Access
 - `ADMIN_EMAILS` env var: comma-separated superuser emails
 - `Admin` role in DB: managed from the admin panel itself
