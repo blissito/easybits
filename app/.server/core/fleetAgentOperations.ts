@@ -343,6 +343,11 @@ export type McpCatalogEntry = {
   // how to call the API (base URL, auth header, key env var, common endpoints).
   skillDoc?: string;
   builtin?: boolean; // easybits/wa — always-on, not togglable
+  // Canal al que ESTÁ atado este builtin (ej. "wa" = Baileys/WhatsApp por QR). Un
+  // consumidor de otro canal (GTeams web/teams) debe OCULTARLO: sus tools solo sirven
+  // pareado a WhatsApp, y el runtime ya lo fuerza-apaga fuera de Baileys. Ausente =
+  // agnóstico al canal (easybits: archivos/docs/imágenes, sirve en todos lados).
+  channel?: string;
 };
 export type GroupConfig = {
   mcpServers?: string[];
@@ -413,7 +418,7 @@ const appBaseUrl = () =>
 // key is a reseller-only path (groupKeys + denikApiKey), invisible to the generic UI.
 export const DEFAULT_MCP_CATALOG: McpCatalogEntry[] = [
   { name: "easybits", label: "EasyBits — archivos, docs, imágenes", transport: "stdio", command: "npx", args: ["-y", "@easybits.cloud/mcp"], builtin: true },
-  { name: "wa", label: "Personal y grupos (QR) — enviar archivos, encuestas, reacciones", transport: "stdio", builtin: true },
+  { name: "wa", label: "Personal y grupos (QR) — enviar archivos, encuestas, reacciones", transport: "stdio", builtin: true, channel: "baileys" },
 ];
 
 // CURATED capabilities EasyBits ships in CODE (not stored in the DB) — every agent
