@@ -70,6 +70,15 @@ export const admitRetryDelay = (attempt: number) =>
 // nivel de módulo → no rompe el prerender del Docker build.
 export const FLEET_DEFAULT_MODEL = process.env.FLEET_MODEL || "claude-sonnet-5";
 
+// Effort del CLI para los workers. El default de Claude Code es xhigh → el modelo
+// piensa al máximo ANTES del primer token = dead-air en chat (GTeams se sentía lento
+// vs Claude-tag-en-Slack; Sonnet 5 corre thinking adaptativo ON por default). "medium"
+// = balance snappy/calidad para el grueso del tráfico (chat/booking). El worker lo lee
+// de FLEET_EFFORT y lo pasa al SDK (ver provider.ts). Override por-agente vía
+// persona.env.FLEET_EFFORT ("high"/"xhigh" para docs pesados, "low" para puro chat) o
+// persona.env.FLEET_THINKING="disabled" para apagarlo del todo.
+export const FLEET_DEFAULT_EFFORT = process.env.FLEET_EFFORT || "medium";
+
 // Identidad del modelo, inyectada FRESCA por turno (como el guardrail de voz) para
 // que el agente sepa sobre qué corre y responda bien si le preguntan "¿qué IA eres?".
 // Solo se inyecta cuando el modelo RESUELTO del agente es claude-sonnet-5 (el
@@ -888,6 +897,9 @@ async function spawnVm(ctx: AuthContext, fleetAgent: { id: string; name: string 
   // Modelo del worker — persona.env gana (override por-agente), si no el default
   // de flota. El CLI del worker lo lee de su env (ver FLEET_DEFAULT_MODEL).
   if (!env.ANTHROPIC_MODEL) env.ANTHROPIC_MODEL = FLEET_DEFAULT_MODEL;
+  // Effort del worker — mismo patrón: persona.env gana, si no el default de flota.
+  // Baja el thinking-antes-del-primer-token (snappy). Ver FLEET_DEFAULT_EFFORT.
+  if (!env.FLEET_EFFORT) env.FLEET_EFFORT = FLEET_DEFAULT_EFFORT;
   // El host escribe el env como EnvironmentFile de systemd (una línea KEY=VALUE) y
   // RECHAZA valores con newline (400 "env value ... contains newline") → el spawn
   // falla y el worker nunca arranca. Un SYSTEM_PROMPT multi-línea (o cualquier valor)
