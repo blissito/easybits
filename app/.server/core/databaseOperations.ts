@@ -6,7 +6,7 @@ import { sqldQuery, sqldExec, sqldCreateNamespace, sqldDeleteNamespace } from ".
 import { dispatchWebhooks } from "../webhooks";
 import { getUserPlan, PLANS, type PlanKey } from "~/lib/plans";
 
-const DB_LIMITS: Record<PlanKey, number> = { Byte: 3, Mega: 10, Tera: 20 };
+export const DB_LIMITS: Record<PlanKey, number> = { Byte: 3, Mega: 10, Tera: 20 };
 
 const LOG_TABLE = "_easybits_query_log";
 const CREATE_LOG_TABLE_SQL = `CREATE TABLE IF NOT EXISTS "${LOG_TABLE}" (

@@ -236,6 +236,8 @@ export default [
     route("agents/:id/mcps", "routes/api/v2/agent-mcps.ts"),
     route("agents/:id/admin", "routes/api/v2/agent-admin.ts"),
     route("sandbox/:id/admin", "routes/api/v2/sandbox-admin.ts"),
+    // Adopción formal: transfiere DB + caja del team de plataforma → user (ADMIN).
+    route("admin/adopt-team", "routes/api/v2/admin.adopt-team.ts"),
     // Raw sandboxes (microVMs) — backs @easybits.cloud/sdk eb.sandboxes.*
     route("sandboxes", "routes/api/v2/sandboxes-collection.ts"),
     route("sandboxes/:id", "routes/api/v2/sandbox.ts"),

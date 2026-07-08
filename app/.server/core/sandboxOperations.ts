@@ -1127,6 +1127,24 @@ export async function execCommand(
   );
 }
 
+// ── Adopción de recursos (plataforma → user) ─────────────────────────────────
+// Reasigna el owner de una caja en el HOST (tag de billing/listing). Las cajas
+// efímeras de team NO tienen fila Sandbox (esa es solo para máquinas permanentes
+// facturadas), así que el ownership vive host-side; mover el tag mueve la caja al
+// cupo del user (el host lista por owner). La caja re-keyea su credencial operativa
+// aparte (ver el endpoint admin/adopt-team). Owner del header = el nuevo dueño.
+export async function reassignSandboxOwnerHost(sandboxId: string, newOwnerId: string): Promise<void> {
+  await callHost("PATCH", `/v1/sandbox/${sandboxId}/owner`, { newOwner: newOwnerId }, newOwnerId);
+}
+
+// Cuenta las cajas del owner en el host (live + suspended, excluye destroyed) para
+// el gate de cupo de la adopción. El host lista por `?owner=`.
+export async function countOwnerHostSandboxes(ownerId: string): Promise<number> {
+  const list = await callHost<unknown>("GET", `/v1/sandbox?owner=${encodeURIComponent(ownerId)}`, undefined, ownerId).catch(() => []);
+  const arr = Array.isArray(list) ? list : Array.isArray((list as { sandboxes?: unknown[] })?.sandboxes) ? (list as { sandboxes: unknown[] }).sandboxes : [];
+  return arr.filter((s) => (s as { status?: string })?.status !== "destroyed").length;
+}
+
 export async function runCode(
   ctx: AuthContext,
   sandboxId: string,
