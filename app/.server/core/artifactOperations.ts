@@ -35,7 +35,14 @@ export type ArtifactRef = {
   kind: ArtifactKind;
   version: number;
   title: string;
+  /** URL del documento — GTeams la detecta y la vuelve editor colab en el panel. */
+  url: string;
 };
+
+function docUrl(id: string): string {
+  const base = (process.env.BASE_URL || "https://www.easybits.cloud").replace(/\/$/, "");
+  return `${base}/dash/documents/${id}`;
+}
 
 /** Crea un artefacto `doc` (v1). Devuelve la identidad estable (artifactId = documentId). */
 export async function createArtifact(
@@ -51,7 +58,7 @@ export async function createArtifact(
   await db.landing
     .update({ where: { id: doc.id }, data: { metadata: { ...meta, artifact: { kind: "doc", version: 1 } } } })
     .catch(() => {});
-  return { artifactId: doc.id, kind: "doc", version: 1, title: doc.name };
+  return { artifactId: doc.id, kind: "doc", version: 1, title: doc.name, url: docUrl(doc.id) };
 }
 
 /**
@@ -89,7 +96,7 @@ export async function updateArtifact(
     })
     .catch(() => {});
 
-  return { artifactId: id, kind: "doc", version, title: doc.name };
+  return { artifactId: id, kind: "doc", version, title: doc.name, url: docUrl(id) };
 }
 
 /** Estado del artefacto (identidad + versión actual + share url). */
@@ -102,6 +109,7 @@ export async function getArtifact(ctx: AuthContext, id: string): Promise<Artifac
     kind: art.kind || "doc",
     version: art.version || 1,
     title: doc.name,
+    url: docUrl(id),
     shareUrl: (doc as { shareUrl?: string | null }).shareUrl ?? null,
   };
 }
