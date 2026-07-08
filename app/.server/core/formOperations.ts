@@ -351,11 +351,35 @@ export async function handleFormSubmission(
     }
   }
 
-  // Dispatch webhook — self-describing: include field metadata so consumers
-  // (e.g. GTeams) can render labels + matrices without fetching the form config.
+  // Hosted (standalone) forms → crea una FICHA: un Documento EasyBits real (v4)
+  // por respuesta, para que el consumidor (GTeams) la muestre como ARTEFACTO con
+  // visor + Descargar PDF/Word (reusa el loop de documentos, NO reinventa export).
+  // Best-effort: nunca bloquea el submit.
+  let fichaDocumentId: string | null = null;
+  if (formConfig.slug) {
+    try {
+      const { createDocument } = await import("./documentOperations");
+      const ctx = { user: { id: formConfig.ownerId }, scopes: ["WRITE"] } as unknown as AuthContext;
+      const html = renderSubmissionFichaHtml(formConfig.name, fields, cleanData);
+      const empresa = cleanData.razon_social || cleanData.empresa || cleanData.nombre || "";
+      const doc = await createDocument(ctx, {
+        name: `${formConfig.name}${empresa ? " — " + empresa : ""}`.slice(0, 120),
+        intent: "document",
+        sections: [{ id: nanoid(), order: 0, html, type: "content", name: "Ficha" }],
+      });
+      fichaDocumentId = doc.id;
+    } catch (err) {
+      console.error("Ficha document creation failed:", err);
+    }
+  }
+
+  // Dispatch webhook — self-describing: include field metadata + the ficha doc id
+  // so consumers (GTeams) render labels/matrices AND attach the document artifact.
   dispatchWebhooks(formConfig.ownerId, "form.submitted", {
     formId,
     formName: formConfig.name,
+    fichaDocumentId,
+    fichaUrl: fichaDocumentId ? `https://www.easybits.cloud/documents/${fichaDocumentId}` : null,
     websiteId: formConfig.websiteId,
     landingId: formConfig.landingId,
     data: cleanData,
@@ -481,6 +505,85 @@ export async function listFormSubmissions(ctx: AuthContext, formId?: string, lim
     items: submissions.map((s) => ({ id: s.id, formId: s.formConfigId, data: s.data, createdAt: s.createdAt })),
     total: submissions.length,
   };
+}
+
+// ─── Ficha de intake: submission → HTML de documento (v4) ──────
+// Renderiza una respuesta como una FICHA formateada (tabla label→valor, matrices
+// como sub-tablas) para crear un Documento EasyBits real (visor + PDF/Word). NO
+// reinventa export: es HTML de sección que consume el pipeline de documentos.
+export function renderSubmissionFichaHtml(
+  formName: string,
+  fields: FormField[],
+  data: Record<string, string>,
+  submittedAt?: Date
+): string {
+  const simpleVal = (f: FormField): string => {
+    const v = data[f.name] || "";
+    if (f.type === "checkbox") return v === "true" ? "Sí" : "—";
+    if (f.type === "file") return v ? "📎 Archivo adjunto" : "—";
+    return escapeHtml(v) || "—";
+  };
+  // Flat table of non-matrix fields (BlockNote no soporta tablas anidadas → cada
+  // matriz va como su PROPIA tabla debajo, nunca dentro de una celda).
+  const simpleFields = fields.filter((f) => f.type !== "matrix");
+  const matrixFields = fields.filter((f) => f.type === "matrix");
+
+  // Nota: NADA de width en porcentaje en <td> — html-to-docx (export Word) genera
+  // XML inválido ("@w") con anchos %. Se deja que Word/PDF auto-dimensionen.
+  const td = (s: string, extra = "") => `<td style="padding:7px 12px;border:1px solid #e5e5e5;${extra}">${s}</td>`;
+  const simpleRows = simpleFields
+    .map((f) => `<tr>${td(escapeHtml(f.label), "font-weight:600;background:#faf9fb")}${td(simpleVal(f))}</tr>`)
+    .join("");
+  const simpleTable = simpleRows
+    ? `<table style="border-collapse:collapse;width:100%;font-size:13.5px;line-height:1.5">${simpleRows}</table>`
+    : "";
+
+  // Matriz simplificada para lectura (patrón de checklist de cumplimiento):
+  // símbolo + color por estado + línea de resumen. Sí/No → ✓ verde / ✗ rojo;
+  // frecuencia → badge de color por severidad (opción 0 = más severa). Tabla plana.
+  const YES = new Set(["sí", "si", "yes", "true"]);
+  const matrixBlocks = matrixFields
+    .map((f) => {
+      let sel: Record<string, string> = {};
+      try { sel = data[f.name] ? JSON.parse(data[f.name]) : {}; } catch { sel = {}; }
+      const opts = f.options || [];
+      const isBinary = opts.length === 2 && opts.some((o) => YES.has(o.toLowerCase())) && opts.some((o) => ["no"].includes(o.toLowerCase()));
+      const sevColor = ["#c2410c", "#b45309", "#6b6575", "#6b6575"]; // por índice de opción
+      const badge = (val: string): string => {
+        if (!val) return `<span style="color:#c4c4c4">—</span>`;
+        if (isBinary) {
+          const yes = YES.has(val.toLowerCase());
+          return `<span style="color:${yes ? "#15803d" : "#c2410c"};font-weight:600">${yes ? "✓" : "✗"} ${escapeHtml(val)}</span>`;
+        }
+        const i = opts.indexOf(val);
+        return `<span style="color:${sevColor[i] ?? "#6b6575"};font-weight:600">${escapeHtml(val)}</span>`;
+      };
+      const answered = (f.rows || []).filter((r) => sel[r]);
+      // Resumen: Sí/No → "12 sí · 8 no"; frecuencia → "N respondidas".
+      let summary: string;
+      if (isBinary) {
+        const yes = answered.filter((r) => YES.has(sel[r].toLowerCase())).length;
+        summary = `<span style="color:#15803d;font-weight:600">✓ ${yes}</span> · <span style="color:#c2410c;font-weight:600">✗ ${answered.length - yes}</span> de ${(f.rows || []).length}`;
+      } else {
+        summary = `${answered.length} de ${(f.rows || []).length} respondidas`;
+      }
+      const rows = (f.rows || [])
+        .map((r) => `<tr>${td(escapeHtml(r))}${td(badge(sel[r] || ""), "text-align:right")}</tr>`)
+        .join("");
+      return `<h3 style="font-size:15px;margin:22px 0 4px">${escapeHtml(f.label)}</h3>
+  <p style="font-size:12px;color:#6b6575;margin:0 0 8px">${summary}</p>
+  <table style="border-collapse:collapse;width:100%;font-size:12.5px">${rows}</table>`;
+    })
+    .join("\n");
+
+  const fecha = (submittedAt || new Date()).toLocaleDateString("es-MX", { year: "numeric", month: "long", day: "numeric" });
+  return `<section style="max-width:760px;margin:0 auto;padding:40px 48px;font-family:'Helvetica Neue',Arial,sans-serif;color:#1a1a1a">
+  <h1 style="font-size:22px;margin:0 0 4px;line-height:1.25">${escapeHtml(formName)}</h1>
+  <p style="font-size:12px;color:#6b6575;margin:0 0 20px">Ficha de intake · Recibido el ${fecha}</p>
+  ${simpleTable}
+  ${matrixBlocks}
+  <p style="margin-top:24px;font-size:11px;color:#999">Documento generado con EasyBits.cloud</p>
+</section>`;
 }
 
 // ─── Public: file upload for a hosted form ─────────────────────
