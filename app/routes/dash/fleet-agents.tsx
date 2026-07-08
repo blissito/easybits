@@ -102,7 +102,7 @@ export async function loader({ request }: Route.LoaderArgs) {
       // values never leave the server). DEFAULT_MCP_CATALOG seeds the builtins.
       const secretsSet = new Set(secretNames);
       // Builtins (easybits/wa) are code-defined and always-on — list for display.
-      const builtins = DEFAULT_MCP_CATALOG.map((e) => ({ name: e.name, label: e.label ?? e.name }));
+      const builtins = DEFAULT_MCP_CATALOG.map((e) => ({ name: e.name, label: e.label ?? e.name, channel: e.channel ?? null, bucketScoped: !!e.bucketScoped }));
       const capabilities = mergedCapabilities(p)
         .filter((e) => !e.builtin)
         .map((e) => ({
@@ -2645,12 +2645,12 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
               <div className="mb-4">
                 <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Conectores</span>
                 <div className="mt-1 flex flex-col gap-2">
-                    {/* `wa` envía por Baileys (QR) → no aplica a un número WABA;
-                        ocúltalo cuando el target es WABA para no ofrecer canal inerte. */}
-                    {/* easybits NO se muestra como conector: su superficie son los buckets
-                        de arriba (mostrarlo como toggle separado contradecía los buckets).
-                        wa (Baileys) no aplica a un número WABA. */}
-                    {cp.builtins.filter((b) => b.name !== "easybits" && !(waba && b.name === "wa")).map((b) => (
+                    {/* Regla metadata-driven (una sola, compartida con la API capabilities):
+                        - bucketScoped (easybits): su superficie SON los buckets de arriba →
+                          un toggle aparte es redundante con el granular. Se oculta siempre.
+                        - channel (wa=Baileys): canal inerte fuera del suyo → ocúltalo cuando
+                          el target es WABA. */}
+                    {cp.builtins.filter((b) => !b.bucketScoped && !(waba && b.channel)).map((b) => (
                       <div key={b.name} className="border-2 border-gray-100 rounded-xl px-3 py-2 flex items-center justify-between gap-2">
                         <p className="text-sm font-semibold min-w-0 truncate">{b.label}</p>
                         <Switch value={!cg.disabledBuiltins.includes(b.name)}

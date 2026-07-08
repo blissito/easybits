@@ -105,7 +105,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   const groupCfgs = cfgs(fa);
   const bucketsParam = groupCfgs["*"]?.toolGroup ?? env.EASYBITS_TOOL_GROUP;
   return json({
-    builtins: DEFAULT_MCP_CATALOG.map((e) => ({ name: e.name, label: e.label ?? e.name, channel: e.channel ?? null })),
+    builtins: DEFAULT_MCP_CATALOG.map((e) => ({ name: e.name, label: e.label ?? e.name, channel: e.channel ?? null, bucketScoped: !!e.bucketScoped })),
     capabilities,
     secretsPresent: [...secretNames],
     groups: groupCfgs,

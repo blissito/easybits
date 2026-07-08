@@ -348,6 +348,11 @@ export type McpCatalogEntry = {
   // pareado a WhatsApp, y el runtime ya lo fuerza-apaga fuera de Baileys. Ausente =
   // agnóstico al canal (easybits: archivos/docs/imágenes, sirve en todos lados).
   channel?: string;
+  // El SURFACE de este builtin ES los tool buckets (HERRAMIENTAS): easybits expone
+  // exactamente esos grupos, así que un toggle on/off aparte es redundante con el
+  // granular. Un consumidor con picker de buckets (GTeams) debe OCULTARLO — los
+  // buckets ya lo prenden/apagan. Ver intent set-group-toolgroup.
+  bucketScoped?: boolean;
 };
 export type GroupConfig = {
   mcpServers?: string[];
@@ -417,7 +422,7 @@ const appBaseUrl = () =>
 // (baked env / in-process), not togglable. NO denik here — denik's per-group org
 // key is a reseller-only path (groupKeys + denikApiKey), invisible to the generic UI.
 export const DEFAULT_MCP_CATALOG: McpCatalogEntry[] = [
-  { name: "easybits", label: "EasyBits — archivos, docs, imágenes", transport: "stdio", command: "npx", args: ["-y", "@easybits.cloud/mcp"], builtin: true },
+  { name: "easybits", label: "EasyBits — archivos, docs, imágenes", transport: "stdio", command: "npx", args: ["-y", "@easybits.cloud/mcp"], builtin: true, bucketScoped: true },
   { name: "wa", label: "Personal y grupos (QR) — enviar archivos, encuestas, reacciones", transport: "stdio", builtin: true, channel: "baileys" },
 ];
 
