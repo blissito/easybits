@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import { db } from "../db";
 import type { AuthContext } from "../apiAuth";
 import { requireScope } from "../apiAuth";
@@ -106,36 +107,43 @@ export async function createDatabase(
     );
   }
 
+  // Genera el id/namespace DEFINITIVO antes de insertar. Antes se insertaba
+  // `namespace: ""` como placeholder y se actualizaba después; pero `namespace`
+  // es @unique GLOBAL, así que si sqldCreateNamespace/Exec fallaba entre el
+  // create y el update, la fila quedaba con "" y ENVENENABA TODA creación de DB
+  // siguiente (toda insertaba "" → colisión → 500 global). Incidente 2026-07-08:
+  // un solo huérfano tumbó el provisioning de TODOS los teams. Ahora el namespace
+  // va desde el create (nunca ""), y si sqld falla borramos la fila (sin fantasma).
+  const namespace = crypto.randomBytes(12).toString("hex"); // 24-hex = ObjectId válido
   const database = await db.database.create({
     data: {
+      id: namespace,
       name,
-      namespace: "", // placeholder, will update with id
+      namespace,
       description: opts.description || null,
       userId: ctx.user.id,
     },
   });
 
-  // Use the DB id as namespace (guaranteed unique)
-  const namespace = database.id;
-  await sqldCreateNamespace(namespace);
-  await sqldExec(namespace, [{ sql: CREATE_LOG_TABLE_SQL }]);
-
-  const updated = await db.database.update({
-    where: { id: database.id },
-    data: { namespace },
-  });
+  try {
+    await sqldCreateNamespace(namespace);
+    await sqldExec(namespace, [{ sql: CREATE_LOG_TABLE_SQL }]);
+  } catch (e) {
+    await db.database.delete({ where: { id: database.id } }).catch(() => {});
+    throw e;
+  }
 
   dispatchWebhooks(ctx.user.id, "database.created", {
-    id: updated.id,
-    name: updated.name,
+    id: database.id,
+    name: database.name,
   });
 
   return {
-    id: updated.id,
-    name: updated.name,
-    namespace: updated.namespace,
-    description: updated.description,
-    createdAt: updated.createdAt,
+    id: database.id,
+    name: database.name,
+    namespace: database.namespace,
+    description: database.description,
+    createdAt: database.createdAt,
   };
 }
 
