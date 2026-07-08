@@ -113,11 +113,27 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     ownerDbs,
     agent: {
       systemPrompt: env.SYSTEM_PROMPT ?? "",
-      model: env.ANTHROPIC_MODEL ?? FLEET_DEFAULT_MODEL,
+      // Model lever REAL por template (no inventado): ghosty-gc usa GHOSTY_LLM
+      // (deepseek/easybits), el resto ANTHROPIC_MODEL (Claude). El valor es el
+      // efectivo (override o default), no un placeholder.
+      workerTemplate: fa.workerTemplate,
+      model: fa.workerTemplate === "ghosty-gc" ? (env.GHOSTY_LLM ?? "deepseek") : (env.ANTHROPIC_MODEL ?? FLEET_DEFAULT_MODEL),
+      modelLabel: fa.workerTemplate === "ghosty-gc" ? "Cerebro (LLM)" : "Modelo",
       effort: env.FLEET_EFFORT ?? FLEET_DEFAULT_EFFORT,
       hasOwnNumber: !!fa.hasOwnNumber,
       buckets: [...toolsParamToBuckets(bucketsParam)],
     },
+    // Opciones de modelo REALES para ESTE template (fuente = levers del dash).
+    models: fa.workerTemplate === "ghosty-gc"
+      ? [
+          { key: "deepseek", label: "DeepSeek — tu key (off-meter)" },
+          { key: "easybits", label: "EasyBits — Claude medido" },
+        ]
+      : [
+          { key: "claude-sonnet-5", label: "Sonnet 5 (equilibrado)" },
+          { key: "claude-opus-4-8", label: "Opus 4.8 (máxima capacidad)" },
+          { key: "claude-haiku-4-5-20251001", label: "Haiku 4.5 (rápido y barato)" },
+        ],
     buckets: FLEET_BUCKETS.map((b) => ({
       key: b.key,
       label: b.label,
@@ -127,11 +143,6 @@ export async function loader({ request, params }: Route.LoaderArgs) {
       // declara el SET de sub-buckets que activa → el cliente arma el ?tools= completo.
       levels: b.levels?.map((l) => ({ key: l.key, label: l.label, buckets: l.buckets })) ?? null,
     })),
-    models: [
-      { key: "claude-sonnet-5", label: "Sonnet 5 (equilibrado)" },
-      { key: "claude-opus-4-8", label: "Opus 4.8 (máxima capacidad)" },
-      { key: "claude-haiku-4-5-20251001", label: "Haiku 4.5 (rápido y barato)" },
-    ],
     efforts: ["low", "medium", "high", "xhigh"],
     skills: fleetSkills(fa).map((s) => ({ id: s.id, name: s.name, description: s.description, enabled: s.enabled !== false, fileCount: (s.files ?? []).length })),
     customMcps: mergedCapabilities(fa).filter((e) => !e.builtin && !CURATED_CAPABILITIES.some((c) => c.name === e.name)).map((e) => ({ name: e.name, label: e.label ?? e.name, transport: e.transport ?? "stdio", requiredSecrets: e.requiredSecrets ?? [] })),
@@ -198,9 +209,16 @@ export async function action({ request, params }: Route.ActionArgs) {
     return json({ ok: true });
   }
   if (action === "set-model") {
+    // El lever REAL depende del template: ghosty-gc = GHOSTY_LLM (deepseek/easybits),
+    // el resto = ANTHROPIC_MODEL (Claude). Se escribe el campo correcto server-side.
     const model = String(b?.model ?? "").trim();
-    if (model && !/^claude-/.test(model)) return json({ error: "modelo inválido" }, 400);
-    await setEnv({ ANTHROPIC_MODEL: model || undefined });
+    if (fa.workerTemplate === "ghosty-gc") {
+      if (model && !["deepseek", "easybits"].includes(model)) return json({ error: "cerebro inválido" }, 400);
+      await setEnv({ GHOSTY_LLM: model || undefined });
+    } else {
+      if (model && !/^claude-/.test(model)) return json({ error: "modelo inválido" }, 400);
+      await setEnv({ ANTHROPIC_MODEL: model || undefined });
+    }
     return json({ ok: true });
   }
   if (action === "set-effort") {

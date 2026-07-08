@@ -86,9 +86,16 @@ export async function updateArtifact(
   sv[key] = [...(sv[key] || []), { html: prevHtml, timestamp: Date.now() }].slice(-20);
   const version = (((meta.artifact as { version?: number })?.version) || 1) + 1;
 
-  await updateDocument(ctx, id, {
-    sections: [{ id: key, order: (first.order as number) ?? 0, html: wrapFlow(inner) }],
-  });
+  // Reemplaza SOLO la sección target (la primera) y PRESERVA el resto — no colapsar
+  // a un solo elemento (destruía toda página ≠ 0 en docs multi-sección).
+  const nextSections = (
+    sections.length > 0
+      ? sections.map((s, i) =>
+          i === 0 ? { ...s, id: key, order: (first.order as number) ?? 0, html: wrapFlow(inner) } : s,
+        )
+      : [{ id: key, order: 0, html: wrapFlow(inner) }]
+  ) as Array<{ id: string; order: number; html?: string; type?: string; name?: string }>;
+  await updateDocument(ctx, id, { sections: nextSections });
   await db.landing
     .update({
       where: { id },
