@@ -731,7 +731,13 @@ export function resolveGroupDbScope(
   groupId: string
 ): string | null {
   const all = (fleetAgent.groupConfigs as Record<string, GroupConfig> | null) ?? {};
-  const allow = all[groupId]?.dbAllow ?? all["*"]?.dbAllow;
+  // Filtra namespaces vacíos/whitespace: un dbAllow guardado como [""] (junk de un
+  // save previo) era TRUTHY y ganaba sobre el wildcard, inyectando una allowlist con
+  // un namespace vacío → el agente reportaba "lista de namespaces permitidos vacía".
+  // Si el grupo no tiene entradas reales, HEREDA la config "*" (la que pone la UI).
+  const clean = (a?: string[]) => a?.filter((s) => s && s.trim());
+  const own = clean(all[groupId]?.dbAllow);
+  const allow = own?.length ? own : clean(all["*"]?.dbAllow);
   if (!allow?.length) return null;
   return `## Bases de datos permitidas\nSOLO puedes usar estas bases de datos (namespaces): ${allow.join(", ")}. NO toques ninguna otra.`;
 }
