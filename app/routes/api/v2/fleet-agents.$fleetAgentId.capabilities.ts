@@ -142,6 +142,33 @@ export async function action({ request, params }: Route.ActionArgs) {
   if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
   const fa = await auth(request, params.fleetAgentId!);
   if (!fa) return json({ error: "Unauthorized" }, 401);
+
+  // Subida directa de un entregable (multipart): sube un archivo PÚBLICO del owner y
+  // lo adjunta al set de assets del grupo. Espeja el intent `upload-asset` del dash.
+  if ((request.headers.get("content-type") || "").includes("multipart/form-data")) {
+    const fd = await request.formData().catch(() => null);
+    if (!fd || String(fd.get("action") || "") !== "upload-asset") return json({ error: "unknown action" }, 400);
+    const file = fd.get("file");
+    const groupId = String(fd.get("groupId") || "*");
+    if (!(file instanceof File)) return json({ error: "no file" }, 400);
+    const buf = Buffer.from(await file.arrayBuffer());
+    const { getPlatformPublicClient, buildPublicAssetUrl } = await import("~/.server/storage");
+    const { randomUUID } = await import("node:crypto");
+    const safe = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+    const storageKey = `${fa.ownerId}/${randomUUID()}-${safe}`;
+    const ctype = file.type || "application/octet-stream";
+    await getPlatformPublicClient().putObject(storageKey, buf, ctype);
+    const created = await db.file.create({
+      data: { storageKey, slug: storageKey, name: file.name, size: buf.length, contentType: ctype, status: "DONE", url: buildPublicAssetUrl(storageKey), access: "public", ownerId: fa.ownerId, assetIds: [] },
+      select: { id: true },
+    });
+    const configs = cfgs(fa);
+    const cur = configs[groupId] ?? {};
+    configs[groupId] = { ...cur, assets: [...new Set([...(cur.assets ?? []), created.id])] };
+    await db.fleetAgent.update({ where: { id: fa.id }, data: { groupConfigs: configs } });
+    return json({ ok: true, fileId: created.id, name: file.name });
+  }
+
   const b = await request.json().catch(() => ({}));
   const action = String(b?.action ?? "");
   const groupId = String(b?.groupId ?? "");
@@ -261,6 +288,11 @@ export async function action({ request, params }: Route.ActionArgs) {
     const set = new Set(cur.assets ?? []);
     if (b?.on) set.add(fileId); else set.delete(fileId);
     configs[groupId] = { ...cur, assets: [...set] };
+  } else if (action === "set-db-allow") {
+    // Scope del bucket DB: qué namespaces puede tocar el agente. [] / ausente = todas.
+    // Se inyecta al prompt del turno (enforcement en el MCP db = follow-up).
+    const dbs = Array.isArray(b?.dbAllow) ? (b.dbAllow as unknown[]).map((s) => String(s)) : [];
+    configs[groupId] = { ...cur, dbAllow: dbs };
   } else if (action === "set-toolgroup") {
     // EasyBits tool buckets for this group (GTeams uses "*" = agent default). Touching
     // buckets IS the easybits surface → re-enable the easybits builtin for this group.
