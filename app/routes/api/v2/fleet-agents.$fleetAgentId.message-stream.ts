@@ -113,6 +113,17 @@ export async function action({ request, params }: Route.ActionArgs) {
 
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
+      // Heartbeat: en un cold spawn (~30-40s) routeMessage no emite chunks hasta que
+      // el worker arranca; sin datos, un proxy idle puede matar el SSE → el agente
+      // "no responde" en frío (el caso de blue/ghosty-gc). Un comentario SSE (`: ka`)
+      // cada 15s mantiene viva la conexión — el cliente lo ignora (solo parsea `data:`).
+      const heartbeat = setInterval(() => {
+        try {
+          controller.enqueue(encoder.encode(`: ka\n\n`));
+        } catch {
+          /* stream ya cerrado */
+        }
+      }, 15_000);
       try {
         const reply = await routeMessage(fleetAgentId, {
           groupId,
@@ -145,6 +156,7 @@ export async function action({ request, params }: Route.ActionArgs) {
                 : "fleetAgent error";
         controller.enqueue(sse({ type: "error", message }));
       } finally {
+        clearInterval(heartbeat);
         controller.close();
       }
     },
