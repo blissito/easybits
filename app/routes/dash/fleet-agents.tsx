@@ -393,7 +393,14 @@ export async function loader({ request }: Route.LoaderArgs) {
       ownerEmail: emailById.get(p.ownerId) ?? null,
     }));
   }
-  return { secretNames, pools, capacity, sharedPools, buckets: FLEET_BUCKETS };
+  // Tools de cada bucket key (+ sub-buckets de nivel) → el checklist per-tool del
+  // modal. Se computa SERVER-side (GROUP_ALLOWLISTS vive en `.server`) y viaja por el
+  // loader; el componente cliente NO puede importar `.server` (RR lo rechaza).
+  const bucketTools = Object.fromEntries(
+    [...new Set(FLEET_BUCKETS.flatMap((b) => [b.key, ...(b.levels?.flatMap((l) => l.buckets) ?? [])]))]
+      .map((k) => [k, [...(GROUP_ALLOWLISTS[k as ToolGroupKey] ?? [])]] as const)
+  );
+  return { secretNames, pools, capacity, sharedPools, buckets: FLEET_BUCKETS, bucketTools };
 }
 
 // Puente a Formmy (fuente única de la coexistencia): pausa/reactiva una conversación
@@ -1815,7 +1822,7 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
   // Sembrado de loaderData; re-sincronizado cuando el loader revalida (acción/nav).
   const [hud, setHud] = useState(loaderData);
   useEffect(() => setHud(loaderData), [loaderData]);
-  const { secretNames, pools, capacity, sharedPools, buckets } = hud;
+  const { secretNames, pools, capacity, sharedPools, buckets, bucketTools } = hud;
   const fetcher = useFetcher();
   const rev = useRevalidator();
   const [showForm, setShowForm] = useState(false);
@@ -2618,7 +2625,7 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                   const keys = b.levels
                     ? b.levels.flatMap((l) => l.buckets).filter((k) => effective.has(k))
                     : (effective.has(b.key) ? [b.key] : []);
-                  return [...new Set(keys.flatMap((k) => [...(GROUP_ALLOWLISTS[k as ToolGroupKey] ?? [])]))].sort();
+                  return [...new Set(keys.flatMap((k) => bucketTools[k] ?? []))].sort();
                 };
                 return (
                   <div>
