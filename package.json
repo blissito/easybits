@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "postinstall": "patch-package",
     "dev": "react-router dev",
     "build": "react-router build",
     "start": "cross-env NODE_ENV=production node server.mjs ./build/server/index.js",
@@ -160,6 +161,7 @@
     "@vitest/ui": "^3.2.4",
     "autoprefixer": "^10.4.20",
     "dotenv": "^17.1.0",
+    "patch-package": "^8.0.1",
     "prisma": "^6.19.2",
     "typescript": "^5.7.3",
     "vite": "^6.1.1",

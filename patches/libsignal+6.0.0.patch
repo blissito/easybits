@@ -1,0 +1,36 @@
+diff --git a/node_modules/libsignal/src/session_record.js b/node_modules/libsignal/src/session_record.js
+index 7626a39..838bdcb 100644
+--- a/node_modules/libsignal/src/session_record.js
++++ b/node_modules/libsignal/src/session_record.js
+@@ -267,18 +267,16 @@ class SessionRecord {
+ 
+     closeSession(session) {
+         if (this.isClosed(session)) {
+-            console.warn("Session already closed", session);
++            // patched (easybits): silenciado — volcaba el objeto `session` completo
++            // (_chains/currentRatchet/…) a stdout en CADA cierre; bajo tráfico de grupo
++            // = miles de writes síncronos → ahoga el event loop (outage 2026-07-09).
+             return;
+         }
+-        console.info("Closing session:", session);
+         session.indexInfo.closed = Date.now();
+     }
+ 
+     openSession(session) {
+-        if (!this.isClosed(session)) {
+-            console.warn("Session already open");
+-        }
+-        console.info("Opening session:", session);
++        // patched (easybits): silenciado el volcado del objeto `session` a stdout.
+         session.indexInfo.closed = -1;
+     }
+ 
+@@ -298,7 +296,7 @@ class SessionRecord {
+                 }
+             }
+             if (oldestKey) {
+-                console.info("Removing old closed session:", oldestSession);
++                // patched (easybits): silenciado el volcado del objeto `session` a stdout.
+                 delete this.sessions[oldestKey];
+             } else {
+                 throw new Error('Corrupt sessions object');

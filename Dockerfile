@@ -13,8 +13,12 @@ RUN curl -fSL --retry 3 --retry-delay 2 -o /tmp/typst.tar.xz \
 FROM node:20-slim AS builder
 WORKDIR /app
 
-# 1. Copy only dependency files first (cached layer)
+# 1. Copy only dependency files first (cached layer). `patches/` DEBE llegar antes
+#    de `npm ci` porque el postinstall (patch-package) se corre DURANTE npm ci y
+#    necesita los .patch presentes (si no, los aplica sobre nada → dumps de libsignal
+#    vuelven). Ver patches/libsignal+6.0.0.patch (silencia el volcado de sesión).
 COPY package.json package-lock.json .npmrc ./
+COPY patches ./patches
 RUN npm ci
 
 # 2. Copy prisma schema and generate (cached if schema unchanged)
