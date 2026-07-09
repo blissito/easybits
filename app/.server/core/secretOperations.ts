@@ -77,6 +77,21 @@ export async function deleteSecretByName(
  * the sandbox. NEVER expose this to a route loader/action; the plaintext
  * must not leave the server boundary.
  */
+// Decrypt and return a secret's plaintext WITHOUT bumping lastUsedAt. For the
+// vault UI's copy-to-clipboard — the owner reading their own value is not an
+// "agent used it" event, so it must not pollute the Último uso column.
+export async function revealSecretValue(
+  userId: string,
+  secretId: string
+): Promise<string | null> {
+  const row = await db.secret.findFirst({
+    where: { id: secretId, userId },
+    select: { value: true },
+  });
+  if (!row) return null;
+  return decryptSecret(row.value);
+}
+
 export async function getSecretValue(
   userId: string,
   name: string
