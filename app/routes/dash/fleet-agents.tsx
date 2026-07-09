@@ -2685,12 +2685,12 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                                   <summary className="text-[10px] text-gray-400 cursor-pointer select-none">
                                     Herramientas ({activeCount}/{tools.length})
                                   </summary>
-                                  <div className="mt-1 flex flex-col gap-1 max-h-40 overflow-y-auto">
+                                  <div className="mt-1 flex flex-col gap-1.5 max-h-40 overflow-y-auto">
                                     {tools.map((tn) => (
-                                      <label key={tn} className="flex items-center gap-2 text-[11px] cursor-pointer hover:bg-gray-50 rounded px-1">
-                                        <input type="checkbox" checked={!denySet.has(tn)} onChange={(e) => toggleTool(tn, e.target.checked)} />
-                                        <span className="truncate font-mono">{tn}</span>
-                                      </label>
+                                      <div key={tn} className="flex items-center gap-2 text-[11px] px-1">
+                                        <Switch value={!denySet.has(tn)} className="items-center shrink-0" onChange={(on) => toggleTool(tn, on)} />
+                                        <span className="truncate font-mono min-w-0 flex-1">{tn}</span>
+                                      </div>
                                     ))}
                                   </div>
                                 </details>
