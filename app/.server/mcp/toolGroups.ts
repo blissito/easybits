@@ -29,6 +29,8 @@ export type ToolGroupKey =
   // conector de Claude.ai, por eso no están en TOOL_GROUPS, solo en GROUP_ALLOWLISTS).
   | "imagenes"
   | "documentos"
+  | "documentos-write"
+  | "documentos-del"
   | "investigacion"
   | "db"
   | "db-write"
@@ -493,16 +495,27 @@ export const IMAGENES_ALLOWLIST = new Set<string>([
   "get_file", "list_files", "upload_file",
 ]);
 
-/** Documentos — crear/editar/publicar + páginas + export, sin tocar DB/sitios. */
+/** Documentos — granular por nivel (cumulativo), como DB. Sin tocar DB/sitios.
+ * Lectura = listar/consultar/exportar; Escritura = + crear/editar/publicar/páginas;
+ * Borrado = + eliminar doc/página/share link. */
+export const DOCUMENTOS_READ_ALLOWLIST = new Set<string>([
+  "get_document", "list_documents", "get_page_html",
+  "export_document", "get_document_pdf",
+  "list_share_links",
+  "get_file", "list_files",
+]);
+export const DOCUMENTOS_WRITE_ALLOWLIST = new Set<string>([
+  "create_document", "update_document", "open_design_in_editor",
+  "add_page", "reorder_pages", "set_page_html",
+  "structured_doc", "deploy_document",
+  "create_share_link", "upload_file",
+]);
+export const DOCUMENTOS_DEL_ALLOWLIST = new Set<string>([
+  "delete_document", "delete_page", "revoke_share_link",
+]);
+/** Compat: el set completo (algún consumidor legacy lo espera). */
 export const DOCUMENTOS_ALLOWLIST = new Set<string>([
-  "create_document", "get_document", "list_documents", "update_document", "delete_document",
-  "open_design_in_editor",
-  "add_page", "delete_page", "reorder_pages",
-  "set_page_html", "get_page_html",
-  "structured_doc",
-  "deploy_document", "export_document", "get_document_pdf",
-  "create_share_link", "list_share_links", "revoke_share_link",
-  "get_file", "list_files", "upload_file",
+  ...DOCUMENTOS_READ_ALLOWLIST, ...DOCUMENTOS_WRITE_ALLOWLIST, ...DOCUMENTOS_DEL_ALLOWLIST,
 ]);
 
 /** Investigación — Brightdata scrape + SERP. */
@@ -583,7 +596,9 @@ export const GROUP_ALLOWLISTS: Partial<Record<ToolGroupKey, Set<string>>> = {
   "public-safe": PUBLIC_SAFE_ALLOWLIST,
   scripting: SCRIPTING_ALLOWLIST,
   imagenes: IMAGENES_ALLOWLIST,
-  documentos: DOCUMENTOS_ALLOWLIST,
+  documentos: DOCUMENTOS_READ_ALLOWLIST,
+  "documentos-write": DOCUMENTOS_WRITE_ALLOWLIST,
+  "documentos-del": DOCUMENTOS_DEL_ALLOWLIST,
   investigacion: INVESTIGACION_ALLOWLIST,
   db: DB_READ_ALLOWLIST,
   "db-write": DB_WRITE_ALLOWLIST,
@@ -625,7 +640,7 @@ export const TOOL_PROFILES: Record<string, ToolProfile> = {
     label: "Público",
     description:
       "Creativo, sin administración. Crea imágenes y documentos, investiga y maneja archivos — pero NO bases de datos, sitios, secrets ni sandboxes. Ideal para un agente de cara al cliente.",
-    buckets: ["imagenes", "documentos", "investigacion"],
+    buckets: ["imagenes", "documentos", "documentos-write", "investigacion"],
   },
 };
 
@@ -644,7 +659,14 @@ export const FLEET_BUCKETS: Array<{
   levels?: { key: string; label: string; buckets: ToolGroupKey[] }[];
 }> = [
   { key: "imagenes", label: "Imágenes", description: "Generar, editar y describir imágenes." },
-  { key: "documentos", label: "Documentos", description: "Crear, editar y publicar documentos." },
+  {
+    key: "documentos", label: "Documentos", description: "Consultar, crear, editar y publicar documentos.",
+    levels: [
+      { key: "read", label: "Lectura", buckets: ["documentos"] },
+      { key: "write", label: "Escritura", buckets: ["documentos", "documentos-write"] },
+      { key: "del", label: "Borrado", buckets: ["documentos", "documentos-write", "documentos-del"] },
+    ],
+  },
   { key: "investigacion", label: "Investigación", description: "Buscar y leer información de la web." },
   { key: "video", label: "Video", description: "Generar video y personajes." },
   { key: "email", label: "Email", description: "Enviar correos y newsletters." },

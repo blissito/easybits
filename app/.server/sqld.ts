@@ -9,6 +9,43 @@
 const SQLD_URL = process.env.SQLD_URL || "http://localhost:8080";
 const SQLD_ADMIN_URL = process.env.SQLD_ADMIN_URL || "http://localhost:9090";
 
+// easybits-db corre scale-to-zero en Fly (min_machines_running=0). El PRIMER
+// request tras un idle despierta la VM en frío y llega antes de que sqld escuche
+// → 503 (proxy Fly sin backend) o error de red (connection refused/reset). Sin
+// retry, ese primer query tiraba un "db 503" al agente. Reintentamos con backoff
+// SOLO en esos casos transitorios (503/502/red); un 4xx real (SQL malo) NO se
+// reintenta. La VM tarda ~1-3s en levantar, así que 4 intentos cubren el wake.
+const WAKE_RETRIES = 4;
+const WAKE_BACKOFF_MS = [400, 900, 1800]; // aplicado tras intento 1,2,3
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+async function sqldFetch(url: string, init: RequestInit): Promise<Response> {
+  let lastErr: unknown;
+  for (let attempt = 0; attempt < WAKE_RETRIES; attempt++) {
+    try {
+      const res = await fetch(url, init);
+      // 503/502 = proxy Fly sin backend listo (cold wake). Reintentar salvo el último.
+      if ((res.status === 503 || res.status === 502) && attempt < WAKE_RETRIES - 1) {
+        await res.body?.cancel().catch(() => {});
+        await sleep(WAKE_BACKOFF_MS[attempt] ?? 1800);
+        continue;
+      }
+      return res;
+    } catch (e) {
+      // fetch throw = error de red (connection refused/reset mientras despierta).
+      lastErr = e;
+      if (attempt < WAKE_RETRIES - 1) {
+        await sleep(WAKE_BACKOFF_MS[attempt] ?? 1800);
+        continue;
+      }
+      throw e;
+    }
+  }
+  // Inalcanzable (el loop siempre retorna o lanza), pero satisface el tipo.
+  throw lastErr ?? new Error("sqld fetch failed");
+}
+
 interface StmtArg {
   type: "integer" | "float" | "text" | "blob" | "null";
   value?: string;
@@ -65,7 +102,7 @@ function parseResult(raw: PipelineResponse["results"][0]): SqldResult {
  * Create a namespace in sqld (must be called before querying).
  */
 export async function sqldCreateNamespace(namespace: string): Promise<void> {
-  const res = await fetch(`${SQLD_ADMIN_URL}/v1/namespaces/${namespace}/create`, {
+  const res = await sqldFetch(`${SQLD_ADMIN_URL}/v1/namespaces/${namespace}/create`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({}),
@@ -80,7 +117,7 @@ export async function sqldCreateNamespace(namespace: string): Promise<void> {
  * Delete a namespace in sqld.
  */
 export async function sqldDeleteNamespace(namespace: string): Promise<void> {
-  const res = await fetch(`${SQLD_ADMIN_URL}/v1/namespaces/${namespace}`, {
+  const res = await sqldFetch(`${SQLD_ADMIN_URL}/v1/namespaces/${namespace}`, {
     method: "DELETE",
   });
   if (!res.ok && res.status !== 404) {
@@ -97,7 +134,7 @@ export async function sqldQuery(
   sql: string,
   args: unknown[] = []
 ): Promise<SqldResult> {
-  const res = await fetch(`${SQLD_URL}/v2/pipeline`, {
+  const res = await sqldFetch(`${SQLD_URL}/v2/pipeline`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -133,7 +170,7 @@ export async function sqldExec(
   }));
   requests.push({ type: "close" as any, stmt: undefined as any });
 
-  const res = await fetch(`${SQLD_URL}/v2/pipeline`, {
+  const res = await sqldFetch(`${SQLD_URL}/v2/pipeline`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
