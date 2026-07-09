@@ -553,6 +553,43 @@ export const CURATED_CAPABILITIES: McpCatalogEntry[] = [
     },
   },
   {
+    // Formmy CRM — levanta órdenes/pedidos, mueve el tablero (kanban de brendi) y
+    // guarda datos fiscales/de envío del cliente en el CRM de Formmy. Análogo a
+    // kommo pero para Formmy. Dos particularidades vs los demás conectores:
+    //  1) NO pide secret del owner: el auth al bridge de Formmy es de SISTEMA
+    //     (FORMMY_BRIDGE_SECRET del env de la app = NANOCLAW_WEBHOOK_SECRET de
+    //     Formmy). Por eso es un toggle puro, sin config del owner.
+    //  2) El conversationId se resuelve SOLO: el MCP lee NANOCLAW_CHAT_JID
+    //     (waba:<integrationId>:<phone>, inyectado por scopeByJid) y pega al bridge
+    //     `resolve_conversation`. El agente nunca maneja conversationId a mano.
+    name: "formmy",
+    label: "Formmy CRM — órdenes y tablero",
+    description: "Levantar pedidos, mover el tablero y guardar datos del cliente en tu CRM de Formmy.",
+    mode: "mcp",
+    transport: "stdio",
+    command: "npx",
+    args: ["-y", "@formmy.app/mcp-server"],
+    env: {
+      FORMMY_API_URL: "https://formmy.app",
+      NANOCLAW_WEBHOOK_SECRET: process.env.FORMMY_BRIDGE_SECRET ?? "",
+    },
+    toolsets: {
+      envVar: "FORMMY_TOOLSETS",
+      // scopeByJid siempre ON → inyecta NANOCLAW_CHAT_JID = groupId
+      // (waba:INTEG:PHONE) por-conversación, que el MCP usa para resolver la
+      // conversación de Formmy.
+      scopeEnv: { flag: "FORMMY_SCOPE_BY_JID", jid: "NANOCLAW_CHAT_JID" },
+      levels: [
+        {
+          key: "board",
+          label: "Tablero (órdenes + contacto)",
+          toolsets: ["orders", "contacts"],
+          scopeByJid: true,
+        },
+      ],
+    },
+  },
+  {
     name: "skydropx",
     label: "Skydropx — cotizar y generar envíos",
     description: "Cotizar guías y generar envíos con Skydropx.",
