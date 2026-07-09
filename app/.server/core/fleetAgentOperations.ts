@@ -103,6 +103,17 @@ export const MODEL_IDENTITY_SONNET5 = [
 // single-instance — else machine B's reaper could reap a VM busy on machine A.
 const busyVms = new Set<string>();
 
+// ── Auto-compact ───────────────────────────────────────────────────────────────
+// The worker's Agent SDK .jsonl transcript is APPEND-ONLY (same failure mode as
+// NanoClaw): it grows without bound, inflating cold-spawn restore, per-suspend
+// backup I/O (whole tgz base64'd through the host exec channel), and microVM RSS.
+// After a turn we measure the jsonl; if it crosses the threshold we flag the
+// session, and the NEXT turn injects a bare "/compact" (SDK-native, in-place,
+// same sticky sessionUuid) before the user's message. In-memory Set keyed by
+// sessionUuid, single-instance like busyVms — see the scaling caveat on the reaper.
+const pendingCompact = new Set<string>();
+const COMPACT_THRESHOLD_BYTES = Number(process.env.FLEET_COMPACT_THRESHOLD_BYTES) || 4_000_000;
+
 // ── Audit instrumentation (FLEET_AUDIT_LOG=1) ──────────────────────────────────
 // Stage-by-stage timing/decisions for the live Baileys audit (warm/cold place,
 // boot ms, turn ms, self-heal, reaper). Off unless the flag is set so prod logs
@@ -211,6 +222,47 @@ export async function restoreConversation(
     timeoutSeconds: 60,
   });
   return true;
+}
+
+// Byte size of the conversation's SDK transcript on the VM (0 if missing/error).
+// Cheap read-only stat; used to decide when to auto-compact. Best-effort.
+async function measureJsonlBytes(
+  ctx: AuthContext,
+  vm: { sandboxId: string },
+  sessionUuid: string
+): Promise<number> {
+  const jsonl = `/data/.claude/projects/-data-workspaces-${sessionUuid}/${sessionUuid}.jsonl`;
+  try {
+    const r = await execCommand(ctx, vm.sandboxId, {
+      command: `stat -c%s "${jsonl}" 2>/dev/null || echo 0`,
+      timeoutSeconds: 10,
+    });
+    return Number(String((r as any).stdout ?? "0").trim()) || 0;
+  } catch {
+    return 0;
+  }
+}
+
+// Sweep orphan memory blobs: fleet-memory/<fleetAgentId>/<sessionUuid>.tgz with
+// no live FleetAgentRoute. Backups written for since-detached routes, failed
+// best-effort deletes, and stale sessions accumulate in S3 forever otherwise.
+// Grace window (1h): never touch a fresh blob — a just-backed-up conversation
+// whose route write hasn't landed yet must not be reaped.
+export async function sweepOrphanFleetMemory(): Promise<{ scanned: number; deleted: number }> {
+  const objects = await memClient().listObjects().catch(() => [] as { key: string; lastModified?: Date }[]);
+  if (!objects.length) return { scanned: 0, deleted: 0 };
+  const routes = await db.fleetAgentRoute.findMany({ select: { fleetAgentId: true, sessionUuid: true } });
+  const live = new Set(routes.map((r) => `${r.fleetAgentId}/${r.sessionUuid}`));
+  const graceCutoff = Date.now() - 60 * 60_000;
+  let deleted = 0;
+  for (const o of objects) {
+    const id = o.key.replace(/\.tgz$/, ""); // "<fleetAgentId>/<sessionUuid>"
+    if (live.has(id)) continue;
+    if (o.lastModified && o.lastModified.getTime() > graceCutoff) continue; // too fresh
+    await memClient().deleteObject(o.key).then(() => { deleted++; }).catch(() => {});
+  }
+  if (deleted) auditLog("mem.sweep", { scanned: objects.length, deleted });
+  return { scanned: objects.length, deleted };
 }
 
 // ── Multi-box seam ──────────────────────────────────────────────────────────
@@ -1116,6 +1168,7 @@ function extFromMime(mimeType: string, name?: string): string {
 export async function clearGroupSession(ctx: AuthContext, fleetAgent: PoolRow, groupId: string): Promise<string> {
   const route = await db.fleetAgentRoute.findUnique({ where: { fleetAgentId_groupId: { fleetAgentId: fleetAgent.id, groupId } } });
   if (route) {
+    pendingCompact.delete(route.sessionUuid);
     await memClient().deleteObject(memKey(fleetAgent.id, route.sessionUuid)).catch(() => {});
     if (route.agentId) {
       const vm = await db.agent.findUnique({ where: { id: route.agentId } });
@@ -1258,6 +1311,40 @@ export async function routeMessage(
       notes.push(`[El usuario envió un ${kind} (${f.mimeType}${named}) guardado en ${path} — ÁBRELO con la tool Read.]`);
     });
     content = `${notes.join("\n")}\n${content}`;
+  }
+
+  // Auto-compact: a prior turn flagged this session as over-threshold. Run a
+  // bare "/compact" turn FIRST (SDK-native, in-place, same sticky sessionUuid),
+  // then proceed with the user's message. Best-effort — a failed compact must
+  // NOT drop the user's turn (degrade, don't break). Skip when the user is
+  // already sending /compact (bareCompact handles it) or clearing the session.
+  if (pendingCompact.has(placed.sessionUuid) && !bareCompact) {
+    pendingCompact.delete(placed.sessionUuid);
+    try {
+      busyVms.add(placed.vm.id);
+      const w = placed.vm;
+      const cstream = await openAgentChunkStream(
+        {
+          agentId: w.id,
+          ownerId: w.ownerId,
+          sandboxId: w.sandboxId,
+          protocol: w.protocol ?? "sse",
+          port: w.port ?? 3000,
+          messagePath: w.messagePath ?? "/message",
+          acpSessionId: w.acpSessionId,
+          acpTransportSessionId: w.acpTransportSessionId,
+          embedToken: w.embedToken,
+          template: w.template,
+        },
+        { content: "/compact", sessionId: placed.sessionUuid }
+      );
+      await collectStream(cstream);
+      auditLog("compact.ok", { groupId: msg.groupId, sessionUuid: placed.sessionUuid });
+    } catch (e) {
+      console.error(`fleetAgent auto-compact ${placed.sessionUuid} failed:`, e);
+    } finally {
+      busyVms.delete(placed.vm.id);
+    }
   }
 
   let reply = "";
@@ -1427,6 +1514,20 @@ export async function routeMessage(
     await db.fleetAgentMessage.create({
       data: { fleetAgentId: fleetAgent.id, groupId: msg.groupId, role: "agent", text: reply },
     });
+  }
+  // Auto-compact trigger (off the critical path): measure the transcript AFTER
+  // replying; if it crosses the threshold, flag the session so the NEXT turn
+  // injects a "/compact". Fire-and-forget — never delays or fails this reply.
+  // Skip for a bareCompact turn (it just shrank the transcript).
+  if (!bareCompact) {
+    void measureJsonlBytes(ctx, placed.vm, placed.sessionUuid)
+      .then((bytes) => {
+        if (bytes > COMPACT_THRESHOLD_BYTES) {
+          pendingCompact.add(placed.sessionUuid);
+          auditLog("compact.flag", { sessionUuid: placed.sessionUuid, bytes });
+        }
+      })
+      .catch(() => {});
   }
   return reply;
 }

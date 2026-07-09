@@ -32,3 +32,8 @@ jobs:
           curl -fsS -X GET \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             https://easybits.cloud/api/cron/purge-notifications
+      - name: Sweep orphaned fleet-memory blobs
+        run: |
+          curl -fsS -X GET \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            https://easybits.cloud/api/cron/sweep-fleet-memory

@@ -8,6 +8,7 @@ import {
   CreateMultipartUploadCommand,
   UploadPartCommand,
   CompleteMultipartUploadCommand,
+  ListObjectsV2Command,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import type { StorageProvider, StorageRegion } from "@prisma/client";
@@ -45,6 +46,7 @@ export type StorageClient = {
   getReadUrl(key: string, expiresIn?: number): Promise<string>;
   deleteObject(key: string): Promise<void>;
   putObject(key: string, body: Buffer, contentType: string): Promise<void>;
+  listObjects(): Promise<{ key: string; lastModified?: Date }[]>;
   createMultipart(key: string): Promise<{ uploadId: string }>;
   getPutPartUrl(key: string, uploadId: string, partNumber: number): Promise<string>;
   completeMultipart(key: string, uploadId: string, etags: string[]): Promise<void>;
@@ -124,6 +126,25 @@ function buildStorageClient(s3: S3Client, bucket: string, prefix = DEFAULT_PREFI
       await s3.send(
         new PutObjectCommand({ Bucket: bucket, Key: prefix + key, Body: body, ContentType: contentType })
       );
+    },
+
+    // List all objects under this client's prefix. Returns keys WITHOUT the
+    // prefix (symmetric to putObject/deleteObject, which prepend it), so callers
+    // pass the returned key straight back to deleteObject. Paginates fully.
+    async listObjects() {
+      const out: { key: string; lastModified?: Date }[] = [];
+      let ContinuationToken: string | undefined;
+      do {
+        const res = await s3.send(
+          new ListObjectsV2Command({ Bucket: bucket, Prefix: prefix, ContinuationToken })
+        );
+        for (const o of res.Contents ?? []) {
+          if (!o.Key) continue;
+          out.push({ key: o.Key.slice(prefix.length), lastModified: o.LastModified });
+        }
+        ContinuationToken = res.IsTruncated ? res.NextContinuationToken : undefined;
+      } while (ContinuationToken);
+      return out;
     },
 
     async createMultipart(key) {

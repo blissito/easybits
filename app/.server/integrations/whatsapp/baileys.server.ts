@@ -863,9 +863,11 @@ async function drainSurface(graceMs = 28_000): Promise<void> {
 
 // ── Idle reaper (lazy singleton) ─────────────────────────────────────────────
 let reaperTimer: NodeJS.Timeout | null = null;
+let reaperTicks = 0;
 function startReaper() {
   if (reaperTimer) return;
   reaperTimer = setInterval(async () => {
+    reaperTicks++;
     try {
       const { reapIdleFleetAgents } = await import("~/.server/core/fleetAgentOperations");
       await reapIdleFleetAgents();
@@ -895,6 +897,16 @@ function startReaper() {
       await reapIdleEmbedAgents();
     } catch (e) {
       console.error("embed-agent reaper tick failed:", e);
+    }
+    // Barrido de blobs de memoria huérfanos (fleet-memory/) cada ~30min — hygiene
+    // barata sobre el mismo heartbeat, no cada tick (lista todo el bucket).
+    if (reaperTicks % 30 === 0) {
+      try {
+        const { sweepOrphanFleetMemory } = await import("~/.server/core/fleetAgentOperations");
+        await sweepOrphanFleetMemory();
+      } catch (e) {
+        console.error("fleet-memory sweep tick failed:", e);
+      }
     }
   }, 60_000);
   if (typeof reaperTimer.unref === "function") reaperTimer.unref();
