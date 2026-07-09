@@ -27,7 +27,7 @@ import {
 import { getSecretValue } from "~/.server/core/secretOperations";
 import { getReservedCapacity } from "~/.server/core/sandboxReservations";
 import { getUserPlan, PLANS } from "~/lib/plans";
-import { profileToToolsParam, DEFAULT_PROFILE } from "~/.server/mcp/toolGroups";
+import { profileToToolsParam, DEFAULT_PROFILE, GROUP_ALLOWLISTS, type ToolGroupKey } from "~/.server/mcp/toolGroups";
 import { getPlatformDefaultClient, buildPublicAssetUrl } from "~/.server/storage";
 import { checkSandboxRateLimit } from "~/.server/rateLimiter";
 
@@ -804,6 +804,40 @@ export function resolveGroupDbScope(
   return `## Bases de datos permitidas\nSOLO puedes usar estas bases de datos (namespaces): ${allow.join(", ")}. NO toques ninguna otra.`;
 }
 
+// Manifiesto de tools REALES activas para el turno. En Code Mode (`scripting`) el
+// tools/list es LEAN (solo discover_tools/run_tool + IO) → el agente NO ve sus tools
+// de documentos/imágenes/etc. y, si le preguntan qué puede hacer, inventa features
+// genéricas de EasyBits. Este manifiesto (calculado desde el toolGroup efectivo +
+// deny, MISMA lógica que el MCP endpoint) le dice EXACTAMENTE qué tiene → deja de
+// inflar. Se inyecta al prompt del turno como assetManifest/dbScope (sin rebake).
+export function resolveGroupToolsManifest(
+  fleetAgent: { groupConfigs?: unknown; persona?: unknown },
+  groupId: string
+): string | null {
+  const effective =
+    resolveToolGroup(fleetAgent, groupId) ??
+    (fleetAgent.persona as Persona | null)?.env?.EASYBITS_TOOL_GROUP;
+  if (!effective) return null;
+  const parts = effective.split(",").map((s) => s.trim()).filter(Boolean);
+  const deny = new Set(parts.filter((p) => p.startsWith("-")).map((p) => p.slice(1)));
+  const groups = parts.filter((p) => !p.startsWith("-"));
+  if (groups.includes("all")) return null; // sin restricción → nada que enumerar
+  const tools = new Set<string>();
+  for (const g of groups) {
+    const al = GROUP_ALLOWLISTS[g as ToolGroupKey];
+    if (al) for (const t of al) if (!deny.has(t)) tools.add(t);
+  }
+  if (!tools.size) return null;
+  const list = [...tools].sort();
+  return (
+    `## Tus herramientas EasyBits activas (${list.length})\n` +
+    `Estas son las ÚNICAS herramientas de EasyBits que tienes en este turno: ${list.join(", ")}.\n` +
+    `NO afirmes ni ofrezcas capacidades fuera de esta lista; si te preguntan qué puedes hacer, ` +
+    `básate SOLO en estas tools (sin inventar). Si una acción requiere una tool que no está aquí, ` +
+    `di claramente que no la tienes activada. Además siempre tienes render de PDF/imágenes y edición de artefactos.`
+  );
+}
+
 // The always-on `render` MCP server (PDF/screenshots via the on-demand Gotenberg
 // box). Injected into EVERY turn for EVERY fleet agent, NOT subject to
 // disabledBuiltins/catalog — so the agent can render even with the EasyBits MCP
@@ -1396,6 +1430,7 @@ export async function routeMessage(
       const skillsRes = await resolveSkillsPrompt(fleetAgent);
       const assetManifest = await resolveGroupAssetManifest(fleetAgent, cfgId, skillsRes.fileIds);
       const dbScope = resolveGroupDbScope(fleetAgent, cfgId);
+      const toolsManifest = resolveGroupToolsManifest(fleetAgent, cfgId);
       const stream = await openAgentChunkStream(
         {
           agentId: worker.id,
@@ -1465,6 +1500,7 @@ export async function routeMessage(
             skillsRes.prompt,
             assetManifest,
             dbScope,
+            toolsManifest,
             msg.appendSystemPrompt,
           ]
             .filter(Boolean)
