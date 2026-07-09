@@ -66,6 +66,13 @@ const BOT_PROBE_PATTERNS = [
   /^\/solr/,
   /^\/actuator/,
   /^\/_ignition/,
+  // Extensiones que ninguna ruta de la app sirve — puro scanner. El `/1.php`,
+  // `/index.php`, `/shell.php` que ahogaron el CPU en el outage 2026-07-09 caían a
+  // React Router (404 con stack trace + symbolication = 600-1200ms c/u). Cortarlas
+  // aquí = 404 seco O(1) antes de morgan/RR.
+  /\.php(\?|$)/i,
+  /\.(asp|aspx|jsp|cgi)(\?|$)/i,
+  /\.(bak|old|sql|zip|tar|gz|env)(\?|$)/i,
 ];
 
 async function run() {

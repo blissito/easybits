@@ -170,12 +170,37 @@ async function waitReady(url: string, path: string, attempts = 20, delayMs = 100
   return false;
 }
 
+// In-process mutex por (owner,kind) para ensureServiceBox. La superficie es
+// single-instance (mismo criterio que withLock en fleetAgentOperations) → un lock en
+// memoria serializa correctamente. Sin esto, dos turnos concurrentes del MISMO owner
+// (p.ej. render_url MCP + renderClient, o STT+render en vuelo) veían ambos "no hay box"
+// en el findUnique y ambos llegaban a spawnServiceBox → DOS VMs. El upsert tardío
+// (~30s después) sobrescribía sandboxId → la VM ganadora quedaba HUÉRFANA (sin fila,
+// invisible al reaper) y persistía como `render·dormida` en /dash/flota. Incidente
+// 2026-07-09. Con el lock, el 2º turno espera al 1º y toma la ruta de reuso.
+const serviceLocks = new Map<string, Promise<unknown>>();
+function withServiceLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
+  const prev = serviceLocks.get(key) ?? Promise.resolve();
+  const next = prev.then(fn, fn);
+  const tail = next.catch(() => undefined);
+  serviceLocks.set(key, tail);
+  tail.then(() => {
+    if (serviceLocks.get(key) === tail) serviceLocks.delete(key);
+  });
+  return next;
+}
+
 // ensureServiceBox — idempotent. Returns the owner's running box for `kind` if it
 // already exists, else spawns one. Used by BOTH the agent-facing tool
 // (service_start) and the channel-agnostic fleet voice layer, so we never
-// double-spawn the same service for one owner.
+// double-spawn the same service for one owner. Serializado por (owner,kind) — ver
+// serviceLocks arriba.
 export async function ensureServiceBox(ctx: AuthContext, kind: string): Promise<ServiceBoxHandle> {
   requireScope(ctx, "WRITE");
+  return withServiceLock(`${ctx.user.id}:${kind}`, () => ensureServiceBoxInner(ctx, kind));
+}
+
+async function ensureServiceBoxInner(ctx: AuthContext, kind: string): Promise<ServiceBoxHandle> {
   const spec = specFor(kind);
 
   // Reuse an existing box for this (owner, kind) — running OR still booting. The

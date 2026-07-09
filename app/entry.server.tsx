@@ -2,7 +2,7 @@ import { PassThrough } from "node:stream";
 
 import type { AppLoadContext, EntryContext } from "react-router";
 import { createReadableStreamFromReadable } from "@react-router/node";
-import { ServerRouter } from "react-router";
+import { ServerRouter, isRouteErrorResponse } from "react-router";
 import { isbot } from "isbot";
 import type { RenderToPipeableStreamOptions } from "react-dom/server";
 import { renderToPipeableStream } from "react-dom/server";
@@ -25,6 +25,18 @@ if (!globalThis.__ebProcessGuards) {
 }
 
 export const streamTimeout = 5_000;
+
+// Override del errorHandler DEFAULT de React Router, que hace `console.error(stack)`
+// en TODO modo salvo `test` → cada 404 de scanner logueaba el stack completo de "No
+// route matches URL" + symbolication de source-map (fs.existsSync por frame) → 600-1200ms
+// bajo flood (contribuyó al outage 2026-07-09). Silenciamos 404s y requests abortadas;
+// los errores reales SÍ se loguean. El fast-path de server.mjs corta la mayoría antes,
+// esto cubre lo que se escape.
+export function handleError(error: unknown, { request }: { request: Request }) {
+  if (request.signal.aborted) return;
+  if (isRouteErrorResponse(error) && error.status === 404) return;
+  console.error(error);
+}
 
 export default async function handleRequest(
   request: Request,
