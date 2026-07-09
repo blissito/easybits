@@ -40,7 +40,11 @@ export async function handleMcp(request: Request): Promise<Response> {
   // Parse tool groups from query string
   const url = new URL(request.url);
   const toolsParam = url.searchParams.get("tools");
-  const groups = toolsParam ? toolsParam.split(",").map(g => g.trim()) : undefined;
+  // Entradas con prefijo `-` = per-tool DENY (default = todas las tools del bucket
+  // activas; el user destila una → llega como `-<tool>`). El resto = bucket keys.
+  const parts = toolsParam ? toolsParam.split(",").map((g) => g.trim()).filter(Boolean) : [];
+  const denyTools = parts.filter((p) => p.startsWith("-")).map((p) => p.slice(1));
+  const groups = parts.length ? parts.filter((p) => !p.startsWith("-")) : undefined;
 
   // Per-connection provider keys (passed as query params in the connector URL
   // or as request headers). These are NOT stored — they live only on the
@@ -52,7 +56,7 @@ export async function handleMcp(request: Request): Promise<Response> {
 
   const ctxWithKeys = { ...ctx, providerKeys: { openai: openaiKey } };
 
-  const server = createMcpServer(groups);
+  const server = createMcpServer(groups, denyTools.length ? denyTools : undefined);
   const transport = new WebStandardStreamableHTTPServerTransport({
     sessionIdGenerator: undefined, // stateless
   });

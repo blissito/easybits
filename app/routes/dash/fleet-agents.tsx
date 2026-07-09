@@ -10,7 +10,7 @@ import { getUserOrRedirect } from "~/.server/getters";
 import { db } from "~/.server/db";
 import { delegatedAccountIds, SCOPES } from "~/.server/delegation";
 import { createFleetAgent, deleteFleetAgent, clearGroupSession, mergedCapabilities, CURATED_CAPABILITIES, DEFAULT_MCP_CATALOG, fleetSkills, type McpCatalogEntry, type GroupConfig, type FleetSkill } from "~/.server/core/fleetAgentOperations";
-import { FLEET_BUCKETS, toolsParamToBuckets, bucketsToToolsParam } from "~/.server/mcp/toolGroups";
+import { FLEET_BUCKETS, GROUP_ALLOWLISTS, toolsParamToBuckets, bucketsToToolsParam, type ToolGroupKey } from "~/.server/mcp/toolGroups";
 import { getReservedCapacity } from "~/.server/core/sandboxReservations";
 import { listSecrets, createSecret } from "~/.server/core/secretOperations";
 import {
@@ -138,6 +138,7 @@ export async function loader({ request }: Route.LoaderArgs) {
         // Buckets per-grupo (null = hereda el default del agente; computado server-side
         // porque toolsParamToBuckets vive en .server).
         toolBuckets: gconf[g.id]?.toolGroup ? [...toolsParamToBuckets(gconf[g.id]!.toolGroup!)] : null,
+        toolDeny: (gconf[g.id]?.toolDeny?.length ? gconf[g.id]!.toolDeny : gconf["*"]?.toolDeny) ?? [],
       }));
       // WABA numbers (Meta WhatsApp Business). Each integration is its OWN config
       // unit `waba:<integrationId>` — same shape as a group so the Capacidades
@@ -162,6 +163,7 @@ export async function loader({ request }: Route.LoaderArgs) {
           assets: (gconf[id]?.assets?.length ? gconf[id]!.assets : gconf["*"]?.assets) ?? [],
           dbAllow: (gconf[id]?.dbAllow?.length ? gconf[id]!.dbAllow : gconf["*"]?.dbAllow) ?? [],
           toolBuckets: gconf[id]?.toolGroup ? [...toolsParamToBuckets(gconf[id]!.toolGroup!)] : null,
+          toolDeny: (gconf[id]?.toolDeny?.length ? gconf[id]!.toolDeny : gconf["*"]?.toolDeny) ?? [],
         };
       });
       // Teams (Ghosty Teams): un solo canal por FleetAgent — la conexión vive del
@@ -184,6 +186,7 @@ export async function loader({ request }: Route.LoaderArgs) {
         assets: (teamsCfg.assets?.length ? teamsCfg.assets : gconf["*"]?.assets) ?? [],
         dbAllow: (teamsCfg.dbAllow?.length ? teamsCfg.dbAllow : gconf["*"]?.dbAllow) ?? [],
         toolBuckets: teamsCfg.toolGroup ? [...toolsParamToBuckets(teamsCfg.toolGroup)] : null,
+        toolDeny: (teamsCfg.toolDeny?.length ? teamsCfg.toolDeny : gconf["*"]?.toolDeny) ?? [],
         connected: teamsConnected,
       };
       // Per-VM capacity boxes: each worker VM + how many conversations (slots) it
@@ -711,6 +714,21 @@ export async function action({ request }: Route.ActionArgs) {
     // separado en OFF lo apagaba y dejaba los buckets inertes ("no usa easybits").
     const disabled = (cur.disabledBuiltins ?? []).filter((n) => n !== "easybits");
     configs[groupId] = { ...cur, toolGroup: inherit ? undefined : bucketsToToolsParam(bucketList), disabledBuiltins: disabled };
+    await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { groupConfigs: configs } });
+    return data({ ok: true });
+  }
+  if (intent === "set-tool-deny") {
+    // Per-tool: destildar una tool de un bucket ON = DENY (on=0); re-permitir = on=1.
+    // Se codifica como `-<tool>` en el ?tools= (resolveToolGroup) al armar el turno.
+    const groupId = String(fd.get("groupId") || "");
+    const tool = String(fd.get("tool") || "").trim();
+    const on = String(fd.get("on") || "") === "1";
+    if (!tool) return data({ error: "tool requerida" }, { status: 400 });
+    const configs = { ...((fleetAgent.groupConfigs as Record<string, GroupConfig> | null) ?? {}) };
+    const cur = configs[groupId] ?? {};
+    const set = new Set(cur.toolDeny ?? []);
+    if (on) set.delete(tool); else set.add(tool);
+    configs[groupId] = { ...cur, toolDeny: [...set] };
     await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { groupConfigs: configs } });
     return data({ ok: true });
   }
@@ -2584,6 +2602,24 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                   if (level !== "off") b.levels!.find((l) => l.key === level)!.buckets.forEach((k) => next.add(k));
                   commit(next);
                 };
+                // Per-tool deny (default = todas ON; destildar = deny). Optimista aparte.
+                const denyKey = `${cg.id}:deny`;
+                const denySet = new Set<string>(
+                  optim[denyKey] != null ? optim[denyKey].split(",").filter(Boolean) : (cg.toolDeny ?? [])
+                );
+                const toggleTool = (tool: string, allow: boolean) => {
+                  const next = new Set(denySet);
+                  if (allow) next.delete(tool); else next.add(tool);
+                  setOpt(denyKey, [...next].join(","));
+                  fetcher.submit({ intent: "set-tool-deny", fleetAgentId: cp.id, groupId: cg.id, tool, on: allow ? "1" : "0" }, { method: "post" });
+                };
+                // Tools reales de los sub-buckets ACTIVOS del bucket (para el checklist).
+                const bucketActiveTools = (b: typeof buckets[number]) => {
+                  const keys = b.levels
+                    ? b.levels.flatMap((l) => l.buckets).filter((k) => effective.has(k))
+                    : (effective.has(b.key) ? [b.key] : []);
+                  return [...new Set(keys.flatMap((k) => [...(GROUP_ALLOWLISTS[k as ToolGroupKey] ?? [])]))].sort();
+                };
                 return (
                   <div>
                     <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Herramientas EasyBits</span>
@@ -2632,6 +2668,27 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                                 )}
                               </div>
                             )}
+                            {/* Per-tool: destildar herramientas puntuales del bucket (default todas ON). */}
+                            {(() => {
+                              const tools = bucketActiveTools(b);
+                              if (!tools.length) return null;
+                              const activeCount = tools.filter((t) => !denySet.has(t)).length;
+                              return (
+                                <details className="mt-2 border-t border-gray-100 pt-2">
+                                  <summary className="text-[10px] text-gray-400 cursor-pointer select-none">
+                                    Herramientas ({activeCount}/{tools.length})
+                                  </summary>
+                                  <div className="mt-1 flex flex-col gap-1 max-h-40 overflow-y-auto">
+                                    {tools.map((tn) => (
+                                      <label key={tn} className="flex items-center gap-2 text-[11px] cursor-pointer hover:bg-gray-50 rounded px-1">
+                                        <input type="checkbox" checked={!denySet.has(tn)} onChange={(e) => toggleTool(tn, e.target.checked)} />
+                                        <span className="truncate font-mono">{tn}</span>
+                                      </label>
+                                    ))}
+                                  </div>
+                                </details>
+                              );
+                            })()}
                           </div>
                         );
                       })}

@@ -411,6 +411,10 @@ export type GroupConfig = {
   env?: Record<string, string>;
   disabledBuiltins?: string[];
   toolGroup?: string;
+  // Per-tool DENY dentro de los buckets activos. Default = todas las tools del bucket
+  // ON; el user destila herramientas puntuales → van aquí. Se codifican como `-<tool>`
+  // en el `?tools=` (resolveToolGroup) → el MCP endpoint las deshabilita ese turno.
+  toolDeny?: string[];
   // Per enabled capability, the chosen LEVEL KEY (declared by the connector, e.g.
   // kommo: "read" | "scoped" | "admin"). Absent → the connector's first level.
   // Drives <SERVER>_TOOLSETS (+ scope env). This is how "admin desde baileys /
@@ -459,7 +463,13 @@ export function resolveToolGroup(
   groupId: string
 ): string | undefined {
   const all = (fleetAgent.groupConfigs as Record<string, GroupConfig> | null) ?? {};
-  return all[groupId]?.toolGroup ?? all["*"]?.toolGroup ?? undefined;
+  // El cfg que provee el toolGroup (per-grupo gana sobre "*") es también quien
+  // aporta el deny → van juntos para no mezclar buckets de un cfg con deny de otro.
+  const cfg = all[groupId]?.toolGroup != null ? all[groupId] : all["*"];
+  const base = cfg?.toolGroup;
+  if (!base) return undefined;
+  const deny = (cfg?.toolDeny ?? []).filter(Boolean);
+  return deny.length ? [base, ...deny.map((t) => `-${t}`)].join(",") : base;
 }
 
 // $secret:NAME reference shape (same as agentOperations.expandMcpServerSecrets).

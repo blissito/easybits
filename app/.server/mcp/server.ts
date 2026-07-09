@@ -337,7 +337,7 @@ export function wrapHandler<T>(fn: (params: T, extra: any) => Promise<any>) {
   };
 }
 
-export function createMcpServer(groups?: string[]) {
+export function createMcpServer(groups?: string[], denyTools?: string[]) {
   const server = new McpServer({
     name: "easybits",
     version: "1.0.0",
@@ -407,6 +407,13 @@ export function createMcpServer(groups?: string[]) {
       if (list) list.forEach(t => activeAllowlist!.add(t));
     }
   }
+
+  // Per-tool deny (`-<tool>` entries en el `?tools=`). Default = todas las tools del
+  // bucket activas; el user destila una y llega aquí como deny. Subtrae del allowlist
+  // (así el scope de run_tool en modo strict también las excluye) y se aplica aparte
+  // más abajo para cubrir los grupos SIN allowlist (`all`/`docs`).
+  const denySet = denyTools && denyTools.length ? new Set(denyTools) : null;
+  if (denySet && activeAllowlist) for (const t of denySet) activeAllowlist.delete(t);
   // Groups WITHOUT a curated allowlist (`docs`, `sites`, `brand` alone) keep
   // their previous behavior: no filtering — every registered tool stays
   // visible. The new dynamic-discovery meta-tools are appended afterwards.
@@ -446,6 +453,16 @@ export function createMcpServer(groups?: string[]) {
       if (!activeAllowlist.has(name) && typeof tool.disable === "function") {
         tool.disable();
       }
+    }
+  }
+
+  // Per-tool deny también en grupos SIN allowlist (`all`/`docs`): el bloque de
+  // arriba no corre ahí, así que deshabilitamos el deny explícitamente.
+  if (denySet) {
+    const all = (server as any)._registeredTools as Record<string, { disable?: () => void }>;
+    for (const name of denySet) {
+      const tool = all[name];
+      if (tool && typeof tool.disable === "function") tool.disable();
     }
   }
 

@@ -10,7 +10,7 @@ import {
   type GroupConfig,
   type McpCatalogEntry,
 } from "~/.server/core/fleetAgentOperations";
-import { FLEET_BUCKETS, bucketsToToolsParam, toolsParamToBuckets } from "~/.server/mcp/toolGroups";
+import { FLEET_BUCKETS, GROUP_ALLOWLISTS, bucketsToToolsParam, toolsParamToBuckets, type ToolGroupKey } from "~/.server/mcp/toolGroups";
 import { createSecret, listSecrets } from "~/.server/core/secretOperations";
 
 // API-first capability config for a FleetAgent. Both the EasyBits dashboard AND
@@ -143,6 +143,12 @@ export async function loader({ request, params }: Route.LoaderArgs) {
       // declara el SET de sub-buckets que activa → el cliente arma el ?tools= completo.
       levels: b.levels?.map((l) => ({ key: l.key, label: l.label, buckets: l.buckets })) ?? null,
     })),
+    // Tools de CADA bucket key (incluidos los sub-buckets de nivel) → el cliente pinta
+    // el checklist per-tool (default todo ON; destildar = deny). Se une por buckets activos.
+    bucketTools: Object.fromEntries(
+      [...new Set(FLEET_BUCKETS.flatMap((b) => [b.key, ...(b.levels?.flatMap((l) => l.buckets) ?? [])]))]
+        .map((k) => [k, [...(GROUP_ALLOWLISTS[k as ToolGroupKey] ?? [])]] as const)
+    ),
     efforts: ["low", "medium", "high", "xhigh"],
     skills: fleetSkills(fa).map((s) => ({ id: s.id, name: s.name, description: s.description, enabled: s.enabled !== false, fileCount: (s.files ?? []).length })),
     customMcps: mergedCapabilities(fa).filter((e) => !e.builtin && !CURATED_CAPABILITIES.some((c) => c.name === e.name)).map((e) => ({ name: e.name, label: e.label ?? e.name, transport: e.transport ?? "stdio", requiredSecrets: e.requiredSecrets ?? [] })),
@@ -322,6 +328,13 @@ export async function action({ request, params }: Route.ActionArgs) {
     const list = Array.isArray(b?.buckets) ? (b.buckets as unknown[]).map((s) => String(s)) : [];
     const disabled = (cur.disabledBuiltins ?? []).filter((n) => n !== "easybits");
     configs[groupId] = { ...cur, toolGroup: inherit ? undefined : bucketsToToolsParam(list), disabledBuiltins: disabled };
+  } else if (action === "set-tool-deny") {
+    // Per-tool: `on:false` = destildar = DENY esa tool; `on:true` = re-permitir (quitar del deny).
+    const tool = String(b?.tool ?? "").trim();
+    if (!tool) return json({ error: "tool required" }, 400);
+    const set = new Set(cur.toolDeny ?? []);
+    if (b?.on) set.delete(tool); else set.add(tool);
+    configs[groupId] = { ...cur, toolDeny: [...set] };
   } else {
     return json({ error: "unknown action" }, 400);
   }
