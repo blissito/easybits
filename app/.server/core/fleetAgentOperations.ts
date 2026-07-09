@@ -1482,10 +1482,16 @@ export async function routeMessage(
               (fleetAgent.persona as Persona | null)?.env?.ASSISTANT_NAME === "Ghosty")
               ? WEB_RESEARCH_GUARDRAIL
               : null,
-            // WABA: NO hay server `wa` (Baileys) ni socket. Corrige la persona
-            // horneada (que dice "usa wa send_message") → en este canal los archivos
-            // se mandan incluyendo su URL en el texto (la plataforma la adjunta).
-            cfgId.startsWith("waba:") ? WABA_DELIVERY_GUARDRAIL : null,
+            // Identidad de canal (per-canal, UN solo guardrail de entrega por turno).
+            // Reemplaza el framing WhatsApp que antes vivía HORNEADO en la persona base
+            // (removido) y se filtraba a Teams → "WhatsApp no está conectado". WABA y
+            // web/Teams entregan por URL (la plataforma adjunta/previsualiza); baileys
+            // (groupId = JID de WhatsApp) entrega por adjunto con `wa send_message`.
+            cfgId.startsWith("waba:")
+              ? WABA_DELIVERY_GUARDRAIL
+              : /@(g\.us|s\.whatsapp\.net)$/.test(msg.groupId)
+                ? BAILEYS_DELIVERY_GUARDRAIL
+                : WEB_DELIVERY_GUARDRAIL,
             // Code Mode: si este fleetAgent corre con un perfil (la superficie lean
             // siempre empieza con `scripting`, seguido de los buckets del perfil).
             (fleetAgent.persona as Persona | null)?.env?.EASYBITS_TOOL_GROUP?.startsWith("scripting")
@@ -1692,8 +1698,9 @@ export async function deleteFleetAgent(ctx: AuthContext, fleetAgentId: string): 
 // server `easybits`). Va como SYSTEM_PROMPT en persona.env (el claude-worker lo
 // lee). Equivale al rol de un CLAUDE.md. Solidificar el default en el template
 // (CLAUDE.md propio) es follow-up; por ahora el fleetAgent lo inyecta.
-// BASE / guardrails de plataforma (formato WhatsApp, brevedad, uso de tools,
-// honestidad). NO es la personalidad final: cuando llegue la customización del
+// BASE / guardrails de plataforma (brevedad, uso de tools, honestidad — AGNÓSTICO
+// de canal: la entrega de archivos la dicta el guardrail de canal per-turno, no la
+// persona). NO es la personalidad final: cuando llegue la customización del
 // dueño (agenda #3, form de agente), su texto debe COMPONERSE ENCIMA de esto
 // (append), nunca reemplazar estos guardrails — si no, se pierden el "sin
 // markdown" y la brevedad. Ver [[project_pool_production_agenda]].
@@ -1701,7 +1708,7 @@ const GHOSTY_SYSTEM = [
   "Eres Ghosty, un asistente de EasyBits. Responde SIEMPRE en español, con tono cálido y directo.",
   "SÉ BREVE: entrega el resultado, no el proceso. Nada de relleno ni cierres tipo '¿algo más?'.",
   "Texto plano; evita Markdown pesado (títulos con #, tablas, bloques de código) salvo que de verdad ayude.",
-  "Tienes las herramientas de EasyBits vía MCP (`easybits`): documentos, imágenes, archivos, sitios — úsalas cuando ayuden. Si estás en WhatsApp (server `wa`), manda los archivos como adjunto, no solo el link.",
+  "Tienes las herramientas de EasyBits vía MCP (`easybits`): documentos, imágenes, archivos, sitios — úsalas cuando ayuden. La forma de ENTREGAR archivos depende del canal (te la indica el guardrail de canal de cada turno); no asumas WhatsApp.",
   "Si algo está fuera de tu alcance, dilo con honestidad.",
 ].join(" ");
 export const GHOSTY_PERSONA = { name: "Ghosty", env: { ASSISTANT_NAME: "Ghosty", SYSTEM_PROMPT: GHOSTY_SYSTEM } };
@@ -1774,6 +1781,23 @@ const WEB_RESEARCH_GUARDRAIL = [
 const WABA_DELIVERY_GUARDRAIL = [
   "CANAL WhatsApp Business (WABA): NO tienes el server MCP `wa` ni un socket. NUNCA intentes `wa send_message`/`wa send_poll`/`wa react_message` ni digas que 'el socket está caído' — eso aquí no aplica.",
   "Para ENVIAR un archivo (imagen, PDF, etc.): genera/súbelo a EasyBits e incluye su URL pública directamente en tu respuesta de texto. La plataforma la descarga y la adjunta al chat automáticamente — no necesitas ninguna herramienta de envío.",
+].join(" ");
+
+// baileys (WhatsApp personal/grupo): este canal SÍ tiene el server `wa` (socket
+// Baileys). Reemplaza la instrucción de entrega que ANTES vivía horneada en la persona
+// base (removida para que no se filtrara a Teams/web y provocara la alucinación "WhatsApp
+// no está conectado"). Inyectado per-turno SOLO cuando el groupId es un JID de WhatsApp.
+const BAILEYS_DELIVERY_GUARDRAIL =
+  "CANAL WhatsApp: tienes el server MCP `wa` (socket). Para ENVIAR un archivo (imagen, PDF, etc.) mándalo como ADJUNTO con `wa send_message`, no solo pegando el link en el texto.";
+
+// Canal WEB (Ghosty Teams room o widget web): NO es WhatsApp y NO tiene socket `wa`.
+// Sin esto el agente cae al modelo mental WhatsApp de la persona horneada y responde
+// "WhatsApp no está conectado" en un room de Teams. Los archivos se entregan por su URL
+// pública en el texto → la plataforma los muestra como ARTEFACTO (con vista previa) en el
+// room. Inyectado per-turno para todo canal que NO sea WhatsApp (baileys) ni WABA.
+const WEB_DELIVERY_GUARDRAIL = [
+  "CANAL WEB (Ghosty Teams / widget): NO estás en WhatsApp. NUNCA digas que 'WhatsApp no está conectado' ni intentes `wa send_message` — ese canal no aplica aquí.",
+  "Para ENTREGAR un archivo (imagen, PDF, HTML, etc.): genera/súbelo a EasyBits e incluye su URL pública directamente en tu respuesta de texto. La plataforma la muestra como artefacto con vista previa — no necesitas ninguna herramienta de envío.",
 ].join(" ");
 
 // Code Mode: guía inyectada SOLO cuando el fleetAgent corre con la superficie MCP

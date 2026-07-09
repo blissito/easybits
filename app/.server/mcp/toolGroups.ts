@@ -639,8 +639,8 @@ export const TOOL_PROFILES: Record<string, ToolProfile> = {
     key: "publico",
     label: "Público",
     description:
-      "Creativo, sin administración. Crea imágenes y documentos, investiga y maneja archivos — pero NO bases de datos, sitios, secrets ni sandboxes. Ideal para un agente de cara al cliente.",
-    buckets: ["imagenes", "documentos", "documentos-write", "investigacion"],
+      "Creativo, sin administración. Crea imágenes y documentos, investiga, maneja archivos y envía correo (send_email) — pero NO bases de datos, sitios, secrets ni sandboxes. Ideal para un agente de cara al cliente.",
+    buckets: ["imagenes", "documentos", "documentos-write", "investigacion", "email"],
   },
 };
 
