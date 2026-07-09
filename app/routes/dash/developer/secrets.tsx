@@ -49,17 +49,27 @@ export const action = async ({ request }: Route.ActionArgs) => {
 export default function SecretsPage() {
   const { secrets } = useLoaderData<typeof loader>();
   const fetcher = useFetcher<typeof action>();
-  const [showCreate, setShowCreate] = useState(false);
+  // modal === null → cerrado; {name:""} → nuevo; {name:"X"} → editar (nombre fijo).
+  const [modal, setModal] = useState<{ name: string } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
+  const [copied, setCopied] = useState<string | null>(null);
 
   const lastError = fetcher.data && "error" in fetcher.data ? fetcher.data.error : null;
   const lastCreated = fetcher.data && "created" in fetcher.data ? fetcher.data.created : null;
+  const isEdit = !!modal?.name;
+
+  const copyName = (name: string) => {
+    navigator.clipboard?.writeText(name).then(() => {
+      setCopied(name);
+      setTimeout(() => setCopied((c) => (c === name ? null : c)), 1200);
+    });
+  };
 
   return (
     <div>
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-lg font-black uppercase tracking-tight">Secretos</h2>
-        <BrutalButton size="chip" onClick={() => setShowCreate(true)} className="text-sm px-4 py-1.5">
+        <BrutalButton size="chip" onClick={() => setModal({ name: "" })} className="text-sm px-4 py-1.5">
           + Nuevo secreto
         </BrutalButton>
       </div>
@@ -70,7 +80,7 @@ export default function SecretsPage() {
         El valor nunca se vuelve a mostrar después de guardarlo — solo el nombre.
       </div>
 
-      {showCreate && (
+      {modal && (
         <div
           className="fixed inset-0 bg-black/60 flex items-center justify-center z-50"
           role="dialog"
@@ -78,11 +88,13 @@ export default function SecretsPage() {
           aria-labelledby="create-secret-title"
         >
           <div className="bg-white border-3 border-black rounded-xl p-6 w-full max-w-md shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]">
-            <h3 id="create-secret-title" className="text-lg font-black uppercase mb-4">Nuevo secreto</h3>
+            <h3 id="create-secret-title" className="text-lg font-black uppercase mb-4">
+              {isEdit ? "Editar secreto" : "Nuevo secreto"}
+            </h3>
             <fetcher.Form
               method="post"
               onSubmit={() => {
-                setShowCreate(false);
+                setModal(null);
               }}
             >
               <input type="hidden" name="intent" value="create" />
@@ -94,8 +106,10 @@ export default function SecretsPage() {
                   pattern="[A-Z_][A-Z0-9_]*"
                   placeholder="BRIGHTDATA_API_TOKEN"
                   title="Solo MAYÚSCULAS, números y guion bajo. Debe empezar con letra o _."
-                  className="mt-1 block w-full border-2 border-black rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-brand-500"
-                  autoFocus
+                  defaultValue={modal.name}
+                  readOnly={isEdit}
+                  className={`mt-1 block w-full border-2 border-black rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-brand-500 ${isEdit ? "bg-gray-100 text-gray-500" : ""}`}
+                  autoFocus={!isEdit}
                 />
               </label>
               <label className="block mb-4">
@@ -104,15 +118,16 @@ export default function SecretsPage() {
                   name="value"
                   required
                   rows={4}
-                  placeholder="Pégalo aquí. No se mostrará después."
+                  placeholder={isEdit ? "Pega el nuevo valor. Reemplaza el anterior." : "Pégalo aquí. No se mostrará después."}
                   className="mt-1 block w-full border-2 border-black rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-brand-500"
+                  autoFocus={isEdit}
                 />
               </label>
               <div className="flex gap-2 justify-end">
                 <BrutalButton
                   mode="ghost"
                   size="chip"
-                  onClick={() => setShowCreate(false)}
+                  onClick={() => setModal(null)}
                   className="text-sm px-4 py-1.5"
                   type="button"
                 >
@@ -152,20 +167,49 @@ export default function SecretsPage() {
           <tbody>
             {secrets.map((s) => (
               <tr key={s.id} className="border-t-2 border-black hover:bg-brand-100 transition-colors">
-                <td className="px-4 py-3 font-mono font-bold">{s.name}</td>
+                <td className="px-4 py-3">
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono font-bold">{s.name}</span>
+                    <button
+                      type="button"
+                      onClick={() => copyName(s.name)}
+                      title="Copiar nombre"
+                      aria-label={`Copiar nombre ${s.name}`}
+                      className="shrink-0 p-1 rounded-md border-2 border-transparent text-gray-400 hover:text-black hover:border-black transition-colors"
+                    >
+                      {copied === s.name ? (
+                        <span className="text-xs font-bold text-green-600">✓</span>
+                      ) : (
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                        </svg>
+                      )}
+                    </button>
+                  </div>
+                </td>
                 <td className="px-4 py-3 font-mono text-xs">{new Date(s.createdAt).toLocaleDateString()}</td>
                 <td className="px-4 py-3 font-mono text-xs">
                   {s.lastUsedAt ? new Date(s.lastUsedAt).toLocaleString() : "—"}
                 </td>
                 <td className="px-4 py-3">
-                  <BrutalButton
-                    mode="danger"
-                    size="chip"
-                    onClick={() => setDeleteTarget({ id: s.id, name: s.name })}
-                    isLoading={fetcher.state !== "idle" && fetcher.formData?.get("secretId") === s.id}
-                  >
-                    Borrar
-                  </BrutalButton>
+                  <div className="flex items-center gap-2">
+                    <BrutalButton
+                      mode="ghost"
+                      size="chip"
+                      onClick={() => setModal({ name: s.name })}
+                    >
+                      Editar
+                    </BrutalButton>
+                    <BrutalButton
+                      mode="danger"
+                      size="chip"
+                      onClick={() => setDeleteTarget({ id: s.id, name: s.name })}
+                      isLoading={fetcher.state !== "idle" && fetcher.formData?.get("secretId") === s.id}
+                    >
+                      Borrar
+                    </BrutalButton>
+                  </div>
                 </td>
               </tr>
             ))}
