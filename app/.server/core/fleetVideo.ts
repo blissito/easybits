@@ -14,9 +14,32 @@
 import type { AuthContext } from "../apiAuth";
 import { ensureServiceBox, touchServiceBox } from "./fleetServiceOperations";
 
+/** An asset the box downloads into the project's assets/ dir before rendering. */
+export interface VideoAsset {
+  /** Filename under assets/ (referenced as assets/<name> in indexHtml/scenes). */
+  name: string;
+  /** Public URL the box fetches over HTTP (no auth). */
+  url: string;
+}
+
 export interface VideoInput {
-  /** Self-contained HyperFrames composition HTML. */
-  html: string;
+  /**
+   * Host composition HTML. Prefer `indexHtml`; `html` is the backward-compatible
+   * alias for a single self-contained composition (no assets/scenes).
+   */
+  html?: string;
+  /** Host composition HTML (the project's index.html). */
+  indexHtml?: string;
+  /** Optional sub-compositions written to compositions/<id>.html (id ^[\w-]+$). */
+  scenes?: { id: string; html: string }[];
+  /** Images/other media the box downloads into assets/ (referenced as assets/<name>). */
+  assets?: VideoAsset[];
+  /**
+   * Background audio track. HyperFrames muxes audio ONLY from a real file, so the
+   * box downloads this to assets/<name>; indexHtml must carry
+   * `<audio id=... src="assets/<name>">` at the composition root.
+   */
+  audio?: VideoAsset;
   /** Frame rate (1-240). Defaults to the composition's data-fps, else 30. */
   fps?: number;
   /** Render quality. Default "standard". */
@@ -52,7 +75,10 @@ async function postRender(
   input: VideoInput
 ): Promise<{ bytes: Buffer; contentType: string; renderMs?: number } | null> {
   const body = JSON.stringify({
-    html: input.html,
+    indexHtml: input.indexHtml || input.html,
+    scenes: input.scenes,
+    assets: input.assets,
+    audio: input.audio,
     fps: input.fps,
     quality: input.quality,
     resolution: input.resolution,
@@ -92,7 +118,8 @@ export async function renderViaHyperframesBox(
   ctx: AuthContext,
   input: VideoInput
 ): Promise<VideoResult> {
-  if (!input.html?.trim()) throw new Error("video render needs html");
+  if (!input.indexHtml?.trim() && !input.html?.trim())
+    throw new Error("video render needs indexHtml (or html)");
 
   const box = await ensureBox(ctx);
   if (!box?.videoUrl) throw new Error("video box unavailable (host down or plan cap)");

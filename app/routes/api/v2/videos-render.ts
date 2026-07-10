@@ -20,6 +20,10 @@ export async function action({ request }: Route.ActionArgs) {
 
   const body = (await request.json().catch(() => ({}))) as {
     html?: string;
+    indexHtml?: string;
+    scenes?: { id: string; html: string }[];
+    assets?: { name: string; url: string }[];
+    audio?: { name: string; url: string };
     fps?: number;
     quality?: "draft" | "standard" | "high";
     resolution?: string;
@@ -27,13 +31,18 @@ export async function action({ request }: Route.ActionArgs) {
     fileName?: string;
   };
 
-  if (!body.html || !body.html.trim()) {
-    return Response.json({ error: "html is required" }, { status: 400 });
+  const root = body.indexHtml || body.html;
+  if (!root || !root.trim()) {
+    return Response.json({ error: "indexHtml (or html) is required" }, { status: 400 });
   }
 
   try {
     const file = await renderViaHyperframesBox(ctx, {
+      indexHtml: body.indexHtml,
       html: body.html,
+      scenes: body.scenes,
+      assets: body.assets,
+      audio: body.audio,
       fps: body.fps,
       quality: body.quality,
       resolution: body.resolution,
