@@ -407,6 +407,7 @@ export const SANDBOX_ALLOWLIST = new Set<string>([
   "call_stop",
   "call_status",
   "call_files",
+  "call_transcript",
   "call_destroy",
   "service_start",
   "service_stop",
