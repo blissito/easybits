@@ -47,6 +47,8 @@ export interface VideoScene {
   narrationUrl?: string;
   /** assets/<name> the render box downloads the narration into. */
   narrationName?: string;
+  /** Measured duration (s) of the narration WAV — the scene is stretched to fit it. */
+  narrationSec?: number;
 }
 
 export interface VideoAssetRef {
@@ -311,6 +313,7 @@ export async function setScene(
     narrationVoice: nextVoice,
     narrationUrl: narrationChanged ? undefined : cur.narrationUrl,
     narrationName: narrationChanged ? undefined : cur.narrationName,
+    narrationSec: narrationChanged ? undefined : cur.narrationSec,
   };
   // No-op guard — nothing actually changed.
   if (
@@ -408,10 +411,13 @@ export function compileVideoProject(p: VideoProjectRow): VideoInput {
   const w = p.width;
   const h = p.height;
   const fps = p.fps || 30;
-  const total = Math.max(
-    1,
-    scenes.reduce((a, s) => a + (Number(s.durationSec) || 0), 0)
-  );
+
+  // Effective on-screen duration: at least the authored duration, but stretched
+  // to fit the narration WAV (+0.4s tail) so voiceovers never truncate or spill
+  // into the next scene.
+  const effDur = (s: VideoScene) =>
+    Math.max(clampDuration(s.durationSec), s.narrationSec ? s.narrationSec + 0.4 : 0);
+  const total = Math.max(1, scenes.reduce((a, s) => a + effDur(s), 0));
 
   // Sequential slots on one visual track. Narration (per scene) rides a separate
   // audio track, each clip starting at its scene's offset.
@@ -422,7 +428,7 @@ export function compileVideoProject(p: VideoProjectRow): VideoInput {
   const narrationAssets: { name: string; url: string }[] = [];
   let hasNarration = false;
   for (const s of scenes) {
-    const dur = clampDuration(s.durationSec);
+    const dur = effDur(s);
     const sid = s.id.replace(/[^\w-]/g, "");
     slots.push(
       `      <div data-composition-id="${sid}" data-composition-src="compositions/${sid}.html" data-start="${offset}" data-duration="${dur}" data-track-index="1"></div>`
@@ -525,26 +531,29 @@ export async function ensureNarration(
   p: VideoProjectRow
 ): Promise<VideoProjectRow> {
   const scenes = scenesOf(p);
-  const pending = scenes.filter((s) => s.narration && !s.narrationUrl);
-  if (pending.length === 0) return p;
+  // Re-synth when there's narration text but no cached audio, OR a cached audio
+  // without a measured duration (older rows) — we need narrationSec to size scenes.
+  const isPending = (s: VideoScene) => !!s.narration && (!s.narrationUrl || s.narrationSec == null);
+  if (!scenes.some(isPending)) return p;
 
   const { synthesizeVoiceFile } = await import("./fleetVoice");
   let changed = false;
   for (const s of scenes) {
-    if (!s.narration || s.narrationUrl) continue;
+    if (!isPending(s)) continue;
     // kokoro loads models lazily → the first request to a cold voice box can 502.
     // Retry with backoff so a cold start doesn't fail the whole render.
     let lastErr: Error | null = null;
     for (let attempt = 0; attempt < 4; attempt++) {
       if (attempt > 0) await new Promise((r) => setTimeout(r, 4000));
       try {
-        const r = await synthesizeVoiceFile(ctx, s.narration, {
+        const r = await synthesizeVoiceFile(ctx, s.narration!, {
           voice: s.narrationVoice,
           format: "wav",
           isPublic: true,
         });
         s.narrationUrl = r.audioUrl;
         s.narrationName = `narr-${s.id}.wav`;
+        s.narrationSec = r.durationSec || undefined;
         changed = true;
         lastErr = null;
         break;
@@ -615,6 +624,7 @@ function normalizeScene(s: Partial<VideoScene>): VideoScene {
     narrationVoice: s.narrationVoice || undefined,
     narrationUrl: s.narrationUrl || undefined,
     narrationName: s.narrationName || undefined,
+    narrationSec: s.narrationSec || undefined,
   };
 }
 

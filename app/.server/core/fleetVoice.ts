@@ -135,11 +135,34 @@ export async function synthesizeVoice(ownerId: string, text: string, opts?: { vo
 // For the voice_tts_create MCP tool: synthesize a WAV and upload it to the owner's
 // Files, returning a public audioUrl (feeds avatar_video_create). kokoro ONLY —
 // SIN fallback OpenAI (decisión del dueño). Throws si la caja no produce audio.
+/** Duration in seconds of a canonical PCM WAV buffer (0 if not parseable). */
+function wavDurationSec(buf: Buffer): number {
+  try {
+    if (buf.length < 44 || buf.toString("ascii", 0, 4) !== "RIFF") return 0;
+    const channels = buf.readUInt16LE(22) || 1;
+    const sampleRate = buf.readUInt32LE(24) || 0;
+    const bits = buf.readUInt16LE(34) || 16;
+    if (!sampleRate) return 0;
+    // Find the "data" chunk size; fall back to (fileSize - 44).
+    let dataSize = buf.length - 44;
+    for (let i = 12; i + 8 <= buf.length; ) {
+      const id = buf.toString("ascii", i, i + 4);
+      const sz = buf.readUInt32LE(i + 4);
+      if (id === "data") { dataSize = sz; break; }
+      i += 8 + sz + (sz % 2);
+    }
+    const bytesPerSec = sampleRate * channels * (bits / 8);
+    return bytesPerSec ? dataSize / bytesPerSec : 0;
+  } catch {
+    return 0;
+  }
+}
+
 export async function synthesizeVoiceFile(
   ctx: AuthContext,
   text: string,
   opts?: { isPublic?: boolean; voice?: string; format?: VoiceFmt }
-): Promise<{ fileId: string; audioUrl: string; source: "box"; voice: string; chars: number }> {
+): Promise<{ fileId: string; audioUrl: string; source: "box"; voice: string; chars: number; durationSec: number }> {
   const clean = stripForVoice(text);
   if (!clean) throw new Error("empty text");
   const source = "box" as const;
@@ -174,7 +197,8 @@ export async function synthesizeVoiceFile(
     body: new Uint8Array(audio.buffer),
   });
   if (!put.ok) throw new Error(`audio upload failed: ${put.status}`);
-  return { fileId: file.id, audioUrl: file.url || "", source, voice, chars: clean.length };
+  const durationSec = fmt === "wav" ? wavDurationSec(audio.buffer) : 0;
+  return { fileId: file.id, audioUrl: file.url || "", source, voice, chars: clean.length, durationSec };
 }
 
 // Back-compat shim for callers that only need the buffer (Baileys edge).
