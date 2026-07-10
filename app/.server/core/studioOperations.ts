@@ -419,6 +419,53 @@ export async function listCallFiles(ctx: AuthContext) {
   return files;
 }
 
+// ── call_transcript ────────────────────────────────────────────────────────
+// Devuelve el TEXTO del transcript inline + un status honesto. Dos fuentes:
+//  1. VM viva (sandboxId): el box es la verdad del progreso — GET /rec/transcript
+//     → transcribing | ready | failed | unknown (incluye `text` cuando ready).
+//  2. Registro durable (sin sandboxId o VM destruida): el .txt más reciente en
+//     Files → ready+text; si hay .mp4 sin .txt → unavailable; si nada → no_recording.
+// Todo lado app; el box ya trackea el estado real (whisper dejó de fallar en silencio).
+export type CallTranscript = {
+  source: "box" | "files";
+  status: "transcribing" | "ready" | "failed" | "unknown" | "unavailable" | "no_recording" | "not_found";
+  text?: string | null;
+  chars?: number;
+  error?: string;
+  fileId?: string;
+  name?: string;
+  createdAt?: Date;
+};
+
+export async function getCallTranscript(
+  ctx: AuthContext,
+  opts: { sandboxId?: string } = {}
+): Promise<CallTranscript> {
+  requireScope(ctx, "READ");
+  // 1. VM viva → el box tiene el estado real (transcribing/ready/failed).
+  if (opts.sandboxId) {
+    try {
+      const row = await loadStudioRow(ctx, opts.sandboxId);
+      const r = await boxAdmin<Partial<CallTranscript> & { status?: string }>(row, "GET", "/rec/transcript");
+      if (r && r.status) return { source: "box", status: r.status as CallTranscript["status"], text: r.text ?? null, chars: r.chars, error: r.error };
+    } catch { /* VM caída/destruida → cae al registro durable en Files */ }
+  }
+  // 2. Registro durable: el .txt más reciente en Files (source=studio).
+  const txt = await db.file.findFirst({
+    where: { ownerId: ctx.user.id, source: "studio", status: { not: "DELETED" }, contentType: "text/plain" },
+    orderBy: { createdAt: "desc" },
+    select: { id: true, name: true, url: true, access: true, storageProviderId: true, storageKey: true, createdAt: true },
+  });
+  if (!txt) {
+    const anyMp4 = await db.file.count({ where: { ownerId: ctx.user.id, source: "studio", status: { not: "DELETED" }, contentType: "video/mp4" } });
+    return { source: "files", status: anyMp4 > 0 ? "unavailable" : "no_recording", text: null };
+  }
+  const { getReadClientForPlatformFile } = await import("../storage");
+  const url = await getReadClientForPlatformFile(txt).getReadUrl((txt as { storageKey: string }).storageKey);
+  const text = await fetch(url).then((r) => (r.ok ? r.text() : "")).catch(() => "");
+  return { source: "files", status: "ready", fileId: txt.id, name: txt.name, createdAt: txt.createdAt, chars: text.length, text };
+}
+
 // ── call_destroy ─────────────────────────────────────────────────────────────
 // Termina la llamada limpiamente:
 //  1. Para grabación activa si la hay (→ sube MP4 a Files via /admin/recording/stop)

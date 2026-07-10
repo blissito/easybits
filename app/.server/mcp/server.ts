@@ -2498,6 +2498,20 @@ How to embed safely (the only reliable rule):
   );
 
   server.tool(
+    "call_transcript",
+    "Devuelve el TEXTO del transcript de una llamada, inline, listo para resumir o extraer pendientes — no un link. Incluye un `status` honesto: `transcribing` (Whisper aún procesando, reintenta en ~1 min), `ready` (texto disponible en `text`), `failed` (la grabación no tuvo audio o Whisper falló), `unavailable` (hay grabación pero el transcript no se guardó), `no_recording` (nadie grabó la llamada). Pasa `sandboxId` para el estado EN VIVO durante/tras la llamada; sin él devuelve el transcript más reciente de tus Files.",
+    {
+      sandboxId: z.string().optional().describe("sandboxId de call_create — para estado en vivo. Si se omite, devuelve el transcript más reciente."),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { getCallTranscript } = await import("~/.server/core/studioOperations");
+      const result = await getCallTranscript(ctx, { sandboxId: params.sandboxId });
+      return ok(result);
+    })
+  );
+
+  server.tool(
     "call_destroy",
     "Termina una videollamada limpiamente: (1) para la grabación activa si la hay y sube el MP4 a Files, (2) rescata cualquier grabación huérfana en la VM y la sube, (3) destruye el servidor. Llama esto cuando la llamada haya terminado para liberar recursos. Si no se llama, el servidor se auto-destruye al TTL (6h).",
     {
