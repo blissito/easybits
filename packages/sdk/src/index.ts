@@ -1615,6 +1615,25 @@ export class EasybitsClient {
       files(): Promise<Array<{ id: string; name: string; url: string; source: string; createdAt: string }>> {
         return req(`/calls/files`);
       },
+      /**
+       * Texto del transcript de una llamada, inline (no un link), + status honesto:
+       * `transcribing` (Whisper procesando, reintenta), `ready` (texto en `.text`),
+       * `failed` (sin audio o Whisper falló), `unavailable` (grabación sin transcript),
+       * `no_recording` (nadie grabó). Pasa `sandboxId` para el estado EN VIVO durante
+       * la llamada; omítelo para el transcript más reciente de tus Files.
+       */
+      transcript(sandboxId?: string): Promise<{
+        source: "box" | "files";
+        status: "transcribing" | "ready" | "failed" | "unknown" | "unavailable" | "no_recording" | "not_found";
+        text?: string | null;
+        chars?: number;
+        error?: string;
+        fileId?: string;
+        name?: string;
+        createdAt?: string;
+      }> {
+        return req(sandboxId ? `/calls/${sandboxId}/transcript` : `/calls/transcript`);
+      },
       /** Para grabación activa, rescata archivos huérfanos de la VM y destruye el servidor. */
       destroy(sandboxId: string): Promise<{ ok: true }> {
         return req(`/calls/${sandboxId}/destroy`, { method: "POST" });

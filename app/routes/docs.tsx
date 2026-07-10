@@ -1861,8 +1861,8 @@ agent_run({ prompt: "scrapea ...", secrets: ["BRIGHTDATA_API_TOKEN"] })`}
             </p>
 
             <div className="mb-6 bg-green-50 border-2 border-green-300 rounded-xl p-4 text-sm">
-              <strong>6 herramientas MCP</strong> en el grupo <code className="bg-gray-100 px-1 rounded">sandbox</code>:{" "}
-              <code className="bg-gray-100 px-1 rounded">call_create</code>, <code className="bg-gray-100 px-1 rounded">call_record</code>, <code className="bg-gray-100 px-1 rounded">call_stop</code>, <code className="bg-gray-100 px-1 rounded">call_status</code>, <code className="bg-gray-100 px-1 rounded">call_files</code>, <code className="bg-gray-100 px-1 rounded">call_destroy</code>.{" "}
+              <strong>7 herramientas MCP</strong> en el grupo <code className="bg-gray-100 px-1 rounded">sandbox</code>:{" "}
+              <code className="bg-gray-100 px-1 rounded">call_create</code>, <code className="bg-gray-100 px-1 rounded">call_record</code>, <code className="bg-gray-100 px-1 rounded">call_stop</code>, <code className="bg-gray-100 px-1 rounded">call_status</code>, <code className="bg-gray-100 px-1 rounded">call_files</code>, <code className="bg-gray-100 px-1 rounded">call_transcript</code>, <code className="bg-gray-100 px-1 rounded">call_destroy</code>.{" "}
               Las llaves del servidor de video se <strong>generan solas</strong> — no necesitas cuenta en ningún proveedor ni pasar secrets.
             </div>
 
@@ -1930,6 +1930,34 @@ POST /api/v2/calls/:id/destroy` },
                 { label: "MCP", code: `call_status({ sandboxId })    // ¿grabando? ¿quién está conectado?
 call_files()                  // lista las grabaciones en Archivos
 call_destroy({ sandboxId })   // cierra la sala y libera la VM` },
+              ]}
+            />
+
+            <h3 className="text-lg font-bold mb-3 mt-8">Transcript de la llamada</h3>
+            <p className="text-gray-600 text-sm mb-3">
+              Al detener la grabación, la caja transcribe el audio con <strong>Whisper embebido</strong> (español, on-device — sin proveedor externo) y sube el <code className="bg-gray-100 px-1 rounded">.txt</code> a tus <a href="#files" className="underline font-medium">Archivos</a>. <code className="bg-gray-100 px-1 rounded">transcript</code> devuelve el <strong>texto inline</strong> (no un link) más un <code className="bg-gray-100 px-1 rounded">status</code>: <code className="bg-gray-100 px-1 rounded">transcribing</code> (Whisper procesando, reintenta en ~1 min), <code className="bg-gray-100 px-1 rounded">ready</code> (texto en <code className="bg-gray-100 px-1 rounded">text</code>), <code className="bg-gray-100 px-1 rounded">failed</code>, <code className="bg-gray-100 px-1 rounded">unavailable</code> o <code className="bg-gray-100 px-1 rounded">no_recording</code>. Con <code className="bg-gray-100 px-1 rounded">sandboxId</code> = estado en vivo del box; sin él = el transcript más reciente de Archivos.
+            </p>
+            <TabbedCode
+              tabs={[
+                { label: "SDK", code: `// Estado en vivo durante/tras la llamada
+const t = await eb.calls.transcript(call.sandboxId);
+if (t.status === "transcribing") {
+  // Whisper aún procesando — reintenta en ~1 min
+} else if (t.status === "ready") {
+  console.log(t.text); // texto completo, listo para resumir
+}
+
+// El transcript más reciente de tus Archivos (sin sandboxId)
+const last = await eb.calls.transcript();` },
+                { label: "REST", code: `# Estado en vivo (el box es la fuente de verdad)
+GET  /api/v2/calls/:id/transcript
+# → { source, status, text, chars }
+
+# El más reciente de tus Archivos
+GET  /api/v2/calls/transcript
+# → { source: "files", status: "ready", text, fileId }` },
+                { label: "MCP", code: `call_transcript({ sandboxId })   // estado en vivo → { status, text }
+call_transcript()                // el transcript más reciente de Archivos` },
               ]}
             />
 
