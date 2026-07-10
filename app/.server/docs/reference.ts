@@ -568,6 +568,13 @@ Template \`livekit-svc\`: sala de videoconferencia self-hosted con grabación HD
 \`call_files()\`
 - Retorna \`[{ id, name, url, source, createdAt }]\` — las grabaciones en tus Files (source: "studio")
 
+### Transcript de la llamada
+\`call_transcript({ sandboxId? })\`
+- Devuelve el TEXTO del transcript inline (no un link), listo para resumir
+- \`status\`: \`transcribing\` (Whisper procesando, reintenta ~1 min), \`ready\` (texto en \`text\`), \`failed\` (sin audio o Whisper falló), \`unavailable\` (grabación sin transcript), \`no_recording\` (nadie grabó)
+- Con \`sandboxId\` = estado EN VIVO del box durante/tras la llamada; sin él = el transcript más reciente de tus Files
+- Retorna \`{ source, status, text?, chars? }\`
+
 ### Cerrar la llamada
 \`call_destroy({ sandboxId })\`
 - Sube grabaciones pendientes, las rescata de la VM y destruye el servidor. Si no se llama, la sala se auto-destruye al TTL (3h)
@@ -579,6 +586,8 @@ POST /api/v2/calls/:id/record   body: { room }       → { recording: true }
 POST /api/v2/calls/:id/stop                          → { url, fileId }
 GET  /api/v2/calls/:id/status                        → { recording, room?, startedAt?, participants[] }
 GET  /api/v2/calls/files                             → [{ id, name, url, source, createdAt }]
+GET  /api/v2/calls/:id/transcript                    → { status, text?, chars? }  (estado en vivo)
+GET  /api/v2/calls/transcript                        → { status, text?, fileId? }  (más reciente)
 POST /api/v2/calls/:id/destroy                       → cierra la sala (sube pendientes + destruye)
 \`\`\`
 
@@ -591,6 +600,7 @@ const { url } = await eb.calls.stop(call.sandboxId);
 // url = MP4 permanente en Files
 const st = await eb.calls.status(call.sandboxId);  // { recording, participants[] }
 const recs = await eb.calls.files();               // grabaciones en Files
+const t = await eb.calls.transcript(call.sandboxId); // { status, text } — texto inline
 await eb.calls.destroy(call.sandboxId);            // cierra la sala
 \`\`\`
 
@@ -611,7 +621,7 @@ call_stop({ sandboxId })    → { url }  ← link permanente al MP4
 
 **Notas:**
 - Una grabación activa por sandbox; para sesiones paralelas usa \`call_create\` por separado
-- Transcript via Whisper de la flota (sin costo extra)
+- Transcript via Whisper EMBEBIDO en la caja (español, on-device, sin costo extra ni proveedor externo). El .txt llega async tras \`call_stop\`; consúltalo con \`call_transcript\`
 - MP4 + .txt en Files permanentemente aunque la VM se destruya
 `,
 
