@@ -85,6 +85,22 @@ const SERVICE_REGISTRY: Record<string, ServiceSpec> = {
     suspendOnIdle: true,
     hardTtlMin: 60,
   },
+  // video: HyperFrames (HeyGen, Apache 2.0) HTML→MP4 box. Heavy image (chrome-
+  // headless-shell + ffmpeg + node_modules, ~4GB RAM) → snapshot/resume pays off.
+  // Keyed per OWNER like render, so every video render for that owner shares ONE
+  // box. Idle windows generous vs render because a render can take tens of seconds
+  // (don't suspend mid-job). Hard-reaped after 120 min suspended.
+  video: {
+    template: "hyperframes-svc",
+    unit: "hyperframes-svc-runtime",
+    envFile: "/etc/hyperframes-svc-runtime/.env",
+    ports: [9500],
+    readyPaths: { 9500: "/health" },
+    ttlSeconds: 1800,
+    idleMin: 15,
+    suspendOnIdle: true,
+    hardTtlMin: 120,
+  },
   // collab: servidor Hocuspocus/Yjs para co-edición de documentos. Caja estándar
   // (2GB) por owner, compartida por toda su flota. Suspende a los 10 min (snapshot
   // ~1s resume) y se destruye tras 60 min suspendida. Auth y persistencia las
@@ -130,6 +146,8 @@ export interface ServiceBoxHandle {
   speakUrl?: string;
   // render: base URL for the box's HTTP API (POST /render/pdf, /render/screenshot).
   renderUrl?: string;
+  // video: base URL for the HyperFrames box's HTTP API (POST /render → MP4).
+  videoUrl?: string;
   // collab: ws:// URL del servidor Hocuspocus (para el HocuspocusProvider del editor).
   collabWsUrl?: string;
 }
@@ -145,6 +163,10 @@ function buildUrls(kind: string, sandboxId: string, status: string, urls: Record
   if (kind === "render") {
     const r = urls[9300];
     if (r) h.renderUrl = r.replace(/\/$/, "");
+  }
+  if (kind === "video") {
+    const v = urls[9500];
+    if (v) h.videoUrl = v.replace(/\/$/, "");
   }
   if (kind === "collab") {
     const c = urls[9400];

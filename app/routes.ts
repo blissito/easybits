@@ -328,6 +328,7 @@ export default [
     route("document-watch", "routes/api/v2/document-watch.ts"),
     route("book-generate", "routes/api/v2/book-generate.ts"),
     route("video-generate", "routes/api/v2/video-generate.ts"),
+    route("videos/render", "routes/api/v2/videos-render.ts"),
     route("videos", "routes/api/v2/videos.ts"),
     route("videos/:id", "routes/api/v2/video.ts"),
     route("characters", "routes/api/v2/characters.ts"),
