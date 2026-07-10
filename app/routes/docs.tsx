@@ -33,6 +33,7 @@ const SECTIONS = [
   { id: "email", label: "Email & Broadcasts" },
   { id: "websites", label: "Sitios web" },
   { id: "documents", label: "Documentos" },
+  { id: "video-projects", label: "Video" },
   { id: "agents", label: "Agentes & Sandboxes" },
   { id: "flota", label: "Flota" },
   { id: "hosting", label: "Sandboxes permanentes" },
@@ -1309,6 +1310,106 @@ console.log(website.url); // https://my-docs.easybits.cloud`}
               <p>5. <code className="bg-gray-100 px-1 rounded">get_page_screenshot</code> — verifica las páginas visualmente</p>
               <p>6. <code className="bg-gray-100 px-1 rounded">refine_document_section</code> — ajusta páginas individuales</p>
               <p>7. <code className="bg-gray-100 px-1 rounded">deploy_document</code> — publica en slug.easybits.cloud</p>
+            </div>
+          </section>
+
+          {/* Video Projects */}
+          <section id="video-projects" className="mb-16">
+            <h2 className="text-2xl font-bold mb-6">Video</h2>
+            <p className="text-gray-600 mb-6 text-sm">
+              Videos editables por <strong>escenas</strong> que compilan a MP4. Cada escena es una composición{" "}
+              <a href="https://github.com/heygen-com/hyperframes" className="underline" target="_blank" rel="noopener noreferrer">HyperFrames</a>:
+              tú das el HTML de la escena (posicionado absoluto, assets como <code className="bg-gray-100 px-1 rounded">assets/&lt;name&gt;</code>)
+              y un snippet de timeline GSAP opcional contra un <code className="bg-gray-100 px-1 rounded">tl</code> pausado.
+              Agrega <strong>narración</strong> por escena → se sintetiza con kokoro (voz <code className="bg-gray-100 px-1 rounded">em_santa</code>)
+              y se muxea sola; la escena se estira para que la voz quepa. El render corre en un microVM on-demand (decenas de segundos)
+              y el MP4 aterriza en tus archivos, público. Vertical 1080×1920 por default (presets: <code className="bg-gray-100 px-1 rounded">reel</code>/<code className="bg-gray-100 px-1 rounded">story</code>/<code className="bg-gray-100 px-1 rounded">tiktok</code> 9:16, <code className="bg-gray-100 px-1 rounded">square</code> 1:1, <code className="bg-gray-100 px-1 rounded">landscape</code> 16:9).
+            </p>
+
+            <Endpoint
+              method="GET"
+              path="/video-projects"
+              description="Lista tus proyectos de video"
+              response={`{ "total": 3, "items": [{ "id": "vp123", "name": "Launch reel", "status": "ready", "sceneCount": 3, "durationSec": 13, "lastRenderUrl": "https://..." }] }`}
+              sdk={`const { items } = await eb.listVideoProjects();`}
+            />
+
+            <Endpoint
+              method="POST"
+              path="/video-projects"
+              description="Crea un proyecto de video (vacío o con escenas)"
+              body={[
+                { name: "name", type: "string", desc: "Nombre del proyecto" },
+                { name: "format", type: "object", desc: "Preset de aspecto: { preset: 'reel' | 'story' | 'square' | 'landscape' }" },
+                { name: "theme", type: "string", desc: "Fondo: default | dark | light | brand" },
+                { name: "scenes", type: "array", desc: "Escenas iniciales opcionales [{ html, timeline?, durationSec?, narration? }]" },
+              ]}
+              response={`{ "project": { "id": "vp123", "name": "Launch reel", "status": "draft" } }`}
+              sdk={`const p = await eb.createVideoProject({ name: "Launch reel", format: { preset: "reel" }, theme: "dark" });`}
+            />
+
+            <Endpoint
+              method="POST"
+              path="/video-projects/:id/scenes"
+              description="Agrega una escena (markup + animación + narración)"
+              body={[
+                { name: "html", type: "string", desc: "Markup de la escena (absoluto; assets como assets/<name>)" },
+                { name: "timeline", type: "string", desc: "Snippet GSAP contra `tl` (ej. tl.from('#t',{opacity:0,y:40,duration:0.6}))" },
+                { name: "durationSec", type: "number", desc: "Duración; si hay narración, se ajusta para que quepa" },
+                { name: "narration", type: "string", desc: "Texto de voz en off (kokoro em_santa)" },
+              ]}
+              response={`{ "scene": { "id": "sc1", "order": 0, "durationSec": 3.2 }, "sceneCount": 1 }`}
+              sdk={`await eb.addVideoScene(p.id, { html: "<div id='t' style='...'>EasyBits</div>", timeline: "tl.from('#t',{opacity:0,y:60,duration:0.7})", narration: "Bienvenido a EasyBits." });`}
+            />
+
+            <Endpoint
+              method="PATCH"
+              path="/video-projects/:id/scenes/:sceneId"
+              description="Edita una escena. Cambiar narration re-sintetiza la voz en el próximo render."
+              sdk={`await eb.setVideoScene(p.id, "sc1", { durationSec: 4 });`}
+            />
+
+            <Endpoint
+              method="PUT"
+              path="/video-projects/:id/audio"
+              description="Registra un asset (imagen/logo) que la caja baja a assets/; referéncialo en el HTML como assets/<name>"
+              body={[
+                { name: "url", type: "string", desc: "URL pública del asset" },
+                { name: "name", type: "string", desc: "Nombre de archivo, ej. logo.png" },
+              ]}
+              sdk={`await eb.attachVideoAsset(p.id, { url: "https://www.easybits.cloud/logo-purple.svg", name: "eyes.svg" });`}
+            />
+
+            <Endpoint
+              method="POST"
+              path="/video-projects/:id/audio"
+              description="Música de fondo continua (auto-duckeada bajo la narración). url: null para quitar."
+              body={[{ name: "url", type: "string", desc: "URL pública de audio (o null)" }]}
+              sdk={`await eb.setVideoMusic(p.id, "https://.../bgm.mp3", "bgm.mp3");`}
+            />
+
+            <Endpoint
+              method="POST"
+              path="/video-projects/:id/render"
+              description="Compila, sintetiza la narración pendiente y renderiza a MP4 en el microVM. Síncrono (decenas de segundos)."
+              response={`{ "status": "ready", "file": { "fileId": "f_abc", "url": "https://...mp4", "renderMs": 76000 } }`}
+              sdk={`const { file } = await eb.renderVideoProject(p.id); // → { fileId, url, renderMs }`}
+            />
+
+            <h3 className="text-lg font-bold mt-8 mb-4">MCP tools (12)</h3>
+            <div className="space-y-2">
+              <McpTool name="create_video_project" params="name?, format?, theme?, scenes?" description="Crea un proyecto de video doc-style." />
+              <McpTool name="list_video_projects" params="limit?, offset?, status?" description="Lista proyectos de video." />
+              <McpTool name="get_video_project" params="projectId" description="Proyecto con su lista completa de escenas." />
+              <McpTool name="update_video_project" params="projectId, name?, theme?, fps?, width?, height?" description="Actualiza metadata (no toca escenas)." />
+              <McpTool name="delete_video_project" params="projectId" description="Elimina el proyecto." />
+              <McpTool name="add_video_scene" params="projectId, html, timeline?, durationSec?, narration?, afterIndex?" description="Agrega una escena." />
+              <McpTool name="set_video_scene" params="projectId, sceneId, html?, timeline?, durationSec?, narration?" description="Edita una escena por id." />
+              <McpTool name="delete_video_scene" params="projectId, sceneId" description="Elimina una escena." />
+              <McpTool name="reorder_video_scenes" params="projectId, sceneIds" description="Reordena todas las escenas." />
+              <McpTool name="set_video_music" params="projectId, url, name?" description="Música de fondo (o url:null para quitar)." />
+              <McpTool name="attach_video_asset" params="projectId, url, name?, type?" description="Registra imagen/logo como asset." />
+              <McpTool name="render_video_project" params="projectId" description="Compila + renderiza a MP4 con narración kokoro." />
             </div>
           </section>
 

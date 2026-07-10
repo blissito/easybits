@@ -453,6 +453,14 @@ Configure via MCP tool \`set_ai_key\` or dashboard. Supports ANTHROPIC and OPENA
 | \`deleteDocument(id)\` | Delete document |
 | \`deployDocument(id)\` | Publish as live website |
 | \`unpublishDocument(id)\` | Unpublish document |
+| \`listVideoProjects(params?)\` | List video projects |
+| \`getVideoProject(id)\` | Get project with scenes |
+| \`createVideoProject(params)\` | Create video project |
+| \`addVideoScene(id, scene)\` | Add a scene |
+| \`setVideoScene(id, sceneId, patch)\` | Edit a scene |
+| \`reorderVideoScenes(id, ids)\` | Reorder scenes |
+| \`setVideoMusic(id, url, name?)\` | Set/clear background music |
+| \`renderVideoProject(id)\` | Render to MP4 |
 | \`getDocs(section?)\` | Get this documentation |
 `,
 
@@ -929,6 +937,80 @@ When creating documents from the dashboard, 4 design directions are generated fi
 \`\`\`
 `,
 
+  videoProjects: `## Video Projects (animated video → MP4)
+
+Stateful, document-style video: an ordered set of animated **scenes** that compile to an MP4. Each scene is a self-contained [HyperFrames](https://github.com/heygen-com/hyperframes) composition — you provide the scene **markup** (HTML, absolutely positioned, assets referenced as \`assets/<name>\`) plus an optional GSAP timeline snippet against a pre-declared paused \`tl\` (e.g. \`tl.from('#title',{opacity:0,y:40,duration:0.6})\`). Add **narration** text per scene → synthesized with kokoro (voice \`em_santa\`) and muxed automatically; scenes stretch to fit the voiceover. Rendering runs on an on-demand microVM and takes tens of seconds; the result lands in your Files as a public MP4.
+
+Portrait 1080×1920 by default. Format presets: \`portrait\`/\`story\`/\`reel\`/\`tiktok\` (9:16), \`square\` (1:1), \`landscape\`/\`youtube\` (16:9), or custom \`width\`+\`height\`.
+
+### List video projects
+\`GET /video-projects\`
+Returns: \`{ total, items: VideoProjectSummary[] }\`
+SDK: \`eb.listVideoProjects({ limit?, offset?, status? })\`
+MCP: \`list_video_projects\`
+
+### Get video project
+\`GET /video-projects/:id\`
+Returns: project with full scene list (html, timeline, narration, durations) and assets.
+SDK: \`eb.getVideoProject(id)\`
+MCP: \`get_video_project({ projectId })\`
+
+### Create video project
+\`POST /video-projects\`
+Body: \`{ name?, format?: { preset }, width?, height?, fps?, theme?, customColors?, scenes? }\`
+Returns: VideoProjectSummary.
+SDK: \`eb.createVideoProject({ name, format?, scenes? })\`
+MCP: \`create_video_project({ name?, format?, scenes? })\`
+
+### Update project (metadata)
+\`PATCH /video-projects/:id\` — Body: \`{ name?, theme?, customColors?, fps?, width?, height? }\` (does not touch scenes).
+SDK: \`eb.updateVideoProject(id, patch)\` · MCP: \`update_video_project({ projectId, ... })\`
+
+### Delete project
+\`DELETE /video-projects/:id\`
+SDK: \`eb.deleteVideoProject(id)\` · MCP: \`delete_video_project({ projectId })\`
+
+### Add scene
+\`POST /video-projects/:id/scenes\`
+Body: \`{ html, timeline?, durationSec?, label?, narration?, narrationVoice?, afterIndex? }\`
+SDK: \`eb.addVideoScene(id, { html, timeline?, durationSec?, narration? })\`
+MCP: \`add_video_scene({ projectId, html, timeline?, durationSec?, narration? })\`
+
+### Edit scene
+\`PATCH /video-projects/:id/scenes/:sceneId\` — pass only the fields you change. Changing \`narration\` re-synthesizes the voiceover on the next render.
+SDK: \`eb.setVideoScene(id, sceneId, patch)\` · MCP: \`set_video_scene({ projectId, sceneId, ... })\`
+
+### Delete / reorder scenes
+\`DELETE /video-projects/:id/scenes/:sceneId\` — SDK: \`eb.deleteVideoScene(id, sceneId)\` · MCP: \`delete_video_scene\`
+\`PUT /video-projects/:id/scenes\` Body: \`{ sceneIds: [...] }\` (every existing id, in order) — SDK: \`eb.reorderVideoScenes(id, sceneIds)\` · MCP: \`reorder_video_scenes\`
+
+### Background music
+\`POST /video-projects/:id/audio\` Body: \`{ url, name? }\` (or \`url: null\` to clear). Public audio URL; the box downloads and muxes it, auto-ducked under narration.
+SDK: \`eb.setVideoMusic(id, url, name?)\` · MCP: \`set_video_music({ projectId, url, name? })\`
+
+### Attach an asset (image/logo)
+\`PUT /video-projects/:id/audio\` Body: \`{ url, name?, type? }\` — registers a named media asset the render box downloads into \`assets/\`; reference it in scene HTML as \`assets/<name>\`.
+SDK: \`eb.attachVideoAsset(id, { url, name? })\` · MCP: \`attach_video_asset({ projectId, url, name? })\`
+
+### Render
+\`POST /video-projects/:id/render\`
+Compiles the project, synthesizes pending narration, and renders to MP4 on the on-demand box. Synchronous (tens of seconds).
+Returns: \`{ status: "ready", file: { fileId, url, renderMs } }\`
+SDK: \`eb.renderVideoProject(id)\`
+MCP: \`render_video_project({ projectId })\`
+
+**Example (SDK):**
+\`\`\`ts
+const p = await eb.createVideoProject({ name: "Launch reel", format: { preset: "reel" }, theme: "dark" });
+await eb.addVideoScene(p.id, {
+  html: \`<div id="t" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font-size:180px;font-weight:800">EasyBits</div>\`,
+  timeline: "tl.from('#t',{opacity:0,y:60,duration:0.7,ease:'power3.out'})",
+  narration: "Bienvenido a EasyBits.",
+});
+const { file } = await eb.renderVideoProject(p.id); // → { fileId, url, renderMs }
+\`\`\`
+`,
+
   errors: `## Error Codes
 
 | Status | Meaning |
@@ -1384,6 +1466,22 @@ For charts/funnels/flows, use inline SVG inside a \`.diagram\` container:
 | \`create_tournament_schedule\` | Create tournament schedule |
 | \`edit_tournament_schedule\` | Edit tournament schedule |
 | \`create_document_from_cfdi\` | Create document from Mexican CFDI XML |
+
+### Video Projects (12 tools)
+| Tool | Description |
+|------|-------------|
+| \`create_video_project\` | Create a stateful animated video project |
+| \`list_video_projects\` | List video projects |
+| \`get_video_project\` | Get project with full scene list |
+| \`update_video_project\` | Update name/theme/fps/size |
+| \`delete_video_project\` | Delete a project |
+| \`add_video_scene\` | Add a scene (html + timeline + narration) |
+| \`set_video_scene\` | Edit a scene by id |
+| \`delete_video_scene\` | Delete a scene |
+| \`reorder_video_scenes\` | Reorder scenes |
+| \`set_video_music\` | Set/clear background music |
+| \`attach_video_asset\` | Register an image/logo asset |
+| \`render_video_project\` | Compile + render to MP4 (kokoro narration) |
 
 ### Presentations (17 tools)
 | Tool | Description |
