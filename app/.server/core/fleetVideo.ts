@@ -94,7 +94,7 @@ async function postRender(
     });
     if (!r.ok) {
       const detail = await r.text().catch(() => "");
-      console.error(`[video] hyperframes http=${r.status} ${detail.slice(0, 400)}`);
+      console.error(`[video] hyperframes http=${r.status} ${detail.slice(0, 2000)}`);
       return null;
     }
     const buf = Buffer.from(await r.arrayBuffer());

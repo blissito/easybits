@@ -437,8 +437,13 @@ export function compileVideoProject(p: VideoProjectRow): VideoInput {
     if (s.narrationUrl && s.narrationName) {
       hasNarration = true;
       narrationAssets.push({ name: s.narrationName, url: s.narrationUrl });
+      // data-duration = the narration's OWN measured length (not the scene's
+      // effective duration) so it matches the WAV exactly — a mismatch trips a
+      // lint that fails the render on the box. The scene slot already holds
+      // `dur` (≥ narration), so this clip fits with a trailing gap, never overlaps.
+      const audioDur = s.narrationSec ? Math.min(s.narrationSec, dur) : dur;
       narrationTags.push(
-        `      <audio src="assets/${s.narrationName}" data-start="${offset}" data-duration="${dur}" data-track-index="11" data-volume="1"></audio>`
+        `      <audio src="assets/${s.narrationName}" data-start="${offset}" data-duration="${audioDur.toFixed(2)}" data-track-index="11" data-volume="1"></audio>`
       );
     }
     offset += dur;
