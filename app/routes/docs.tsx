@@ -45,6 +45,9 @@ const SECTIONS = [
   { id: "tool-groups", label: "Tool Groups" },
 ] as const;
 
+// Sections that show the "Nuevo" badge in the nav (recently shipped).
+const NEW_SECTIONS = new Set<string>(["flota", "video-projects", "calls", "secrets"]);
+
 export default function DocsPage() {
   const location = useLocation();
 
@@ -222,7 +225,7 @@ export default function DocsPage() {
                 }`}
               >
                 <span>{s.label}</span>
-                {s.id === "flota" && (
+                {NEW_SECTIONS.has(s.id) && (
                   <span className={`text-[10px] font-bold uppercase tracking-wide rounded px-1.5 py-0.5 leading-none ${
                     activeSection === s.id ? "bg-white text-black" : "bg-brand-500 text-white"
                   }`}>Nuevo</span>
