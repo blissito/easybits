@@ -532,18 +532,28 @@ export async function ensureNarration(
   let changed = false;
   for (const s of scenes) {
     if (!s.narration || s.narrationUrl) continue;
-    try {
-      const r = await synthesizeVoiceFile(ctx, s.narration, {
-        voice: s.narrationVoice,
-        format: "wav",
-        isPublic: true,
-      });
-      s.narrationUrl = r.audioUrl;
-      s.narrationName = `narr-${s.id}.wav`;
-      changed = true;
-    } catch (e) {
-      throw new Error(`narration synth failed for scene "${s.label || s.id}": ${(e as Error).message}`);
+    // kokoro loads models lazily → the first request to a cold voice box can 502.
+    // Retry with backoff so a cold start doesn't fail the whole render.
+    let lastErr: Error | null = null;
+    for (let attempt = 0; attempt < 4; attempt++) {
+      if (attempt > 0) await new Promise((r) => setTimeout(r, 4000));
+      try {
+        const r = await synthesizeVoiceFile(ctx, s.narration, {
+          voice: s.narrationVoice,
+          format: "wav",
+          isPublic: true,
+        });
+        s.narrationUrl = r.audioUrl;
+        s.narrationName = `narr-${s.id}.wav`;
+        changed = true;
+        lastErr = null;
+        break;
+      } catch (e) {
+        lastErr = e as Error;
+      }
     }
+    if (lastErr)
+      throw new Error(`narration synth failed for scene "${s.label || s.id}": ${lastErr.message}`);
   }
   if (changed) {
     const updated = await db.videoProject.update({
