@@ -209,6 +209,20 @@ import {
   editTournamentSchedule,
   uploadPdfToStorage,
 } from "../core/documentOperations";
+import {
+  listVideoProjects,
+  getVideoProject,
+  createVideoProject,
+  updateVideoProject,
+  deleteVideoProject,
+  addScene,
+  setScene,
+  deleteScene,
+  reorderScenes,
+  setVideoAudio,
+  attachVideoAsset,
+  renderVideoProject,
+} from "../core/videoProjectOperations";
 import { createFormConfig, generateFormHtml, escapeHtml } from "../core/formOperations";
 import { db } from "../db";
 import type { AuthContext } from "../apiAuth";
@@ -3787,6 +3801,200 @@ The template generates a dark-themed multi-page scorecard with: domain header, o
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await unpublishDocument(ctx, params.documentId);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  // ── Video projects — stateful, doc-style video (scenes → HyperFrames → MP4) ──
+  const vpJson = (o: any) => ({ content: [{ type: "text", text: JSON.stringify(o, null, 2) }] });
+
+  server.tool(
+    "create_video_project",
+    `Create a stateful video project — an ordered set of animated scenes that compile to an MP4. Doc-style: create empty (or with scenes), then add/edit/reorder scenes, set music, and render_video_project. Portrait 1080×1920 by default (format presets: portrait/story/reel/tiktok = 9:16, square = 1:1, landscape/youtube = 16:9). Each scene is a self-contained HyperFrames sub-composition: you provide the scene MARKUP (html, absolutely-positioned, assets referenced as assets/<name>) and an optional GSAP timeline snippet against a pre-declared paused \`tl\` (e.g. tl.from('#title',{opacity:0,y:40,duration:0.6})). Add narration text per scene → synthesized with kokoro (voice em_santa) and muxed automatically at render.`,
+    {
+      name: z.string().optional().describe("Project name"),
+      format: z
+        .object({ preset: z.string().optional() })
+        .optional()
+        .describe("Aspect preset: portrait|story|reel|tiktok|square|landscape|youtube"),
+      width: z.number().optional(),
+      height: z.number().optional(),
+      fps: z.number().optional().describe("Frame rate (default 30)"),
+      theme: z.string().optional().describe("Background theme: default|dark|light|brand"),
+      customColors: z
+        .record(z.string())
+        .optional()
+        .describe("Optional palette, e.g. { primary, background }"),
+      scenes: z
+        .array(
+          z.object({
+            html: z.string(),
+            timeline: z.string().optional(),
+            durationSec: z.number().optional(),
+            label: z.string().optional(),
+            narration: z.string().optional(),
+            narrationVoice: z.string().optional(),
+          })
+        )
+        .optional()
+        .describe("Optional initial scenes"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      return vpJson(await createVideoProject(ctx, params as any));
+    })
+  );
+
+  server.tool(
+    "list_video_projects",
+    "List the caller's video projects (newest first).",
+    {
+      limit: z.number().optional(),
+      offset: z.number().optional(),
+      status: z.string().optional().describe("draft|rendering|ready|failed"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      return vpJson(await listVideoProjects(ctx, params));
+    })
+  );
+
+  server.tool(
+    "get_video_project",
+    "Get a video project with its full scene list (html, timeline, narration, durations) and assets.",
+    { projectId: z.string() },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      return vpJson(await getVideoProject(ctx, params.projectId));
+    })
+  );
+
+  server.tool(
+    "update_video_project",
+    "Update project-level fields (name, theme, customColors, fps, width, height). Does NOT touch scenes.",
+    {
+      projectId: z.string(),
+      name: z.string().optional(),
+      theme: z.string().optional(),
+      customColors: z.record(z.string()).optional(),
+      fps: z.number().optional(),
+      width: z.number().optional(),
+      height: z.number().optional(),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { projectId, ...patch } = params as any;
+      return vpJson(await updateVideoProject(ctx, projectId, patch));
+    })
+  );
+
+  server.tool(
+    "delete_video_project",
+    "Delete a video project permanently.",
+    { projectId: z.string() },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      return vpJson(await deleteVideoProject(ctx, params.projectId));
+    })
+  );
+
+  server.tool(
+    "add_video_scene",
+    `Add a scene. html = the scene's markup (absolutely positioned to fill the frame; reference bundled media as assets/<name>; put scoped CSS in an inline <style>). timeline = optional GSAP snippet against a pre-declared paused \`tl\` (animate the scene's own elements). durationSec defaults to fit narration if given. narration = optional voiceover text (kokoro em_santa) muxed at the scene's start. afterIndex = 0-based insert position; omit to append.`,
+    {
+      projectId: z.string(),
+      html: z.string(),
+      timeline: z.string().optional(),
+      durationSec: z.number().optional(),
+      label: z.string().optional(),
+      narration: z.string().optional(),
+      narrationVoice: z.string().optional().describe("em_santa|em_alex|ef_dora (default em_santa)"),
+      afterIndex: z.number().optional(),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { projectId, ...opts } = params as any;
+      return vpJson(await addScene(ctx, projectId, opts));
+    })
+  );
+
+  server.tool(
+    "set_video_scene",
+    "Edit a scene by id (from get_video_project scenes[].id). Only pass the fields you change. Changing narration re-synthesizes the voiceover on next render.",
+    {
+      projectId: z.string(),
+      sceneId: z.string(),
+      html: z.string().optional(),
+      timeline: z.string().optional(),
+      durationSec: z.number().optional(),
+      label: z.string().optional(),
+      narration: z.string().optional(),
+      narrationVoice: z.string().optional(),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { projectId, sceneId, ...patch } = params as any;
+      return vpJson(await setScene(ctx, projectId, sceneId, patch));
+    })
+  );
+
+  server.tool(
+    "delete_video_scene",
+    "Delete a scene by id.",
+    { projectId: z.string(), sceneId: z.string() },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      return vpJson(await deleteScene(ctx, params.projectId, params.sceneId));
+    })
+  );
+
+  server.tool(
+    "reorder_video_scenes",
+    "Reorder all scenes. sceneIds must list every existing scene id exactly once in the desired order.",
+    { projectId: z.string(), sceneIds: z.array(z.string()) },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      return vpJson(await reorderScenes(ctx, params.projectId, params.sceneIds));
+    })
+  );
+
+  server.tool(
+    "set_video_music",
+    "Set (or clear) the continuous background music track. Pass a public audio URL; the box downloads and muxes it (auto-ducked under narration). Pass url:null to remove.",
+    {
+      projectId: z.string(),
+      url: z.string().nullable().optional(),
+      name: z.string().optional().describe("Filename, e.g. bgm.mp3"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { projectId, ...opts } = params as any;
+      return vpJson(await setVideoAudio(ctx, projectId, opts));
+    })
+  );
+
+  server.tool(
+    "attach_video_asset",
+    "Register a named media asset (image/logo/etc.) the render box downloads into assets/. Reference it in scene html as assets/<name>.",
+    {
+      projectId: z.string(),
+      url: z.string(),
+      name: z.string().optional(),
+      type: z.string().optional(),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { projectId, ...opts } = params as any;
+      return vpJson(await attachVideoAsset(ctx, projectId, opts));
+    })
+  );
+
+  server.tool(
+    "render_video_project",
+    "Compile the project to a HyperFrames composition and render it to MP4 on the owner's on-demand box (synthesizing any pending narration first). Synchronous — a short video takes tens of seconds. Returns { status:'ready', file:{ fileId, url, renderMs } }.",
+    { projectId: z.string() },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      return vpJson(await renderVideoProject(ctx, params.projectId));
     })
   );
 

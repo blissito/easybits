@@ -1640,6 +1640,108 @@ export class EasybitsClient {
       },
     };
   }
+
+  // ── Video projects ──────────────────────────────────────────
+  // Stateful, doc-style video: ordered animated scenes (HTML + GSAP) that
+  // compile to an MP4 via the on-demand HyperFrames box, with optional kokoro
+  // narration and background music.
+
+  listVideoProjects(params?: {
+    limit?: number;
+    offset?: number;
+    status?: string;
+  }): Promise<{ total: number; items: VideoProjectSummary[] }> {
+    const s = new URLSearchParams();
+    if (params?.limit) s.set("limit", String(params.limit));
+    if (params?.offset) s.set("offset", String(params.offset));
+    if (params?.status) s.set("status", params.status);
+    const qs = s.toString();
+    return this.request(`/video-projects${qs ? `?${qs}` : ""}`);
+  }
+
+  getVideoProject(id: string): Promise<VideoProject> {
+    return this.request(`/video-projects/${id}`);
+  }
+
+  async createVideoProject(params: CreateVideoProjectParams): Promise<VideoProjectSummary> {
+    const { project } = await this.request<{ project: VideoProjectSummary }>(`/video-projects`, {
+      method: "POST",
+      body: JSON.stringify(params ?? {}),
+    });
+    return project;
+  }
+
+  async updateVideoProject(
+    id: string,
+    patch: Partial<Pick<VideoProject, "name" | "theme" | "fps" | "width" | "height">> & {
+      customColors?: Record<string, string>;
+    },
+  ): Promise<VideoProjectSummary> {
+    const { project } = await this.request<{ project: VideoProjectSummary }>(
+      `/video-projects/${id}`,
+      { method: "PATCH", body: JSON.stringify(patch) },
+    );
+    return project;
+  }
+
+  deleteVideoProject(id: string): Promise<{ success: boolean }> {
+    return this.request(`/video-projects/${id}`, { method: "DELETE" });
+  }
+
+  addVideoScene(
+    id: string,
+    scene: VideoSceneInput & { afterIndex?: number },
+  ): Promise<{ scene: VideoScene; sceneCount: number }> {
+    return this.request(`/video-projects/${id}/scenes`, {
+      method: "POST",
+      body: JSON.stringify(scene),
+    });
+  }
+
+  setVideoScene(
+    id: string,
+    sceneId: string,
+    patch: Partial<VideoSceneInput>,
+  ): Promise<{ scene: VideoScene; changed: boolean }> {
+    return this.request(`/video-projects/${id}/scenes/${sceneId}`, {
+      method: "PATCH",
+      body: JSON.stringify(patch),
+    });
+  }
+
+  deleteVideoScene(id: string, sceneId: string): Promise<{ success: boolean; sceneCount: number }> {
+    return this.request(`/video-projects/${id}/scenes/${sceneId}`, { method: "DELETE" });
+  }
+
+  reorderVideoScenes(id: string, sceneIds: string[]): Promise<{ scenes: unknown[] }> {
+    return this.request(`/video-projects/${id}/scenes`, {
+      method: "PUT",
+      body: JSON.stringify({ sceneIds }),
+    });
+  }
+
+  setVideoMusic(id: string, url: string | null, name?: string): Promise<VideoProjectSummary> {
+    return this.request(`/video-projects/${id}/audio`, {
+      method: "POST",
+      body: JSON.stringify({ url, name }),
+    });
+  }
+
+  attachVideoAsset(
+    id: string,
+    asset: { url: string; name?: string; type?: string },
+  ): Promise<{ assets: Array<{ name: string; url: string }>; added: { name: string; url: string } }> {
+    return this.request(`/video-projects/${id}/audio`, {
+      method: "PUT",
+      body: JSON.stringify(asset),
+    });
+  }
+
+  renderVideoProject(
+    id: string,
+  ): Promise<VideoProjectSummary & { file: { fileId: string; url: string; renderMs?: number } }> {
+    return this.request(`/video-projects/${id}/render`, { method: "POST" });
+  }
 }
 
 // ─── Sandbox handle ──────────────────────────────────────────────
@@ -1980,6 +2082,66 @@ export class SandboxFiles {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
+}
+
+// ─── Video project types ─────────────────────────────────────────
+
+export interface VideoSceneInput {
+  /** Scene markup — absolutely positioned, assets referenced as assets/<name>. */
+  html: string;
+  /** Optional GSAP snippet against a pre-declared paused timeline `tl`. */
+  timeline?: string;
+  /** Seconds on screen (defaults to fit narration, else 3). */
+  durationSec?: number;
+  label?: string;
+  /** Voiceover text — synthesized with kokoro (default voice em_santa). */
+  narration?: string;
+  /** kokoro voice id: em_santa | em_alex | ef_dora. */
+  narrationVoice?: string;
+}
+
+export interface VideoScene extends VideoSceneInput {
+  id: string;
+  order: number;
+  narrationUrl?: string;
+  narrationName?: string;
+}
+
+export interface VideoProjectSummary {
+  id: string;
+  name: string;
+  status: "draft" | "rendering" | "ready" | "failed";
+  width: number;
+  height: number;
+  fps: number;
+  theme: string;
+  sceneCount: number;
+  durationSec: number;
+  hasAudio: boolean;
+  lastRenderUrl?: string | null;
+  lastRenderFileId?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface VideoProject extends VideoProjectSummary {
+  customColors?: Record<string, string> | null;
+  audioAssetName?: string | null;
+  assets: Array<{ name: string; url: string; type?: string }>;
+  scenes: VideoScene[];
+  lastRenderMs?: number | null;
+  failReason?: string | null;
+}
+
+export interface CreateVideoProjectParams {
+  name?: string;
+  format?: { preset?: string };
+  width?: number;
+  height?: number;
+  fps?: number;
+  theme?: string;
+  customColors?: Record<string, string>;
+  scenes?: VideoSceneInput[];
 }
 
 // ─── Sandbox types ───────────────────────────────────────────────

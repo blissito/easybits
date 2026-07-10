@@ -97,8 +97,8 @@ export const TOOL_GROUPS: ToolGroup[] = [
   {
     key: "video",
     label: "Video",
-    description: "Video con IA (Runway Gen-4.5) + personajes recurrentes. Ghosty decide: recuerda a quién y genera clips con el mismo personaje en escenas distintas. Ideal para WhatsApp.",
-    toolCount: 6,
+    description: "Video con IA (Runway Gen-4.5) + personajes recurrentes, y proyectos de video doc-style (escenas animadas HTML → MP4 con narración kokoro). Ghosty arma escenas, música y voz, y renderiza.",
+    toolCount: 18,
   },
   {
     key: "sandbox",
@@ -147,11 +147,28 @@ export const TOOL_GROUPS: ToolGroup[] = [
   },
 ];
 
+/** Video projects — stateful doc-style video (scenes → HyperFrames → MP4 + kokoro narration). */
+export const VIDEO_PROJECT_TOOLS = [
+  "create_video_project",
+  "list_video_projects",
+  "get_video_project",
+  "update_video_project",
+  "delete_video_project",
+  "add_video_scene",
+  "set_video_scene",
+  "delete_video_scene",
+  "reorder_video_scenes",
+  "set_video_music",
+  "attach_video_asset",
+  "render_video_project",
+] as const;
+
 /**
  * Curated "Design" allowlist — Canva-like experience inside Claude.ai.
  * Exposes visual creation + deploy + brand, hides DB/forms/webhooks.
  */
 export const DESIGN_ALLOWLIST = new Set<string>([
+  ...VIDEO_PROJECT_TOOLS,
   // Documents — CRUD
   "list_documents", "get_document",
   "create_document", "update_document", "delete_document",
@@ -215,6 +232,7 @@ export const DESIGN_ALLOWLIST = new Set<string>([
 ]);
 
 export const CORE_ALLOWLIST = new Set<string>([
+  ...VIDEO_PROJECT_TOOLS,
   "list_files", "get_file", "upload_file",
   "db_list", "db_create", "db_query",
   "list_documents", "get_document", "create_document", "update_document", "delete_document",
@@ -295,6 +313,7 @@ export const VIDEO_ALLOWLIST = new Set<string>([
   "character_remember",
   "character_list",
   "character_delete",
+  ...VIDEO_PROJECT_TOOLS,
   "get_file",
   "list_files",
   "upload_file",

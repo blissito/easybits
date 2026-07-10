@@ -248,6 +248,7 @@ model User {
   oauthAuthCodes       OAuthAuthCode[]
   characters           Character[]
   videoGenerations     VideoGeneration[]
+  videoProjects        VideoProject[]
   shareLinks           ShareLink[]
   secrets              Secret[]
   agents               Agent[]
@@ -997,6 +998,52 @@ model VideoGeneration {
   @@index([ownerId])
   @@index([ownerId, status])
   @@index([createdAt])
+}
+
+/// Stateful video project — a doc-style resource of ordered scenes that
+/// compiles to a HyperFrames composition (modular orchestrator) rendered to MP4
+/// via the on-demand hyperframes-svc box. Distinct from VideoGeneration (Runway,
+/// AI clip). Editing surface = REST/MCP/SDK doc-style tools; see
+/// videoProjectOperations.ts.
+model VideoProject {
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  ownerId         String   @db.ObjectId
+  owner           User     @relation(fields: [ownerId], references: [id])
+
+  name            String   @default("Untitled video")
+  /// "draft" | "rendering" | "ready" | "failed"
+  status          String   @default("draft")
+
+  width           Int      @default(1080)
+  height          Int      @default(1920)
+  fps             Int      @default(30)
+  /// Shared background theme token (default | dark | light | brand) + optional palette
+  theme           String   @default("default")
+  customColors    Json?
+
+  /// Scene[] — [{ id, order, label, durationSec, html, timeline? }]. Each scene
+  /// becomes a sub-composition; html is the scene markup (+ scoped <style>),
+  /// timeline is a GSAP snippet against a pre-declared `tl`.
+  scenes          Json     @default("[]")
+  /// Undo snapshot of scenes before the last mutation.
+  previousScenes  Json?
+  /// Downloaded into the box's assets/ before render — [{ name, url, type? }].
+  assetRefs       Json     @default("[]")
+  /// Continuous background audio (real file; muxed by HyperFrames).
+  audioAssetUrl   String?
+  audioAssetName  String?
+
+  /// File id + public URL of the most recent successful render.
+  lastRenderFileId String? @db.ObjectId
+  lastRenderUrl    String?
+  lastRenderMs     Int?
+  failReason       String?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([ownerId])
+  @@index([ownerId, status])
 }
 
 model FormConfig {
