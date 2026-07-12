@@ -995,6 +995,26 @@ function workersOnVm(agentId: string): Promise<number> {
   return db.fleetAgentRoute.count({ where: { agentId } });
 }
 
+// ── Warm spare pure decision helpers (unit-tested in test/warmSpare.test.ts) ──
+// freeSlotsOf: total READY worker slots across a fleet's VMs — each VM offers
+// (maxWorkersPerVm − its current route count). A new conversation needs one free
+// slot; if this is below warmSpares, topUpWarmSpares pre-boots more.
+export function freeSlotsOf(routeCounts: number[], maxWorkersPerVm: number): number {
+  return routeCounts.reduce((n, r) => n + Math.max(0, maxWorkersPerVm - r), 0);
+}
+// selectHotSpares: up to `warmSpares` ZERO-route VMs to keep RUNNING (instant
+// claim). The reaper exempts these from suspend/destroy while the fleet is active,
+// so an unclaimed spare never degrades to a ~700ms resume. VMs already hosting a
+// conversation are never "hot spares" (they're in use).
+export function selectHotSpares(vms: { id: string; routes: number }[], warmSpares: number): string[] {
+  const hot: string[] = [];
+  for (const vm of vms) {
+    if (hot.length >= warmSpares) break;
+    if (vm.routes === 0) hot.push(vm.id);
+  }
+  return hot;
+}
+
 // Spawn a fresh VM for the fleetAgent, branded from persona, RAM-gated.
 
 async function spawnVm(ctx: AuthContext, fleetAgent: { id: string; name: string | null; workerTemplate: string; persona: unknown; vmMemMb: number; maxVms: number; oauthSecretName: string | null; token: string }) {
@@ -1647,6 +1667,30 @@ export async function reapIdleFleetAgents(): Promise<{ suspended: number; destro
     const ctx = await ctxForOwner(fleetAgent.ownerId).catch(() => null);
     if (!ctx) continue;
 
+    // Warm pool: keep up to `warmSpares` zero-route running VMs HOT — never
+    // suspend or destroy them while the fleet is active — so a BRAND-NEW
+    // conversation claims them INSTANTLY (not ~700ms resume, not ~14s cold). This
+    // is the lowest-latency choice, traded for idle RAM. A DORMANT fleet (no route
+    // touched within destroyIdleMin) skips this → its spares get reaped normally
+    // and topUpWarmSpares won't recreate them, so RAM is only held while in use.
+    const hotSpares = new Set<string>();
+    if (fleetAgent.warmSpares > 0) {
+      const activeCutoff = new Date(now - fleetAgent.destroyIdleMin * 60_000);
+      const active = await db.fleetAgentRoute.count({
+        where: { fleetAgentId: fleetAgent.id, lastMessageAt: { gte: activeCutoff } },
+      });
+      if (active) {
+        const running = await db.agent.findMany({
+          where: { fleetAgentId: fleetAgent.id, status: "running" },
+          select: { id: true },
+        });
+        const withRoutes = await Promise.all(
+          running.map(async (vm) => ({ id: vm.id, routes: await workersOnVm(vm.id) }))
+        );
+        for (const id of selectHotSpares(withRoutes, fleetAgent.warmSpares)) hotSpares.add(id);
+      }
+    }
+
     // Stage 2 — destroy long-idle VMs (running or already-suspended).
     const toDestroy = await db.agent.findMany({
       where: {
@@ -1657,6 +1701,7 @@ export async function reapIdleFleetAgents(): Promise<{ suspended: number; destro
       },
     });
     for (const w of toDestroy) {
+      if (hotSpares.has(w.id)) continue; // warm pool: keep the hot spare alive
       try {
         // A still-running VM may hold un-backed-up turns since its last suspend —
         // back up before destroying. Suspended VMs were backed up at suspend.
@@ -1687,6 +1732,7 @@ export async function reapIdleFleetAgents(): Promise<{ suspended: number; destro
       },
     });
     for (const w of toSuspend) {
+      if (hotSpares.has(w.id)) continue; // warm pool: keep the hot spare running (instant claim)
       try {
         const routes = await db.fleetAgentRoute.findMany({ where: { agentId: w.id } });
         for (const r of routes) {
@@ -1704,6 +1750,57 @@ export async function reapIdleFleetAgents(): Promise<{ suspended: number; destro
   }
   if (suspended || destroyed) auditLog("reaper", { suspended, destroyed, busy: busy.length });
   return { suspended, destroyed };
+}
+
+// ── topUpWarmSpares ──────────────────────────────────────────────────────────
+// Warm spare pool for the fleet. Keeps `fleetAgent.warmSpares` FREE worker slots
+// pre-booted so a BRAND-NEW conversation claims a ready VM (instant, or ~700ms if
+// the spare got parked by the reaper) instead of cold-booting ~14s. A "spare" is
+// just an extra Agent row with the fleet's OAuth baked and 0 routes — reserveVm's
+// existing candidate loop (running/building/suspended VM with a free slot) already
+// claims it, so there is NO new claim path here; we only pre-BOOT the capacity.
+//
+// Runs on the 60s reaper heartbeat AFTER reapIdleFleetAgents (reap first, then
+// refill). Only tops up fleets with recent activity (a route touched within
+// destroyIdleMin) so a dormant agent holds no idle RAM. Budget-gated: spawnVm
+// throws FleetAgentAtCapacity when the owner is at plan budget → we skip (real
+// demand still falls back to the queue/eviction path). One spawn per fleet per
+// tick to avoid bursts; the pool fills gradually (cheap with FC_ROOTFS_DM).
+export async function topUpWarmSpares(): Promise<{ checked: number; spawned: number }> {
+  let spawned = 0;
+  const fleets = await db.fleetAgent.findMany({ where: { warmSpares: { gt: 0 } } });
+  for (const fleetAgent of fleets) {
+    try {
+      // Only pre-warm fleets that are actually in use (a conversation touched
+      // within the destroy window). No point holding RAM for a dormant agent.
+      const activeCutoff = new Date(Date.now() - fleetAgent.destroyIdleMin * 60_000);
+      const active = await db.fleetAgentRoute.count({
+        where: { fleetAgentId: fleetAgent.id, lastMessageAt: { gte: activeCutoff } },
+      });
+      if (!active) continue;
+
+      // Count ready free slots across the fleet's non-dead VMs. A suspended VM
+      // still counts — reserveVm claims it and ensureRunning resumes it ~700ms.
+      const vms = await db.agent.findMany({
+        where: { fleetAgentId: fleetAgent.id, status: { in: ["running", "building", "suspended"] } },
+        select: { id: true },
+      });
+      const routeCounts = await Promise.all(vms.map((vm) => workersOnVm(vm.id)));
+      const freeSlots = freeSlotsOf(routeCounts, fleetAgent.maxWorkersPerVm);
+      if (freeSlots >= fleetAgent.warmSpares) continue;
+
+      // Not enough headroom → pre-boot ONE spare VM this tick (budget-gated).
+      const ctx = await ctxForOwner(fleetAgent.ownerId).catch(() => null);
+      if (!ctx) continue;
+      await spawnVm(ctx, fleetAgent);
+      spawned++;
+      auditLog("warm-spare", { fleetAgent: fleetAgent.id, freeSlots, target: fleetAgent.warmSpares });
+    } catch (e) {
+      if (e instanceof FleetAgentAtCapacity) continue; // at budget → queue/eviction covers demand
+      console.error(`warm-spare top-up for ${fleetAgent.id} failed:`, (e as Error).message);
+    }
+  }
+  return { checked: fleets.length, spawned };
 }
 
 // Delete a fleetAgent: destroy its worker VMs (best-effort), then remove its routes,
@@ -1860,6 +1957,7 @@ export async function createFleetAgent(
     persona?: Persona;
     oauthSecretName?: string;
     llm?: string; // ghosty-gc: "deepseek" (BYOK) | "easybits" (medido) → GHOSTY_LLM
+    env?: Record<string, string>; // env extra del motor (registro FLEET_ENGINES) → persona.env
     maxWorkersPerVm?: number;
     vmMemMb?: number;
     maxVms?: number;
@@ -1881,6 +1979,9 @@ export async function createFleetAgent(
       // inyección de DEEPSEEK_API_KEY en createAgent → ghosty-gc-start cae al proxy
       // medido; "deepseek" (default) la inyecta → off-meter. Ver createAgent ghosty-gc.
       ...(opts.llm ? { GHOSTY_LLM: opts.llm } : {}),
+      // Env del motor (registro FLEET_ENGINES): p.ej. { GHOSTY_LLM: "deepseek" }.
+      // Generaliza `llm`; el form nuevo lo pasa por aquí. persona.env sigue ganando.
+      ...(opts.env ?? {}),
       ...(basePersona.env ?? {}),
     },
   };

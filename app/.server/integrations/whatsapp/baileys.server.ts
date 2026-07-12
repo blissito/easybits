@@ -898,6 +898,15 @@ function startReaper() {
     } catch (e) {
       console.error("embed-agent reaper tick failed:", e);
     }
+    try {
+      // Warm spare pool: tras reapear, rellena los slots pre-booteados de las
+      // fleets con warmSpares>0 y actividad reciente → conversación NUEVA reclama
+      // una VM lista (instantáneo / ~700ms) en vez de cold-boot ~14s. Budget-gated.
+      const { topUpWarmSpares } = await import("~/.server/core/fleetAgentOperations");
+      await topUpWarmSpares();
+    } catch (e) {
+      console.error("warm-spare top-up tick failed:", e);
+    }
     // Barrido de blobs de memoria huérfanos (fleet-memory/) cada ~30min — hygiene
     // barata sobre el mismo heartbeat, no cada tick (lista todo el bucket).
     if (reaperTicks % 30 === 0) {

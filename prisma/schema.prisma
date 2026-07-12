@@ -1177,6 +1177,13 @@ model FleetAgent {
   // so suspended VMs stay resumable (~700-950ms snapshot resume vs ~12s cold boot
   // + restore-from-S3); restore round-trip is verified, so destroy is only deferred.
   destroyIdleMin     Int  @default(45)
+  // Warm spare pool (opt-in, default 0 = off). Number of FREE worker slots to keep
+  // pre-booted so a BRAND-NEW conversation claims a ready VM (instant, or ~700ms if
+  // the spare got parked) instead of cold-booting ~14s. A spare is just an extra
+  // pre-booted worker VM with 0 routes — reserveVm's existing candidate loop claims
+  // it; topUpWarmSpares only pre-BOOTS the capacity. Budget-gated (counts toward the
+  // owner's concurrentSandboxes) and only maintained while the fleet is active.
+  warmSpares         Int  @default(0)
   // WABA (WhatsApp Business / Meta) channel config. Formmy is the gateway: it
   // owns the Meta number and FORWARDS each inbound message to this fleet agent, then
   // expects us to POST the reply back to Formmy's /send. Shape:

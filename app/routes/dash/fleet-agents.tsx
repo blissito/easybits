@@ -13,6 +13,7 @@ import { createFleetAgent, deleteFleetAgent, clearGroupSession, mergedCapabiliti
 import { FLEET_BUCKETS, GROUP_ALLOWLISTS, toolsParamToBuckets, bucketsToToolsParam, type ToolGroupKey } from "~/.server/mcp/toolGroups";
 import { getReservedCapacity } from "~/.server/core/sandboxReservations";
 import { listSecrets, createSecret } from "~/.server/core/secretOperations";
+import { FLEET_ENGINES, getEngine, DEFAULT_ENGINE_ID, engineCreatable, getEngineByTemplate } from "~/lib/fleetEngines";
 import {
   connectFleetAgent,
   disconnectFleetAgent,
@@ -29,23 +30,11 @@ import {
   normalizePhone,
 } from "~/.server/integrations/whatsapp/waba.server";
 
-const DEFAULT_OAUTH = "CLAUDE_CODE_OAUTH_TOKEN";
-
 // Editor de prompts markdown (CodeMirror + preview) — lazy para NO importar MDEditor
 // (usa window) en el bundle SSR; solo carga en cliente al abrir el modal Expandir.
 const PromptEditor = lazy(() =>
   import("./PromptEditor.client").then((m) => ({ default: m.PromptEditor }))
 );
-
-// Cerebros seleccionables al crear un agente. Client-safe (subconjunto curado de
-// SANDBOX_TEMPLATES; el default es claude-worker). `value` = workerTemplate real.
-// - claude-worker: LLM por OAuth Max del dueño (tarifa plana, off-meter).
-// - ghosty-gc: cerebro propio (ghostycode, Rust) — LLM por el proxy MEDIDO de EasyBits.
-const BRAINS: { value: string; label: string }[] = [
-  { value: "claude-worker", label: "Ghosty (Claude)" },
-  { value: "ghosty-gc", label: "Ghosty propio (ghostycode)" },
-];
-const DEFAULT_BRAIN = "claude-worker";
 
 // The live HUD poll (routes/dash/fleet-agents.poll.tsx) reuses THIS loader on the server
 // to return the EXACT same shape as JSON, so the page can poll it with a plain
@@ -66,6 +55,13 @@ export async function loader({ request }: Route.LoaderArgs) {
   await ensureRehydrated();
 
   const secretNames = (await listSecrets(user.id)).map((s) => s.name);
+  // Por motor: ¿ya está su credencial canónica en el vault? El form usa esto para
+  // pedir la key SOLO cuando falta (no exponemos la lista de secrets al cliente —
+  // secretNames se queda server-side para el cálculo de missingSecrets de abajo).
+  const ownedSecrets = new Set(secretNames);
+  const engineHasSecret = Object.fromEntries(
+    FLEET_ENGINES.map((e) => [e.id, !e.secret || ownedSecrets.has(e.secret.name)])
+  ) as Record<string, boolean>;
   // ⚠️ `select` OBLIGATORIO: findMany SIN select sobre FleetAgent tarda ~4.4s por
   // fila (patología Prisma+Mongo, medido) vs ~100ms con proyección — el doc pesa
   // solo ~6KB, no es tamaño. Proyectar solo lo que usa el loader.
@@ -234,6 +230,16 @@ export async function loader({ request }: Route.LoaderArgs) {
         conversations, maxWorkersPerVm: p.maxWorkersPerVm, vmMemMb: p.vmMemMb,
         throttledUntil, connReason: b.reason ?? null, mainGroupJid: p.mainGroupJid,
         hasOwnNumber: p.hasOwnNumber, builtins, capabilities,
+        // Motor con modelo seleccionable (claude-worker → claude; codex-worker →
+        // codex). undefined para ghosty-gc (modelo fijo) → sin selector de modelo.
+        // `agentModel` = modelo actual efectivo (persona.env[modelEnv] o default).
+        workerTemplate: p.workerTemplate,
+        agentModel: (() => {
+          const eng = getEngineByTemplate(p.workerTemplate);
+          if (!eng?.modelEnv) return null;
+          const cur = (p.persona as { env?: Record<string, string> } | null)?.env?.[eng.modelEnv];
+          return cur ?? eng.defaultModel ?? null;
+        })(),
         // Prompt del AGENTE (persona.SYSTEM_PROMPT) — UNO, multicanal (Baileys+WABA).
         // Es el CLAUDE.md del agente; los canales lo heredan. Editado en un solo lugar.
         agentPrompt: ((p.persona as { env?: Record<string, string> } | null)?.env?.SYSTEM_PROMPT) ?? "",
@@ -400,7 +406,7 @@ export async function loader({ request }: Route.LoaderArgs) {
     [...new Set(FLEET_BUCKETS.flatMap((b) => [b.key, ...(b.levels?.flatMap((l) => l.buckets) ?? [])]))]
       .map((k) => [k, [...(GROUP_ALLOWLISTS[k as ToolGroupKey] ?? [])]] as const)
   );
-  return { secretNames, pools, capacity, sharedPools, buckets: FLEET_BUCKETS, bucketTools };
+  return { engineHasSecret, pools, capacity, sharedPools, buckets: FLEET_BUCKETS, bucketTools };
 }
 
 // Puente a Formmy (fuente única de la coexistencia): pausa/reactiva una conversación
@@ -449,21 +455,40 @@ export async function action({ request }: Route.ActionArgs) {
 
   if (intent === "create") {
     const name = String(fd.get("name") || "").trim() || undefined;
-    const workerTemplate = String(fd.get("workerTemplate") || "").trim() || undefined;
-    const llm = String(fd.get("llm") || "").trim() || undefined; // ghosty-gc: "deepseek" | "easybits"
-    let oauthSecretName = String(fd.get("oauthSecretName") || "").trim();
-    const newOauth = String(fd.get("newOauth") || "").trim();
-    // Pasting a new token saves it to the vault under the given (or default) name.
-    if (newOauth) {
-      const secretName = String(fd.get("newOauthName") || "").trim() || DEFAULT_OAUTH;
-      await createSecret(user.id, { name: secretName, value: newOauth });
-      oauthSecretName = secretName;
+    // Motor elegido en el form (proveedor + template + credencial). El registro es
+    // la fuente única; el form solo manda el `engine` id. Ver ~/lib/fleetEngines.
+    const engine = getEngine(String(fd.get("engine") || "")) ?? getEngine(DEFAULT_ENGINE_ID)!;
+    if (!engineCreatable(engine)) return data({ error: "Motor aún no disponible" }, { status: 400 });
+    let oauthSecretName: string | undefined;
+    if (engine.secret) {
+      // La credencial se guarda/lee por su nombre canónico. Si no está en el vault,
+      // el form la pidió (secretValue) → la ciframos ahora. "Si la llave no está,
+      // que te la pida."
+      const owned = (await listSecrets(user.id)).some((s) => s.name === engine.secret!.name);
+      if (!owned) {
+        const val = String(fd.get("secretValue") || "").trim();
+        if (!val) return data({ error: `Falta ${engine.secret.name}` }, { status: 400 });
+        await createSecret(user.id, { name: engine.secret.name, value: val });
+      }
+      // Solo OAuth se persiste en el FleetAgent; las apiKey (deepseek/codex) las
+      // resuelve el spawn por nombre canónico desde el vault.
+      if (engine.secret.kind === "oauth") oauthSecretName = engine.secret.name;
     }
-    // Claude-based brains need a Claude Max OAuth; DeepSeek brains (rust-ghosty)
-    // run on DEEPSEEK_API_KEY (injected at spawn) and don't require one.
-    const needsOauth = !workerTemplate || workerTemplate === "claude-worker";
-    if (needsOauth && !oauthSecretName) return data({ error: "Elige o pega un OAuth" }, { status: 400 });
-    const fleetAgent = await createFleetAgent(ctx, { name, oauthSecretName: oauthSecretName || undefined, workerTemplate, llm });
+    // Modelo elegido dentro del proveedor → persona.env[engine.modelEnv]
+    // (ANTHROPIC_MODEL / CODEX_MODEL). Se valida contra la lista; si no, el default.
+    const extraEnv: Record<string, string> = { ...(engine.env ?? {}) };
+    if (engine.modelEnv && engine.models.length) {
+      const picked = String(fd.get("model") || "").trim();
+      // Solo modelos READY; si mandan uno inválido/no listo, cae al default.
+      const model = engine.models.some((m) => m.id === picked && m.ready !== false) ? picked : engine.defaultModel;
+      if (model) extraEnv[engine.modelEnv] = model;
+    }
+    const fleetAgent = await createFleetAgent(ctx, {
+      name,
+      workerTemplate: engine.template,
+      env: extraEnv,
+      oauthSecretName,
+    });
     return data({ ok: true, fleetAgentId: fleetAgent.id });
   }
 
@@ -685,6 +710,22 @@ export async function action({ request }: Route.ActionArgs) {
     const persona = ((fleetAgent.persona ?? {}) as { env?: Record<string, string> });
     const env = { ...(persona.env ?? {}) };
     if (systemPrompt) env.SYSTEM_PROMPT = systemPrompt; else delete env.SYSTEM_PROMPT;
+    await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { persona: { ...persona, env } as object } });
+    return data({ ok: true });
+  }
+  if (intent === "set-model") {
+    // Cambiar el modelo de un agente existente → persona.env[modelEnv]
+    // (ANTHROPIC_MODEL / CODEX_MODEL). Solo modelos READY del motor del template.
+    // Aplica a VMs nuevas/recicladas (el env se inyecta al spawn). Mismo patrón que
+    // set-agent-prompt. ghosty-gc no tiene modelo seleccionable → engine undefined.
+    const eng = getEngineByTemplate(fleetAgent.workerTemplate);
+    if (!eng?.modelEnv) return data({ error: "Este motor no permite cambiar de modelo" }, { status: 400 });
+    const picked = String(fd.get("model") || "").trim();
+    if (!eng.models.some((m) => m.id === picked && m.ready !== false)) {
+      return data({ error: "Modelo no disponible" }, { status: 400 });
+    }
+    const persona = ((fleetAgent.persona ?? {}) as { env?: Record<string, string> });
+    const env = { ...(persona.env ?? {}), [eng.modelEnv]: picked };
     await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { persona: { ...persona, env } as object } });
     return data({ ok: true });
   }
@@ -1822,17 +1863,17 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
   // Sembrado de loaderData; re-sincronizado cuando el loader revalida (acción/nav).
   const [hud, setHud] = useState(loaderData);
   useEffect(() => setHud(loaderData), [loaderData]);
-  const { secretNames, pools, capacity, sharedPools, buckets, bucketTools } = hud;
+  const { engineHasSecret, pools, capacity, sharedPools, buckets, bucketTools } = hud;
   const fetcher = useFetcher();
   const rev = useRevalidator();
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState("");
-  const [oauthChoice, setOauthChoice] = useState(secretNames.includes(DEFAULT_OAUTH) ? DEFAULT_OAUTH : secretNames[0] ?? "__new__");
-  const [brain, setBrain] = useState(DEFAULT_BRAIN);
-  const [llm, setLlm] = useState("deepseek");
-  const [newOauth, setNewOauth] = useState("");
-  const hasSecrets = secretNames.length > 0;
-  const pasteNew = oauthChoice === "__new__" || !hasSecrets;
+  const [engineId, setEngineId] = useState(DEFAULT_ENGINE_ID);
+  const engine = getEngine(engineId) ?? getEngine(DEFAULT_ENGINE_ID)!;
+  // Proveedor con al menos un modelo listo → creable (si no, se elige pero no crea).
+  const creatable = engineCreatable(engine);
+  // ¿Falta la credencial del motor elegido? → el form la pide inline (solo si creable).
+  const needsSecret = creatable && !!engine.secret && !engineHasSecret[engine.id];
 
   const busy = fetcher.state !== "idle";
   const bIntent = fetcher.formData?.get("intent") as string | undefined;
@@ -2095,55 +2136,123 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
           <input name="name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Atención a cliente"
             className="border-2 border-black rounded-lg px-3 py-2" />
 
-          <label className="text-sm font-semibold">Cerebro</label>
-          <select name="workerTemplate" value={brain} onChange={(e) => setBrain(e.target.value)}
-            className="border-2 border-black rounded-lg px-3 py-2 bg-white">
-            {BRAINS.map((b) => <option key={b.value} value={b.value}>{b.label}</option>)}
-          </select>
+          <input type="hidden" name="engine" value={engineId} />
 
-          {/* ghostycode corre con la key que elijas: DeepSeek (tu key, off-meter) o el
-              proxy medido de EasyBits. Requiere el secret correspondiente en Secretos. */}
-          {brain === "ghosty-gc" && (
-            <>
-              <label className="text-sm font-semibold">Motor del LLM</label>
-              <select name="llm" value={llm} onChange={(e) => setLlm(e.target.value)}
-                className="border-2 border-black rounded-lg px-3 py-2 bg-white">
-                <option value="deepseek">DeepSeek — tu propia key (off-meter). Necesita el secret DEEPSEEK_API_KEY.</option>
-                <option value="easybits">EasyBits — medido, se cobra a tu plan.</option>
-              </select>
-            </>
-          )}
+          {/* Motor = qué modelo corre Ghosty. Siempre es Ghosty; cambia el proveedor.
+              El PROVEEDOR siempre es seleccionable; la disponibilidad vive a nivel
+              modelo (opciones disabled más abajo). La credencial se pide inline si falta. */}
+          <label className="text-sm font-semibold">Motor</label>
+          <div className="grid gap-2">
+            {FLEET_ENGINES.map((e) => {
+              const selected = e.id === engineId;
+              const creat = engineCreatable(e);
+              const connected = !e.secret || engineHasSecret[e.id];
+              return (
+                <button
+                  key={e.id}
+                  type="button"
+                  onClick={() => setEngineId(e.id)}
+                  className={`flex items-center justify-between text-left border-2 rounded-lg px-3 py-2 transition hover:border-brand-500 ${
+                    selected ? "border-brand-500 bg-brand-500/5" : "border-black bg-white"
+                  }`}
+                >
+                  <span className="flex flex-col">
+                    <span className="font-semibold text-sm">{e.label}</span>
+                    <span className="text-xs text-gray-500">{e.model}</span>
+                  </span>
+                  <span className="text-xs">
+                    {!creat ? (
+                      <span className="text-gray-400">próximamente</span>
+                    ) : !e.secret ? (
+                      <span className="text-gray-400">medido</span>
+                    ) : connected ? (
+                      <span className="text-green-600">✓ conectada</span>
+                    ) : (
+                      <span className="text-amber-600">requiere key</span>
+                    )}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
 
-          {/* OAuth de Claude solo aplica a cerebros Claude; los DeepSeek corren con DEEPSEEK_API_KEY. */}
-          {brain === "claude-worker" && (
-            <>
-              <label className="text-sm font-semibold">OAuth de Claude (cuenta Max)</label>
-              {hasSecrets && (
-                <select name="oauthSecretName" value={oauthChoice} onChange={(e) => setOauthChoice(e.target.value)}
-                  className="border-2 border-black rounded-lg px-3 py-2 bg-white">
-                  {secretNames.map((n) => <option key={n} value={n}>{n}</option>)}
-                  <option value="__new__">➕ Pegar nuevo…</option>
+          {/* Modelo del proveedor. Los modelos aún no implementados van DISABLED
+              ("próximamente"). El bloque anima entrada/salida al cambiar de motor
+              (key por engine.id → AnimatePresence remonta y re-aplica defaultValue). */}
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div
+              key={`model-${engine.id}`}
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
+              className="overflow-hidden"
+            >
+              <div className="flex flex-col gap-1 pt-px">
+                <label className="text-sm font-semibold">Modelo</label>
+                <select
+                  name="model"
+                  defaultValue={engine.defaultModel ?? engine.models.find((m) => m.ready !== false)?.id ?? engine.models[0]?.id}
+                  className="border-2 border-black rounded-lg px-3 py-2 bg-white"
+                >
+                  {engine.models.map((m) => (
+                    <option key={m.id} value={m.id} disabled={m.ready === false}>
+                      {m.label}{m.ready === false ? " · próximamente" : ""}
+                    </option>
+                  ))}
                 </select>
-              )}
-              {pasteNew && (
-                <div className="flex flex-col gap-2">
-                  <input name="newOauth" value={newOauth} onChange={(e) => setNewOauth(e.target.value)} type="password"
-                    placeholder="sk-ant-oat..." className="border-2 border-black rounded-lg px-3 py-2 font-mono text-sm" />
-                  <input name="newOauthName" defaultValue={DEFAULT_OAUTH}
-                    className="border-2 border-black rounded-lg px-3 py-2 font-mono text-xs text-gray-500"
-                    title="Nombre del secreto en el vault" />
-                  <span className="text-xs text-gray-400">Se guarda cifrado en Secretos.</span>
+              </div>
+            </motion.div>
+          </AnimatePresence>
+
+          {/* "Si la llave no está, que te la pida": un solo campo, solo cuando falta.
+              Anima entrada/salida al cambiar de motor o al conectarse la key. */}
+          <AnimatePresence initial={false}>
+            {needsSecret && engine.secret && (
+              <motion.div
+                key={`secret-${engine.id}`}
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.2, ease: "easeOut" }}
+                className="overflow-hidden"
+              >
+                <div className="flex flex-col gap-1 pt-px">
+                  <label className="text-sm font-semibold">
+                    Falta <span className="font-mono text-xs">{engine.secret.name}</span> para este motor
+                  </label>
+                  <input
+                    name="secretValue"
+                    type="password"
+                    placeholder={engine.secret.placeholder ?? "pega tu key…"}
+                    className="border-2 border-black rounded-lg px-3 py-2 font-mono text-sm"
+                  />
+                  <span className="text-xs text-gray-400">Se guarda cifrada en Secretos.</span>
                 </div>
-              )}
-            </>
-          )}
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           <div className="flex items-center gap-3">
-            <button disabled={isBusy("create")} className="self-start bg-brand-500 text-white rounded-lg px-4 py-2 font-semibold disabled:opacity-60">
+            <button disabled={isBusy("create") || !creatable} className="self-start bg-brand-500 text-white rounded-lg px-4 py-2 font-semibold disabled:opacity-60">
               {isBusy("create") ? <Spinner /> : "+ Crear Agente"}
             </button>
             <button type="button" onClick={() => setShowForm(false)} className="text-sm text-gray-400 hover:text-gray-600">Cancelar</button>
           </div>
+          <AnimatePresence initial={false}>
+            {!creatable && (
+              <motion.p
+                key={`soon-${engine.id}`}
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.2, ease: "easeOut" }}
+                className="overflow-hidden text-xs text-gray-400 -mt-1"
+              >
+                Este proveedor aún no está disponible — llega en la Fase 2.
+              </motion.p>
+            )}
+          </AnimatePresence>
         </fetcher.Form>
         )}
       </div>
@@ -2852,6 +2961,34 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                   </label>
                 </div>
               </div>
+
+              {/* Modelo del AGENTE — cambiable en vivo (persona.env[modelEnv]). Solo
+                  motores con modelo seleccionable (claude-worker; codex-worker cuando
+                  llegue). ghosty-gc = modelo fijo → cp.agentModel null, no se muestra.
+                  Auto-submit al cambiar. Aplica al reciclar la caja (env al spawn). */}
+              {cp.agentModel && (() => {
+                const modelEng = getEngineByTemplate(cp.workerTemplate);
+                if (!modelEng) return null;
+                return (
+                  <div>
+                    <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Modelo</span>
+                    <fetcher.Form method="post" className="mt-1" key={`sm-${cp.id}`}>
+                      <input type="hidden" name="intent" value="set-model" />
+                      <input type="hidden" name="fleetAgentId" value={cp.id} />
+                      <select name="model" defaultValue={cp.agentModel}
+                        onChange={(e) => e.currentTarget.form?.requestSubmit()}
+                        className="w-full border-2 border-gray-300 rounded-lg px-2 py-1.5 text-sm bg-white">
+                        {modelEng.models.map((m) => (
+                          <option key={m.id} value={m.id} disabled={m.ready === false}>
+                            {m.label}{m.ready === false ? " · próximamente" : ""}
+                          </option>
+                        ))}
+                      </select>
+                    </fetcher.Form>
+                    <p className="text-[11px] text-gray-400 mt-0.5">Aplica al reciclar la caja del agente.</p>
+                  </div>
+                );
+              })()}
 
               {/* Instrucciones del AGENTE — UNA, multicanal (Baileys + WABA), como el
                   CLAUDE.md de nanoclaw. Editor real: alto, importar .md/.txt, Expandir. */}

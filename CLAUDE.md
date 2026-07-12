@@ -136,6 +136,19 @@ GTeams provisiona cada team con la **key de PLATAFORMA** (cuenta fixtergeek, Api
 - **File read helper**: `getReadClientForPlatformFile(file)` in `app/.server/storage.ts` — resolves correct prefix (`mcp/` vs root) for platform files. Use instead of `getClientForFile()` when reading file contents.
 - **Won't fix**: credentials encryption at rest, persistent rate limiter, storage quota enforcement — accepted as non-critical
 
+## Research / Web scraping (BrightData)
+- **Token**: `BRIGHTDATA_API_TOKEN` en `easybits/.env` (gitignored — el mismo valor que `~/nanoclaw/.env`). NUNCA pegar el valor crudo en archivos trackeados (CLAUDE.md, docs, código); solo referenciar el nombre de la env var.
+- **Ya cableado, dos superficies**: (1) service provider nativo `research.brightdata.scrape` / `.search` (`app/.server/services/providers/brightdata.ts`, registrado en `services/registry.ts`), expuesto como MCP `research_scrape` / `research_search`; (2) MCP child `@brightdata/mcp` que la flota inyecta con `env: { API_TOKEN: "$secret:BRIGHTDATA_API_TOKEN" }` (allowlist del worker incluye `brightdata`).
+- **Investigaciones ad-hoc (Claude en sesión) = code-mode, NO el MCP.** Un agente en sesión con Bash NO carga `@brightdata/mcp` (indirección + overhead de schemas); pega directo a la API. Un solo endpoint REST `POST https://api.brightdata.com/request`, mismo token para Unlocker y SERP (los diferencia `zone`; default `web_unlocker1`, SERP usa su propia zone). Referencia canónica de la forma: `app/.server/services/providers/brightdata.ts`.
+  ```bash
+  source .env
+  curl -s https://api.brightdata.com/request -H "Authorization: Bearer $BRIGHTDATA_API_TOKEN" \
+    -H 'Content-Type: application/json' \
+    -d '{"zone":"web_unlocker1","url":"https://ejemplo.com","format":"raw"}'
+  # format=raw → HTML crudo; format=json → envelope {status_code,headers,body}
+  ```
+  Usar cuando WebSearch/WebFetch no basten (Cloudflare, SERP a escala, unlocker). Para JS-heavy usar Scraping Browser de BrightData, no el scrape simple. El MCP `@brightdata/mcp` es para el **worker de flota** (superficie de tools persistente entre turnos), no para mí.
+
 ## Observability & Health
 - Health check: `app/routes/api/health.ts` — checks DB connectivity, returns 200/503
 - Sentry: `app/.server/sentry.ts` — lazy init, 10% trace sample rate, `SENTRY_DSN` env var

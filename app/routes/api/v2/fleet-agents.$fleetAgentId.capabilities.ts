@@ -114,10 +114,15 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     agent: {
       systemPrompt: env.SYSTEM_PROMPT ?? "",
       // Model lever REAL por template (no inventado): ghosty-gc usa GHOSTY_LLM
-      // (deepseek/easybits), el resto ANTHROPIC_MODEL (Claude). El valor es el
-      // efectivo (override o default), no un placeholder.
+      // (deepseek/easybits), codex-worker usa CODEX_MODEL (Codex/OpenAI), el resto
+      // ANTHROPIC_MODEL (Claude). El valor es el efectivo (override o default).
       workerTemplate: fa.workerTemplate,
-      model: fa.workerTemplate === "ghosty-gc" ? (env.GHOSTY_LLM ?? "deepseek") : (env.ANTHROPIC_MODEL ?? FLEET_DEFAULT_MODEL),
+      model:
+        fa.workerTemplate === "ghosty-gc"
+          ? (env.GHOSTY_LLM ?? "deepseek")
+          : fa.workerTemplate === "codex-worker"
+          ? (env.CODEX_MODEL ?? "gpt-5.6-sol")
+          : (env.ANTHROPIC_MODEL ?? FLEET_DEFAULT_MODEL),
       modelLabel: fa.workerTemplate === "ghosty-gc" ? "Cerebro (LLM)" : "Modelo",
       effort: env.FLEET_EFFORT ?? FLEET_DEFAULT_EFFORT,
       hasOwnNumber: !!fa.hasOwnNumber,
