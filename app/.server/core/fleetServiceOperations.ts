@@ -318,15 +318,29 @@ export async function spawnServiceBox(ctx: AuthContext, kind: string): Promise<S
     spec.ports.map((p) => (spec.readyPaths[p] ? waitReady(urls[p], spec.readyPaths[p]) : Promise.resolve(true)))
   );
 
-  // 5. Register for the idle reaper (best-effort). upsert keeps the (owner,kind)
-  //    invariant if a race created a row in between.
-  await db.serviceBox
+  // 5. Registra la caja para el reaper + INVARIANTE (owner,kind). Si al registrar YA
+  //    existe una fila apuntando a OTRA caja (race residual, o un restart de deploy que
+  //    interleaveó dos spawns), NO pisamos su sandboxId: la nuestra PERDIÓ el slot → la
+  //    DESTRUIMOS y reusamos la registrada. Antes el `update:{sandboxId}` pisaba el slot y
+  //    la caja anterior quedaba HUÉRFANA en el host, acumulándose (bug 2026-07-09: 4 cajas
+  //    render por owner). `update:{lastActiveAt}` conserva al ganador.
+  const row = await db.serviceBox
     .upsert({
       where: { ownerId_kind: { ownerId: ctx.user.id, kind } },
       create: { ownerId: ctx.user.id, kind, sandboxId: sb.sandboxId },
-      update: { sandboxId: sb.sandboxId, lastActiveAt: new Date() },
+      update: { lastActiveAt: new Date() },
     })
-    .catch((e) => console.error("service reaper: register failed:", e));
+    .catch((e) => {
+      console.error("service reaper: register failed:", e);
+      return null;
+    });
+  if (row && row.sandboxId && row.sandboxId !== sb.sandboxId) {
+    // Perdimos: nuestra caja es huérfana → destrúyela y reusa la registrada (idempotente).
+    console.warn(`service ${kind}: perdió race, destruyo ${sb.sandboxId}, reuso ${row.sandboxId}`);
+    await destroySandbox(ctx, sb.sandboxId).catch(() => {});
+    const winnerUrls = await exposeAll(ctx, row.sandboxId, spec.ports).catch(() => ({} as Record<number, string>));
+    return buildUrls(kind, row.sandboxId, "running", winnerUrls);
+  }
 
   return buildUrls(kind, sb.sandboxId, "running", urls);
 }
