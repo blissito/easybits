@@ -157,7 +157,13 @@ export const engineCreatable = (e: FleetEngine): boolean =>
 export const getEngineForAgent = (
   template?: string,
   env?: Record<string, string> | null
-): FleetEngine | undefined =>
-  FLEET_ENGINES.find(
+): FleetEngine | undefined => {
+  const direct = FLEET_ENGINES.find(
     (e) => e.template === template && (!e.env?.GHOSTY_LLM || e.env.GHOSTY_LLM === env?.GHOSTY_LLM)
   );
+  if (direct) return direct;
+  // Fallback: ghosty-gc SIN GHOSTY_LLM explícito (agente viejo) = deepseek, que es el
+  // default del worker (server.js) → el selector de modelo aparece igual.
+  if (template === "ghosty-gc" && !env?.GHOSTY_LLM) return getEngine("deepseek");
+  return undefined;
+};
