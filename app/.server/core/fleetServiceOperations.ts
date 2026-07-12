@@ -70,10 +70,10 @@ const SERVICE_REGISTRY: Record<string, ServiceSpec> = {
   },
   // render: Chromium HTML→PDF/PNG box. Heavy image (~300MB) → snapshot/resume
   // pays off (warm ~700ms vs ~12s cold). Keyed per OWNER like voice, so every
-  // render for that owner shares ONE box. Suspends after 5 min idle (memory
-  // snapshot), and is hard-reaped after 60 min suspended to reclaim the ~2GB
-  // snapshot disk — bounds accumulation across many owners while keeping warm
-  // resume for active export sessions.
+  // render for that owner shares ONE box. Render usage es BURSTY (exportas unos
+  // PDFs y listo) → duerme rápido (3 min idle) y se recicla pronto (15 min
+  // suspendida) para liberar budget de sandbox (inUse = live + suspended) y el
+  // ~2GB de snapshot; un warm resume de ~700ms cubre la sesión activa de sobra.
   render: {
     template: "render-svc",
     unit: "render-svc-runtime",
@@ -81,9 +81,9 @@ const SERVICE_REGISTRY: Record<string, ServiceSpec> = {
     ports: [9300],
     readyPaths: { 9300: "/health" },
     ttlSeconds: 1800,
-    idleMin: 5,
+    idleMin: 3,
     suspendOnIdle: true,
-    hardTtlMin: 60,
+    hardTtlMin: 15,
   },
   // video: HyperFrames (HeyGen, Apache 2.0) HTML→MP4 box. Heavy image (chrome-
   // headless-shell + ffmpeg + node_modules, ~4GB RAM) → snapshot/resume pays off.

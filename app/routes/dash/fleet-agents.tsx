@@ -1157,21 +1157,32 @@ function VmBox({ id, status, slots, max, ghosty, mascotColor, addon, kind, sysLa
   // ignoraba el status → no se veía ni iniciando ni durmiendo.
   const sleeping = status === "suspended";
   const starting = status === "building" || status === "starting";
-  // Tonos de FIELTRO por estado (mismo gradiente de salud que antes, en lana). La
-  // textura/borde/sombra los pone la clase `.felt`; aquí sólo el relleno + el hilo.
-  // OJO: NO cambiar la semántica — verde lleno = "a tope y bien", no advertencia.
-  // Dormida/arrancando GANAN sobre el color por tipo → una caja de servicio también
-  // se pinta índigo-apagada (dormida) o violeta-pulso (arrancando).
+  // Tonos de FIELTRO por estado (en lana). La textura/borde/sombra los pone la clase
+  // `.felt`; aquí sólo el relleno + el hilo. Semántica de color:
+  //   VERDE  = disponible (add-on listo, aún sin levantar)
+  //   MOTOR  = viva/atendiendo → el tinte lo manda `mascotColor`: LILA deepseek/ghosty,
+  //            CORAL Claude (color de marca Anthropic). Fallback verde si es desconocido.
+  // Dormida/arrancando GANAN sobre todo → caja también se pinta índigo (dormida) o
+  // violeta-pulso (arrancando).
+  const engineFelt: [string, string] =
+    mascotColor === "#D97757" ? ["#f2d9cd", "#c07050"]     // Claude → coral
+    : mascotColor === "#9870ED" ? ["#e7dcf6", "#9870ED"]   // deepseek/ghosty → lila
+    : ["#cfe0bf", "#9bbf8f"];                              // desconocido → verde
+  const engineFeltFull: [string, string] =
+    mascotColor === "#D97757" ? ["#e8c4b2", "#a85c3d"]
+    : mascotColor === "#9870ED" ? ["#d9c6f2", "#7d5bd0"]
+    : ["#a9c79b", "#6f9a63"];
   const [fill, stitch] =
     sleeping ? ["#c8c6e6", "#a6a3d6"]
     : starting ? ["#d7c9ef", "#9b86d6"]
     : system ? ["#bcd3ea", "#5a86b0"]
     : custom ? ["#cfd4dc", "#8a95a6"]
-    // Libre (sin add-on): fieltro GRIS — "espacio por llenar" neutro que contrasta
-    // sobre el tapete claro sin competir con el verde (activo) ni el índigo (dormida).
-    : status == null ? (addon ? ["#e7dcf6", "#9870ED"] : ["#c4c2cc", "rgba(70,66,86,0.45)"])
-    : full ? ["#a9c79b", "#6f9a63"]
-    : slots > 0 ? ["#cfe0bf", "#9bbf8f"]
+    // Disponible (add-on sin levantar): fieltro VERDE = "listo para usarse". Libre sin
+    // add-on = GRIS neutro. (Antes el add-on era lila; ahora el lila es solo VIVA deepseek.)
+    : status == null ? (addon ? ["#cfe0bf", "#9bbf8f"] : ["#c4c2cc", "rgba(70,66,86,0.45)"])
+    // Viva (atendiendo): color del MOTOR — lila deepseek, coral Claude.
+    : full ? engineFeltFull
+    : slots > 0 ? engineFelt
     : ["#dcd2bb", "rgba(60,42,16,0.3)"];
   const feltStyle = { "--felt-fill": fill, "--felt-stitch": stitch } as CSSProperties;
   const label = extra
@@ -1187,7 +1198,7 @@ function VmBox({ id, status, slots, max, ghosty, mascotColor, addon, kind, sysLa
   const iconTone = sleeping ? "text-indigo-400" : starting ? "text-brand-500" : system ? "text-blue-500" : "text-slate-500";
   const labelTone = extra
     ? (sleeping ? "text-indigo-500" : starting ? "text-brand-600" : system ? "text-blue-700" : "text-slate-600")
-    : addon && status == null ? "text-brand-600"
+    : addon && status == null ? "text-[#5f8a4f]"
     : sleeping ? "text-indigo-500"
     : status == null ? "text-[#55525f]"
     : "text-[#4a3f2c]";
@@ -1333,9 +1344,14 @@ function CapacityHud({ capacity }: { capacity: Capacity }) {
   // FIJO de celdas (al menos maxMachines). Cada celda lleva su posición `p`; las
   // posiciones sobrantes quedan `item: undefined` (slot libre). El número de celdas
   // sólo cambia si cambia el plan/add-ons, no en cada poll → contenedor estable.
+  // Orden DETERMINISTA por id estable. El listing del host (`extraMachines`) NO
+  // garantiza orden entre polls → sin ordenar, cada poll de 2.5s reacomodaba las
+  // cajas de servicio en distinta celda ("se la pasan bailando"). Ordenar cada
+  // grupo por su id (agent id / sandboxId, ambos estables) fija la posición: una
+  // caja solo se mueve cuando cambia el conteo real de máquinas, no en cada poll.
   const ordered: ({ kind: "machine"; m: Capacity["machines"][number] } | { kind: "extra"; s: Capacity["extraMachines"][number] })[] = [
-    ...capacity.machines.map((m) => ({ kind: "machine" as const, m })),
-    ...capacity.extraMachines.map((s) => ({ kind: "extra" as const, s })),
+    ...[...capacity.machines].sort((a, b) => a.id.localeCompare(b.id)).map((m) => ({ kind: "machine" as const, m })),
+    ...[...capacity.extraMachines].sort((a, b) => a.id.localeCompare(b.id)).map((s) => ({ kind: "extra" as const, s })),
   ];
   const totalCells = Math.max(capacity.maxMachines, ordered.length);
   const capacityCells = Array.from({ length: totalCells }, (_, p) => ({ p, item: ordered[p] }));
