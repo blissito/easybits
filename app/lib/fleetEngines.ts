@@ -123,13 +123,13 @@ export const FLEET_ENGINES: FleetEngine[] = [
     model: "Sol · Terra · Luna",
     provider: "openai",
     template: "codex-worker",
-    // El worker codex-worker se hornea en el host OVH (Fase 2) → todos los modelos
-    // not ready (opciones disabled). Seleccionable como proveedor, no creable aún.
+    // codex-worker HORNEADO y registrado en el host OVH (Fase 2, 2026-07-12) → modelos
+    // ready. El spawn inyecta OPENAI_API_KEY del vault; el worker corre @openai/codex-sdk.
     modelEnv: "CODEX_MODEL",
     models: [
-      { id: "gpt-5.6-sol", label: "Sol (tope)", ready: false },
-      { id: "gpt-5.6-terra", label: "Terra (balance)", ready: false },
-      { id: "gpt-5.6-luna", label: "Luna (rápido)", ready: false },
+      { id: "gpt-5.6-sol", label: "Sol (tope)" },
+      { id: "gpt-5.6-terra", label: "Terra (balance)" },
+      { id: "gpt-5.6-luna", label: "Luna (rápido)" },
     ],
     defaultModel: "gpt-5.6-sol",
     // Codex headless usa OPENAI_API_KEY (doc oficial); el spawn la inyecta como tal.
