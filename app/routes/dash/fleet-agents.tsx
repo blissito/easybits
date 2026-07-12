@@ -13,7 +13,7 @@ import { createFleetAgent, deleteFleetAgent, clearGroupSession, mergedCapabiliti
 import { FLEET_BUCKETS, GROUP_ALLOWLISTS, toolsParamToBuckets, bucketsToToolsParam, type ToolGroupKey } from "~/.server/mcp/toolGroups";
 import { getReservedCapacity } from "~/.server/core/sandboxReservations";
 import { listSecrets, createSecret } from "~/.server/core/secretOperations";
-import { FLEET_ENGINES, getEngine, DEFAULT_ENGINE_ID, engineCreatable, getEngineByTemplate } from "~/lib/fleetEngines";
+import { FLEET_ENGINES, getEngine, DEFAULT_ENGINE_ID, engineCreatable, getEngineForAgent } from "~/lib/fleetEngines";
 import {
   connectFleetAgent,
   disconnectFleetAgent,
@@ -234,11 +234,14 @@ export async function loader({ request }: Route.LoaderArgs) {
         // codex). undefined para ghosty-gc (modelo fijo) → sin selector de modelo.
         // `agentModel` = modelo actual efectivo (persona.env[modelEnv] o default).
         workerTemplate: p.workerTemplate,
+        // Engine del agente (desambiguado por GHOSTY_LLM) + su modelo efectivo. El
+        // panel usa engineId → getEngine() para la lista de modelos del selector.
+        engineId: getEngineForAgent(p.workerTemplate, (p.persona as { env?: Record<string, string> } | null)?.env)?.id ?? null,
         agentModel: (() => {
-          const eng = getEngineByTemplate(p.workerTemplate);
+          const penv = (p.persona as { env?: Record<string, string> } | null)?.env;
+          const eng = getEngineForAgent(p.workerTemplate, penv);
           if (!eng?.modelEnv) return null;
-          const cur = (p.persona as { env?: Record<string, string> } | null)?.env?.[eng.modelEnv];
-          return cur ?? eng.defaultModel ?? null;
+          return penv?.[eng.modelEnv] ?? eng.defaultModel ?? null;
         })(),
         // Prompt del AGENTE (persona.SYSTEM_PROMPT) — UNO, multicanal (Baileys+WABA).
         // Es el CLAUDE.md del agente; los canales lo heredan. Editado en un solo lugar.
@@ -718,13 +721,13 @@ export async function action({ request }: Route.ActionArgs) {
     // (ANTHROPIC_MODEL / CODEX_MODEL). Solo modelos READY del motor del template.
     // Aplica a VMs nuevas/recicladas (el env se inyecta al spawn). Mismo patrón que
     // set-agent-prompt. ghosty-gc no tiene modelo seleccionable → engine undefined.
-    const eng = getEngineByTemplate(fleetAgent.workerTemplate);
+    const persona = ((fleetAgent.persona ?? {}) as { env?: Record<string, string> });
+    const eng = getEngineForAgent(fleetAgent.workerTemplate, persona.env);
     if (!eng?.modelEnv) return data({ error: "Este motor no permite cambiar de modelo" }, { status: 400 });
     const picked = String(fd.get("model") || "").trim();
     if (!eng.models.some((m) => m.id === picked && m.ready !== false)) {
       return data({ error: "Modelo no disponible" }, { status: 400 });
     }
-    const persona = ((fleetAgent.persona ?? {}) as { env?: Record<string, string> });
     const env = { ...(persona.env ?? {}), [eng.modelEnv]: picked };
     await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { persona: { ...persona, env } as object } });
     return data({ ok: true });
@@ -2967,7 +2970,7 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                   llegue). ghosty-gc = modelo fijo → cp.agentModel null, no se muestra.
                   Auto-submit al cambiar. Aplica al reciclar la caja (env al spawn). */}
               {cp.agentModel && (() => {
-                const modelEng = getEngineByTemplate(cp.workerTemplate);
+                const modelEng = cp.engineId ? getEngine(cp.engineId) : null;
                 if (!modelEng) return null;
                 return (
                   <div>

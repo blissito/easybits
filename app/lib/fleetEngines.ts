@@ -81,12 +81,18 @@ export const FLEET_ENGINES: FleetEngine[] = [
   {
     id: "deepseek",
     label: "Ghosty · DeepSeek",
-    model: "deepseek-chat",
+    model: "V4 Pro · V4 Flash",
     provider: "deepseek",
     template: "ghosty-gc",
     env: { GHOSTY_LLM: "deepseek" },
-    // Modelo fijo por el worker (GHOSTY_LLM ya elige el proveedor) → sin modelEnv.
-    models: [{ id: "deepseek-chat", label: "deepseek-chat (fijo)" }],
+    // El worker ghosty-gc YA lee DEEPSEEK_MODEL (server.js:17 = OPENAI_MODEL||DEEPSEEK_MODEL||
+    // "deepseek-v4-pro") → modelo seleccionable de verdad, sin tocar el host.
+    modelEnv: "DEEPSEEK_MODEL",
+    models: [
+      { id: "deepseek-v4-pro", label: "V4 Pro (tope · agentic)" },
+      { id: "deepseek-v4-flash", label: "V4 Flash (rápido)" },
+    ],
+    defaultModel: "deepseek-v4-pro",
     secret: { name: "DEEPSEEK_API_KEY", kind: "apiKey", placeholder: "sk-..." },
   },
   {
@@ -126,7 +132,8 @@ export const FLEET_ENGINES: FleetEngine[] = [
       { id: "gpt-5.6-luna", label: "Luna (rápido)", ready: false },
     ],
     defaultModel: "gpt-5.6-sol",
-    secret: { name: "CODEX_API_KEY", kind: "apiKey", placeholder: "sk-..." },
+    // Codex headless usa OPENAI_API_KEY (doc oficial); el spawn la inyecta como tal.
+    secret: { name: "OPENAI_API_KEY", kind: "apiKey", placeholder: "sk-..." },
   },
 ];
 
@@ -140,10 +147,17 @@ export const engineCreatable = (e: FleetEngine): boolean =>
   e.models.some((m) => m.ready !== false);
 
 /**
- * Motor con MODELO SELECCIONABLE para un workerTemplate dado (tiene modelEnv). Para
- * editar el modelo de un agente existente. Los proveedores ghosty-gc (deepseek/glm/
- * easybits) comparten template y NO tienen modelEnv (modelo fijo) → undefined, sin
- * selector. claude-worker → claude; codex-worker → codex. Único por template.
+ * Motor de un agente EXISTENTE (para editar su modelo). Matchea por template Y, cuando
+ * varios motores comparten template (ghosty-gc: deepseek/easybits/glm), desambigua por
+ * persona.env.GHOSTY_LLM. claude-worker → claude; codex-worker → codex; ghosty-gc+
+ * GHOSTY_LLM=deepseek → deepseek (con modelEnv), =easybits/glm → ese engine (sin modelEnv
+ * → el caller no muestra selector). Sin GHOSTY_LLM en env → no matchea los ghosty-gc
+ * (undefined, sin selector) — seguro para agentes viejos.
  */
-export const getEngineByTemplate = (template?: string): FleetEngine | undefined =>
-  FLEET_ENGINES.find((e) => e.template === template && !!e.modelEnv);
+export const getEngineForAgent = (
+  template?: string,
+  env?: Record<string, string> | null
+): FleetEngine | undefined =>
+  FLEET_ENGINES.find(
+    (e) => e.template === template && (!e.env?.GHOSTY_LLM || e.env.GHOSTY_LLM === env?.GHOSTY_LLM)
+  );

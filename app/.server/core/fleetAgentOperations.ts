@@ -1074,9 +1074,12 @@ async function spawnVm(ctx: AuthContext, fleetAgent: { id: string; name: string 
   if (!env.FLEET_EFFORT) env.FLEET_EFFORT = FLEET_DEFAULT_EFFORT;
   // Sesión persistente: default ON para claude-worker (UN subproceso claude por
   // conversación → turnos 2..N ~2× más rápidos, validado A/B en prod ~8s→~3.8s). El
-  // código vive SOLO en el template claude-worker → excluido por template (ghosty-gc/
-  // deepseek se hará después). persona.env.FLEET_PERSISTENT_SESSION gana (override/apagar).
-  if (!env.FLEET_PERSISTENT_SESSION && fleetAgent.workerTemplate === "claude-worker") {
+  // código vive en claude-worker y en codex-worker (Thread in-process del Codex SDK →
+  // misma ganancia). ghosty-gc se hará después. persona.env gana (override/apagar).
+  if (
+    !env.FLEET_PERSISTENT_SESSION &&
+    (fleetAgent.workerTemplate === "claude-worker" || fleetAgent.workerTemplate === "codex-worker")
+  ) {
     env.FLEET_PERSISTENT_SESSION = "1";
   }
   // El host escribe el env como EnvironmentFile de systemd (una línea KEY=VALUE) y

@@ -2228,12 +2228,12 @@ export async function createAgent(
       if (dsKey) env.DEEPSEEK_API_KEY = dsKey;
     }
   }
-  // codex-worker (motor Codex / OpenAI): igual que la inyección DeepSeek, la key se
-  // resuelve del vault por su nombre canónico. Dormant hasta que el worker se hornee
-  // en el host (Fase 2). Ver ~/lib/fleetEngines (engine "codex").
-  if (params.template === "codex-worker" && !env.CODEX_API_KEY) {
-    const k = await getSecretValue(ctx.user.id, "CODEX_API_KEY").catch(() => null);
-    if (k) env.CODEX_API_KEY = k;
+  // codex-worker (motor Codex / OpenAI): el Codex SDK headless usa OPENAI_API_KEY
+  // (doc oficial). Se resuelve del vault por su nombre canónico, igual que la
+  // inyección DeepSeek. CODEX_MODEL llega por persona.env (modelEnv del registro).
+  if (params.template === "codex-worker" && !env.OPENAI_API_KEY) {
+    const k = await getSecretValue(ctx.user.id, "OPENAI_API_KEY").catch(() => null);
+    if (k) env.OPENAI_API_KEY = k;
   }
   // NOTA: la GOOGLE key (visión Gemini) NO se inyecta aquí — las credenciales de provider
   // del user viven en ghosty-studio (provider-credentials), no en el `db.secret` de easybits.
