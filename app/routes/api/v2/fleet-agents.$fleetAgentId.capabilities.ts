@@ -151,7 +151,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
       [...new Set(FLEET_BUCKETS.flatMap((b) => [b.key, ...(b.levels?.flatMap((l) => l.buckets) ?? [])]))]
         .map((k) => [k, [...(GROUP_ALLOWLISTS[k as ToolGroupKey] ?? [])]] as const)
     ),
-    efforts: ["low", "medium", "high", "xhigh"],
+    efforts: ["low", "medium", "high", "xhigh", "max"],
     skills: fleetSkills(fa).map((s) => ({ id: s.id, name: s.name, description: s.description, enabled: s.enabled !== false, fileCount: (s.files ?? []).length })),
     customMcps: mergedCapabilities(fa).filter((e) => !e.builtin && !CURATED_CAPABILITIES.some((c) => c.name === e.name)).map((e) => ({ name: e.name, label: e.label ?? e.name, transport: e.transport ?? "stdio", requiredSecrets: e.requiredSecrets ?? [] })),
   });
@@ -231,7 +231,7 @@ export async function action({ request, params }: Route.ActionArgs) {
   }
   if (action === "set-effort") {
     const effort = String(b?.effort ?? "").trim();
-    if (effort && !["low", "medium", "high", "xhigh"].includes(effort)) return json({ error: "effort inválido" }, 400);
+    if (effort && !["low", "medium", "high", "xhigh", "max"].includes(effort)) return json({ error: "effort inválido" }, 400);
     await setEnv({ FLEET_EFFORT: effort || undefined });
     return json({ ok: true });
   }
