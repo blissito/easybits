@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, lazy, Suspense, type CSSProperties } from 
 import { useFetcher, useRevalidator, data } from "react-router";
 import { motion, AnimatePresence } from "motion/react";
 import QRCode from "qrcode";
+import { Streamdown } from "streamdown";
 import { Switch } from "~/components/forms/Switch";
 import { FeltFilters } from "~/components/felt/FeltFilters";
 import { PLANS, getUserPlan, getFleetBox, NEXT_PLAN } from "~/lib/plans";
@@ -1687,6 +1688,12 @@ function WabaInboxModal({
 // /api/v2/fleet-agents/:id/message-stream (Bearer = token del agente) y stremea la
 // respuesta token-por-token. El primer mensaje levanta el VM del cerebro (~segundos).
 // Portado del AgentLivePreview de ghosty-studio, autocontenido (texto plano, sin deps).
+// Cache de historial por agente, FUERA del ciclo de vida del drawer: al cerrar/reabrir
+// la misma conversación mostramos lo cacheado al instante (sin skeleton) y revalidamos
+// en background. El skeleton solo aparece la PRIMERA vez (cache vacío). Módulo-level →
+// sobrevive el unmount del drawer.
+const testChatHistory = new Map<string, Array<{ role: "user" | "bot"; text: string }>>();
+
 function TestChatDrawer({
   agent,
   onClose,
@@ -1694,10 +1701,13 @@ function TestChatDrawer({
   agent: { id: string; name: string | null; token: string };
   onClose: () => void;
 }) {
-  const [msgs, setMsgs] = useState<Array<{ role: "user" | "bot"; text: string }>>([]);
+  const [msgs, setMsgs] = useState<Array<{ role: "user" | "bot"; text: string }>>(
+    () => testChatHistory.get(agent.id) ?? []
+  );
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
-  const [loadingHistory, setLoadingHistory] = useState(true);
+  // Skeleton solo si NO hay cache (primera apertura); reaperturas muestran el cache ya.
+  const [loadingHistory, setLoadingHistory] = useState(() => !testChatHistory.has(agent.id));
   // Modo admin: el turno inyecta el MCP admin (self-config + set_agent_prompt). Solo
   // aquí (drawer del dueño, sesión web validada server-side) — nunca un canal público.
   const [adminMode, setAdminMode] = useState(false);
@@ -1722,6 +1732,11 @@ function TestChatDrawer({
       .finally(() => { if (alive) setLoadingHistory(false); });
     return () => { alive = false; };
   }, [agent.id, agent.token, groupId]);
+
+  // Persiste el hilo en el cache módulo-level en cada cambio → reapertura instantánea.
+  useEffect(() => {
+    if (msgs.length) testChatHistory.set(agent.id, msgs);
+  }, [agent.id, msgs]);
 
   useEffect(() => {
     bodyRef.current?.scrollTo({ top: bodyRef.current.scrollHeight });
@@ -1836,13 +1851,23 @@ function TestChatDrawer({
             msgs.map((m, i) => (
               <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
                 <div
-                  className={`max-w-[80%] px-3.5 py-2 rounded-2xl text-sm whitespace-pre-wrap break-words ${
+                  className={`max-w-[80%] px-3.5 py-2 rounded-2xl text-sm break-words ${
                     m.role === "user"
-                      ? "bg-brand-500 text-white rounded-br-md"
+                      ? "bg-brand-500 text-white rounded-br-md whitespace-pre-wrap"
                       : "bg-white border-2 border-gray-200 text-gray-900 rounded-bl-md"
                   }`}
                 >
-                  {m.text || (m.role === "bot" ? <span className="text-gray-400">escribiendo…</span> : "")}
+                  {m.role === "bot" ? (
+                    m.text ? (
+                      // Streamdown = markdown streaming-aware: renderiza markdown parcial
+                      // sin romperse mientras el bot streamea token-por-token.
+                      <Streamdown>{m.text}</Streamdown>
+                    ) : (
+                      <span className="text-gray-400">escribiendo…</span>
+                    )
+                  ) : (
+                    m.text
+                  )}
                 </div>
               </div>
             ))

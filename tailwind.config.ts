@@ -1,7 +1,12 @@
 import type { Config } from "tailwindcss";
 
 export default {
-  content: ["./app/**/{**,.client,.server}/**/*.{js,jsx,ts,tsx}"],
+  content: [
+    "./app/**/{**,.client,.server}/**/*.{js,jsx,ts,tsx}",
+    // Streamdown aplica clases Tailwind a su markdown renderizado (drawer de prueba de
+    // flota). Tailwind v3 debe escanear su dist o purga esas clases → markdown sin estilo.
+    "./node_modules/streamdown/dist/*.js",
+  ],
   theme: {
     extend: {
       colors: {
