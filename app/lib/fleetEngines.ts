@@ -58,6 +58,13 @@ export type FleetEngine = {
   defaultModel?: string;
   /** null = motor sin credencial (proxy medido de EasyBits). */
   secret?: FleetEngineSecret | null;
+  /**
+   * ¿El motor VE imágenes de forma nativa? true = multimodal (Claude) → el arnés
+   * dropea la imagen a disco y le dice "ábrela con Read". Ausente/false = text-only
+   * (DeepSeek/GLM/Codex-worker) → el arnés le apunta a la tool `see_image` (Gemini
+   * vision) en vez de Read, para que no CONFABULE el contenido. Ver fleet-vision MCP.
+   */
+  vision?: boolean;
 };
 
 export const FLEET_ENGINES: FleetEngine[] = [
@@ -77,6 +84,7 @@ export const FLEET_ENGINES: FleetEngine[] = [
     ],
     defaultModel: "claude-sonnet-5",
     secret: { name: "CLAUDE_CODE_OAUTH_TOKEN", kind: "oauth", placeholder: "sk-ant-oat..." },
+    vision: true, // Claude es multimodal → ve la imagen con Read; no necesita see_image.
   },
   {
     id: "deepseek",
@@ -141,6 +149,16 @@ export const DEFAULT_ENGINE_ID = "claude";
 
 export const getEngine = (id?: string): FleetEngine | undefined =>
   FLEET_ENGINES.find((e) => e.id === id);
+
+/**
+ * ¿El motor de este agente VE imágenes nativas? Default seguro = false (ciego):
+ * un motor desconocido o sin flag se trata como text-only → recibe see_image, que
+ * es inofensivo si resulta que sí veía. Solo `vision:true` (Claude) usa Read nativo.
+ */
+export const engineHasVision = (
+  template?: string,
+  env?: Record<string, string> | null
+): boolean => getEngineForAgent(template, env)?.vision === true;
 
 /** ¿El proveedor tiene al menos un modelo listo? (si no, se puede elegir pero no crear). */
 export const engineCreatable = (e: FleetEngine): boolean =>

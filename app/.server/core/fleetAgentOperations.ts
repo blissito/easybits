@@ -27,6 +27,7 @@ import {
 import { getSecretValue } from "~/.server/core/secretOperations";
 import { getReservedCapacity } from "~/.server/core/sandboxReservations";
 import { getUserPlan, PLANS } from "~/lib/plans";
+import { engineHasVision } from "~/lib/fleetEngines";
 import { profileToToolsParam, DEFAULT_PROFILE, GROUP_ALLOWLISTS, type ToolGroupKey } from "~/.server/mcp/toolGroups";
 import { getPlatformDefaultClient, buildPublicAssetUrl } from "~/.server/storage";
 import { checkSandboxRateLimit } from "~/.server/rateLimiter";
@@ -901,6 +902,46 @@ function artifactMcpServer(fleetAgent: { id: string; token: string }): Record<st
   };
 }
 
+// Vision MCP server — `see_image` (Gemini vision + OCR) para que un motor TEXT-ONLY
+// (DeepSeek/GLM/Codex-worker) pueda VER una imagen en vez de confabular su contenido.
+// Mismo patrón que renderMcpServer (HTTP, auth = fleetAgent token), inyectado
+// INCONDICIONAL en todo turno → siempre ofrecida (un motor multimodal simplemente
+// no la llama). El note de imagen (más abajo) apunta a esta tool cuando el motor es ciego.
+function visionMcpServer(fleetAgent: { id: string; token: string }): Record<string, unknown> {
+  const base = (process.env.BASE_URL || "https://www.easybits.cloud").replace(/\/$/, "");
+  const url = `${base}/api/v2/fleet-vision/${fleetAgent.id}/mcp?token=${encodeURIComponent(fleetAgent.token)}`;
+  return {
+    vision: { type: "http", url, headers: { Authorization: `Bearer ${fleetAgent.token}` } },
+  };
+}
+
+// Canal-side vision para motores CIEGOS (text-only): describe una imagen ENTRANTE
+// server-side (ya tenemos los bytes) e inyecta el texto al turno — el modelo nunca
+// tiene que "acordarse" de llamar see_image para lo que el usuario mandó, y no hay
+// URL de por medio (cubre `bytes` inline de GTeams y el path de baileys por igual).
+// La tool see_image queda para que el AGENTE verifique sus PROPIOS outputs (PDFs que
+// genera, con su URL). Devuelve la descripción + OCR, o null si Gemini falla.
+async function describeInboundImage(
+  ownerId: string,
+  base64: string,
+  mediaType: string,
+  question?: string
+): Promise<string | null> {
+  try {
+    const { consumeService } = await import("../services/consume");
+    const data = new Uint8Array(Buffer.from(base64, "base64"));
+    const r = await consumeService<import("../services/providers/describe").DescribeImageOutput>(
+      "image.gemini.describe",
+      { images: [{ data, mediaType }], question },
+      { userId: ownerId }
+    );
+    return r.data.description || null;
+  } catch (e) {
+    console.error("describeInboundImage failed:", e);
+    return null;
+  }
+}
+
 // Admin MCP server — gestiona números/identidad/capacidades del propio FleetAgent.
 // Mismo patrón que renderMcpServer (HTTP, auth = fleetAgent token), pero inyectado
 // SOLO en turnos admin (msg.admin) → el dueño administra el agente desde su
@@ -1394,15 +1435,32 @@ export async function routeMessage(
     }
   }
 
-  // NATIVE Claude vision: drop the inbound image onto the worker's disk and tell
-  // the agent to open it with Read (Claude is multimodal — no Gemini describe).
-  // The actual write happens INSIDE the turn loop so a self-heal retry re-writes
-  // it onto the fresh VM. Path is unique per turn to avoid cross-session clobber.
+  // ¿El motor VE imágenes nativas? (Claude sí; DeepSeek/GLM/… no). Gobierna cómo se
+  // trata TODA imagen entrante (msg.image de baileys + FileParts de GTeams, abajo).
+  const engineSees = engineHasVision(
+    fleetAgent.workerTemplate,
+    (fleetAgent.persona as { env?: Record<string, string> } | null)?.env
+  );
+
+  // Imagen entrante (baileys/WhatsApp) — la ruta depende de si el motor ve:
+  //  · multimodal (Claude): dropea la imagen a disco y dile "ábrela con Read".
+  //  · text-only: Read NO ve imágenes → si le decimos "ábrela con Read" el modelo
+  //    CONFABULA su contenido. Describe la imagen SERVER-SIDE (Gemini + OCR) e inyecta
+  //    el texto → ve de verdad, sin depender de una tool ni de una URL.
+  // El write a disco (multimodal) ocurre DENTRO del loop para cubrir self-heal.
   let imgPath: string | null = null;
   if (msg.image && !bareCompact) {
-    imgPath = `/tmp/wa-img-${placed.sessionUuid}-${Date.now()}.${msg.image.ext}`;
-    const urlNote = msg.image.url ? ` (si necesitas editarla/reusarla con tus tools de imagen, su URL es ${msg.image.url})` : "";
-    content = `[El usuario envió una IMAGEN. Está guardada en ${imgPath} — ÁBRELA con la tool Read para verla antes de responder.${urlNote}]\n${content}`;
+    if (engineSees) {
+      imgPath = `/tmp/wa-img-${placed.sessionUuid}-${Date.now()}.${msg.image.ext}`;
+      const urlNote = msg.image.url ? ` (si necesitas editarla/reusarla con tus tools de imagen, su URL es ${msg.image.url})` : "";
+      content = `[El usuario envió una IMAGEN. Está guardada en ${imgPath} — ÁBRELA con la tool Read para verla antes de responder.${urlNote}]\n${content}`;
+    } else {
+      const mediaType = `image/${msg.image.ext === "jpg" ? "jpeg" : msg.image.ext}`;
+      const desc = await describeInboundImage(fleetAgent.ownerId, msg.image.base64, mediaType, msg.text.trim() || undefined);
+      content = desc
+        ? `[El usuario envió una IMAGEN. Esto es lo que muestra (visión Gemini + OCR):\n${desc}\n\nResponde con base en esto — NO inventes nada más. Si generas un PDF/PNG, usa la tool see_image sobre su URL para VERIFICAR el resultado.]\n${content}`
+        : `[El usuario envió una IMAGEN pero no pude analizarla. Pídele que la reenvíe — NO inventes qué muestra.]\n${content}`;
+    }
   }
 
   // Archivos A2A (FileParts) → asigna un path por archivo y anótalos en el prompt; se
@@ -1410,13 +1468,27 @@ export async function routeMessage(
   const filePaths: { path: string; base64: string }[] = [];
   if (inboundFiles.length && !bareCompact) {
     const notes: string[] = [];
-    inboundFiles.forEach((f, i) => {
+    for (let i = 0; i < inboundFiles.length; i++) {
+      const f = inboundFiles[i];
+      const isImage = f.mimeType.startsWith("image/");
+      const named = f.name ? `, "${f.name}"` : "";
+      // Motor ciego + IMAGEN (así llega el adjunto de GTeams): descríbela server-side
+      // e inyecta el texto — NO la escribas a disco (Read no la vería) ni dejes que el
+      // modelo la adivine. Los archivos NO-imagen (pdf/doc/txt) sí van a disco + Read.
+      if (isImage && !engineSees) {
+        const desc = await describeInboundImage(fleetAgent.ownerId, f.base64, f.mimeType, msg.text.trim() || undefined);
+        notes.push(
+          desc
+            ? `[El usuario envió una IMAGEN${named}. Esto es lo que muestra (visión Gemini + OCR):\n${desc}\n\nResponde con base en esto — NO inventes nada más.]`
+            : `[El usuario envió una IMAGEN${named} pero no pude analizarla. Pídele que la reenvíe — NO inventes qué muestra.]`
+        );
+        continue;
+      }
       const path = `/tmp/gt-file-${placed.sessionUuid}-${i}-${Date.now()}.${extFromMime(f.mimeType, f.name)}`;
       filePaths.push({ path, base64: f.base64 });
-      const kind = f.mimeType.startsWith("image/") ? "IMAGEN" : "ARCHIVO";
-      const named = f.name ? `, "${f.name}"` : "";
+      const kind = isImage ? "IMAGEN" : "ARCHIVO";
       notes.push(`[El usuario envió un ${kind} (${f.mimeType}${named}) guardado en ${path} — ÁBRELO con la tool Read.]`);
-    });
+    }
     content = `${notes.join("\n")}\n${content}`;
   }
 
@@ -1583,6 +1655,9 @@ export async function routeMessage(
             ...(await resolveGroupMcpServers(fleetAgent, cfgId, fleetAgent.ownerId)),
             ...renderMcpServer(fleetAgent),
             ...artifactMcpServer(fleetAgent),
+            // vision = SIEMPRE inyectado (como render) → un motor ciego puede VER una
+            // imagen con see_image en vez de confabular. El multimodal no la llama.
+            ...visionMcpServer(fleetAgent),
             // admin = SOLO en turnos admin (dueño en su conversación admin de WABA).
             ...(msg.admin ? adminMcpServer(fleetAgent) : {}),
           },

@@ -225,6 +225,8 @@ export default [
     // Always-on `render` MCP for fleet agents (PDF/screenshots via the on-demand Gotenberg box)
     route("fleet-render/:fleetAgentId/mcp", "routes/api/v2/fleet-render.$fleetAgentId.mcp.ts"),
     route("fleet-artifact/:fleetAgentId/mcp", "routes/api/v2/fleet-artifact.$fleetAgentId.mcp.ts"),
+    // Always-on `vision` MCP for fleet agents — see_image (Gemini) so a text-only engine SEES an image instead of confabulating
+    route("fleet-vision/:fleetAgentId/mcp", "routes/api/v2/fleet-vision.$fleetAgentId.mcp.ts"),
     // Admin MCP for fleet agents — gestiona números/identidad/capacidades; inyectado SOLO en turnos admin
     route("fleet-admin/:fleetAgentId/mcp", "routes/api/v2/fleet-admin.$fleetAgentId.mcp.ts"),
     // WABA channel — Formmy forwards inbound here; partner writes per-number config
