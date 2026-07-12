@@ -4,7 +4,6 @@ import {
   mergedCapabilities,
   DEFAULT_MCP_CATALOG,
   CURATED_CAPABILITIES,
-  FLEET_DEFAULT_MODEL,
   FLEET_DEFAULT_EFFORT,
   fleetSkills,
   type GroupConfig,
@@ -12,6 +11,7 @@ import {
 } from "~/.server/core/fleetAgentOperations";
 import { FLEET_BUCKETS, GROUP_ALLOWLISTS, bucketsToToolsParam, toolsParamToBuckets, type ToolGroupKey } from "~/.server/mcp/toolGroups";
 import { createSecret, listSecrets } from "~/.server/core/secretOperations";
+import { getEngineForAgent } from "~/lib/fleetEngines";
 
 // API-first capability config for a FleetAgent. Both the EasyBits dashboard AND
 // the external "Slack-type" app configure agents through THIS surface — the UI is
@@ -104,6 +104,16 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   const env = persona.env ?? {};
   const groupCfgs = cfgs(fa);
   const bucketsParam = groupCfgs["*"]?.toolGroup ?? env.EASYBITS_TOOL_GROUP;
+  // Modelo — FUENTE ÚNICA = registro de Motores (FLEET_ENGINES), igual que el dash.
+  // El engine se desambigua por template+GHOSTY_LLM; su modelo vive en persona.env
+  // [modelEnv] (ANTHROPIC_MODEL/DEEPSEEK_MODEL/CODEX_MODEL). Motores sin modelEnv
+  // (easybits fijo) → sin opciones → el cliente oculta el selector.
+  const engForModel = getEngineForAgent(fa.workerTemplate, env);
+  const modelEnvKey = engForModel?.modelEnv;
+  const currentModel = modelEnvKey ? (env[modelEnvKey] ?? engForModel?.defaultModel ?? "") : "";
+  const modelOptions = modelEnvKey
+    ? (engForModel?.models ?? []).filter((m) => m.ready !== false).map((m) => ({ key: m.id, label: m.label }))
+    : [];
   return json({
     builtins: DEFAULT_MCP_CATALOG.map((e) => ({ name: e.name, label: e.label ?? e.name, channel: e.channel ?? null, bucketScoped: !!e.bucketScoped })),
     capabilities,
@@ -113,32 +123,19 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     ownerDbs,
     agent: {
       systemPrompt: env.SYSTEM_PROMPT ?? "",
-      // Model lever REAL por template (no inventado): ghosty-gc usa GHOSTY_LLM
-      // (deepseek/easybits), codex-worker usa CODEX_MODEL (Codex/OpenAI), el resto
-      // ANTHROPIC_MODEL (Claude). El valor es el efectivo (override o default).
+      // Modelo efectivo del agente (registry-driven, ver arriba). "" si el motor no
+      // tiene modelo seleccionable (easybits) → el cliente oculta el selector.
       workerTemplate: fa.workerTemplate,
-      model:
-        fa.workerTemplate === "ghosty-gc"
-          ? (env.GHOSTY_LLM ?? "deepseek")
-          : fa.workerTemplate === "codex-worker"
-          ? (env.CODEX_MODEL ?? "gpt-5.6-sol")
-          : (env.ANTHROPIC_MODEL ?? FLEET_DEFAULT_MODEL),
-      modelLabel: fa.workerTemplate === "ghosty-gc" ? "Cerebro (LLM)" : "Modelo",
+      model: currentModel,
+      modelLabel: "Modelo",
       effort: env.FLEET_EFFORT ?? FLEET_DEFAULT_EFFORT,
       hasOwnNumber: !!fa.hasOwnNumber,
       buckets: [...toolsParamToBuckets(bucketsParam)],
     },
-    // Opciones de modelo REALES para ESTE template (fuente = levers del dash).
-    models: fa.workerTemplate === "ghosty-gc"
-      ? [
-          { key: "deepseek", label: "DeepSeek — tu key (off-meter)" },
-          { key: "easybits", label: "EasyBits — Claude medido" },
-        ]
-      : [
-          { key: "claude-sonnet-5", label: "Sonnet 5 (equilibrado)" },
-          { key: "claude-opus-4-8", label: "Opus 4.8 (máxima capacidad)" },
-          { key: "claude-haiku-4-5-20251001", label: "Haiku 4.5 (rápido y barato)" },
-        ],
+    // Opciones de modelo del proveedor (fuente única = FLEET_ENGINES). Vacío = sin
+    // selector (motor de modelo fijo). Claude: Opus/Fable/Sonnet; DeepSeek: V4 Pro/
+    // Flash; Codex: Sol/Terra/Luna.
+    models: modelOptions,
     buckets: FLEET_BUCKETS.map((b) => ({
       key: b.key,
       label: b.label,
@@ -220,16 +217,16 @@ export async function action({ request, params }: Route.ActionArgs) {
     return json({ ok: true });
   }
   if (action === "set-model") {
-    // El lever REAL depende del template: ghosty-gc = GHOSTY_LLM (deepseek/easybits),
-    // el resto = ANTHROPIC_MODEL (Claude). Se escribe el campo correcto server-side.
+    // Registry-driven (misma lógica que el dash): el engine (desambiguado por template+
+    // GHOSTY_LLM) define modelEnv y la lista de modelos ready. Se escribe persona.env
+    // [modelEnv] (ANTHROPIC_MODEL / DEEPSEEK_MODEL / CODEX_MODEL).
     const model = String(b?.model ?? "").trim();
-    if (fa.workerTemplate === "ghosty-gc") {
-      if (model && !["deepseek", "easybits"].includes(model)) return json({ error: "cerebro inválido" }, 400);
-      await setEnv({ GHOSTY_LLM: model || undefined });
-    } else {
-      if (model && !/^claude-/.test(model)) return json({ error: "modelo inválido" }, 400);
-      await setEnv({ ANTHROPIC_MODEL: model || undefined });
+    const eng = getEngineForAgent(fa.workerTemplate, persona.env);
+    if (!eng?.modelEnv) return json({ error: "este motor no permite cambiar de modelo" }, 400);
+    if (model && !eng.models.some((m) => m.id === model && m.ready !== false)) {
+      return json({ error: "modelo no disponible" }, 400);
     }
+    await setEnv({ [eng.modelEnv]: model || undefined });
     return json({ ok: true });
   }
   if (action === "set-effort") {
