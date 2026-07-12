@@ -2353,6 +2353,32 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                 );
               })()}
 
+              {/* Modelo del agente (global, todos los canales) — chip compacto en el
+                  header expandido. persona.env[modelEnv]; aplica al reciclar la caja
+                  (tooltip). Solo motores con modelo seleccionable (claude/deepseek/codex). */}
+              {isOpen && p.agentModel && (() => {
+                const eng = p.engineId ? getEngine(p.engineId) : null;
+                if (!eng) return null;
+                return (
+                  <div className="mt-2 flex items-center gap-2 text-xs">
+                    <span className="text-gray-400">Modelo:</span>
+                    <fetcher.Form method="post" key={`sm-inline-${p.id}`} className="contents">
+                      <input type="hidden" name="intent" value="set-model" />
+                      <input type="hidden" name="fleetAgentId" value={p.id} />
+                      <select name="model" defaultValue={p.agentModel} title="Aplica al reciclar la caja del agente"
+                        onChange={(e) => e.currentTarget.form?.requestSubmit()}
+                        className="border-2 border-gray-200 rounded-full px-2 py-0.5 text-xs bg-white font-semibold text-gray-600">
+                        {eng.models.map((m) => (
+                          <option key={m.id} value={m.id} disabled={m.ready === false}>
+                            {m.label}{m.ready === false ? " · próximamente" : ""}
+                          </option>
+                        ))}
+                      </select>
+                    </fetcher.Form>
+                  </div>
+                );
+              })()}
+
               {isOpen && (() => {
                 // Cada canal es un MÓDULO uniforme { kind, label, dot, count }. Los
                 // grupos son los destinos del canal Baileys; los números, los de WABA.
@@ -2981,33 +3007,9 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                 </div>
               </div>
 
-              {/* Modelo del AGENTE — cambiable en vivo (persona.env[modelEnv]). Solo
-                  motores con modelo seleccionable (claude-worker; codex-worker cuando
-                  llegue). ghosty-gc = modelo fijo → cp.agentModel null, no se muestra.
-                  Auto-submit al cambiar. Aplica al reciclar la caja (env al spawn). */}
-              {cp.agentModel && (() => {
-                const modelEng = cp.engineId ? getEngine(cp.engineId) : null;
-                if (!modelEng) return null;
-                return (
-                  <div>
-                    <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Modelo</span>
-                    <fetcher.Form method="post" className="mt-1" key={`sm-${cp.id}`}>
-                      <input type="hidden" name="intent" value="set-model" />
-                      <input type="hidden" name="fleetAgentId" value={cp.id} />
-                      <select name="model" defaultValue={cp.agentModel}
-                        onChange={(e) => e.currentTarget.form?.requestSubmit()}
-                        className="w-full border-2 border-gray-300 rounded-lg px-2 py-1.5 text-sm bg-white">
-                        {modelEng.models.map((m) => (
-                          <option key={m.id} value={m.id} disabled={m.ready === false}>
-                            {m.label}{m.ready === false ? " · próximamente" : ""}
-                          </option>
-                        ))}
-                      </select>
-                    </fetcher.Form>
-                    <p className="text-[11px] text-gray-400 mt-0.5">Aplica al reciclar la caja del agente.</p>
-                  </div>
-                );
-              })()}
+              {/* El selector de Modelo (global del agente) vive en el header del card
+                  expandido, NO aquí — este modal es config POR-GRUPO y confundía el
+                  alcance (el modelo es per-agente, no per-canal). */}
 
               {/* Instrucciones del AGENTE — UNA, multicanal (Baileys + WABA), como el
                   CLAUDE.md de nanoclaw. Editor real: alto, importar .md/.txt, Expandir. */}
