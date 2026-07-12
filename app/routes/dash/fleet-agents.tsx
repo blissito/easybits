@@ -1972,6 +1972,7 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
     });
   const [editingName, setEditingName] = useState<string | null>(null);
   const [draftName, setDraftName] = useState("");
+  const [copiedId, setCopiedId] = useState<string | null>(null);
   const [optimisticNames, setOptimisticNames] = useState<Record<string, string>>({});
   const [wabaConnecting, setWabaConnecting] = useState<string | null>(null);
   const [wabaError, setWabaError] = useState<string | null>(null);
@@ -2283,19 +2284,34 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                   </button>
                   {/* Fantasmita del agente (tamaño form), color persistente por tipo de cerebro. */}
                   {(() => { const t = blinkTiming(p.id); return <GhostyMascot className="w-10 h-12 shrink-0" color={p.mascotColor} offset={t.offset} period={t.period} />; })()}
-                  {editingName === p.id ? (
-                    <input autoFocus value={draftName} onChange={(e) => setDraftName(e.target.value)}
-                      onBlur={() => { const v = draftName.trim(); if (v !== displayName) { setOptimisticNames((s) => ({ ...s, [p.id]: v })); fetcher.submit({ intent: "rename", fleetAgentId: p.id, name: v }, { method: "post" }); } setEditingName(null); }}
-                      onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); if (e.key === "Escape") setEditingName(null); }}
-                      placeholder="Sin nombre"
-                      className="font-bold border-b-2 border-brand-500 bg-transparent outline-none min-w-0 flex-1 px-0.5" />
-                  ) : (
-                    <button type="button" title="Clic para renombrar"
-                      onClick={() => { setEditingName(p.id); setDraftName(displayName); }}
-                      className="font-bold truncate text-left hover:underline decoration-dotted underline-offset-4">
-                      {displayName || "Sin nombre"}
+                  <div className="flex flex-col min-w-0 flex-1">
+                    {editingName === p.id ? (
+                      <input autoFocus value={draftName} onChange={(e) => setDraftName(e.target.value)}
+                        onBlur={() => { const v = draftName.trim(); if (v !== displayName) { setOptimisticNames((s) => ({ ...s, [p.id]: v })); fetcher.submit({ intent: "rename", fleetAgentId: p.id, name: v }, { method: "post" }); } setEditingName(null); }}
+                        onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); if (e.key === "Escape") setEditingName(null); }}
+                        placeholder="Sin nombre"
+                        className="font-bold border-b-2 border-brand-500 bg-transparent outline-none w-full px-0.5" />
+                    ) : (
+                      <button type="button" title="Clic para renombrar"
+                        onClick={() => { setEditingName(p.id); setDraftName(displayName); }}
+                        className="font-bold truncate text-left hover:underline decoration-dotted underline-offset-4">
+                        {displayName || "Sin nombre"}
+                      </button>
+                    )}
+                    {/* ID del agente + copy — útil para el SDK/API (fleetAgentId). */}
+                    <button type="button" title="Copiar ID del agente"
+                      onClick={() => { navigator.clipboard?.writeText(p.id); setCopiedId(p.id); setTimeout(() => setCopiedId((c) => (c === p.id ? null : c)), 1200); }}
+                      className="flex items-center gap-1 text-[11px] text-gray-400 font-mono hover:text-gray-600 max-w-full self-start">
+                      <span className="truncate">{p.id}</span>
+                      {copiedId === p.id ? (
+                        <span className="text-green-600 shrink-0">✓ copiado</span>
+                      ) : (
+                        <svg className="w-3 h-3 shrink-0" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.6">
+                          <rect x="7" y="7" width="9" height="9" rx="1.5" /><path d="M4 13V4.5A1.5 1.5 0 0 1 5.5 3H13" />
+                        </svg>
+                      )}
                     </button>
-                  )}
+                  </div>
                 </div>
                 <button type="button" onClick={() => setChatAgent({ id: p.id, name: p.name, token: p.token })}
                   title="Probar el agente en un chat, sin conectar canales"
