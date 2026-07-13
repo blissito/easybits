@@ -125,6 +125,20 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     capabilities,
     secretsPresent: [...secretNames],
     groups: groupCfgs,
+    // Canales configurables del agente (para la UI): el canal WEB (burbujas en
+    // landings) es SIEMPRE ofrecido bajo la clave estable "web" — su config
+    // (prompt/tools per-canal via las acciones set-* con groupId:"web") aplica a
+    // todas las burbujas. + los grupos WhatsApp/WABA/teams ya configurados.
+    channels: [
+      { key: "web", type: "web", label: "Canal web (burbuja)" },
+      ...Object.keys(groupCfgs)
+        .filter((k) => k !== "*" && k !== "web")
+        .map((k) => ({
+          key: k,
+          type: k.startsWith("waba:") ? "waba" : k === "teams" ? "teams" : "whatsapp",
+          label: k,
+        })),
+    ],
     ownerFiles,
     ownerDbs,
     agent: {

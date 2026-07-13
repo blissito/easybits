@@ -383,6 +383,14 @@ export async function connectFleetAgent(fleetAgentId: string, opts: { pairingPho
   // Honor an in-flight connect only if it's RECENT — a stale `connecting` (its
   // socket hung / a deploy killed it) must not wedge re-pairing forever.
   if (existing?.connecting && Date.now() - (existing.startedAt ?? 0) < CONNECTING_STALE_MS) return;
+  // Idempotencia: si YA hay un socket vivo y NO estás re-pareando con un número,
+  // `connect` es no-op — no tires una conexión que ya sirve (un reseller que llama
+  // connect sobre un agente conectado, ej. tania, no debe cortarlo). Solo re-init si
+  // el status persistido NO es "connected" (socket colgado) o si mandas pairingPhone.
+  if (existing && !pairingPhone) {
+    const cur = await db.fleetAgent.findUnique({ where: { id: fleetAgentId }, select: { baileys: true } });
+    if ((cur?.baileys as { status?: string } | null)?.status === "connected") return;
+  }
   if (existing) {
     try { existing.sock.ev.removeAllListeners("connection.update"); existing.sock.end(undefined); } catch {}
     sockets.delete(fleetAgentId);

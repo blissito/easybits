@@ -1423,8 +1423,15 @@ export async function routeMessage(
 
   let content = bareCompact ? "/compact" : formatContent(msg); // stable UUID → per-conversation .jsonl transcript
   let placed = await pickOrSpawn(ctx, fleetAgent, msg.groupId);
-  // Config unit for key + capabilities: the number (WABA) or the conversation itself.
-  const cfgId = msg.configGroupId ?? msg.groupId;
+  // Config unit for key + capabilities: the number (WABA) o la conversación misma.
+  // Canal WEB (bubbles en landings): los groupId son `web-<uuid>` EFÍMEROS (uno por
+  // conversación) → normalizamos a la clave ESTABLE "web" para que TODAS las burbujas
+  // compartan UNA config configurable (prompt/tools) — igual que Teams usa "teams".
+  // El ruteo de conversación sigue por msg.groupId (route pegajosa); solo la config
+  // se resuelve por cfgId. El denikApiKey per-turn (msg.denikApiKey) sigue ganando,
+  // así que el scope reseller por-customer no se ve afectado.
+  const rawCfgId = msg.configGroupId ?? msg.groupId;
+  const cfgId = /^web(-|$)/.test(rawCfgId) ? "web" : rawCfgId;
   // Teams: EasyBits no sabe de la conexión (vive en GTeams). La INFERIMOS del primer
   // turno con cfgId "teams" → estampa connectedAt (idempotente: un solo write) para
   // prender el indicador del canal en /dash/flota. Guarded (.catch): jamás tumba el turno.
