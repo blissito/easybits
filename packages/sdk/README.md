@@ -342,6 +342,50 @@ Templates: `code-interpreter` (Python + Jupyter kernel + numpy/pandas/matplotlib
 `ubuntu`, `node`, `bun`, and more. Use `eb.listTemplates()` for the catalog.
 For one-off snippets without persistent state, use `sbx.runCode(code, { lang })`.
 
+## Fleet Agents
+
+Elastic fleet agents route conversations to ephemeral workers (WhatsApp, WABA,
+web). Create/list/delete authenticate with the client credential (a user OAuth JWT
+with `WRITE` scope); **every config and message call takes the per-agent `token`
+returned by `create()`** — persist `{ id, token }` and reuse the token as the
+second argument. One client instance can configure many agents.
+
+```ts
+// Lifecycle — auth = client credential (pass the user JWT as apiKey)
+const eb = new EasybitsClient({ apiKey: userJwt });
+const { fleetAgent } = await eb.fleet.create({ name: "Tania", systemPrompt: "...", model: "claude-sonnet-5" });
+const { id, token } = fleetAgent;              // persist BOTH
+await eb.fleet.list();                          // { pools: [...] }
+await eb.fleet.delete(id);
+
+// Read config — auth = per-agent token
+const caps = await eb.fleet.getCapabilities(id, token);
+caps.agent.model;      // "claude-sonnet-5"
+caps.agent.effort;     // "medium"
+caps.skills;           // [{ id, name, enabled, ... }]
+
+// Agent-level config
+await eb.fleet.setName(id, token, "Tania");
+await eb.fleet.setAgentPrompt(id, token, "New base instructions...");
+await eb.fleet.setModel(id, token, "claude-opus-4-8");
+await eb.fleet.setEffort(id, token, "high");           // low|medium|high|xhigh|max
+await eb.fleet.toggleOwnNumber(id, token, true);
+await eb.fleet.addMcp(id, token, { name: "stripe", pkg: "@stripe/mcp", requiredSecret: "STRIPE_KEY" });
+await eb.fleet.toggleSkill(id, token, { skillId: "abc", on: true });
+
+// Per-channel config (groupId; "*" = the agent's default)
+await eb.fleet.setGroupPrompt(id, token, "*", "Extra per-channel instructions");
+await eb.fleet.setToolGroup(id, token, "*", { buckets: ["documentos", "db", "db-write"] });
+await eb.fleet.setCapLevel(id, token, "*", { cap: "denik", level: "write" });
+
+// Messaging
+const { reply } = await eb.fleet.message(id, token, { groupId: "web-123", text: "Hola" });
+```
+
+`getCapabilities` returns the full catalog + current state (builtins, capabilities,
+buckets, `bucketTools`, models, skills, per-group config). See the type
+`FleetCapabilities` for the shape.
+
 ## MCP Integration
 
 For **AI agents**, the same sandboxes are available as MCP tools (the agent calls
