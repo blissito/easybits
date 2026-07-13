@@ -1715,6 +1715,11 @@ console.log(status.result);  // resultado final del agente`} />
               <a href="/dash/flota" className="underline font-medium">/dash/flota</a> — crear agentes, vincular WhatsApp, prender/apagar grupos y desconectar.
             </div>
 
+            <div className="mb-6 bg-purple-50 border-2 border-purple-300 rounded-xl p-4 text-sm">
+              ¿Construyes sobre EasyBits? Crea y configura agentes por código con el{" "}
+              <a href="#sdk" className="underline font-medium">SDK</a> (<code className="bg-gray-100 px-1 rounded">{`eb.fleet.create({ engine, name, systemPrompt })`}</code>, <code className="bg-gray-100 px-1 rounded">eb.fleet.setModel</code>, <code className="bg-gray-100 px-1 rounded">setAgentPrompt</code>, <code className="bg-gray-100 px-1 rounded">setToolGroup</code>…) o la REST <code className="bg-gray-100 px-1 rounded">/api/v2/fleet-agents</code>. Motores: Claude, DeepSeek, Codex. Así es como <strong>Formmy</strong> configura sus agentes en tu flota.
+            </div>
+
             <h3 className="text-lg font-bold mb-3">Cómo conectar (WhatsApp personal)</h3>
             <ol className="list-decimal pl-5 text-gray-600 text-sm mb-6 space-y-1.5">
               <li>Entra a <a href="/dash/flota" className="underline font-medium">/dash/flota</a> y crea un agente.</li>
