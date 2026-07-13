@@ -25,6 +25,7 @@ export async function action({ request }: Route.ActionArgs) {
     name: typeof body?.name === "string" ? body.name : undefined,
     systemPrompt: typeof body?.systemPrompt === "string" ? body.systemPrompt : undefined,
     model: typeof body?.model === "string" ? body.model : undefined,
+    engine: typeof body?.engine === "string" ? body.engine : undefined,
     workerTemplate: typeof body?.workerTemplate === "string" ? body.workerTemplate : undefined,
     persona: body?.persona && typeof body.persona === "object" ? body.persona : undefined,
     maxWorkersPerVm: Number.isFinite(body?.maxWorkersPerVm) ? body.maxWorkersPerVm : undefined,

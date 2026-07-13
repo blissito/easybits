@@ -587,6 +587,10 @@ export interface CreateFleetAgentParams {
   systemPrompt?: string;
   /** Shortcut → persona.env[modelEnv], resolved by the agent's engine. */
   model?: string;
+  /** High-level engine id (FLEET_ENGINES): "claude" | "deepseek" | "codex" | "easybits" | "glm".
+   *  Derives workerTemplate + env + defaultModel. Engines other than Claude may require a
+   *  provider secret (set it via setSecret) — e.g. "deepseek" needs DEEPSEEK_API_KEY. */
+  engine?: string;
   workerTemplate?: string;
   maxWorkersPerVm?: number;
   vmMemMb?: number;

@@ -355,6 +355,11 @@ second argument. One client instance can configure many agents.
 const eb = new EasybitsClient({ apiKey: userJwt });
 const { fleetAgent } = await eb.fleet.create({ name: "Tania", systemPrompt: "...", model: "claude-sonnet-5" });
 const { id, token } = fleetAgent;              // persist BOTH
+
+// Pick a non-default engine (DeepSeek/Codex/…). Some engines need a provider
+// secret — set it right after with setSecret (e.g. DEEPSEEK_API_KEY).
+const ds = await eb.fleet.create({ engine: "deepseek", name: "Vendedor", systemPrompt: "..." });
+await eb.fleet.setSecret(ds.fleetAgent.id, ds.fleetAgent.token, { name: "DEEPSEEK_API_KEY", value: "sk-..." });
 await eb.fleet.list();                          // { pools: [...] }
 await eb.fleet.delete(id);
 

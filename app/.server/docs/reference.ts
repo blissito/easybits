@@ -547,6 +547,56 @@ MCP: \`agent_run_destroy({ jobId })\` — liberar sandbox
 Rate limits: 10 spawns/min, 120 ops/min. Sandboxes se auto-destruyen al TTL (default 5 min; máx según plan: Byte 1h · Mega 4h · Tera 24h).
 `,
 
+  flota: `## Flota — Fleet Agents (agentes elásticos multicanal)
+
+Un Fleet Agent rutea conversaciones (WhatsApp, WABA, web) a workers efímeros. Los
+configuras por completo vía SDK/REST — el dashboard es solo un cliente.
+
+**Dos credenciales, no mezclar:**
+- \`create\` / \`list\` / \`delete\` → tu credencial de cliente (API key o JWT OAuth del user, scope WRITE).
+- Toda la config + mensajería → el **\`token\` por-agente** que devuelve \`create\` (persístelo junto al \`id\`).
+
+### Crear
+\`POST /fleet-agents\`
+Body: \`{ name?, systemPrompt?, model?, engine?, workerTemplate?, maxWorkersPerVm?, vmMemMb?, maxVms?, idleSuspendMin? }\`
+\`engine\` (atajo de alto nivel): \`claude\` (default) · \`deepseek\` · \`codex\` · \`easybits\` · \`glm\` — deriva template + modelo por defecto. Motores no-Claude pueden requerir un secret de proveedor (ej. \`deepseek\` → \`DEEPSEEK_API_KEY\`, ponlo con \`set-secret\`).
+Returns: \`{ fleetAgent: { id, token, ... } }\` — guarda \`id\` **y** \`token\`.
+SDK: \`eb.fleet.create({ name, systemPrompt?, model?, engine? })\`
+
+### Listar / eliminar
+\`GET /fleet-agents\` → \`{ pools: FleetAgent[] }\` · SDK: \`eb.fleet.list()\`
+\`POST /fleet-agents/:id/delete\` · SDK: \`eb.fleet.delete(id)\`
+
+### Leer configuración
+\`GET /fleet-agents/:id/capabilities\` (auth = \`token\` del agente, header \`Authorization: Bearer\` o \`?token=\`)
+Returns: catálogo + estado (\`agent\`, \`buckets\`, \`bucketTools\`, \`models\`, \`skills\`, \`groups\`, …).
+SDK: \`eb.fleet.getCapabilities(id, token)\`
+
+### Configurar (auth = \`token\` del agente)
+\`POST /fleet-agents/:id/capabilities\` con \`{ action, ... }\`. A nivel agente (sin \`groupId\`):
+- \`set-name { name }\` — SDK: \`eb.fleet.setName(id, token, name)\`
+- \`set-agent-prompt { systemPrompt }\` — instrucciones base · SDK: \`eb.fleet.setAgentPrompt(...)\`
+- \`set-model { model }\` — SDK: \`eb.fleet.setModel(...)\`
+- \`set-effort { effort }\` — \`low|medium|high|xhigh|max\` · SDK: \`eb.fleet.setEffort(...)\`
+- \`toggle-own-number { on }\`, \`set-secret { name, value }\`
+- \`add-mcp { name, pkg?|url?, requiredSecret?, envVar? }\`, \`remove-mcp { name }\`
+- \`toggle-skill { skillId, on }\`, \`delete-skill { skillId }\`
+
+Por canal (con \`groupId\`; \`"*"\` = default del agente):
+- \`set-prompt { systemPrompt }\` — SDK: \`eb.fleet.setGroupPrompt(id, token, groupId, ...)\`
+- \`set-cap-level { cap, level }\` — \`off|read|write\` · SDK: \`eb.fleet.setCapLevel(...)\`
+- \`toggle-builtin { builtin, on }\`, \`set-toolgroup { buckets, inherit? }\`, \`toggle-asset { fileId, on }\`
+
+Respuesta uniforme: \`{ ok: true }\` o \`{ error }\`.
+
+### Mensajería (auth = \`token\` del agente)
+\`POST /fleet-agents/:id/message\` → \`{ reply }\` · SDK: \`eb.fleet.message(id, token, { groupId, text })\`
+\`POST /fleet-agents/:id/message-stream\` → SSE (\`chunk\`/\`done\`/\`error\`; \`done.value\` = reply autoritativo).
+
+### WABA
+\`POST /fleet-agents/:id/waba/config\` — SDK: \`eb.fleet.waba.config(id, token, {...})\`
+`,
+
   studio: `## Llamadas online — Videollamadas con grabación (tipo Zoom/Riverside)
 
 Template \`livekit-svc\`: sala de videoconferencia self-hosted con grabación HD server-side. El agente crea la sala, los participantes se unen por navegador (cámara + pantalla compartida), el servidor graba el layout completo en 1080p y al terminar sube el MP4 + transcript a tus Files de EasyBits. Sin servidores de terceros, sin límite de duración.

@@ -27,7 +27,7 @@ import {
 import { getSecretValue } from "~/.server/core/secretOperations";
 import { getReservedCapacity } from "~/.server/core/sandboxReservations";
 import { getUserPlan, PLANS } from "~/lib/plans";
-import { engineHasVision, getEngineForAgent } from "~/lib/fleetEngines";
+import { engineHasVision, getEngineForAgent, getEngine } from "~/lib/fleetEngines";
 import { profileToToolsParam, DEFAULT_PROFILE, GROUP_ALLOWLISTS, type ToolGroupKey } from "~/.server/mcp/toolGroups";
 import { getPlatformDefaultClient, buildPublicAssetUrl } from "~/.server/storage";
 import { checkSandboxRateLimit } from "~/.server/rateLimiter";
@@ -2034,6 +2034,7 @@ export async function createFleetAgent(
     name?: string;
     systemPrompt?: string; // atajo greenfield (Formmy): → persona.env.SYSTEM_PROMPT sin armar persona
     model?: string; // atajo greenfield: → persona.env[modelEnv] resuelto por el motor
+    engine?: string; // atajo alto nivel (registro FLEET_ENGINES): "deepseek"/"codex"/… → template+env+defaultModel
     workerTemplate?: string;
     persona?: Persona;
     oauthSecretName?: string;
@@ -2051,11 +2052,22 @@ export async function createFleetAgent(
   // al spawn → tools/list lean + run_tool acotado al perfil. El env explícito de
   // la persona gana (power users). Agentes EXISTENTES no se tocan (sin este env =
   // catálogo completo, intacto).
+  // engine (registro FLEET_ENGINES) = atajo de alto nivel: "deepseek"/"codex"/… →
+  // deriva template + env (GHOSTY_LLM/…) + defaultModel, sin que el caller conozca la
+  // plomería. Formmy manda `engine` desde su selector de motor. `workerTemplate`/`env`/
+  // `llm` explícitos siguen ganando (power users).
+  const engineSpec = opts.engine ? getEngine(opts.engine) : undefined;
+  if (opts.engine && !engineSpec) throw new Error(`engine desconocido: ${opts.engine}`);
+  const workerTemplate = opts.workerTemplate ?? engineSpec?.template ?? "claude-worker";
+
   const basePersona = opts.persona ?? GHOSTY_PERSONA;
   const persona: Persona = {
     ...basePersona,
     env: {
       EASYBITS_TOOL_GROUP: profileToToolsParam(DEFAULT_PROFILE),
+      // Env del motor resuelto por `engine` (p.ej. { GHOSTY_LLM: "deepseek" }). Menor
+      // prioridad que `llm`/`env` explícitos.
+      ...(engineSpec?.env ?? {}),
       // Motor LLM elegido en el form (ghosty-gc): "easybits" (medido) omite la
       // inyección de DEEPSEEK_API_KEY en createAgent → ghosty-gc-start cae al proxy
       // medido; "deepseek" (default) la inyecta → off-meter. Ver createAgent ghosty-gc.
@@ -2072,17 +2084,18 @@ export async function createFleetAgent(
   if (!opts.persona) {
     if (opts.name) persona.env!.ASSISTANT_NAME = opts.name;
     if (opts.systemPrompt) persona.env!.SYSTEM_PROMPT = opts.systemPrompt.slice(0, 120000);
-    if (opts.model) {
-      const eng = getEngineForAgent(opts.workerTemplate ?? "claude-worker", persona.env);
-      if (eng?.modelEnv) persona.env![eng.modelEnv] = opts.model;
-    }
+    // Modelo: explícito (opts.model) o, si se eligió engine, su defaultModel. Se escribe
+    // en persona.env[modelEnv] del motor resuelto (engineSpec gana; si no, se infiere).
+    const eng = engineSpec ?? getEngineForAgent(workerTemplate, persona.env);
+    const chosenModel = opts.model ?? (engineSpec ? engineSpec.defaultModel : undefined);
+    if (eng?.modelEnv && chosenModel) persona.env![eng.modelEnv] = chosenModel;
   }
   return db.fleetAgent.create({
     data: {
       ownerId: ctx.user.id,
       name: opts.name,
       token: "pool_" + randomBytes(24).toString("hex"),
-      workerTemplate: opts.workerTemplate ?? "claude-worker",
+      workerTemplate,
       persona,
       // Deriva la identidad de la persona (ASSISTANT_NAME > persona.name). El
       // default (GHOSTY_PERSONA) trae ASSISTANT_NAME="Ghosty" → sigue siendo

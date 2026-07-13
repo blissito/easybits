@@ -111,6 +111,12 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   const engForModel = getEngineForAgent(fa.workerTemplate, env);
   const modelEnvKey = engForModel?.modelEnv;
   const currentModel = modelEnvKey ? (env[modelEnvKey] ?? engForModel?.defaultModel ?? "") : "";
+  // Label real del modelo actual (no genérico): el label del modelo resuelto en el
+  // registro, o el nombre del motor si su modelo es fijo (easybits/glm sin modelEnv).
+  const currentModelLabel =
+    (engForModel?.models ?? []).find((m) => m.id === currentModel)?.label ??
+    engForModel?.label ??
+    "Modelo";
   const modelOptions = modelEnvKey
     ? (engForModel?.models ?? []).filter((m) => m.ready !== false).map((m) => ({ key: m.id, label: m.label }))
     : [];
@@ -127,7 +133,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
       // tiene modelo seleccionable (easybits) → el cliente oculta el selector.
       workerTemplate: fa.workerTemplate,
       model: currentModel,
-      modelLabel: "Modelo",
+      modelLabel: currentModelLabel,
       effort: env.FLEET_EFFORT ?? FLEET_DEFAULT_EFFORT,
       hasOwnNumber: !!fa.hasOwnNumber,
       buckets: [...toolsParamToBuckets(bucketsParam)],
