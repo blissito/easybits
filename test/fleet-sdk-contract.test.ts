@@ -107,4 +107,42 @@ describe("eb.fleet.* contract", () => {
     expect(last().url).toBe(url(`/fleet-agents/${ID}/message`));
     expect(JSON.parse(last().body!)).toEqual({ groupId: "web-1", text: "hola" });
   });
+
+  // ── Baileys connection flow — auth = client credential (owner), NO per-agent token ──
+  it("connect → POST /connect con credencial del cliente (QR o pairingPhone)", async () => {
+    await eb.fleet.connect(ID, { pairingPhone: "5215500000000" });
+    expect(last().method).toBe("POST");
+    expect(last().url).toBe(url(`/fleet-agents/${ID}/connect`));
+    expect(last().headers.Authorization).toBe(`Bearer ${KEY}`);
+    expect(JSON.parse(last().body!)).toEqual({ pairingPhone: "5215500000000" });
+  });
+
+  it("connectionState → GET /connect", async () => {
+    await eb.fleet.connectionState(ID);
+    expect(last().method).toBe("GET");
+    expect(last().url).toBe(url(`/fleet-agents/${ID}/connect`));
+  });
+
+  it("disconnect → POST /connect?disconnect=1", async () => {
+    await eb.fleet.disconnect(ID);
+    expect(last().url).toBe(url(`/fleet-agents/${ID}/connect?disconnect=1`));
+  });
+
+  it("listGroups → GET /groups con credencial del cliente", async () => {
+    await eb.fleet.listGroups(ID);
+    expect(last().method).toBe("GET");
+    expect(last().url).toBe(url(`/fleet-agents/${ID}/groups`));
+    expect(last().headers.Authorization).toBe(`Bearer ${KEY}`);
+  });
+
+  it("toggleGroup → POST /groups {groupId,on}", async () => {
+    await eb.fleet.toggleGroup(ID, "123@g.us", true);
+    expect(last().url).toBe(url(`/fleet-agents/${ID}/groups`));
+    expect(JSON.parse(last().body!)).toEqual({ groupId: "123@g.us", on: true });
+  });
+
+  it("setMain → POST /groups {groupId,main:true}", async () => {
+    await eb.fleet.setMain(ID, "123@g.us");
+    expect(JSON.parse(last().body!)).toEqual({ groupId: "123@g.us", main: true });
+  });
 });

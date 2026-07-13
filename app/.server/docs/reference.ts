@@ -593,6 +593,14 @@ Respuesta uniforme: \`{ ok: true }\` o \`{ error }\`.
 \`POST /fleet-agents/:id/message\` → \`{ reply }\` · SDK: \`eb.fleet.message(id, token, { groupId, text })\`
 \`POST /fleet-agents/:id/message-stream\` → SSE (\`chunk\`/\`done\`/\`error\`; \`done.value\` = reply autoritativo).
 
+### Conexión WhatsApp (Baileys) — auth = credencial del cliente (dueño)
+Vincula un número **personal** (NO Business/WABA) para que el agente atienda grupos.
+- \`POST /fleet-agents/:id/connect\` — inicia el socket. Sin body → QR; \`{ pairingPhone }\` → código de emparejamiento. \`?disconnect=1\` para desvincular. SDK: \`eb.fleet.connect(id, { pairingPhone? })\` / \`eb.fleet.disconnect(id)\`.
+- \`GET /fleet-agents/:id/connect\` → \`{ baileys: { status, qr?, pairingCode?, phone?, pairBlockedUntil? } }\`. Estados: \`qr_pending|pairing|connecting|connected|failed|disconnected\`. **Poll cada ~2.5s**; respeta \`pairBlockedUntil\` (cooldown). SDK: \`eb.fleet.connectionState(id)\`.
+- \`GET /fleet-agents/:id/groups\` → \`{ groups: [{ groupId, subject, enabled, isMain }] }\` (toca el socket en vivo → on-demand, no en el poll). SDK: \`eb.fleet.listGroups(id)\`.
+- \`POST /fleet-agents/:id/groups\` — \`{ groupId, on }\` prende/apaga · \`{ groupId, main:true }\` designa el grupo MAIN (canal admin). SDK: \`eb.fleet.toggleGroup(id, groupId, on)\` / \`eb.fleet.setMain(id, groupId)\`.
+- ⚠️ El backend NO valida si el número es Business/WABA — muéstralo como advertencia. Números Business van por WABA, no por aquí.
+
 ### WABA
 \`POST /fleet-agents/:id/waba/config\` — SDK: \`eb.fleet.waba.config(id, token, {...})\`
 `,

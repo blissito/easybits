@@ -385,6 +385,16 @@ await eb.fleet.setCapLevel(id, token, "*", { cap: "denik", level: "write" });
 
 // Messaging
 const { reply } = await eb.fleet.message(id, token, { groupId: "web-123", text: "Hola" });
+
+// WhatsApp (Baileys) connection — auth = client credential (owner), NOT the per-agent token.
+// Link a PERSONAL number (never a Business/WABA number). Omit pairingPhone → QR; pass it → code.
+await eb.fleet.connect(id);                          // then poll:
+const { baileys } = await eb.fleet.connectionState(id);  // { status, qr?, pairingCode?, pairBlockedUntil? }
+// status: qr_pending | pairing | connecting | connected | failed | disconnected. Poll ~2.5s.
+const { groups } = await eb.fleet.listGroups(id);    // [{ groupId, subject, enabled, isMain }] (on-demand)
+await eb.fleet.toggleGroup(id, groups[0].groupId, true);  // answer here
+await eb.fleet.setMain(id, groups[0].groupId);       // admin/main channel
+await eb.fleet.disconnect(id);
 ```
 
 `getCapabilities` returns the full catalog + current state (builtins, capabilities,

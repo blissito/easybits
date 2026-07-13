@@ -636,6 +636,29 @@ export interface FleetCapabilities {
   customMcps: Array<Record<string, unknown>>;
 }
 
+/** Baileys (WhatsApp) connection state — poll via fleet.connectionState(id). */
+export interface BaileysState {
+  status: "qr_pending" | "pairing" | "connecting" | "connected" | "failed" | "disconnected";
+  /** QR string to render when status is qr_pending (no pairingPhone). */
+  qr?: string;
+  /** Pairing code to type into WhatsApp when connect() was called with pairingPhone. */
+  pairingCode?: string;
+  phone?: string;
+  reason?: string;
+  /** If present, back off polling/retries until this ISO time (anti-abuse cooldown). */
+  pairBlockedUntil?: string;
+  attempt?: number;
+  [k: string]: unknown;
+}
+
+/** A WhatsApp group the agent's number can answer in. */
+export interface FleetGroup {
+  groupId: string;
+  subject: string;
+  enabled: boolean;
+  isMain: boolean;
+}
+
 export type FleetEffort = "low" | "medium" | "high" | "xhigh" | "max";
 export type FleetCapLevel = "off" | "read" | "write";
 /** Uniform mutation response from POST .../capabilities. */
@@ -1651,6 +1674,24 @@ export class EasybitsClient {
       list: (): Promise<{ pools: FleetAgentRecord[] }> => req("/fleet-agents"),
       delete: (id: string): Promise<{ ok: boolean }> =>
         req(`/fleet-agents/${id}/delete`, { method: "POST", body: "{}" }),
+
+      // ── WhatsApp (Baileys) connection flow — auth = client credential (owner) ──
+      /** Start the Baileys socket (lazy). Omit pairingPhone → QR; pass it → pairing code. */
+      connect: (id: string, opts?: { pairingPhone?: string }): Promise<{ ok: boolean; baileys: BaileysState }> =>
+        req(`/fleet-agents/${id}/connect`, { method: "POST", body: JSON.stringify(opts ?? {}) }),
+      /** Poll the current connection state (status/qr/pairingCode). */
+      connectionState: (id: string): Promise<{ baileys: BaileysState }> => req(`/fleet-agents/${id}/connect`),
+      /** Stop the socket / unlink. */
+      disconnect: (id: string): Promise<{ ok: boolean; status: string }> =>
+        req(`/fleet-agents/${id}/connect?disconnect=1`, { method: "POST", body: "{}" }),
+      /** WhatsApp groups the number discovered, with enabled/main flags. Hits the live socket — call on demand, not on a tight poll. */
+      listGroups: (id: string): Promise<{ groups: FleetGroup[] }> => req(`/fleet-agents/${id}/groups`),
+      /** Enable/disable whether the agent answers in a group. */
+      toggleGroup: (id: string, groupId: string, on: boolean): Promise<{ ok: boolean; enabled: boolean; enabledGroups: string[] }> =>
+        req(`/fleet-agents/${id}/groups`, { method: "POST", body: JSON.stringify({ groupId, on }) }),
+      /** Designate (or, if repeated, clear) the group's MAIN/admin channel. Group must be enabled. */
+      setMain: (id: string, groupId: string): Promise<{ ok: boolean; mainGroupJid: string | null }> =>
+        req(`/fleet-agents/${id}/groups`, { method: "POST", body: JSON.stringify({ groupId, main: true }) }),
 
       // ── Config: read (auth = fleetAgent.token) ──
       getCapabilities: (id: string, token: string, params?: { q?: string }): Promise<FleetCapabilities> =>
