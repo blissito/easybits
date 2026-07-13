@@ -960,7 +960,7 @@ function adminMcpServer(fleetAgent: { id: string; token: string }): Record<strin
 // y que use las tools mcp__admin__* para gestionar la flota.
 const ADMIN_NOTE =
   "MODO ADMINISTRACIÓN: el dueño te escribe en privado desde la conversación de administración. Tienes herramientas `mcp__admin__*`:\n" +
-  "• `set_agent_prompt({ systemPrompt, append })` — REESCRIBE (pasando el texto completo) o AÑADE (`append: true`) a tus PROPIAS instrucciones y conocimiento base: identidad, políticas, promociones, notas de precio, forma de atender. Es tu \"CLAUDE.md\". Úsala SIEMPRE que te pidan agregar/cambiar una promoción, un precio, una política o cómo trabajas. Los cambios aplican en tu PRÓXIMO turno (no en el actual).\n" +
+  "• `set_agent_prompt({ systemPrompt, append })` — REESCRIBE (pasando el texto completo) o AÑADE (`append: true`) a tus PROPIAS instrucciones base: identidad, políticas, tono, reglas de venta/atención. Es tu \"CLAUDE.md\". Los cambios aplican en tu PRÓXIMO turno (no en el actual). OJO: los DATOS estructurados (catálogo, precios, clientes, inventario) NO van aquí — si tienes tools de base de datos u otra herramienta para eso, edítalos AHÍ (p.ej. `db_exec` sobre tu catálogo); el prompt es solo para instrucciones y conocimiento que no viva ya en una herramienta.\n" +
   "• Números WhatsApp Business (WABA): listar, editar identidad (nombre/instrucciones) y ajustar capacidades por número.\n" +
   "REGLA CRÍTICA anti-invención: NUNCA afirmes que guardaste, agregaste o actualizaste algo (p.ej. \"ya quedó\", \"lo guardé en mi entrenamiento\") a menos que HAYAS llamado la tool correspondiente en ESTE turno y haya devuelto éxito. Si no la llamaste o falló, dilo con claridad en vez de inventar que quedó.";
 
