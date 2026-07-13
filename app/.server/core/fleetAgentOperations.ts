@@ -27,7 +27,7 @@ import {
 import { getSecretValue } from "~/.server/core/secretOperations";
 import { getReservedCapacity } from "~/.server/core/sandboxReservations";
 import { getUserPlan, PLANS } from "~/lib/plans";
-import { engineHasVision } from "~/lib/fleetEngines";
+import { engineHasVision, getEngineForAgent } from "~/lib/fleetEngines";
 import { profileToToolsParam, DEFAULT_PROFILE, GROUP_ALLOWLISTS, type ToolGroupKey } from "~/.server/mcp/toolGroups";
 import { getPlatformDefaultClient, buildPublicAssetUrl } from "~/.server/storage";
 import { checkSandboxRateLimit } from "~/.server/rateLimiter";
@@ -959,9 +959,10 @@ function adminMcpServer(fleetAgent: { id: string; token: string }): Record<strin
 // guardrail de voz). Le dice al agente que está en su conversación de administración
 // y que use las tools mcp__admin__* para gestionar la flota.
 const ADMIN_NOTE =
-  "MODO ADMINISTRACIÓN: estás en la conversación de administración de este agente (el dueño te escribe en privado). " +
-  "Tienes herramientas `mcp__admin__*` para LISTAR y CONFIGURAR los números WhatsApp Business (WABA) del agente: " +
-  "ver números, editar su identidad (nombre/instrucciones) y ajustar sus capacidades. Úsalas cuando te pidan administrar.";
+  "MODO ADMINISTRACIÓN: el dueño te escribe en privado desde la conversación de administración. Tienes herramientas `mcp__admin__*`:\n" +
+  "• `set_agent_prompt({ systemPrompt, append })` — REESCRIBE (pasando el texto completo) o AÑADE (`append: true`) a tus PROPIAS instrucciones y conocimiento base: identidad, políticas, promociones, notas de precio, forma de atender. Es tu \"CLAUDE.md\". Úsala SIEMPRE que te pidan agregar/cambiar una promoción, un precio, una política o cómo trabajas. Los cambios aplican en tu PRÓXIMO turno (no en el actual).\n" +
+  "• Números WhatsApp Business (WABA): listar, editar identidad (nombre/instrucciones) y ajustar capacidades por número.\n" +
+  "REGLA CRÍTICA anti-invención: NUNCA afirmes que guardaste, agregaste o actualizaste algo (p.ej. \"ya quedó\", \"lo guardé en mi entrenamiento\") a menos que HAYAS llamado la tool correspondiente en ESTE turno y haya devuelto éxito. Si no la llamaste o falló, dilo con claridad en vez de inventar que quedó.";
 
 // Build a background AuthContext for a fleetAgent's owner. FleetAgent dispatch runs outside
 // any HTTP request (reaper, autoscale), so we mint a ctx with full owner scopes.
@@ -2031,6 +2032,8 @@ export async function createFleetAgent(
   ctx: AuthContext,
   opts: {
     name?: string;
+    systemPrompt?: string; // atajo greenfield (Formmy): → persona.env.SYSTEM_PROMPT sin armar persona
+    model?: string; // atajo greenfield: → persona.env[modelEnv] resuelto por el motor
     workerTemplate?: string;
     persona?: Persona;
     oauthSecretName?: string;
@@ -2063,6 +2066,17 @@ export async function createFleetAgent(
       ...(basePersona.env ?? {}),
     },
   };
+  // Atajos greenfield (Formmy crea+configura en un shot vía SDK). Se aplican DESPUÉS
+  // del merge para GANARLE al spread de basePersona.env (que trae ASSISTANT_NAME
+  // "Ghosty" y de otro modo se impone). Solo si el caller NO pasó una persona custom.
+  if (!opts.persona) {
+    if (opts.name) persona.env!.ASSISTANT_NAME = opts.name;
+    if (opts.systemPrompt) persona.env!.SYSTEM_PROMPT = opts.systemPrompt.slice(0, 120000);
+    if (opts.model) {
+      const eng = getEngineForAgent(opts.workerTemplate ?? "claude-worker", persona.env);
+      if (eng?.modelEnv) persona.env![eng.modelEnv] = opts.model;
+    }
+  }
   return db.fleetAgent.create({
     data: {
       ownerId: ctx.user.id,
@@ -2074,7 +2088,7 @@ export async function createFleetAgent(
       // default (GHOSTY_PERSONA) trae ASSISTANT_NAME="Ghosty" → sigue siendo
       // "Ghosty"; los agentes creados con persona custom (p.ej. desde Formmy)
       // aparecen con su nombre real en la flota en vez de todos como "Ghosty".
-      assistantName: persona.env?.ASSISTANT_NAME ?? basePersona.name ?? "Ghosty",
+      assistantName: persona.env?.ASSISTANT_NAME ?? opts.name ?? basePersona.name ?? "Ghosty",
       oauthSecretName: opts.oauthSecretName ?? null,
       // Seed the MCP menu with the builtins so the UI/agent can immediately see
       // the surface and start enabling custom servers per group.

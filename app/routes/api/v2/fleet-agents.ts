@@ -23,6 +23,8 @@ export async function action({ request }: Route.ActionArgs) {
   const body = await request.json().catch(() => ({}));
   const fleetAgent = await createFleetAgent(ctx, {
     name: typeof body?.name === "string" ? body.name : undefined,
+    systemPrompt: typeof body?.systemPrompt === "string" ? body.systemPrompt : undefined,
+    model: typeof body?.model === "string" ? body.model : undefined,
     workerTemplate: typeof body?.workerTemplate === "string" ? body.workerTemplate : undefined,
     persona: body?.persona && typeof body.persona === "object" ? body.persona : undefined,
     maxWorkersPerVm: Number.isFinite(body?.maxWorkersPerVm) ? body.maxWorkersPerVm : undefined,

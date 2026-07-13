@@ -216,6 +216,20 @@ export async function action({ request, params }: Route.ActionArgs) {
     await setEnv({ SYSTEM_PROMPT: String(b?.systemPrompt ?? "").slice(0, 120000) || undefined });
     return json({ ok: true });
   }
+  if (action === "set-name") {
+    // Renombrar = DOS campos: fleetAgent.assistantName (baileys lo antepone como
+    // prefijo cuando hasOwnNumber=false) Y persona.env.ASSISTANT_NAME (identidad que
+    // el worker inyecta en el system prompt). Tocar solo uno deja "Ghosty:" pegado.
+    // Actualiza también la columna `name` (display en /dash/flota). Ver CLAUDE.md.
+    const name = String(b?.name ?? "").trim().slice(0, 120);
+    if (!name) return json({ error: "name required" }, 400);
+    const env = { ...(persona.env ?? {}), ASSISTANT_NAME: name };
+    await db.fleetAgent.update({
+      where: { id: fa.id },
+      data: { name, assistantName: name, persona: { ...persona, env } as object },
+    });
+    return json({ ok: true });
+  }
   if (action === "set-model") {
     // Registry-driven (misma lógica que el dash): el engine (desambiguado por template+
     // GHOSTY_LLM) define modelEnv y la lista de modelos ready. Se escribe persona.env
