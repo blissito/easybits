@@ -145,4 +145,17 @@ describe("eb.fleet.* contract", () => {
     await eb.fleet.setMain(ID, "123@g.us");
     expect(JSON.parse(last().body!)).toEqual({ groupId: "123@g.us", main: true });
   });
+
+  it("connection flow acepta token override (reseller fleetToken) sobre la credencial del cliente", async () => {
+    await eb.fleet.connect(ID, { pairingPhone: "521", token: TOK });
+    expect(last().headers.Authorization).toBe(`Bearer ${TOK}`);
+    expect(JSON.parse(last().body!)).toEqual({ pairingPhone: "521" }); // token NO va en el body
+    await eb.fleet.listGroups(ID, TOK);
+    expect(last().headers.Authorization).toBe(`Bearer ${TOK}`);
+    await eb.fleet.toggleGroup(ID, "g@g.us", true, TOK);
+    expect(last().headers.Authorization).toBe(`Bearer ${TOK}`);
+    // sin token → credencial del cliente
+    await eb.fleet.connectionState(ID);
+    expect(last().headers.Authorization).toBe(`Bearer ${KEY}`);
+  });
 });

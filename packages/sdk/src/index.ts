@@ -1664,6 +1664,9 @@ export class EasybitsClient {
       ...opts,
       headers: { ...opts?.headers, Authorization: `Bearer ${token}` },
     });
+    // For connection-flow calls: optional per-agent token overrides the client credential.
+    const withAuth = (token: string | undefined, opts?: RequestInit): RequestInit | undefined =>
+      token ? asAgent(token, opts) : opts;
     const cap = (id: string) => `/fleet-agents/${id}/capabilities`;
     const post = (id: string, token: string, body: Record<string, unknown>) =>
       req<FleetOk>(cap(id), asAgent(token, { method: "POST", body: JSON.stringify(body) }));
@@ -1675,23 +1678,26 @@ export class EasybitsClient {
       delete: (id: string): Promise<{ ok: boolean }> =>
         req(`/fleet-agents/${id}/delete`, { method: "POST", body: "{}" }),
 
-      // ── WhatsApp (Baileys) connection flow — auth = client credential (owner) ──
+      // ── WhatsApp (Baileys) connection flow — auth = client credential (owner/delegate)
+      //    OR the per-agent `token` (pass it to authenticate as the fleetAgent, e.g. a reseller). ──
       /** Start the Baileys socket (lazy). Omit pairingPhone → QR; pass it → pairing code. */
-      connect: (id: string, opts?: { pairingPhone?: string }): Promise<{ ok: boolean; baileys: BaileysState }> =>
-        req(`/fleet-agents/${id}/connect`, { method: "POST", body: JSON.stringify(opts ?? {}) }),
+      connect: (id: string, opts?: { pairingPhone?: string; token?: string }): Promise<{ ok: boolean; baileys: BaileysState }> =>
+        req(`/fleet-agents/${id}/connect`, withAuth(opts?.token, { method: "POST", body: JSON.stringify(opts?.pairingPhone ? { pairingPhone: opts.pairingPhone } : {}) })),
       /** Poll the current connection state (status/qr/pairingCode). */
-      connectionState: (id: string): Promise<{ baileys: BaileysState }> => req(`/fleet-agents/${id}/connect`),
+      connectionState: (id: string, token?: string): Promise<{ baileys: BaileysState }> =>
+        req(`/fleet-agents/${id}/connect`, withAuth(token)),
       /** Stop the socket / unlink. */
-      disconnect: (id: string): Promise<{ ok: boolean; status: string }> =>
-        req(`/fleet-agents/${id}/connect?disconnect=1`, { method: "POST", body: "{}" }),
+      disconnect: (id: string, token?: string): Promise<{ ok: boolean; status: string }> =>
+        req(`/fleet-agents/${id}/connect?disconnect=1`, withAuth(token, { method: "POST", body: "{}" })),
       /** WhatsApp groups the number discovered, with enabled/main flags. Hits the live socket — call on demand, not on a tight poll. */
-      listGroups: (id: string): Promise<{ groups: FleetGroup[] }> => req(`/fleet-agents/${id}/groups`),
+      listGroups: (id: string, token?: string): Promise<{ groups: FleetGroup[] }> =>
+        req(`/fleet-agents/${id}/groups`, withAuth(token)),
       /** Enable/disable whether the agent answers in a group. */
-      toggleGroup: (id: string, groupId: string, on: boolean): Promise<{ ok: boolean; enabled: boolean; enabledGroups: string[] }> =>
-        req(`/fleet-agents/${id}/groups`, { method: "POST", body: JSON.stringify({ groupId, on }) }),
+      toggleGroup: (id: string, groupId: string, on: boolean, token?: string): Promise<{ ok: boolean; enabled: boolean; enabledGroups: string[] }> =>
+        req(`/fleet-agents/${id}/groups`, withAuth(token, { method: "POST", body: JSON.stringify({ groupId, on }) })),
       /** Designate (or, if repeated, clear) the group's MAIN/admin channel. Group must be enabled. */
-      setMain: (id: string, groupId: string): Promise<{ ok: boolean; mainGroupJid: string | null }> =>
-        req(`/fleet-agents/${id}/groups`, { method: "POST", body: JSON.stringify({ groupId, main: true }) }),
+      setMain: (id: string, groupId: string, token?: string): Promise<{ ok: boolean; mainGroupJid: string | null }> =>
+        req(`/fleet-agents/${id}/groups`, withAuth(token, { method: "POST", body: JSON.stringify({ groupId, main: true }) })),
 
       // ── Config: read (auth = fleetAgent.token) ──
       getCapabilities: (id: string, token: string, params?: { q?: string }): Promise<FleetCapabilities> =>

@@ -1,5 +1,5 @@
 import type { Route } from "./+types/fleet-agents.$fleetAgentId.groups";
-import { authenticateRequest, requireAuth } from "~/.server/apiAuth";
+import { authFleetAgentManage } from "~/.server/apiAuth";
 import { db } from "~/.server/db";
 import { listFleetAgentGroups } from "~/.server/integrations/whatsapp/baileys.server";
 
@@ -13,14 +13,8 @@ import { listFleetAgentGroups } from "~/.server/integrations/whatsapp/baileys.se
 // Auth = dueño (JWT/API key de la cuenta), igual que /connect y create/list/delete.
 // Espeja la lógica de los intents `toggle-group` / `set-main` del dashboard para que
 // una app externa (Formmy) maneje el flujo Baileys completo por SDK.
-async function ownAgent(request: Request, fleetAgentId: string) {
-  const ctx = requireAuth(await authenticateRequest(request));
-  const fleetAgent = await db.fleetAgent.findUnique({ where: { id: fleetAgentId } });
-  if (!fleetAgent || fleetAgent.ownerId !== ctx.user.id) {
-    throw new Response(JSON.stringify({ error: "Not found" }), { status: 404 });
-  }
-  return fleetAgent;
-}
+// Auth = dueño, delegado (scope agents) o el fleetAgent.token (ver authFleetAgentManage).
+const ownAgent = (request: Request, fleetAgentId: string) => authFleetAgentManage(request, fleetAgentId);
 
 export async function loader({ request, params }: Route.LoaderArgs) {
   const fleetAgent = await ownAgent(request, params.fleetAgentId!);

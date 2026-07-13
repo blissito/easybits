@@ -98,6 +98,34 @@ export function requireAuth(ctx: AuthContext | null): AuthContext {
   return ctx;
 }
 
+/**
+ * Auth para GESTIONAR la conexión de un FleetAgent (Baileys connect/groups). Acepta 3
+ * credenciales, cualquiera vale:
+ *   1. `fleetAgent.token` (Bearer o `?token=`) — credencial per-agente durable (reseller
+ *      tipo Formmy). Mismo patrón que `capabilities.ts`.
+ *   2. el DUEÑO (`ownerId === ctx.user.id`).
+ *   3. un DELEGADO con scope `agents` (`can`, el "operar como" cross-cuenta).
+ * Devuelve el FleetAgent o lanza 401/404. NO reasigna ownership.
+ */
+export async function authFleetAgentManage(request: Request, fleetAgentId: string) {
+  const fleetAgent = await db.fleetAgent.findUnique({ where: { id: fleetAgentId } });
+  const notFound = () =>
+    new Response(JSON.stringify({ error: "Not found" }), { status: 404, headers: { "Content-Type": "application/json" } });
+  if (!fleetAgent) throw notFound();
+  // (1) fleetToken per-agente.
+  const bearer =
+    request.headers.get("Authorization")?.replace(/^Bearer\s+/i, "") ||
+    new URL(request.url).searchParams.get("token") ||
+    "";
+  if (bearer && bearer === fleetAgent.token) return fleetAgent;
+  // (2)/(3) dueño o delegado con scope `agents`.
+  const ctx = requireAuth(await authenticateRequest(request));
+  if (fleetAgent.ownerId === ctx.user.id || (await can(ctx, fleetAgent.ownerId, SCOPES.AGENTS))) {
+    return fleetAgent;
+  }
+  throw notFound();
+}
+
 export type AgentAuthResult =
   | { kind: "owner"; ctx: AuthContext; agent: AgentAuthInfo }
   | { kind: "embed"; ctx: AuthContext; agent: AgentAuthInfo };
