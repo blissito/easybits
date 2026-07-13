@@ -573,6 +573,74 @@ export interface MessageAgentParams {
   sessionId?: string;
 }
 
+// ── FleetAgents ──────────────────────────────────────────────
+// A FleetAgent is an elastic agent in the EasyBits fleet: it routes conversations
+// to ephemeral workers. External apps (Formmy, GTeams) create one per tenant and
+// configure it entirely through this SDK. See docs/formmy-easybits-sdk-integration.md.
+//
+// TWO credentials, don't mix:
+//   • create / list / delete  → the client credential (user OAuth JWT, scope WRITE)
+//   • everything else          → the per-agent `token` returned by create()
+export interface CreateFleetAgentParams {
+  name?: string;
+  /** Shortcut → persona.env.SYSTEM_PROMPT (identity/instructions). */
+  systemPrompt?: string;
+  /** Shortcut → persona.env[modelEnv], resolved by the agent's engine. */
+  model?: string;
+  workerTemplate?: string;
+  maxWorkersPerVm?: number;
+  vmMemMb?: number;
+  maxVms?: number;
+  idleSuspendMin?: number;
+}
+
+export interface FleetAgentRecord {
+  id: string;
+  /** Per-agent bearer for all config/message calls. Persist it alongside id. */
+  token: string;
+  name?: string | null;
+  assistantName?: string | null;
+  workerTemplate?: string;
+  hasOwnNumber?: boolean;
+  ownerId?: string;
+  createdAt?: string;
+  [k: string]: unknown;
+}
+
+/** Response of GET .../capabilities — catalog + current state (see doc for full shape). */
+export interface FleetCapabilities {
+  builtins: Array<{ name: string; label: string; channel: string | null; bucketScoped: boolean }>;
+  capabilities: Array<Record<string, unknown>>;
+  secretsPresent: string[];
+  groups: Record<string, Record<string, unknown>>;
+  ownerFiles: Array<{ id: string; name: string; contentType: string }>;
+  ownerDbs: Array<{ name: string; namespace: string }>;
+  agent: {
+    systemPrompt: string;
+    workerTemplate: string;
+    model: string;
+    modelLabel: string;
+    effort: string;
+    hasOwnNumber: boolean;
+    buckets: string[];
+  };
+  models: Array<{ key: string; label: string }>;
+  buckets: Array<Record<string, unknown>>;
+  bucketTools: Record<string, string[]>;
+  efforts: string[];
+  skills: Array<{ id: string; name: string; description: string; enabled: boolean; fileCount: number }>;
+  customMcps: Array<Record<string, unknown>>;
+}
+
+export type FleetEffort = "low" | "medium" | "high" | "xhigh" | "max";
+export type FleetCapLevel = "off" | "read" | "write";
+/** Uniform mutation response from POST .../capabilities. */
+export interface FleetOk {
+  ok?: boolean;
+  error?: string;
+  [k: string]: unknown;
+}
+
 export class EasybitsError extends Error {
   constructor(
     public status: number,
