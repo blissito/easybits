@@ -1626,6 +1626,77 @@ export class EasybitsClient {
   }
 
   /**
+   * Elastic fleet agents. Create/list/delete authenticate with the client
+   * credential (user OAuth JWT, scope WRITE); every config/message call takes the
+   * per-agent `token` returned by create(). See docs/formmy-easybits-sdk-integration.md.
+   */
+  get fleet() {
+    const req = <T>(path: string, opts?: RequestInit) => this.request<T>(path, opts);
+    // Config/message calls auth with the per-agent fleetAgent.token, NOT the client key.
+    const asAgent = (token: string, opts?: RequestInit): RequestInit => ({
+      ...opts,
+      headers: { ...opts?.headers, Authorization: `Bearer ${token}` },
+    });
+    const cap = (id: string) => `/fleet-agents/${id}/capabilities`;
+    const post = (id: string, token: string, body: Record<string, unknown>) =>
+      req<FleetOk>(cap(id), asAgent(token, { method: "POST", body: JSON.stringify(body) }));
+    return {
+      // ── Lifecycle (auth = client credential) ──
+      create: (params: CreateFleetAgentParams): Promise<{ fleetAgent: FleetAgentRecord }> =>
+        req("/fleet-agents", { method: "POST", body: JSON.stringify(params) }),
+      list: (): Promise<{ pools: FleetAgentRecord[] }> => req("/fleet-agents"),
+      delete: (id: string): Promise<{ ok: boolean }> =>
+        req(`/fleet-agents/${id}/delete`, { method: "POST", body: "{}" }),
+
+      // ── Config: read (auth = fleetAgent.token) ──
+      getCapabilities: (id: string, token: string, params?: { q?: string }): Promise<FleetCapabilities> =>
+        req(`${cap(id)}${params?.q ? `?q=${encodeURIComponent(params.q)}` : ""}`, asAgent(token)),
+
+      // ── Config: agent-level mutations ──
+      setName: (id: string, token: string, name: string) => post(id, token, { action: "set-name", name }),
+      setAgentPrompt: (id: string, token: string, systemPrompt: string) =>
+        post(id, token, { action: "set-agent-prompt", systemPrompt }),
+      setModel: (id: string, token: string, model: string) => post(id, token, { action: "set-model", model }),
+      setEffort: (id: string, token: string, effort: FleetEffort) => post(id, token, { action: "set-effort", effort }),
+      toggleOwnNumber: (id: string, token: string, on: boolean) => post(id, token, { action: "toggle-own-number", on }),
+      setSecret: (id: string, token: string, secret: { name: string; value: string }) =>
+        post(id, token, { action: "set-secret", ...secret }),
+      addMcp: (id: string, token: string, mcp: { name: string; label?: string; pkg?: string; url?: string; requiredSecret?: string; envVar?: string }) =>
+        post(id, token, { action: "add-mcp", ...mcp }),
+      removeMcp: (id: string, token: string, name: string) => post(id, token, { action: "remove-mcp", name }),
+      toggleSkill: (id: string, token: string, s: { skillId: string; on: boolean }) =>
+        post(id, token, { action: "toggle-skill", ...s }),
+      deleteSkill: (id: string, token: string, skillId: string) => post(id, token, { action: "delete-skill", skillId }),
+
+      // ── Config: per-channel mutations (groupId; "*" = agent default) ──
+      setGroupPrompt: (id: string, token: string, groupId: string, systemPrompt: string) =>
+        post(id, token, { action: "set-prompt", groupId, systemPrompt }),
+      setCapLevel: (id: string, token: string, groupId: string, p: { cap: string; level: FleetCapLevel }) =>
+        post(id, token, { action: "set-cap-level", groupId, ...p }),
+      toggleBuiltin: (id: string, token: string, groupId: string, p: { builtin: string; on: boolean }) =>
+        post(id, token, { action: "toggle-builtin", groupId, ...p }),
+      setToolGroup: (id: string, token: string, groupId: string, p: { buckets: string[]; inherit?: boolean }) =>
+        post(id, token, { action: "set-toolgroup", groupId, ...p }),
+      toggleAsset: (id: string, token: string, groupId: string, p: { fileId: string; on: boolean }) =>
+        post(id, token, { action: "toggle-asset", groupId, ...p }),
+
+      // ── WABA (auth = fleetAgent.token) ──
+      waba: {
+        config: (id: string, token: string, body: Record<string, unknown>) =>
+          req<FleetOk>(`/fleet-agents/${id}/waba/config`, asAgent(token, { method: "POST", body: JSON.stringify(body) })),
+        connectStart: (id: string, token: string, body: Record<string, unknown>) =>
+          req<FleetOk>(`/fleet-agents/${id}/waba/connect/start`, asAgent(token, { method: "POST", body: JSON.stringify(body) })),
+        connect: (id: string, token: string, body: Record<string, unknown>) =>
+          req<FleetOk>(`/fleet-agents/${id}/waba/connect`, asAgent(token, { method: "POST", body: JSON.stringify(body) })),
+      },
+
+      // ── Messaging (auth = fleetAgent.token) ──
+      message: (id: string, token: string, body: { groupId: string; text: string; [k: string]: unknown }): Promise<{ reply: string }> =>
+        req(`/fleet-agents/${id}/message`, asAgent(token, { method: "POST", body: JSON.stringify(body) })),
+    };
+  }
+
+  /**
    * Convenience view over always-on machines (permanent sandboxes). Same
    * resources as `eb.sandboxes.*` — machines are addressed by sandboxId.
    */
