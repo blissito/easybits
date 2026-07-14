@@ -522,6 +522,25 @@ const STUDIO_IDLE_BOOT_MIN = 30; // gracia esperando la primera llamada (caja qu
 const STUDIO_IDLE_AFTER_CALL_MIN = 60; // gracia tras colgar — 1h antes de reciclar
 const STUDIO_HOST_TTL_MIN = 3 * 60; // TTL del host (spawnStudio): pasado esto el box ya murió
 
+// Reap timing para el HUD. Un studio (livekit) NO suspende — solo se DESTRUYE al
+// cruzar la gracia idle (30 min si nunca tuvo llamada, 60 min tras colgar), medida
+// desde lastActiveAt (que el reaper refresca durante una llamada activa → el reloj
+// se resetea mientras hablan). Devuelve destroyAt por sandboxId; sin suspendAt
+// porque estas cajas no duermen. Ver reapIdleStudios abajo.
+export async function listStudioBoxReapInfo(
+  ownerId: string
+): Promise<Record<string, { destroyAt: string }>> {
+  const rows = await db.studioBox.findMany({ where: { ownerId } });
+  const out: Record<string, { destroyAt: string }> = {};
+  for (const box of rows) {
+    const graceMin = box.everHadCall ? STUDIO_IDLE_AFTER_CALL_MIN : STUDIO_IDLE_BOOT_MIN;
+    out[box.sandboxId] = {
+      destroyAt: new Date(box.lastActiveAt.getTime() + graceMin * 60_000).toISOString(),
+    };
+  }
+  return out;
+}
+
 export async function reapIdleStudios(): Promise<{ checked: number; destroyed: number }> {
   let destroyed = 0;
   const now = Date.now();

@@ -49,13 +49,20 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
   const permIds = new Set(permanents.map((p) => p.sandboxId));
   const rawEphemerals = (Array.isArray(hostList) ? hostList : []).filter((s) => !permIds.has(s.sandboxId));
 
-  // Reap timings de las cajas de servicio (voice/render/video/collab): cuándo el
-  // reaper las duerme (idle) y cuándo las mata (hardTtl). El host expiresAt es solo
-  // el techo duro de 30 min; el evento real que el user quiere ver es el del reaper.
+  // Reap timings del evento REAL de cada reaper de EasyBits (el host expiresAt es
+  // solo el techo duro, no lo que dispara primero). Dos fuentes, una por reaper:
+  //  · servicio (render/voice/video/collab) → duerme (idle) + muere (hardTtl)
+  //  · studio (livekit call box) → solo muere (gracia idle 30/60 min, no suspende)
+  // Una caja es de UN tipo → sin colisión al fusionar en reapById.
   const { listServiceBoxReapInfo } = await import("~/.server/core/fleetServiceOperations");
-  const reapInfo = await listServiceBoxReapInfo(user.id).catch(
-    () => ({} as Awaited<ReturnType<typeof listServiceBoxReapInfo>>)
-  );
+  const { listStudioBoxReapInfo } = await import("~/.server/core/studioOperations");
+  const [serviceReap, studioReap] = await Promise.all([
+    listServiceBoxReapInfo(user.id).catch(() => ({} as Awaited<ReturnType<typeof listServiceBoxReapInfo>>)),
+    listStudioBoxReapInfo(user.id).catch(() => ({} as Awaited<ReturnType<typeof listStudioBoxReapInfo>>)),
+  ]);
+  const reapById: Record<string, { destroyAt: string; suspendAt: string | null }> = {};
+  for (const [id, r] of Object.entries(serviceReap)) reapById[id] = { destroyAt: r.destroyAt, suspendAt: r.suspendAt };
+  for (const [id, r] of Object.entries(studioReap)) reapById[id] = { destroyAt: r.destroyAt, suspendAt: null };
 
   // For running livekit-svc sandboxes, call exposeSandboxPort to get (or re-register) the real URL.
   const ephemerals = await Promise.all(
@@ -68,10 +75,11 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
       return {
         sandboxId: s.sandboxId, template: s.template, status: s.status as string,
         expiresAt: s.expiresAt, studioUrl,
-        // reap: cajas de servicio reapeadas por EasyBits (render/voice/video/collab).
-        // suspendOnIdle/hardExpiresAt: cajas sleep/wake reapeadas por el HOST (team
-        // boxes tipo ghosty-chat) — su muerte real es hardExpiresAt, no expiresAt.
-        reap: reapInfo[s.sandboxId] ?? null,
+        // reap: cajas reapeadas por EasyBits (servicio con suspendAt+destroyAt;
+        // studio livekit solo destroyAt). suspendOnIdle/hardExpiresAt: cajas
+        // sleep/wake reapeadas por el HOST (team boxes tipo ghosty-chat) — su
+        // muerte real es hardExpiresAt, no expiresAt.
+        reap: reapById[s.sandboxId] ?? null,
         suspendOnIdle: s.suspendOnIdle ?? false,
         hardExpiresAt: s.hardExpiresAt ?? null,
       };
@@ -410,8 +418,12 @@ export default function HostingMachines({ loaderData }: Route.ComponentProps) {
                               ? <ReapCountdown at={dieAt} label="muere en" title="Se destruye la caja (libera el snapshot) al llegar a 0" />
                               : null; // dormida sin cap duro (persistente) → nada
                           }
-                          // Corriendo: cuándo se dormirá (sleep/wake) o se destruirá (efímera normal).
-                          if (s.reap) return <ReapCountdown at={s.reap.suspendAt} label="duerme en" title="Se suspende (snapshot) por inactividad al llegar a 0" />;
+                          // Corriendo: cuándo se dormirá (sleep/wake) o se destruirá.
+                          // reap.suspendAt = caja de servicio que duerme; sin suspendAt
+                          // = studio livekit (no duerme, recicla al idlear) → "muere en".
+                          if (s.reap) return s.reap.suspendAt
+                            ? <ReapCountdown at={s.reap.suspendAt} label="duerme en" title="Se suspende (snapshot) por inactividad al llegar a 0" />
+                            : <ReapCountdown at={s.reap.destroyAt} label="muere en" title="Se recicla por inactividad al llegar a 0 (durante una llamada el reloj se refresca)" />;
                           if (s.suspendOnIdle) return <ReapCountdown at={s.expiresAt} label="duerme en" title="Se suspende (snapshot) por inactividad al llegar a 0" />;
                           return <Countdown expiresAt={s.expiresAt} />;
                         })()}
