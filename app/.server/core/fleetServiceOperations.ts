@@ -71,9 +71,10 @@ const SERVICE_REGISTRY: Record<string, ServiceSpec> = {
   // render: Chromium HTML→PDF/PNG box. Heavy image (~300MB) → snapshot/resume
   // pays off (warm ~700ms vs ~12s cold). Keyed per OWNER like voice, so every
   // render for that owner shares ONE box. Render usage es BURSTY (exportas unos
-  // PDFs y listo) → duerme rápido (3 min idle) y se recicla pronto (15 min
-  // suspendida) para liberar budget de sandbox (inUse = live + suspended) y el
-  // ~2GB de snapshot; un warm resume de ~700ms cubre la sesión activa de sobra.
+  // PDFs y listo) → duerme rápido (3 min idle) y se recicla pronto (5 min
+  // suspendida = 2 min tras el corte de idle) para liberar budget de sandbox
+  // (inUse = live + suspended) y el ~2GB de snapshot; un warm resume de ~700ms
+  // cubre la sesión activa de sobra.
   render: {
     template: "render-svc",
     unit: "render-svc-runtime",
@@ -83,7 +84,7 @@ const SERVICE_REGISTRY: Record<string, ServiceSpec> = {
     ttlSeconds: 1800,
     idleMin: 3,
     suspendOnIdle: true,
-    hardTtlMin: 15,
+    hardTtlMin: 5,
   },
   // video: HyperFrames (HeyGen, Apache 2.0) HTML→MP4 box. Heavy image (chrome-
   // headless-shell + ffmpeg + node_modules, ~4GB RAM) → snapshot/resume pays off.
@@ -371,6 +372,32 @@ export async function destroyServiceBox(ctx: AuthContext, sandboxId: string): Pr
 // the reaper measures real usage, not just boot time.
 export async function touchServiceBox(sandboxId: string): Promise<void> {
   await db.serviceBox.updateMany({ where: { sandboxId }, data: { lastActiveAt: new Date() } }).catch(() => {});
+}
+
+// Reap timings for the HUD countdowns. Per owner's service box: when the reaper
+// will SUSPEND it (running → lastActiveAt + idleMin) and when it will DESTROY it
+// (suspended → lastActiveAt + hardTtlMin, o al idle si no suspende). Devuelve un
+// mapa por sandboxId para que /dash/hosting pinte "duerme en" / "muere en".
+export async function listServiceBoxReapInfo(
+  ownerId: string
+): Promise<Record<string, { kind: string; suspendAt: string; destroyAt: string }>> {
+  const rows = await db.serviceBox.findMany({ where: { ownerId } });
+  const out: Record<string, { kind: string; suspendAt: string; destroyAt: string }> = {};
+  for (const r of rows) {
+    const spec = SERVICE_REGISTRY[r.kind];
+    if (!spec) continue;
+    const last = r.lastActiveAt.getTime();
+    const suspendMs = last + spec.idleMin * 60_000;
+    const destroyMs = spec.suspendOnIdle
+      ? last + (spec.hardTtlMin ?? 720) * 60_000
+      : suspendMs; // sin suspend, el idle destruye directo
+    out[r.sandboxId] = {
+      kind: r.kind,
+      suspendAt: new Date(suspendMs).toISOString(),
+      destroyAt: new Date(destroyMs).toISOString(),
+    };
+  }
+  return out;
 }
 
 // ── reapIdleServiceBoxes ─────────────────────────────────────────────────────

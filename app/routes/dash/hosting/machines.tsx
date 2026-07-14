@@ -49,6 +49,14 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
   const permIds = new Set(permanents.map((p) => p.sandboxId));
   const rawEphemerals = (Array.isArray(hostList) ? hostList : []).filter((s) => !permIds.has(s.sandboxId));
 
+  // Reap timings de las cajas de servicio (voice/render/video/collab): cuándo el
+  // reaper las duerme (idle) y cuándo las mata (hardTtl). El host expiresAt es solo
+  // el techo duro de 30 min; el evento real que el user quiere ver es el del reaper.
+  const { listServiceBoxReapInfo } = await import("~/.server/core/fleetServiceOperations");
+  const reapInfo = await listServiceBoxReapInfo(user.id).catch(
+    () => ({} as Awaited<ReturnType<typeof listServiceBoxReapInfo>>)
+  );
+
   // For running livekit-svc sandboxes, call exposeSandboxPort to get (or re-register) the real URL.
   const ephemerals = await Promise.all(
     rawEphemerals.map(async (s) => {
@@ -57,7 +65,16 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
         const ep = await exposeSandboxPort(ctx, s.sandboxId, 8088).catch(() => null);
         if (ep) studioUrl = ep.url.replace(/\/$/, "") + "/room";
       }
-      return { sandboxId: s.sandboxId, template: s.template, status: s.status as string, expiresAt: s.expiresAt, studioUrl };
+      return {
+        sandboxId: s.sandboxId, template: s.template, status: s.status as string,
+        expiresAt: s.expiresAt, studioUrl,
+        // reap: cajas de servicio reapeadas por EasyBits (render/voice/video/collab).
+        // suspendOnIdle/hardExpiresAt: cajas sleep/wake reapeadas por el HOST (team
+        // boxes tipo ghosty-chat) — su muerte real es hardExpiresAt, no expiresAt.
+        reap: reapInfo[s.sandboxId] ?? null,
+        suspendOnIdle: s.suspendOnIdle ?? false,
+        hardExpiresAt: s.hardExpiresAt ?? null,
+      };
     })
   );
   const plan = getUserPlan(user);
@@ -154,8 +171,11 @@ const gb = (mb: number) => (mb >= 1024 ? `${Math.round(mb / 1024)} GB` : `${mb} 
 const fmtLeft = (ms: number) => {
   if (ms <= 0) return "expirando…";
   const s = Math.floor(ms / 1000);
-  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+  const d = Math.floor(s / 86400);
+  const h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
   const pad = (n: number) => String(n).padStart(2, "0");
+  // Caps largos (ej. hard-TTL 7d de las team boxes) → días+horas, sin segundos.
+  if (d > 0) return `${d}d ${h}h`;
   if (h > 0) return `${h}h ${pad(m)}m ${pad(sec)}s`;
   if (m > 0) return `${m}m ${pad(sec)}s`;
   return `${sec}s`;
@@ -189,6 +209,23 @@ const Countdown = ({ expiresAt }: { expiresAt: string | null }) => {
   return (
     <span className="flex items-center gap-1 tabular-nums" title="Se auto-destruye al llegar a 0">
       <LuClock size={13} /> {fmtLeft(ms)}
+    </span>
+  );
+};
+
+// Countdown al próximo evento del reaper de una caja de servicio: "duerme en"
+// (running → suspend) o "muere en" (suspended → destroy). A diferencia de
+// <Countdown/> (techo host de 30 min), este es el evento real que el user espera.
+const ReapCountdown = ({ at, label, title }: { at: string; label: string; title: string }) => {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  const ms = new Date(at).getTime() - now;
+  return (
+    <span className="flex items-center gap-1 tabular-nums" title={title}>
+      <LuClock size={13} /> {label} {fmtLeft(ms)}
     </span>
   );
 };
@@ -362,7 +399,22 @@ export default function HostingMachines({ loaderData }: Route.ComponentProps) {
                       </div>
                       <p className="text-sm text-iron mt-1 flex items-center gap-3 flex-wrap">
                         <span>{s.template}</span>
-                        {!suspended && <Countdown expiresAt={s.expiresAt} />}
+                        {(() => {
+                          // Muerte de caja dormida: reaper de EasyBits (render/voice…)
+                          // → reap.destroyAt; caja sleep/wake host-managed (chat) →
+                          // hardExpiresAt. hardExpiresAt "0001-…" = sin cap duro.
+                          const hostHard = !isPermanentExpiry(s.hardExpiresAt) ? s.hardExpiresAt : null;
+                          if (suspended) {
+                            const dieAt = s.reap?.destroyAt ?? hostHard;
+                            return dieAt
+                              ? <ReapCountdown at={dieAt} label="muere en" title="Se destruye la caja (libera el snapshot) al llegar a 0" />
+                              : null; // dormida sin cap duro (persistente) → nada
+                          }
+                          // Corriendo: cuándo se dormirá (sleep/wake) o se destruirá (efímera normal).
+                          if (s.reap) return <ReapCountdown at={s.reap.suspendAt} label="duerme en" title="Se suspende (snapshot) por inactividad al llegar a 0" />;
+                          if (s.suspendOnIdle) return <ReapCountdown at={s.expiresAt} label="duerme en" title="Se suspende (snapshot) por inactividad al llegar a 0" />;
+                          return <Countdown expiresAt={s.expiresAt} />;
+                        })()}
                       </p>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">

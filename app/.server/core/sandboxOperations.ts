@@ -98,6 +98,12 @@ export interface SandboxRecord {
   expiresAt: string;
   ownerId: string;
   metadata?: Record<string, string>;
+  // Cajas host-managed con sleep/wake (team boxes tipo ghosty-chat): el host
+  // suspende al vencer expiresAt (idle) y DESTRUYE al vencer hardExpiresAt (cap
+  // absoluto). Ambos vienen en el JSON del host; los usa el HUD para el reloj de
+  // muerte de una caja dormida. Zero-time ("0001-…") = sin cap duro.
+  suspendOnIdle?: boolean;
+  hardExpiresAt?: string;
 }
 
 export interface ExecResult {
