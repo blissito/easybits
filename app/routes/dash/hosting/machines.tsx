@@ -224,6 +224,12 @@ const Countdown = ({ expiresAt }: { expiresAt: string | null }) => {
 // Countdown al próximo evento del reaper de una caja de servicio: "duerme en"
 // (running → suspend) o "muere en" (suspended → destroy). A diferencia de
 // <Countdown/> (techo host de 30 min), este es el evento real que el user espera.
+// Verbo en curso cuando el contador ya pasó 0 (el reaper aún no dispara): evita
+// el sinsentido "duerme en expirando…" (label + fallback de fmtLeft). "duerme
+// en" → "durmiendo…", "muere en" → "muriendo…".
+const imminentVerb = (label: string) =>
+  label.startsWith("duerme") ? "durmiendo…" : label.startsWith("muere") ? "muriendo…" : "expirando…";
+
 const ReapCountdown = ({ at, label, title }: { at: string; label: string; title: string }) => {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -233,7 +239,7 @@ const ReapCountdown = ({ at, label, title }: { at: string; label: string; title:
   const ms = new Date(at).getTime() - now;
   return (
     <span className="flex items-center gap-1 tabular-nums" title={title}>
-      <LuClock size={13} /> {label} {fmtLeft(ms)}
+      <LuClock size={13} /> {ms <= 0 ? imminentVerb(label) : `${label} ${fmtLeft(ms)}`}
     </span>
   );
 };
