@@ -1280,40 +1280,47 @@ function fmtLeftShort(ms: number): string {
   return `${h}h ${m % 60}m`;
 }
 
-// Contador del reaper por caja — muestra AMBOS eventos (duerme + muere) cuando
-// aplican, resaltando el ACTIVO (el próximo a dispararse) y atenuando el otro:
-//   running con suspendAt → "duerme Xm" (activo, índigo) · "muere Ym" (atenuado)
-//   running sin suspendAt (custom/TTL host) → "muere Xm" (activo, rojo)
-//   suspended → "muere Ym" (activo, rojo — ya está dormida)
-// Tick 1s; al llegar a 0 el activo muestra el verbo en curso. null si no hay reloj.
+// Estado + contadores del reaper por caja. PRIMERO el ESTADO (activa/dormida/
+// arrancando) con su punto de color → responde "¿ya está suspendida?" de un
+// vistazo. Luego los contadores: "duerme Xm" (si es viva y se auto-duerme) y
+// "muere Ym" (TTL de destrucción), resaltando el evento ACTIVO (próximo) y
+// atenuando el otro. Tick 1s; al llegar a 0 muestra el verbo en curso.
 function ReapCountdown({ suspendAt, destroyAt, status }: { suspendAt?: string | null; destroyAt?: string | null; status: string | null }) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(id);
   }, []);
+  const suspended = status === "suspended";
+  const starting = status === "building" || status === "starting";
   const canSleep = status === "running" && !!suspendAt;
   const sleepMs = suspendAt ? new Date(suspendAt).getTime() - now : 0;
   const dieMs = destroyAt ? new Date(destroyAt).getTime() - now : 0;
-  // El evento ACTIVO: dormir si la caja está viva y aún no ha dormido; si no, morir.
+  // El evento ACTIVO (próximo): dormir si la caja está viva y aún no ha dormido; si no, morir.
   const sleepActive = canSleep;
   const dieActive = !canSleep && !!destroyAt;
-  if (!canSleep && !destroyAt) return null;
-  const chip = (active: boolean, activeCls: string, verb: string, ms: number) => (
-    <span className={active ? `inline-flex items-center gap-1 font-semibold ${activeCls}` : "inline-flex items-center gap-1 font-medium text-gray-400"}>
-      {active && (
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-          <circle cx="12" cy="12" r="9" /><path d="M12 8v4l2.5 2" />
-        </svg>
-      )}
+  const state = suspended
+    ? { word: "dormida", dot: "bg-indigo-400", text: "text-indigo-500" }
+    : starting
+      ? { word: "arrancando", dot: "bg-amber-400", text: "text-amber-500" }
+      : { word: "activa", dot: "bg-emerald-500", text: "text-emerald-600" };
+  const chip = (active: boolean, verb: string, ms: number) => (
+    <span className={active ? "font-semibold text-[#3a3340]" : "font-medium text-gray-400"}>
       {ms <= 0 ? (verb === "duerme" ? "durmiendo…" : "muriendo…") : `${verb} ${fmtLeftShort(ms)}`}
     </span>
   );
   return (
-    <span className="mt-1 flex items-center gap-1.5 text-[11px] leading-none tabular-nums select-none">
-      {canSleep && chip(sleepActive, "text-indigo-500", "duerme", sleepMs)}
-      {canSleep && destroyAt && <span className="text-gray-300">·</span>}
-      {destroyAt && chip(dieActive, "text-rose-500", "muere", dieMs)}
+    <span className="mt-1 flex flex-col items-center gap-0.5 leading-tight tabular-nums select-none max-w-full px-1">
+      <span className={`inline-flex items-center gap-1 text-[11px] font-bold ${state.text}`}>
+        <span className={`w-1.5 h-1.5 rounded-full ${state.dot}`} />{state.word}
+      </span>
+      {(canSleep || destroyAt) && (
+        <span className="inline-flex items-center gap-1 text-[10px] flex-wrap justify-center">
+          {canSleep && chip(sleepActive, "duerme", sleepMs)}
+          {canSleep && destroyAt && <span className="text-gray-300">·</span>}
+          {destroyAt && chip(dieActive, "muere", dieMs)}
+        </span>
+      )}
     </span>
   );
 }
