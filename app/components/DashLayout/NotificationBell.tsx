@@ -71,6 +71,21 @@ export function NotificationBell({ unreadCount = 0 }: { unreadCount?: number }) 
     }
   }, [open]);
 
+  // Al ABRIR el panel, marcar todo como leído (después de mostrar la lista). Se
+  // dispara una vez cuando la lista cargó con no-leídas; el badge se limpia y las
+  // filas conservan su resaltado "nuevo" hasta el próximo fetch/recarga.
+  useEffect(() => {
+    if (
+      open &&
+      fetcher.data?.notifications.some((n) => !n.read) &&
+      markFetcher.state === "idle" &&
+      !markFetcher.data
+    ) {
+      markFetcher.submit({ intent: "mark-read", all: "1" }, { method: "post", action: "/api/v2/notifications" });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, fetcher.data]);
+
   // Compute the dropdown position from the bell's rect each time it opens.
   useEffect(() => {
     if (!open) return;

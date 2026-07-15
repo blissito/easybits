@@ -78,6 +78,8 @@ export async function loader({ request }: Route.LoaderArgs) {
       groupKeys: true,
       wabaConfig: true, mcpCatalog: true, maxWorkersPerVm: true, vmMemMb: true, skills: true,
       mainGroupJid: true, hasOwnNumber: true, workerTemplate: true, persona: true,
+      // Timings del reaper de workers → contador "duerme en / muere en" por caja.
+      idleSuspendMin: true, destroyIdleMin: true,
       // token: bearer del surface web/Baileys — lo usa el drawer de prueba (message-stream).
       token: true,
     },
@@ -217,7 +219,7 @@ export async function loader({ request }: Route.LoaderArgs) {
       // holds vs maxWorkersPerVm. Drives the "cajitas encendidas" capacity view.
       const workers = await db.agent.findMany({
         where: { fleetAgentId: p.id, status: { in: ["running", "suspended", "building"] } },
-        select: { id: true, status: true, sandboxId: true },
+        select: { id: true, status: true, sandboxId: true, lastMessageAt: true },
       });
       // Todos los agentes de flota se dibujan como fantasmita; el COLOR = tipo de agente:
       // claude-worker = coral Anthropic, ghostycode/deepseek = morado Ghosty, cualquier
@@ -229,15 +231,27 @@ export async function loader({ request }: Route.LoaderArgs) {
           : p.workerTemplate === "ghosty-gc"
             ? "#9870ED"
             : "#9CA3AF";
+      // Contador del reaper por worker: duerme (running → suspend) a lastMessageAt +
+      // idleSuspendMin; muere (destroy) a lastMessageAt + destroyIdleMin. building no
+      // tiene reloj aún. lastMessageAt puede faltar en una caja recién nacida → sin
+      // contador (null) hasta el primer turno.
+      const idleSuspendMin = p.idleSuspendMin ?? 2;
+      const destroyIdleMin = p.destroyIdleMin ?? 45;
       const machines = await Promise.all(
-        workers.map(async (w) => ({
-          id: w.id,
-          sandboxId: w.sandboxId,
-          status: w.status,
-          ghosty,
-          mascotColor,
-          slots: await db.fleetAgentRoute.count({ where: { agentId: w.id } }),
-        }))
+        workers.map(async (w) => {
+          const last = w.lastMessageAt ? new Date(w.lastMessageAt).getTime() : null;
+          return {
+            id: w.id,
+            sandboxId: w.sandboxId,
+            status: w.status,
+            ghosty,
+            mascotColor,
+            slots: await db.fleetAgentRoute.count({ where: { agentId: w.id } }),
+            // running → cuándo dormirá; suspended → cuándo morirá. building → sin reloj.
+            suspendAt: last && w.status === "running" ? new Date(last + idleSuspendMin * 60_000).toISOString() : null,
+            destroyAt: last && w.status !== "building" ? new Date(last + destroyIdleMin * 60_000).toISOString() : null,
+          };
+        })
       );
       const conversations = await db.fleetAgentRoute.count({ where: { fleetAgentId: p.id } });
       // Perfil de herramientas activo del agente: vive en persona.env.EASYBITS_TOOL_GROUP.
@@ -378,6 +392,32 @@ export async function loader({ request }: Route.LoaderArgs) {
       )
     ).filter((x): x is ServiceTile => x !== null);
   }
+  // Contador del reaper de las cajas de SERVICIO (voz/render): duerme (idle) + muere
+  // (hardTtl). Mismo reloj que /dash/hosting antes. Custom boxes sin registro → sin
+  // contador. Keyado por sandboxId.
+  const { listServiceBoxReapInfo } = await import("~/.server/core/fleetServiceOperations");
+  const serviceReap = await listServiceBoxReapInfo(user.id).catch(
+    () => ({} as Record<string, { kind: string; suspendAt: string; destroyAt: string }>)
+  );
+  // Un expiresAt "cero" (0001-01-01, año ≤ 1) = caja permanente: no muere por TTL.
+  const isPermanentExpiry = (e: string | null | undefined) => {
+    if (!e) return true;
+    const d = new Date(e);
+    return Number.isNaN(d.getTime()) || d.getUTCFullYear() <= 1;
+  };
+  const reapFor = (sandboxId: string) => {
+    const r = serviceReap[sandboxId];
+    return r ? { suspendAt: r.suspendAt as string | null, destroyAt: r.destroyAt as string | null } : { suspendAt: null, destroyAt: null };
+  };
+  // Reap de una caja NO-worker del host: primero el reaper de servicio (voz/render);
+  // si no, cae al TTL del host (hardExpiresAt ?? expiresAt) como "muere en". Las
+  // permanentes (expiresAt cero) no tienen contador.
+  const reapForVm = (v: any) => {
+    const svc = serviceReap[v.sandboxId];
+    if (svc) return { suspendAt: svc.suspendAt as string | null, destroyAt: svc.destroyAt as string | null };
+    const ttl = v.hardExpiresAt ?? v.expiresAt ?? null;
+    return { suspendAt: null as string | null, destroyAt: isPermanentExpiry(ttl) ? null : (ttl as string) };
+  };
   const extraMachines = [
     // Cajas NO-worker del host: sistema (voz/render/llamadas) o custom. Incluye
     // DORMIDAS (suspended) → así una caja de servicio parada se ve dormida en el HUD.
@@ -385,11 +425,11 @@ export async function loader({ request }: Route.LoaderArgs) {
       .filter((v) => !workerSandboxIds.has(v.sandboxId) && ["running", "starting", "building", "suspended"].includes(v.status))
       .map((v) =>
         SYSTEM_TEMPLATES[v.template]
-          ? { id: v.sandboxId, status: v.status as string, kind: "system" as const, label: SYSTEM_TEMPLATES[v.template] }
-          : { id: v.sandboxId, status: v.status as string, kind: "custom" as const, label: v.template as string }
+          ? { id: v.sandboxId, status: v.status as string, kind: "system" as const, label: SYSTEM_TEMPLATES[v.template], ...reapForVm(v) }
+          : { id: v.sandboxId, status: v.status as string, kind: "custom" as const, label: v.template as string, ...reapForVm(v) }
       ),
     // Verificadas contra el host (dedup contra las ya emitidas por el listing).
-    ...serviceTiles,
+    ...serviceTiles.map((t) => ({ ...t, ...reapFor(t.id) })),
   ];
   const capacity = {
     machines,
@@ -1221,12 +1261,62 @@ function ChannelConnectMenu({
 }
 
 type Capacity = {
-  machines: { id: string; sandboxId?: string | null; status: string; slots: number; ghosty?: boolean; mascotColor?: string }[];
-  extraMachines: { id: string; status: string; kind: "system" | "custom"; label: string }[];
+  machines: { id: string; sandboxId?: string | null; status: string; slots: number; ghosty?: boolean; mascotColor?: string; suspendAt?: string | null; destroyAt?: string | null }[];
+  extraMachines: { id: string; status: string; kind: "system" | "custom"; label: string; suspendAt?: string | null; destroyAt?: string | null }[];
   vms: number; maxMachines: number; plan: string; planName: string;
   nextPlan: string | null; maxWorkersPerVm: number; vmMemMb: number; vcpus: number;
   reservedMachines: number; agentsActive: number; agentsMax: number; addonCostMxn: number;
 };
+
+// Formato compacto de tiempo restante para el contador del reaper: "45s", "2m",
+// "1h 3m". <=0 → "" (el llamador muestra el verbo en curso).
+function fmtLeftShort(ms: number): string {
+  if (ms <= 0) return "";
+  const s = Math.round(ms / 1000);
+  if (s < 60) return `${s}s`;
+  const m = Math.round(s / 60);
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60);
+  return `${h}h ${m % 60}m`;
+}
+
+// Contador del reaper por caja — muestra AMBOS eventos (duerme + muere) cuando
+// aplican, resaltando el ACTIVO (el próximo a dispararse) y atenuando el otro:
+//   running con suspendAt → "duerme Xm" (activo, índigo) · "muere Ym" (atenuado)
+//   running sin suspendAt (custom/TTL host) → "muere Xm" (activo, rojo)
+//   suspended → "muere Ym" (activo, rojo — ya está dormida)
+// Tick 1s; al llegar a 0 el activo muestra el verbo en curso. null si no hay reloj.
+function ReapCountdown({ suspendAt, destroyAt, status }: { suspendAt?: string | null; destroyAt?: string | null; status: string | null }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  const canSleep = status === "running" && !!suspendAt;
+  const sleepMs = suspendAt ? new Date(suspendAt).getTime() - now : 0;
+  const dieMs = destroyAt ? new Date(destroyAt).getTime() - now : 0;
+  // El evento ACTIVO: dormir si la caja está viva y aún no ha dormido; si no, morir.
+  const sleepActive = canSleep;
+  const dieActive = !canSleep && !!destroyAt;
+  if (!canSleep && !destroyAt) return null;
+  const chip = (active: boolean, activeCls: string, verb: string, ms: number) => (
+    <span className={active ? `inline-flex items-center gap-1 font-semibold ${activeCls}` : "inline-flex items-center gap-1 font-medium text-gray-400"}>
+      {active && (
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="9" /><path d="M12 8v4l2.5 2" />
+        </svg>
+      )}
+      {ms <= 0 ? (verb === "duerme" ? "durmiendo…" : "muriendo…") : `${verb} ${fmtLeftShort(ms)}`}
+    </span>
+  );
+  return (
+    <span className="mt-1 flex items-center gap-1.5 text-[11px] leading-none tabular-nums select-none">
+      {canSleep && chip(sleepActive, "text-indigo-500", "duerme", sleepMs)}
+      {canSleep && destroyAt && <span className="text-gray-300">·</span>}
+      {destroyAt && chip(dieActive, "text-rose-500", "muere", dieMs)}
+    </span>
+  );
+}
 
 // Per-Ghosty blink timing, deterministic (NO Math.random → no SSR/hydration
 // mismatch) from a stable seed (box id + slot index). Returns BOTH a phase offset
@@ -1289,7 +1379,7 @@ function GhostyMascot({ className = "", blink = true, sleeping = false, offset =
 // One sandbox = a CONTAINER box; the agents (workers) inside it are the ojitos.
 // Color climbs with occupancy: empty→gray, healthy→green, full→amber (no room);
 // building pulses violet; an unspawned slot is a dashed "mount" ready on demand.
-function VmBox({ id, sandboxId, status, slots, max, ghosty, mascotColor, addon, kind, sysLabel, onAction, pending }: { id: string; sandboxId?: string | null; status: string | null; slots: number; max: number; ghosty?: boolean; mascotColor?: string; addon?: boolean; kind?: "system" | "custom"; sysLabel?: string; onAction?: (sandboxId: string, intent: "box-suspend" | "box-resume" | "box-destroy") => void; pending?: boolean }) {
+function VmBox({ id, sandboxId, status, slots, max, ghosty, mascotColor, addon, kind, sysLabel, onAction, pending, suspendAt, destroyAt }: { id: string; sandboxId?: string | null; status: string | null; slots: number; max: number; ghosty?: boolean; mascotColor?: string; addon?: boolean; kind?: "system" | "custom"; sysLabel?: string; onAction?: (sandboxId: string, intent: "box-suspend" | "box-resume" | "box-destroy") => void; pending?: boolean; suspendAt?: string | null; destroyAt?: string | null }) {
   const system = kind === "system";
   const custom = kind === "custom";
   const extra = system || custom;
@@ -1509,6 +1599,8 @@ function VmBox({ id, sandboxId, status, slots, max, ghosty, mascotColor, addon, 
         </div>
       )}
       <span className={`font-jersey text-base leading-none truncate max-w-full px-2 font-bold ${labelTone} ${sleeping ? "opacity-80" : ""}`}>{label}</span>
+      {/* Contador sutil del reaper: solo en cajas reales (no celdas libres/add-on). */}
+      {status != null && <ReapCountdown suspendAt={suspendAt} destroyAt={destroyAt} status={status} />}
       </div>
     </motion.div>
   );
@@ -1575,9 +1667,9 @@ function CapacityHud({ capacity, onBoxAction, actionError, pending }: {
           const inner = !cell.item ? (
             <VmBox id={`free-${cell.p}`} status={null} slots={0} max={capacity.maxWorkersPerVm} addon={isAddon} />
           ) : cell.item.kind === "machine" ? (
-            (() => { const m = cell.item.m; return <VmBox id={m.id} sandboxId={m.sandboxId ?? null} status={m.status} slots={m.slots} max={capacity.maxWorkersPerVm} ghosty={m.ghosty} mascotColor={m.mascotColor} addon={isAddon} onAction={onBoxAction} pending={pending === m.sandboxId} />; })()
+            (() => { const m = cell.item.m; return <VmBox id={m.id} sandboxId={m.sandboxId ?? null} status={m.status} slots={m.slots} max={capacity.maxWorkersPerVm} ghosty={m.ghosty} mascotColor={m.mascotColor} addon={isAddon} onAction={onBoxAction} pending={pending === m.sandboxId} suspendAt={m.suspendAt} destroyAt={m.destroyAt} />; })()
           ) : (
-            (() => { const s = cell.item.s; return <VmBox id={s.id} sandboxId={s.id} status={s.status} slots={0} max={capacity.maxWorkersPerVm} kind={s.kind} sysLabel={s.label} onAction={onBoxAction} pending={pending === s.id} />; })()
+            (() => { const s = cell.item.s; return <VmBox id={s.id} sandboxId={s.id} status={s.status} slots={0} max={capacity.maxWorkersPerVm} kind={s.kind} sysLabel={s.label} onAction={onBoxAction} pending={pending === s.id} suspendAt={s.suspendAt} destroyAt={s.destroyAt} />; })()
           );
           return (
             <div key={`cell-${cell.p}`} className="relative">
