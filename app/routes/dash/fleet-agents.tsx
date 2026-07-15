@@ -252,6 +252,10 @@ export async function loader({ request }: Route.LoaderArgs) {
       return {
         id: p.id, name: p.name, token: p.token, mascotColor, status, live, qrDataUrl, pairingCode, groups,
         wabaNumbers, teamsChannel, webChannel,
+        // Canales ocultados EXPLÍCITAMENTE por el dueño para este agente (Nik Admin
+        // oculta Web; Nik público oculta Baileys). Vive en persona.hiddenChannels
+        // (NO persona.env → no afecta el spawn). Default [] = todos visibles.
+        hiddenChannels: ((p.persona as { hiddenChannels?: string[] } | null)?.hiddenChannels) ?? [],
         enabledCount: p.enabledGroups.length, machines, vms: machines.length,
         conversations, maxWorkersPerVm: p.maxWorkersPerVm, vmMemMb: p.vmMemMb,
         throttledUntil, connReason: b.reason ?? null, mainGroupJid: p.mainGroupJid,
@@ -728,6 +732,19 @@ export async function action({ request }: Route.ActionArgs) {
     const cur = configs[groupId] ?? {};
     configs[groupId] = { ...cur, systemPrompt: systemPrompt || undefined };
     await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { groupConfigs: configs } });
+    return data({ ok: true });
+  }
+  if (intent === "toggle-channel") {
+    // Mostrar/ocultar un canal para ESTE agente (explícito, decisión del dueño — NO
+    // auto-inferido de la conexión). Se persiste en persona.hiddenChannels (fuera de
+    // persona.env → no toca el spawn). Default = todos visibles.
+    const kind = String(fd.get("kind") || "");
+    const visible = String(fd.get("visible") || "") === "1";
+    if (!kind) return data({ error: "kind requerido" }, { status: 400 });
+    const persona = ((fleetAgent.persona ?? {}) as { hiddenChannels?: string[] });
+    const set = new Set(persona.hiddenChannels ?? []);
+    if (visible) set.delete(kind); else set.add(kind);
+    await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { persona: { ...persona, hiddenChannels: [...set] } as object } });
     return data({ ok: true });
   }
   if (intent === "set-group-key") {
@@ -2476,30 +2493,38 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                 // de conexión) pero WABA tiene números → arranca en WABA, para no
                 // caer siempre en una tab de un canal en desuso.
                 const baileysIdle = !inFlow && p.status !== "connected" && !p.live;
-                const defaultCh = baileysIdle && p.wabaNumbers.length > 0 ? "waba" : "baileys";
-                const activeCh = inFlow ? "baileys" : (activeChannel[p.id] ?? defaultCh);
                 const settingsOpen = chSettings[p.id] ?? false;
                 // Solo cuando el surface está vivo de verdad tiene sentido ver/configurar
                 // grupos: desconectado/relinking → la sesión Baileys no existe, así que
                 // los toggles no harían nada hasta reconectar. Los ocultamos para no
                 // ofrecer config inerte (los enabledGroups persisten igual en la DB).
                 const liveConnected = p.status === "connected" && p.live;
-                const channels = [
+                // Catálogo de canales del agente. Teams solo si conectado (la conexión
+                // vive en GTeams). El resto siempre existe; su VISIBILIDAD la decide el
+                // dueño en el menú "⋯" (persona.hiddenChannels) — Nik Admin oculta Web,
+                // Nik público oculta Baileys. Nada auto-inferido de la conexión.
+                const allChannels = [
                   { kind: "baileys", label: "Personal y grupos (QR)", dot: (stale || relinking) ? "bg-orange-400" : st.dot, count: p.conversations },
                   { kind: "waba", label: "WhatsApp Business API", dot: p.wabaNumbers.length ? "bg-green-500" : "bg-gray-300", count: p.wabaNumbers.length },
-                  // Teams: la tab aparece SOLO en agentes ya conectados desde Teams
-                  // (connectedAt del primer turno). La conexión se hace en GTeams; no
-                  // tiene sentido ofrecer config de un canal que este agente no usa.
                   ...(p.teamsChannel.connected ? [{ kind: "teams", label: "Ghosty Teams", dot: "bg-green-500", count: 0 }] : []),
-                  // Web: bubbles públicos en landings. Se ofrece SIEMPRE (cualquier
-                  // agente puede hospedar burbujas). Verde = recibiendo tráfico; morado
-                  // = configurado sin tráfico aún; gris = intacto.
+                  // Web (bubbles públicos): verde = recibiendo; morado = configurado sin
+                  // tráfico; gris = intacto.
                   { kind: "web", label: "Bubbles públicos (Web)",
                     dot: p.webChannel.connected ? "bg-green-500"
                       : (p.webChannel.systemPrompt || p.webChannel.keySet || p.webChannel.mcps.length) ? "bg-brand-500"
                       : "bg-gray-300",
                     count: 0 },
                 ];
+                const hidden = new Set(p.hiddenChannels);
+                // Visibles = no ocultos. Baileys se fuerza visible durante un flujo de
+                // conexión (QR/pairing) aunque esté oculto, para no esconder el código.
+                const channels = allChannels.filter((c) => !hidden.has(c.kind) || (c.kind === "baileys" && inFlow));
+                // Default: el canal EN USO (baileys, o waba si baileys ocioso) mientras
+                // sea VISIBLE; si no, el primer canal visible (evita abrir en un tab oculto).
+                const preferred = baileysIdle && p.wabaNumbers.length > 0 ? "waba" : "baileys";
+                const defaultCh = channels.some((c) => c.kind === preferred) ? preferred : (channels[0]?.kind ?? "web");
+                const savedCh = inFlow ? "baileys" : (activeChannel[p.id] ?? defaultCh);
+                const activeCh = channels.some((c) => c.kind === savedCh) ? savedCh : defaultCh;
                 return (<>
                 {/* Tabs por canal */}
                 <div className="mt-4 flex items-center gap-1 border-b-2 border-gray-100">
@@ -2509,8 +2534,24 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                       <span className={`w-2 h-2 rounded-full ${c.dot}`} /><span>{c.label}</span>
                       {c.count > 0 && <span className="text-[10px] leading-none bg-gray-100 text-gray-600 rounded-full px-1.5 py-0.5">{c.count}</span>}
                     </button> ); })}
-                  <button type="button" disabled title="Más canales (Slack, Instagram…) próximamente"
-                    className="ml-auto px-2.5 py-1 text-lg leading-none text-gray-300 cursor-default">+</button>
+                  <details className="ml-auto relative">
+                    <summary title="Mostrar u ocultar canales de este agente"
+                      className="px-2.5 py-1 text-lg leading-none text-gray-300 hover:text-brand-500 cursor-pointer list-none select-none">⋯</summary>
+                    <div className="absolute right-0 top-8 z-20 w-64 bg-white border-2 border-black rounded-xl shadow-[2px_2px_0_0_#000] p-2">
+                      <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide px-1 pb-1">Canales de este agente</p>
+                      {allChannels.map((c) => {
+                        const visible = !hidden.has(c.kind);
+                        return (
+                          <label key={c.kind} className="flex items-center justify-between gap-2 px-1 py-1.5 text-sm cursor-pointer hover:bg-gray-50 rounded-lg">
+                            <span className="flex items-center gap-1.5 min-w-0"><span className={`w-2 h-2 rounded-full ${c.dot}`} /><span className="truncate">{c.label}</span></span>
+                            <input type="checkbox" checked={visible}
+                              onChange={(e) => fetcher.submit({ intent: "toggle-channel", fleetAgentId: p.id, kind: c.kind, visible: e.target.checked ? "1" : "0" }, { method: "post" })} />
+                          </label>
+                        );
+                      })}
+                      <p className="text-[11px] text-gray-400 px-1 pt-1">Oculta los canales que este agente no usa. No borra su configuración.</p>
+                    </div>
+                  </details>
                 </div>
 
                 {/* ── Canal WhatsApp (Baileys) ──────────────────────────── */}
@@ -3332,8 +3373,8 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                       className="border-2 border-black rounded-lg px-4 py-1.5 text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed">
                       {saving ? "Guardando…" : savedFlash && !promptDirty ? "✓ Guardado" : "Guardar"}
                     </button>
-                    <button type="button" onClick={closePromptFull}
-                      className="border-2 border-gray-300 rounded-lg px-4 py-1.5 text-sm font-semibold text-gray-600 hover:bg-gray-50">
+                    <button type="button" onClick={closePromptFull} disabled={saving}
+                      className="border-2 border-gray-300 rounded-lg px-4 py-1.5 text-sm font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed">
                       Cerrar
                     </button>
                     <span className="text-[11px] text-gray-400">
