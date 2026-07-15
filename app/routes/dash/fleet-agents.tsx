@@ -71,6 +71,9 @@ export async function loader({ request }: Route.LoaderArgs) {
     orderBy: { createdAt: "desc" },
     select: {
       id: true, name: true, baileys: true, enabledGroups: true, groupConfigs: true,
+      // groupKeys: solo para saber SI el canal web tiene key denik pública (booleano);
+      // el valor NUNCA sale al cliente (se deriva keySet más abajo, nunca se serializa).
+      groupKeys: true,
       wabaConfig: true, mcpCatalog: true, maxWorkersPerVm: true, vmMemMb: true, skills: true,
       mainGroupJid: true, hasOwnNumber: true, workerTemplate: true, persona: true,
       // token: bearer del surface web/Baileys — lo usa el drawer de prueba (message-stream).
@@ -186,6 +189,28 @@ export async function loader({ request }: Route.LoaderArgs) {
         toolDeny: (teamsCfg.toolDeny?.length ? teamsCfg.toolDeny : gconf["*"]?.toolDeny) ?? [],
         connected: teamsConnected,
       };
+      // Web (bubbles públicos en landings de clientes): config unit ESTABLE "web".
+      // routeMessage normaliza los groupId efímeros web-<uuid> → "web", así que TODAS
+      // las burbujas comparten UN prompt/tools. Mismo shape que teams → el modal de
+      // Capacidades lo reusa. "Recibiendo" = hubo al menos un turno (connectedAt).
+      const webCfg = gconf["web"] ?? {};
+      const webConnected = !!webCfg.connectedAt;
+      const webChannel = {
+        id: "web",
+        subject: "Bubbles públicos",
+        mcps: webCfg.mcpServers ?? [],
+        disabledBuiltins: webCfg.disabledBuiltins ?? [],
+        capLevels: webCfg.capLevels ?? {},
+        systemPrompt: webCfg.systemPrompt ?? "",
+        assets: (webCfg.assets?.length ? webCfg.assets : gconf["*"]?.assets) ?? [],
+        dbAllow: (webCfg.dbAllow?.length ? webCfg.dbAllow : gconf["*"]?.dbAllow) ?? [],
+        toolBuckets: webCfg.toolGroup ? [...toolsParamToBuckets(webCfg.toolGroup)] : null,
+        toolDeny: (webCfg.toolDeny?.length ? webCfg.toolDeny : gconf["*"]?.toolDeny) ?? [],
+        connected: webConnected,
+        // Presencia de key denik pública (dnk_pub_) — SOLO booleano, el valor jamás
+        // se serializa al cliente (scopea el MCP denik del worker a 3 tools públicas).
+        keySet: !!((p.groupKeys as Record<string, string> | null)?.["web"]),
+      };
       // Per-VM capacity boxes: each worker VM + how many conversations (slots) it
       // holds vs maxWorkersPerVm. Drives the "cajitas encendidas" capacity view.
       const workers = await db.agent.findMany({
@@ -226,7 +251,7 @@ export async function loader({ request }: Route.LoaderArgs) {
       const skillFileById = new Map(skillFiles.map((f) => [f.id, f]));
       return {
         id: p.id, name: p.name, token: p.token, mascotColor, status, live, qrDataUrl, pairingCode, groups,
-        wabaNumbers, teamsChannel,
+        wabaNumbers, teamsChannel, webChannel,
         enabledCount: p.enabledGroups.length, machines, vms: machines.length,
         conversations, maxWorkersPerVm: p.maxWorkersPerVm, vmMemMb: p.vmMemMb,
         throttledUntil, connReason: b.reason ?? null, mainGroupJid: p.mainGroupJid,
@@ -703,6 +728,20 @@ export async function action({ request }: Route.ActionArgs) {
     const cur = configs[groupId] ?? {};
     configs[groupId] = { ...cur, systemPrompt: systemPrompt || undefined };
     await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { groupConfigs: configs } });
+    return data({ ok: true });
+  }
+  if (intent === "set-group-key") {
+    // API key denik POR-CANAL → groupKeys[groupId]. Hoy la UI solo la expone para el
+    // canal "web" (bubbles públicos): la key pública (dnk_pub_) del negocio scopea el
+    // MCP denik del worker a las 3 tools públicas (servicios/disponibilidad/reservar).
+    // routeMessage la inyecta por-turno (msg.denikApiKey ?? groupKeys[cfgId]). El valor
+    // NUNCA se devuelve al cliente; vacío = borra la key.
+    const groupId = String(fd.get("groupId") || "");
+    const key = String(fd.get("key") || "").trim();
+    if (!groupId) return data({ error: "groupId requerido" }, { status: 400 });
+    const keys = { ...((fleetAgent.groupKeys as Record<string, string> | null) ?? {}) };
+    if (key) keys[groupId] = key; else delete keys[groupId];
+    await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { groupKeys: keys } });
     return data({ ok: true });
   }
   if (intent === "set-agent-prompt") {
@@ -2444,6 +2483,14 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                   // (connectedAt del primer turno). La conexión se hace en GTeams; no
                   // tiene sentido ofrecer config de un canal que este agente no usa.
                   ...(p.teamsChannel.connected ? [{ kind: "teams", label: "Ghosty Teams", dot: "bg-green-500", count: 0 }] : []),
+                  // Web: bubbles públicos en landings. Se ofrece SIEMPRE (cualquier
+                  // agente puede hospedar burbujas). Verde = recibiendo tráfico; morado
+                  // = configurado sin tráfico aún; gris = intacto.
+                  { kind: "web", label: "Bubbles públicos (Web)",
+                    dot: p.webChannel.connected ? "bg-green-500"
+                      : (p.webChannel.systemPrompt || p.webChannel.keySet || p.webChannel.mcps.length) ? "bg-brand-500"
+                      : "bg-gray-300",
+                    count: 0 },
                 ];
                 return (<>
                 {/* Tabs por canal */}
@@ -2454,7 +2501,7 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                       <span className={`w-2 h-2 rounded-full ${c.dot}`} /><span>{c.label}</span>
                       {c.count > 0 && <span className="text-[10px] leading-none bg-gray-100 text-gray-600 rounded-full px-1.5 py-0.5">{c.count}</span>}
                     </button> ); })}
-                  <button type="button" disabled title="Más canales (Slack, Web…) próximamente"
+                  <button type="button" disabled title="Más canales (Slack, Instagram…) próximamente"
                     className="ml-auto px-2.5 py-1 text-lg leading-none text-gray-300 cursor-default">+</button>
                 </div>
 
@@ -2667,6 +2714,64 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                   </p>
                 </div>)}
 
+                {/* ── Canal Web (bubbles públicos en landings) ───────────── */}
+                {activeCh === "web" && (<div className="mt-3">
+                  <p className="text-xs text-gray-500 mb-3">
+                    Burbujas de chat en las landings de tus clientes. Todas las burbujas comparten
+                    esta configuración (prompt y herramientas) — la conversación es efímera, la config es una.
+                  </p>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0 flex items-center gap-2">
+                      <span className="text-sm font-semibold truncate">Bubbles públicos</span>
+                      <span className={`shrink-0 inline-flex items-center gap-1.5 text-[11px] font-semibold px-2 py-1 rounded-full border-2 ${p.webChannel.connected ? "border-green-200 text-green-600" : "border-gray-200 text-gray-500"}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${p.webChannel.connected ? "bg-green-500" : "bg-gray-300"}`} />
+                        {p.webChannel.connected ? "Recibiendo" : "Sin tráfico aún"}
+                      </span>
+                    </div>
+                    <button type="button" title="Capacidades y comportamiento del widget web"
+                      onClick={() => setCapModal({ fleetAgentId: p.id, groupId: "web" })}
+                      className="flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-lg border-2 border-gray-200 text-gray-600 hover:border-brand-500 hover:text-brand-500 transition-colors">
+                      <span className="text-sm leading-none">⚡</span><span>Capacidades</span>
+                      <span className="text-[10px] leading-none bg-gray-100 text-gray-600 rounded-full px-1.5 py-0.5">{p.builtins.length + p.webChannel.mcps.length}</span>
+                    </button>
+                  </div>
+
+                  {/* Llave Denik pública — colapsable. Present/falta; NUNCA muestra el valor.
+                      `key` en el key= fuerza reset del input cuando cambia el estado guardado. */}
+                  <details className="mt-3 group">
+                    <summary className="text-xs font-semibold text-gray-500 cursor-pointer hover:text-gray-800 flex items-center gap-1 list-none">
+                      <span className="transition-transform group-open:rotate-90">›</span>
+                      Llave Denik pública
+                      {p.webChannel.keySet
+                        ? <span className="text-green-600 font-normal">· configurada</span>
+                        : <span className="text-gray-400 font-normal">· sin configurar</span>}
+                    </summary>
+                    <fetcher.Form method="post" className="mt-2 flex items-center gap-2" key={`webkey-${p.id}-${p.webChannel.keySet}`}>
+                      <input type="hidden" name="intent" value="set-group-key" />
+                      <input type="hidden" name="fleetAgentId" value={p.id} />
+                      <input type="hidden" name="groupId" value="web" />
+                      <input name="key" type="password" autoComplete="off"
+                        placeholder={p.webChannel.keySet ? "•••• (reemplazar)" : "dnk_pub_…"}
+                        className="border-2 border-gray-300 rounded-lg px-2 py-1.5 text-sm font-mono flex-1 min-w-0" />
+                      <button type="submit"
+                        disabled={fetcher.state !== "idle" && fetcher.formData?.get("intent") === "set-group-key"}
+                        className="shrink-0 border-2 border-black rounded-lg px-3 py-1.5 text-xs font-semibold disabled:opacity-60">
+                        Guardar
+                      </button>
+                    </fetcher.Form>
+                    <p className="text-[11px] text-gray-400 mt-1">
+                      Key pública del negocio (dnk_pub_): da a las burbujas las 3 tools públicas de Denik
+                      (servicios, disponibilidad, reservar). El valor nunca se muestra.
+                    </p>
+                  </details>
+
+                  {/* Endpoint que el tenant proxea desde SU server (el token nunca al browser). */}
+                  <p className="mt-3 text-[11px] text-gray-400 break-words">
+                    Endpoint: <code className="bg-gray-100 rounded px-1">POST /api/v2/fleet-agents/{p.id}/message-stream</code>
+                    {" "}· autentica con el token del agente desde tu server, no lo expongas al navegador.
+                  </p>
+                </div>)}
+
                 {/* Footer del agente — Borrar es DESTRUCTIVO e irreversible: lo
                     dejamos discreto (no un botón rojo prominente) para que no se
                     dispare por accidente. Mantiene el confirm reforzado. */}
@@ -2730,7 +2835,10 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
         // la reusa; tools por toggle-group-mcp y comportamiento por set-group-prompt,
         // ambos keyean por groupId="teams").
         const cgTeams = capModal.groupId === "teams" ? cp?.teamsChannel : undefined;
-        const cg = cp?.groups.find((x) => x.id === capModal.groupId) ?? cgWaba ?? cgTeams;
+        // Web: unidad de config "web" (mismo shape que teams → el modal la reusa;
+        // prompt capa-3 por set-group-prompt, tools por toggle-group-mcp, keyean "web").
+        const cgWeb = capModal.groupId === "web" ? cp?.webChannel : undefined;
+        const cg = cp?.groups.find((x) => x.id === capModal.groupId) ?? cgWaba ?? cgTeams ?? cgWeb;
         if (!cp || !cg) return null;
         const waba = cgWaba ?? null;
         return (
