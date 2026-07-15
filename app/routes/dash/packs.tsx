@@ -7,10 +7,12 @@ import { getUserOrRedirect } from "~/.server/getters";
 import { checkAiGenerationLimit } from "~/.server/aiGenerationLimit";
 import { checkLLMTokenLimit } from "~/.server/llmTokenLimit";
 import { getReferralStats } from "~/.server/core/referralOperations";
+import { getReservedCapacity } from "~/.server/core/sandboxReservations";
 import {
   GENERATION_PACKS,
   LLM_TOKEN_PACKS,
   NEXT_PLAN,
+  PLANS,
   REFERRAL_SIGNUP_BONUS,
   REFERRAL_UPGRADE_BONUS,
   REFERRAL_WELCOME_BONUS,
@@ -31,6 +33,8 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
   const genLimit = await checkAiGenerationLimit(user.id, plan);
   const llmLimit = await checkLLMTokenLimit(user.id, plan);
   const referralStats = await getReferralStats(user.id);
+  // Capacidad reservada (add-ons de cajas ya compradas, cobradas mensualmente).
+  const reserved = await getReservedCapacity(user.id);
 
   const nextPlan = NEXT_PLAN[plan];
 
@@ -59,11 +63,20 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
     referralLink: `https://www.easybits.cloud/login?ref=${user.publicKey}`,
     autoTopup: user.autoTopup ?? null,
     canBuyAddon: plan !== "Byte", // box minPlan: Mega
+    // Cajas: base del plan + add-ons reservados (cobrados mensualmente).
+    sandboxes: {
+      planMachines: PLANS[plan].concurrentSandboxes,
+      reservedMachines: reserved.machines,
+      reservedAgents: reserved.agents,
+      agentsPerBox: FLEET_BOX.agents,
+      boxPriceMxn: FLEET_BOX.priceMxn,
+      monthlyMxn: reserved.machines * FLEET_BOX.priceMxn,
+    },
   };
 };
 
 export default function PacksPage({ loaderData }: Route.ComponentProps) {
-  const { packs, llmPacks, plan, genLimit, llmLimit, referralStats, referralLink, autoTopup, canBuyAddon } =
+  const { packs, llmPacks, plan, genLimit, llmLimit, referralStats, referralLink, autoTopup, canBuyAddon, sandboxes } =
     loaderData;
 
   type Tab = "credits" | "tokens" | "sandboxes";
@@ -109,7 +122,7 @@ export default function PacksPage({ loaderData }: Route.ComponentProps) {
       <AutoTopupStatus autoTopup={autoTopup} />
 
       {/* Usage bars: side by side */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-8">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-8">
         <CreditUsageBar
           plan={plan}
           used={genLimit.used}
@@ -124,6 +137,7 @@ export default function PacksPage({ loaderData }: Route.ComponentProps) {
           bonus={llmLimit.bonus}
           resetAt={llmLimit.resetAt}
         />
+        <SandboxReservedCard sandboxes={sandboxes} onManage={() => switchTab("sandboxes")} />
       </div>
 
       {/* Tab switcher */}
@@ -187,6 +201,74 @@ export default function PacksPage({ loaderData }: Route.ComponentProps) {
       <ReferralSection referralLink={referralLink} stats={referralStats} />
       </div>
     </section>
+  );
+}
+
+// ─── Sandboxes reservados (cajas cobradas mensualmente) ────────────────────
+
+function SandboxReservedCard({
+  sandboxes,
+  onManage,
+}: {
+  sandboxes: {
+    planMachines: number;
+    reservedMachines: number;
+    reservedAgents: number;
+    agentsPerBox: number;
+    boxPriceMxn: number;
+    monthlyMxn: number;
+  };
+  onManage: () => void;
+}) {
+  const { planMachines, reservedMachines, agentsPerBox, boxPriceMxn, monthlyMxn } = sandboxes;
+  const totalMachines = planMachines + reservedMachines;
+  const hasAddons = reservedMachines > 0;
+  return (
+    <div className="border-2 border-black rounded-xl p-4 flex flex-col">
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <h3 className="text-base font-bold flex items-center gap-1.5">🖥️ Sandboxes</h3>
+          <p className="text-xs text-iron">Cajas add-on que pagas al mes · ${boxPriceMxn} c/u</p>
+        </div>
+        <span
+          className={`shrink-0 text-[11px] font-semibold px-2 py-0.5 rounded-full border-2 ${
+            hasAddons ? "border-green-500 text-green-600" : "border-gray-300 text-gray-500"
+          }`}
+        >
+          {hasAddons ? "Activo" : "Sin add-ons"}
+        </span>
+      </div>
+
+      {/* El COBRO mensual es SOLO de los add-ons. Las cajas del plan van incluidas. */}
+      <div className="mt-3">
+        {hasAddons ? (
+          <div className="flex items-baseline gap-1.5">
+            <span className="text-2xl font-bold text-brand-500">${monthlyMxn.toLocaleString("es-MX")}</span>
+            <span className="text-sm text-iron">MXN/mes</span>
+            <span className="text-xs text-iron">· {reservedMachines} × ${boxPriceMxn}</span>
+          </div>
+        ) : (
+          <div className="flex items-baseline gap-1.5">
+            <span className="text-2xl font-bold text-gray-400">$0</span>
+            <span className="text-sm text-iron">MXN/mes en add-ons</span>
+          </div>
+        )}
+      </div>
+
+      <div className="mt-auto pt-3 flex items-center justify-between border-t-2 border-gray-100">
+        <span className="text-[11px] text-iron">
+          {planMachines} incluida{planMachines !== 1 ? "s" : ""} en tu plan
+          {hasAddons ? ` + ${reservedMachines} add-on${reservedMachines !== 1 ? "s" : ""}` : ""} ·{" "}
+          {totalMachines * agentsPerBox} agentes
+        </span>
+        <button
+          onClick={onManage}
+          className="text-xs font-semibold text-brand-500 hover:underline shrink-0"
+        >
+          {hasAddons ? "Gestionar →" : "Añadir →"}
+        </button>
+      </div>
+    </div>
   );
 }
 

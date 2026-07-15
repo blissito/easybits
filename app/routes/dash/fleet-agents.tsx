@@ -1,5 +1,5 @@
 import type { Route } from "./+types/fleet-agents";
-import { useEffect, useRef, useState, lazy, Suspense, type CSSProperties } from "react";
+import { useEffect, useRef, useState, lazy, Suspense, type CSSProperties, type MouseEvent as ReactMouseEvent } from "react";
 import { useFetcher, useRevalidator, data } from "react-router";
 import { motion, AnimatePresence } from "motion/react";
 import QRCode from "qrcode";
@@ -13,6 +13,8 @@ import { delegatedAccountIds, SCOPES } from "~/.server/delegation";
 import { createFleetAgent, deleteFleetAgent, clearGroupSession, mergedCapabilities, CURATED_CAPABILITIES, DEFAULT_MCP_CATALOG, fleetSkills, type McpCatalogEntry, type GroupConfig, type FleetSkill } from "~/.server/core/fleetAgentOperations";
 import { FLEET_BUCKETS, GROUP_ALLOWLISTS, toolsParamToBuckets, bucketsToToolsParam, type ToolGroupKey } from "~/.server/mcp/toolGroups";
 import { getReservedCapacity } from "~/.server/core/sandboxReservations";
+import { suspendSandbox, resumeSandbox, destroySandbox } from "~/.server/core/sandboxOperations";
+import { FLEET_BOX } from "~/lib/hostingCatalog";
 import { listSecrets, createSecret } from "~/.server/core/secretOperations";
 import { FLEET_ENGINES, getEngine, DEFAULT_ENGINE_ID, engineCreatable, getEngineForAgent } from "~/lib/fleetEngines";
 import {
@@ -402,6 +404,9 @@ export async function loader({ request }: Route.LoaderArgs) {
     // vCPU por sandbox — misma regla que spawnVm (≤512MB → 1, si no 2).
     vcpus: (pools[0]?.vmMemMb ?? box.vmMemMb) <= 512 ? 1 : 2,
     reservedMachines: reserved.machines,
+    // Costo mensual de los add-ons (cajas reservadas): reservedMachines × precio
+    // plano de la caja Flota. Fuente única = FLEET_BOX.priceMxn ($299/mes/caja).
+    addonCostMxn: reserved.machines * FLEET_BOX.priceMxn,
     // Agents running RIGHT NOW = sum of workers inside active VMs (coherent with
     // "VMs contain agents"); idle/detached routes don't count until re-spawned.
     agentsActive: machines.reduce((s, m) => s + m.slots, 0),
@@ -523,6 +528,32 @@ export async function action({ request }: Route.ActionArgs) {
       oauthSecretName,
     });
     return data({ ok: true, fleetAgentId: fleetAgent.id });
+  }
+
+  // Ciclo de vida por CAJA (sandbox) desde el HUD de capacidad. Se llavean por
+  // `sandboxId`, NO por fleetAgent → van ANTES del gate de fleetAgentId (que
+  // devuelve 404 sin fleetAgentId). `effectiveOwnerId` dentro de cada op es la
+  // frontera de autorización: 404 si no es del owner ni delegado; las cajas
+  // efímeras (servicio/custom, sin fila Sandbox/Agent) caen al fallback caller.
+  // ADMIN del ctx ya satisface el requireScope(WRITE) de las ops.
+  if (intent === "box-suspend" || intent === "box-resume" || intent === "box-destroy") {
+    const sandboxId = String(fd.get("sandboxId") || "").trim();
+    if (!sandboxId) return data({ error: "Falta sandboxId" }, { status: 400 });
+    try {
+      if (intent === "box-suspend") await suspendSandbox(ctx, sandboxId);
+      else if (intent === "box-resume") await resumeSandbox(ctx, sandboxId);
+      else await destroySandbox(ctx, sandboxId); // sin asOperator → protegidas dan 403
+      return data({ ok: true });
+    } catch (e) {
+      // El host/las ops lanzan Response (404/403) o Error. Surfacear un mensaje
+      // legible en vez de tumbar la acción con un throw crudo.
+      const status = e instanceof Response ? e.status : 500;
+      let msg = "No se pudo completar la acción sobre la caja.";
+      if (e instanceof Response) {
+        msg = await e.clone().text().then((t) => { try { return JSON.parse(t).message ?? JSON.parse(t).error ?? msg; } catch { return msg; } }).catch(() => msg);
+      } else if (e instanceof Error) msg = e.message;
+      return data({ error: msg }, { status });
+    }
   }
 
   const fleetAgentId = String(fd.get("fleetAgentId") || "");
@@ -1134,12 +1165,67 @@ function Spinner() {
   return <span className="inline-block w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin align-[-2px]" />;
 }
 
+// Menú "+ Conectar canal": lista los canales NO conectados del agente. La
+// superficie es ABIERTA — además de los canales con flujo propio (WhatsApp, WABA,
+// Teams, Web) siempre está el canal GENÉRICO por API (HTTP/SSE): cualquier sistema
+// (Slack, la web de un cliente, una app) postea al endpoint del agente y ES un
+// canal, sin integración a medida. Cierra con clic-fuera y ESC (un <details>
+// nativo no lo hace). Reusable por agente.
+function ChannelConnectMenu({
+  unconnected,
+  hasTabs,
+  onConnect,
+}: {
+  unconnected: { kind: string; label: string; dot: string }[];
+  hasTabs: boolean;
+  onConnect: (kind: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => { document.removeEventListener("mousedown", onDown); document.removeEventListener("keydown", onKey); };
+  }, [open]);
+  return (
+    <div ref={ref} className="ml-auto relative">
+      <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open}
+        title="Conectar otro canal a este agente"
+        className="px-3 py-2 text-sm font-semibold text-brand-500 hover:text-brand-600 cursor-pointer select-none whitespace-nowrap">
+        + Conectar canal{hasTabs && unconnected.length > 0 ? ` (${unconnected.length})` : ""}
+      </button>
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ opacity: 0, y: -4, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -4, scale: 0.98 }} transition={{ duration: 0.12 }}
+            className="absolute right-0 top-10 z-20 w-72 bg-white border-2 border-black rounded-xl shadow-[2px_2px_0_0_#000] p-2">
+            <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide px-1 pb-1">Canales disponibles</p>
+            {unconnected.map((c) => (
+              <button key={c.kind} type="button"
+                onClick={() => { onConnect(c.kind); setOpen(false); }}
+                className="w-full flex items-center gap-1.5 px-1 py-1.5 text-sm cursor-pointer hover:bg-gray-50 rounded-lg text-left">
+                <span className={`w-2 h-2 rounded-full ${c.dot}`} /><span className="truncate flex-1">{c.label}</span>
+                <span className="text-xs text-brand-500">Conectar →</span>
+              </button>
+            ))}
+            <p className="text-[11px] text-gray-400 px-1 pt-1">El canal por API (HTTP/SSE) es genérico: conecta Slack, tu web o cualquier app posteando al endpoint del agente.</p>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
 type Capacity = {
-  machines: { id: string; status: string; slots: number; ghosty?: boolean; mascotColor?: string }[];
+  machines: { id: string; sandboxId?: string | null; status: string; slots: number; ghosty?: boolean; mascotColor?: string }[];
   extraMachines: { id: string; status: string; kind: "system" | "custom"; label: string }[];
   vms: number; maxMachines: number; plan: string; planName: string;
   nextPlan: string | null; maxWorkersPerVm: number; vmMemMb: number; vcpus: number;
-  reservedMachines: number; agentsActive: number; agentsMax: number;
+  reservedMachines: number; agentsActive: number; agentsMax: number; addonCostMxn: number;
 };
 
 // Per-Ghosty blink timing, deterministic (NO Math.random → no SSR/hydration
@@ -1203,7 +1289,7 @@ function GhostyMascot({ className = "", blink = true, sleeping = false, offset =
 // One sandbox = a CONTAINER box; the agents (workers) inside it are the ojitos.
 // Color climbs with occupancy: empty→gray, healthy→green, full→amber (no room);
 // building pulses violet; an unspawned slot is a dashed "mount" ready on demand.
-function VmBox({ id, status, slots, max, ghosty, mascotColor, addon, kind, sysLabel }: { id: string; status: string | null; slots: number; max: number; ghosty?: boolean; mascotColor?: string; addon?: boolean; kind?: "system" | "custom"; sysLabel?: string }) {
+function VmBox({ id, sandboxId, status, slots, max, ghosty, mascotColor, addon, kind, sysLabel, onAction, pending }: { id: string; sandboxId?: string | null; status: string | null; slots: number; max: number; ghosty?: boolean; mascotColor?: string; addon?: boolean; kind?: "system" | "custom"; sysLabel?: string; onAction?: (sandboxId: string, intent: "box-suspend" | "box-resume" | "box-destroy") => void; pending?: boolean }) {
   const system = kind === "system";
   const custom = kind === "custom";
   const extra = system || custom;
@@ -1276,12 +1362,45 @@ function VmBox({ id, status, slots, max, ghosty, mascotColor, addon, kind, sysLa
   // celda vive en una posición estable keyada por índice, así que un free que
   // bootea a máquina NO cambia de key → sin pop de entrada/salida ni reflow. La
   // caja solo cambia su relleno/contenido EN SU LUGAR. Sin `layout`, sin SPAWN.
+  // Controles de ciclo de vida (pausar/reanudar/eliminar) — solo en cajas reales
+  // (viva o dormida), nunca en celdas libres/add-on (status null) ni en transición
+  // (starting/building). Aparecen en hover; el clic NO debe propagar al wrapper.
+  const canControl = !!onAction && !!sandboxId && (status === "running" || status === "suspended");
+  const doAction = (e: ReactMouseEvent, intent: "box-suspend" | "box-resume" | "box-destroy") => {
+    e.preventDefault(); e.stopPropagation();
+    if (!sandboxId || !onAction) return;
+    if (intent === "box-destroy") {
+      const warn = !extra && slots > 0
+        ? `Eliminar esta caja cortará ${slots} conversación${slots !== 1 ? "es" : ""} en curso; se reconectan en un worker nuevo al próximo mensaje. ¿Continuar?`
+        : `¿Eliminar esta caja (${extra ? (sysLabel ?? "servicio") : "worker"})? Se destruye ahora; vuelve a levantarse bajo demanda si se necesita.`;
+      if (!window.confirm(warn)) return;
+    }
+    onAction(sandboxId, intent);
+  };
   return (
     <motion.div
       whileHover={{ scale: 1.04, y: -2 }}
       transition={{ type: "spring", stiffness: 500, damping: 30 }}
-      className="w-full aspect-square"
+      className="group relative w-full aspect-square"
     >
+      {canControl && (
+        <div className="absolute top-1 right-1 z-20 flex items-center gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+          {pending ? (
+            <span className="w-6 h-6 flex items-center justify-center bg-white/90 border-2 border-black rounded-md"><Spinner /></span>
+          ) : (<>
+            {status === "running" && (
+              <button type="button" title="Pausar — se pausa hasta el próximo mensaje" onClick={(e) => doAction(e, "box-suspend")}
+                className="w-6 h-6 flex items-center justify-center text-xs bg-white/90 border-2 border-black rounded-md hover:bg-indigo-50 hover:border-indigo-500 transition-colors">⏸</button>
+            )}
+            {status === "suspended" && (
+              <button type="button" title="Reanudar" onClick={(e) => doAction(e, "box-resume")}
+                className="w-6 h-6 flex items-center justify-center text-xs bg-white/90 border-2 border-black rounded-md hover:bg-green-50 hover:border-green-500 transition-colors">▶</button>
+            )}
+            <button type="button" title="Eliminar caja" onClick={(e) => doAction(e, "box-destroy")}
+              className="w-6 h-6 flex items-center justify-center text-xs bg-white/90 border-2 border-black rounded-md hover:bg-red-50 hover:border-red-500 transition-colors">🗑</button>
+          </>)}
+        </div>
+      )}
       {/* El transform del hover va en ESTE wrapper, NO en el .felt: border-radius +
           overflow:hidden deja de recortar cuando el MISMO elemento tiene un filter
           (#feltRough) Y un transform → en hover asomaban las esquinas cuadradas del
@@ -1395,7 +1514,12 @@ function VmBox({ id, status, slots, max, ghosty, mascotColor, addon, kind, sysLa
   );
 }
 
-function CapacityHud({ capacity }: { capacity: Capacity }) {
+function CapacityHud({ capacity, onBoxAction, actionError, pending }: {
+  capacity: Capacity;
+  onBoxAction: (sandboxId: string, intent: "box-suspend" | "box-resume" | "box-destroy") => void;
+  actionError: string | null;
+  pending: string | null;
+}) {
   // Aplanamos máquinas + extras a una lista ordenada y la rellenamos a un número
   // FIJO de celdas (al menos maxMachines). Cada celda lleva su posición `p`; las
   // posiciones sobrantes quedan `item: undefined` (slot libre). El número de celdas
@@ -1428,6 +1552,10 @@ function CapacityHud({ capacity }: { capacity: Capacity }) {
         </span>
       </div>
 
+      {actionError && (
+        <p className="relative mb-3 text-xs text-red-700 bg-red-50 border-2 border-red-300 rounded-lg px-3 py-2">⚠️ {actionError}</p>
+      )}
+
       {/* Grid POSICIONAL de tamaño fijo: maxMachines celdas + el botón "MÁS".
           Cada celda se keya por su índice de posición (`cell-N`), NO por el id de
           la VM. Así, cuando un free bootea a máquina o una máquina se duerme/muere,
@@ -1436,16 +1564,34 @@ function CapacityHud({ capacity }: { capacity: Capacity }) {
       <div className="relative grid grid-cols-2 sm:grid-cols-4 gap-3">
         {capacityCells.map((cell) => {
           const isAddon = cell.p >= capacity.maxMachines - capacity.reservedMachines;
-          if (!cell.item) {
-            // Celda vacía → slot libre disponible (se levanta bajo demanda).
-            return <VmBox key={`cell-${cell.p}`} id={`free-${cell.p}`} status={null} slots={0} max={capacity.maxWorkersPerVm} addon={isAddon} />;
-          }
-          if (cell.item.kind === "machine") {
-            const m = cell.item.m;
-            return <VmBox key={`cell-${cell.p}`} id={m.id} status={m.status} slots={m.slots} max={capacity.maxWorkersPerVm} ghosty={m.ghosty} mascotColor={m.mascotColor} addon={isAddon} />;
-          }
-          const s = cell.item.s;
-          return <VmBox key={`cell-${cell.p}`} id={s.id} status={s.status} slots={0} max={capacity.maxWorkersPerVm} kind={s.kind} sysLabel={s.label} />;
+          // Identidad del CONTENIDO de la celda (no de la celda). La celda es
+          // posicional y estable (`cell-N`); dentro, un AnimatePresence keyado por
+          // esta identidad hace que al ELIMINAR una caja su contenido se desvanezca
+          // ("poof": encoge + gira + sube) y el nuevo contenido entre cosiéndose,
+          // sin romper el grid fijo. suspend/resume NO cambian la identidad (misma
+          // key) → transición suave de props, sin poof.
+          const contentKey = !cell.item ? "free"
+            : cell.item.kind === "machine" ? `m:${cell.item.m.id}` : `s:${cell.item.s.id}`;
+          const inner = !cell.item ? (
+            <VmBox id={`free-${cell.p}`} status={null} slots={0} max={capacity.maxWorkersPerVm} addon={isAddon} />
+          ) : cell.item.kind === "machine" ? (
+            (() => { const m = cell.item.m; return <VmBox id={m.id} sandboxId={m.sandboxId ?? null} status={m.status} slots={m.slots} max={capacity.maxWorkersPerVm} ghosty={m.ghosty} mascotColor={m.mascotColor} addon={isAddon} onAction={onBoxAction} pending={pending === m.sandboxId} />; })()
+          ) : (
+            (() => { const s = cell.item.s; return <VmBox id={s.id} sandboxId={s.id} status={s.status} slots={0} max={capacity.maxWorkersPerVm} kind={s.kind} sysLabel={s.label} onAction={onBoxAction} pending={pending === s.id} />; })()
+          );
+          return (
+            <div key={`cell-${cell.p}`} className="relative">
+              <AnimatePresence mode="popLayout" initial={false}>
+                <motion.div key={contentKey}
+                  initial={{ scale: 0.55, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  exit={{ scale: 0.35, opacity: 0, y: -14, rotate: -8 }}
+                  transition={{ type: "spring", stiffness: 480, damping: 32 }}>
+                  {inner}
+                </motion.div>
+              </AnimatePresence>
+            </div>
+          );
         })}
         {/* Añadir capacidad — sube de plan para más sandboxes */}
         <motion.a key="add" href="/dash/packs?tab=sandboxes" title="Añadir capacidad"
@@ -1462,6 +1608,14 @@ function CapacityHud({ capacity }: { capacity: Capacity }) {
           ? ` (${capacity.maxMachines - capacity.reservedMachines} ${capacity.planName} + ${capacity.reservedMachines} add-on${capacity.reservedMachines !== 1 ? "s" : ""})`
           : ` · plan ${capacity.planName}`}
         {` · ${(capacity.vmMemMb / 1024).toFixed(capacity.vmMemMb % 1024 ? 1 : 0)}GB · ${capacity.vcpus} vCPU · ${capacity.maxWorkersPerVm} agentes c/u. `}
+        {capacity.reservedMachines > 0 && (
+          <>
+            <a href="/dash/packs?tab=sandboxes" title="Gestionar o cancelar add-ons" className="font-semibold text-[#5f8a4f] hover:underline">
+              ${capacity.addonCostMxn.toLocaleString("es-MX")} MXN/mes en add-ons ↗
+            </a>
+            {" · "}
+          </>
+        )}
         {capacity.nextPlan
           ? <a href="/planes" className="font-semibold text-brand-500 hover:underline">Sube a {capacity.nextPlan} ↗</a>
           : <a href="/dash/packs?tab=sandboxes" className="font-semibold text-brand-500 hover:underline">Añade capacidad ↗</a>}
@@ -2029,6 +2183,35 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
   }, [capModal?.fleetAgentId]);
   const modalFiles = capFetcher.data?.ownerFiles ?? [];
   const modalDbs = capFetcher.data?.ownerDbs ?? [];
+  // Ciclo de vida por caja (pausar/reanudar/eliminar) desde el HUD. Fetcher propio
+  // para no chocar con `fetcher` (config de agentes). Optimismo IN-PLACE: muta el
+  // status de la caja / la remueve en destroy SIN reordenar ni re-keyear el grid
+  // posicional; el revalidate del submit + el poll (1.2s) reconcilian con la verdad.
+  const boxFetcher = useFetcher<{ ok?: boolean; error?: string }>();
+  const [boxErr, setBoxErr] = useState<string | null>(null);
+  useEffect(() => {
+    if (boxFetcher.state === "idle" && boxFetcher.data?.error) setBoxErr(boxFetcher.data.error);
+  }, [boxFetcher.state, boxFetcher.data]);
+  const boxAction = (sandboxId: string, intent: "box-suspend" | "box-resume" | "box-destroy") => {
+    setBoxErr(null);
+    setHud((h) => {
+      const cap = h.capacity;
+      if (intent === "box-destroy") {
+        return { ...h, capacity: {
+          ...cap,
+          machines: cap.machines.filter((m) => m.sandboxId !== sandboxId),
+          extraMachines: cap.extraMachines.filter((s) => s.id !== sandboxId),
+        } };
+      }
+      const next = intent === "box-suspend" ? "suspended" : "starting";
+      return { ...h, capacity: {
+        ...cap,
+        machines: cap.machines.map((m) => (m.sandboxId === sandboxId ? { ...m, status: next } : m)),
+        extraMachines: cap.extraMachines.map((s) => (s.id === sandboxId ? { ...s, status: next } : s)),
+      } };
+    });
+    boxFetcher.submit({ intent, sandboxId }, { method: "post" });
+  };
   // Búsqueda server-side del picker de Archivos (debounced). Recarga capFetcher con
   // ?q= al teclear, SOLO con el picker abierto → lista ligera (seleccionados + matches),
   // sin cargar 1400+ archivos. fileMgr = groupId del picker abierto (o null).
@@ -2095,6 +2278,14 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
       return next;
     });
   const [chSettings, setChSettings] = useState<Record<string, boolean>>({});
+  // Canales REVELADOS manualmente desde "+ Conectar canal" (por agente). Un canal
+  // no conectado no se muestra como tab; al elegirlo en el menú se añade aquí para
+  // que su tab (con su flujo de conexión) aparezca. `${pid}:${kind}`.
+  const [revealCh, setRevealCh] = useState<Set<string>>(new Set());
+  const revealChannel = (pid: string, kind: string) => {
+    setRevealCh((s) => new Set(s).add(`${pid}:${kind}`));
+    setChannelTab(pid, kind);
+  };
   // Connect a WhatsApp Business number: ask our server for Formmy's signed popup
   // URL, open it, and wait for the popup to postMessage { code, phoneNumberId,
   // wabaId } back. We forward that to /waba/connect (which provisions via Formmy
@@ -2164,14 +2355,23 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
         if (alive) setHud(next);
       } catch { /* blip de red mientras se reemplaza la máquina → ignora, se autocura */ }
     };
-    const t = setInterval(tick, 2500);
+    const t = setInterval(tick, 1200);
     return () => { alive = false; clearInterval(t); };
   }, [polling]);
   // Modal de capacidades: cerrar con ESC + bloquear el scroll del body mientras
   // está abierto. Cleanup restaura el overflow previo y quita el listener.
+  // ⚠️ ESC enruta al modal MÁS INTERNO: los anidados (manageSkill / promptFull /
+  // fileMgr) no tienen su propio handler, así que ESC dentro de ellos caía al
+  // handler del capModal y cerraba TODO el config. Cerramos primero el interno.
   useEffect(() => {
     if (!capModal) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setCapModal(null); };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (manageSkill) { setManageSkill(null); return; }
+      if (promptFull) { closePromptFull(); return; }
+      if (fileMgr) { setFileMgr(null); return; }
+      closeCap();
+    };
     document.addEventListener("keydown", onKey);
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
@@ -2179,7 +2379,8 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
       document.removeEventListener("keydown", onKey);
       document.body.style.overflow = prevOverflow;
     };
-  }, [capModal]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [capModal, manageSkill, promptFull, fileMgr, capDirty, promptDirty]);
 
   return (
     // Cuando el chat de prueba está abierto reservamos su ancho (28rem = max-w-md del
@@ -2209,7 +2410,7 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
           los agentes (ojitos de la marca); color por ocupación. Ocupa 3/5 y queda
           sticky al hacer scroll de la lista de agentes. */}
       <div className="lg:col-span-3 lg:self-start lg:sticky lg:top-6">
-        <CapacityHud capacity={capacity} />
+        <CapacityHud capacity={capacity} onBoxAction={boxAction} actionError={boxErr} pending={boxFetcher.state !== "idle" ? (boxFetcher.formData?.get("sandboxId") as string) : null} />
       </div>
 
       {/* DERECHA — columna de agentes (2/5): Nuevo agente + las cards apiladas. */}
@@ -2499,34 +2700,47 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                 // los toggles no harían nada hasta reconectar. Los ocultamos para no
                 // ofrecer config inerte (los enabledGroups persisten igual en la DB).
                 const liveConnected = p.status === "connected" && p.live;
-                // Catálogo de canales del agente. Teams solo si conectado (la conexión
-                // vive en GTeams). El resto siempre existe; su VISIBILIDAD la decide el
-                // dueño en el menú "⋯" (persona.hiddenChannels) — Nik Admin oculta Web,
-                // Nik público oculta Baileys. Nada auto-inferido de la conexión.
+                // Catálogo de canales del agente + si están CONECTADOS. Por defecto solo
+                // se muestran los conectados; los demás viven en "+ Conectar canal". Un
+                // canal REVELADO manualmente (revealCh) o baileys en flujo de conexión se
+                // muestran aunque no estén conectados (para ver su flujo/QR). `hidden`
+                // (persona.hiddenChannels) sigue como override avanzado que oculta un
+                // canal aunque esté conectado.
+                const webConfigured = !!(p.webChannel.connected || p.webChannel.systemPrompt || p.webChannel.keySet || p.webChannel.mcps.length);
                 const allChannels = [
-                  { kind: "baileys", label: "Personal y grupos (QR)", dot: (stale || relinking) ? "bg-orange-400" : st.dot, count: p.conversations },
-                  { kind: "waba", label: "WhatsApp Business API", dot: p.wabaNumbers.length ? "bg-green-500" : "bg-gray-300", count: p.wabaNumbers.length },
-                  ...(p.teamsChannel.connected ? [{ kind: "teams", label: "Ghosty Teams", dot: "bg-green-500", count: 0 }] : []),
+                  { kind: "baileys", label: "Personal y grupos (QR)", dot: (stale || relinking) ? "bg-orange-400" : st.dot, count: p.conversations, connected: liveConnected },
+                  { kind: "waba", label: "WhatsApp Business API", dot: p.wabaNumbers.length ? "bg-green-500" : "bg-gray-300", count: p.wabaNumbers.length, connected: p.wabaNumbers.length > 0 },
+                  { kind: "teams", label: "Ghosty Teams", dot: p.teamsChannel.connected ? "bg-green-500" : "bg-gray-300", count: 0, connected: p.teamsChannel.connected },
                   // Web (bubbles públicos): verde = recibiendo; morado = configurado sin
-                  // tráfico; gris = intacto.
+                  // tráfico; gris = intacto. Configurado cuenta como conectado.
                   { kind: "web", label: "Bubbles públicos (Web)",
-                    dot: p.webChannel.connected ? "bg-green-500"
-                      : (p.webChannel.systemPrompt || p.webChannel.keySet || p.webChannel.mcps.length) ? "bg-brand-500"
-                      : "bg-gray-300",
-                    count: 0 },
+                    dot: p.webChannel.connected ? "bg-green-500" : webConfigured ? "bg-brand-500" : "bg-gray-300",
+                    count: 0, connected: webConfigured },
+                  // Canal GENÉRICO por API (HTTP/SSE): cualquier sistema postea al
+                  // endpoint del agente. Nunca "conectado" solo — se revela desde el
+                  // menú para ver el endpoint + token. Es la superficie abierta.
+                  { kind: "api", label: "Canal por API (HTTP/SSE)", dot: "bg-gray-300", count: 0, connected: false },
                 ];
                 const hidden = new Set(p.hiddenChannels);
-                // Visibles = no ocultos. Baileys se fuerza visible durante un flujo de
-                // conexión (QR/pairing) aunque esté oculto, para no esconder el código.
-                const channels = allChannels.filter((c) => !hidden.has(c.kind) || (c.kind === "baileys" && inFlow));
+                const revealed = revealCh;
+                // Mostrados = conectados ∪ revelados manualmente ∪ baileys-en-flujo, menos
+                // los ocultados explícitamente (override).
+                const isShown = (kind: string) =>
+                  !hidden.has(kind) && (
+                    allChannels.find((c) => c.kind === kind)?.connected ||
+                    revealed.has(`${p.id}:${kind}`) ||
+                    (kind === "baileys" && inFlow)
+                  );
+                const channels = allChannels.filter((c) => isShown(c.kind));
+                const unconnected = allChannels.filter((c) => !isShown(c.kind));
                 // Default: el canal EN USO (baileys, o waba si baileys ocioso) mientras
-                // sea VISIBLE; si no, el primer canal visible (evita abrir en un tab oculto).
+                // sea VISIBLE; si no, el primer canal visible.
                 const preferred = baileysIdle && p.wabaNumbers.length > 0 ? "waba" : "baileys";
-                const defaultCh = channels.some((c) => c.kind === preferred) ? preferred : (channels[0]?.kind ?? "web");
+                const defaultCh = channels.some((c) => c.kind === preferred) ? preferred : (channels[0]?.kind ?? "");
                 const savedCh = inFlow ? "baileys" : (activeChannel[p.id] ?? defaultCh);
                 const activeCh = channels.some((c) => c.kind === savedCh) ? savedCh : defaultCh;
                 return (<>
-                {/* Tabs por canal */}
+                {/* Tabs por canal — solo conectados; el resto en "+ Conectar canal" */}
                 <div className="mt-4 flex items-center gap-1 border-b-2 border-gray-100">
                   {channels.map((c) => { const on = activeCh === c.kind; return (
                     <button key={c.kind} type="button" onClick={() => setChannelTab(p.id, c.kind)}
@@ -2534,25 +2748,16 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                       <span className={`w-2 h-2 rounded-full ${c.dot}`} /><span>{c.label}</span>
                       {c.count > 0 && <span className="text-[10px] leading-none bg-gray-100 text-gray-600 rounded-full px-1.5 py-0.5">{c.count}</span>}
                     </button> ); })}
-                  <details className="ml-auto relative">
-                    <summary title="Mostrar u ocultar canales de este agente"
-                      className="px-2.5 py-1 text-lg leading-none text-gray-300 hover:text-brand-500 cursor-pointer list-none select-none">⋯</summary>
-                    <div className="absolute right-0 top-8 z-20 w-64 bg-white border-2 border-black rounded-xl shadow-[2px_2px_0_0_#000] p-2">
-                      <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide px-1 pb-1">Canales de este agente</p>
-                      {allChannels.map((c) => {
-                        const visible = !hidden.has(c.kind);
-                        return (
-                          <label key={c.kind} className="flex items-center justify-between gap-2 px-1 py-1.5 text-sm cursor-pointer hover:bg-gray-50 rounded-lg">
-                            <span className="flex items-center gap-1.5 min-w-0"><span className={`w-2 h-2 rounded-full ${c.dot}`} /><span className="truncate">{c.label}</span></span>
-                            <input type="checkbox" checked={visible}
-                              onChange={(e) => fetcher.submit({ intent: "toggle-channel", fleetAgentId: p.id, kind: c.kind, visible: e.target.checked ? "1" : "0" }, { method: "post" })} />
-                          </label>
-                        );
-                      })}
-                      <p className="text-[11px] text-gray-400 px-1 pt-1">Oculta los canales que este agente no usa. No borra su configuración.</p>
-                    </div>
-                  </details>
+                  <ChannelConnectMenu
+                    unconnected={unconnected.map((c) => ({ kind: c.kind, label: c.label, dot: c.dot }))}
+                    hasTabs={channels.length > 0}
+                    onConnect={(kind) => revealChannel(p.id, kind)}
+                  />
                 </div>
+
+                {channels.length === 0 && (
+                  <p className="mt-3 text-sm text-gray-500">Este agente aún no tiene canales conectados. Usa <b>“+ Conectar canal”</b> para vincular WhatsApp, WhatsApp Business, Ghosty Teams o los bubbles web.</p>
+                )}
 
                 {/* ── Canal WhatsApp (Baileys) ──────────────────────────── */}
                 {activeCh === "baileys" && (<div className="mt-3">
@@ -2818,6 +3023,38 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                   <p className="mt-3 text-[11px] text-gray-400 break-words">
                     Endpoint: <code className="bg-gray-100 rounded px-1">POST /api/v2/fleet-agents/{p.id}/message-stream</code>
                     {" "}· autentica con el token del agente desde tu server, no lo expongas al navegador.
+                  </p>
+                </div>)}
+
+                {/* ── Canal genérico por API (HTTP/SSE) ──────────────────── */}
+                {activeCh === "api" && (<div className="mt-3">
+                  <p className="text-xs text-gray-500 mb-3">
+                    Superficie <b>abierta</b>: cualquier sistema (Slack, la web de un cliente, una app,
+                    un webhook) es un canal si postea al endpoint del agente. El <code className="bg-gray-100 rounded px-1">groupId</code> es
+                    opaco — mándalo por conversación y el agente mantiene el hilo. Autentica siempre
+                    desde <b>tu server</b> con el token del agente (no lo expongas al navegador).
+                  </p>
+                  <div className="flex flex-col gap-2 text-[12px]">
+                    <div>
+                      <span className="font-semibold text-gray-700">Síncrono</span> <span className="text-gray-400">→ {"{ reply }"}</span>
+                      <code className="block mt-1 bg-gray-100 rounded px-2 py-1.5 break-words">POST /api/v2/fleet-agents/{p.id}/message</code>
+                    </div>
+                    <div>
+                      <span className="font-semibold text-gray-700">Streaming (SSE)</span> <span className="text-gray-400">→ chunk / done / error</span>
+                      <code className="block mt-1 bg-gray-100 rounded px-2 py-1.5 break-words">POST /api/v2/fleet-agents/{p.id}/message-stream</code>
+                    </div>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="font-semibold text-gray-700 shrink-0">Auth</span>
+                      <code className="bg-gray-100 rounded px-2 py-1.5 flex-1 min-w-0 truncate">Authorization: Bearer {p.token.slice(0, 6)}••••••</code>
+                      <button type="button" title="Copiar token del agente"
+                        onClick={() => { navigator.clipboard?.writeText(p.token).catch(() => {}); }}
+                        className="shrink-0 border-2 border-black rounded-lg px-2.5 py-1.5 text-xs font-semibold hover:bg-gray-50">Copiar token</button>
+                    </div>
+                    <p className="text-[11px] text-amber-600">⚠️ El token da control total del agente — úsalo solo server-side, nunca en el cliente.</p>
+                  </div>
+                  <p className="mt-3 text-[11px] text-gray-400">
+                    Body: <code className="bg-gray-100 rounded px-1">{'{ "groupId": "tu-id", "text": "hola" }'}</code>. Documentación:{" "}
+                    <a href="/docs#flota" target="_blank" rel="noopener noreferrer" className="text-brand-500 font-semibold hover:underline">ver flota ↗</a>
                   </p>
                 </div>)}
 
