@@ -1982,6 +1982,14 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
   const [fileQ, setFileQ] = useState("");
   // Instrucciones: editor a pantalla (no textarea de 5 líneas).
   const [promptFull, setPromptFull] = useState<string | null>(null);
+  // Dirty del editor Expandir (instrucciones a pantalla): Guardar se habilita solo
+  // tras editar; Cancelar advierte si hay cambios. Se resetea al abrir/guardar.
+  const [promptDirty, setPromptDirty] = useState(false);
+  const openPromptFull = (id: string) => { setPromptDirty(false); setPromptFull(id); };
+  const closePromptFull = () => {
+    if (promptDirty && !window.confirm("Tienes cambios sin guardar. ¿Cerrar de todos modos?")) return;
+    setPromptDirty(false); setPromptFull(null);
+  };
   // Administrar skill: { fleetAgentId, skillId } del skill abierto en el modal.
   const [manageSkill, setManageSkill] = useState<{ fleetAgentId: string; skillId: string } | null>(null);
   // Optimistic UI: override local `${groupId}:${key}` → valor, aplicado en el
@@ -3165,7 +3173,7 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
               <div>
                 <div className="flex items-center justify-between">
                   <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Instrucciones del agente <span className="normal-case text-gray-400 font-normal">· todos los canales</span></span>
-                  <button type="button" onClick={() => setPromptFull(cp.id)}
+                  <button type="button" onClick={() => openPromptFull(cp.id)}
                     className="text-[11px] font-semibold text-brand-500 hover:underline">Expandir ⤢</button>
                 </div>
                 <fetcher.Form method="post" className="mt-1" key={`ap-${cp.id}`}
@@ -3301,22 +3309,39 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                 (markdown + preview en vivo + fullscreen). Near-fullscreen para editar
                 un CLAUDE.md completo de verdad. */}
             {promptFull === cp.id && (
-              <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-3 sm:p-6" onClick={(e) => { e.stopPropagation(); setPromptFull(null); }}>
+              <div className="fixed inset-0 z-[60] bg-black/50 flex items-center justify-center p-3 sm:p-6" onClick={(e) => { e.stopPropagation(); closePromptFull(); }}>
                 <fetcher.Form method="post" className="bg-white rounded-2xl border-2 border-black w-full max-w-6xl h-[92vh] flex flex-col p-4" onClick={(e) => e.stopPropagation()}
-                  onSubmit={() => { setPromptFull(null); setCapDirty(false); }}>
+                  onSubmit={() => setPromptDirty(false)}>
                   <input type="hidden" name="intent" value="set-agent-prompt" />
                   <input type="hidden" name="fleetAgentId" value={cp.id} />
                   <div className="pb-3 mb-3 border-b-2 border-gray-100 flex items-center justify-between">
                     <h4 className="font-semibold">Instrucciones del agente — {cp.name} <span className="font-normal text-gray-400 text-xs">· CLAUDE.md · todos los canales</span></h4>
-                    <button type="button" onClick={() => setPromptFull(null)} className="text-gray-400 hover:text-black">✕</button>
+                    <button type="button" onClick={closePromptFull} className="text-gray-400 hover:text-black">✕</button>
                   </div>
                   <Suspense fallback={<div className="flex-1 flex items-center justify-center"><Spinner /></div>}>
-                    <PromptEditor name="systemPrompt" defaultValue={cp.agentPrompt ?? ""} onDirty={() => setCapDirty(true)} />
+                    <PromptEditor name="systemPrompt" defaultValue={cp.agentPrompt ?? ""} onDirty={() => setPromptDirty(true)} />
                   </Suspense>
+                  {/* Guardar NO cierra: persiste en sitio (feedback Guardando…/✓ Guardado)
+                      y el editor sigue abierto para seguir editando. Solo "Cerrar" cierra
+                      (advierte si hay cambios sin guardar). Guardar se habilita solo si dirty. */}
+                  {(() => {
+                    const saving = fetcher.state !== "idle" && fetcher.formData?.get("intent") === "set-agent-prompt";
+                    return (
                   <div className="pt-3 mt-3 border-t-2 border-gray-100 flex items-center gap-2">
-                    <button type="submit" className="border-2 border-black rounded-lg px-4 py-1.5 text-sm font-semibold">Guardar</button>
-                    <span className="text-[11px] text-gray-400">Se agrega sobre la base de EasyBits. Aplica a todos los canales.</span>
+                    <button type="submit" disabled={!promptDirty || saving}
+                      className="border-2 border-black rounded-lg px-4 py-1.5 text-sm font-semibold disabled:opacity-40 disabled:cursor-not-allowed">
+                      {saving ? "Guardando…" : savedFlash && !promptDirty ? "✓ Guardado" : "Guardar"}
+                    </button>
+                    <button type="button" onClick={closePromptFull}
+                      className="border-2 border-gray-300 rounded-lg px-4 py-1.5 text-sm font-semibold text-gray-600 hover:bg-gray-50">
+                      Cerrar
+                    </button>
+                    <span className="text-[11px] text-gray-400">
+                      {promptDirty ? "Cambios sin guardar — Guardar mantiene el editor abierto." : "Se agrega sobre la base de EasyBits. Aplica a todos los canales."}
+                    </span>
                   </div>
+                    );
+                  })()}
                 </fetcher.Form>
               </div>
             )}

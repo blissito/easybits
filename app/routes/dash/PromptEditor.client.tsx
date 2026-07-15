@@ -18,7 +18,20 @@ export function PromptEditor({
   const [val, setVal] = useState(defaultValue || "");
   const [mode, setMode] = useState<"edit" | "live" | "preview">("live");
   return (
-    <div data-color-mode="light" className="flex-1 min-h-0 flex flex-col">
+    <div data-color-mode="light" className="eb-prompt-editor flex-1 min-h-0 flex flex-col">
+      {/* Contraste de selección: por defecto MDEditor pinta el texto del textarea
+          transparente (el color lo da el <pre> de abajo) → la selección se veía casi
+          invisible. Forzamos un resalte fuerte de marca en el textarea Y en el <pre>
+          resaltado y el preview, para que se lea en cualquier capa. */}
+      <style>{`
+        .eb-prompt-editor .w-md-editor-text-input::selection,
+        .eb-prompt-editor .w-md-editor-text-pre::selection,
+        .eb-prompt-editor .w-md-editor-text-pre *::selection,
+        .eb-prompt-editor .wmde-markdown::selection,
+        .eb-prompt-editor .wmde-markdown *::selection {
+          background: rgba(152, 112, 237, 0.55) !important;
+        }
+      `}</style>
       <div className="flex items-center gap-1 mb-2 text-[11px] font-semibold">
         {(["edit", "live", "preview"] as const).map((m) => (
           <button
