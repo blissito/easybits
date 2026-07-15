@@ -120,10 +120,23 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   const modelOptions = modelEnvKey
     ? (engForModel?.models ?? []).filter((m) => m.ready !== false).map((m) => ({ key: m.id, label: m.label }))
     : [];
+  // Llave del MOTOR (BYOK): qué secret del vault necesita el proveedor de ESTE
+  // agente + si ya está guardada. El spawn la lee del vault del owner por nombre
+  // (getSecretValue), así que el panel solo la pide y recicla la caja. `null` para
+  // el motor `easybits` (medido, sin credencial) → el cliente oculta la sección.
+  const engineSecret = engForModel?.secret
+    ? {
+        name: engForModel.secret.name,
+        kind: engForModel.secret.kind,
+        placeholder: engForModel.secret.placeholder ?? "",
+        present: secretNames.has(engForModel.secret.name),
+      }
+    : null;
   return json({
     builtins: DEFAULT_MCP_CATALOG.map((e) => ({ name: e.name, label: e.label ?? e.name, channel: e.channel ?? null, bucketScoped: !!e.bucketScoped })),
     capabilities,
     secretsPresent: [...secretNames],
+    engineSecret,
     groups: groupCfgs,
     // Canales configurables del agente (para la UI): el canal WEB (burbujas en
     // landings) es SIEMPRE ofrecido bajo la clave estable "web" — su config
@@ -222,6 +235,17 @@ export async function action({ request, params }: Route.ActionArgs) {
       return json({ error: e instanceof Error ? e.message : "bad secret" }, 400);
     }
     return json({ ok: true });
+  }
+
+  // Recicla las cajas vivas del agente para que un cambio spawn-baked (típicamente
+  // la llave del motor recién guardada con set-secret) aplique YA — sin esperar al
+  // reaper. El próximo turno cold-spawnea con el env nuevo.
+  if (action === "recycle-box") {
+    const { recycleFleetAgentBoxes } = await import(
+      "~/.server/core/fleetAgentOperations"
+    );
+    const r = await recycleFleetAgentBoxes(fa).catch(() => ({ recycled: 0 }));
+    return json({ ok: true, ...r });
   }
 
   // ── Agent-level actions (no groupId): persona / model / effort / catalog / skills ──

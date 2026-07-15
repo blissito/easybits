@@ -146,6 +146,52 @@ async function markWorkerLost(agentId: string): Promise<void> {
   await db.agent.updateMany({ where: { id: agentId }, data: { status: "lost" } }).catch(() => {});
 }
 
+// Recycle ALL of a fleetAgent's live boxes (running + suspended) so the next turn
+// cold-spawns with fresh spawn-baked env (model/effort/OAuth/DEEPSEEK_API_KEY). The
+// provider key is read from the owner vault at spawn (spawnVm / sandboxOperations),
+// so after the owner saves their own key via `set-secret` the change only lands on
+// a NEW VM — a live/suspended box keeps the old env until recycled. Mirrors the
+// reaper's destroy loop (back up running turns, detach routes, destroy, delete row);
+// skips VMs mid-turn (busyVms) so an in-flight turn is never cut. Returns how many
+// boxes were recycled.
+export async function recycleFleetAgentBoxes(fleetAgent: {
+  id: string;
+  ownerId: string;
+}): Promise<{ recycled: number }> {
+  const ctx = await ctxForOwner(fleetAgent.ownerId).catch(() => null);
+  if (!ctx) return { recycled: 0 };
+  const busy = [...busyVms];
+  const boxes = await db.agent.findMany({
+    where: {
+      fleetAgentId: fleetAgent.id,
+      status: { in: ["running", "suspended"] },
+      id: { notIn: busy },
+    },
+  });
+  let recycled = 0;
+  for (const w of boxes) {
+    try {
+      // A running VM may hold un-backed-up turns since its last suspend — back up
+      // before destroying. Suspended VMs were already backed up at suspend time.
+      if (w.status === "running") {
+        const routes = await db.fleetAgentRoute.findMany({ where: { agentId: w.id } });
+        for (const r of routes) {
+          await backupConversation(ctx, w, fleetAgent.id, r.sessionUuid).catch((e) =>
+            console.error(`fleet recycle: backup ${r.sessionUuid} failed:`, e)
+          );
+        }
+      }
+      await db.fleetAgentRoute.updateMany({ where: { agentId: w.id }, data: { agentId: null, detachedAt: new Date() } });
+      await destroySandbox(ctx, w.sandboxId);
+      await db.agent.delete({ where: { id: w.id } }).catch(() => {});
+      recycled++;
+    } catch (e) {
+      console.error(`fleet recycle: destroy ${w.sandboxId} failed:`, e);
+    }
+  }
+  return { recycled };
+}
+
 // ── In-process placement mutex ────────────────────────────────────────────────
 // The Baileys surface is single-instance (accepted constraint), so an in-memory
 // lock is a correct serialization point. Used to serialize the capacity decision
