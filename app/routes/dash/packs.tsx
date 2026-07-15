@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useFetcher, useSearchParams } from "react-router";
+import { useFetcher, useSearchParams, useNavigate } from "react-router";
 import { BrutalButton } from "~/components/common/BrutalButton";
 import { LuMemoryStick, LuCpu, LuHardDrive } from "react-icons/lu";
 import { FLEET_BOX } from "~/lib/hostingCatalog";
@@ -81,6 +81,7 @@ export default function PacksPage({ loaderData }: Route.ComponentProps) {
 
   type Tab = "credits" | "tokens" | "sandboxes";
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   const tabParam = searchParams.get("tab");
   const [tab, setTab] = useState<Tab>(
     tabParam === "tokens" ? "tokens" : tabParam === "credits" ? "credits" : "sandboxes",
@@ -140,10 +141,16 @@ export default function PacksPage({ loaderData }: Route.ComponentProps) {
         <SandboxReservedCard
           sandboxes={sandboxes}
           onManage={() => {
-            switchTab("sandboxes");
-            requestAnimationFrame(() =>
-              document.getElementById("sandbox-buy")?.scrollIntoView({ behavior: "smooth", block: "start" })
-            );
+            // Con add-ons → a la Flota (ahí se ven/pausan/eliminan las cajas). Sin
+            // add-ons → scroll a la sección de compra de esta misma pantalla.
+            if (sandboxes.reservedMachines > 0) {
+              navigate("/dash/flota");
+            } else {
+              switchTab("sandboxes");
+              requestAnimationFrame(() =>
+                document.getElementById("sandbox-buy")?.scrollIntoView({ behavior: "smooth", block: "start" })
+              );
+            }
           }}
         />
       </div>
