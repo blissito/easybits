@@ -137,7 +137,15 @@ export default function PacksPage({ loaderData }: Route.ComponentProps) {
           bonus={llmLimit.bonus}
           resetAt={llmLimit.resetAt}
         />
-        <SandboxReservedCard sandboxes={sandboxes} onManage={() => switchTab("sandboxes")} />
+        <SandboxReservedCard
+          sandboxes={sandboxes}
+          onManage={() => {
+            switchTab("sandboxes");
+            requestAnimationFrame(() =>
+              document.getElementById("sandbox-buy")?.scrollIntoView({ behavior: "smooth", block: "start" })
+            );
+          }}
+        />
       </div>
 
       {/* Tab switcher */}
@@ -188,7 +196,7 @@ export default function PacksPage({ loaderData }: Route.ComponentProps) {
           ))}
         </div>
       ) : (
-        <div className="mb-12">
+        <div className="mb-12" id="sandbox-buy">
           <p className="text-sm text-iron mb-4 max-w-xl">
             Reserva capacidad para tus agentes Ghosty. El fleetAgent es uniforme: agrega las
             cajas que necesites — cada caja corre <b>{FLEET_BOX.agents} agentes Ghosty</b> a la vez.
@@ -220,52 +228,39 @@ function SandboxReservedCard({
   };
   onManage: () => void;
 }) {
-  const { planMachines, reservedMachines, agentsPerBox, boxPriceMxn, monthlyMxn } = sandboxes;
-  const totalMachines = planMachines + reservedMachines;
+  const { reservedMachines, agentsPerBox, boxPriceMxn, monthlyMxn } = sandboxes;
   const hasAddons = reservedMachines > 0;
   return (
-    <div className="border-2 border-black rounded-xl p-4 flex flex-col">
-      <div className="flex items-start justify-between gap-2">
+    <div className="border-2 border-black rounded-xl bg-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] p-4">
+      <div className="flex items-center justify-between mb-2">
         <div>
-          <h3 className="text-base font-bold flex items-center gap-1.5">🖥️ Sandboxes</h3>
-          <p className="text-xs text-iron">Cajas add-on que pagas al mes · ${boxPriceMxn} c/u</p>
+          <h3 className="text-base font-bold">Sandboxes</h3>
+          <p className="text-xs text-iron">Cajas add-on · ${boxPriceMxn}/mes c/u</p>
         </div>
         <span
-          className={`shrink-0 text-[11px] font-semibold px-2 py-0.5 rounded-full border-2 ${
-            hasAddons ? "border-green-500 text-green-600" : "border-gray-300 text-gray-500"
+          className={`text-xs px-2 py-0.5 rounded-full border font-bold ${
+            hasAddons ? "border-green-400 bg-green-50 text-green-700" : "border-gray-300 bg-gray-50 text-gray-500"
           }`}
         >
           {hasAddons ? "Activo" : "Sin add-ons"}
         </span>
       </div>
 
-      {/* El COBRO mensual es SOLO de los add-ons. Las cajas del plan van incluidas. */}
-      <div className="mt-3">
-        {hasAddons ? (
-          <div className="flex items-baseline gap-1.5">
-            <span className="text-2xl font-bold text-brand-500">${monthlyMxn.toLocaleString("es-MX")}</span>
-            <span className="text-sm text-iron">MXN/mes</span>
-            <span className="text-xs text-iron">· {reservedMachines} × ${boxPriceMxn}</span>
-          </div>
-        ) : (
-          <div className="flex items-baseline gap-1.5">
-            <span className="text-2xl font-bold text-gray-400">$0</span>
-            <span className="text-sm text-iron">MXN/mes en add-ons</span>
-          </div>
-        )}
+      <div className="flex justify-between text-xs text-iron mb-1">
+        <span>{reservedMachines} caja{reservedMachines !== 1 ? "s" : ""} add-on</span>
+        <span>{reservedMachines * agentsPerBox} agentes</span>
       </div>
 
-      <div className="mt-auto pt-3 flex items-center justify-between border-t-2 border-gray-100">
-        <span className="text-[11px] text-iron">
-          {planMachines} incluida{planMachines !== 1 ? "s" : ""} en tu plan
-          {hasAddons ? ` + ${reservedMachines} add-on${reservedMachines !== 1 ? "s" : ""}` : ""} ·{" "}
-          {totalMachines * agentsPerBox} agentes
+      <div className="flex items-center justify-between mt-2 text-xs flex-wrap gap-x-2">
+        <span className="text-iron">
+          {hasAddons ? (
+            <>Total <b className="text-black">${monthlyMxn.toLocaleString("es-MX")}</b> MXN/mes · {reservedMachines} × ${boxPriceMxn}</>
+          ) : (
+            "Aún no contratas cajas add-on"
+          )}
         </span>
-        <button
-          onClick={onManage}
-          className="text-xs font-semibold text-brand-500 hover:underline shrink-0"
-        >
-          {hasAddons ? "Gestionar →" : "Añadir →"}
+        <button onClick={onManage} className="text-[10px] font-bold text-brand-500 hover:underline shrink-0">
+          {hasAddons ? "Gestionar" : "Añadir"}
         </button>
       </div>
     </div>
