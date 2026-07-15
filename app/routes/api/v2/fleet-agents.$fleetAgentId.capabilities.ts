@@ -11,7 +11,7 @@ import {
 } from "~/.server/core/fleetAgentOperations";
 import { FLEET_BUCKETS, GROUP_ALLOWLISTS, bucketsToToolsParam, toolsParamToBuckets, type ToolGroupKey } from "~/.server/mcp/toolGroups";
 import { createSecret, listSecrets } from "~/.server/core/secretOperations";
-import { getEngineForAgent } from "~/lib/fleetEngines";
+import { getEngineForAgent, FLEET_ENGINES } from "~/lib/fleetEngines";
 
 // API-first capability config for a FleetAgent. Both the EasyBits dashboard AND
 // the external "Slack-type" app configure agents through THIS surface — the UI is
@@ -169,6 +169,15 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     // selector (motor de modelo fijo). Claude: Opus/Fable/Sonnet; DeepSeek: V4 Pro/
     // Flash; Codex: Sol/Terra/Luna.
     models: modelOptions,
+    // Motor actual + catálogo de motores (para el selector de engine en la UI). El
+    // motor define el worker (Claude/DeepSeek/Codex) → cambiarlo recicla la box.
+    engine: engForModel?.id ?? null,
+    engines: FLEET_ENGINES.map((e) => ({
+      id: e.id,
+      label: e.label,
+      model: e.model,
+      ready: e.models.some((m) => m.ready !== false),
+    })),
     buckets: FLEET_BUCKETS.map((b) => ({
       key: b.key,
       label: b.label,
@@ -293,6 +302,36 @@ export async function action({ request, params }: Route.ActionArgs) {
     await setEnv({ FLEET_EFFORT: effort || undefined });
     return json({ ok: true });
   }
+  if (action === "set-engine") {
+    // Cambia el MOTOR (workerTemplate + GHOSTY_LLM + modelo default). El template está
+    // horneado en la VM al spawn → hay que RECICLAR las boxes para que corra el worker
+    // nuevo. Se limpian todos los model-env del motor anterior y se setea el del nuevo.
+    const { getEngine } = await import("~/lib/fleetEngines");
+    const eng = getEngine(String(b?.engine ?? "").trim());
+    if (!eng) return json({ error: "engine desconocido" }, 400);
+    if (!eng.models.some((m) => m.ready !== false)) return json({ error: "motor no disponible aún" }, 400);
+    const env = { ...(persona.env ?? {}) };
+    delete env.GHOSTY_LLM; delete env.ANTHROPIC_MODEL; delete env.DEEPSEEK_MODEL; delete env.CODEX_MODEL;
+    if (eng.env?.GHOSTY_LLM) env.GHOSTY_LLM = eng.env.GHOSTY_LLM;
+    if (eng.modelEnv && eng.defaultModel) env[eng.modelEnv] = eng.defaultModel;
+    await db.fleetAgent.update({ where: { id: fa.id }, data: { workerTemplate: eng.template, persona: { ...persona, env } as object } });
+    // Ya actualizamos el DB (workerTemplate+persona); recycle solo mata las boxes por
+    // id/ownerId → respawnean leyendo el DB nuevo (worker/engine nuevo).
+    const { recycleFleetAgentBoxes } = await import("~/.server/core/fleetAgentOperations");
+    await recycleFleetAgentBoxes(fa).catch(() => {});
+    return json({ ok: true, engine: eng.id });
+  }
+  if (action === "connect-teams") {
+    // Marca el canal "Ghosty Teams" como conectado (mismo campo `connectedAt` que
+    // estampa routeMessage al primer turno). Idempotente. Para agentes agregados a Teams
+    // desde ghosty-chat → aparecen "Conectado" de inmediato, sin esperar el primer mensaje.
+    const gconf = (fa.groupConfigs as Record<string, { connectedAt?: string }> | null) ?? {};
+    if (!gconf.teams?.connectedAt) {
+      const next = { ...gconf, teams: { ...(gconf.teams ?? {}), connectedAt: new Date().toISOString() } };
+      await db.fleetAgent.update({ where: { id: fa.id }, data: { groupConfigs: next } });
+    }
+    return json({ ok: true });
+  }
   if (action === "toggle-own-number") {
     await db.fleetAgent.update({ where: { id: fa.id }, data: { hasOwnNumber: !!b?.on } });
     return json({ ok: true });
@@ -343,6 +382,30 @@ export async function action({ request, params }: Route.ActionArgs) {
     const skills = fleetSkills(fa).filter((s) => s.id !== skillId);
     await db.fleetAgent.update({ where: { id: fa.id }, data: { skills } });
     return json({ ok: true });
+  }
+  if (action === "add-skill") {
+    // Crear skill desde fileIds YA subidos (por la app: Teams sube el SKILL.md + scripts
+    // a Files y pasa los fileIds). files[0] = SKILL.md → parseamos su frontmatter para
+    // name/description si no vienen en el body. Autenticado por fleetAgent.token (arriba).
+    const files = Array.isArray(b?.files) ? (b.files as unknown[]).map((x) => String(x)).filter(Boolean) : [];
+    if (!files.length) return json({ error: "files (fileIds) requerido" }, 400);
+    let name = String(b?.name ?? "").trim();
+    let description = String(b?.description ?? "").trim();
+    if (!name || !description) {
+      const md = await db.file.findUnique({ where: { id: files[0] }, select: { url: true, name: true } }).catch(() => null);
+      if (md?.url) {
+        const mdText = await fetch(md.url).then((r) => (r.ok ? r.text() : "")).catch(() => "");
+        const fm = /^---\s*\n([\s\S]*?)\n---/.exec(mdText)?.[1] ?? "";
+        const pick = (k: string) => new RegExp(`^${k}\\s*:\\s*(.+)$`, "m").exec(fm)?.[1]?.trim().replace(/^["']|["']$/g, "");
+        name = name || pick("name") || (md.name ?? "skill").replace(/\.md$/i, "");
+        description = description || pick("description") || "";
+      }
+    }
+    const { randomUUID } = await import("node:crypto");
+    const skill = { id: randomUUID().slice(0, 8), name: name || "Skill", description, files, enabled: true };
+    const skills = [...fleetSkills(fa), skill];
+    await db.fleetAgent.update({ where: { id: fa.id }, data: { skills } });
+    return json({ ok: true, skillId: skill.id });
   }
 
   if (!groupId) return json({ error: "groupId required" }, 400);
