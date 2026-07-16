@@ -10,6 +10,23 @@ import matter from "gray-matter";
 // Map of known blog posts with their file paths and metadata
 const BLOG_POSTS = [
   {
+    slug: "una-caja-una-base-por-cliente",
+    filePath:
+      "app/content/blog/2026-07-16-una-caja-una-base-por-cliente.mdx",
+    title:
+      "Una caja y una base por cliente: la infraestructura detrás de una app multi-tenant sobre EasyBits",
+    description:
+      "Formmy Teams corre completa sobre EasyBits: una microVM Firecracker y una base libSQL aislada por equipo. Compute fungible, estado durable, y qué se rompió.",
+    date: "2026-07-16",
+    author: "Equipo Easybits",
+    tags: ["sandboxes", "flota", "build in public", "arquitectura", "agentes"],
+    featuredImage: "/blog/assets/sandbox-ghosty.jpg",
+    readingTime: 6,
+    excerpt:
+      "Formmy Teams corre completa sobre EasyBits: una microVM Firecracker y una base libSQL aislada por equipo. Compute fungible, estado durable, y los dos incidentes que nos enseñaron a operarlo.",
+    published: true,
+  },
+  {
     slug: "waba-inbox-estados-de-respuesta",
     filePath:
       "app/content/blog/2026-06-28-waba-inbox-estados-de-respuesta.mdx",

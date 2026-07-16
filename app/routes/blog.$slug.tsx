@@ -10,6 +10,8 @@ import matter from "gray-matter";
 
 // Map of known blog posts with their file paths
 const BLOG_POSTS = {
+  "una-caja-una-base-por-cliente":
+    "app/content/blog/2026-07-16-una-caja-una-base-por-cliente.mdx",
   "waba-inbox-estados-de-respuesta":
     "app/content/blog/2026-06-28-waba-inbox-estados-de-respuesta.mdx",
   "tres-pruebas-una-sola-herramienta":
@@ -56,6 +58,10 @@ const BLOG_POSTS = {
 
 // Array con slug y featuredImage igual que en la lista de blog
 const BLOG_POSTS_LIST = [
+  {
+    slug: "una-caja-una-base-por-cliente",
+    featuredImage: "/blog/assets/sandbox-ghosty.jpg",
+  },
   {
     slug: "waba-inbox-estados-de-respuesta",
     featuredImage:
