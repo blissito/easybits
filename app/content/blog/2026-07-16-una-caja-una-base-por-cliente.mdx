@@ -1,0 +1,110 @@
+---
+title: "Una caja y una base por cliente: la infraestructura detrás de una app multi-tenant sobre EasyBits"
+description: "Formmy Teams corre completa sobre EasyBits: una microVM Firecracker y una base libSQL aislada por equipo. Compute fungible, estado durable, y qué se rompió."
+date: "2026-07-16"
+author: "Equipo Easybits"
+tags: ["sandboxes", "flota", "build in public", "arquitectura", "agentes"]
+featuredImage: "/blog/assets/sandbox-ghosty.jpg"
+published: true
+---
+
+# Una caja y una base por cliente: la infraestructura detrás de una app multi-tenant sobre EasyBits
+
+La parte difícil de una app multi-tenant casi nunca es la app. Es dónde vive el estado de cada cliente y dónde corre su código, sin que un cliente pueda ver ni tirar al de al lado.
+
+Este mes pusimos a prueba esa idea con un caso real: **Formmy Teams**, un chat de equipo estilo Slack con agentes tagueables (`@ghosty`, `@handle`), corre **completo sobre EasyBits**. Cada equipo que se da de alta recibe su propia microVM Firecracker y su propia base de datos aislada. Es la primera app multi-tenant que hospedamos de punta a punta con nuestra propia plataforma, y sirve como prueba de cómo pensamos la infraestructura para agentes.
+
+Te contamos cómo está armado, y —porque es *build in public*— qué se nos rompió y cómo lo arreglamos.
+
+## Dos propiedades que queríamos separar
+
+Todo el diseño gira alrededor de una separación:
+
+- **El compute es fungible.** La VM donde corre el app de un equipo se puede matar y volver a crear cuando queramos —para un update, tras una caída, o porque llevaba horas sin uso— sin que el equipo pierda nada.
+- **El estado es durable.** Los mensajes, los hilos, los miembros y las salas de cada equipo viven fuera de la VM, en una base que sobrevive a que la caja nazca y muera N veces.
+
+Cuando esas dos cosas están limpiamente separadas, operar se vuelve tranquilo: una caja es reemplazable, y reemplazarla no es un evento delicado. Todo lo que sigue son las piezas de EasyBits que hacen esa separación posible.
+
+## Una microVM por equipo, desde un template inmutable
+
+Cada equipo corre en su propia **Sandbox** de EasyBits: una microVM Firecracker con su propio kernel, aislada a nivel de hardware de las demás. No es un contenedor que comparte kernel con sus vecinos; es una máquina virtual ligera de verdad, que arranca en milisegundos.
+
+El app no se instala en caliente dentro de la caja. Se hornea antes, una vez, en un **template inmutable**. El template trae el bundle de la app listo en `/opt/ghosty-chat`; lo único que NO va horneado son los secretos, que se inyectan al momento de provisionar en `/app/secrets.env`. Provisionar un equipo, entonces, es pedir una caja de ese template y exponerle un puerto:
+
+```js
+import { EasybitsClient } from "@easybits.cloud/sdk";
+const eb = new EasybitsClient({ apiKey: process.env.EASYBITS_API_KEY });
+
+// Una VM del template ya horneado del app
+const sbx = await eb.sandboxes.create({ template: "ghosty-chat" });
+
+// Inyecta los secretos del equipo (key, dbId, session secret…) y expone el app
+await sbx.files.write("/app/secrets.env", teamSecrets);
+const { url } = await sbx.exposePort(3000);
+// url interna: https://sb-...-3000.sandboxes.easybits.cloud
+```
+
+Que el template sea inmutable tiene una consecuencia buena y una molesta. La buena: dos equipos nunca "derivan" —todos corren exactamente el mismo bundle, byte por byte—. La molesta: cada cambio de runtime necesita un *rebake*. No hay hot-reload en las VMs; sirven lo que quedó horneado. Un cambio de código es: reconstruir el template, y recrear las cajas para que lo tomen.
+
+## Una base de datos aislada por equipo
+
+El estado durable vive en la **DB API de EasyBits**, que es libSQL (SQLite en la nube) con **namespaces**. Cada equipo estrena su propio namespace: una base separada, no una tabla compartida con una columna `team_id`. El aislamiento es de infraestructura, no de convención.
+
+```js
+// Al nacer el equipo: base aislada + schema + seed
+await eb.db.create({ name: teamNamespace });
+await eb.db.exec(teamNamespace, GC_SCHEMA);      // tablas gc_*
+await eb.db.exec(teamNamespace, seedRooms);      // 3 salas iniciales
+```
+
+La caja del equipo es stateless; toda su lectura y escritura pega contra esa base por HTTP. Por eso matar la VM no duele: el estado no estaba ahí. Cuando la caja revive, se reconecta a la MISMA base y el equipo ni se entera de que cambió de máquina.
+
+## El cerebro del chat: un fleet agent por OAuth2
+
+Los agentes que responden en el chat (`@ghosty` y los que agregue el equipo) son **Fleet Agents** de EasyBits. El dueño del equipo los conecta con **OAuth2** desde un wizard dentro del chat, y con esa misma conexión **adopta la caja** a su cuenta: la VM que nació en la cuenta de plataforma pasa a ser suya, respetando su plan. Compute que empezó siendo nuestro, termina siendo del cliente, sin recrear nada.
+
+El agente no vive en la VM del chat. Es un worker efímero de la flota que se levanta para atender un turno y se suspende cuando termina —el mismo patrón elástico que usamos para todo lo que corre modelos—. La VM del chat sirve la interfaz; la flota piensa. Dos capas, cada una escala por su lado.
+
+## Fungible de verdad: matar la caja y revivirla sobre la misma base
+
+La prueba de fuego de "compute fungible" es poder destruir la caja de un equipo vivo y que el sistema se recomponga solo. Así se ve el ciclo completo:
+
+1. Se destruye la Sandbox del equipo (un update de template, o limpieza).
+2. El dueño recarga la app. El ingress detecta que la caja ya no responde.
+3. Se levanta una caja **nueva del template actual**, apuntando a la **misma** base del equipo.
+4. Se actualiza a dónde apunta el equipo y se sirve. El usuario ve una pantalla de "calentando…" con auto-refresh, ~60-90s, y entra a su chat intacto.
+
+Ningún mensaje se pierde porque ningún mensaje vivía en la caja. La caja era desechable; la base, no.
+
+## Lo que se rompió (y por qué lo contamos)
+
+Nada de esto salió limpio a la primera. Dos incidentes valen la anécdota porque son exactamente el tipo de cosa que separa "funciona en mi demo" de "aguanta producción".
+
+**El lockfile que envenenaba el build (macOS → Linux).** Al hornear el template incluíamos el `package-lock.json` del repo. Ese lock, generado en una Mac (arm64), hacía que el `npm install` dentro del contenedor Linux (amd64) **omitiera binarios nativos** —el compilador de estilos, el bundler— y el build reventara con `MODULE_NOT_FOUND`. La cura fue no copiar el lockfile al template y dejar que cada plataforma resuelva sus binarios frescos. Un archivo de más en el `rsync` costaba horas de "pero si local compila".
+
+**Migraciones que se tragaron a sí mismas (5 de julio).** El primer despliegue completo dio `db 500` en producción. La rutina que aplica el schema corrió durante un parpadeo de la base, los `ALTER`/`CREATE` fallaron en silencio, y —peor— quedaron **memoizados como hechos**: el proceso creía que ya había migrado, y nunca lo reintentaba (`no such column: archived`, para siempre). Dos arreglos salieron de ahí: la rutina de schema ahora **reintenta** en vez de recordar el fracaso, y recuperamos la base en sitio aplicando el DDL directo contra libSQL desde una máquina externa —esquivando un *hairpin* de red intermitente que teníamos cuando la app se llamaba a sí misma por su URL pública—:
+
+```bash
+# Recuperación en sitio: DDL directo al namespace del equipo
+curl https://easybits-db.fly.dev/v2/pipeline \
+  -H "x-namespace: <dbId-del-equipo>" \
+  -d '{"requests":[{"type":"execute","stmt":{"sql":"ALTER TABLE ..."}},{"type":"close"}]}'
+```
+
+La lección no fue "las migraciones son difíciles". Fue que **memoizar un fallo es peor que reintentarlo**, y que en multi-tenant necesitas poder entrar a la base de UN equipo, sin tocar a los demás, para curarla a mano. Los namespaces aislados hicieron esa cirugía posible sin riesgo para nadie más.
+
+## Lo que sigue: dormir la caja, despertarla al usar
+
+Hoy la caja de cada equipo está siempre encendida. La dirección es hacerla dormir por inactividad y despertarla en el primer request —snapshot y resume de Firecracker, que ya usamos en la flota: una caja suspendida revive en ~1 segundo desde su snapshot, con su estado intacto—. Un equipo que no se usa en la madrugada no debería costar compute; uno que despierta a las 9am no debería notar la diferencia. Esa pieza —un wake reactivo en el ingress— es el siguiente escalón.
+
+## El punto
+
+Formmy Teams es un caso de uso, pero la infraestructura es EasyBits: **Sandboxes** (microVMs Firecracker desde un template inmutable), la **DB API** libSQL con un namespace aislado por tenant, y **Fleet Agents** conectados por OAuth2. Compute que puedes tirar y rehacer; estado que sobrevive. Si estás construyendo algo multi-tenant —un chat, un panel por cliente, un agente por cuenta— es exactamente la separación que quieres, y no tienes que armarla con cinta entre cuatro proveedores.
+
+Facturado en México, en pesos, con soporte en español.
+
+👉 Pruébalo en [www.easybits.cloud](https://www.easybits.cloud)
+
+---
+
+*¿Estás hospedando algo multi-tenant y peleando con el estado por cliente? Cuéntanos cómo lo resuelves hoy —y si quieres que entremos más a fondo en el ingress, la adopción de cajas, o el idle-suspend, dinos y escribimos la segunda parte.*
