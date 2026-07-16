@@ -1,5 +1,5 @@
 import type { Route } from "./+types/fleet-agents";
-import { useEffect, useRef, useState, lazy, Suspense, type CSSProperties, type MouseEvent as ReactMouseEvent } from "react";
+import { useEffect, useRef, useState, lazy, Suspense, type CSSProperties, type MouseEvent as ReactMouseEvent, type ReactElement } from "react";
 import { useFetcher, useRevalidator, data } from "react-router";
 import { motion, AnimatePresence } from "motion/react";
 import QRCode from "qrcode";
@@ -1203,6 +1203,29 @@ const STATUS = {
 
 function Spinner() {
   return <span className="inline-block w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin align-[-2px]" />;
+}
+
+// Iconos por canal — reemplazan al texto de estado en el header del agente.
+// Verde = conectado, gris = no conectado (color lo pasa quien lo renderiza).
+const CHANNEL_ICON_PATHS: Record<string, ReactElement> = {
+  // WhatsApp (baileys personal/grupos y WABA usan el mismo glyph)
+  baileys: <path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.32 4.95L2 22l5.25-1.38a9.9 9.9 0 0 0 4.79 1.22h.004c5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01A9.82 9.82 0 0 0 12.04 2Zm4.68 12.04c-.26-.13-1.51-.75-1.75-.83-.23-.09-.4-.13-.57.13-.17.26-.65.83-.8 1-.15.17-.29.19-.55.06-.26-.13-1.08-.4-2.06-1.27-.76-.68-1.28-1.51-1.43-1.77-.15-.26-.02-.4.11-.53.12-.12.26-.29.39-.44.13-.15.17-.26.26-.43.09-.17.04-.32-.02-.45-.06-.13-.57-1.38-.78-1.89-.21-.5-.42-.43-.57-.44l-.49-.01c-.17 0-.44.06-.68.32-.23.26-.89.87-.89 2.12s.91 2.46 1.04 2.63c.13.17 1.79 2.74 4.34 3.84.61.26 1.08.42 1.45.54.61.19 1.16.17 1.6.1.49-.07 1.51-.62 1.72-1.21.21-.6.21-1.1.15-1.21-.06-.11-.23-.17-.49-.3Z" />,
+  waba: <path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.75.46 3.45 1.32 4.95L2 22l5.25-1.38a9.9 9.9 0 0 0 4.79 1.22h.004c5.46 0 9.91-4.45 9.91-9.91 0-2.65-1.03-5.14-2.9-7.01A9.82 9.82 0 0 0 12.04 2Zm4.68 12.04c-.26-.13-1.51-.75-1.75-.83-.23-.09-.4-.13-.57.13-.17.26-.65.83-.8 1-.15.17-.29.19-.55.06-.26-.13-1.08-.4-2.06-1.27-.76-.68-1.28-1.51-1.43-1.77-.15-.26-.02-.4.11-.53.12-.12.26-.29.39-.44.13-.15.17-.26.26-.43.09-.17.04-.32-.02-.45-.06-.13-.57-1.38-.78-1.89-.21-.5-.42-.43-.57-.44l-.49-.01c-.17 0-.44.06-.68.32-.23.26-.89.87-.89 2.12s.91 2.46 1.04 2.63c.13.17 1.79 2.74 4.34 3.84.61.26 1.08.42 1.45.54.61.19 1.16.17 1.6.1.49-.07 1.51-.62 1.72-1.21.21-.6.21-1.1.15-1.21-.06-.11-.23-.17-.49-.3Z" />,
+  // Ghosty Teams — fantasmita
+  teams: <path d="M12 2a7 7 0 0 0-7 7v9.5c0 .8.9 1.3 1.6.9l1.4-.9 1.5 1a1 1 0 0 0 1.1 0l1.4-.9 1.4.9a1 1 0 0 0 1.1 0l1.5-1 1.4.9c.7.4 1.6-.1 1.6-.9V9a7 7 0 0 0-7-7Zm-2.5 7a1 1 0 1 1 0 2 1 1 0 0 1 0-2Zm5 0a1 1 0 1 1 0 2 1 1 0 0 1 0-2Z" />,
+  // Bubbles web — globo
+  web: <path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm6.9 6h-2.5a15 15 0 0 0-1.2-3.3A8 8 0 0 1 18.9 8ZM12 4c.8 0 1.9 1.5 2.5 4h-5C10.1 5.5 11.2 4 12 4ZM4.3 14a8 8 0 0 1 0-4h2.9a17 17 0 0 0 0 4H4.3Zm.8 2h2.5c.3 1.2.7 2.3 1.2 3.3A8 8 0 0 1 5.1 16Zm2.5-8H5.1a8 8 0 0 1 3.7-3.3C8.3 5.7 7.9 6.8 7.6 8ZM12 20c-.8 0-1.9-1.5-2.5-4h5c-.6 2.5-1.7 4-2.5 4Zm2.9-6h-5.8a15 15 0 0 1 0-4h5.8a15 15 0 0 1 0 4Zm.3 5.3c.5-1 .9-2.1 1.2-3.3h2.5a8 8 0 0 1-3.7 3.3Zm1.6-5.3a17 17 0 0 0 0-4h2.9a8 8 0 0 1 0 4h-2.9Z" />,
+};
+
+function ChannelIcon({ kind, title, className }: { kind: string; title?: string; className?: string }) {
+  const path = CHANNEL_ICON_PATHS[kind];
+  if (!path) return null;
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-label={title}>
+      {title && <title>{title}</title>}
+      {path}
+    </svg>
+  );
 }
 
 // Menú "+ Conectar canal": lista los canales NO conectados del agente. La
@@ -2723,18 +2746,25 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                   className="shrink-0 text-xs font-semibold px-2.5 py-1 rounded-full border-2 border-brand-500/40 text-brand-600 hover:bg-brand-500/5">
                   💬 Probar
                 </button>
-                <span className="flex items-center gap-2 text-sm font-semibold shrink-0">
-                  {/* Estado AGREGADO del agente, no de un canal: está "Activo" si
-                      PUEDE recibir por cualquier vía (Baileys vivo o WABA con números).
-                      El estado granular por canal (QR, Falló) vive en su pestaña. Así
-                      un fallo de Baileys no contradice un WABA conectado en el header. */}
+                {/* Un icono por canal en vez de un texto de estado: verde = conectado,
+                    gris = no conectado. Muestra de un vistazo QUÉ canales están vivos
+                    sin contradecirse (Teams conectado + Baileys desconectado convivían
+                    mal con un único "Desconectado"). El estado granular (QR, Falló)
+                    vive en la pestaña del canal. */}
+                <span className="flex items-center gap-1.5 shrink-0">
                   {(() => {
-                    const baileysUp = p.status === "connected" && p.live;
-                    const wabaUp = p.wabaNumbers.length > 0;
-                    if (baileysUp || wabaUp) return (<><span className="w-2.5 h-2.5 rounded-full bg-green-500" />Activo</>);
-                    if (stale) return (<><span className="w-2.5 h-2.5 rounded-full bg-orange-400" />Reconectando…</>);
-                    if (relinking) return (<><span className="w-2.5 h-2.5 rounded-full bg-orange-400 animate-pulse" />Se desvinculó, generando QR…</>);
-                    return (<><span className={`w-2.5 h-2.5 rounded-full ${st.dot}`} />{st.label}</>);
+                    const liveConnected = p.status === "connected" && p.live;
+                    const webConfigured = !!(p.webChannel.connected || p.webChannel.systemPrompt || p.webChannel.keySet || p.webChannel.mcps.length);
+                    const hidden = new Set(p.hiddenChannels);
+                    const chans = [
+                      { kind: "baileys", title: "WhatsApp (personal/grupos)", color: liveConnected ? "text-green-500" : (stale || relinking) ? "text-orange-400" : "text-gray-300" },
+                      { kind: "waba", title: "WhatsApp Business API", color: p.wabaNumbers.length ? "text-green-500" : "text-gray-300" },
+                      { kind: "teams", title: "Ghosty Teams", color: p.teamsChannel.connected ? "text-green-500" : "text-gray-300" },
+                      { kind: "web", title: "Bubbles públicos (Web)", color: webConfigured ? "text-green-500" : "text-gray-300" },
+                    ].filter((c) => !hidden.has(c.kind));
+                    return chans.map((c) => (
+                      <ChannelIcon key={c.kind} kind={c.kind} title={`${c.title} — ${c.color.includes("green") ? "conectado" : c.color.includes("orange") ? "reconectando" : "sin conectar"}`} className={`w-4 h-4 ${c.color}`} />
+                    ));
                   })()}
                 </span>
               </div>
