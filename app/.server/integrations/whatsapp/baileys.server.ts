@@ -761,17 +761,31 @@ export async function createFleetAgentGroup(
   // inyecta per-mensaje para scopear el MCP a ESE org (aislamiento per-grupo).
   const fleetAgent = await db.fleetAgent.findUnique({
     where: { id: fleetAgentId },
-    select: { enabledGroups: true, groupKeys: true },
+    select: { enabledGroups: true, groupKeys: true, groupConfigs: true },
   });
   const enabled = new Set(fleetAgent?.enabledGroups ?? []);
   enabled.add(groupJid);
-  const data: { enabledGroups: string[]; groupKeys?: Record<string, string> } = {
+  const data: {
+    enabledGroups: string[];
+    groupKeys?: Record<string, string>;
+    groupConfigs?: Record<string, any>;
+  } = {
     enabledGroups: [...enabled],
   };
   if (denikApiKey) {
     data.groupKeys = {
       ...((fleetAgent?.groupKeys as Record<string, string> | null) ?? {}),
       [groupJid]: denikApiKey,
+    };
+    // Auto-encender la capability denik para este grupo → ningún user nuevo
+    // necesita el toggle manual. La ruta-key (groupKeys→worker) ya adjunta el
+    // MCP, pero setear groupConfigs.mcpServers lo hace explícito y consistente
+    // con los grupos configurados desde la UI (evita el caso "Maru sin citas").
+    const existingConfigs =
+      (fleetAgent?.groupConfigs as Record<string, any> | null) ?? {};
+    data.groupConfigs = {
+      ...existingConfigs,
+      [groupJid]: { ...(existingConfigs[groupJid] ?? {}), mcpServers: ["denik"] },
     };
   }
   await db.fleetAgent.update({ where: { id: fleetAgentId }, data });
