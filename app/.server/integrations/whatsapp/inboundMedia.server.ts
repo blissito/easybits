@@ -282,6 +282,20 @@ export async function extractInboundContent(
 ): Promise<InboundContent | null> {
   const c: any = normalizeMessageContent(m.message!) || m.message;
 
+  // Message edits & control noise → skip silently. Editing a WhatsApp message
+  // delivers a bare secretEncryptedMessage (encrypted payload Baileys can't
+  // decrypt) or an editedMessage/keepInChatMessage wrapper. None carry readable
+  // text here; surfacing them made the agent answer a phantom "unsupported
+  // attachment" turn on every edit. We already fail-closed to null downstream,
+  // but skip early for clarity + to stay safe if a generic placeholder branch is
+  // ever added. Parity with nanoclaw prod fix (1ecb6cf).
+  {
+    const EDIT_NOISE = new Set(["secretEncryptedMessage", "editedMessage", "keepInChatMessage"]);
+    const keys = [...Object.keys(m.message ?? {}), ...Object.keys(c ?? {})];
+    const meaningful = keys.find((k) => !EDIT_NOISE.has(k) && k !== "messageContextInfo");
+    if (keys.length && !meaningful) return null;
+  }
+
   // ── Forward/wrapper diagnostics (FLEET_AUDIT_LOG=1) ──────────────────────────
   // A forwarded captioned image was reaching the worker as TEXT ONLY (no vision
   // framing) — i.e. `c.imageMessage` undefined. Log the raw vs normalized shape
