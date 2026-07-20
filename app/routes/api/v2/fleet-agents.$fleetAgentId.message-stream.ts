@@ -139,6 +139,8 @@ export async function action({ request, params }: Route.ActionArgs) {
           denikApiKey: typeof body?.denikApiKey === "string" ? body.denikApiKey : undefined,
           appendSystemPrompt:
             typeof body?.appendSystemPrompt === "string" ? body.appendSystemPrompt : undefined,
+          // IANA timezone del tenant → localiza la fecha/hora fresca del turno.
+          timezone: typeof body?.timezone === "string" ? body.timezone : undefined,
           admin,
         }, {
           onChunk: (value) => controller.enqueue(sse({ type: "chunk", value })),

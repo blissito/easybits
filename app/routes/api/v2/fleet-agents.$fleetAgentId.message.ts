@@ -104,6 +104,8 @@ export async function action({ request, params }: Route.ActionArgs) {
       // Per-org personalization (layer 3) appended to the fleetAgent persona by the worker.
       appendSystemPrompt:
         typeof body?.appendSystemPrompt === "string" ? body.appendSystemPrompt : undefined,
+      // IANA timezone del tenant → localiza la fecha/hora fresca del turno.
+      timezone: typeof body?.timezone === "string" ? body.timezone : undefined,
       admin,
     });
     return Response.json({ reply }, { headers: CORS });

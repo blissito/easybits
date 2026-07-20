@@ -31,12 +31,15 @@ export async function action({ request, params }: Route.ActionArgs) {
   const name = typeof body?.name === "string" ? body.name.trim() : "";
   // dnk_pub_ de la org → se guarda por grupo y scopea el MCP per-mensaje.
   const denikApiKey = typeof body?.denikApiKey === "string" ? body.denikApiKey : undefined;
+  // IANA timezone del tenant → se congela en groupConfigs[jid].timezone (este canal
+  // no puede pasar msg.timezone por turno) para localizar la fecha/hora del agente.
+  const timezone = typeof body?.timezone === "string" ? body.timezone : undefined;
   if (!name) {
     return Response.json({ error: "name required" }, { status: 400, headers: CORS });
   }
 
   try {
-    const { groupJid, inviteUrl } = await createFleetAgentGroup(fleetAgentId, name, denikApiKey);
+    const { groupJid, inviteUrl } = await createFleetAgentGroup(fleetAgentId, name, denikApiKey, timezone);
     return Response.json({ groupJid, inviteUrl }, { headers: CORS });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "group create failed";

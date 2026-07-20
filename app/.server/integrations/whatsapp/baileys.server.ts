@@ -747,7 +747,8 @@ export async function executeWaAction(
 export async function createFleetAgentGroup(
   fleetAgentId: string,
   name: string,
-  denikApiKey?: string
+  denikApiKey?: string,
+  timezone?: string
 ): Promise<{ groupJid: string; inviteUrl: string }> {
   const cur = sockets.get(fleetAgentId);
   if (!cur) throw new Error("fleet-agent socket not connected");
@@ -772,21 +773,26 @@ export async function createFleetAgentGroup(
   } = {
     enabledGroups: [...enabled],
   };
-  if (denikApiKey) {
-    data.groupKeys = {
-      ...((fleetAgent?.groupKeys as Record<string, string> | null) ?? {}),
-      [groupJid]: denikApiKey,
-    };
-    // Auto-encender la capability denik para este grupo → ningún user nuevo
-    // necesita el toggle manual. La ruta-key (groupKeys→worker) ya adjunta el
-    // MCP, pero setear groupConfigs.mcpServers lo hace explícito y consistente
-    // con los grupos configurados desde la UI (evita el caso "Maru sin citas").
+  // groupConfigs del grupo nuevo: mcpServers (si viene denikApiKey) + timezone (si
+  // viene) — este canal (WhatsApp Baileys) recibe el inbound DIRECTO, no puede pasar
+  // msg.timezone por turno, así que la tz se congela aquí para localizar la fecha.
+  if (denikApiKey || timezone) {
     const existingConfigs =
       (fleetAgent?.groupConfigs as Record<string, any> | null) ?? {};
-    data.groupConfigs = {
-      ...existingConfigs,
-      [groupJid]: { ...(existingConfigs[groupJid] ?? {}), mcpServers: ["denik"] },
-    };
+    const groupEntry: Record<string, any> = { ...(existingConfigs[groupJid] ?? {}) };
+    if (denikApiKey) {
+      data.groupKeys = {
+        ...((fleetAgent?.groupKeys as Record<string, string> | null) ?? {}),
+        [groupJid]: denikApiKey,
+      };
+      // Auto-encender la capability denik para este grupo → ningún user nuevo
+      // necesita el toggle manual. La ruta-key (groupKeys→worker) ya adjunta el
+      // MCP, pero setear groupConfigs.mcpServers lo hace explícito y consistente
+      // con los grupos configurados desde la UI (evita el caso "Maru sin citas").
+      groupEntry.mcpServers = ["denik"];
+    }
+    if (timezone) groupEntry.timezone = timezone;
+    data.groupConfigs = { ...existingConfigs, [groupJid]: groupEntry };
   }
   await db.fleetAgent.update({ where: { id: fleetAgentId }, data });
   return { groupJid, inviteUrl: `https://chat.whatsapp.com/${code}` };

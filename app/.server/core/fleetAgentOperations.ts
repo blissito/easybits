@@ -90,6 +90,38 @@ export const MODEL_IDENTITY_SONNET5 = [
   "Si te preguntan qué modelo o IA eres, responde: Claude Sonnet 5, de Anthropic.",
 ].join(" ");
 
+// Fecha/hora local actual, inyectada FRESCA por turno (como MODEL_IDENTITY_SONNET5) —
+// un LLM no tiene reloj y su training tiene cutoff; sin esto el agente ADIVINA el día
+// ("mañana es sábado") y falla al agendar/interpretar "hoy"/"mañana". Se COMPUTA en cada
+// turno (no es constante). Cubre TODA la flota, todos los canales, sin rebuild ni recycle
+// de VMs (es per-turno, no spawn-baked como persona.env). `timeZone` se resuelve por capas
+// en routeMessage (msg.timezone → groupConfig.timezone → env → default LATAM).
+export function buildDateTimeContext(timeZone: string): string {
+  let stamp: string;
+  try {
+    stamp = new Intl.DateTimeFormat("es-MX", {
+      timeZone,
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    }).format(new Date());
+    // "sábado, 20 de julio de 2026, 12:49"
+  } catch {
+    // timeZone inválida (o ICU incompleto) → cae a UTC ISO, nunca rompe el turno.
+    stamp = `${new Date().toISOString().replace("T", " ").slice(0, 16)} UTC`;
+    timeZone = "UTC";
+  }
+  return [
+    `FECHA Y HORA ACTUAL: ${stamp} (${timeZone}).`,
+    `Resuelve "hoy", "mañana", "ayer", "este viernes", "la próxima semana", etc. SIEMPRE contra esta fecha —`,
+    `NUNCA adivines el día ni el año. Si una herramienta devuelve fechas, confía en la herramienta por encima de tu memoria.`,
+  ].join(" ");
+}
+
 // ── In-flight turn guard ──────────────────────────────────────────────────────
 // VMs currently servicing a turn (working, or waiting on tools/subagents that
 // emit no chunks). The reaper measures idle by lastMessageAt, which is only
@@ -392,6 +424,11 @@ type InboundMessage = {
   // fleetAgent en el worker (que a su vez se appendea al preset). Canales web (denik)
   // la pasan por turno; WhatsApp la omite.
   appendSystemPrompt?: string;
+  // IANA timezone del tenant (ej. "America/Mexico_City") para localizar la fecha/hora
+  // que se inyecta fresca cada turno (buildDateTimeContext). Canales web proxeados
+  // (Denik) la pasan por turno con la timezone de su org; WhatsApp la omite y cae a
+  // groupConfig.timezone (fijada al crear el grupo) → env → default LATAM.
+  timezone?: string;
   // Turno de ADMINISTRACIÓN: el dueño escribe desde la conversación admin (WABA
   // self-chat o sender designado). Inyecta el MCP `admin` + una nota de sistema
   // para que el agente gestione números/identidad/capacidades. Solo lo setea el
@@ -469,6 +506,10 @@ export type GroupConfig = {
   capLevels?: Record<string, string>;
   // Per-channel append to the system prompt (layer 3, appended never overwritten).
   systemPrompt?: string;
+  // IANA timezone del grupo/tenant (ej. "America/Mexico_City"). Fijada al crear el grupo
+  // (createFleetAgentGroup) para canales donde el inbound NO es proxeado (WhatsApp Baileys),
+  // que no pueden pasar msg.timezone por turno. Localiza buildDateTimeContext.
+  timezone?: string;
   // S3 asset library: file IDs (EasyBits public files) the agent may deliver in
   // this channel. Reemplaza el group-FS de nanoclaw (catálogos/imágenes). Se
   // inyecta como manifiesto (nombre → URL) en el prompt del turno.
@@ -1613,6 +1654,14 @@ export async function routeMessage(
       // (elevenlabs & co.) → their skillDocs go into the prompt; their env is ready
       // for the worker via turnEnv (consumed once the worker template supports it).
       const groupCfg = ((fleetAgent.groupConfigs as Record<string, GroupConfig> | null) ?? {})[cfgId] ?? {};
+      // Timezone para la fecha/hora fresca del turno, por capas: override per-turno
+      // (canales web proxeados) → config del grupo (fijada al crear el grupo, cubre
+      // WhatsApp) → default de plataforma → base LATAM.
+      const timeZone =
+        msg.timezone ||
+        groupCfg.timezone ||
+        process.env.FLEET_DEFAULT_TIMEZONE ||
+        "America/Mexico_City";
       const codeCaps = await resolveGroupCodeCaps(fleetAgent, cfgId, fleetAgent.ownerId);
       // Skills encendidos: name/description al prompt (progressive disclosure) + sus
       // files al manifiesto (para que el agente lea el SKILL.md y baje el script).
@@ -1647,6 +1696,9 @@ export async function routeMessage(
           // Capa 3 (per-org) PRECEDIDA por el guardrail de plataforma fresco —
           // así el guardrail de voz llega a todos los agentes sin rebuild/migración.
           appendSystemPrompt: [
+            // Fecha/hora local actual, fresca cada turno — sin esto el agente adivina
+            // el día. Primero en el array para anclar todo el razonamiento del turno.
+            buildDateTimeContext(timeZone),
             PLATFORM_VOICE_GUARDRAIL,
             // Ruteo de documentos: fuerza el motor correcto (docs-router/oficio/xlsx/
             // pptx/structured_doc) y prohíbe create_document+set_page_html a mano.
