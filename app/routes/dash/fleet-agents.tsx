@@ -1236,12 +1236,16 @@ function ChannelIcon({ kind, title, className }: { kind: string; title?: string;
 // nativo no lo hace). Reusable por agente.
 function ChannelConnectMenu({
   unconnected,
+  hidden = [],
   hasTabs,
   onConnect,
+  onShow,
 }: {
   unconnected: { kind: string; label: string; dot: string }[];
+  hidden?: { kind: string; label: string; dot: string }[];
   hasTabs: boolean;
   onConnect: (kind: string) => void;
+  onShow?: (kind: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -1263,8 +1267,8 @@ function ChannelConnectMenu({
       <AnimatePresence>
         {open && (
           <motion.div
-            initial={{ opacity: 0, y: -4, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -4, scale: 0.98 }} transition={{ duration: 0.12 }}
+            initial={{ y: -4, scale: 0.98 }} animate={{ y: 0, scale: 1 }}
+            exit={{ y: -4, scale: 0.98 }} transition={{ duration: 0.12 }}
             className="absolute right-0 top-10 z-20 w-72 bg-white border-2 border-black rounded-xl shadow-[2px_2px_0_0_#000] p-2">
             <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide px-1 pb-1">Canales disponibles</p>
             {unconnected.map((c) => (
@@ -1275,6 +1279,21 @@ function ChannelConnectMenu({
                 <span className="text-xs text-brand-500">Conectar →</span>
               </button>
             ))}
+            {/* Canales OCULTADOS por el dueño (persona.hiddenChannels) — re-mostrables
+                sin tocar la DB. Su tráfico/estado real sigue vivo; solo estaban escondidos. */}
+            {hidden.length > 0 && (
+              <>
+                <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide px-1 pt-2 pb-1">Ocultos</p>
+                {hidden.map((c) => (
+                  <button key={c.kind} type="button"
+                    onClick={() => { onShow?.(c.kind); setOpen(false); }}
+                    className="w-full flex items-center gap-1.5 px-1 py-1.5 text-sm cursor-pointer hover:bg-gray-50 rounded-lg text-left">
+                    <span className={`w-2 h-2 rounded-full ${c.dot}`} /><span className="truncate flex-1 text-gray-500">{c.label}</span>
+                    <span className="text-xs text-brand-500">Mostrar</span>
+                  </button>
+                ))}
+              </>
+            )}
             <p className="text-[11px] text-gray-400 px-1 pt-1">El canal por API (HTTP/SSE) es genérico: conecta Slack, tu web o cualquier app posteando al endpoint del agente.</p>
           </motion.div>
         )}
@@ -2701,6 +2720,61 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
           const isOpen = (expanded[p.id] ?? false) || inFlow;
           // Optimistic name: muestra el valor recién escrito hasta que el loader se ponga al día.
           const displayName = (optimisticNames[p.id] ?? p.name) || "";
+          // ── Estado de canales: FUENTE ÚNICA ──────────────────────────────
+          // El header (iconos) Y las tabs derivan de aquí, así no se contradicen.
+          // Antes cada sitio recalculaba su propia noción de "conectado" → bugs:
+          // Teams pintaba verde hardcodeado, WABA verde con TODOS los números
+          // apagados, y web mezclaba "configurado" con "recibiendo". Semántica:
+          //  · connected  = recibe de verdad (baileys vivo, waba con número activo,
+          //                 teams/web con connectedAt).
+          //  · configured = tiene config/números pero sin tráfico → se muestra igual,
+          //                 con dot distinto (no verde).
+          //  · hidden     = override del dueño (persona.hiddenChannels).
+          //  · shown      = !hidden && (connected || configured || revelado || baileys-en-flujo).
+          const liveConnected = p.status === "connected" && p.live;
+          const wabaActive = p.wabaNumbers.some((w) => w.mode !== "off");
+          const webConfigured = !!(p.webChannel.systemPrompt || p.webChannel.keySet || p.webChannel.mcps.length);
+          const hiddenSet = new Set(p.hiddenChannels);
+          const CH = (
+            [
+              { kind: "baileys", label: "Personal y grupos (QR)", title: "WhatsApp (personal/grupos)",
+                connected: liveConnected, configured: false,
+                state: liveConnected ? "connected" : (stale || relinking) ? "relinking" : "off",
+                dot: (stale || relinking) ? "bg-orange-400" : st.dot, count: p.conversations },
+              { kind: "waba", label: "WhatsApp Business API", title: "WhatsApp Business API",
+                connected: wabaActive, configured: p.wabaNumbers.length > 0 && !wabaActive,
+                state: wabaActive ? "connected" : p.wabaNumbers.length > 0 ? "configured" : "off",
+                dot: wabaActive ? "bg-green-500" : p.wabaNumbers.length > 0 ? "bg-gray-400" : "bg-gray-300",
+                count: p.wabaNumbers.length },
+              { kind: "teams", label: "Ghosty Teams", title: "Ghosty Teams",
+                connected: p.teamsChannel.connected, configured: false,
+                state: p.teamsChannel.connected ? "connected" : "off",
+                dot: p.teamsChannel.connected ? "bg-green-500" : "bg-gray-300", count: 0 },
+              { kind: "web", label: "Bubbles públicos (Web)", title: "Bubbles públicos (Web)",
+                connected: p.webChannel.connected, configured: !p.webChannel.connected && webConfigured,
+                state: p.webChannel.connected ? "connected" : webConfigured ? "configured" : "off",
+                dot: p.webChannel.connected ? "bg-green-500" : webConfigured ? "bg-brand-500" : "bg-gray-300", count: 0 },
+              { kind: "api", label: "Canal por API (HTTP/SSE)", title: "Canal por API (HTTP/SSE)",
+                connected: false, configured: false, state: "off", dot: "bg-gray-300", count: 0 },
+            ] as const
+          ).map((c) => ({
+            ...c,
+            hidden: hiddenSet.has(c.kind),
+            shown:
+              !hiddenSet.has(c.kind) &&
+              (c.connected || c.configured || revealCh.has(`${p.id}:${c.kind}`) ||
+                (c.kind === "baileys" && inFlow)),
+            iconColor:
+              c.state === "connected" ? "text-green-500"
+              : c.state === "relinking" ? "text-orange-400"
+              : c.state === "configured" ? "text-brand-500"
+              : "text-gray-300",
+            stateLabel:
+              c.state === "connected" ? "conectado"
+              : c.state === "relinking" ? "reconectando"
+              : c.state === "configured" ? "configurado"
+              : "sin conectar",
+          }));
           return (
             <div key={p.id} className="border-2 border-black rounded-xl p-4 animate-fade-in">
               <div className="w-full flex items-center justify-between gap-2">
@@ -2752,20 +2826,9 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                     mal con un único "Desconectado"). El estado granular (QR, Falló)
                     vive en la pestaña del canal. */}
                 <span className="flex items-center gap-1.5 shrink-0">
-                  {(() => {
-                    const liveConnected = p.status === "connected" && p.live;
-                    const webConfigured = !!(p.webChannel.connected || p.webChannel.systemPrompt || p.webChannel.keySet || p.webChannel.mcps.length);
-                    const hidden = new Set(p.hiddenChannels);
-                    const chans = [
-                      { kind: "baileys", title: "WhatsApp (personal/grupos)", color: liveConnected ? "text-green-500" : (stale || relinking) ? "text-orange-400" : "text-gray-300" },
-                      { kind: "waba", title: "WhatsApp Business API", color: p.wabaNumbers.length ? "text-green-500" : "text-gray-300" },
-                      { kind: "teams", title: "Ghosty Teams", color: p.teamsChannel.connected ? "text-green-500" : "text-gray-300" },
-                      { kind: "web", title: "Bubbles públicos (Web)", color: webConfigured ? "text-green-500" : "text-gray-300" },
-                    ].filter((c) => !hidden.has(c.kind));
-                    return chans.map((c) => (
-                      <ChannelIcon key={c.kind} kind={c.kind} title={`${c.title} — ${c.color.includes("green") ? "conectado" : c.color.includes("orange") ? "reconectando" : "sin conectar"}`} className={`w-4 h-4 ${c.color}`} />
-                    ));
-                  })()}
+                  {CH.filter((c) => c.kind !== "api" && !c.hidden).map((c) => (
+                    <ChannelIcon key={c.kind} kind={c.kind} title={`${c.title} — ${c.stateLabel}`} className={`w-4 h-4 ${c.iconColor}`} />
+                  ))}
                 </span>
               </div>
 
@@ -2826,42 +2889,16 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                 const settingsOpen = chSettings[p.id] ?? false;
                 // Solo cuando el surface está vivo de verdad tiene sentido ver/configurar
                 // grupos: desconectado/relinking → la sesión Baileys no existe, así que
-                // los toggles no harían nada hasta reconectar. Los ocultamos para no
-                // ofrecer config inerte (los enabledGroups persisten igual en la DB).
-                const liveConnected = p.status === "connected" && p.live;
-                // Catálogo de canales del agente + si están CONECTADOS. Por defecto solo
-                // se muestran los conectados; los demás viven en "+ Conectar canal". Un
-                // canal REVELADO manualmente (revealCh) o baileys en flujo de conexión se
-                // muestran aunque no estén conectados (para ver su flujo/QR). `hidden`
-                // (persona.hiddenChannels) sigue como override avanzado que oculta un
-                // canal aunque esté conectado.
-                const webConfigured = !!(p.webChannel.connected || p.webChannel.systemPrompt || p.webChannel.keySet || p.webChannel.mcps.length);
-                const allChannels = [
-                  { kind: "baileys", label: "Personal y grupos (QR)", dot: (stale || relinking) ? "bg-orange-400" : st.dot, count: p.conversations, connected: liveConnected },
-                  { kind: "waba", label: "WhatsApp Business API", dot: p.wabaNumbers.length ? "bg-green-500" : "bg-gray-300", count: p.wabaNumbers.length, connected: p.wabaNumbers.length > 0 },
-                  { kind: "teams", label: "Ghosty Teams", dot: p.teamsChannel.connected ? "bg-green-500" : "bg-gray-300", count: 0, connected: p.teamsChannel.connected },
-                  // Web (bubbles públicos): verde = recibiendo; morado = configurado sin
-                  // tráfico; gris = intacto. Configurado cuenta como conectado.
-                  { kind: "web", label: "Bubbles públicos (Web)",
-                    dot: p.webChannel.connected ? "bg-green-500" : webConfigured ? "bg-brand-500" : "bg-gray-300",
-                    count: 0, connected: webConfigured },
-                  // Canal GENÉRICO por API (HTTP/SSE): cualquier sistema postea al
-                  // endpoint del agente. Nunca "conectado" solo — se revela desde el
-                  // menú para ver el endpoint + token. Es la superficie abierta.
-                  { kind: "api", label: "Canal por API (HTTP/SSE)", dot: "bg-gray-300", count: 0, connected: false },
-                ];
-                const hidden = new Set(p.hiddenChannels);
-                const revealed = revealCh;
-                // Mostrados = conectados ∪ revelados manualmente ∪ baileys-en-flujo, menos
-                // los ocultados explícitamente (override).
-                const isShown = (kind: string) =>
-                  !hidden.has(kind) && (
-                    allChannels.find((c) => c.kind === kind)?.connected ||
-                    revealed.has(`${p.id}:${kind}`) ||
-                    (kind === "baileys" && inFlow)
-                  );
-                const channels = allChannels.filter((c) => isShown(c.kind));
-                const unconnected = allChannels.filter((c) => !isShown(c.kind));
+                // los toggles no harían nada hasta reconectar (los ocultamos para no
+                // ofrecer config inerte; enabledGroups persiste igual en la DB). El
+                // catálogo de canales `CH` (con connected/configured/shown/hidden) viene
+                // de la FUENTE ÚNICA de arriba — el header y estas tabs no se contradicen.
+                //  · channels   = mostrados (shown): recibe ∪ configurado ∪ revelado ∪ baileys-en-flujo.
+                //  · unconnected = disponibles a conectar (ni shown ni ocultos) → menú "+ Conectar".
+                //  · hiddenList  = ocultados por el dueño (override) → menú, con "Mostrar".
+                const channels = CH.filter((c) => c.shown);
+                const unconnected = CH.filter((c) => !c.shown && !c.hidden);
+                const hiddenList = CH.filter((c) => c.hidden);
                 // Default: el canal EN USO (baileys, o waba si baileys ocioso) mientras
                 // sea VISIBLE; si no, el primer canal visible.
                 const preferred = baileysIdle && p.wabaNumbers.length > 0 ? "waba" : "baileys";
@@ -2877,10 +2914,24 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                       <span className={`w-2 h-2 rounded-full ${c.dot}`} /><span>{c.label}</span>
                       {c.count > 0 && <span className="text-[10px] leading-none bg-gray-100 text-gray-600 rounded-full px-1.5 py-0.5">{c.count}</span>}
                     </button> ); })}
+                  {/* Ocultar el canal ACTIVO (override del dueño → persona.hiddenChannels).
+                      No aplica a baileys mientras hay un flujo de conexión vivo (QR/pairing). */}
+                  {activeCh && !(activeCh === "baileys" && inFlow) && (
+                    <button type="button" title="Ocultar este canal de la vista (lo re-muestras desde “+ Conectar canal”)"
+                      onClick={() => fetcher.submit({ intent: "toggle-channel", fleetAgentId: p.id, kind: activeCh, visible: "0" }, { method: "post" })}
+                      className="shrink-0 p-1.5 text-gray-300 hover:text-gray-600 transition-colors">
+                      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" /><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" />
+                        <path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" /><line x1="2" y1="2" x2="22" y2="22" />
+                      </svg>
+                    </button>
+                  )}
                   <ChannelConnectMenu
                     unconnected={unconnected.map((c) => ({ kind: c.kind, label: c.label, dot: c.dot }))}
+                    hidden={hiddenList.map((c) => ({ kind: c.kind, label: c.label, dot: c.dot }))}
                     hasTabs={channels.length > 0}
                     onConnect={(kind) => revealChannel(p.id, kind)}
+                    onShow={(kind) => fetcher.submit({ intent: "toggle-channel", fleetAgentId: p.id, kind, visible: "1" }, { method: "post" })}
                   />
                 </div>
 
@@ -3080,8 +3131,11 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                   <div className="flex items-center justify-between gap-2">
                     <div className="min-w-0 flex items-center gap-2">
                       <span className="text-sm font-semibold truncate">{p.teamsChannel.subject}</span>
-                      <span className="shrink-0 inline-flex items-center gap-1.5 text-[11px] font-semibold px-2 py-1 rounded-full border-2 border-green-200 text-green-600">
-                        <span className="w-1.5 h-1.5 rounded-full bg-green-500" />Conectado
+                      {/* Estado REAL (antes: verde "Conectado" hardcodeado aunque no
+                          hubiera conectado desde GTeams). connected = hubo ≥1 turno. */}
+                      <span className={`shrink-0 inline-flex items-center gap-1.5 text-[11px] font-semibold px-2 py-1 rounded-full border-2 ${p.teamsChannel.connected ? "border-green-200 text-green-600" : "border-gray-200 text-gray-500"}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${p.teamsChannel.connected ? "bg-green-500" : "bg-gray-300"}`} />
+                        {p.teamsChannel.connected ? "Conectado" : "Sin conectar aún"}
                       </span>
                     </div>
                     <button type="button" title="Capacidades y comportamiento en Teams"
