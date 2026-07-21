@@ -591,21 +591,13 @@ export const CURATED_CAPABILITIES: McpCatalogEntry[] = [
     env: { API_TOKEN: "$secret:BRIGHTDATA_API_TOKEN" },
     requiredSecrets: ["BRIGHTDATA_API_TOKEN"],
   },
-  {
-    // Denik agenda (contactos + reservas). Mismo binario `denik-mcp` pre-instalado
-    // en la imagen del worker que usa el path per-turn (groupKeys/denikApiKey); aquí
-    // lo exponemos como capacidad curada para que sea configurable por-grupo desde
-    // la UI (antes solo se podía registrar invisible vía groupKeys). DENIK_BASE_URL
-    // tiene default https://www.denik.me dentro de @denik.me/mcp, no hace falta pasarlo.
-    name: "denik",
-    label: "Denik — agenda y contactos",
-    description: "Buscar contactos y gestionar reservas de tu agenda Denik.",
-    transport: "stdio",
-    command: "denik-mcp",
-    args: [],
-    env: { DENIK_API_KEY: "$secret:DENIK_API_KEY" },
-    requiredSecrets: ["DENIK_API_KEY"],
-  },
+  // NOTA: la capacidad curada "denik" (agenda + contactos) se RETIRÓ de la UI
+  // (2026-07-21). Era redundante y engañosa para la flota denik: el binario
+  // `denik-mcp` ya se inyecta POR-TURNO vía `denikApiKey`/`groupKeys[cfgId]`
+  // (org.apiKey admin en dash/grupos, org.publicApiKey en burbujas), scopeado por-org.
+  // La tarjeta pedía una llave ESTÁTICA del vault (DENIK_API_KEY) que en multi-tenant
+  // mezclaría datos entre orgs y nunca se usaba (el per-turn gana). Se elimina para no
+  // mostrar un "falta la llave" confuso. El path per-turno NO depende de esta entrada.
   {
     // Kommo CRM — MCP hospedado por EasyBits (proxy a la API de Kommo con la llave
     // del owner). Tri-estado: Lectura = leer leads/contactos; Escritura = crear/mover

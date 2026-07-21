@@ -3173,34 +3173,10 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                     </button>
                   </div>
 
-                  {/* Llave Denik pública — colapsable. Present/falta; NUNCA muestra el valor.
-                      `key` en el key= fuerza reset del input cuando cambia el estado guardado. */}
-                  <details className="mt-3 group">
-                    <summary className="text-xs font-semibold text-gray-500 cursor-pointer hover:text-gray-800 flex items-center gap-1 list-none">
-                      <span className="transition-transform group-open:rotate-90">›</span>
-                      Llave Denik pública
-                      {p.webChannel.keySet
-                        ? <span className="text-green-600 font-normal">· configurada</span>
-                        : <span className="text-gray-400 font-normal">· sin configurar</span>}
-                    </summary>
-                    <fetcher.Form method="post" className="mt-2 flex items-center gap-2" key={`webkey-${p.id}-${p.webChannel.keySet}`}>
-                      <input type="hidden" name="intent" value="set-group-key" />
-                      <input type="hidden" name="fleetAgentId" value={p.id} />
-                      <input type="hidden" name="groupId" value="web" />
-                      <input name="key" type="password" autoComplete="off"
-                        placeholder={p.webChannel.keySet ? "•••• (reemplazar)" : "dnk_pub_…"}
-                        className="border-2 border-gray-300 rounded-lg px-2 py-1.5 text-sm font-mono flex-1 min-w-0" />
-                      <button type="submit"
-                        disabled={fetcher.state !== "idle" && fetcher.formData?.get("intent") === "set-group-key"}
-                        className="shrink-0 border-2 border-black rounded-lg px-3 py-1.5 text-xs font-semibold disabled:opacity-60">
-                        Guardar
-                      </button>
-                    </fetcher.Form>
-                    <p className="text-[11px] text-gray-400 mt-1">
-                      Key pública del negocio (dnk_pub_): da a las burbujas las 3 tools públicas de Denik
-                      (servicios, disponibilidad, reservar). El valor nunca se muestra.
-                    </p>
-                  </details>
+                  {/* "Llave Denik pública" (dnk_pub_ estática) RETIRADA de la UI (2026-07-21):
+                      vestigial en multi-tenant — denik inyecta la key pública POR-TURNO
+                      (org.publicApiKey vía denikApiKey), la estática nunca se usaba. La acción
+                      set-group-key sigue existiendo (backend) por si se necesita vía API. */}
 
                   {/* Endpoint que el tenant proxea desde SU server (el token nunca al browser). */}
                   <p className="mt-3 text-[11px] text-gray-400 break-words">
@@ -3484,9 +3460,10 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                     {/* Regla metadata-driven (una sola, compartida con la API capabilities):
                         - bucketScoped (easybits): su superficie SON los buckets de arriba →
                           un toggle aparte es redundante con el granular. Se oculta siempre.
-                        - channel (wa=Baileys): canal inerte fuera del suyo → ocúltalo cuando
-                          el target es WABA. */}
-                    {cp.builtins.filter((b) => !b.bucketScoped && !(waba && b.channel)).map((b) => (
+                        - channel (wa=Baileys): su superficie viene INCLUIDA al conectar el
+                          canal → un toggle aparte es redundante. Se oculta siempre (2026-07-21).
+                          Sigue always-on a nivel worker; para apagarlo hay disabledBuiltins vía API. */}
+                    {cp.builtins.filter((b) => !b.bucketScoped && !b.channel).map((b) => (
                       <div key={b.name} className="border-2 border-gray-100 rounded-xl px-3 py-2 flex items-center justify-between gap-2">
                         <p className="text-sm font-semibold min-w-0 truncate">{b.label}</p>
                         <Switch value={!cg.disabledBuiltins.includes(b.name)}
