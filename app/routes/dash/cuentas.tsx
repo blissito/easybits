@@ -42,7 +42,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
     logger.info(
       `[impersonation] start operator=${operator.id} (${operator.email}) target=${target.id} (${target.email})`
     );
-    throw redirect("/dash", {
+    throw redirect("/dash/flota", {
       headers: { "set-cookie": await commitSession(session) },
     });
   }
