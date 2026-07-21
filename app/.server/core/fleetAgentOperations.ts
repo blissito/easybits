@@ -1519,13 +1519,16 @@ export async function routeMessage(
   // así que el scope reseller por-customer no se ve afectado.
   const rawCfgId = msg.configGroupId ?? msg.groupId;
   const cfgId = /^web(-|$)/.test(rawCfgId) ? "web" : rawCfgId;
-  // Teams: EasyBits no sabe de la conexión (vive en GTeams). La INFERIMOS del primer
-  // turno con cfgId "teams" → estampa connectedAt (idempotente: un solo write) para
-  // prender el indicador del canal en /dash/flota. Guarded (.catch): jamás tumba el turno.
-  if (cfgId === "teams") {
+  // Teams/Web: EasyBits no ve la "conexión" como en Baileys (Teams vive en GTeams; el
+  // canal Web son bubbles efímeros web-<uuid> normalizados a "web"). La INFERIMOS del
+  // primer turno con ese cfgId estable → estampa connectedAt (idempotente: un solo
+  // write) para prender el indicador del canal en /dash/flota. Antes solo cubría "teams"
+  // → el canal web NUNCA se marcaba conectado aunque respondiera en prod. Guarded
+  // (.catch): jamás tumba el turno.
+  if (cfgId === "teams" || cfgId === "web") {
     const gc = (fleetAgent.groupConfigs as Record<string, GroupConfig> | null) ?? {};
-    if (!gc["teams"]?.connectedAt) {
-      const next = { ...gc, teams: { ...(gc["teams"] ?? {}), connectedAt: new Date().toISOString() } };
+    if (!gc[cfgId]?.connectedAt) {
+      const next = { ...gc, [cfgId]: { ...(gc[cfgId] ?? {}), connectedAt: new Date().toISOString() } };
       await db.fleetAgent.update({ where: { id: fleetAgent.id }, data: { groupConfigs: next } }).catch(() => {});
     }
   }
