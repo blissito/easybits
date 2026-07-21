@@ -591,13 +591,27 @@ export const CURATED_CAPABILITIES: McpCatalogEntry[] = [
     env: { API_TOKEN: "$secret:BRIGHTDATA_API_TOKEN" },
     requiredSecrets: ["BRIGHTDATA_API_TOKEN"],
   },
-  // NOTA: la capacidad curada "denik" (agenda + contactos) se RETIRÓ de la UI
-  // (2026-07-21). Era redundante y engañosa para la flota denik: el binario
-  // `denik-mcp` ya se inyecta POR-TURNO vía `denikApiKey`/`groupKeys[cfgId]`
-  // (org.apiKey admin en dash/grupos, org.publicApiKey en burbujas), scopeado por-org.
-  // La tarjeta pedía una llave ESTÁTICA del vault (DENIK_API_KEY) que en multi-tenant
-  // mezclaría datos entre orgs y nunca se usaba (el per-turn gana). Se elimina para no
-  // mostrar un "falta la llave" confuso. El path per-turno NO depende de esta entrada.
+  {
+    // Denik agenda (contactos + reservas). Es el MCP que da el scope de AGENDAR — las
+    // burbujas públicas de landing agendan con esto (su razón de existir).
+    // ⚠️ PARTNERSHIP denik = SIN LLAVE en la UI: la key real llega POR-TURNO
+    // (`denikApiKey`: org.publicApiKey en burbujas / org.apiKey en dash+grupos), scopeada
+    // por-org. Por eso NO lleva `requiredSecrets` → la tarjeta se ve CONECTADA, no pide
+    // llave ni muestra "falta la llave". El `env` con `$secret:DENIK_API_KEY` se conserva
+    // a propósito: mantiene el comportamiento de runtime igual que antes — como el vault
+    // no tiene ese secret, `resolveGroupMcpServers` SALTA esta entrada y `denik-mcp` corre
+    // por el path per-turno (el binario está pre-instalado en la imagen del worker). Sin
+    // el env se incluiría un server keyless duplicado. DENIK_BASE_URL default
+    // https://www.denik.me dentro de @denik.me/mcp. NO REMOVER (confirmado con Brendi 2026-07-21).
+    name: "denik",
+    label: "Denik — agenda y contactos",
+    description: "Buscar contactos y gestionar reservas de tu agenda Denik.",
+    transport: "stdio",
+    command: "denik-mcp",
+    args: [],
+    env: { DENIK_API_KEY: "$secret:DENIK_API_KEY" },
+    // sin requiredSecrets: partnership → la key va por-turno, la UI no debe pedirla.
+  },
   {
     // Kommo CRM — MCP hospedado por EasyBits (proxy a la API de Kommo con la llave
     // del owner). Tri-estado: Lectura = leer leads/contactos; Escritura = crear/mover
