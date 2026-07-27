@@ -659,7 +659,11 @@ export const CURATED_CAPABILITIES: McpCatalogEntry[] = [
     mode: "mcp",
     transport: "stdio",
     command: "npx",
-    args: ["-y", "@formmy.app/mcp-server"],
+    // Versión PINNEADA a propósito: `npx -y` cachea por especificador, así que sin el pin
+    // un worker vivo podía seguir sirviendo 0.6.0 (la que tenía create_order roto y cero
+    // scoping) sin ninguna señal. El pin fuerza el miss de caché y deja auditable qué corre.
+    // Convención: cada release del MCP = bump acá.
+    args: ["-y", "@formmy.app/mcp-server@0.7.0"],
     env: {
       FORMMY_API_URL: "https://formmy.app",
       FORMMY_SECRET_KEY: "$secret:FORMMY_SECRET_KEY",
