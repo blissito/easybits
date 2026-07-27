@@ -517,6 +517,87 @@ export type WabaInboundMedia = {
   fileName?: string;
 };
 
+// Todo lo que NO es texto ni media clásica y que Formmy YA nos manda en el envelope del
+// canal (`server/channels/handler.ts`), pero que la superficie WABA venía descartando en
+// silencio: una ubicación compartida para una entrega se perdía por completo, y un mensaje
+// de campaña llegaba como el placeholder "📎 [system]" sin nada más.
+export type WabaExtras = {
+  location?: { latitude?: number; longitude?: number; name?: string; address?: string };
+  contacts?: Array<{ name?: string; phones?: string[]; vcard_raw?: string }>;
+  reaction?: { emoji?: string; to_message_id?: string };
+  quoted?: { message_id?: string; from?: string; content_preview?: string };
+  unhandled?: { meta_type?: string; raw?: unknown };
+};
+
+/** Resumen de un `unhandled.raw` de Meta para logs. ALLOWLIST, no denylist: sólo salen los
+ *  campos nombrados, así que un tipo nuevo no puede filtrar el teléfono ni el texto del
+ *  cliente. `rawKeys` deja ver qué llegó sin exponer valores — si aparece algo no cubierto,
+ *  ampliar esta lista es una línea. */
+export function summarizeUnhandled(raw: unknown): Record<string, unknown> {
+  const r = (raw ?? {}) as Record<string, any>;
+  const out: Record<string, unknown> = { rawKeys: Object.keys(r) };
+  if (typeof r.type === "string") out.type = r.type;
+  if (r.system?.type) out.systemType = r.system.type;
+  if (r.interactive?.type) out.interactiveType = r.interactive.type;
+  for (const k of ["button_reply", "list_reply"] as const) {
+    const rep = r.interactive?.[k];
+    if (rep) out[k] = { id: rep.id, title: rep.title };
+  }
+  if (r.button) out.button = { text: r.button.text, payload: r.button.payload };
+  // La razón de ser del log: `source_type` + `ctwa_clid` dicen si el mensaje viene de un
+  // anuncio Click-to-WhatsApp y de cuál campaña.
+  if (r.referral) {
+    out.referral = {
+      source_type: r.referral.source_type,
+      source_id: r.referral.source_id,
+      headline: r.referral.headline,
+      ctwa_clid: r.referral.ctwa_clid,
+    };
+  }
+  if (Array.isArray(r.errors)) {
+    out.errors = r.errors.map((e: any) => ({ code: e?.code, title: e?.title }));
+  }
+  return out;
+}
+
+/** Convierte los extras en líneas de texto para el turno. Formato COPIADO VERBATIM del
+ *  camino baileys de este mismo archivo (ver "Location / contact / poll → text") para que
+ *  las dos superficies no diverjan. */
+export function wabaExtraLines(extras: WabaExtras): string[] {
+  const lines: string[] = [];
+  // Primero el quote: es contexto de todo lo demás.
+  if (extras.quoted) {
+    const prev = (extras.quoted.content_preview || "").replace(/\s+/g, " ").trim();
+    lines.push(prev ? `[Responde a: "${prev.slice(0, 200)}"]` : "[Responde a un mensaje anterior]");
+  }
+  const loc = extras.location;
+  if (loc && Number.isFinite(loc.latitude) && Number.isFinite(loc.longitude)) {
+    const q = `${loc.latitude},${loc.longitude}`;
+    lines.push(
+      `[Ubicación: ${q}]${loc.name ? ` "${loc.name}"` : ""}${loc.address ? " " + loc.address : ""} https://maps.google.com/?q=${q}`
+    );
+  }
+  for (const ct of extras.contacts ?? []) {
+    // Formmy ya parsea los teléfonos; el vcard crudo es el respaldo (mismo regex que baileys).
+    const tel = ct.phones?.[0] || ((ct.vcard_raw || "").match(/TEL[^:]*:([+\d][\d\s()-]+)/) || [])[1];
+    lines.push(`[Contacto: ${ct.name || "contacto"}${tel ? ", tel: " + tel.trim() : ""}]`);
+  }
+  if (extras.reaction?.emoji) lines.push(`[El usuario reaccionó con ${extras.reaction.emoji}]`);
+  if (extras.unhandled?.meta_type && extras.unhandled.meta_type !== "revoke") {
+    const s = summarizeUnhandled(extras.unhandled.raw);
+    const hint =
+      (s.referral as any)?.headline ? `anuncio: "${(s.referral as any).headline}"` :
+      (s.button_reply as any)?.title ? `botón: "${(s.button_reply as any).title}"` :
+      (s.list_reply as any)?.title ? `opción: "${(s.list_reply as any).title}"` :
+      (s.button as any)?.text ? `botón: "${(s.button as any).text}"` :
+      s.systemType ? `aviso del sistema: ${s.systemType}` : "";
+    lines.push(
+      `[Mensaje de WhatsApp de tipo "${extras.unhandled.meta_type}" que no puedo leer directamente${hint ? ` — ${hint}` : ""}]`
+    );
+  }
+  return lines;
+}
+
 const MAX_MEDIA_BYTES = 25 * 1024 * 1024;
 
 // Bounded fetch of a media URL → Buffer. Formmy reenvía la media como su PROXY
@@ -554,8 +635,10 @@ function extFromMime(mime: string): string {
 export async function extractWabaContent(
   textContent: string,
   media: WabaInboundMedia | null,
-  opts: { ownerId: string; formmySecret?: string }
+  opts: { ownerId: string; formmySecret?: string; extras?: WabaExtras }
 ): Promise<InboundContent> {
+  // Líneas de ubicación/contacto/quote/etc. Van ANTES del texto del usuario, como en baileys.
+  const extraLines = wabaExtraLines(opts.extras ?? {});
   // The user's typed words (or media caption). For a voice note it's replaced by
   // the transcript below (drives the voice-reply trigger, like Baileys).
   let userWords = (textContent || media?.caption || "").trim();
@@ -632,6 +715,15 @@ export async function extractWabaContent(
   // Foto sin caption: el agente la VE (bytes nativos), pero un turno con texto vacío
   // no le dice qué se espera de él. Marco neutro, como el de baileys.
   if (!text.trim() && imageData) text = "(el usuario envió una imagen, sin texto)";
+
+  if (extraLines.length) {
+    text = [...extraLines, text].filter((s) => s && s.trim()).join("\n");
+    // Una ubicación o un contacto SON el mensaje cuando vienen solos: sin esto el Inbox
+    // mostraría la fila vacía y el disparo de nota de voz no tendría con qué comparar.
+    if (!userWords) userWords = extraLines.join(" ");
+    // Paridad con baileys, que cuenta location/contacts dentro de hasMedia.
+    if (opts.extras?.location || opts.extras?.contacts?.length) hasMedia = true;
+  }
 
   return { text, userText: userWords, refImageUrl: imageData?.url, wasVoice, hasMedia, image: imageData };
 }

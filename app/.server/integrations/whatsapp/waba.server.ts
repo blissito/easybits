@@ -7,7 +7,10 @@ import { db } from "~/.server/db";
 import { routeMessage } from "~/.server/core/fleetAgentOperations";
 import {
   extractWabaContent,
+  wabaExtraLines,
+  summarizeUnhandled,
   type WabaInboundMedia,
+  type WabaExtras,
   type InboundContent,
 } from "./inboundMedia.server";
 import { deliverFilesFromReply } from "./outboundMedia.server";
@@ -82,6 +85,66 @@ export function parseDropletMedia(raw: unknown): WabaInboundMedia | null {
   };
 }
 
+// Los campos NO-texto del envelope del canal (server/channels/handler.ts de Formmy). Mismo
+// estilo defensivo que parseDropletMedia: todo opcional, cualquier forma rara se ignora en
+// vez de reventar el turno. Un Formmy viejo que no los mande se comporta idéntico.
+export function parseWabaExtras(body: Record<string, unknown>): WabaExtras {
+  const obj = (v: unknown) => (v && typeof v === "object" ? (v as Record<string, any>) : null);
+  const extras: WabaExtras = {};
+  const loc = obj(body.location);
+  if (loc && typeof loc.latitude === "number" && typeof loc.longitude === "number") {
+    extras.location = {
+      latitude: loc.latitude,
+      longitude: loc.longitude,
+      name: typeof loc.name === "string" ? loc.name : undefined,
+      address: typeof loc.address === "string" ? loc.address : undefined,
+    };
+  }
+  if (Array.isArray(body.contacts) && body.contacts.length) {
+    extras.contacts = body.contacts
+      .map((c) => obj(c))
+      .filter(Boolean)
+      .map((c) => ({
+        name: typeof c!.name === "string" ? c!.name : undefined,
+        phones: Array.isArray(c!.phones) ? c!.phones.filter((p: unknown) => typeof p === "string") : undefined,
+        vcard_raw: typeof c!.vcard_raw === "string" ? c!.vcard_raw : undefined,
+      }));
+  }
+  const rx = obj(body.reaction);
+  // ⚠️ `to_message_id`, no `message_id` — así lo manda handler.ts.
+  if (rx && typeof rx.emoji === "string") {
+    extras.reaction = { emoji: rx.emoji, to_message_id: typeof rx.to_message_id === "string" ? rx.to_message_id : undefined };
+  }
+  const q = obj(body.quoted);
+  if (q && (typeof q.message_id === "string" || typeof q.content_preview === "string")) {
+    extras.quoted = {
+      message_id: typeof q.message_id === "string" ? q.message_id : undefined,
+      from: typeof q.from === "string" ? q.from : undefined,
+      content_preview: typeof q.content_preview === "string" ? q.content_preview : undefined,
+    };
+  }
+  const u = obj(body.unhandled);
+  if (u && typeof u.meta_type === "string") extras.unhandled = { meta_type: u.meta_type, raw: u.raw };
+  return extras;
+}
+
+export function hasWabaExtras(e: WabaExtras): boolean {
+  return !!(e.location || e.contacts?.length || e.reaction || e.quoted || e.unhandled);
+}
+
+// Formmy rellena `content` con un placeholder emoji cuando el mensaje no trae texto propio
+// (handler.ts:150-166: "📍 …", "📇 …", "📎 [system]"). Si además nos manda el campo
+// estructurado, ese placeholder es ruido duplicado: lo tiramos y dejamos que wabaExtraLines
+// arme la línea buena, con coordenadas y link de mapa.
+export function stripFormmyPlaceholder(content: string, e: WabaExtras): string {
+  const t = content.trim();
+  if (e.location && /^📍/u.test(t)) return "";
+  if (e.contacts?.length && /^📇/u.test(t)) return "";
+  if (e.unhandled && /^📎\s*\[/u.test(t)) return "";
+  if (e.reaction && /\(reacción\)$/u.test(t)) return "";
+  return content;
+}
+
 // Persist an inbound user message WITHOUT running a turn (paused/muted/off) so the
 // Inbox shows it and "Solicitar respuesta" can replay it. Fire-and-forget.
 export async function persistInboundUserMessage(
@@ -134,7 +197,7 @@ type WabaCtx = {
   org: WabaOrg | undefined;
   admin?: boolean;
 };
-type WabaItem = { content: string; media: WabaInboundMedia | null; messageId?: string; senderName?: string };
+type WabaItem = { content: string; media: WabaInboundMedia | null; messageId?: string; senderName?: string; extras?: WabaExtras };
 type WabaBuf = { ctx: WabaCtx; items: WabaItem[]; running: boolean; timer: ReturnType<typeof setTimeout> | null };
 const wabaBuffers = new Map<string, WabaBuf>();
 
@@ -180,7 +243,18 @@ async function drainWaba(key: string): Promise<void> {
     const media = batch.map((i) => i.media).find(Boolean) ?? null;
     const last = batch[batch.length - 1];
     const senderName = batch.map((i) => i.senderName).find(Boolean);
-    const ec = await extractWabaContent(combined, media, { ownerId: ctx.ownerId, formmySecret: ctx.formmySecret });
+    // Extras de la ráfaga: se mergean POR CAMPO (no "el primero gana"), porque el cliente
+    // puede mandar la ubicación y el texto como dos mensajes seguidos y ambos entran al
+    // mismo turno. Los contactos se concatenan; del resto, el primero que aparezca.
+    const extras: WabaExtras = {
+      location: batch.map((i) => i.extras?.location).find(Boolean),
+      quoted: batch.map((i) => i.extras?.quoted).find(Boolean),
+      reaction: batch.map((i) => i.extras?.reaction).find(Boolean),
+      unhandled: batch.map((i) => i.extras?.unhandled).find(Boolean),
+      contacts: batch.flatMap((i) => i.extras?.contacts ?? []),
+    };
+    if (!extras.contacts?.length) delete extras.contacts;
+    const ec = await extractWabaContent(combined, media, { ownerId: ctx.ownerId, formmySecret: ctx.formmySecret, extras });
     await runWabaTurn({
       fleetAgentId: ctx.fleetAgentId,
       ownerId: ctx.ownerId,

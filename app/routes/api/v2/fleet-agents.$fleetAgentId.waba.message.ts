@@ -6,10 +6,14 @@ import {
   resolveMode,
   adminSetOf,
   parseDropletMedia,
+  parseWabaExtras,
+  hasWabaExtras,
+  stripFormmyPlaceholder,
   recordPausedUntil,
   persistInboundUserMessage,
   enqueueWabaTurn,
 } from "~/.server/integrations/whatsapp/waba.server";
+import { summarizeUnhandled, wabaExtraLines } from "~/.server/integrations/whatsapp/inboundMedia.server";
 
 // POST /api/v2/fleet-agents/:fleetAgentId/waba/message
 //
@@ -40,6 +44,14 @@ type DropletInbound = {
   manual_mode?: boolean;
   paused_until?: string; // estado de pausa de Formmy (fuente única) — para visibilidad
   media?: unknown;
+  // El resto del envelope del canal (server/channels/handler.ts de Formmy). Se venía
+  // descartando en silencio: una ubicación compartida para una entrega se perdía entera y
+  // un mensaje de campaña llegaba como el placeholder "📎 [system]" sin nada más.
+  location?: unknown;
+  contacts?: unknown;
+  reaction?: unknown;
+  quoted?: unknown;
+  unhandled?: unknown;
 };
 
 export async function loader({ request }: Route.LoaderArgs) {
@@ -60,8 +72,20 @@ export async function action({ request, params }: Route.ActionArgs) {
   const body = (await request.json().catch(() => ({}))) as DropletInbound;
   const integrationId = typeof body.integration_id === "string" ? body.integration_id : "";
   const sender = typeof body.sender === "string" ? body.sender : "";
-  const content = typeof body.content === "string" ? body.content : "";
+  const rawContent = typeof body.content === "string" ? body.content : "";
   const media = parseDropletMedia(body.media);
+  const extras = parseWabaExtras(body as Record<string, unknown>);
+  // El placeholder emoji de Formmy sobra cuando además nos manda el campo estructurado.
+  const content = stripFormmyPlaceholder(rawContent, extras);
+  // Diagnóstico de los tipos que Meta no mapea (campañas, avisos de sistema, botones).
+  // Allowlist estricta: nunca sale el teléfono ni el texto del cliente. Es la ÚNICA forma
+  // de saber qué son realmente esos mensajes — sin esto son una caja negra.
+  if (extras.unhandled) {
+    console.log(
+      `[waba] unhandled ${fleetAgentId} ${integrationId}`,
+      JSON.stringify({ meta_type: extras.unhandled.meta_type, ...summarizeUnhandled(extras.unhandled.raw) })
+    );
+  }
   // Nombre de perfil del contacto. Ignora "Operador" (placeholder de ecos) y los
   // que son solo el teléfono.
   const rawName = typeof body.sender_name === "string" ? body.sender_name.trim() : "";
@@ -88,20 +112,31 @@ export async function action({ request, params }: Route.ActionArgs) {
   }
 
   // ACK immediately. Anything that means "nothing to answer" still returns 200.
-  const hasInbound = !!(content.trim() || media);
+  // `hasExtras` es parte del guard: una ubicación o un contacto SIN texto son un mensaje
+  // completo, y al limpiar el placeholder de Formmy se caerían por el `content` vacío.
+  const hasExtras = hasWabaExtras(extras);
+  const hasInbound = !!(content.trim() || media || hasExtras);
+  // Una reacción SOLA no merece un turno: runWabaTurn manda 👀 + "escribiendo…" + ✅ por
+  // turno, así que cada 👍 del cliente se vería como el bot despertando, costaría un worker
+  // completo y probablemente arrancaría un "¡de nada!". Se registra y ya. Si la reacción
+  // viene acompañando texto o media, sigue el camino normal y su línea va en el framing.
+  const reactionOnly = !!extras.reaction && !content.trim() && !media && !extras.location && !extras.contacts?.length;
   if (integrationId && sender && hasInbound) {
-    const willRun = isAdmin || (!body.is_from_me && shouldRespond && !body.manual_mode);
+    const willRun = !reactionOnly && (isAdmin || (!body.is_from_me && shouldRespond && !body.manual_mode));
     if (willRun) {
       // Encola (coalescing por conversación) → UN turno a la vez = un solo worker
       // sticky (sin la carrera que spawneaba varios y partía la memoria).
       enqueueWabaTurn(
         { fleetAgentId, ownerId: fleetAgent.ownerId, formmySecret, integrationId, sender, org, admin: isAdmin },
-        { content, media, senderName, messageId: typeof body.message_id === "string" ? body.message_id : undefined }
+        { content, media, senderName, extras, messageId: typeof body.message_id === "string" ? body.message_id : undefined }
       );
     } else if (!body.is_from_me) {
       // No corremos turno (pausa/muted/off) pero NO es nuestro eco → persiste para
       // el Inbox + "Solicitar respuesta".
-      void persistInboundUserMessage(fleetAgentId, integrationId, sender, senderName, content, media);
+      // Con el placeholder ya limpio, el texto para el Inbox sale del framing (la ubicación
+      // con su link, el contacto con su tel) en vez de quedar vacío.
+      const inboxText = content.trim() || wabaExtraLines(extras).join(" ");
+      void persistInboundUserMessage(fleetAgentId, integrationId, sender, senderName, inboxText, media);
     }
   }
 
