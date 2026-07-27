@@ -1108,15 +1108,32 @@ async function waitAgentRunning(agentId: string, timeoutMs = 120_000) {
 // Drain a unified {type:"chunk"|"done"|"error"} SSE stream into plain text.
 // WhatsApp is non-streaming (one message out), so we collect server-side; this
 // also lets us log the full reply as FleetAgentMessage.
+/**
+ * `onBlock` = ENTREGA TEMPRANA. El Agent SDK emite un bloque de texto antes de llamar
+ * una tool ("Permíteme un momento, ya busco…") y otro después del resultado. Sin esto
+ * los dos salían pegados AL FINAL del turno, así que el "permíteme" llegaba junto con
+ * la respuesta — inútil: su único valor es avisar MIENTRAS el agente trabaja, que es
+ * lo que tarda 10-30s. Con `onBlock`, el bloque acumulado se despacha en cuanto llega
+ * el evento `tool`, y el turno devuelve sólo lo que falta.
+ *
+ * Si no se pasa `onBlock`, el comportamiento es el de antes (todo junto al final), así
+ * que las superficies que no lo usan no cambian.
+ */
 async function collectStream(
   stream: ReadableStream<Uint8Array>,
   onChunk?: (s: string) => void,
-  onTool?: (name: string) => void
+  onTool?: (name: string) => void,
+  onBlock?: (text: string) => Promise<void> | void
 ): Promise<string> {
   const reader = stream.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
   let reply = "";
+  let flushedLen = 0;
+  // Los envíos deben salir EN ORDEN. `consume` es síncrono (lo llama el read loop), así
+  // que encadenamos en vez de await: cada flush espera al anterior y al final esperamos
+  // la cadena completa antes de devolver.
+  let flushChain: Promise<void> = Promise.resolve();
   const consume = (raw: string) => {
     for (const line of raw.split("\n")) {
       const t = line.trim();
@@ -1130,6 +1147,12 @@ async function collectStream(
           onChunk?.(evt.value);
         } else if (evt.type === "tool" && typeof evt.name === "string") {
           onTool?.(evt.name);
+          // Frontera de bloque: lo dicho ANTES de la tool ya es un mensaje completo.
+          if (onBlock) {
+            const pend = stripInternal(reply.slice(flushedLen)).trim();
+            flushedLen = reply.length;
+            if (pend) flushChain = flushChain.then(() => onBlock(pend)).catch(() => {});
+          }
         } else if (evt.type === "error") throw new Error(evt.message || "agent stream error");
       } catch (e) {
         if (e instanceof Error && e.message.includes("agent stream")) throw e;
@@ -1148,7 +1171,9 @@ async function collectStream(
   }
   buffer += decoder.decode();
   if (buffer) consume(buffer);
-  return reply.trim();
+  await flushChain; // los bloques tempranos salen ANTES que el resto
+  // Con entrega temprana devolvemos sólo lo NO enviado; sin ella, todo (como antes).
+  return (onBlock ? reply.slice(flushedLen) : reply).trim();
 }
 
 // How many workers (= conversations, sticky routes) a VM currently hosts.
@@ -1466,7 +1491,10 @@ export async function clearGroupSession(ctx: AuthContext, fleetAgent: PoolRow, g
 export async function routeMessage(
   fleetAgentId: string,
   msg: InboundMessage,
-  opts: { skipRateLimit?: boolean; hasMedia?: boolean; skipUserLog?: boolean; onChunk?: (s: string) => void; onTool?: (name: string) => void } = {}
+  // `onBlock`: entrega TEMPRANA — se llama con el texto dicho antes de cada tool, para
+  // que el "permíteme un momento" salga MIENTRAS el agente trabaja. Con él, el valor
+  // devuelto es sólo lo que falta por mandar. Ver collectStream.
+  opts: { skipRateLimit?: boolean; hasMedia?: boolean; skipUserLog?: boolean; onChunk?: (s: string) => void; onTool?: (name: string) => void; onBlock?: (text: string) => Promise<void> | void } = {}
 ): Promise<string> {
   const fleetAgent = await db.fleetAgent.findUniqueOrThrow({ where: { id: fleetAgentId } });
   const ctx = await ctxForOwner(fleetAgent.ownerId);
@@ -1666,6 +1694,9 @@ export async function routeMessage(
   }
 
   let reply = "";
+  // Bloques ya entregados al canal por `onBlock` (entrega temprana). Salen del `reply`
+  // devuelto pero se re-unen para el transcript.
+  const earlyBlocks: string[] = [];
   // Turn loop with self-heal: if the worker's box is DEAD (host unreachable / VM
   // gone via crash/restart/TTL — not a manual delete), mark it "lost" and
   // re-place ONCE on a fresh VM (memory restored from the externalized blob). A
@@ -1826,7 +1857,15 @@ export async function routeMessage(
           toolGroup: resolveToolGroup(fleetAgent, cfgId),
         }
       );
-      reply = await collectStream(stream, opts.onChunk, opts.onTool);
+      // Los bloques entregados temprano salen del `reply` devuelto, pero el transcript
+      // debe guardar el turno COMPLETO — si no, el historial pierde lo que el cliente
+      // sí vio y el agente se contradice en el turno siguiente.
+      reply = await collectStream(
+        stream,
+        opts.onChunk,
+        opts.onTool,
+        opts.onBlock && (async (t) => { earlyBlocks.push(t); await opts.onBlock!(t); })
+      );
       auditLog("turn.ok", {
         groupId: msg.groupId,
         agentId: worker.id,
@@ -1856,9 +1895,12 @@ export async function routeMessage(
     where: { fleetAgentId_groupId: { fleetAgentId: fleetAgent.id, groupId: msg.groupId } },
     data: { lastMessageAt: now },
   });
-  if (reply) {
+  // Transcript = turno COMPLETO (adelantos + resto), aunque al canal hayan salido en
+  // mensajes distintos.
+  const fullTurn = [...earlyBlocks, reply].filter(Boolean).join("\n\n");
+  if (fullTurn) {
     await db.fleetAgentMessage.create({
-      data: { fleetAgentId: fleetAgent.id, groupId: msg.groupId, role: "agent", text: reply },
+      data: { fleetAgentId: fleetAgent.id, groupId: msg.groupId, role: "agent", text: fullTurn },
     });
   }
   // Auto-compact trigger (off the critical path): measure the transcript AFTER

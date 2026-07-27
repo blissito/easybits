@@ -321,6 +321,24 @@ export async function runWabaTurn(args: {
   // mismo número no se parte en dos sesiones (521 vs 52) → memoria continua, como
   // el jid estable de Baileys. El `sender` crudo se conserva SOLO para enviar a Meta.
   const convId = normalizePhone(sender);
+  // Entrega TEMPRANA del "permíteme un momento": el agente lo dice ANTES de llamar sus
+  // tools, pero se entregaba junto con el resultado al final del turno — inútil, porque
+  // su único valor es avisar mientras trabaja (10-30s). Ahora sale en cuanto el turno
+  // cruza la frontera de la tool. Best-effort: si el envío temprano falla, el texto ya
+  // salió del `reply` final, así que se registra pero no se reintenta.
+  //
+  // Se omite si la respuesta va a ir por VOZ: ahí el turno entero se sintetiza en un
+  // solo audio y un adelanto en texto rompería la nota.
+  const willSpeak = wantsVoiceReply(content.userText ?? "", !!content.wasVoice);
+  const earlyBlocks: string[] = [];
+  const onBlock = willSpeak
+    ? undefined
+    : async (text: string) => {
+        earlyBlocks.push(text);
+        await sendTextToFormmy(formmySecret, integrationId, sender, text).catch((e) =>
+          console.error(`[waba] envío temprano falló para ${convId}:`, e instanceof Error ? e.message : e)
+        );
+      };
   const reply = await routeMessage(
     fleetAgentId,
     {
@@ -337,14 +355,21 @@ export async function runWabaTurn(args: {
       // sin depender de que el modelo la copie del texto de un turno anterior.
       turnEnvExtra: await locationEnvFor(fleetAgentId, integrationId, convId),
     },
-    { skipRateLimit: false, hasMedia: content.hasMedia, skipUserLog }
+    { skipRateLimit: false, hasMedia: content.hasMedia, skipUserLog, onBlock }
   );
-  if (!reply) return;
-  await deliverWabaReply({ fleetAgentId, formmySecret, integrationId, sender, ownerId, reply, userText: content.userText, wasVoice: content.wasVoice });
+  // `reply` ya viene sin los bloques entregados temprano. Si no quedó nada, el turno
+  // se agotó en el adelanto (p.ej. sólo dijo "ahorita reviso" y terminó) — igual hay
+  // que cerrar con la reacción ✅ y mover etapa, así que no salimos aquí.
+  if (!reply && !earlyBlocks.length) return;
+  if (reply) {
+    await deliverWabaReply({ fleetAgentId, formmySecret, integrationId, sender, ownerId, reply, userText: content.userText, wasVoice: content.wasVoice });
+  }
   // ✅ al terminar (paridad con baileys).
   if (messageId) void sendReactionToFormmy(formmySecret, integrationId, sender, messageId, "✅");
   // Mueve la etapa del tablero si en este turno hubo un pago. Va DESPUÉS de entregar
   // a propósito: el cliente nunca espera por el CRM. Fire-and-forget.
+  // El texto del turno COMPLETO (adelantos + resto): la confirmación de pago puede
+  // haber quedado en un bloque entregado temprano.
   void maybeMovePaymentStage({
     fleetAgentId,
     ownerId,
@@ -353,7 +378,7 @@ export async function runWabaTurn(args: {
     np: convId,
     org,
     incomingText: content.userText || content.text || "",
-    reply,
+    reply: [...earlyBlocks, reply].filter(Boolean).join("\n\n"),
   }).catch(() => {});
 }
 
