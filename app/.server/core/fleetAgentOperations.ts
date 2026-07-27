@@ -776,7 +776,14 @@ export function mergedCapabilities(fleetAgent: { mcpCatalog?: unknown }): McpCat
 export async function resolveGroupMcpServers(
   fleetAgent: { mcpCatalog?: unknown; groupConfigs?: unknown },
   groupId: string,
-  ownerId: string
+  ownerId: string,
+  // JID de la CONVERSACIÓN para el scope por-JID. Se separa de `groupId` porque en WABA
+  // ese es el `configGroupId` (`waba:<integrationId>` — el NÚMERO, que es la unidad de
+  // configuración), mientras que la conversación es `waba:<integrationId>:<phone>`.
+  // Mandando el de config, el MCP recibía un JID sin teléfono, su parseChatJid no
+  // matcheaba y toda tool scopeada moría con "no pude identificar esta conversación"
+  // (tania-0, 2026-07-27). Default = groupId → Baileys/web no cambian.
+  scopeJid?: string
 ): Promise<Record<string, unknown> | undefined> {
   const all = (fleetAgent.groupConfigs as Record<string, GroupConfig> | null) ?? {};
   const cfg = all[groupId] ?? {};
@@ -813,7 +820,7 @@ export async function resolveGroupMcpServers(
       env[e.toolsets.envVar] = lvl.toolsets.join(",");
       if (lvl.scopeByJid && e.toolsets.scopeEnv) {
         env[e.toolsets.scopeEnv.flag] = "1";
-        env[e.toolsets.scopeEnv.jid] = groupId;
+        env[e.toolsets.scopeEnv.jid] = scopeJid || groupId;
       }
     }
     out[e.name] =
@@ -1777,7 +1784,7 @@ export async function routeMessage(
           // render = SIEMPRE inyectado (no gateado por disabledBuiltins) → PDF/screenshots
           // disponibles aunque el grupo apague el MCP de easybits. El resto es per-grupo.
           mcpServers: {
-            ...(await resolveGroupMcpServers(fleetAgent, cfgId, fleetAgent.ownerId)),
+            ...(await resolveGroupMcpServers(fleetAgent, cfgId, fleetAgent.ownerId, msg.groupId)),
             ...renderMcpServer(fleetAgent),
             ...artifactMcpServer(fleetAgent),
             // vision = SIEMPRE inyectado (como render) → un motor ciego puede VER una
