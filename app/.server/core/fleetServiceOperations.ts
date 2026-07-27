@@ -10,6 +10,7 @@ import {
   destroySandbox,
   suspendSandbox,
   resumeSandbox,
+  listSandboxes,
 } from "./sandboxOperations";
 import type { SandboxTemplate } from "../sandbox/schemas";
 
@@ -264,7 +265,7 @@ async function ensureServiceBoxInner(ctx: AuthContext, kind: string): Promise<Se
         return buildUrls(kind, existing.sandboxId, "running", urls);
       } catch (e) {
         console.error("service resume failed, respawning:", (e as Error).message);
-        await db.serviceBox.delete({ where: { id: existing.id } }).catch(() => {});
+        await dropServiceBox(ctx, existing.id, existing.sandboxId);
         return spawnServiceBox(ctx, kind);
       }
     }
@@ -272,8 +273,8 @@ async function ensureServiceBoxInner(ctx: AuthContext, kind: string): Promise<Se
       if (sb.status === "starting") {
         const ok = await waitUntilRunning(ctx, existing.sandboxId, { timeoutMs: 60_000 }).catch(() => null);
         if (!ok) {
-          // Boot stalled — drop the row and spawn fresh.
-          await db.serviceBox.delete({ where: { id: existing.id } }).catch(() => {});
+          // Boot stalled — get rid of it and spawn fresh.
+          await dropServiceBox(ctx, existing.id, existing.sandboxId);
           return spawnServiceBox(ctx, kind);
         }
       }
@@ -281,10 +282,33 @@ async function ensureServiceBoxInner(ctx: AuthContext, kind: string): Promise<Se
       return buildUrls(kind, existing.sandboxId, "running", urls);
     }
     // Stale row (box died / TTL): drop it and spawn fresh below.
-    await db.serviceBox.delete({ where: { id: existing.id } }).catch(() => {});
+    await dropServiceBox(ctx, existing.id, existing.sandboxId);
   }
 
   return spawnServiceBox(ctx, kind);
+}
+
+// dropServiceBox — soltar una caja de servicio de la que nos vamos a desentender.
+//
+// Existe porque los tres caminos de recuperación de arriba borraban la FILA y
+// respawneaban, sin tocar la CAJA. Cuando la vieja seguía viva —el resume había
+// funcionado en el host pero waitReady se pasó de tiempo, o getSandbox parpadeó—
+// quedaba huérfana: sin fila es INVISIBLE para reapIdleServiceBoxes, que sólo
+// recorre db.serviceBox. Vivía hasta su TTL de 30 min comiendo 2GB, y el panel
+// del dueño mostraba dos `render`. Observado el 2026-07-27; mismo modo de falla
+// que el incidente 2026-07-09 que motivó withServiceLock, por otro camino.
+//
+// La fila se borra SIEMPRE, aunque el destroy truene (una caja ya muerta hace
+// throw): si nos quedáramos con ella, el respawn de abajo no ocurriría nunca y
+// el dueño se queda sin servicio, que es peor que una caja de más.
+async function dropServiceBox(ctx: AuthContext, rowId: string, sandboxId: string): Promise<void> {
+  try {
+    await destroySandbox(ctx, sandboxId);
+  } catch (e) {
+    // Lo normal acá es 404 (la caja ya no estaba) — por eso no es error.
+    console.error(`service drop: destroy ${sandboxId} no aplicó:`, (e as Error).message);
+  }
+  await db.serviceBox.deleteMany({ where: { id: rowId } }).catch(() => {});
 }
 
 async function exposeAll(ctx: AuthContext, sandboxId: string, ports: number[]): Promise<Record<number, string>> {
@@ -463,7 +487,53 @@ export async function reapIdleServiceBoxes(): Promise<{ checked: number; destroy
       console.error(`service reaper: poll ${box.sandboxId} failed:`, (e as Error).message);
     }
   }
+  destroyed += await sweepOrphanServiceBoxes(boxes);
   return { checked: boxes.length, destroyed, suspended };
+}
+
+// sweepOrphanServiceBoxes — cajas de servicio SIN fila, que por eso nadie ve.
+//
+// El reaper de arriba recorre db.serviceBox, así que una caja sin fila es
+// invisible para él: nadie la duerme ni la destruye, y vive hasta que vence su
+// TTL en el host comiendo su RAM entera. dropServiceBox cerró la forma común de
+// producirlas, pero queda una que ningún cuidado en ensureServiceBox puede
+// cubrir: si el proceso muere ENTRE createSandbox y el upsert de la fila, la
+// caja nace huérfana. (Lo mismo si Fly levanta una segunda máquina: el lock de
+// ensureServiceBox es en memoria y no serializa entre instancias.)
+//
+// Por eso el barrido mira lo que el HOST dice que existe, no lo que nuestra
+// tabla cree.
+async function sweepOrphanServiceBoxes(rows: { ownerId: string; kind: string; sandboxId: string }[]): Promise<number> {
+  const conocidas = new Set(rows.map((r) => r.sandboxId));
+  const plantillas = new Map(Object.entries(SERVICE_REGISTRY).map(([, s]) => [s.template as string, s]));
+  let destruidas = 0;
+
+  for (const ownerId of new Set(rows.map((r) => r.ownerId))) {
+    const ctx = await ctxForServiceOwner(ownerId).catch(() => null);
+    if (!ctx) continue;
+    const cajas = await listSandboxes(ctx).catch(() => []);
+    for (const c of cajas) {
+      const spec = plantillas.get(c.template);
+      if (!spec || conocidas.has(c.sandboxId)) continue;
+      // Sólo cajas más viejas que el TTL del spec. Sin esta guarda, una que
+      // spawnServiceBox está creando AHORA (todavía sin fila) sería candidata y
+      // la mataríamos a media alta.
+      const edadMs = Date.now() - Date.parse(c.createdAt);
+      if (!(edadMs >= spec.ttlSeconds * 1000)) continue;
+      try {
+        await destroySandbox(ctx, c.sandboxId);
+        destruidas++;
+        // Se dice en voz alta a propósito: una destrucción silenciosa es peor
+        // que la fuga, porque nadie se entera de que había una.
+        console.error(
+          `[service-sweep] huérfana destruida: ${c.sandboxId} (${c.template}, owner ${ownerId}, ${Math.round(edadMs / 60_000)}min sin fila)`
+        );
+      } catch (e) {
+        console.error(`[service-sweep] no se pudo destruir ${c.sandboxId}:`, (e as Error).message);
+      }
+    }
+  }
+  return destruidas;
 }
 
 // Background AuthContext for the box owner (the reaper runs outside any HTTP

@@ -181,6 +181,7 @@ export default [
   route("api/cron/purge-keys", "routes/api/cron/purge-keys.ts"),
   route("api/cron/reap-embed-agents", "routes/api/cron/reap-embed-agents.ts"),
   route("api/cron/sweep-fleet-memory", "routes/api/cron/sweep-fleet-memory.ts"),
+  route("api/cron/reap-service-boxes", "routes/api/cron/reap-service-boxes.ts"),
   route("api/cron/purge-notifications", "routes/api/cron/purge-notifications.ts"),
   // Webhooks (inbound from external providers)
   route("api/webhooks/mercadopago", "routes/api/webhooks/mercadopago.ts"),
