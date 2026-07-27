@@ -324,7 +324,7 @@ export async function runWabaTurn(args: {
     { skipRateLimit: false, hasMedia: content.hasMedia, skipUserLog }
   );
   if (!reply) return;
-  await deliverWabaReply({ formmySecret, integrationId, sender, ownerId, reply, userText: content.userText, wasVoice: content.wasVoice });
+  await deliverWabaReply({ fleetAgentId, formmySecret, integrationId, sender, ownerId, reply, userText: content.userText, wasVoice: content.wasVoice });
   // ✅ al terminar (paridad con baileys).
   if (messageId) void sendReactionToFormmy(formmySecret, integrationId, sender, messageId, "✅");
 }
@@ -332,6 +332,8 @@ export async function runWabaTurn(args: {
 // Deliver the reply: attach file URLs (stripped from text), then voice note XOR
 // remaining text (mirrors Baileys). PTT carries no waveform (Meta renders it).
 async function deliverWabaReply(args: {
+  // Necesario para resolver el motor de voz del canal (ElevenLabs si está encendido).
+  fleetAgentId?: string;
   formmySecret: string;
   integrationId: string;
   sender: string;
@@ -340,11 +342,14 @@ async function deliverWabaReply(args: {
   userText?: string;
   wasVoice?: boolean;
 }): Promise<void> {
-  const { formmySecret, integrationId, sender, ownerId, reply, userText, wasVoice } = args;
+  const { fleetAgentId, formmySecret, integrationId, sender, ownerId, reply, userText, wasVoice } = args;
   const fileSender = makeWabaFileSender(formmySecret, integrationId, sender);
   const { text: cleaned } = await deliverFilesFromReply(fileSender, sender, reply);
   const body = cleaned.trim();
-  const voice = wantsVoiceReply(userText ?? "", !!wasVoice) ? await synthesizeVoice(ownerId, body || reply) : null;
+  // cfgId = la unidad de CONFIGURACIÓN del canal WABA (el número), igual que para MCPs.
+  const voice = wantsVoiceReply(userText ?? "", !!wasVoice)
+    ? await synthesizeVoice(ownerId, body || reply, { fleetAgentId, cfgId: `waba:${integrationId}` })
+    : null;
   if (voice) await sendVoiceToFormmy(formmySecret, integrationId, sender, voice.buffer);
   else if (body) await sendTextToFormmy(formmySecret, integrationId, sender, body);
 }

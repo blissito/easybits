@@ -134,6 +134,8 @@ export async function loader({ request }: Route.LoaderArgs) {
         mcps: gconf[g.id]?.mcpServers ?? [],
         disabledBuiltins: gconf[g.id]?.disabledBuiltins ?? [],
         capLevels: gconf[g.id]?.capLevels ?? {},
+        // Voz del canal (hereda del default del agente si no tiene propia).
+        voiceId: gconf[g.id]?.env?.ELEVENLABS_VOICE_ID ?? gconf["*"]?.env?.ELEVENLABS_VOICE_ID ?? "",
         systemPrompt: gconf[g.id]?.systemPrompt ?? "",
         // Sin selección propia → hereda los archivos del agente ("*") — así la
         // factura (adjunta al default) se ve seleccionada en cada canal.
@@ -164,6 +166,7 @@ export async function loader({ request }: Route.LoaderArgs) {
           mcps: gconf[id]?.mcpServers ?? [],
           disabledBuiltins: gconf[id]?.disabledBuiltins ?? [],
           capLevels: gconf[id]?.capLevels ?? {},
+        voiceId: gconf[id]?.env?.ELEVENLABS_VOICE_ID ?? gconf["*"]?.env?.ELEVENLABS_VOICE_ID ?? "",
           assets: (gconf[id]?.assets?.length ? gconf[id]!.assets : gconf["*"]?.assets) ?? [],
           dbAllow: (gconf[id]?.dbAllow?.length ? gconf[id]!.dbAllow : gconf["*"]?.dbAllow) ?? [],
           toolBuckets: gconf[id]?.toolGroup ? [...toolsParamToBuckets(gconf[id]!.toolGroup!)] : null,
@@ -186,6 +189,7 @@ export async function loader({ request }: Route.LoaderArgs) {
         mcps: teamsCfg.mcpServers ?? [],
         disabledBuiltins: teamsCfg.disabledBuiltins ?? [],
         capLevels: teamsCfg.capLevels ?? {},
+        voiceId: teamsCfg.env?.ELEVENLABS_VOICE_ID ?? gconf["*"]?.env?.ELEVENLABS_VOICE_ID ?? "",
         systemPrompt: teamsCfg.systemPrompt ?? "",
         assets: (teamsCfg.assets?.length ? teamsCfg.assets : gconf["*"]?.assets) ?? [],
         dbAllow: (teamsCfg.dbAllow?.length ? teamsCfg.dbAllow : gconf["*"]?.dbAllow) ?? [],
@@ -205,6 +209,7 @@ export async function loader({ request }: Route.LoaderArgs) {
         mcps: webCfg.mcpServers ?? [],
         disabledBuiltins: webCfg.disabledBuiltins ?? [],
         capLevels: webCfg.capLevels ?? {},
+        voiceId: webCfg.env?.ELEVENLABS_VOICE_ID ?? gconf["*"]?.env?.ELEVENLABS_VOICE_ID ?? "",
         systemPrompt: webCfg.systemPrompt ?? "",
         assets: (webCfg.assets?.length ? webCfg.assets : gconf["*"]?.assets) ?? [],
         dbAllow: (webCfg.dbAllow?.length ? webCfg.dbAllow : gconf["*"]?.dbAllow) ?? [],
@@ -727,6 +732,22 @@ export async function action({ request }: Route.ActionArgs) {
     if (level === "off") { set.delete(name); delete levels[name]; }
     else { set.add(name); levels[name] = level; }
     configs[groupId] = { ...cur, mcpServers: [...set], capLevels: levels };
+    await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { groupConfigs: configs } });
+    return data({ ok: true });
+  }
+  if (intent === "set-voice") {
+    // Voz del canal para las notas de voz. Vive en GroupConfig.env.ELEVENLABS_VOICE_ID
+    // porque ese env ya se mezcla tanto en el motor de voz del canal como en el env
+    // code-mode del agente — un solo valor, sin campo nuevo en Prisma.
+    // "" = usar la voz por defecto (kokoro).
+    const groupId = String(fd.get("groupId") || "");
+    const voiceId = String(fd.get("voiceId") || "").trim();
+    const configs = { ...((fleetAgent.groupConfigs as Record<string, GroupConfig> | null) ?? {}) };
+    const cur = configs[groupId] ?? {};
+    const env = { ...(cur.env ?? {}) };
+    if (voiceId) env.ELEVENLABS_VOICE_ID = voiceId;
+    else delete env.ELEVENLABS_VOICE_ID;
+    configs[groupId] = { ...cur, env };
     await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { groupConfigs: configs } });
     return data({ ok: true });
   }
@@ -1955,6 +1976,63 @@ function ConvRow({
 // arriba el MODO (Apagado / Activo-excepto / Solo), abajo las conversaciones con su
 // toggle. La coexistencia (cuando tú respondes desde tu cel) ya pausa al agente.
 // La búsqueda es SERVER-side (escala a miles de conversaciones).
+// Selector de voz por canal. Carga el catálogo bajo demanda (al abrir el <select>) para no
+// pegarle a la API de ElevenLabs en cada render del modal. Sin llave en el vault, el
+// endpoint devuelve sólo las de kokoro y el selector sigue siendo útil.
+function VoicePicker({
+  fleetAgentId,
+  groupId,
+  current,
+  onPick,
+}: {
+  fleetAgentId: string;
+  groupId: string;
+  current: string;
+  onPick: (voiceId: string) => void;
+}) {
+  const [voices, setVoices] = useState<Array<{ id: string; name: string; engine: string; hint?: string }> | null>(null);
+  const [val, setVal] = useState(current);
+  useEffect(() => setVal(current), [current, groupId]);
+  const load = () => {
+    if (voices) return;
+    fetch(`/api/v2/fleet-agents/${fleetAgentId}/voices`)
+      .then((r) => r.json())
+      .then((d) => setVoices(d.voices ?? []))
+      .catch(() => setVoices([]));
+  };
+  const kokoro = (voices ?? []).filter((v) => v.engine === "kokoro");
+  const eleven = (voices ?? []).filter((v) => v.engine === "elevenlabs");
+  return (
+    <div className="mb-4">
+      <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide">Voz</span>
+      <select
+        value={val}
+        onFocus={load}
+        onMouseDown={load}
+        onChange={(e) => { setVal(e.target.value); onPick(e.target.value); }}
+        className="mt-1 w-full border-2 border-gray-200 rounded-xl px-2 py-1.5 text-sm bg-white"
+      >
+        <option value="">Voz por defecto</option>
+        {!!kokoro.length && (
+          <optgroup label="Incluidas">
+            {kokoro.map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
+          </optgroup>
+        )}
+        {!!eleven.length && (
+          <optgroup label="ElevenLabs (tu cuenta)">
+            {eleven.map((v) => <option key={v.id} value={v.id}>{v.name}{v.hint ? ` — ${v.hint}` : ""}</option>)}
+          </optgroup>
+        )}
+        {/* La voz guardada puede no estar en la lista aún (catálogo sin cargar). */}
+        {val && !(voices ?? []).some((v) => v.id === val) && <option value={val}>{val}</option>}
+      </select>
+      <p className="mt-0.5 text-[10px] text-gray-400">
+        Las voces de ElevenLabs requieren su capacidad encendida y la llave guardada. Si falla, la nota de voz sale con la voz incluida.
+      </p>
+    </div>
+  );
+}
+
 function WabaInboxModal({
   modal,
   onClose,
@@ -3539,6 +3617,13 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                     })}
                 </div>
               </div>
+
+              {/* Voz de las notas de voz del canal. El motor lo decide la capacidad
+                  `elevenlabs`: encendida + llave → ElevenLabs; si falla, cae a kokoro sola.
+                  Vacío = voz por defecto. */}
+              <VoicePicker fleetAgentId={cp.id} groupId={cg.id} current={cg.voiceId ?? ""}
+                onPick={(v) => fetcher.submit({ intent: "set-voice", fleetAgentId: cp.id, groupId: cg.id, voiceId: v }, { method: "post" })} />
+
               {/* fin columna izquierda → columna derecha */}
               </div>
               <div className="flex flex-col gap-4 min-w-0">

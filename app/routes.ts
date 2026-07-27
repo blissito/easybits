@@ -222,6 +222,7 @@ export default [
     route("fleet-agents/:fleetAgentId/message-stream", "routes/api/v2/fleet-agents.$fleetAgentId.message-stream.ts"),
     route("fleet-agents/:fleetAgentId/group", "routes/api/v2/fleet-agents.$fleetAgentId.group.ts"),
     route("fleet-agents/:fleetAgentId/capabilities", "routes/api/v2/fleet-agents.$fleetAgentId.capabilities.ts"),
+    route("fleet-agents/:fleetAgentId/voices", "routes/api/v2/fleet-agents.$fleetAgentId.voices.ts"),
     route("fleet-agents/:fleetAgentId/connect", "routes/api/v2/fleet-agents.$fleetAgentId.connect.ts"),
     route("fleet-agents/:fleetAgentId/groups", "routes/api/v2/fleet-agents.$fleetAgentId.groups.ts"),
     // Always-on `render` MCP for fleet agents (PDF/screenshots via the on-demand Gotenberg box)

@@ -102,19 +102,116 @@ async function speakViaBox(speakUrl: string, text: string, fmt: VoiceFmt, voice?
   }
 }
 
+// ─── ElevenLabs (voz premium, opt-in por canal) ──────────────────────────────
+//
+// Hermana de speakViaBox. Se usa SOLO si el canal tiene la capacidad `elevenlabs`
+// encendida y su llave en el vault; si falla por lo que sea (sin saldo, 401, timeout,
+// formato no soportado) devuelve null y el llamador cae a kokoro — el cliente nunca se
+// queda sin su nota de voz por un problema de facturación.
+const ELEVEN_URL = "https://api.elevenlabs.io";
+const ELEVEN_MODEL = process.env.ELEVENLABS_MODEL || "eleven_multilingual_v2";
+const ELEVEN_FALLBACK_VOICE = process.env.ELEVENLABS_DEFAULT_VOICE || "EXAVITQu4vr4xnSDxMaL";
+
+async function speakViaElevenLabs(
+  apiKey: string,
+  text: string,
+  voiceId: string,
+  fmt: VoiceFmt
+): Promise<Buffer | null> {
+  try {
+    // ⚠️ opus_48000_64 NO es opcional para una nota de voz: las dos superficies mandan
+    // `audio/ogg; codecs=opus` (wabaSend.ts, baileys.server.ts). Un mp3 llegaría a
+    // WhatsApp como archivo adjunto en vez de burbuja de voz. Si la cuenta no puede dar
+    // opus, preferimos caer a kokoro.
+    const outFmt = fmt === "ogg" ? "opus_48000_64" : "pcm_24000";
+    const r = await fetch(
+      `${ELEVEN_URL}/v1/text-to-speech/${encodeURIComponent(voiceId)}?output_format=${outFmt}`,
+      {
+        method: "POST",
+        headers: { "xi-api-key": apiKey, "content-type": "application/json", accept: "audio/ogg" },
+        body: JSON.stringify({ text, model_id: ELEVEN_MODEL }),
+        signal: AbortSignal.timeout(25_000),
+      }
+    );
+    if (!r.ok) {
+      console.error(`[voice] elevenlabs http=${r.status} voice=${voiceId} → cae a kokoro`);
+      return null;
+    }
+    const buf = Buffer.from(await r.arrayBuffer());
+    if (!buf.length) { console.error("[voice] elevenlabs body vacío → cae a kokoro"); return null; }
+    return buf;
+  } catch (e) {
+    console.error("[voice] elevenlabs FAILED → cae a kokoro:", (e as Error)?.message || e);
+    return null;
+  }
+}
+
+export type VoiceEngine =
+  | { engine: "elevenlabs"; apiKey: string; voiceId: string }
+  | { engine: "kokoro"; voice?: string };
+
+/** ¿Qué motor le toca a este canal? Se apoya en resolveGroupCodeCaps, que ya resuelve la
+ *  herencia del default `"*"` y ya aplica "falta el secret ⇒ la capacidad no cuenta".
+ *  Sin fleetAgentId/cfgId (llamadas viejas) → kokoro, idéntico a como estaba. */
+export async function resolveVoiceEngine(
+  ownerId: string,
+  opts?: { fleetAgentId?: string; cfgId?: string; voice?: string }
+): Promise<VoiceEngine> {
+  const { fleetAgentId, cfgId } = opts ?? {};
+  if (!fleetAgentId || !cfgId) return { engine: "kokoro", voice: opts?.voice };
+  try {
+    const [{ db }, { resolveGroupCodeCaps }] = await Promise.all([
+      import("~/.server/db"),
+      import("./fleetAgentOperations"),
+    ]);
+    const fa = await db.fleetAgent.findUnique({
+      where: { id: fleetAgentId },
+      select: { mcpCatalog: true, groupConfigs: true },
+    });
+    if (!fa) return { engine: "kokoro", voice: opts?.voice };
+    const caps = await resolveGroupCodeCaps(fa as never, cfgId, ownerId);
+    const apiKey = caps?.env?.ELEVENLABS_API_KEY;
+    if (!apiKey) return { engine: "kokoro", voice: opts?.voice };
+    return {
+      engine: "elevenlabs",
+      apiKey,
+      // La voz elegida en el admin vive en GroupConfig.env (por canal, heredando de "*").
+      voiceId: opts?.voice || caps.env.ELEVENLABS_VOICE_ID || ELEVEN_FALLBACK_VOICE,
+    };
+  } catch (e) {
+    console.error("[voice] resolveVoiceEngine falló → kokoro:", (e as Error)?.message || e);
+    return { engine: "kokoro", voice: opts?.voice };
+  }
+}
+
 export interface SynthResult {
   buffer: Buffer;
   /** base64-encoded 64-byte amplitude waveform for WhatsApp PTT (kokoro only;
    *  OpenAI fallback omits it → Baileys derives it via `audio-decode`). */
   waveform?: string;
-  source: "box";
+  source: "box" | "elevenlabs";
 }
 
 // Synthesize an OGG/opus voice note for WhatsApp PTT. kokoro box PRIMARY, OpenAI
 // fallback. Returns null when neither works (caller sends text instead).
-export async function synthesizeVoice(ownerId: string, text: string, opts?: { voice?: string }): Promise<SynthResult | null> {
+export async function synthesizeVoice(
+  ownerId: string,
+  text: string,
+  opts?: { voice?: string; fleetAgentId?: string; cfgId?: string }
+): Promise<SynthResult | null> {
   const clean = stripForVoice(text);
   if (!clean) return null;
+  // Motor premium primero si el canal lo tiene encendido. ElevenLabs no devuelve waveform
+  // (baileys la deriva con audio-decode; WhatsApp dibuja barra plana si no).
+  const eng = await resolveVoiceEngine(ownerId, opts);
+  if (eng.engine === "elevenlabs") {
+    const buf = await speakViaElevenLabs(eng.apiKey, clean.slice(0, 5000), eng.voiceId, "ogg");
+    if (buf) {
+      console.log(`[voice] source=elevenlabs voice=${eng.voiceId} bytes=${buf.length}`);
+      return { buffer: buf, source: "elevenlabs" };
+    }
+    // sin return: cae a kokoro abajo
+  }
   const ctx = await ctxFor(ownerId);
   if (ctx) {
     const box = await ensureBox(ctx);
@@ -161,17 +258,29 @@ function wavDurationSec(buf: Buffer): number {
 export async function synthesizeVoiceFile(
   ctx: AuthContext,
   text: string,
-  opts?: { isPublic?: boolean; voice?: string; format?: VoiceFmt }
-): Promise<{ fileId: string; audioUrl: string; source: "box"; voice: string; chars: number; durationSec: number }> {
+  opts?: { isPublic?: boolean; voice?: string; format?: VoiceFmt; fleetAgentId?: string; cfgId?: string }
+): Promise<{ fileId: string; audioUrl: string; source: "box" | "elevenlabs"; voice: string; chars: number; durationSec: number }> {
   const clean = stripForVoice(text);
   if (!clean) throw new Error("empty text");
-  const source = "box" as const;
   const fmt: VoiceFmt = opts?.format ?? "wav";
-  const voice = resolveVoice(opts?.voice);
-  console.warn(`[voice] voice_tts_create llamado (kokoro-only) voice=${voice} fmt=${fmt} chars=${clean.length}`);
 
+  // Mismo criterio que la nota de voz del canal: si el canal tiene ElevenLabs encendido,
+  // el audio que el agente pide a propósito también sale con la voz premium.
   let audio: { buffer: Buffer; contentType: string } | null = null;
-  const box = await ensureBox(ctx);
+  let source: "box" | "elevenlabs" = "box";
+  let voice = resolveVoice(opts?.voice);
+  const eng = await resolveVoiceEngine(ctx.user.id, { fleetAgentId: opts?.fleetAgentId, cfgId: opts?.cfgId, voice: opts?.voice });
+  if (eng.engine === "elevenlabs") {
+    const buf = await speakViaElevenLabs(eng.apiKey, clean.slice(0, 5000), eng.voiceId, fmt);
+    if (buf) {
+      audio = { buffer: buf, contentType: fmt === "ogg" ? "audio/ogg" : "audio/wav" };
+      source = "elevenlabs";
+      voice = eng.voiceId;
+    }
+  }
+  console.warn(`[voice] voice_tts_create source=${source} voice=${voice} fmt=${fmt} chars=${clean.length}`);
+
+  const box = audio ? null : await ensureBox(ctx);
   if (box?.speakUrl) {
     const r = await speakViaBox(box.speakUrl, clean.slice(0, 5000), fmt, voice);
     if (r) {

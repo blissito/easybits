@@ -184,9 +184,11 @@ async function drainGroup(sock: WASocket, fleetAgentId: string, jid: string) {
       let body = delivered.text;
       if (!body && delivered.sent) body = "Ahí te va 👆";
       if (body) {
-        const voice = wantsVoiceReply(userText, wasVoice) ? await synthesizeVoice(ownerId, body) : null;
+        const voice = wantsVoiceReply(userText, wasVoice)
+          ? await synthesizeVoice(ownerId, body, { fleetAgentId, cfgId: jid })
+          : null;
         if (voice) {
-          log(fleetAgentId, `[voice] ENVIANDO PTT kokoro bytes=${voice.buffer.length} jid=${jid} onda=${voice.waveform ? "si" : "no"}`);
+          log(fleetAgentId, `[voice] ENVIANDO PTT ${voice.source} bytes=${voice.buffer.length} jid=${jid} onda=${voice.waveform ? "si" : "no"}`);
           await sendTracked(sock, jid, {
             audio: voice.buffer,
             ptt: true,
