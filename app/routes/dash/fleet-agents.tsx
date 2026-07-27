@@ -2019,7 +2019,7 @@ function VoicePicker({
           </optgroup>
         )}
         {!!eleven.length && (
-          <optgroup label="ElevenLabs (tu cuenta)">
+          <optgroup label="ElevenLabs — español">
             {eleven.map((v) => <option key={v.id} value={v.id}>{v.name}{v.hint ? ` — ${v.hint}` : ""}</option>)}
           </optgroup>
         )}
