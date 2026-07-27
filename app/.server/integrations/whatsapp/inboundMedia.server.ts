@@ -612,7 +612,12 @@ export async function extractWabaContent(
   // Anti-drop: a media-only message we couldn't process still tells the agent.
   // Formmy already re-hosted the file, so there's no expired-link/resend angle —
   // name what arrived and ask the user to describe/resend it.
-  if (!text.trim()) {
+  //
+  // ⚠️ `!imageData` es parte de la guarda (paridad con baileys, ver arriba): una foto
+  // SIN caption deja `text` vacío aunque se haya extraído perfecto, y sin esto se le
+  // colaba al agente "no pude procesar" JUNTO con la imagen que sí podía ver → pedía
+  // que se la describieran teniéndola enfrente. Reportado en prod 2026-07-27 (tania-0).
+  if (!text.trim() && !imageData) {
     if (hasMedia) {
       const label = media?.fileName
         ? `el documento "${media.fileName}"`
@@ -624,6 +629,9 @@ export async function extractWabaContent(
       text = "";
     }
   }
+  // Foto sin caption: el agente la VE (bytes nativos), pero un turno con texto vacío
+  // no le dice qué se espera de él. Marco neutro, como el de baileys.
+  if (!text.trim() && imageData) text = "(el usuario envió una imagen, sin texto)";
 
   return { text, userText: userWords, refImageUrl: imageData?.url, wasVoice, hasMedia, image: imageData };
 }
