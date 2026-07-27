@@ -1698,7 +1698,13 @@ export async function routeMessage(
         {
           content,
           sessionId: placed.sessionUuid,
-          turnEnv: codeCaps?.env,
+          // NANOCLAW_CHAT_JID identifica la CONVERSACIÓN de este turno. Ya se inyectaba al
+          // proceso hijo de los MCP con scopeByJid, pero NO al env del worker — así que un
+          // script del agente (una skill corriendo por Bash) no tenía forma de saber a qué
+          // conversación pertenece, y el registro en el CRM se saltaba en silencio
+          // ("sin FORMMY_SECRET_KEY o sin NANOCLAW_CHAT_JID"). Va por turno, no al spawn,
+          // porque una misma VM atiende hasta maxWorkersPerVm conversaciones distintas.
+          turnEnv: { ...(codeCaps?.env ?? {}), NANOCLAW_CHAT_JID: msg.groupId },
           // Per-grupo: la dnk_pub_ del org dueño de este grupo. El body gana
           // (canales web la mandan por turno); cae a fleetAgent.groupKeys[cfgId]
           // (registrado al crear el grupo, ruta WhatsApp). cfgId = configGroupId
