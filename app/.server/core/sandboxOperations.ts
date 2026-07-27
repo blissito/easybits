@@ -2126,6 +2126,17 @@ export async function createAgent(
         env.EASYBITS_API_KEY = minted.raw;
       }
     }
+    // FORMMY_SECRET_KEY: hasta ahora sólo llegaba al env del PROCESO HIJO del MCP de
+    // formmy, no al del worker — así que un script del agente (Code Mode / una skill)
+    // no podía registrar en el CRM aunque el conector estuviera conectado. Se inyecta
+    // sólo si el dueño ya la tiene en su vault (nunca se mintea desde acá).
+    if (!env.FORMMY_SECRET_KEY) {
+      const fk = await getSecretValue(ctx.user.id, "FORMMY_SECRET_KEY").catch(() => null);
+      if (fk) {
+        env.FORMMY_SECRET_KEY = fk;
+        if (!env.FORMMY_API_URL) env.FORMMY_API_URL = "https://formmy.app";
+      }
+    }
   }
   // livekit-svc (self-hosted recording studio): the LiveKit SFU and the box's
   // own token minting share ONE key pair, both internal to the VM. Generate it

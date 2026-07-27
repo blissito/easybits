@@ -8,7 +8,30 @@
 // maybeDeliverFiles (server.js) — same SSRF guard, content-type allowlist and
 // 25MB cap — with one upgrade: images go inline as { image } instead of as a
 // document.
+import { db } from "../../db";
+
 type SendFn = (jid: string, content: Record<string, unknown>) => Promise<unknown>;
+
+// El nombre que ve el CLIENTE en WhatsApp.
+//
+// El basename de la URL NO sirve: la URL pública de un archivo de EasyBits termina en
+// su storageKey (`<ownerId>/<shortId>`), no en su nombre — así que una cotización
+// subida como `COT-260726-003.pdf` se entregaba como `IJv.pdf` (reportado en prod
+// 2026-07-27, tania-0). Orden: Content-Disposition → nombre registrado del File →
+// basename de la URL como último recurso.
+async function fileNameFor(url: string, disposition: string | null): Promise<string> {
+  const fromHeader = /filename\*?=(?:UTF-8''|")?([^";]+)/i.exec(disposition || "")?.[1];
+  if (fromHeader) return decodeURIComponent(fromHeader.trim());
+  const parts = url.split("?")[0].split("/").filter(Boolean);
+  const key = parts.slice(-2).join("/"); // <ownerId>/<shortId>
+  if (/^[a-f0-9]{24}\//.test(key)) {
+    const f = await db.file
+      .findFirst({ where: { storageKey: key }, select: { name: true } })
+      .catch(() => null);
+    if (f?.name) return f.name;
+  }
+  return decodeURIComponent(parts.pop() || "archivo") || "archivo";
+}
 
 export async function deliverFilesFromReply(
   send: SendFn,
@@ -29,7 +52,7 @@ export async function deliverFilesFromReply(
       if (!/(application\/pdf|octet-stream|zip|image\/|spreadsheet|wordprocessing|presentation|vnd\.)/.test(ct)) continue;
       const buf = Buffer.from(await resp.arrayBuffer());
       if (!buf.length || buf.length > 25 * 1024 * 1024) continue;
-      let fileName = decodeURIComponent(url.split("?")[0].split("/").pop() || "archivo") || "archivo";
+      let fileName = await fileNameFor(url, resp.headers.get("content-disposition"));
       const isPdf = /pdf/.test(ct);
       const isImage = /^image\//.test(ct);
       if (isPdf && !/\.\w+$/.test(fileName)) fileName += ".pdf";
