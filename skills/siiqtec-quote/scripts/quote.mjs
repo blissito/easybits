@@ -456,12 +456,14 @@ function formmyEnv() {
   };
 }
 
-async function formmyPost(cfg, intent, params, body) {
+async function formmySdk(cfg, intent, params, body, method) {
   const url = new URL(`${cfg.base}/api/v2/sdk`);
   url.searchParams.set('intent', intent);
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, String(v));
   const res = await fetch(url, {
-    method: 'POST', // /api/v2/sdk solo tiene handler GET y POST; estos intents son POST
+    // /api/v2/sdk solo tiene handler GET y POST. Las mutaciones son POST; las
+    // lecturas (conversations.get) van por GET o el router no las encuentra.
+    method: method || 'POST',
     headers: { 'X-Secret-Key': cfg.key, ...(body ? { 'Content-Type': 'application/json' } : {}) },
     body: body ? JSON.stringify(body) : undefined,
     signal: AbortSignal.timeout(15000),
@@ -470,6 +472,12 @@ async function formmyPost(cfg, intent, params, body) {
   if (!res.ok) throw new Error(data?.error || `sdk ${res.status}`);
   return data;
 }
+const formmyPost = (cfg, intent, params, body) => formmySdk(cfg, intent, params, body, 'POST');
+const formmyGet = (cfg, intent, params) => formmySdk(cfg, intent, params, undefined, 'GET');
+
+// Etapa en la que nace una cotización. Mientras la orden siga AHÍ, nadie la ha movido
+// a pago/cierre, así que una re-cotización es la MISMA venta corrigiéndose.
+const ESTATUS_INICIAL = () => process.env.QUOTE_CRM_ESTATUS || 'Cotización enviada';
 
 async function registerOrderInFormmy({ input, totals, pdfUrl }) {
   const cfg = formmyEnv();
@@ -499,20 +507,52 @@ async function registerOrderInFormmy({ input, totals, pdfUrl }) {
       ? `Paquetería ${envio.carrier || ''} · CP ${envio.cp || ''} · ${envio.dias || ''} · ${envio.costo ?? 0}`
       : `Ruta propia ${envio.dia || ''} · ${envio.destino || ''}`;
 
-    await formmyPost(cfg, 'conversations.createOrder', { conversationId }, {
-      folio: input.folio,
+    // Re-cotizar NO es un pedido nuevo. Antes esto llamaba createOrder siempre, así que
+    // corregir un precio dejaba una tarjeta extra por intento: caso real 2026-07-27,
+    // 3 órdenes en 5 min para la misma venta (1480 → 1350 → 1270) mientras el cliente
+    // corregía precios. Ahora, si la orden más reciente sigue en la etapa INICIAL —o sea
+    // nadie la movió a pago/cierre— la parcheamos en vez de crear otra. Si ya avanzó de
+    // columna, sí es una venta distinta y se crea nueva.
+    //
+    // updateOrder/createOrder actúan sobre la orden MÁS RECIENTE de la conversación (el
+    // SDK no direcciona por id), que es justo la que queremos parchear.
+    let modo = 'creada';
+    let folioVigente = input.folio;
+    let previa = null;
+    try {
+      const conv = await formmyGet(cfg, 'conversations.get', { conversationId });
+      previa = conv?.conversation?.ordenes?.[0] ?? null;
+    } catch (e) {
+      // Sin lectura no podemos decidir → seguimos creando (comportamiento anterior).
+      console.error(`[quote] CRM: no pude leer órdenes previas (${e instanceof Error ? e.message : String(e)}) — creo una nueva`);
+    }
+    const patchable = previa && (previa.estatus ?? ESTATUS_INICIAL()) === ESTATUS_INICIAL();
+    const payload = {
       cliente: input.cliente?.nombre,
       tel: input.cliente?.tel || telFromJid() || undefined,
       total: totals.total,
       cotizacionUrl: pdfUrl,
-      estatus: process.env.QUOTE_CRM_ESTATUS || 'Cotización enviada',
-      notas: `Folio ${input.folio} · ${input.items.length} producto(s) · Total ${totals.total}\nEnvío: ${envioTxt}\nVigencia: 3 días naturales${dir.mapsUrl ? `\nUbicación: ${dir.mapsUrl}` : ''}`,
+      notas: `Folio ${folioVigente} · ${input.items.length} producto(s) · Total ${totals.total}\nEnvío: ${envioTxt}\nVigencia: 3 días naturales${dir.mapsUrl ? `\nUbicación: ${dir.mapsUrl}` : ''}`,
       productos,
       direccionEntrega: dir.direccion
         ? { direccion: dir.direccion, ciudad: dir.ciudad, cp: dir.cp, ...(dir.mapsUrl ? { mapsUrl: dir.mapsUrl } : {}) }
         : undefined,
-    });
-    console.error(`[quote] CRM: orden ${input.folio} registrada en ${conversationId}`);
+    };
+    if (patchable) {
+      // Conservamos el folio ORIGINAL: el cliente ya lo vio en el primer PDF y el
+      // operador lo usa para referirse a la venta.
+      modo = 'actualizada';
+      folioVigente = previa.folio || input.folio;
+      payload.notas = `Folio ${folioVigente} · ${input.items.length} producto(s) · Total ${totals.total}\nEnvío: ${envioTxt}\nVigencia: 3 días naturales${dir.mapsUrl ? `\nUbicación: ${dir.mapsUrl}` : ''}`;
+      await formmyPost(cfg, 'conversations.updateOrder', { conversationId }, { ...payload, folio: folioVigente });
+    } else {
+      await formmyPost(cfg, 'conversations.createOrder', { conversationId }, {
+        ...payload,
+        folio: input.folio,
+        estatus: ESTATUS_INICIAL(),
+      });
+    }
+    console.error(`[quote] CRM: orden ${folioVigente} ${modo} en ${conversationId}${patchable ? ` (re-cotización; etapa "${previa.estatus}")` : ''}`);
 
     // Ficha de contacto: el domicilio es REQUISITO del input, así que a estas alturas
     // siempre lo tenemos — dejarlo fuera del CRM y que el operador vea "--" no tiene
