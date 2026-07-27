@@ -49,7 +49,13 @@ export async function action({ request, params }: Route.ActionArgs) {
   }
   const org = waba!.orgs?.[integrationId];
   if (!integrationId || !sender || !org) {
-    return Response.json({ ok: false, error: "missing integration/sender" }, { status: 200, headers: CORS });
+    // Antes esto respondía 200: el caller lo leía como éxito y el operador se quedaba
+    // esperando una respuesta que nunca se disparó. Es un error del request (falta el
+    // dato o el número no está configurado en este agente), así que 400 — y se loguea
+    // el integrationId, sin el cual era indiagnosticable.
+    const why = !integrationId ? "sin integration_id" : !sender ? "sin phone_number/jid" : "integrationId no configurado en este agente";
+    console.error(`[waba] trigger-reply rechazado (${why}) fleetAgent=${fleetAgentId} integrationId="${integrationId}" orgs=[${Object.keys(waba!.orgs ?? {}).join(",")}]`);
+    return Response.json({ ok: false, error: why }, { status: 400, headers: CORS });
   }
 
   // Despausar el cache local (Formmy ya reactivó su lado) y contestar lo pendiente.
