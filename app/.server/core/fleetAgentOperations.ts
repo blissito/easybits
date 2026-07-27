@@ -844,6 +844,13 @@ export async function resolveGroupCodeCaps(
   const cfg = all[groupId] ?? {};
   const enabled = cfg.mcpServers ?? all["*"]?.mcpServers;
   if (!enabled?.length) return null;
+  // env del grupo, MISMA regla de herencia que resolveGroupMcpServers: el del grupo
+  // específico, o el del default "*" si hereda. Faltaba acá aunque el schema de
+  // groupConfigs lo promete ("env = per-group overrides merged over the catalog entry's
+  // static env at resolution time") — sólo estaba implementado para los MCP. Sin esto, una
+  // preferencia por canal (p.ej. ELEVENLABS_VOICE_ID, la voz elegida en el admin) nunca
+  // llegaba ni al worker ni al motor de voz.
+  const cfgEnv = cfg.mcpServers ? cfg.env : (cfg.env ?? all["*"]?.env);
   const caps = mergedCapabilities(fleetAgent);
   const env: Record<string, string> = {};
   const skillDocs: string[] = [];
@@ -862,6 +869,8 @@ export async function resolveGroupCodeCaps(
     Object.assign(env, resolved);
     if (e.skillDoc) skillDocs.push(e.skillDoc);
   }
+  // El override del canal gana sobre el env estático de la capacidad.
+  if (cfgEnv) Object.assign(env, cfgEnv);
   return Object.keys(env).length || skillDocs.length ? { env, skillDocs } : null;
 }
 

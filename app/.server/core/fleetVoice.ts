@@ -110,7 +110,10 @@ async function speakViaBox(speakUrl: string, text: string, fmt: VoiceFmt, voice?
 // queda sin su nota de voz por un problema de facturación.
 const ELEVEN_URL = "https://api.elevenlabs.io";
 const ELEVEN_MODEL = process.env.ELEVENLABS_MODEL || "eleven_multilingual_v2";
-const ELEVEN_FALLBACK_VOICE = process.env.ELEVENLABS_DEFAULT_VOICE || "EXAVITQu4vr4xnSDxMaL";
+// Respaldo cuando el canal no eligió voz: Antonio (latin american, conversacional). NO una
+// voz inglesa — eleven_multilingual_v2 las hace hablar español con acento gringo, que suena
+// peor que kokoro. Override con ELEVENLABS_DEFAULT_VOICE.
+const ELEVEN_FALLBACK_VOICE = process.env.ELEVENLABS_DEFAULT_VOICE || "htFfPSZGJwjBv1CL0aMD";
 
 async function speakViaElevenLabs(
   apiKey: string,
