@@ -10,7 +10,15 @@ export type DocModelOperation =
   | "docGenerate"
   | "docRefine"
   | "docRegeneratePage"
-  | "docAutoDescribe";
+  | "docAutoDescribe"
+  // Extracción tipada de la señal de pago en un turno de WhatsApp (superficie WABA).
+  // Corre por turno, así que quiere el modelo más barato que cumpla; se puede cambiar
+  // desde AppConfig sin deploy si la precisión no alcanza.
+  // ⚠️ NO usar gemini-* aquí: la GOOGLE_GENERATIVE_AI_API_KEY del proyecto está en free
+  // tier (20 requests/día) — a volumen de producción devolvería null por cuota y la
+  // etapa dejaría de moverse EN SILENCIO. Haiku es el mismo modelo que ya usan
+  // autoTagFile/searchFilesWithAI en core/ai.ts.
+  | "wabaPaymentSignal";
 
 const DEFAULTS: Record<DocModelOperation, string> = {
   docDirections: "gemini-2.5-flash",
@@ -19,6 +27,7 @@ const DEFAULTS: Record<DocModelOperation, string> = {
   docRefine: "gemini-2.5-pro",
   docRegeneratePage: "gemini-2.5-pro",
   docAutoDescribe: "gemini-2.5-flash",
+  wabaPaymentSignal: "claude-haiku-4-5-20251001",
 };
 
 let cache: Record<string, string> | null = null;

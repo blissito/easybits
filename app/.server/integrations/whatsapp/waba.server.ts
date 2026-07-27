@@ -16,6 +16,7 @@ import {
 import { deliverFilesFromReply } from "./outboundMedia.server";
 import { makeWabaFileSender, sendTextToFormmy, sendVoiceToFormmy, sendReactionToFormmy, sendTypingToFormmy } from "./wabaSend";
 import { wantsVoiceReply, synthesizeVoice } from "~/.server/core/fleetVoice";
+import { maybeMovePaymentStage } from "./wabaOrderStage";
 
 // Per-integration (per Meta number) config.
 export type WabaOrg = {
@@ -39,6 +40,13 @@ export type WabaOrg = {
   // pida la cotización: si sólo vive en el texto del turno, para cuando el script corre ya
   // no existe y el repartidor se queda sin el punto exacto.
   lastLocation?: Record<string, { lat: number; lng: number; url: string; name?: string; address?: string; at: string }>;
+  // Última etapa del tablero aplicada AUTOMÁTICAMENTE por pago, POR CONVERSACIÓN (np →
+  // etapa). Sirve de guarda anti-eco: sin esto, cada "gracias por tu pago" posterior
+  // re-dispararía sobre la orden más reciente. Ver wabaOrderStage.ts.
+  orderStage?: Record<string, { estatus: string; at: string }>;
+  // Override de las etiquetas de columna por tenant (forma de pago → label del tablero).
+  // Sin esto, DEFAULT_PAYMENT_STAGES.
+  paymentStages?: Record<string, string>;
 };
 
 export type WabaConfig = {
@@ -335,6 +343,18 @@ export async function runWabaTurn(args: {
   await deliverWabaReply({ fleetAgentId, formmySecret, integrationId, sender, ownerId, reply, userText: content.userText, wasVoice: content.wasVoice });
   // ✅ al terminar (paridad con baileys).
   if (messageId) void sendReactionToFormmy(formmySecret, integrationId, sender, messageId, "✅");
+  // Mueve la etapa del tablero si en este turno hubo un pago. Va DESPUÉS de entregar
+  // a propósito: el cliente nunca espera por el CRM. Fire-and-forget.
+  void maybeMovePaymentStage({
+    fleetAgentId,
+    ownerId,
+    integrationId,
+    sender,
+    np: convId,
+    org,
+    incomingText: content.userText || content.text || "",
+    reply,
+  }).catch(() => {});
 }
 
 // Deliver the reply: attach file URLs (stripped from text), then voice note XOR
