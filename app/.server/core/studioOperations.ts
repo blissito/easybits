@@ -145,6 +145,7 @@ export async function spawnStudio(
     timeoutSeconds: 3 * 3600,
     name: room ? `studio-${room}` : "studio",
     metadata: { embedToken: adminToken },
+    kind: "studio", // telemetría: cajas de llamada/grabación, aparte de los workers
   });
 
   // 2. Esperar a que arranque el microVM (sandbox-agent listo).

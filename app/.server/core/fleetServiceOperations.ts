@@ -295,6 +295,7 @@ export async function spawnServiceBox(ctx: AuthContext, kind: string): Promise<S
     template: spec.template,
     timeoutSeconds: spec.ttlSeconds,
     name: kind,
+    kind: "service", // telemetría: separa voice/render del consumo de workers
   });
   await waitUntilRunning(ctx, sb.sandboxId, { timeoutMs: 60_000 });
 

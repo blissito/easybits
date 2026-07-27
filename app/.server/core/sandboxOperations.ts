@@ -9,6 +9,13 @@ import { can, delegatedAccountIds, SCOPES } from "../delegation";
 import { mintComputeKey, revokeSandboxKeys, COMPUTE_BASE_URL } from "../compute/gateway";
 import type { SandboxTemplate } from "../sandbox/schemas";
 import { PLANS, getUserPlan } from "../../lib/plans";
+import type { SandboxSessionKind } from "./sandboxSessions";
+import {
+  openSandboxSession,
+  markSandboxSuspended,
+  markSandboxResumed,
+  closeSandboxSession,
+} from "./sandboxSessions";
 
 const HOST_URL = process.env.SANDBOX_HOST_URL || "";
 const HOST_TOKEN = process.env.SANDBOX_HOST_TOKEN || "";
@@ -541,6 +548,11 @@ export async function createSandbox(
     memoryMb?: number;
     vcpus?: number;
     env?: Record<string, string>;
+    // Clasificación para la telemetría de ciclo de vida (SandboxSession). NO se
+    // reenvía al host: solo etiqueta el intervalo para poder desglosar el uso por
+    // tipo de caja. Lo pone el caller porque el template no basta (claude-worker
+    // es worker de flota Y agente embed standalone).
+    kind?: SandboxSessionKind;
   }
 ): Promise<SandboxRecord> {
   requireScope(ctx, "WRITE");
@@ -621,7 +633,7 @@ export async function createSandbox(
     Math.max(params.timeoutSeconds ?? DEFAULT_TIMEOUT_S, 30),
     plan.maxSandboxTtlSeconds
   );
-  return callHost<SandboxRecord>(
+  const rec = await callHost<SandboxRecord>(
     "POST",
     "/v1/sandbox",
     {
@@ -638,6 +650,19 @@ export async function createSandbox(
     },
     ctx.user.id
   );
+  // Telemetría de ciclo de vida: abre el intervalo de esta caja. Fire-and-forget
+  // — openSandboxSession se auto-cachea, nunca puede tumbar un spawn.
+  void openSandboxSession({
+    ownerId: ctx.user.id,
+    sandboxId: rec.sandboxId,
+    kind: params.kind ?? "sandbox",
+    template: params.template,
+    memMb: resources.memoryMb,
+    vcpus: resources.vcpus,
+    persistent,
+    startedAt: rec.createdAt ? new Date(rec.createdAt) : undefined,
+  });
+  return rec;
 }
 
 // Lower-level create for ALWAYS-ON machines (hosting product). Bypasses the
@@ -664,7 +689,7 @@ export async function createSandboxRaw(
     protected?: boolean;
   }
 ): Promise<SandboxRecord> {
-  return callHost<SandboxRecord>(
+  const rec = await callHost<SandboxRecord>(
     "POST",
     "/v1/sandbox",
     {
@@ -680,6 +705,19 @@ export async function createSandboxRaw(
     },
     ctx.user.id
   );
+  // Máquina always-on (hosting): mismo intervalo, kind "machine" para poder
+  // separar el consumo facturado del efímero.
+  void openSandboxSession({
+    ownerId: ctx.user.id,
+    sandboxId: rec.sandboxId,
+    kind: "machine",
+    template: params.template,
+    memMb: params.memoryMb,
+    vcpus: params.vcpus,
+    persistent: true,
+    startedAt: rec.createdAt ? new Date(rec.createdAt) : undefined,
+  });
+  return rec;
 }
 
 // Promote an existing (ephemeral) sandbox to always-on: clears the host reaper
@@ -707,12 +745,14 @@ export async function suspendSandboxRaw(
   ownerId: string,
   sandboxId: string
 ): Promise<SandboxRecord> {
-  return callHost<SandboxRecord>(
+  const rec = await callHost<SandboxRecord>(
     "POST",
     `/v1/sandbox/${sandboxId}/suspend`,
     {},
     ownerId
   );
+  void markSandboxSuspended(sandboxId);
+  return rec;
 }
 
 // Server-to-server exec (no AuthContext) — used by trusted internal jobs such
@@ -811,6 +851,12 @@ export async function destroySandbox(
   // produce probeRealStatus en un 404 — el cold path de pickOrSpawn lo excluye y
   // re-spawnea un worker limpio.
   await db.agent.updateMany({ where: { sandboxId }, data: { status: "lost" } }).catch(() => {});
+  // Cierra el intervalo de telemetría. DESPUÉS del callHost a propósito: si el
+  // destroy fue rechazado (403 en una caja protegida) la caja sigue viva, y una
+  // sesión cerrada por error no se repara nunca — el reconciliador solo mira las
+  // ABIERTAS. Fire-and-forget como el revokeSandboxKeys de arriba: si esto falla,
+  // el reconciliador la cierra en el siguiente barrido.
+  void closeSandboxSession(sandboxId, "destroy");
   return result;
 }
 
@@ -867,12 +913,16 @@ export async function suspendSandbox(
   sandboxId: string
 ): Promise<SandboxRecord> {
   requireScope(ctx, "WRITE");
-  return callHost<SandboxRecord>(
+  const rec = await callHost<SandboxRecord>(
     "POST",
     `/v1/sandbox/${sandboxId}/suspend`,
     {},
     await effectiveOwnerId(ctx, sandboxId)
   );
+  // Sella el segmento RUNNING. Va por sandboxId (la sesión abierta ya sabe de
+  // quién es), así no añadimos ninguna resolución de owner al path caliente.
+  void markSandboxSuspended(sandboxId);
+  return rec;
 }
 
 // Restore a suspended sandbox from its snapshot (same TAP/IP/MAC/rootfs/volumes).
@@ -883,12 +933,14 @@ export async function resumeSandbox(
   sandboxId: string
 ): Promise<SandboxRecord> {
   requireScope(ctx, "WRITE");
-  return callHost<SandboxRecord>(
+  const rec = await callHost<SandboxRecord>(
     "POST",
     `/v1/sandbox/${sandboxId}/resume`,
     {},
     await effectiveOwnerId(ctx, sandboxId)
   );
+  void markSandboxResumed(sandboxId);
+  return rec;
 }
 
 // ─────────────── snapshot + fork (copy-on-write clone) ───────────────
@@ -1081,7 +1133,19 @@ export async function forkSandbox(
     const ownerId = await effectiveOwnerId(ctx, params.sandboxId!);
     resp = await callHost("POST", `/v1/sandbox/${params.sandboxId}/fork`, body, ownerId);
   }
-  return resp.children ?? [];
+  const children = resp.children ?? [];
+  // fork NO pasa por createSandbox (pega directo al host), así que abre sus
+  // propios intervalos o los hijos —cajas reales que consumen RAM— no se medirían.
+  for (const c of children) {
+    void openSandboxSession({
+      ownerId: ctx.user.id,
+      sandboxId: c.sandboxId,
+      kind: "fork",
+      template: c.template,
+      startedAt: c.createdAt ? new Date(c.createdAt) : undefined,
+    });
+  }
+  return children;
 }
 
 // Poll the ghostyclaw VM's /chat/ready endpoint via exec curl-from-inside.
@@ -2269,6 +2333,10 @@ export async function createAgent(
     name: params.name,
     memoryMb: params.memoryMb,
     vcpus: params.vcpus,
+    // Telemetría: toda caja con runtime de agente entra como "embed". spawnVm la
+    // re-etiqueta a "worker" con su back-fill cuando es una VM de flota — no se
+    // puede decidir aquí porque el mismo template (claude-worker) sirve a los dos.
+    kind: "embed",
   });
 
   // 3. Insert Agent row IMMEDIATELY with status="building" so the UI can

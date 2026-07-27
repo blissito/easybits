@@ -1452,3 +1452,105 @@ model Notification {
   @@index([userId, read])
   @@index([userId, createdAt])
 }
+
+// ── Telemetría de ciclo de vida de microVMs ───────────────────────────────────
+// UNA FILA POR CAJA VIVA, escrita como INTERVALO (no como muestreo). Existe
+// porque el histórico se PERDÍA: el reaper hace `db.agent.delete` al destruir un
+// worker (fleetAgentOperations), y el único rastro del ciclo de vida era el
+// auditLog a stdout detrás de FLEET_AUDIT_LOG. Sin esto es imposible responder
+// "¿cuántas cajas tuvo este owner en paralelo el lunes a las 11am?" o "¿cuántas
+// VM-horas consumió este mes?" — Agent/Sandbox/ServiceBox/StudioBox guardan solo
+// el estado ACTUAL.
+//
+// Se descartó explícitamente muestrear con un cron: es lossy en los huecos entre
+// ticks (el reaper suspende a los 5 min; una caja que vive 90s no existiría),
+// mete miles de filas de heartbeat al mes en el OLTP y es un punto de falla
+// silencioso. Aquí el intervalo lo escribe la MISMA transición que lo causa, en
+// las primitivas del host (sandboxOperations): createSandbox/createSandboxRaw/
+// forkSandbox abren, suspend/resume sellan el segmento en curso, destroy cierra.
+// Por ese chokepoint pasa TODO — workers de flota, cajas de servicio, studio,
+// embed, forks y permanentes — así que un tipo de caja nuevo queda medido sin
+// tocar nada. De ahí el nombre SandboxSession y no FleetVmSession.
+//
+// INVARIANTE OPERATIVA: todo write de esta tabla es fire-and-forget y guardado.
+// La telemetría NUNCA puede tumbar un spawn (precedente en este repo: un
+// pool.update sin .catch() tumbó prod contra Mongo).
+model SandboxSession {
+  id      String @id @default(auto()) @map("_id") @db.ObjectId
+  ownerId String @db.ObjectId
+  // Handle de la caja en el host. NO es @unique: el host puede reciclar ids, y un
+  // cierre tardío del reconciliador no debe colisionar con una sesión nueva de la
+  // misma caja. La unicidad real es (sandboxId, endedAt=null), y la garantiza
+  // openSandboxSession cerrando cualquier sesión abierta previa antes de insertar.
+  sandboxId String
+
+  // ── El intervalo ────────────────────────────────────────────────────────────
+  startedAt DateTime @default(now())
+  // null = SESIÓN ABIERTA (la caja sigue viva). El barrido de concurrencia trata
+  // endedAt=null como "hasta ahora".
+  endedAt DateTime?
+  // Cómo terminó: "destroy" (nuestro destroySandbox), "reconciled" (el host la
+  // mató por su cuenta — TTL/crash/reinicio — y el barrido lo detectó), "stale"
+  // (abierta más de MAX_SESSION_H sin ninguna señal). El ratio entre los tres
+  // mide cuánta telemetría es observada vs estimada.
+  endReason String?
+
+  // ── Estado + acumuladores ───────────────────────────────────────────────────
+  // Una caja SUSPENDIDA cuesta distinto que una corriendo: suspendida es disco +
+  // snapshot; corriendo es RAM reservada por Firecracker. Contarlas igual sería
+  // mentir, así que el tiempo se parte en dos acumuladores.
+  //
+  // Se eligió fila-por-caja con acumuladores sobre fila-por-segmento: la
+  // concurrencia solo necesita [startedAt, endedAt) y las VM-horas salen de sumar
+  // dos campos, mientras que los segmentos multiplicarían el volumen ×20-50 (una
+  // VM de 8h pasa por decenas de ciclos del reaper) sin responder nada nuevo.
+  state String @default("running") // "running" | "suspended"
+  // Momento de la última transición. El segmento EN CURSO (aún no acumulado) es
+  // now - lastStateAt; las lecturas lo suman en vuelo, así que una sesión abierta
+  // ya reporta VM-horas correctas sin ningún job que la toque.
+  lastStateAt DateTime @default(now())
+  runningMs   Int      @default(0) // ms SELLADOS corriendo (excluye el segmento en curso)
+  suspendedMs Int      @default(0) // ms SELLADOS suspendida
+  // Diagnóstico del reaper: un suspendCount alto es thrashing suspend/resume, que
+  // cuesta I/O de snapshot.
+  suspendCount Int @default(0)
+  // Bitácora CAPADA de transiciones [{t: ISO, s: "running"|"suspended"}]. Permite
+  // reconstruir concurrencia solo-RUNNING a posteriori sin una tabla de segmentos.
+  // Al llegar al cap se deja de escribir — los acumuladores siguen exactos y un
+  // documento Mongo que crece sin techo es un incidente esperando a pasar.
+  transitions Json?
+
+  // ── Atribución (quién, qué y cuánto costaba) ────────────────────────────────
+  // "worker" (VM de FleetAgent) | "service" (voice/render) | "studio" (livekit) |
+  // "embed" (worker standalone) | "fork" (hijo copy-on-write) | "machine"
+  // (permanente vía createSandboxRaw) | "sandbox" (default: createSandbox directo
+  // por API/MCP). Lo pone el CALLER: NO se deriva del template, que no es
+  // inyectivo (claude-worker es worker de flota Y agente embed standalone).
+  kind     String  @default("sandbox")
+  template String?
+  // FleetAgent dueño del worker. Va por BACK-FILL desde spawnVm — en el momento
+  // de createSandbox todavía no existe.
+  fleetAgentId String? @db.ObjectId
+  // Recursos de arranque. memMb es el denominador real del costo: la RAM es el
+  // recurso escaso del host (ver el gate de pickHost).
+  memMb Int?
+  vcpus Int?
+  // Caja permanente/protegida (el reaper no la toca): separa el consumo always-on
+  // facturado del efímero.
+  persistent Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Sin relación `owner User @relation` A PROPÓSITO: un onDelete: Cascade borraría
+  // el histórico de consumo al borrar al usuario, que es justo lo que hay que
+  // conservar para reconciliar facturación. Mismo criterio que SandboxReservation.
+
+  // Lecturas: se filtra por owner y se traen las sesiones que SOLAPAN el rango
+  // (startedAt < to AND (endedAt = null OR endedAt > from)).
+  @@index([ownerId, startedAt])
+  // Reconciliador: barrido de sesiones abiertas.
+  @@index([ownerId, endedAt])
+  // PATH CALIENTE: sellar una transición busca la sesión abierta por sandboxId.
+  @@index([sandboxId, endedAt])
+}

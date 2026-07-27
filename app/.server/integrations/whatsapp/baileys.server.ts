@@ -937,6 +937,21 @@ function startReaper() {
     } catch (e) {
       console.error("warm-spare top-up tick failed:", e);
     }
+    // Reconciliación de la telemetría de ciclo de vida cada ~5min. Si el host mató
+    // una caja por su cuenta (TTL, crash, reinicio) nuestro destroySandbox nunca
+    // corrió y la SandboxSession quedó abierta, inflando el pico de concurrencia
+    // del reporte. Va al FINAL del tick para reconciliar el estado ya asentado por
+    // los reapers de arriba, y sobre este heartbeat en vez de un cron propio.
+    if (reaperTicks % 5 === 0) {
+      try {
+        const { reconcileSandboxSessions } = await import(
+          "~/.server/core/sandboxSessionReconciler"
+        );
+        await reconcileSandboxSessions();
+      } catch (e) {
+        console.error("sandbox-session reconcile tick failed:", e);
+      }
+    }
     // Barrido de blobs de memoria huérfanos (fleet-memory/) cada ~30min — hygiene
     // barata sobre el mismo heartbeat, no cada tick (lista todo el bucket).
     if (reaperTicks % 30 === 0) {

@@ -25,6 +25,7 @@ import {
   listSandboxes,
 } from "~/.server/core/sandboxOperations";
 import { getSecretValue } from "~/.server/core/secretOperations";
+import { attributeSandboxSession } from "~/.server/core/sandboxSessions";
 import { getReservedCapacity } from "~/.server/core/sandboxReservations";
 import { getUserPlan, PLANS } from "~/lib/plans";
 import { engineHasVision, getEngineForAgent, getEngine } from "~/lib/fleetEngines";
@@ -1084,7 +1085,7 @@ const ADMIN_NOTE =
 
 // Build a background AuthContext for a fleetAgent's owner. FleetAgent dispatch runs outside
 // any HTTP request (reaper, autoscale), so we mint a ctx with full owner scopes.
-async function ctxForOwner(ownerId: string): Promise<AuthContext> {
+export async function ctxForOwner(ownerId: string): Promise<AuthContext> {
   const user = await db.user.findUnique({ where: { id: ownerId } });
   if (!user) throw new Error(`fleetAgent owner ${ownerId} not found`);
   return { user, scopes: ["READ", "WRITE", "DELETE"] };
@@ -1263,6 +1264,15 @@ async function spawnVm(ctx: AuthContext, fleetAgent: { id: string; name: string 
     vcpus: fleetAgent.vmMemMb <= 512 ? 1 : 2,
   });
   auditLog("spawn", { fleetAgent: fleetAgent.id, agentId: created.agentId, memMb: fleetAgent.vmMemMb, box: target.url });
+  // Telemetría: createSandbox ya abrió el intervalo, pero NO podía saber a qué
+  // FleetAgent pertenece (el fleetAgentId se sella justo abajo, después de crear).
+  // Este back-fill es lo que permite desglosar el uso por agente en el reporte.
+  // Fire-and-forget: si falla, la sesión queda como kind "sandbox" y solo se
+  // pierde el desglose, nunca el intervalo.
+  void attributeSandboxSession(created.sandboxId, {
+    kind: "worker",
+    fleetAgentId: fleetAgent.id,
+  });
   // Return the BUILDING row immediately — the caller waits for it to come up
   // OUTSIDE the placement lock (so concurrent cold conversations boot in
   // parallel, not serialized behind each other's ~boot time).
