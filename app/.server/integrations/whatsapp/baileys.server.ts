@@ -176,7 +176,11 @@ async function drainGroup(sock: WASocket, fleetAgentId: string, jid: string) {
   try {
     const reply = await routeMessage(
       fleetAgentId,
-      { groupId: jid, sender: last.sender, text: combinedText, image: batch.map((it) => it.content.image).find(Boolean), admin: isAdminTurn },
+      // `pushName` = nombre de perfil del participante. Va como ANCLA de identidad
+      // (formatContent lo etiqueta `perfil:"…"`), no como nombre para dirigirse a él:
+      // sin ningún identificador del remitente en el turno, el modelo lo inventaba a
+      // partir de un vocativo del texto. Baileys no lo mandaba; WABA sí.
+      { groupId: jid, sender: last.sender, senderName: last.m?.pushName ?? undefined, text: combinedText, image: batch.map((it) => it.content.image).find(Boolean), admin: isAdminTurn },
       { skipRateLimit: true, hasMedia: batch.some((it) => it.content.hasMedia) }
     );
     if (reply) {

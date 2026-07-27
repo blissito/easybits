@@ -1436,9 +1436,22 @@ async function pickOrSpawn(ctx: AuthContext, fleetAgent: PoolRow, groupId: strin
 
 // Compose the prompt for the worker. Group context: prefix the sender so the
 // agent knows who is talking; surface an attached media URL if present.
+// El encabezado es la ÚNICA identidad del remitente que el modelo recibe. Antes solo
+// llevaba el número: sin NADA que identificara a quien escribe, el modelo rellenaba el
+// hueco con el primer sustantivo propio del texto — un vocativo ("Buenas tardes Moni" =
+// saludo A la dueña de la línea) pasaba por el nombre de quien escribe y le contestaba
+// "¡Gracias Moni!" a un cliente que no se llama así.
+//
+// Se etiqueta `perfil:"…"` a propósito, NO como nombre a secas: es el push name de
+// WhatsApp — lo elige el contacto y suele ser una EMPRESA ("Dictum"), un apodo o un
+// emoji. Sirve como ancla ("quien escribe es este, no el del texto"), no como forma de
+// dirigirse a él ni como dato facturable: los flujos que necesitan el nombre real deben
+// seguir pidiéndolo.
 function formatContent(msg: InboundMessage): string {
   const lines: string[] = [];
-  if (msg.sender) lines.push(`[${msg.sender}]`);
+  const profile = msg.senderName?.trim();
+  const id = [msg.sender, profile && `perfil:${JSON.stringify(profile)}`].filter(Boolean).join(" · ");
+  if (id) lines.push(`[${id}]`);
   lines.push(msg.text);
   if (msg.mediaUrl) lines.push(`\n(adjunto: ${msg.mediaUrl})`);
   return lines.join(" ").trim();
