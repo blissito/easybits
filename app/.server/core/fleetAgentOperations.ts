@@ -663,7 +663,7 @@ export const CURATED_CAPABILITIES: McpCatalogEntry[] = [
     // un worker vivo podía seguir sirviendo 0.6.0 (la que tenía create_order roto y cero
     // scoping) sin ninguna señal. El pin fuerza el miss de caché y deja auditable qué corre.
     // Convención: cada release del MCP = bump acá.
-    args: ["-y", "@formmy.app/mcp-server@0.7.0"],
+    args: ["-y", "@formmy.app/mcp-server@0.8.0"],
     env: {
       FORMMY_API_URL: "https://formmy.app",
       FORMMY_SECRET_KEY: "$secret:FORMMY_SECRET_KEY",
