@@ -12,6 +12,7 @@ export const SANDBOX_TEMPLATES = [
   "ghostyclaw", "ghosty-lite", "open-ghosty", "lang-ghosty", "rust-ghosty",
   "ghosty-gc", "ghosty-chat", "claude-worker", "codex-worker",
   "cagent-ghosty", "openclaw", "chat-openai", "chat-anthropic",
+  "ghosty-studio",
   "code-interpreter", "desktop-ghosty", "computer-ghosty", "computer-ghosty-gemini",
   "livekit-svc", "whisper-svc", "kokoro-svc", "voice-svc", "render-svc", "collab-svc",
   "hyperframes-svc",
