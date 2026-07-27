@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { createMcpServer, getRegisteredTools } from "../app/.server/mcp/server";
-import { profileToToolsParam, TOOL_PROFILES } from "../app/.server/mcp/toolGroups";
+import { profileToToolsParam, TOOL_PROFILES, FLEET_BUCKETS } from "../app/.server/mcp/toolGroups";
 
 // Dispatch run_tool the way the SDK would, reading its handler off the registry.
 async function callRunTool(groups: string[], name: string, params: Record<string, unknown> = {}) {
@@ -97,8 +97,19 @@ describe("run_tool enforcement — profile boundary", () => {
 describe("perfil Público — creativo sin administración", () => {
   const groups = () => profileToToolsParam("publico").split(",");
 
-  it("resolves to scripting + creative buckets", () => {
-    expect(profileToToolsParam("publico")).toBe("scripting,imagenes,documentos,investigacion");
+  // Aserciones SEMÁNTICAS, no un snapshot del string: la lista de buckets crece por
+  // diseño (documentos-write en a7e62f48, email en 77253a87) y un literal congelado
+  // ponía el suite en rojo sin señalar ningún defecto real.
+  it("resolves to scripting + creative buckets, sin administración", () => {
+    const g = groups();
+    expect(g[0]).toBe("scripting"); // siempre primero: es la superficie de Code Mode
+    expect(g).toEqual(expect.arrayContaining(["imagenes", "documentos", "investigacion"]));
+    // Lo que el perfil garantiza. Los buckets admin se DERIVAN de FLEET_BUCKETS en vez
+    // de listarse a mano: un bucket admin nuevo queda cubierto solo, y no se puede
+    // pasar vacuamente por escribir un nombre que no existe.
+    const adminBuckets = FLEET_BUCKETS.filter((b) => b.admin).map((b) => b.key);
+    expect(adminBuckets.length).toBeGreaterThan(0);
+    for (const admin of adminBuckets) expect(g).not.toContain(admin);
     expect(TOOL_PROFILES.publico.label).toBe("Público");
   });
 

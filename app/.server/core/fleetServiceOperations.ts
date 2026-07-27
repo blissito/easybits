@@ -70,11 +70,21 @@ const SERVICE_REGISTRY: Record<string, ServiceSpec> = {
   },
   // render: Chromium HTML→PDF/PNG box. Heavy image (~300MB) → snapshot/resume
   // pays off (warm ~700ms vs ~12s cold). Keyed per OWNER like voice, so every
-  // render for that owner shares ONE box. Render usage es BURSTY (exportas unos
-  // PDFs y listo) → duerme rápido (3 min idle) y se recicla pronto (5 min
-  // suspendida = 2 min tras el corte de idle) para liberar budget de sandbox
-  // (inUse = live + suspended) y el ~2GB de snapshot; un warm resume de ~700ms
-  // cubre la sesión activa de sobra.
+  // render for that owner shares ONE box.
+  //
+  // Ventanas subidas de 3/5 a 5/60 (2026-07-27): el 5 original asumía que render
+  // es burst AISLADO (exportas unos PDFs y listo) y lo reciclaba 2 min después de
+  // dormirse, así que un uso frecuente pagaba cold boot (~12s) una y otra vez.
+  // En la práctica se usa seguido. Dormir más NO cuesta budget del tenant: el gate
+  // de plan (fleetAgentOperations `inUse = live + suspended`) suma las suspendidas
+  // desde `db.agent`, y una caja de servicio vive en `db.serviceBox` — o sea sólo
+  // cuenta mientras está CORRIENDO. El costo real es disco de snapshot en el host,
+  // que lo tolera de sobra (su janitor de suspendidas-viejas trabaja en escala de
+  // 72h). idleMin 5 además evita dormirla a media ráfaga de exportaciones.
+  //
+  // ⚠️ El reloj de hardTtlMin corre desde `lastActiveAt`, que NO se reinicia al
+  // suspender — así que 60 = "se destruye 60 min tras el último uso", ≈55 min
+  // parqueada, no 60 min de sueño.
   render: {
     template: "render-svc",
     unit: "render-svc-runtime",
@@ -82,9 +92,9 @@ const SERVICE_REGISTRY: Record<string, ServiceSpec> = {
     ports: [9300],
     readyPaths: { 9300: "/health" },
     ttlSeconds: 1800,
-    idleMin: 3,
+    idleMin: 5,
     suspendOnIdle: true,
-    hardTtlMin: 5,
+    hardTtlMin: 60,
   },
   // video: HyperFrames (HeyGen, Apache 2.0) HTML→MP4 box. Heavy image (chrome-
   // headless-shell + ffmpeg + node_modules, ~4GB RAM) → snapshot/resume pays off.
