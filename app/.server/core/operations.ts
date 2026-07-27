@@ -10,9 +10,11 @@ import {
   buildPublicAssetUrl,
   copyObjectAcrossBuckets,
   deleteObjectFromBucket,
+  ObjectStillExistsError,
   PRIVATE_BUCKET,
   PUBLIC_BUCKET,
 } from "../storage";
+import logger from "../logger";
 import type { AuthContext } from "../apiAuth";
 import { requireScope } from "../apiAuth";
 import type { StorageRegion } from "@prisma/client";
@@ -357,8 +359,7 @@ async function hardDeleteFile(file: {
   //    proceed with DB cleanup.
   try {
     if (!file.storageProviderId && file.access === "public") {
-      // Public platform object lives in PUBLIC_BUCKET at root. Delete it via the
-      // gateway-aware helper so the Tigris edge cache is purged too.
+      // Public platform object lives in PUBLIC_BUCKET at root.
       const isLegacyMcpUrl = !!file.url && file.url.includes("/mcp/");
       await deleteObjectFromBucket({
         bucket: PUBLIC_BUCKET,
@@ -370,8 +371,24 @@ async function hardDeleteFile(file: {
         : getReadClientForPlatformFile(file as any);
       await client.deleteObject(file.storageKey);
     }
-  } catch {
-    // storage already gone, continue with DB cleanup
+  } catch (err) {
+    // The object is PROVEN still public: abort. Dropping the row would leave it
+    // orphaned with nothing in the DB pointing at it — unauditable, unrecoverable.
+    // purgeDeletedFiles catches per-file, so the batch survives and retries next run.
+    if (err instanceof ObjectStillExistsError) {
+      logger.error("hardDeleteFile: public object survived delete, keeping DB row", {
+        fileId: file.id,
+        ownerId: file.ownerId,
+        storageKey: file.storageKey,
+      });
+      throw err;
+    }
+    // Anything else (already gone, user's provider down) → clean up the DB anyway.
+    logger.warn("hardDeleteFile: storage delete failed, proceeding with DB cleanup", {
+      fileId: file.id,
+      storageKey: file.storageKey,
+      err: err instanceof Error ? err.message : String(err),
+    });
   }
 
   // 2) DB dependents + dangling pointers, all scoped to this file id.
@@ -415,8 +432,13 @@ export async function purgeDeletedFiles() {
       arr.push(file.name);
       purgedByOwner.set(file.ownerId, arr);
     } catch (e) {
-      // One bad row can't abort the whole batch.
-      console.error(`purgeDeletedFiles: failed to delete file ${file.id}:`, e);
+      // One bad row can't abort the whole batch. It stays DELETED and is retried
+      // next run — which is the desired outcome when its object is still public.
+      logger.error("purgeDeletedFiles: failed to delete file", {
+        fileId: file.id,
+        ownerId: file.ownerId,
+        err: e instanceof Error ? e.message : String(e),
+      });
     }
   }
 
@@ -435,8 +457,38 @@ export async function purgeDeletedFiles() {
 }
 
 /**
+ * A public object that refused to die is a USER-facing failure: it means we could
+ * not honor "make this private / delete this". Surface it as a 500 that says so,
+ * explicitly stating nothing changed — the worst outcome is a UI claiming privacy
+ * the storage isn't providing. Non-storage errors pass through untouched.
+ */
+function throwPurgeFailed(err: unknown): never {
+  if (err instanceof ObjectStillExistsError) {
+    throw new Response(
+      JSON.stringify({
+        error:
+          "No se pudo retirar el archivo del almacenamiento público. No se cambió nada — sigue siendo público. Reintenta.",
+      }),
+      { status: 500, headers: { "Content-Type": "application/json" } }
+    );
+  }
+  throw err;
+}
+
+/** S3 "the object isn't there" — a delete/copy against a missing key is a no-op, not a failure. */
+function isObjectMissing(err: unknown): boolean {
+  const e = err as { name?: string; Code?: string; $metadata?: { httpStatusCode?: number } };
+  return (
+    e?.name === "NotFound" ||
+    e?.name === "NoSuchKey" ||
+    e?.Code === "NoSuchKey" ||
+    e?.$metadata?.httpStatusCode === 404
+  );
+}
+
+/**
  * Stop serving a PUBLIC platform object immediately: move its bytes to the
- * private bucket and purge the public copy (origin + Tigris edge). Keeps the
+ * private bucket and purge the public copy. Keeps the
  * file recoverable (it comes back as `private`) while ensuring a deleted public
  * URL stops returning 200 NOW instead of at the 7-day purge / cache TTL.
  * No-op for private files and custom-provider files.
@@ -459,10 +511,15 @@ async function depublishPublicObject(file: {
       key: srcKey,
       destKey: dstKey,
     });
-  } catch {
-    // source object may already be gone — still flip the record + purge edge
+  } catch (err) {
+    // Source already gone → nothing to preserve, carry on. Any OTHER copy failure
+    // must abort: deleting bytes we failed to back up would lose them.
+    if (!isObjectMissing(err)) throw err;
   }
-  await deleteObjectFromBucket({ bucket: PUBLIC_BUCKET, key: srcKey }).catch(() => {});
+  // Order matters: prove the public object is gone BEFORE the record says it's
+  // private. If this throws, the row keeps `access:"public"` + its url — the UI
+  // stays truthful instead of claiming a privacy that doesn't exist.
+  await deleteObjectFromBucket({ bucket: PUBLIC_BUCKET, key: srcKey }).catch(throwPurgeFailed);
   await db.file.update({
     where: { id: file.id },
     data: { access: "private", url: "" },
@@ -600,20 +657,43 @@ export async function updateFile(
     updates.access = opts.access;
     updates.url = opts.access === "public" ? buildPublicAssetUrl(dstKey) : "";
 
+    // Going PRIVATE: purge the public copy BEFORE flipping the record. The old
+    // order (DB first, delete swallowed) let the row read `private` with url:""
+    // while the object stayed live at its public URL — the UI lied. If the purge
+    // fails we roll back the copy and surface it; nothing changes.
+    if (fromBucket === PUBLIC_BUCKET) {
+      try {
+        await deleteObjectFromBucket({ bucket: fromBucket, key: srcKey });
+      } catch (err) {
+        await deleteObjectFromBucket({ bucket: toBucket, key: dstKey }).catch((e) =>
+          logger.warn("toggleFileAccess: rollback copy cleanup failed", { key: dstKey, err: String(e) })
+        );
+        throwPurgeFailed(err);
+      }
+    }
+
     // Update DB first; if it fails, clean up the copy
     try {
       const updated = await db.file.update({
         where: { id: opts.fileId },
         data: updates,
       });
-      // DB succeeded — safe to delete from source bucket
-      await deleteObjectFromBucket({ bucket: fromBucket, key: srcKey }).catch(() => {});
+      // Going PUBLIC: the public object is already in place (the desired state),
+      // so a leftover in the private bucket is just garbage — log, don't fail.
+      if (fromBucket !== PUBLIC_BUCKET) {
+        await deleteObjectFromBucket({ bucket: fromBucket, key: srcKey }).catch((e) =>
+          logger.warn("toggleFileAccess: source cleanup failed", { bucket: fromBucket, key: srcKey, err: String(e) })
+        );
+      }
       fileEvents.emit("file:changed", ctx.user.id);
       dispatchWebhooks(ctx.user.id, "file.updated", { id: updated.id, name: updated.name, access: updated.access });
       return updated;
     } catch (err) {
-      // Rollback: delete the copy we just made
-      await deleteObjectFromBucket({ bucket: toBucket, key: dstKey }).catch(() => {});
+      // Rollback: delete the copy we just made. Best-effort — the DB error is the
+      // one that matters; a stray copy is caught by scripts/audit-orphan-public-objects.
+      await deleteObjectFromBucket({ bucket: toBucket, key: dstKey }).catch((e) =>
+        logger.warn("toggleFileAccess: rollback copy cleanup failed", { bucket: toBucket, key: dstKey, err: String(e) })
+      );
       throw err;
     }
   }

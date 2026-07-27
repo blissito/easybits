@@ -4,6 +4,7 @@ import {
   PutObjectCommand,
   PutBucketCorsCommand,
   DeleteObjectCommand,
+  HeadObjectCommand,
   CopyObjectCommand,
   CreateMultipartUploadCommand,
   UploadPartCommand,
@@ -13,6 +14,7 @@ import {
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import type { StorageProvider, StorageRegion } from "@prisma/client";
 import { db } from "./db";
+import logger from "./logger";
 
 const DEFAULT_PREFIX = "API_EXPERIMENT/";
 
@@ -338,25 +340,6 @@ function getPlatformS3(): S3Client {
   });
 }
 
-// Tigris Acceleration Gateway endpoint. Deleting an object through this endpoint
-// eagerly purges the edge cache (TAG drops the cache entry before forwarding the
-// DELETE). The direct endpoint (AWS_ENDPOINT_URL_S3 = t3.storage.dev) does NOT —
-// a deleted public object keeps serving a stale 200 from
-// `*.fly.storage.tigris.dev` until the cache TTL ages it out.
-const TIGRIS_GATEWAY_ENDPOINT =
-  process.env.TIGRIS_GATEWAY_ENDPOINT || "https://fly.storage.tigris.dev";
-
-function getPlatformGatewayS3(): S3Client {
-  return new S3Client({
-    region: process.env.AWS_REGION || "auto",
-    endpoint: TIGRIS_GATEWAY_ENDPOINT,
-    credentials: {
-      accessKeyId: process.env.AWS_ACCESS_KEY_ID || "",
-      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || "",
-    },
-  });
-}
-
 export async function copyObjectAcrossBuckets(opts: {
   fromBucket: string;
   toBucket: string;
@@ -373,18 +356,61 @@ export async function copyObjectAcrossBuckets(opts: {
   );
 }
 
+/** The DELETE reported success but the object is still served. */
+export class ObjectStillExistsError extends Error {
+  constructor(readonly bucket: string, readonly key: string) {
+    super(`Object still exists after delete: ${bucket}/${key}`);
+    this.name = "ObjectStillExistsError";
+  }
+}
+
+function isNotFound(err: unknown): boolean {
+  const e = err as { name?: string; $metadata?: { httpStatusCode?: number } };
+  return e?.name === "NotFound" || e?.name === "NoSuchKey" || e?.$metadata?.httpStatusCode === 404;
+}
+
+/**
+ * Delete an object, and for the PUBLIC bucket PROVE it's gone.
+ *
+ * Every delete goes through the direct endpoint (AWS_ENDPOINT_URL_S3). The Tigris
+ * Acceleration Gateway (`fly.storage.tigris.dev`) that this used to route public
+ * deletes through — on the premise that it eagerly purged the edge cache — was
+ * retired and now 403s everything, so those deletes silently no-op'd while callers
+ * swallowed the error: the DB said "deleted/private" and the object kept serving.
+ * There is no separate edge to purge anymore — `PUBLIC_ASSET_HOST` IS the direct
+ * endpoint, and a direct delete stops serving within seconds.
+ *
+ * Idempotent: deleting a missing key is a no-op (S3 returns 204), never an error.
+ * Verification failures that DON'T prove survival (403, network) only warn — we
+ * won't break a flow over a flaky HEAD.
+ */
 export async function deleteObjectFromBucket(opts: {
   bucket: string;
   key: string;
+  /** Confirm the object is gone. Defaults to true for the public bucket. */
+  verify?: boolean;
 }) {
-  // Route PUBLIC bucket deletes through the Tigris gateway so the edge cache is
-  // purged immediately; everything else uses the direct endpoint.
-  const s3 =
-    opts.bucket === PUBLIC_BUCKET ? getPlatformGatewayS3() : getPlatformS3();
-  await s3.send(
-    new DeleteObjectCommand({
-      Bucket: opts.bucket,
-      Key: opts.key,
-    })
-  );
+  const s3 = getPlatformS3();
+  const { bucket, key } = opts;
+  try {
+    await s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
+  } catch (err) {
+    if (!isNotFound(err)) throw err; // already gone → nothing to do
+  }
+
+  const verify = opts.verify ?? bucket === PUBLIC_BUCKET;
+  if (!verify) return;
+
+  try {
+    await s3.send(new HeadObjectCommand({ Bucket: bucket, Key: key }));
+  } catch (err) {
+    if (isNotFound(err)) return; // proven gone
+    logger.warn("deleteObjectFromBucket: could not verify delete", {
+      bucket,
+      key,
+      err: err instanceof Error ? err.message : String(err),
+    });
+    return;
+  }
+  throw new ObjectStillExistsError(bucket, key);
 }

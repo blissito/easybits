@@ -18,6 +18,7 @@ import { createHost, removeHost } from "~/lib/fly_certs/certs_getters";
 import { dispatchWebhooks } from "../webhooks";
 import { enrichImages } from "../images/enrichImages";
 import { replaceCdnWithCompiledCSS } from "../tailwind";
+import logger from "../logger";
 
 function throwJson(error: string, status: number): never {
   throw new Response(JSON.stringify({ error }), {
@@ -455,6 +456,39 @@ export async function unpublishLanding(ctx: AuthContext, id: string) {
       status: { not: "DELETED" },
     },
   });
+  // Stop serving the published assets NOW: purge each public object. These are
+  // deploy artifacts (HTML/PDF/images) that get regenerated on re-publish, so
+  // there's nothing to preserve — and a sensitive unpublished document must stop
+  // returning 200 immediately, not at cache TTL.
+  //
+  // This runs BEFORE any status flips: nothing may read "unpublished" while the
+  // PDFs are still live. Every key is attempted (not aborting on the first
+  // failure, which would leave the site half-published), then we surface what
+  // survived. Retrying is safe — already-purged keys 404 and pass through.
+  const unpurged: string[] = [];
+  for (const f of siteFiles) {
+    if (f.storageProviderId) continue; // custom provider: not ours to purge
+    const isLegacyMcpUrl = !!f.url && f.url.includes("/mcp/");
+    const key = isLegacyMcpUrl ? `mcp/${f.storageKey}` : f.storageKey;
+    try {
+      await deleteObjectFromBucket({ bucket: PUBLIC_BUCKET, key });
+    } catch (err) {
+      logger.error("unpublishLanding: could not purge published asset", {
+        landingId: id,
+        websiteId: website.id,
+        key,
+        err: err instanceof Error ? err.message : String(err),
+      });
+      unpurged.push(key);
+    }
+  }
+  if (unpurged.length) {
+    throwJson(
+      `No se pudieron retirar ${unpurged.length} archivo(s) publicado(s); el sitio sigue publicado. Reintenta.`,
+      500
+    );
+  }
+
   await db.file.updateMany({
     where: {
       name: { startsWith: `sites/${website.id}/` },
@@ -463,19 +497,6 @@ export async function unpublishLanding(ctx: AuthContext, id: string) {
     },
     data: { status: "DELETED", deletedAt: new Date() },
   });
-
-  // Stop serving the published assets NOW: purge each public object from the
-  // origin + Tigris edge. These are deploy artifacts (HTML/PDF/images) that get
-  // regenerated on re-publish, so there's nothing to preserve — and a sensitive
-  // unpublished document must stop returning 200 immediately, not at cache TTL.
-  for (const f of siteFiles) {
-    if (f.storageProviderId) continue; // custom provider: not ours to purge
-    const isLegacyMcpUrl = !!f.url && f.url.includes("/mcp/");
-    await deleteObjectFromBucket({
-      bucket: PUBLIC_BUCKET,
-      key: isLegacyMcpUrl ? `mcp/${f.storageKey}` : f.storageKey,
-    }).catch(() => {});
-  }
 
   // Soft-delete website
   await db.website.update({
