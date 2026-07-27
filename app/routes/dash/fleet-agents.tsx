@@ -436,10 +436,23 @@ export async function loader({ request }: Route.LoaderArgs) {
     // Verificadas contra el host (dedup contra las ya emitidas por el listing).
     ...serviceTiles.map((t) => ({ ...t, ...reapFor(t.id) })),
   ];
+  // Una caja NO-worker DORMIDA es un snapshot en disco: 0 CPU/RAM, resume ~1s. No
+  // ocupa sandbox — y así la trata el gate real (`spawnVm`: `live` sale del listing del
+  // host, que omite suspendidas, y `suspended` sale de `db.agent`, donde una ServiceBox
+  // no vive). El HUD las contaba igual, así que podía mostrar "4/4" mientras reserveVm
+  // calculaba 3/4 y sí dejaba spawnear. Se separan: las que OCUPAN van al grid y al
+  // contador; las parqueadas bajan a la repisa "EN DISCO".
+  //
+  // ⚠️ Solo cajas de servicio/custom. Un WORKER dormido SÍ cuenta, a propósito: no
+  // contarlos era explotable (llenas las cajas, dejas que el reaper las duerma — se
+  // caen del listing — y respawneas encima, duplicando el cupo).
+  const occupyingExtras = extraMachines.filter((e) => e.status !== "suspended");
+  const parkedExtras = extraMachines.filter((e) => e.status === "suspended");
   const capacity = {
     machines,
-    extraMachines,
-    vms: machines.length + extraMachines.length,
+    extraMachines: occupyingExtras,
+    parkedExtras,
+    vms: machines.length + occupyingExtras.length,
     maxMachines: planCfg.concurrentSandboxes + reserved.machines,
     plan,
     planName: planCfg.name,
@@ -460,7 +473,7 @@ export async function loader({ request }: Route.LoaderArgs) {
     // para agentes → se descuentan del budget. Ej: 5 sandboxes − 3 llamadas = 2
     // libres × 4 = 8 agentes máx. agentsMax = total sandboxes × agentes-por-sandbox. Sin densidades
     // mixtas por tier — un add-on = +1 sandbox del MISMO tamaño.
-    agentsMax: Math.max(0, planCfg.concurrentSandboxes + reserved.machines - extraMachines.length) * maxWorkersPerVm,
+    agentsMax: Math.max(0, planCfg.concurrentSandboxes + reserved.machines - occupyingExtras.length) * maxWorkersPerVm,
   };
   // Flotas compartidas conmigo (delegación scope `agents`) — lista read-only,
   // separada del HUD de capacidad (que es por cuenta propia). Sólo visibilidad.
@@ -1326,6 +1339,8 @@ function ChannelConnectMenu({
 type Capacity = {
   machines: { id: string; sandboxId?: string | null; status: string; slots: number; ghosty?: boolean; mascotColor?: string; suspendAt?: string | null; destroyAt?: string | null }[];
   extraMachines: { id: string; status: string; kind: "system" | "custom"; label: string; suspendAt?: string | null; destroyAt?: string | null }[];
+  // Cajas no-worker dormidas: viven en la repisa "EN DISCO", fuera del grid y del conteo.
+  parkedExtras: { id: string; status: string; kind: "system" | "custom"; label: string; suspendAt?: string | null; destroyAt?: string | null }[];
   vms: number; maxMachines: number; plan: string; planName: string;
   nextPlan: string | null; maxWorkersPerVm: number; vmMemMb: number; vcpus: number;
   reservedMachines: number; agentsActive: number; agentsMax: number; addonCostMxn: number;
@@ -1449,6 +1464,116 @@ function GhostyMascot({ className = "", blink = true, sleeping = false, offset =
 // One sandbox = a CONTAINER box; the agents (workers) inside it are the ojitos.
 // Color climbs with occupancy: empty→gray, healthy→green, full→amber (no room);
 // building pulses violet; an unspawned slot is a dashed "mount" ready on demand.
+// Icono de una caja NO-worker, elegido por su etiqueta. Vive FUERA de VmBox porque la
+// repisa "EN DISCO" lo reusa en chico. `size` se pasa como clase Tailwind completa
+// (w-12 h-12 / w-7 h-7) para que el JIT no la purgue.
+// Repisa "EN DISCO": las cajas no-worker DORMIDAS viven aquí, fuera del grid, porque
+// no ocupan sandbox (0 CPU/RAM; solo disco). El grid pasa a significar "lo que ocupas"
+// y la repisa "lo que guardas caliente, gratis". Antes una dormida se veía en una celda
+// igual que una activa y además contaba — el HUD contradecía al gate de presupuesto.
+// Se monta sólo si hay algo parqueado: sin estado vacío, sin chrome de más.
+function ParkedShelf({ parked, onBoxAction, pending }: {
+  parked: Capacity["parkedExtras"];
+  onBoxAction?: (sandboxId: string, intent: "box-suspend" | "box-resume" | "box-destroy") => void;
+  pending?: string | null;
+}) {
+  if (!parked.length) return null;
+  return (
+    <div className="relative mt-4 pt-3 border-t-2 border-dashed border-[rgba(60,42,16,0.22)]">
+      <div className="flex items-baseline gap-2 mb-2">
+        <span className="font-jersey text-lg leading-none tracking-wide text-[#5a5566]">EN DISCO</span>
+        <span className="text-[11px] text-gray-500">no ocupan sandbox · despiertan en ~1s</span>
+      </div>
+      <div className="flex flex-wrap gap-3">
+        <AnimatePresence initial={false} mode="popLayout">
+          {parked.map((s) => (
+            <motion.div key={s.id} layoutId={`svc:${s.id}`}
+              initial={{ scale: 0.6, opacity: 0, y: -10 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.5, opacity: 0, y: -14 }}
+              transition={{ type: "spring", stiffness: 480, damping: 32 }}
+              whileHover={{ y: -2 }}
+              className="group/parked relative flex items-center gap-2.5 pl-2 pr-3 py-2 rounded-xl border-2 border-black/80 bg-white/45"
+            >
+              {/* Cajita chica en fieltro índigo — mismo lenguaje que la celda dormida. */}
+              <div className="relative w-11 h-11 shrink-0 felt flex items-center justify-center text-indigo-400 opacity-70 grayscale"
+                style={{ "--felt-fill": "#c8c6e6", "--felt-stitch": "#a6a3d6" } as CSSProperties}>
+                <ServiceIcon system={s.kind === "system"} sysLabel={s.label} size="w-6 h-6" />
+                <motion.span
+                  animate={{ y: [0, -3, 0], opacity: [0.75, 1, 0.75] }}
+                  transition={{ duration: 2.6, repeat: Infinity, ease: "easeInOut" }}
+                  className="pointer-events-none absolute -top-2 -right-2 font-jersey text-xs leading-none text-indigo-400 select-none -rotate-6">Zzz</motion.span>
+              </div>
+              <div className="flex flex-col items-start leading-tight min-w-0">
+                <span className="font-jersey text-base leading-none text-indigo-500 truncate max-w-[9rem]">{s.label}</span>
+                {/* status fijo "suspended" → sólo pinta "muere Xm", que es lo relevante parqueada. */}
+                <ReapCountdown suspendAt={null} destroyAt={s.destroyAt} status="suspended" />
+              </div>
+              {onBoxAction && (
+                <div className="flex items-center gap-1 opacity-0 group-hover/parked:opacity-100 focus-within:opacity-100 transition-opacity">
+                  {pending === s.id ? (
+                    <span className="w-6 h-6 flex items-center justify-center"><Spinner /></span>
+                  ) : (<>
+                    <button type="button" title="Despertar" onClick={() => onBoxAction(s.id, "box-resume")}
+                      className="w-6 h-6 flex items-center justify-center text-xs bg-white/90 border-2 border-black rounded-md hover:bg-green-50 hover:border-green-500 transition-colors">▶</button>
+                    <button type="button" title="Eliminar caja"
+                      onClick={() => { if (window.confirm(`¿Eliminar la caja de ${s.label}? Se destruye ahora; vuelve a levantarse bajo demanda.`)) onBoxAction(s.id, "box-destroy"); }}
+                      className="w-6 h-6 flex items-center justify-center text-xs bg-white/90 border-2 border-black rounded-md hover:bg-red-50 hover:border-red-500 transition-colors">🗑</button>
+                  </>)}
+                </div>
+              )}
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      </div>
+    </div>
+  );
+}
+
+function ServiceIcon({ system, sysLabel, size = "w-12 h-12" }: { system: boolean; sysLabel?: string; size?: string }) {
+  return system ? (
+        sysLabel === "render" ? (
+          // Render (PDF/PNG): hoja con líneas de texto, NO teléfono.
+          <svg className={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <polyline points="14 2 14 8 20 8" />
+            <line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /><line x1="10" y1="9" x2="8" y2="9" />
+          </svg>
+        ) : sysLabel === "voz" ? (
+          // Voz (whisper STT + kokoro TTS): micrófono, NO teléfono.
+          <svg className={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" />
+            <path d="M19 10v1a7 7 0 0 1-14 0v-1" /><line x1="12" y1="18" x2="12" y2="22" /><line x1="8" y1="22" x2="16" y2="22" />
+          </svg>
+        ) : (
+          // Llamadas (livekit): teléfono.
+          <svg className={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z" />
+          </svg>
+        )
+      ) : (
+        /chat/i.test(sysLabel ?? "") ? (
+          // Chat (ej. ghosty-chat): burbuja de conversación con puntos, NO cubo.
+          <svg className={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+            <line x1="8.5" y1="11.5" x2="8.51" y2="11.5" /><line x1="12" y1="11.5" x2="12.01" y2="11.5" /><line x1="15.5" y1="11.5" x2="15.51" y2="11.5" />
+          </svg>
+        ) : /ubuntu/i.test(sysLabel ?? "") ? (
+          // Ubuntu: el "Circle of Friends" oficial (naranja de marca), NO el cubo.
+          <svg className={size} viewBox="0 0 24 24" fill="#E95420" aria-label="Ubuntu">
+            <path d="M4.6 10.2a1.8 1.8 0 1 0 0 3.6 1.8 1.8 0 0 0 0-3.6zm11.9 6.9a1.8 1.8 0 1 0 1.8 3.1 1.8 1.8 0 0 0-1.8-3.1zm0-10.2a1.8 1.8 0 1 0-1.8-3.1 1.8 1.8 0 0 0 1.8 3.1z" />
+            <path fill="none" stroke="#E95420" strokeWidth="1.6" d="M8.6 4.8A7.8 7.8 0 0 1 19.4 8m0 8a7.8 7.8 0 0 1-10.8 3.2M4.9 15.4A7.8 7.8 0 0 1 4.9 8.6" />
+          </svg>
+        ) : (
+          // Otros custom (code-interpreter, etc.): cubo genérico.
+          <svg className={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+            <path d="m3.3 7 8.7 5 8.7-5" /><path d="M12 22V12" />
+          </svg>
+        )
+  );
+}
+
 function VmBox({ id, sandboxId, status, slots, max, ghosty, mascotColor, addon, kind, sysLabel, onAction, pending, suspendAt, destroyAt }: { id: string; sandboxId?: string | null; status: string | null; slots: number; max: number; ghosty?: boolean; mascotColor?: string; addon?: boolean; kind?: "system" | "custom"; sysLabel?: string; onAction?: (sandboxId: string, intent: "box-suspend" | "box-resume" | "box-destroy") => void; pending?: boolean; suspendAt?: string | null; destroyAt?: string | null }) {
   const system = kind === "system";
   const custom = kind === "custom";
@@ -1589,47 +1714,7 @@ function VmBox({ id, sandboxId, status, slots, max, ghosty, mascotColor, addon, 
                 className="pointer-events-none absolute -top-3 -right-3 font-jersey text-sm leading-none text-indigo-400 select-none -rotate-6">Zzz</motion.span>
             )}
           </AnimatePresence>
-          {system ? (
-        sysLabel === "render" ? (
-          // Render (PDF/PNG): hoja con líneas de texto, NO teléfono.
-          <svg className="w-12 h-12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-            <polyline points="14 2 14 8 20 8" />
-            <line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /><line x1="10" y1="9" x2="8" y2="9" />
-          </svg>
-        ) : sysLabel === "voz" ? (
-          // Voz (whisper STT + kokoro TTS): micrófono, NO teléfono.
-          <svg className="w-12 h-12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" />
-            <path d="M19 10v1a7 7 0 0 1-14 0v-1" /><line x1="12" y1="18" x2="12" y2="22" /><line x1="8" y1="22" x2="16" y2="22" />
-          </svg>
-        ) : (
-          // Llamadas (livekit): teléfono.
-          <svg className="w-12 h-12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z" />
-          </svg>
-        )
-      ) : (
-        /chat/i.test(sysLabel ?? "") ? (
-          // Chat (ej. ghosty-chat): burbuja de conversación con puntos, NO cubo.
-          <svg className="w-12 h-12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
-            <line x1="8.5" y1="11.5" x2="8.51" y2="11.5" /><line x1="12" y1="11.5" x2="12.01" y2="11.5" /><line x1="15.5" y1="11.5" x2="15.51" y2="11.5" />
-          </svg>
-        ) : /ubuntu/i.test(sysLabel ?? "") ? (
-          // Ubuntu: el "Circle of Friends" oficial (naranja de marca), NO el cubo.
-          <svg className="w-12 h-12" viewBox="0 0 24 24" fill="#E95420" aria-label="Ubuntu">
-            <path d="M4.6 10.2a1.8 1.8 0 1 0 0 3.6 1.8 1.8 0 0 0 0-3.6zm11.9 6.9a1.8 1.8 0 1 0 1.8 3.1 1.8 1.8 0 0 0-1.8-3.1zm0-10.2a1.8 1.8 0 1 0-1.8-3.1 1.8 1.8 0 0 0 1.8 3.1z" />
-            <path fill="none" stroke="#E95420" strokeWidth="1.6" d="M8.6 4.8A7.8 7.8 0 0 1 19.4 8m0 8a7.8 7.8 0 0 1-10.8 3.2M4.9 15.4A7.8 7.8 0 0 1 4.9 8.6" />
-          </svg>
-        ) : (
-          // Otros custom (code-interpreter, etc.): cubo genérico.
-          <svg className="w-12 h-12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
-            <path d="m3.3 7 8.7 5 8.7-5" /><path d="M12 22V12" />
-          </svg>
-        )
-          )}
+          <ServiceIcon system={system} sysLabel={sysLabel} />
         </div>
       ) : (
         <div className="relative grid grid-cols-2 gap-2.5 place-items-center">
@@ -1739,7 +1824,15 @@ function CapacityHud({ capacity, onBoxAction, actionError, pending }: {
           ) : cell.item.kind === "machine" ? (
             (() => { const m = cell.item.m; return <VmBox id={m.id} sandboxId={m.sandboxId ?? null} status={m.status} slots={m.slots} max={capacity.maxWorkersPerVm} ghosty={m.ghosty} mascotColor={m.mascotColor} addon={isAddon} onAction={onBoxAction} pending={pending === m.sandboxId} suspendAt={m.suspendAt} destroyAt={m.destroyAt} />; })()
           ) : (
-            (() => { const s = cell.item.s; return <VmBox id={s.id} sandboxId={s.id} status={s.status} slots={0} max={capacity.maxWorkersPerVm} kind={s.kind} sysLabel={s.label} onAction={onBoxAction} pending={pending === s.id} suspendAt={s.suspendAt} destroyAt={s.destroyAt} />; })()
+            // layoutId compartido con la repisa: al dormirse la caja BAJA y al despertar
+            // SUBE, en vez de aparecer/desaparecer. Va SOLO en cajas de servicio (una por
+            // tipo) — el grid evita `layout` a propósito para que el poll de 2.5s no cause
+            // reflow, y los workers/celdas libres siguen sin él.
+            (() => { const s = cell.item.s; return (
+              <motion.div layoutId={`svc:${s.id}`} transition={{ type: "spring", stiffness: 480, damping: 32 }}>
+                <VmBox id={s.id} sandboxId={s.id} status={s.status} slots={0} max={capacity.maxWorkersPerVm} kind={s.kind} sysLabel={s.label} onAction={onBoxAction} pending={pending === s.id} suspendAt={s.suspendAt} destroyAt={s.destroyAt} />
+              </motion.div>
+            ); })()
           );
           return (
             <div key={`cell-${cell.p}`} className="relative">
@@ -1763,6 +1856,8 @@ function CapacityHud({ capacity, onBoxAction, actionError, pending }: {
           <span className="font-jersey text-[12px] leading-none">MÁS</span>
         </motion.a>
       </div>
+
+      <ParkedShelf parked={capacity.parkedExtras} onBoxAction={onBoxAction} pending={pending} />
 
       <p className="relative text-xs text-gray-500 mt-2">
         {capacity.maxMachines} sandbox{capacity.maxMachines !== 1 ? "es" : ""}
