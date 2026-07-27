@@ -1382,9 +1382,13 @@ function ReapCountdown({ suspendAt, destroyAt, status }: { suspendAt?: string | 
     : starting
       ? { word: "arrancando", dot: "bg-amber-400", text: "text-amber-500" }
       : { word: "activa", dot: "bg-emerald-500", text: "text-emerald-600" };
+  // Plazo vencido pero el estado AÚN no cambia (el reaper corre cada 60s, y tras un
+  // deploy arranca en frío y tarda más). Decir "durmiendo…" junto a "activa" se leía
+  // como dos verdades opuestas, así que el vencimiento se anuncia como PENDIENTE; los
+  // gerundios quedan para cuando el estado ya cambió de verdad.
   const chip = (active: boolean, verb: string, ms: number) => (
     <span className={active ? "font-semibold text-[#3a3340]" : "font-medium text-gray-400"}>
-      {ms <= 0 ? (verb === "duerme" ? "durmiendo…" : "muriendo…") : `${verb} ${fmtLeftShort(ms)}`}
+      {ms <= 0 ? (verb === "duerme" ? "duerme pronto" : "muere pronto") : `${verb} ${fmtLeftShort(ms)}`}
     </span>
   );
   return (
