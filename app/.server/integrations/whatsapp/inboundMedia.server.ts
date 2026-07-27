@@ -599,9 +599,13 @@ export function wabaExtraLines(extras: WabaExtras): string[] {
       (s.button_reply as any)?.title ? `botón: "${(s.button_reply as any).title}"` :
       (s.list_reply as any)?.title ? `opción: "${(s.list_reply as any).title}"` :
       (s.button as any)?.text ? `botón: "${(s.button as any).text}"` :
-      s.systemType ? `aviso del sistema: ${s.systemType}` : "";
+      s.systemType ? `aviso del sistema: ${s.systemType}` :
+      // `errors[]` es lo único que Meta manda con type:"unsupported" (encuestas,
+      // view-once, editados…). summarizeUnhandled ya los recolecta; sin esto el
+      // agente solo sabía "no puedo leerlo" y no podía decirle al cliente por qué.
+      (s.errors as any[])?.[0]?.title ? `${(s.errors as any[])[0].title}` : "";
     lines.push(
-      `[Mensaje de WhatsApp de tipo "${extras.unhandled.meta_type}" que no puedo leer directamente${hint ? ` — ${hint}` : ""}]`
+      `[Mensaje de WhatsApp de tipo "${extras.unhandled.meta_type}" que no puedo leer directamente${hint ? ` — ${hint}` : ""}. Si necesitas su contenido, pídele al cliente que lo reenvíe como texto, foto o nota de voz]`
     );
   }
   return lines;
