@@ -1875,7 +1875,40 @@ export async function routeMessage(
       })
       .catch(() => {});
   }
-  return reply;
+  return stripInternal(reply);
+}
+
+/**
+ * Quita el razonamiento privado del agente antes de que salga al canal.
+ *
+ * Varios prompts de la flota definen `<internal>…</internal>` como "piensa aquí y NO
+ * produzcas output visible" — es el mecanismo con el que un agente decide CALLARSE
+ * (mensaje que no va dirigido a él, ya resuelto, etc.). El problema: no había código
+ * que las quitara, así que el bloque entero se entregaba al cliente. Casos reales en
+ * WABA el 2026-07-27: «Simple "Gracias" — no está dirigido a mí. Me quedo callada.»
+ * mandado al cliente, y el prompt de tania-0 registra otra fuga igual el 2026-05-14.
+ *
+ * Intentar resolverlo SOLO por prompt no puede funcionar: el turno siempre devuelve
+ * algo y el canal manda lo que reciba. Tiene que ser determinista y aquí — el punto
+ * único por donde pasan WABA, Baileys y el widget web. Si tras limpiar no queda nada,
+ * devolvemos "" y cada superficie ya hace `if (!reply) return` → silencio real, que es
+ * justo lo que el agente pidió.
+ */
+export function stripInternal(reply: string): string {
+  // El guard acepta también el cierre suelto (`</internal>`), si no un huérfano se
+  // colaba entero por el atajo.
+  if (!reply || !/<\s*\/?\s*internal/i.test(reply)) return reply;
+  const cleaned = reply
+    // Bloques bien formados, incluso multilínea.
+    .replace(/<\s*internal\s*>[\s\S]*?<\s*\/\s*internal\s*>/gi, "")
+    // Apertura sin cierre (el modelo se quedó a medias): tiramos hasta el final.
+    .replace(/<\s*internal\s*>[\s\S]*$/i, "")
+    // Cierre huérfano suelto.
+    .replace(/<\s*\/\s*internal\s*>/gi, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+  if (!cleaned) auditLog("reply.internal_only", { chars: reply.length });
+  return cleaned;
 }
 
 // Idle reaper — two stages per worker VM:
