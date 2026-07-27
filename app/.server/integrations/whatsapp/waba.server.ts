@@ -125,11 +125,13 @@ export function parseWabaExtras(body: Record<string, unknown>): WabaExtras {
   }
   const u = obj(body.unhandled);
   if (u && typeof u.meta_type === "string") extras.unhandled = { meta_type: u.meta_type, raw: u.raw };
+  const ref = obj(body.referral);
+  if (ref) extras.referral = ref;
   return extras;
 }
 
 export function hasWabaExtras(e: WabaExtras): boolean {
-  return !!(e.location || e.contacts?.length || e.reaction || e.quoted || e.unhandled);
+  return !!(e.location || e.contacts?.length || e.reaction || e.quoted || e.unhandled || e.referral);
 }
 
 // Formmy rellena `content` con un placeholder emoji cuando el mensaje no trae texto propio
@@ -251,6 +253,7 @@ async function drainWaba(key: string): Promise<void> {
       quoted: batch.map((i) => i.extras?.quoted).find(Boolean),
       reaction: batch.map((i) => i.extras?.reaction).find(Boolean),
       unhandled: batch.map((i) => i.extras?.unhandled).find(Boolean),
+      referral: batch.map((i) => i.extras?.referral).find(Boolean),
       contacts: batch.flatMap((i) => i.extras?.contacts ?? []),
     };
     if (!extras.contacts?.length) delete extras.contacts;

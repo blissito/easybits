@@ -527,6 +527,9 @@ export type WabaExtras = {
   reaction?: { emoji?: string; to_message_id?: string };
   quoted?: { message_id?: string; from?: string; content_preview?: string };
   unhandled?: { meta_type?: string; raw?: unknown };
+  // Click-to-WhatsApp: Formmy ya funde el headline en el texto, pero el objeto trae
+  // source_id/ctwa_clid — lo que permite atribuir la venta a la campaña en el CRM.
+  referral?: Record<string, unknown>;
 };
 
 /** Resumen de un `unhandled.raw` de Meta para logs. ALLOWLIST, no denylist: sólo salen los
@@ -583,6 +586,12 @@ export function wabaExtraLines(extras: WabaExtras): string[] {
     lines.push(`[Contacto: ${ct.name || "contacto"}${tel ? ", tel: " + tel.trim() : ""}]`);
   }
   if (extras.reaction?.emoji) lines.push(`[El usuario reaccionó con ${extras.reaction.emoji}]`);
+  const ref = extras.referral as Record<string, any> | undefined;
+  if (ref?.source_type || ref?.headline) {
+    lines.push(
+      `[Viene de un anuncio${ref.headline ? `: "${ref.headline}"` : ""} — campaña ${ref.source_id ?? "?"} (${ref.source_type ?? "?"})]`
+    );
+  }
   if (extras.unhandled?.meta_type && extras.unhandled.meta_type !== "revoke") {
     const s = summarizeUnhandled(extras.unhandled.raw);
     const hint =

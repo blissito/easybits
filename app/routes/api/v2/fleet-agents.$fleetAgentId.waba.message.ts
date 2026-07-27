@@ -52,6 +52,7 @@ type DropletInbound = {
   reaction?: unknown;
   quoted?: unknown;
   unhandled?: unknown;
+  referral?: unknown;
 };
 
 export async function loader({ request }: Route.LoaderArgs) {
