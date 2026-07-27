@@ -45,11 +45,40 @@ node /tmp/quote.mjs /tmp/cot.json
 - `include_payment_link: true` → agrega el link MercadoPago + QR (requiere el
   conector MercadoPago encendido). Omítelo para solo datos bancarios.
 - Los precios ya incluyen IVA; **no** sumes impuestos aparte.
+- `cliente.tel`: si lo omites, el script lo toma del chat en curso.
+- `cliente.domicilio` puede ir de corrido; el script desglosa CP, colonia, ciudad
+  y estado. Si mandas `cliente.cp`/`colonia`/`ciudad`/`estado` aparte, esos ganan.
+- `cliente.maps_url`: link de Google Maps del punto de entrega. Si el cliente ya
+  compartió su ubicación por WhatsApp, el script la usa sola — no la copies.
 
-4. **Envía al cliente:** el script imprime `{ "pdfUrl": "...", "folio": "...",
-   "total": ..., "paymentUrl": "..." }`. Manda primero el `pdfUrl`, luego (si hay)
-   el `paymentUrl`. Confirma el total con el número que devolvió el script, no con
+4. **Envía al cliente:** el script imprime `{ "pdfUrl": "...", "documentId": "...",
+   "folio": "...", "total": ..., "paymentUrl": "...", "pages": N,
+   "crmConversationId": "..." }`. Manda primero el `pdfUrl`, luego (si hay) el
+   `paymentUrl`. Confirma el total con el número que devolvió el script, no con
    uno que hayas calculado tú.
+
+## Registro en el CRM — automático, no lo hagas tú
+
+El script registra la orden en **Formmy** por su cuenta: resuelve la conversación
+por el teléfono del chat, crea la orden (folio, productos, total, URL del PDF,
+dirección de entrega) en la etapa `Cotización enviada`, y guarda los datos
+fiscales del cliente. `crmConversationId` en la salida confirma que quedó.
+
+**No llames tools del CRM para esto** — duplicarías la orden. Si el registro
+falla, el script lo avisa por stderr (`[quote] CRM: …`) y **la cotización se manda
+igual**: nunca bloquees el envío por un fallo del CRM.
+
+El movimiento de etapa cuando el cliente paga **también es automático** (lo hace
+el servidor al detectar el pago). No lo hagas a mano.
+
+### Env que consume el script
+
+Ya vienen en el entorno del worker; solo importa si estás depurando:
+`EASYBITS_API_KEY`, `EASYBITS_BASE_URL`, `FORMMY_SECRET_KEY`, `FORMMY_API_URL`,
+`NANOCLAW_CHAT_JID` (identifica la conversación), `QUOTE_CRM_ESTATUS` (etapa
+inicial), `WABA_LAST_LOCATION_URL` (última ubicación compartida), `MP_ACCESS_TOKEN`
+y las `QUOTE_*` de marca. Sin `FORMMY_SECRET_KEY` o sin `NANOCLAW_CHAT_JID` el
+registro en CRM se omite en silencio y el PDF sale igual.
 
 ## Errores
 

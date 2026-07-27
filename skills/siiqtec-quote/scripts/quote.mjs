@@ -180,6 +180,9 @@ function renderTotalsBlock(subtotal, envioLabel, envioValueText, envioColor, tot
 
 function renderProductPage({ input, pageItems, pageAmounts, pageNum, pageTotal, totalsBlock }) {
   const c = input.cliente;
+  // Colonia/Ciudad/CP salen del resuelto: si el agente los dejó dentro del domicilio, el
+  // parseo los recupera y el PDF deja de mostrar guiones donde sí había dato.
+  const d = resolveDireccion(input);
   const dash = (v) => (v && String(v).trim() ? escapeHtml(v) : '—');
   const fechaStr = escapeHtml(input.fecha || todayMx());
   const rows = pageItems.map((it, i) => renderItemRow(it, pageAmounts[i])).join('\n');
@@ -214,8 +217,10 @@ function renderProductPage({ input, pageItems, pageAmounts, pageNum, pageTotal, 
       <div><span class="text-gray-500">Email: </span><span class="text-gray-700">${dash(c.email)}</span></div>
       <div><span class="text-gray-500">Tel: </span><span class="text-gray-700">${dash(c.tel)}</span></div>
       <div><span class="text-gray-500">Domicilio: </span><span class="text-gray-700">${dash(c.domicilio)}</span></div>
-      <div><span class="text-gray-500">Colonia: </span><span class="text-gray-700">${dash(c.colonia)}</span></div>
-      <div><span class="text-gray-500">Ciudad: </span><span class="text-gray-700">${dash(c.ciudad)}</span></div>
+      <div><span class="text-gray-500">Colonia: </span><span class="text-gray-700">${dash(d.colonia)}</span></div>
+      <div><span class="text-gray-500">Ciudad: </span><span class="text-gray-700">${dash(d.ciudad)}</span></div>
+      ${d.cp ? `<div><span class="text-gray-500">C.P.: </span><span class="text-gray-700">${escapeHtml(d.cp)}</span></div>` : ''}
+      ${d.mapsUrl ? `<div><span class="text-gray-500">Ubicación: </span><a href="${escapeHtml(d.mapsUrl)}" class="text-gray-700 underline">ver mapa</a></div>` : ''}
       <div><span class="text-gray-500">Vendedor: </span><span class="text-gray-700">${dash(c.vendedor || BRAND.shortName)}</span></div>
     </div>
   </div>
@@ -430,7 +435,185 @@ async function uploadPublicPdf(buf, fileName) {
   return file.url;
 }
 
+// --- CRM (Formmy) ----------------------------------------------------------------
+// El registro del pedido NO puede depender de que el agente se acuerde de llamar una tool:
+// se probó con instrucción suave y con paso obligatorio en el prompt, y las dos veces cerró
+// el turno sin hacerlo (las tools del MCP llegan diferidas y no las va a buscar). Acá es
+// determinista: si se generó la cotización, queda en el tablero.
+//
+// Best-effort ABSOLUTO: cualquier fallo se loguea a stderr y la cotización sigue su curso.
+// Nunca tirar una venta porque el CRM no contestó.
+function formmyEnv() {
+  const key = process.env.FORMMY_SECRET_KEY;
+  const jid = process.env.NANOCLAW_CHAT_JID || '';
+  const m = /^waba:([^:]+):(.+)$/.exec(jid); // waba:<integrationId>:<phone>
+  if (!key || !m) return null;
+  return {
+    key,
+    base: (process.env.FORMMY_API_URL || 'https://formmy.app').replace(/\/$/, ''),
+    integrationId: m[1],
+    phone: m[2],
+  };
+}
+
+async function formmyPost(cfg, intent, params, body) {
+  const url = new URL(`${cfg.base}/api/v2/sdk`);
+  url.searchParams.set('intent', intent);
+  for (const [k, v] of Object.entries(params)) url.searchParams.set(k, String(v));
+  const res = await fetch(url, {
+    method: 'POST', // /api/v2/sdk solo tiene handler GET y POST; estos intents son POST
+    headers: { 'X-Secret-Key': cfg.key, ...(body ? { 'Content-Type': 'application/json' } : {}) },
+    body: body ? JSON.stringify(body) : undefined,
+    signal: AbortSignal.timeout(15000),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data?.error || `sdk ${res.status}`);
+  return data;
+}
+
+async function registerOrderInFormmy({ input, totals, pdfUrl }) {
+  const cfg = formmyEnv();
+  if (!cfg) { console.error('[quote] CRM: sin FORMMY_SECRET_KEY o sin NANOCLAW_CHAT_JID — omitido'); return null; }
+  try {
+    // La conversación se resuelve por el JID del turno → siempre la del cliente que está
+    // escribiendo, nunca otra.
+    const r = await formmyPost(cfg, 'conversations.resolveByPhone', {
+      integrationId: cfg.integrationId,
+      phone: cfg.phone,
+    });
+    const conversationId = r?.conversationId;
+    if (!conversationId) throw new Error('resolveByPhone sin conversationId');
+
+    const productos = input.items.map((it, i) => ({
+      nombre: it.nombre,
+      sku: it.sku,
+      cantidad: it.qty,
+      precioUnitario: it.unit_price,
+      subtotal: totals.amounts?.[i] ?? it.qty * it.unit_price,
+      imagen: it.imagen_url || undefined,
+    }));
+    const envio = input.envio || {};
+    const dir = resolveDireccion(input);
+    console.error(`[quote] dirección: ciudad=${dir.ciudad || '-'} cp=${dir.cp || '-'} colonia=${dir.colonia || '-'} maps=${dir.mapsUrl ? 'sí' : 'no'}`);
+    const envioTxt = envio.modo === 'paqueteria'
+      ? `Paquetería ${envio.carrier || ''} · CP ${envio.cp || ''} · ${envio.dias || ''} · ${envio.costo ?? 0}`
+      : `Ruta propia ${envio.dia || ''} · ${envio.destino || ''}`;
+
+    await formmyPost(cfg, 'conversations.createOrder', { conversationId }, {
+      folio: input.folio,
+      cliente: input.cliente?.nombre,
+      tel: input.cliente?.tel || telFromJid() || undefined,
+      total: totals.total,
+      cotizacionUrl: pdfUrl,
+      estatus: process.env.QUOTE_CRM_ESTATUS || 'Cotización enviada',
+      notas: `Folio ${input.folio} · ${input.items.length} producto(s) · Total ${totals.total}\nEnvío: ${envioTxt}\nVigencia: 3 días naturales${dir.mapsUrl ? `\nUbicación: ${dir.mapsUrl}` : ''}`,
+      productos,
+      direccionEntrega: dir.direccion
+        ? { direccion: dir.direccion, ciudad: dir.ciudad, cp: dir.cp, ...(dir.mapsUrl ? { mapsUrl: dir.mapsUrl } : {}) }
+        : undefined,
+    });
+    console.error(`[quote] CRM: orden ${input.folio} registrada en ${conversationId}`);
+
+    // Ficha de contacto: el domicilio es REQUISITO del input, así que a estas alturas
+    // siempre lo tenemos — dejarlo fuera del CRM y que el operador vea "--" no tiene
+    // sentido. email/rfc/razón social solo si el cliente los dio. Best-effort aparte:
+    // si esto falla, la orden ya quedó registrada.
+    const contacto = {};
+    if (input.cliente?.email) contacto.email = input.cliente.email;
+    if (input.cliente?.rfc) contacto.rfc = input.cliente.rfc;
+    if (input.cliente?.negocio) contacto.razonSocial = input.cliente.negocio;
+    if (dir.direccion) {
+      contacto.direccion = {
+        label: 'Entrega',
+        direccion: dir.direccion,
+        ciudad: dir.ciudad,
+        cp: dir.cp,
+        mapsUrl: dir.mapsUrl,
+      };
+    }
+    if (Object.keys(contacto).length) {
+      try {
+        await formmyPost(cfg, 'conversations.setContact', { conversationId }, contacto);
+        console.error(`[quote] CRM: contacto actualizado (${Object.keys(contacto).join(', ')})`);
+      } catch (e) {
+        console.error(`[quote] CRM: setContact falló (${e instanceof Error ? e.message : String(e)})`);
+      }
+    }
+    return conversationId;
+  } catch (e) {
+    console.error(`[quote] CRM: no se registró la orden (${e instanceof Error ? e.message : String(e)})`);
+    return null;
+  }
+}
+
+// El teléfono del cliente YA lo sabemos: es el número con el que está escribiendo. Si el
+// agente no lo puso en el input (pasa seguido), lo tomamos del JID del turno en vez de
+// dejar la cotización sin contacto. Normaliza 52/521 + 10 dígitos → 10 dígitos.
+function telFromJid() {
+  const m = /^waba:[^:]+:(\d+)$/.exec(process.env.NANOCLAW_CHAT_JID || '');
+  if (!m) return null;
+  const d = m[1].replace(/\D/g, '');
+  return d.length >= 10 ? d.slice(-10) : null;
+}
+
+// Estados de México, para reconocer dónde termina la ciudad al desglosar un domicilio
+// escrito de corrido ("…, Cuautepec de Hinojosa, Hidalgo, CP 43740").
+const MX_ESTADOS = ['Aguascalientes','Baja California','Baja California Sur','Campeche','Chiapas','Chihuahua','Coahuila','Colima','Ciudad de México','CDMX','Durango','Estado de México','México','Guanajuato','Guerrero','Hidalgo','Jalisco','Michoacán','Morelos','Nayarit','Nuevo León','Oaxaca','Puebla','Querétaro','Quintana Roo','San Luis Potosí','Sinaloa','Sonora','Tabasco','Tamaulipas','Tlaxcala','Veracruz','Yucatán','Zacatecas'];
+
+/** Desglosa un domicilio escrito de corrido. Red de seguridad: SOLO se usa para rellenar
+ *  huecos, nunca para pisar lo que el agente ya mandó estructurado. */
+export function parseDomicilio(s) {
+  const out = {};
+  const str = String(s || '').trim();
+  if (!str) return out;
+  // CP: se prefiere el marcado explícitamente; 5 dígitos sueltos SOLO al final, para no
+  // confundir un número exterior largo con un código postal.
+  const cpm = str.match(/\bC\.?\s*P\.?\s*:?\s*(\d{5})\b/i) || str.match(/\b(\d{5})\s*$/);
+  if (cpm) out.cp = cpm[1];
+  const parts = str.split(',').map((p) => p.trim()).filter(Boolean);
+  const colRe = /^(col\.?|colonia|fracc\.?|fraccionamiento|barrio|u\.?h\.?|unidad habitacional)\s+/i;
+  const col = parts.find((p) => colRe.test(p));
+  if (col) out.colonia = col.replace(colRe, '').trim();
+  const iEstado = parts.findIndex((p) => MX_ESTADOS.some((e) => p.toLowerCase() === e.toLowerCase()));
+  // Quita el CP del segmento, venga marcado ("CP 43740") o suelto al final ("… 06600").
+  const limpia = (v) => v.replace(/\bC\.?\s*P\.?\s*:?\s*\d{5}\b/i, '').replace(/\s*\b\d{5}\b\s*$/, '').replace(/,\s*$/, '').trim();
+  if (iEstado > 0) {
+    out.estado = parts[iEstado];
+    const ciudad = limpia(parts[iEstado - 1]);
+    if (ciudad && ciudad !== col) out.ciudad = ciudad;
+  } else {
+    // Sin estado reconocible: la ciudad es el último segmento útil que no sea la calle.
+    const cand = [...parts].reverse().find((p) => p !== col && !/^C\.?\s*P\.?/i.test(p) && !/^\d{5}$/.test(p));
+    if (cand && cand !== parts[0]) { const c = limpia(cand); if (c) out.ciudad = c; }
+  }
+  return out;
+}
+
+/** Dirección final: lo estructurado del agente MANDA, el parseo sólo rellena. El agente
+ *  tiene contexto que el string no tiene (el cliente pudo corregir la ciudad), así que el
+ *  parseo nunca puede empeorar un dato bueno. Mismo criterio que telFromJid(). */
+export function resolveDireccion(input) {
+  const c = input.cliente || {};
+  const env = input.envio || {};
+  const p = parseDomicilio(c.domicilio);
+  const t = (v) => (typeof v === 'string' && v.trim() ? v.trim() : undefined);
+  return {
+    direccion: c.domicilio,
+    ciudad: t(c.ciudad) || p.ciudad,
+    colonia: t(c.colonia) || p.colonia,
+    estado: t(c.estado) || p.estado,
+    cp: t(c.cp) || t(env.cp) || p.cp,
+    // La ubicación compartida por WhatsApp llega por env desde el canal (puede ser de un
+    // turno anterior); un maps_url explícito del agente le gana.
+    mapsUrl: t(c.maps_url) || t(process.env.WABA_LAST_LOCATION_URL),
+  };
+}
+
 export async function runQuote(input) {
+  if (input?.cliente && !String(input.cliente.tel || '').trim()) {
+    const tel = telFromJid();
+    if (tel) { input.cliente.tel = tel; console.error(`[quote] tel del cliente tomado del chat: ${tel}`); }
+  }
   validate(input);
   await pruneBrokenImages(input.items);
   const totals = computeTotals(input);
@@ -440,7 +623,8 @@ export async function runQuote(input) {
   const documentId = await createDocumentRest(name, pages);
   const pdf = await exportPdfRest(documentId);
   const pdfUrl = await uploadPublicPdf(pdf, `COT-${input.folio}.pdf`);
-  return { pdfUrl, documentId, folio: input.folio, total: totals.total, paymentUrl, pages: pages.length };
+  const crmConversationId = await registerOrderInFormmy({ input, totals, pdfUrl });
+  return { pdfUrl, documentId, folio: input.folio, total: totals.total, paymentUrl, pages: pages.length, crmConversationId };
 }
 
 // --- CLI ---------------------------------------------------------------------
