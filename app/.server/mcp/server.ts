@@ -3005,15 +3005,32 @@ function registerDocTools(server: McpServer) {
 
   // ─── Quotation schemas & helpers ──────────────────────────────────
 
-  const quotationItemSchema = z.object({
-    description: z.string().describe("Item description"),
-    quantity: z.number().describe("Quantity"),
-    unit: z.string().optional().describe("Unit (e.g. 'pz', 'kg', 'hr')"),
-    unitPrice: z.number().describe("Unit price"),
-    total: z.number().describe("Line total (quantity × unitPrice - discount)"),
-    code: z.string().optional().describe("SKU or product code"),
-    discount: z.number().optional().describe("Line discount amount"),
-  });
+  // The model supplies BOTH unitPrice and total, and nothing used to check that they agree — a
+  // line could read "3 × $95.00 = $200.00" and render straight into a customer-facing PDF. The
+  // refine below makes that arithmetic non-negotiable. It does NOT check unitPrice against any
+  // catalog; that's a separate (and bigger) guard. See the nanoclaw catalog-price-guard for the
+  // shape that does.
+  const quotationItemSchema = z
+    .object({
+      description: z.string().describe("Item description"),
+      quantity: z.number().describe("Quantity"),
+      unit: z.string().optional().describe("Unit (e.g. 'pz', 'kg', 'hr')"),
+      unitPrice: z.number().describe("Unit price"),
+      total: z.number().describe("Line total (quantity × unitPrice - discount)"),
+      code: z.string().optional().describe("SKU or product code"),
+      discount: z.number().optional().describe("Line discount amount"),
+    })
+    .refine(
+      (i) => Math.abs(i.total - (i.quantity * i.unitPrice - (i.discount ?? 0))) < 0.01,
+      (i) => ({
+        message:
+          `total no cuadra: ${i.quantity} × ${i.unitPrice}` +
+          (i.discount ? ` − ${i.discount}` : "") +
+          ` = ${(i.quantity * i.unitPrice - (i.discount ?? 0)).toFixed(2)}, pero enviaste ${i.total}. ` +
+          `Corrige el cálculo — no ajustes unitPrice para que cuadre.`,
+        path: ["total"],
+      }),
+    );
 
   const companySchema = z.object({
     name: z.string().describe("Company name"),
