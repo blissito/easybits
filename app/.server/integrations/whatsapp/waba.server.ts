@@ -34,6 +34,11 @@ export type WabaOrg = {
   enabled?: boolean; // legacy master ON/OFF (compat)
   allowedSenders?: string[];
   pausedUntil?: Record<string, string>;
+  // Última ubicación compartida POR CONVERSACIÓN (np → punto). Se persiste porque la
+  // ubicación llega como un mensaje suelto, casi siempre TURNOS ANTES de que el cliente
+  // pida la cotización: si sólo vive en el texto del turno, para cuando el script corre ya
+  // no existe y el repartidor se queda sin el punto exacto.
+  lastLocation?: Record<string, { lat: number; lng: number; url: string; name?: string; address?: string; at: string }>;
 };
 
 export type WabaConfig = {
@@ -320,6 +325,9 @@ export async function runWabaTurn(args: {
       appendSystemPrompt: org?.systemPrompt,
       denikApiKey: org?.denikApiKey,
       admin,
+      // La última ubicación de esta conversación, para que la skill de Cotización la use
+      // sin depender de que el modelo la copie del texto de un turno anterior.
+      turnEnvExtra: await locationEnvFor(fleetAgentId, integrationId, convId),
     },
     { skipRateLimit: false, hasMedia: content.hasMedia, skipUserLog }
   );
@@ -510,6 +518,63 @@ export async function setAllowedSenderAtomic(
   const path = `wabaConfig.orgs.${integrationId}.allowedSenders`;
   const u = on ? { $addToSet: { [path]: np } } : { $pull: { [path]: np } };
   await db.$runCommandRaw({ update: "FleetAgent", updates: [{ q: { _id: { $oid: fleetAgentId } }, u }] });
+}
+
+export async function recordLastLocation(
+  fleetAgentId: string,
+  integrationId: string,
+  np: string,
+  loc: { latitude?: number; longitude?: number; name?: string; address?: string }
+): Promise<void> {
+  try {
+    if (!integrationId || !np) return;
+    if (!Number.isFinite(loc.latitude) || !Number.isFinite(loc.longitude)) return;
+    const q = `${loc.latitude},${loc.longitude}`;
+    const path = `wabaConfig.orgs.${integrationId}.lastLocation.${np}`;
+    const value = {
+      lat: loc.latitude,
+      lng: loc.longitude,
+      url: `https://maps.google.com/?q=${q}`,
+      ...(loc.name ? { name: loc.name } : {}),
+      ...(loc.address ? { address: loc.address } : {}),
+      at: new Date().toISOString(),
+    };
+    await db.$runCommandRaw({
+      update: "FleetAgent",
+      updates: [{ q: { _id: { $oid: fleetAgentId } }, u: { $set: { [path]: value } } }],
+    });
+  } catch (e) {
+    console.error(`[waba] recordLastLocation ${fleetAgentId}/${np} failed:`, e instanceof Error ? e.message : e);
+  }
+}
+
+// Una ubicación de hace un mes probablemente era para otra cosa; no queremos resucitarla
+// en una cotización nueva.
+const LOCATION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+
+/** Env del turno con la última ubicación de esta conversación, para que un script del
+ *  agente (la skill de Cotización) la use sin depender de que el modelo la copie. Lee
+ *  FRESCO de DB: el `org` del webhook se capturó antes de esta escritura. */
+export async function locationEnvFor(
+  fleetAgentId: string,
+  integrationId: string,
+  np: string
+): Promise<Record<string, string>> {
+  try {
+    const fa = await db.fleetAgent.findUnique({ where: { id: fleetAgentId }, select: { wabaConfig: true } });
+    const loc = ((fa?.wabaConfig as WabaConfig | null)?.orgs ?? {})[integrationId]?.lastLocation?.[np];
+    if (!loc?.url) return {};
+    const at = Date.parse(loc.at || "");
+    if (at && Date.now() - at > LOCATION_TTL_MS) return {};
+    return {
+      WABA_LAST_LOCATION_URL: loc.url,
+      WABA_LAST_LOCATION_LATLNG: `${loc.lat},${loc.lng}`,
+      ...(loc.address ? { WABA_LAST_LOCATION_ADDRESS: loc.address } : {}),
+      ...(loc.name ? { WABA_LAST_LOCATION_LABEL: loc.name } : {}),
+    };
+  } catch {
+    return {};
+  }
 }
 
 // Cachea (para VISIBILIDAD en el Inbox) el `paused_until` que Formmy manda por

@@ -434,6 +434,11 @@ type InboundMessage = {
   // para que el agente gestione números/identidad/capacidades. Solo lo setea el
   // surface tras verificar is_from_me + número normalizado — nunca el agente.
   admin?: boolean;
+  // Env EXTRA por turno para el worker (se mergea en turnEnv). El canal lo usa para pasarle
+  // a los scripts del agente hechos del canal que no caben en el texto — p.ej. la última
+  // ubicación compartida por esta conversación, que suele venir de un turno ANTERIOR.
+  // NANOCLAW_CHAT_JID se aplica DESPUÉS: el canal no puede pisar la identidad del hilo.
+  turnEnvExtra?: Record<string, string>;
 };
 
 // ── MCP catalog (config-driven capabilities, nanoclaw parity) ────────────────
@@ -1720,7 +1725,7 @@ export async function routeMessage(
           // conversación pertenece, y el registro en el CRM se saltaba en silencio
           // ("sin FORMMY_SECRET_KEY o sin NANOCLAW_CHAT_JID"). Va por turno, no al spawn,
           // porque una misma VM atiende hasta maxWorkersPerVm conversaciones distintas.
-          turnEnv: { ...(codeCaps?.env ?? {}), NANOCLAW_CHAT_JID: msg.groupId },
+          turnEnv: { ...(codeCaps?.env ?? {}), ...(msg.turnEnvExtra ?? {}), NANOCLAW_CHAT_JID: msg.groupId },
           // Per-grupo: la dnk_pub_ del org dueño de este grupo. El body gana
           // (canales web la mandan por turno); cae a fleetAgent.groupKeys[cfgId]
           // (registrado al crear el grupo, ruta WhatsApp). cfgId = configGroupId

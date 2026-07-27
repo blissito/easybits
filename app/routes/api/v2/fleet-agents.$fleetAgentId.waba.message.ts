@@ -10,6 +10,7 @@ import {
   hasWabaExtras,
   stripFormmyPlaceholder,
   recordPausedUntil,
+  recordLastLocation,
   persistInboundUserMessage,
   enqueueWabaTurn,
 } from "~/.server/integrations/whatsapp/waba.server";
@@ -110,6 +111,13 @@ export async function action({ request, params }: Route.ActionArgs) {
   // Visibilidad del Inbox: cachea el `paused_until` de Formmy (escritura atómica).
   if (integrationId && np) {
     void recordPausedUntil(fleetAgentId, integrationId, np, body.paused_until ?? null);
+  }
+  // La ubicación se guarda ANTES de los gates a propósito: el caso típico es que el cliente
+  // la comparte mientras un humano tiene la conversación en pausa, y si se pierde ahí el
+  // repartidor se queda sin el punto exacto. `!is_from_me` para no guardar la ubicación de
+  // la sucursal cuando el negocio se la manda al cliente.
+  if (integrationId && np && extras.location && !body.is_from_me) {
+    void recordLastLocation(fleetAgentId, integrationId, np, extras.location);
   }
 
   // ACK immediately. Anything that means "nothing to answer" still returns 200.
