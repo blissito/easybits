@@ -81,7 +81,7 @@ async function mapLimit(items, fn) {
   return out;
 }
 
-const stats = { checked: 0, orphans: 0, deleted: 0, failed: 0 };
+const stats = { checked: 0, orphans: 0, skipped: 0, deleted: 0, failed: 0 };
 const findings = [];
 
 // --- 1. File rows that shouldn't be public anymore ---------------------------
@@ -116,6 +116,17 @@ await mapLimit(rows, async (f) => {
       continue;
     }
     if (!alive) continue;
+    // GUARD: `status:"DELETED"` sin `deletedAt` no es una papelera de verdad — es un
+    // estado anómalo, y esos objetos suelen seguir EN USO (p.ej. los catálogos que un
+    // agente le sirve a clientes por WhatsApp). Se reportan, nunca se borran: un
+    // borrado aquí es irreversible y rompe flujos vivos. Purgar sólo tras revisarlo
+    // a mano, archivo por archivo.
+    const inUseRisk = f.status === "DELETED" && !f.deletedAt;
+    if (inUseRisk) {
+      stats.skipped++;
+      console.log(`  EN RIESGO (no se toca) ${key}  ${alive.size}B  ${f.name} — DELETED sin deletedAt`);
+      continue;
+    }
     stats.orphans++;
     findings.push({ kind: "file", fileId: f.id, name: f.name, access: f.access, status: f.status, key, size: alive.size });
     console.log(`  ORPHAN ${key}  (${f.access}/${f.status})  ${alive.size}B  ${f.name}`);
