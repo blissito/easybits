@@ -504,36 +504,36 @@ export async function reapIdleServiceBoxes(): Promise<{ checked: number; destroy
 // Por eso el barrido mira lo que el HOST dice que existe, no lo que nuestra
 // tabla cree.
 async function sweepOrphanServiceBoxes(rows: { ownerId: string; kind: string; sandboxId: string }[]): Promise<number> {
-  const conocidas = new Set(rows.map((r) => r.sandboxId));
-  const plantillas = new Map(Object.entries(SERVICE_REGISTRY).map(([, s]) => [s.template as string, s]));
-  let destruidas = 0;
+  const tracked = new Set(rows.map((r) => r.sandboxId));
+  const specByTemplate = new Map(Object.entries(SERVICE_REGISTRY).map(([, s]) => [s.template as string, s]));
+  let destroyed = 0;
 
   for (const ownerId of new Set(rows.map((r) => r.ownerId))) {
     const ctx = await ctxForServiceOwner(ownerId).catch(() => null);
     if (!ctx) continue;
-    const cajas = await listSandboxes(ctx).catch(() => []);
-    for (const c of cajas) {
-      const spec = plantillas.get(c.template);
-      if (!spec || conocidas.has(c.sandboxId)) continue;
+    const boxes = await listSandboxes(ctx).catch(() => []);
+    for (const box of boxes) {
+      const spec = specByTemplate.get(box.template);
+      if (!spec || tracked.has(box.sandboxId)) continue;
       // Sólo cajas más viejas que el TTL del spec. Sin esta guarda, una que
       // spawnServiceBox está creando AHORA (todavía sin fila) sería candidata y
       // la mataríamos a media alta.
-      const edadMs = Date.now() - Date.parse(c.createdAt);
-      if (!(edadMs >= spec.ttlSeconds * 1000)) continue;
+      const ageMs = Date.now() - Date.parse(box.createdAt);
+      if (!(ageMs >= spec.ttlSeconds * 1000)) continue;
       try {
-        await destroySandbox(ctx, c.sandboxId);
-        destruidas++;
+        await destroySandbox(ctx, box.sandboxId);
+        destroyed++;
         // Se dice en voz alta a propósito: una destrucción silenciosa es peor
         // que la fuga, porque nadie se entera de que había una.
         console.error(
-          `[service-sweep] huérfana destruida: ${c.sandboxId} (${c.template}, owner ${ownerId}, ${Math.round(edadMs / 60_000)}min sin fila)`
+          `[service-sweep] huérfana destruida: ${box.sandboxId} (${box.template}, owner ${ownerId}, ${Math.round(ageMs / 60_000)}min sin fila)`
         );
       } catch (e) {
-        console.error(`[service-sweep] no se pudo destruir ${c.sandboxId}:`, (e as Error).message);
+        console.error(`[service-sweep] no se pudo destruir ${box.sandboxId}:`, (e as Error).message);
       }
     }
   }
-  return destruidas;
+  return destroyed;
 }
 
 // Background AuthContext for the box owner (the reaper runs outside any HTTP
