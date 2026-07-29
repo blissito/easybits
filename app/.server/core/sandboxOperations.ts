@@ -2115,6 +2115,11 @@ export async function createAgent(
     /** Override explícito de recursos de la VM (fleetAgent worker sizing). */
     memoryMb?: number;
     vcpus?: number;
+    // Red de seguridad de siesta: con esto, el timer de `timeoutSeconds` del host
+    // SUSPENDE (snapshot) en vez de DESTRUIR. Lo usan los workers de flota, cuyo
+    // apagado normal lo hace el reaper propio de easybits — si ese latido se para
+    // (deploy, restart, health check caído), esto es lo único que devuelve la RAM.
+    suspendOnIdle?: boolean;
   }
 ): Promise<CreatedAgent> {
   requireScope(ctx, "WRITE");
@@ -2333,6 +2338,7 @@ export async function createAgent(
     name: params.name,
     memoryMb: params.memoryMb,
     vcpus: params.vcpus,
+    suspendOnIdle: params.suspendOnIdle,
     // Telemetría: toda caja con runtime de agente entra como "embed". spawnVm la
     // re-etiqueta a "worker" con su back-fill cuando es una VM de flota — no se
     // puede decidir aquí porque el mismo template (claude-worker) sirve a los dos.

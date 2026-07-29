@@ -1203,7 +1203,7 @@ export function selectHotSpares(vms: { id: string; routes: number }[], warmSpare
 
 // Spawn a fresh VM for the fleetAgent, branded from persona, RAM-gated.
 
-async function spawnVm(ctx: AuthContext, fleetAgent: { id: string; name: string | null; workerTemplate: string; persona: unknown; vmMemMb: number; maxVms: number; oauthSecretName: string | null; token: string }) {
+async function spawnVm(ctx: AuthContext, fleetAgent: { id: string; name: string | null; workerTemplate: string; persona: unknown; vmMemMb: number; maxVms: number; oauthSecretName: string | null; token: string; idleSuspendMin: number }) {
   // ── Account sandbox budget (la fuente de verdad, consistente con el HUD) ──
   // El plan da `concurrentSandboxes` y las reservas (add-ons) suman. TODAS las
   // sandboxes del owner en el host consumen este budget — workers de CUALQUIER
@@ -1287,6 +1287,23 @@ async function spawnVm(ctx: AuthContext, fleetAgent: { id: string; name: string 
     seedFiles: persona.seedFiles,
     memoryMb: fleetAgent.vmMemMb, // size the VM per the channel's config (e.g. 512MB)
     vcpus: fleetAgent.vmMemMb <= 512 ? 1 : 2,
+    // ── Red de seguridad: siesta NATIVA del daemon ────────────────────────────
+    // Quien duerme estas VMs normalmente es reapIdleFleetAgents (abajo), que
+    // respalda cada conversación a S3 ANTES de suspender. Ese reaper es el ÚNICO
+    // que las apaga, y sólo late mientras el health check de Fly pega cada 30s:
+    // un deploy, un restart o un health check caído y NADIE las duerme.
+    //
+    // Con esto el timer del propio host las suspende. Dos propiedades lo hacen
+    // seguro: (a) el TTL va POR ENCIMA del nuestro (idleSuspendMin + 5) para que
+    // en operación normal siempre gane nuestro reaper —con su respaldo— y éste
+    // no dispare nunca; (b) suspender CONSERVA el disco, así que una siesta sin
+    // respaldo no pierde nada (el respaldo existe porque nuestra etapa 2
+    // DESTRUYE, y esa la sigue haciendo el reaper).
+    //
+    // De paso arregla algo peor que estaba vivo: sin suspendOnIdle el timer del
+    // host DESTRUÍA la VM a los 30 min (DEFAULT_TIMEOUT_S) sin respaldo alguno.
+    suspendOnIdle: true,
+    timeoutSeconds: (fleetAgent.idleSuspendMin + 5) * 60,
   });
   auditLog("spawn", { fleetAgent: fleetAgent.id, agentId: created.agentId, memMb: fleetAgent.vmMemMb, box: target.url });
   // Telemetría: createSandbox ya abrió el intervalo, pero NO podía saber a qué
