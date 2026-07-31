@@ -47,6 +47,8 @@ export type WabaOrg = {
   // Override de las etiquetas de columna por tenant (forma de pago → label del tablero).
   // Sin esto, DEFAULT_PAYMENT_STAGES.
   paymentStages?: Record<string, string>;
+  // Etiqueta de la columna de cancelación. Sin esto, DEFAULT_CANCEL_STAGE ("Cancelado").
+  cancelStage?: string;
 };
 
 export type WabaConfig = {

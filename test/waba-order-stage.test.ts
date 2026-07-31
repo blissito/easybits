@@ -3,8 +3,10 @@ import {
   shouldFireStage,
   stageLabelFor,
   DEFAULT_PAYMENT_STAGES,
+  DEFAULT_CANCEL_STAGE,
   STAGE_REFIRE_MS,
 } from "~/.server/integrations/whatsapp/wabaOrderStage";
+import type { PaymentSignal } from "~/.server/integrations/whatsapp/wabaOrderStage";
 import type { WabaOrg } from "~/.server/integrations/whatsapp/waba.server";
 
 const NOW = Date.parse("2026-07-27T18:00:00.000Z");
@@ -36,27 +38,50 @@ describe("shouldFireStage — guarda anti-eco", () => {
   });
 });
 
-describe("stageLabelFor — forma de pago → columna del tablero", () => {
+const avanzar = (forma: PaymentSignal["forma"]): PaymentSignal => ({
+  accion: "avanzar",
+  forma,
+  monto: null,
+});
+const cancelar: PaymentSignal = { accion: "cancelar", forma: "desconocida", monto: null };
+
+describe("stageLabelFor — señal del turno → columna del tablero", () => {
   it("mapea las tres formas conocidas a las etiquetas de TOTEQUIM", () => {
-    expect(stageLabelFor("transferencia")).toBe("Pago con transferencia");
-    expect(stageLabelFor("tarjeta")).toBe("Pago con tarjeta");
-    expect(stageLabelFor("contra_entrega")).toBe("Pago a contra entrega");
+    expect(stageLabelFor(avanzar("transferencia"))).toBe("Pago con transferencia");
+    expect(stageLabelFor(avanzar("tarjeta"))).toBe("Pago con tarjeta");
+    expect(stageLabelFor(avanzar("contra_entrega"))).toBe("Pago a contra entrega");
   });
 
   it("'desconocida' no mueve nada — mejor no tocar que mover mal", () => {
-    expect(stageLabelFor("desconocida")).toBeNull();
+    expect(stageLabelFor(avanzar("desconocida"))).toBeNull();
+  });
+
+  it("'ninguna' no mueve nada aunque venga con una forma", () => {
+    expect(
+      stageLabelFor({ accion: "ninguna", forma: "transferencia", monto: 100 })
+    ).toBeNull();
+  });
+
+  it("cancelar va a su columna, sin importar la forma", () => {
+    expect(stageLabelFor(cancelar)).toBe(DEFAULT_CANCEL_STAGE);
+    expect(stageLabelFor({ ...cancelar, forma: "tarjeta" })).toBe(DEFAULT_CANCEL_STAGE);
   });
 
   it("el tenant puede sobreescribir las etiquetas sin tocar código", () => {
-    const org = { paymentStages: { transferencia: "SPEI recibido" } } as WabaOrg;
-    expect(stageLabelFor("transferencia", org)).toBe("SPEI recibido");
+    const org = {
+      paymentStages: { transferencia: "SPEI recibido" },
+      cancelStage: "Perdido",
+    } as WabaOrg;
+    expect(stageLabelFor(avanzar("transferencia"), org)).toBe("SPEI recibido");
     // Las no-sobreescritas siguen con el default.
-    expect(stageLabelFor("tarjeta", org)).toBe("Pago con tarjeta");
+    expect(stageLabelFor(avanzar("tarjeta"), org)).toBe("Pago con tarjeta");
+    expect(stageLabelFor(cancelar, org)).toBe("Perdido");
   });
 
   it("un override vacío o parcial cae al default, no a null", () => {
-    const org = { paymentStages: { transferencia: "" } } as WabaOrg;
-    expect(stageLabelFor("transferencia", org)).toBe(DEFAULT_PAYMENT_STAGES.transferencia);
+    const org = { paymentStages: { transferencia: "" }, cancelStage: "" } as WabaOrg;
+    expect(stageLabelFor(avanzar("transferencia"), org)).toBe(DEFAULT_PAYMENT_STAGES.transferencia);
+    expect(stageLabelFor(cancelar, org)).toBe(DEFAULT_CANCEL_STAGE);
   });
 });
 

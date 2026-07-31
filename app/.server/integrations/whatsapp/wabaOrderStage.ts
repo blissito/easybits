@@ -1,4 +1,5 @@
-// Movimiento AUTOMÁTICO de la etapa del tablero (Formmy) cuando el cliente paga.
+// Movimiento AUTOMÁTICO de la etapa del tablero (Formmy) según lo que pasó en el turno:
+// el cliente pagó (avanzar) o el cliente desistió (cancelar).
 //
 // Por qué existe: pedirle al modelo que EJECUTE el efecto (llamar `set_order_status`)
 // falló 4 veces seguidas — cero llamadas `mcp__formmy__*` en el transcript, con la
@@ -11,6 +12,9 @@
 // schema, y el efecto lo aplica este código. Un modelo cumple mucho mejor "llena este
 // JSON" que "acuérdate de llamar esta tool".
 //
+// Este archivo es el schema de PERCEPCIÓN. El de EFECTO (mover la tarjeta) vive en
+// `formmyOrderActions.ts`, sin vocabulario de ventas, para que otras superficies lo reusen.
+//
 // Nota sobre el comprobante en imagen: el agente ya hizo visión sobre él y verbalizó el
 // monto en su respuesta ("Transferencia de $2,425.00 MXN del 27 de julio"), así que el
 // extractor lee ESO y no necesita visión propia.
@@ -19,9 +23,8 @@ import { z } from "zod";
 import { db } from "~/.server/db";
 import { getAiModel, resolveModelLocal } from "~/.server/aiModels";
 import { getSecretValue } from "~/.server/core/secretOperations";
+import { setOrderStage } from "./formmyOrderActions";
 import type { WabaOrg } from "./waba.server";
-
-const FORMMY_SDK_URL = `${(process.env.FORMMY_API_URL || "https://www.formmy.app").replace(/\/$/, "")}/api/v2/sdk`;
 
 // Formas de pago que reconocemos → etiqueta de la columna del tablero. Los labels son
 // los del tenant, así que `org.paymentStages` los puede sobreescribir sin tocar código.
@@ -31,41 +34,51 @@ export const DEFAULT_PAYMENT_STAGES: Record<string, string> = {
   contra_entrega: "Pago a contra entrega",
 };
 
+// Cancelación: igual, override por tenant vía `org.cancelStage`.
+export const DEFAULT_CANCEL_STAGE = "Cancelado";
+
 // Un "gracias por tu pago" minutos después no debe re-disparar. Pero una orden nueva
 // días después sí. No podemos distinguirlas leyendo (el SDK de Formmy no expone lectura
 // de órdenes), así que la ventana hace de proxy.
 export const STAGE_REFIRE_MS = 24 * 60 * 60 * 1000;
 
 export type PaymentSignal = {
-  mover: boolean;
+  accion: "avanzar" | "cancelar" | "ninguna";
   forma: "transferencia" | "tarjeta" | "contra_entrega" | "desconocida";
   monto: number | null;
 };
 
-// Ojo con la semántica de `mover`: NO es "hubo pago". Contra entrega es justamente el
+// Ojo con la semántica de "avanzar": NO es "hubo pago". Contra entrega es justamente el
 // caso donde todavía no hay dinero pero la tarjeta SÍ debe moverse, porque un pedido
 // confirmado ya compromete una ruta de reparto. Conflacionar ambas cosas en un booleano
 // "pago" hacía que contra-entrega nunca disparara.
 const PaymentSignalSchema = z.object({
-  mover: z
-    .boolean()
+  accion: z
+    .enum(["avanzar", "cancelar", "ninguna"])
     .describe(
-      "true si (a) el cliente reportó un pago YA HECHO o el asistente confirmó recibirlo, o (b) el cliente CONFIRMÓ EXPLÍCITAMENTE un pedido contra entrega. false si sólo se está cotizando, preguntando precios, o prometiendo pagar después."
+      '"avanzar" si (a) el cliente reportó un pago YA HECHO o el asistente confirmó recibirlo, o (b) el cliente CONFIRMÓ EXPLÍCITAMENTE un pedido contra entrega. "cancelar" si el cliente desistió EXPLÍCITAMENTE de la compra o el asistente confirmó la cancelación. "ninguna" en cualquier otro caso.'
     ),
   forma: z
     .enum(["transferencia", "tarjeta", "contra_entrega", "desconocida"])
-    .describe("Cómo se pagó o se pagará."),
+    .describe('Cómo se pagó o se pagará. Sólo importa cuando accion="avanzar".'),
   monto: z.number().nullable().describe("Monto en MXN si aparece; null si no se menciona."),
 });
 
-const PROMPT_HEADER = `Eres un extractor. Lee el intercambio de WhatsApp entre un cliente y el asistente de ventas, y decide si la orden debe avanzar de columna en el tablero de ventas.
+const PROMPT_HEADER = `Eres un extractor. Lee el intercambio de WhatsApp entre un cliente y el asistente de ventas, y decide si la orden debe cambiar de columna en el tablero de ventas.
 
-Reglas para "mover":
-- true si el pago YA ocurrió: el cliente dice que transfirió/pagó, mandó comprobante, o el asistente confirma haberlo recibido.
-- true TAMBIÉN si el cliente CONFIRMÓ EXPLÍCITAMENTE un pedido contra entrega (aún no paga, pero ya compromete una ruta de reparto).
-- false si sólo pregunta precios, pide la cuenta, está considerando la compra, o promete pagar después ("ahorita te deposito").
-- Si debe moverse pero no distingues la forma, usa forma="desconocida".
-- Ante la duda, mover=false. Un falso negativo se corrige a mano; un falso positivo mueve la tarjeta de un cliente que no ha pagado ni confirmado.`;
+"accion" = "avanzar" cuando:
+- El pago YA ocurrió: el cliente dice que transfirió/pagó, mandó comprobante, o el asistente confirma haberlo recibido.
+- O el cliente CONFIRMÓ EXPLÍCITAMENTE un pedido contra entrega (aún no paga, pero ya compromete una ruta de reparto).
+- Si debe avanzar pero no distingues la forma, usa forma="desconocida".
+
+"accion" = "cancelar" SÓLO cuando:
+- El cliente desiste EXPLÍCITAMENTE: "cancélalo", "ya no lo quiero", "mejor ya no", "conseguí con otro proveedor".
+- O el asistente confirma la cancelación del pedido.
+- NUNCA por: "lo voy a pensar", "está caro", "déjame ver", posponer la compra, quejas, reclamos o silencio. Eso es "ninguna".
+
+"accion" = "ninguna" en todo lo demás: cotizar, preguntar precios, pedir la cuenta, considerar la compra, o prometer pagar después ("ahorita te deposito").
+
+Ante la duda, accion="ninguna". Un falso negativo se corrige a mano; un falso positivo mueve la tarjeta de un cliente que no ha pagado, o mata una venta viva.`;
 
 /** Extrae la señal de pago del turno. Devuelve null si el modelo falla (best-effort). */
 export async function extractPaymentSignal(
@@ -104,40 +117,11 @@ export function shouldFireStage(
   return now - at > STAGE_REFIRE_MS;
 }
 
-/** Etiqueta de columna para una forma de pago, con override por tenant. */
-export function stageLabelFor(forma: PaymentSignal["forma"], org?: WabaOrg): string | null {
-  if (forma === "desconocida") return null;
-  return org?.paymentStages?.[forma] || DEFAULT_PAYMENT_STAGES[forma] || null;
-}
-
-type SdkParams = Record<string, string>;
-
-/** POST al SDK de Formmy. Espejo de `formmyPost` en la skill de Cotización (quote.mjs). */
-async function formmySdk(
-  key: string,
-  intent: string,
-  params: SdkParams,
-  body?: unknown
-): Promise<{ ok: boolean; status: number; data: any }> {
-  const url = new URL(FORMMY_SDK_URL);
-  url.searchParams.set("intent", intent);
-  for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {
-      "X-Secret-Key": key,
-      ...(body ? { "Content-Type": "application/json" } : {}),
-    },
-    body: body ? JSON.stringify(body) : undefined,
-    signal: AbortSignal.timeout(15000),
-  });
-  let data: any = null;
-  try {
-    data = await res.json();
-  } catch {
-    /* respuesta no-JSON: data queda null */
-  }
-  return { ok: res.ok, status: res.status, data };
+/** Etiqueta de columna para la señal del turno, con override por tenant. */
+export function stageLabelFor(signal: PaymentSignal, org?: WabaOrg): string | null {
+  if (signal.accion === "cancelar") return org?.cancelStage || DEFAULT_CANCEL_STAGE;
+  if (signal.accion !== "avanzar" || signal.forma === "desconocida") return null;
+  return org?.paymentStages?.[signal.forma] || DEFAULT_PAYMENT_STAGES[signal.forma] || null;
 }
 
 /** Escritura atómica de UNA ruta anidada del blob (mismo patrón que recordLastLocation). */
@@ -183,9 +167,9 @@ export async function maybeMovePaymentStage(args: {
     if (!key) return;
 
     const signal = await extractPaymentSignal(incomingText, reply);
-    if (!signal?.mover) return;
+    if (!signal || signal.accion === "ninguna") return;
 
-    const estatus = stageLabelFor(signal.forma, org);
+    const estatus = stageLabelFor(signal, org);
     if (!estatus) {
       console.log(`[waba] señal de avance para ${np} pero forma desconocida — sin mover etapa`);
       return;
@@ -196,22 +180,11 @@ export async function maybeMovePaymentStage(args: {
       return;
     }
 
-    const conv = await formmySdk(key, "conversations.resolveByPhone", { integrationId, phone: sender });
-    const conversationId = conv.data?.conversationId;
-    if (!conversationId) {
-      console.error(`[waba] resolveByPhone sin conversationId para ${np} (status ${conv.status})`);
-      return;
-    }
-
-    const move = await formmySdk(key, "conversations.setOrderStatus", { conversationId }, { estatus });
-    // Sin órdenes en la conversación = no hay nada que mover. Es el caso normal de un
-    // cliente que paga algo cotizado fuera del sistema; no es un error.
-    if (move.status === 404 || move.data?.code === "NO_ORDERS") {
-      console.log(`[waba] ${np} reportó pago pero la conversación no tiene órdenes — no-op`);
-      return;
-    }
-    if (!move.ok) {
-      console.error(`[waba] setOrderStatus falló (${move.status}):`, JSON.stringify(move.data).slice(0, 200));
+    const move = await setOrderStage(key, { integrationId, sender, estatus });
+    if (!move.moved) {
+      if (move.reason === "no-orders") {
+        console.log(`[waba] señal de ${np} pero la conversación no tiene órdenes — no-op`);
+      }
       return;
     }
 
