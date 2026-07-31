@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
+import { addressIdFor } from "~/.server/integrations/whatsapp/formmyOrderActions";
 import {
+  hasContactData,
   shouldFireStage,
   stageLabelFor,
   DEFAULT_PAYMENT_STAGES,
@@ -41,12 +43,24 @@ describe("shouldFireStage — guarda anti-eco", () => {
   });
 });
 
+const SIN_CONTACTO: PaymentSignal["contacto"] = {
+  email: null,
+  rfc: null,
+  razonSocial: null,
+  direccion: null,
+};
 const avanzar = (forma: PaymentSignal["forma"]): PaymentSignal => ({
   accion: "avanzar",
   forma,
   monto: null,
+  contacto: SIN_CONTACTO,
 });
-const cancelar: PaymentSignal = { accion: "cancelar", forma: "desconocida", monto: null };
+const cancelar: PaymentSignal = {
+  accion: "cancelar",
+  forma: "desconocida",
+  monto: null,
+  contacto: SIN_CONTACTO,
+};
 
 describe("stageLabelFor — señal del turno → columna del tablero", () => {
   it("mapea las tres formas conocidas a las etiquetas de TOTEQUIM", () => {
@@ -61,7 +75,7 @@ describe("stageLabelFor — señal del turno → columna del tablero", () => {
 
   it("'ninguna' no mueve nada aunque venga con una forma", () => {
     expect(
-      stageLabelFor({ accion: "ninguna", forma: "transferencia", monto: 100 })
+      stageLabelFor({ accion: "ninguna", forma: "transferencia", monto: 100, contacto: SIN_CONTACTO })
     ).toBeNull();
   });
 
@@ -75,6 +89,7 @@ describe("stageLabelFor — señal del turno → columna del tablero", () => {
       accion,
       forma: "desconocida",
       monto: null,
+      contacto: SIN_CONTACTO,
     });
     expect(stageLabelFor(sig("facturar"))).toBe(DEFAULT_INVOICE_STAGE);
     expect(stageLabelFor(sig("entregar"))).toBe(DEFAULT_CLOSED_STAGE);
@@ -101,6 +116,33 @@ describe("stageLabelFor — señal del turno → columna del tablero", () => {
     const org = { paymentStages: { transferencia: "" }, cancelStage: "" } as WabaOrg;
     expect(stageLabelFor(avanzar("transferencia"), org)).toBe(DEFAULT_PAYMENT_STAGES.transferencia);
     expect(stageLabelFor(cancelar, org)).toBe(DEFAULT_CANCEL_STAGE);
+  });
+});
+
+describe("hasContactData — gate barato antes de escribir la ficha", () => {
+  it("false cuando el turno no trajo nada (el caso normal)", () => {
+    expect(hasContactData(SIN_CONTACTO)).toBe(false);
+    expect(hasContactData(undefined)).toBe(false);
+    expect(hasContactData({ ...SIN_CONTACTO, direccion: { direccion: null, cp: null, ciudad: null } })).toBe(false);
+  });
+
+  it("true con cualquier dato, incluso una dirección parcial", () => {
+    expect(hasContactData({ ...SIN_CONTACTO, rfc: "XAXX010101000" })).toBe(true);
+    expect(hasContactData({ ...SIN_CONTACTO, direccion: { direccion: null, cp: "42000", ciudad: null } })).toBe(true);
+  });
+});
+
+describe("stableAddressId — la misma dirección NO se duplica en la ficha", () => {
+  it("mismo domicilio → mismo id, aunque cambien acentos, mayúsculas o puntuación", () => {
+    const a = addressIdFor({ direccion: "Av. Juárez 210", cp: "42000", ciudad: "Pachuca" });
+    const b = addressIdFor({ direccion: "AV JUAREZ 210", cp: "42000", ciudad: "pachuca" });
+    expect(a).toBe(b);
+  });
+
+  it("domicilios distintos → ids distintos", () => {
+    const a = addressIdFor({ direccion: "Av. Juárez 210", cp: "42000", ciudad: "Pachuca" });
+    const b = addressIdFor({ direccion: "Av. Juárez 211", cp: "42000", ciudad: "Pachuca" });
+    expect(a).not.toBe(b);
   });
 });
 

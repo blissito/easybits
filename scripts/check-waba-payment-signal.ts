@@ -12,6 +12,7 @@
  */
 import { extractPaymentSignal } from "../app/.server/integrations/whatsapp/wabaOrderStage";
 
+import { hasContactData } from "../app/.server/integrations/whatsapp/wabaOrderStage";
 import type { PaymentSignal } from "../app/.server/integrations/whatsapp/wabaOrderStage";
 
 const FIXTURES: {
@@ -19,6 +20,8 @@ const FIXTURES: {
   accion: PaymentSignal["accion"];
   incoming: string;
   reply: string;
+  /** Sólo en los fixtures que prueban extracción de datos del lead. */
+  contacto?: Partial<PaymentSignal["contacto"]>;
 }[] = [
   {
     label: "comprobante en imagen (caso Iván, 27-jul-2026) — el agente ya lo verbalizó",
@@ -107,6 +110,7 @@ const FIXTURES: {
     accion: "facturar",
     incoming: "me puedes facturar? RFC XAXX010101000, razón social Totequim SA de CV",
     reply: "Claro, ya registré tus datos fiscales. La factura sale este mes.",
+    contacto: { rfc: "XAXX010101000", razonSocial: "Totequim SA de CV" },
   },
   {
     label: "sólo pregunta si facturan — NO mueve",
@@ -152,14 +156,67 @@ const FIXTURES: {
     incoming: "cuál es la diferencia entre la TR180 y la TR140?",
     reply: "La TR180 es más ancha (180mm vs 140mm) y aguanta más tensión. Para uso rudo te recomiendo la TR180.",
   },
+  // --- Datos del lead. El riesgo aquí NO es no extraer, es INVENTAR: un RFC confabulado
+  // se factura mal. Todos los fixtures de arriba sin `contacto` verifican lo contrario
+  // (que no aparezcan datos donde el turno no traía ninguno).
+  {
+    label: "da domicilio de entrega desglosado",
+    accion: "ninguna",
+    incoming: "mándalo a Av. Juárez 210, CP 42000, Pachuca",
+    reply: "Anotado: Av. Juárez 210, CP 42000, Pachuca. Sale en la ruta del jueves.",
+    contacto: { direccion: { direccion: "Av. Juárez 210", cp: "42000", ciudad: "Pachuca" } },
+  },
+  {
+    label: "da correo suelto, sin nada más",
+    accion: "ninguna",
+    incoming: "mi correo es compras@totequim.mx por si necesitas mandarme algo",
+    reply: "Perfecto, lo guardo.",
+    contacto: { email: "compras@totequim.mx", rfc: null, razonSocial: null },
+  },
+  {
+    label: "habla de una dirección que NO es suya — no debe guardarla",
+    accion: "ninguna",
+    incoming: "su sucursal de Pachuca centro está en Matamoros 100 verdad?",
+    reply: "Esa es nuestra matriz, sí. ¿Te queda cómodo pasar por ahí o prefieres envío?",
+    contacto: { direccion: null },
+  },
+  {
+    label: "corrige el CP que había dado antes — gana el nuevo",
+    accion: "ninguna",
+    incoming: "perdón, el CP no es 42000, es 42080",
+    reply: "Corregido, CP 42080.",
+    contacto: { direccion: { direccion: null, cp: "42080", ciudad: null } },
+  },
 ];
 
 let fallas = 0;
 for (const f of FIXTURES) {
   const r = await extractPaymentSignal(f.incoming, f.reply);
-  const ok = r?.accion === f.accion;
+  let ok = r?.accion === f.accion;
+  let detalle = "";
+  // `contacto` sólo se revisa en los fixtures que lo declaran. En los demás basta con que
+  // no invente: si el turno no traía datos, hasContactData debe ser false.
+  if (ok && f.contacto !== undefined) {
+    const got = r!.contacto;
+    for (const [k, want] of Object.entries(f.contacto)) {
+      const mine = (got as any)?.[k] ?? null;
+      const igual =
+        want === null
+          ? mine === null
+          : k === "direccion"
+            ? JSON.stringify(mine) === JSON.stringify(want)
+            : String(mine ?? "") === String(want);
+      if (!igual) {
+        ok = false;
+        detalle += ` [${k}: esperaba ${JSON.stringify(want)}, llegó ${JSON.stringify(mine)}]`;
+      }
+    }
+  } else if (ok && f.contacto === undefined && hasContactData(r?.contacto)) {
+    ok = false;
+    detalle = " [inventó datos de contacto donde no había]";
+  }
   if (!ok) fallas++;
-  console.log(`${ok ? "✓" : "✗ FALLA"} [espera accion=${f.accion}] ${f.label}\n    → ${JSON.stringify(r)}`);
+  console.log(`${ok ? "✓" : "✗ FALLA"} [espera accion=${f.accion}]${detalle} ${f.label}\n    → ${JSON.stringify(r)}`);
 }
 console.log(fallas === 0 ? `\n${FIXTURES.length}/${FIXTURES.length} OK` : `\n${fallas} fallas de ${FIXTURES.length}`);
 process.exit(fallas === 0 ? 0 : 1);

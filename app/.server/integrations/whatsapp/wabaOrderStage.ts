@@ -23,7 +23,7 @@ import { z } from "zod";
 import { db } from "~/.server/db";
 import { getAiModel, resolveModelLocal } from "~/.server/aiModels";
 import { getSecretValue } from "~/.server/core/secretOperations";
-import { setOrderStage, closeOrder } from "./formmyOrderActions";
+import { setOrderStage, closeOrder, setContact, resolveConversationId } from "./formmyOrderActions";
 import type { WabaOrg } from "./waba.server";
 
 // Formas de pago que reconocemos → etiqueta de la columna del tablero. Los labels son
@@ -49,6 +49,26 @@ export type PaymentSignal = {
   accion: "avanzar" | "facturar" | "entregar" | "escalar" | "cancelar" | "ninguna";
   forma: "transferencia" | "tarjeta" | "contra_entrega" | "desconocida";
   monto: number | null;
+  contacto: ContactSignal;
+};
+
+// Datos del lead que aparecieron EN ESTE TURNO. Van en la misma pasada del extractor (una
+// sola llamada al modelo, no dos) porque se leen del mismo texto.
+//
+// Por qué existe: `set_contact` es una tool suelta, y el modelo no llama tools sueltas —
+// mismo diagnóstico que la etapa del tablero. Evidencia en prod: 10 de 12 órdenes reales
+// traen dirección (la pone `quote.mjs`, que SÍ se ejecuta), pero sólo 2 de 80
+// conversaciones tienen `datosCliente`, y ninguna tiene email/RFC/razón social. Sin RFC no
+// se puede facturar, que es justo una de las columnas del tablero.
+export type ContactSignal = {
+  email: string | null;
+  rfc: string | null;
+  razonSocial: string | null;
+  direccion: {
+    direccion: string | null;
+    cp: string | null;
+    ciudad: string | null;
+  } | null;
 };
 
 // Ojo con la semántica de "avanzar": NO es "hubo pago". Contra entrega es justamente el
@@ -65,6 +85,21 @@ const PaymentSignalSchema = z.object({
     .enum(["transferencia", "tarjeta", "contra_entrega", "desconocida"])
     .describe('Cómo se pagó o se pagará. Sólo importa cuando accion="avanzar".'),
   monto: z.number().nullable().describe("Monto en MXN si aparece; null si no se menciona."),
+  contacto: z
+    .object({
+      email: z.string().nullable().describe("Correo del cliente si lo dio en este turno."),
+      rfc: z.string().nullable().describe("RFC mexicano si lo dio, p.ej. 'XAXX010101000'."),
+      razonSocial: z.string().nullable().describe("Razón social para facturar si la dio."),
+      direccion: z
+        .object({
+          direccion: z.string().nullable().describe("Calle y número."),
+          cp: z.string().nullable().describe("Código postal."),
+          ciudad: z.string().nullable().describe("Ciudad o municipio."),
+        })
+        .nullable()
+        .describe("Domicilio de entrega si lo dio en este turno; null si no."),
+    })
+    .describe("Datos del cliente que aparecieron EN ESTE TURNO. null en lo que no aparezca."),
 });
 
 const PROMPT_HEADER = `Eres un extractor. Lee el intercambio de WhatsApp entre un cliente y el asistente de ventas, y decide si la orden debe cambiar de columna en el tablero de ventas.
@@ -97,7 +132,13 @@ const PROMPT_HEADER = `Eres un extractor. Lee el intercambio de WhatsApp entre u
 
 Si en un mismo turno aplican varias, gana la más avanzada en este orden: cancelar > escalar > entregar > facturar > avanzar.
 
-Ante la duda, accion="ninguna". Un falso negativo se corrige a mano; un falso positivo mueve la tarjeta de un cliente que no ha pagado, da por entregado lo que no llegó, o mata una venta viva.`;
+Ante la duda, accion="ninguna". Un falso negativo se corrige a mano; un falso positivo mueve la tarjeta de un cliente que no ha pagado, da por entregado lo que no llegó, o mata una venta viva.
+
+Aparte de la acción, extrae en "contacto" los datos del cliente que aparezcan EN ESTE TURNO (correo, RFC, razón social, domicilio de entrega). Reglas:
+- Copia el dato TAL CUAL lo escribió el cliente. No lo inventes, no lo completes, no lo corrijas.
+- null en cada campo que no aparezca en este turno. Es lo normal: la mayoría de los turnos no traen ninguno.
+- La dirección sólo si es un domicilio de ENTREGA o fiscal que el cliente está dando. No una sucursal tuya, ni un lugar del que sólo se habla.
+- Si el cliente corrige un dato que ya había dado, extrae el NUEVO.`;
 
 /** Extrae la señal de pago del turno. Devuelve null si el modelo falla (best-effort). */
 export async function extractPaymentSignal(
@@ -161,6 +202,13 @@ export function stageLabelFor(signal: PaymentSignal, org?: WabaOrg): string | nu
 // "facturar" NO son terminales — la venta sigue en curso.
 const TERMINAL: ReadonlySet<PaymentSignal["accion"]> = new Set(["cancelar", "entregar"]);
 
+/** ¿El turno trajo algún dato del lead? La mayoría no trae ninguno. */
+export function hasContactData(c: PaymentSignal["contacto"] | undefined): boolean {
+  if (!c) return false;
+  const d = c.direccion;
+  return Boolean(c.email || c.rfc || c.razonSocial || d?.direccion || d?.cp || d?.ciudad);
+}
+
 /** Escritura atómica de UNA ruta anidada del blob (mismo patrón que recordLastLocation). */
 async function recordOrderStage(
   fleetAgentId: string,
@@ -204,7 +252,20 @@ export async function maybeMovePaymentStage(args: {
     if (!key) return;
 
     const signal = await extractPaymentSignal(incomingText, reply);
-    if (!signal || signal.accion === "ninguna") return;
+    if (!signal) return;
+
+    // La ficha del cliente se guarda ANTES y con independencia de la etapa: un turno donde
+    // sólo dio su RFC no mueve ninguna columna, pero sí trae datos que hay que registrar.
+    // Una sola resolución de conversación para las dos escrituras del turno.
+    let conversationId: string | null = null;
+    if (hasContactData(signal.contacto)) {
+      conversationId = await resolveConversationId(key, integrationId, sender);
+      if (conversationId) {
+        await setContact(key, { conversationId, ...signal.contacto });
+      }
+    }
+
+    if (signal.accion === "ninguna") return;
 
     const estatus = stageLabelFor(signal, org);
     if (!estatus) {
@@ -217,7 +278,7 @@ export async function maybeMovePaymentStage(args: {
       return;
     }
 
-    const move = await setOrderStage(key, { integrationId, sender, estatus });
+    const move = await setOrderStage(key, { integrationId, sender, estatus, conversationId });
     if (!move.moved) {
       if (move.reason === "no-orders") {
         console.log(`[waba] señal de ${np} pero la conversación no tiene órdenes — no-op`);
