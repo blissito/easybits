@@ -644,9 +644,25 @@ export function resolveDireccion(input) {
     estado: t(c.estado) || p.estado,
     cp: t(c.cp) || t(env.cp) || p.cp,
     // La ubicación compartida por WhatsApp llega por env desde el canal (puede ser de un
-    // turno anterior); un maps_url explícito del agente le gana.
-    mapsUrl: t(c.maps_url) || t(process.env.WABA_LAST_LOCATION_URL),
+    // turno anterior); un maps_url explícito del agente le gana. Si no hay ninguna de las
+    // dos, se DERIVA del domicilio: un pin exacto es mejor, pero una búsqueda con la
+    // dirección le sirve al repartidor mucho más que un campo vacío — y estaba vacío en el
+    // 100% de las órdenes, porque casi nadie comparte ubicación.
+    mapsUrl:
+      t(c.maps_url) ||
+      t(process.env.WABA_LAST_LOCATION_URL) ||
+      mapsSearchUrl([c.domicilio, t(c.colonia) || p.colonia, t(c.ciudad) || p.ciudad, t(c.cp) || t(env.cp) || p.cp]),
   };
+}
+
+/** Búsqueda de Google Maps a partir de las partes del domicilio. */
+export function mapsSearchUrl(partes) {
+  const q = (partes || [])
+    .map((x) => (typeof x === 'string' ? x.trim() : ''))
+    .filter(Boolean)
+    .join(', ');
+  if (!q) return undefined;
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`;
 }
 
 export async function runQuote(input) {
