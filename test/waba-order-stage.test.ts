@@ -4,6 +4,9 @@ import {
   stageLabelFor,
   DEFAULT_PAYMENT_STAGES,
   DEFAULT_CANCEL_STAGE,
+  DEFAULT_INVOICE_STAGE,
+  DEFAULT_CLOSED_STAGE,
+  DEFAULT_HUMAN_STAGE,
   STAGE_REFIRE_MS,
 } from "~/.server/integrations/whatsapp/wabaOrderStage";
 import type { PaymentSignal } from "~/.server/integrations/whatsapp/wabaOrderStage";
@@ -65,6 +68,22 @@ describe("stageLabelFor — señal del turno → columna del tablero", () => {
   it("cancelar va a su columna, sin importar la forma", () => {
     expect(stageLabelFor(cancelar)).toBe(DEFAULT_CANCEL_STAGE);
     expect(stageLabelFor({ ...cancelar, forma: "tarjeta" })).toBe(DEFAULT_CANCEL_STAGE);
+  });
+
+  it("las columnas que no dependen del pago tienen cada una la suya", () => {
+    const sig = (accion: PaymentSignal["accion"]): PaymentSignal => ({
+      accion,
+      forma: "desconocida",
+      monto: null,
+    });
+    expect(stageLabelFor(sig("facturar"))).toBe(DEFAULT_INVOICE_STAGE);
+    expect(stageLabelFor(sig("entregar"))).toBe(DEFAULT_CLOSED_STAGE);
+    expect(stageLabelFor(sig("escalar"))).toBe(DEFAULT_HUMAN_STAGE);
+    // Las 8 columnas del tablero quedan cubiertas y sin colisión entre sí.
+    const labels = ["facturar", "entregar", "escalar", "cancelar"].map((a) =>
+      stageLabelFor(sig(a as PaymentSignal["accion"]))
+    );
+    expect(new Set(labels).size).toBe(4);
   });
 
   it("el tenant puede sobreescribir las etiquetas sin tocar código", () => {

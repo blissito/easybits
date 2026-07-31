@@ -101,6 +101,57 @@ const FIXTURES: {
     incoming: "uy está muy caro, no manches",
     reply: "Te entiendo. Si quieres te armo una opción con la bobina TR140, sale más accesible.",
   },
+  // --- Facturación
+  {
+    label: "pide factura y da datos fiscales",
+    accion: "facturar",
+    incoming: "me puedes facturar? RFC XAXX010101000, razón social Totequim SA de CV",
+    reply: "Claro, ya registré tus datos fiscales. La factura sale este mes.",
+  },
+  {
+    label: "sólo pregunta si facturan — NO mueve",
+    accion: "ninguna",
+    incoming: "oigan, ustedes facturan?",
+    reply: "Sí, facturamos. Cuando hagas tu pedido me pasas tu RFC y razón social.",
+  },
+  // --- Entrega. El caso trampa es la PREGUNTA "¿ya me llegó?" vs el acuse "ya me llegó".
+  {
+    label: "confirma que recibió el pedido",
+    accion: "entregar",
+    incoming: "ya me llegó todo completo, gracias!",
+    reply: "¡Excelente! Qué bueno que llegó bien. Cualquier cosa aquí andamos 👌",
+  },
+  {
+    label: "PREGUNTA si ya llegó — NO es entrega",
+    accion: "ninguna",
+    incoming: "oye ya me llegó?",
+    reply: "Déjame checo la guía... va en camino, debe llegar mañana por la mañana.",
+  },
+  {
+    label: "va en camino — promesa, no entrega",
+    accion: "ninguna",
+    incoming: "cuándo llega mi pedido?",
+    reply: "Sale hoy en la ruta, te llega mañana antes de las 2pm.",
+  },
+  // --- Escalamiento
+  {
+    label: "pide hablar con un humano",
+    accion: "escalar",
+    incoming: "me puedes comunicar con una persona? esto no me está sirviendo",
+    reply: "Claro, ahorita le paso tu caso a un asesor para que te contacte.",
+  },
+  {
+    label: "reclamo serio: producto dañado",
+    accion: "escalar",
+    incoming: "me llegó la bobina rota y ya pagué, esto es un robo",
+    reply: "Lamento mucho eso. Voy a escalarlo con el encargado ahora mismo para reponerte la pieza.",
+  },
+  {
+    label: "pregunta difícil que el bot igual respondió — NO escala",
+    accion: "ninguna",
+    incoming: "cuál es la diferencia entre la TR180 y la TR140?",
+    reply: "La TR180 es más ancha (180mm vs 140mm) y aguanta más tensión. Para uso rudo te recomiendo la TR180.",
+  },
 ];
 
 let fallas = 0;

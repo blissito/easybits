@@ -37,7 +37,7 @@ export async function formmySdk(
 }
 
 export type SetOrderStageResult =
-  | { moved: true }
+  | { moved: true; ordenId: string | null; conversationId: string }
   | { moved: false; reason: "no-conversation" | "no-orders" | "error" };
 
 /**
@@ -77,5 +77,34 @@ export async function setOrderStage(
     console.error(`[formmy] setOrderStatus falló (${move.status}):`, JSON.stringify(move.data).slice(0, 200));
     return { moved: false, reason: "error" };
   }
-  return { moved: true };
+  // El id de la orden que REALMENTE se movió. Sin esto, cerrar el ciclo de vida exigiría
+  // un segundo "la más reciente", que puede ya no ser la misma si entró otra orden entre
+  // las dos llamadas.
+  return {
+    moved: true,
+    ordenId: (move.data?.orden?.id as string) ?? null,
+    conversationId,
+  };
+}
+
+/**
+ * Cierra el ciclo de vida de una orden (`status`), eje distinto de la columna del tablero
+ * (`estatus`). Una orden cancelada o entregada que se queda ABIERTA sigue contando en el
+ * valor de la columna.
+ */
+export async function closeOrder(
+  key: string,
+  args: { conversationId: string; ordenId?: string | null; status?: "CERRADA" | "ARCHIVADA" }
+): Promise<boolean> {
+  const { conversationId, ordenId, status = "CERRADA" } = args;
+  const res = await formmySdk(
+    key,
+    "conversations.updateOrder",
+    { conversationId },
+    ordenId ? { status, ordenId } : { status }
+  );
+  if (!res.ok) {
+    console.error(`[formmy] updateOrder(status) falló (${res.status}):`, JSON.stringify(res.data).slice(0, 200));
+  }
+  return res.ok;
 }

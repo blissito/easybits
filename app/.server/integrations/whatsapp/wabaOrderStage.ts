@@ -23,7 +23,7 @@ import { z } from "zod";
 import { db } from "~/.server/db";
 import { getAiModel, resolveModelLocal } from "~/.server/aiModels";
 import { getSecretValue } from "~/.server/core/secretOperations";
-import { setOrderStage } from "./formmyOrderActions";
+import { setOrderStage, closeOrder } from "./formmyOrderActions";
 import type { WabaOrg } from "./waba.server";
 
 // Formas de pago que reconocemos → etiqueta de la columna del tablero. Los labels son
@@ -34,8 +34,11 @@ export const DEFAULT_PAYMENT_STAGES: Record<string, string> = {
   contra_entrega: "Pago a contra entrega",
 };
 
-// Cancelación: igual, override por tenant vía `org.cancelStage`.
+// Columnas que no dependen de la forma de pago. Mismo patrón de override por tenant.
 export const DEFAULT_CANCEL_STAGE = "Cancelado";
+export const DEFAULT_INVOICE_STAGE = "En espera de facturación";
+export const DEFAULT_CLOSED_STAGE = "Cerrado";
+export const DEFAULT_HUMAN_STAGE = "Requiere atención humana";
 
 // Un "gracias por tu pago" minutos después no debe re-disparar. Pero una orden nueva
 // días después sí. No podemos distinguirlas leyendo (el SDK de Formmy no expone lectura
@@ -43,7 +46,7 @@ export const DEFAULT_CANCEL_STAGE = "Cancelado";
 export const STAGE_REFIRE_MS = 24 * 60 * 60 * 1000;
 
 export type PaymentSignal = {
-  accion: "avanzar" | "cancelar" | "ninguna";
+  accion: "avanzar" | "facturar" | "entregar" | "escalar" | "cancelar" | "ninguna";
   forma: "transferencia" | "tarjeta" | "contra_entrega" | "desconocida";
   monto: number | null;
 };
@@ -54,9 +57,9 @@ export type PaymentSignal = {
 // "pago" hacía que contra-entrega nunca disparara.
 const PaymentSignalSchema = z.object({
   accion: z
-    .enum(["avanzar", "cancelar", "ninguna"])
+    .enum(["avanzar", "facturar", "entregar", "escalar", "cancelar", "ninguna"])
     .describe(
-      '"avanzar" si (a) el cliente reportó un pago YA HECHO o el asistente confirmó recibirlo, o (b) el cliente CONFIRMÓ EXPLÍCITAMENTE un pedido contra entrega. "cancelar" si el cliente desistió EXPLÍCITAMENTE de la compra o el asistente confirmó la cancelación. "ninguna" en cualquier otro caso.'
+      'A qué columna del tablero debe irse la orden por lo que pasó en ESTE turno. "avanzar" = pago hecho o pedido contra entrega confirmado. "facturar" = pide factura. "entregar" = ya recibió el pedido. "escalar" = necesita un humano. "cancelar" = desistió. "ninguna" = nada de lo anterior.'
     ),
   forma: z
     .enum(["transferencia", "tarjeta", "contra_entrega", "desconocida"])
@@ -71,14 +74,30 @@ const PROMPT_HEADER = `Eres un extractor. Lee el intercambio de WhatsApp entre u
 - O el cliente CONFIRMÓ EXPLÍCITAMENTE un pedido contra entrega (aún no paga, pero ya compromete una ruta de reparto).
 - Si debe avanzar pero no distingues la forma, usa forma="desconocida".
 
+"accion" = "facturar" cuando:
+- El cliente PIDE factura, o entrega sus datos fiscales (RFC, razón social, uso de CFDI) para que se la hagan.
+- NO cuando sólo pregunta "¿facturan?" sin pedirla, ni cuando el asistente menciona la factura por su cuenta.
+
+"accion" = "entregar" SÓLO cuando el pedido YA LLEGÓ:
+- El cliente confirma que lo recibió: "ya me llegó", "lo recibí", "llegó completo", o acusa recibo tras la entrega.
+- O el asistente confirma la entrega ya ocurrida.
+- NUNCA por: "¿ya me llegó?" (eso es una PREGUNTA), "¿cuándo llega?", "sale hoy", "va en camino", promesas de entrega o fechas futuras. Eso es "ninguna".
+
+"accion" = "escalar" cuando el turno necesita a una persona:
+- El cliente PIDE hablar con un humano/asesor/encargado, o el asistente ofrece pasarlo con alguien.
+- O hay un reclamo serio: producto dañado, cobro incorrecto, pedido que no llegó, amenaza de queja.
+- NO por una pregunta difícil que el asistente igual respondió.
+
 "accion" = "cancelar" SÓLO cuando:
 - El cliente desiste EXPLÍCITAMENTE: "cancélalo", "ya no lo quiero", "mejor ya no", "conseguí con otro proveedor".
 - O el asistente confirma la cancelación del pedido.
-- NUNCA por: "lo voy a pensar", "está caro", "déjame ver", posponer la compra, quejas, reclamos o silencio. Eso es "ninguna".
+- NUNCA por: "lo voy a pensar", "está caro", "déjame ver", posponer la compra o silencio. Eso es "ninguna".
 
 "accion" = "ninguna" en todo lo demás: cotizar, preguntar precios, pedir la cuenta, considerar la compra, o prometer pagar después ("ahorita te deposito").
 
-Ante la duda, accion="ninguna". Un falso negativo se corrige a mano; un falso positivo mueve la tarjeta de un cliente que no ha pagado, o mata una venta viva.`;
+Si en un mismo turno aplican varias, gana la más avanzada en este orden: cancelar > escalar > entregar > facturar > avanzar.
+
+Ante la duda, accion="ninguna". Un falso negativo se corrige a mano; un falso positivo mueve la tarjeta de un cliente que no ha pagado, da por entregado lo que no llegó, o mata una venta viva.`;
 
 /** Extrae la señal de pago del turno. Devuelve null si el modelo falla (best-effort). */
 export async function extractPaymentSignal(
@@ -119,10 +138,28 @@ export function shouldFireStage(
 
 /** Etiqueta de columna para la señal del turno, con override por tenant. */
 export function stageLabelFor(signal: PaymentSignal, org?: WabaOrg): string | null {
-  if (signal.accion === "cancelar") return org?.cancelStage || DEFAULT_CANCEL_STAGE;
-  if (signal.accion !== "avanzar" || signal.forma === "desconocida") return null;
-  return org?.paymentStages?.[signal.forma] || DEFAULT_PAYMENT_STAGES[signal.forma] || null;
+  switch (signal.accion) {
+    case "cancelar":
+      return org?.cancelStage || DEFAULT_CANCEL_STAGE;
+    case "facturar":
+      return org?.invoiceStage || DEFAULT_INVOICE_STAGE;
+    case "entregar":
+      return org?.closedStage || DEFAULT_CLOSED_STAGE;
+    case "escalar":
+      return org?.humanStage || DEFAULT_HUMAN_STAGE;
+    case "avanzar":
+      // La forma de pago ES la columna; sin ella no sabemos a cuál de las tres ir.
+      if (signal.forma === "desconocida") return null;
+      return org?.paymentStages?.[signal.forma] || DEFAULT_PAYMENT_STAGES[signal.forma] || null;
+    default:
+      return null;
+  }
 }
+
+// Acciones terminales: la orden deja de ser una venta viva y se le cierra el ciclo de
+// vida, o se quedaría ABIERTA sumando al valor del tablero para siempre. "escalar" y
+// "facturar" NO son terminales — la venta sigue en curso.
+const TERMINAL: ReadonlySet<PaymentSignal["accion"]> = new Set(["cancelar", "entregar"]);
 
 /** Escritura atómica de UNA ruta anidada del blob (mismo patrón que recordLastLocation). */
 async function recordOrderStage(
@@ -186,6 +223,14 @@ export async function maybeMovePaymentStage(args: {
         console.log(`[waba] señal de ${np} pero la conversación no tiene órdenes — no-op`);
       }
       return;
+    }
+
+    // Acción terminal (cancelada o entregada): además de mandarla a su columna, se le
+    // cierra el ciclo de vida. Se cierra el id que REALMENTE se movió, no "la más
+    // reciente" otra vez. Best-effort: si esto falla, la etapa ya quedó bien, que es lo
+    // que se ve en el tablero.
+    if (TERMINAL.has(signal.accion)) {
+      await closeOrder(key, { conversationId: move.conversationId, ordenId: move.ordenId });
     }
 
     await recordOrderStage(fleetAgentId, integrationId, np, { estatus, at: new Date().toISOString() });
