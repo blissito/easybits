@@ -1,0 +1,49 @@
+---
+title: "Un agente sin herramientas y sin un solo error: la tarde que nos costó bubblewrap"
+description: "Una actualización silenciosa del CLI de Codex dejó a nuestros agentes sin ningún MCP. Respondían perfecto. El único rastro estaba enterrado en el journal."
+date: "2026-08-01"
+author: "Equipo Easybits"
+tags: ["flota", "agentes", "mcp", "build in public", "debugging"]
+featuredImage: "/blog/assets/sandbox-ghosty.jpg"
+published: true
+---
+
+# Un agente sin herramientas y sin un solo error: la tarde que nos costó bubblewrap
+
+En la flota de Easybits cada conversación corre en su propia microVM, y el agente llega a sus herramientas por MCP: archivos, documentos, render, los conectores del cliente. Esta semana uno de esos agentes dejó de tener herramientas. Ninguna. Y no lo dijo.
+
+Contestaba con normalidad. Saludaba, razonaba, ejecutaba comandos de shell. Cuando se le pedía algo que requería una herramienta, contestaba que esa función no estaba habilitada en ese turno — con una redacción tan plausible que parecía un problema de permisos del cliente.
+
+## El síntoma apuntaba al lugar equivocado
+
+El primer diagnóstico fue "el conector del cliente no se monta". Tenía sentido: era justo el que se estaba probando. Pero el binario del conector estaba instalado en la caja, respondía su handshake a mano, y la URL base era correcta.
+
+Lo que destrabó el caso fue un control. El mismo agente, la misma llave, la misma configuración, un motor distinto: en el otro motor funcionaba. Eso movió la sospecha del conector al runtime.
+
+Y ahí apareció el dato real: no faltaba un MCP. Faltaban los cuatro.
+
+## La causa
+
+Un rebake de la imagen se trajo una versión nueva del CLI de Codex. El Dockerfile lo instalaba sin fijar versión, así que rehornear por un motivo completamente distinto —actualizar otro paquete— cambió el motor por debajo.
+
+La versión nueva exige **bubblewrap**, el sandbox de Linux que aísla los procesos hijos. Sin él, el servidor arranca, autentica y responde turnos como si nada, pero no levanta ningún servidor MCP. El único rastro es una línea en el journal del worker:
+
+```
+ERROR codex_app_server: could not find bubblewrap on PATH
+```
+
+Nada de eso llega al chat. Para quien mira la conversación, el agente simplemente no tiene herramientas.
+
+## Dos cosas que nos llevamos
+
+**El agente no es una fuente confiable sobre sí mismo.** Durante el diagnóstico, el modelo negó tener una herramienta de render; un turno después esa misma herramienta respondió con un error real del servicio. Si le hubiéramos creído, habríamos "arreglado" algo que nunca estuvo roto. La única prueba que sirve es hacerlo llamar la herramienta y mirar el error literal.
+
+**Las dependencias del motor son dependencias.** Ya fijábamos la versión de los conectores por esta razón exacta. Al CLI del motor lo tratábamos como parte del entorno, y resultó ser la pieza que más silenciosamente puede cambiar el comportamiento de un agente. Ahora va fijado igual, y subirlo es un commit visible.
+
+El arreglo final fueron dos líneas de Dockerfile. Encontrarlas tomó una tarde, y la mitad de esa tarde se fue descartando teorías bonitas: que el conector contaminaba la salida estándar, que la llave era inválida, que la configuración del clon estaba mal. Todas se cayeron con evidencia, una por una, hasta que instalamos bubblewrap en una caja viva y la herramienta pasó de "no existe" a devolver datos reales.
+
+Build in public también es esto: la falla que no truena.
+
+---
+
+¿Estás armando agentes con herramientas propias? La flota de Easybits corre cada conversación aislada, con sus MCP y sus credenciales por tenant. Escríbenos en [easybits.cloud](https://www.easybits.cloud).
