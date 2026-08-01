@@ -10,6 +10,8 @@ import matter from "gray-matter";
 
 // Map of known blog posts with their file paths
 const BLOG_POSTS = {
+  "un-agente-sin-herramientas-y-sin-error":
+    "app/content/blog/2026-08-01-un-agente-sin-herramientas-y-sin-error.mdx",
   "una-caja-una-base-por-cliente":
     "app/content/blog/2026-07-16-una-caja-una-base-por-cliente.mdx",
   "waba-inbox-estados-de-respuesta":
