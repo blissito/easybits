@@ -421,6 +421,12 @@ type InboundMessage = {
   // ephemeral conversation; wins over fleetAgent.groupKeys[groupId]. WhatsApp omits it
   // and relies on the pre-registered groupKeys.
   denikApiKey?: string;
+  // Per-message credencial del MOTOR del tenant (BYOK: el cliente paga SU consumo).
+  // Mismo patrón que denikApiKey y por la misma razón: en la superficie WEB el cfgId
+  // colapsa a "web" para TODAS las orgs, así que la identidad del tenant sólo viaja
+  // en el turno. Gana sobre groupEngineKeys[cfgId], que cubre las superficies donde
+  // el tenant NO está en el path (WABA, grupos) y donde el cfgId sí lo identifica.
+  engineApiKey?: string;
   // Per-message personalización por-org (capa 3): se APPENDEA a la persona del
   // fleetAgent en el worker (que a su vez se appendea al preset). Canales web (denik)
   // la pasan por turno; WhatsApp la omite.
@@ -552,6 +558,42 @@ export function resolveDisabledBuiltins(
 // Tool group (?tools= surface de EasyBits) PER-NÚMERO/grupo: el override per-grupo
 // gana sobre el default del agente (clave "*"). undefined → el worker usa su env
 // EASYBITS_TOOL_GROUP (default del agente, baked al spawn). Keyed por cfgId.
+/**
+ * Credencial del MOTOR para ESTE turno (BYOK por tenant: el cliente paga su consumo).
+ *
+ * Dos carriles, calcados de `denikApiKey`/`groupKeys` porque el problema es idéntico:
+ *   1. `perMessage` — lo manda el tenant en el turno. Necesario en la superficie WEB,
+ *      donde el cfgId colapsa a "web" para TODAS las orgs y por tanto no identifica a
+ *      nadie. Gana siempre.
+ *   2. `groupEngineKeys[cfgId]` — guarda el NOMBRE de un secreto del vault del dueño
+ *      (nunca la llave). Cubre WABA y grupos de WhatsApp, donde el tenant NO está en
+ *      el path de la petición pero el cfgId sí lo identifica.
+ *
+ * Sin nada configurado devuelve undefined y el worker usa su llave horneada — o sea,
+ * el comportamiento de siempre para todo el mundo que no haya optado por BYOK.
+ */
+async function resolveEngineApiKey(
+  fleetAgent: { ownerId: string; groupEngineKeys?: unknown },
+  cfgId: string,
+  perMessage?: string
+): Promise<string | undefined> {
+  if (perMessage) return perMessage;
+  const map = (fleetAgent.groupEngineKeys as Record<string, string> | null) ?? null;
+  const secretName = map?.[cfgId];
+  if (!secretName) return undefined;
+  const value = await getSecretValue(fleetAgent.ownerId, secretName).catch(() => null);
+  if (!value) {
+    // Se cae a la llave horneada (el bot del tenant NO se rompe) pero se GRITA en el
+    // log: a partir de aquí el consumo lo paga el dueño, no el tenant, y eso tiene
+    // que ser visible. Un fallback callado aquí es una fuga de dinero silenciosa.
+    console.error(
+      `engine BYOK: falta el secreto "${secretName}" (cfgId ${cfgId}, agente ${fleetAgent.ownerId}) → ese turno lo paga el DUEÑO`
+    );
+    return undefined;
+  }
+  return value;
+}
+
 export function resolveToolGroup(
   fleetAgent: { groupConfigs?: unknown },
   groupId: string
@@ -1820,6 +1862,12 @@ export async function routeMessage(
           denikApiKey:
             msg.denikApiKey ??
             (fleetAgent.groupKeys as Record<string, string> | null)?.[cfgId],
+          // BYOK del MOTOR por tenant. El mapa guarda el NOMBRE del secreto (no la
+          // llave), así que aquí se resuelve contra el vault del dueño. El override
+          // per-mensaje gana: en web el cfgId colapsa a "web" para todas las orgs.
+          // Sin nada configurado → undefined → el worker usa la llave horneada, o
+          // sea el comportamiento de siempre.
+          engineApiKey: await resolveEngineApiKey(fleetAgent, cfgId, msg.engineApiKey),
           // Capa 3 (per-org) PRECEDIDA por el guardrail de plataforma fresco —
           // así el guardrail de voz llega a todos los agentes sin rebuild/migración.
           appendSystemPrompt: [

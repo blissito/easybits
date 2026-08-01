@@ -156,6 +156,8 @@ export async function openAgentMessageStream(
     content?: string;
     sessionId?: string;
     denikApiKey?: string;
+    /** BYOK: credencial del MOTOR de este tenant para ESTE turno. Ver resolveEngineApiKey. */
+    engineApiKey?: string;
     appendSystemPrompt?: string;
     // Per-turn EXTRA MCP servers (name→serverDef) for the worker to merge over
     // its baked builtins. Resolved per-group by fleetAgentOperations.resolveGroupMcpServers.
@@ -184,7 +186,7 @@ export async function openAgentMessageStream(
   if (body.headers) payload.headers = body.headers;
   if (body.rawBody !== undefined) {
     payload.rawBody = body.rawBody;
-  } else if (body.denikApiKey || body.appendSystemPrompt || body.mcpServers || body.disabledBuiltins?.length || body.toolGroup || body.turnEnv) {
+  } else if (body.denikApiKey || body.engineApiKey || body.appendSystemPrompt || body.mcpServers || body.disabledBuiltins?.length || body.toolGroup || body.turnEnv) {
     // ⚠️ El host (sandbox-host /v1/sandbox/:id/agent/message) SOLO reenvía
     // {content, sessionId} de los campos top-level — descarta cualquier extra.
     // Para que campos del worker (denikApiKey, appendSystemPrompt) lleguen al
@@ -194,6 +196,7 @@ export async function openAgentMessageStream(
       content: body.content,
       ...(body.sessionId ? { sessionId: body.sessionId } : {}),
       ...(body.denikApiKey ? { denikApiKey: body.denikApiKey } : {}),
+      ...(body.engineApiKey ? { engineApiKey: body.engineApiKey } : {}),
       ...(body.appendSystemPrompt ? { appendSystemPrompt: body.appendSystemPrompt } : {}),
       ...(body.mcpServers ? { mcpServers: body.mcpServers } : {}),
       ...(body.disabledBuiltins?.length ? { disabledBuiltins: body.disabledBuiltins } : {}),
@@ -3185,6 +3188,7 @@ export async function openAgentChunkStream(
     content: string;
     sessionId?: string;
     denikApiKey?: string;
+    engineApiKey?: string;
     appendSystemPrompt?: string;
     mcpServers?: Record<string, unknown>;
     disabledBuiltins?: string[];
@@ -3202,6 +3206,8 @@ export async function openAgentChunkStream(
       sessionId: body.sessionId,
       // Per-message denik org key (fleetAgent/Nik): scope del MCP denik por turno.
       denikApiKey: body.denikApiKey,
+      // Per-message credencial del motor del tenant (BYOK).
+      engineApiKey: body.engineApiKey,
       // Per-message personalización por-org (capa 3, append).
       appendSystemPrompt: body.appendSystemPrompt,
       // Per-message MCP custom servers (resueltos por grupo en fleetAgentOperations).

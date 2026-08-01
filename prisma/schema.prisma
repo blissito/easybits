@@ -1172,6 +1172,12 @@ model FleetAgent {
   // (la llave propia de un cliente) sin escribirla en claro en persona.env.
   // Precedencia en spawnVm: engineSecretName > oauthSecretName > canónico.
   engineSecretName String?
+  // BYOK por tenant: { [cfgId]: "NOMBRE_DEL_SECRETO" } en el vault del dueño.
+  // Guarda el NOMBRE, nunca la llave — así la credencial del cliente no vive en
+  // claro en este documento. Se resuelve por TURNO (routeMessage) y cubre las
+  // superficies donde el tenant no está en el path (WABA, grupos de WhatsApp);
+  // la web manda la suya en el turno (InboundMessage.engineApiKey), que gana.
+  groupEngineKeys Json?
   // Scaling knobs. Hierarchy: VM (sandboxId) hosts N workers; worker = 1
   // conversation = 1 sessionId. When a VM hits maxWorkersPerVm, spawn another VM.
   maxWorkersPerVm Int  @default(2)    // conversations (workers) per VM (512MB ≈ 2)
