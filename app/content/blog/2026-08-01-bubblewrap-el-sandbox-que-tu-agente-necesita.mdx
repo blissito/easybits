@@ -45,3 +45,17 @@ Corta: la parte frágil no es bubblewrap, es la suposición de que el fallback s
 - **Verifica dentro del entorno, no en el código.** Que el Dockerfile diga que instalaste algo no prueba que la imagen desplegada lo tenga.
 
 En Easybits cada conversación corre en su propia microVM, así que el aislamiento fuerte vive en la capa de abajo. Aun así, las herramientas del agente pasan por el sandbox del motor, y esa dependencia conviene tratarla como lo que es: parte de tu infraestructura.
+
+## Si no quieres administrar esta capa
+
+Todo lo de arriba es trabajo de infraestructura: elegir la imagen base, instalar el sandbox, fijar versiones, verificar dentro del entorno desplegado y volver a hacerlo en cada actualización del motor.
+
+Las **sandboxes de Easybits** son esa capa ya resuelta. Cada una es una microVM Firecracker aislada de verdad —kernel propio, no un proceso con permisos recortados— donde tu agente ejecuta código, instala lo que necesite y toca archivos sin riesgo para nada de alrededor. Arrancan en segundos, se suspenden solas cuando nadie las usa y despiertan en menos de un segundo.
+
+Facturado en México, en pesos, con soporte en español.
+
+👉 Pruébalo en [www.easybits.cloud](https://www.easybits.cloud)
+
+---
+
+*¿Dónde corre hoy el código que ejecutan tus agentes? Cuéntanos cómo lo resuelves —y si quieres que entremos más a fondo en los modos de sandbox, el aislamiento por microVM o cómo conectar tus herramientas, dinos y escribimos la segunda parte.*
