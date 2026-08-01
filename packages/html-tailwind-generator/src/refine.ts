@@ -112,6 +112,19 @@ export interface RefineOptions {
    *  resolve their hex values via LANDING_THEMES). Used both for prompt context
    *  AND for theme-aware sanitization of arbitrary `bg-[#hex]` classes. */
   themeColors?: Record<string, string>;
+  /** Background family that `currentHtml` sits inside.
+   *
+   *  **Pass it whenever `currentHtml` is a FRAGMENT** (refining ONE element on
+   *  its own, not a whole section). The colour sanitizer decides each `text-*`
+   *  against the nearest ancestor `bg-*`, and a bare fragment has no ancestors
+   *  in the string — so it falls back to the page background and can rewrite a
+   *  correct class into an unreadable one:
+   *
+   *    '<span class="bg-secondary/20 text-on-secondary">' inside a dark section
+   *      → text-on-surface (1.41:1, unreadable) without this
+   *      → text-on-surface-deep with it
+   */
+  inheritedBg?: import("./sanitizeColors").BgFamily;
   /** Theme name (e.g. "minimal", "noche", "custom") — tells the AI the design mood */
   themeName?: string;
   /** Brand kit info for AI context */
@@ -142,6 +155,7 @@ export async function refineLanding(options: RefineOptions): Promise<string> {
     onDone,
     onError,
     themeColors,
+    inheritedBg,
     themeName,
     brandKit,
   } = options;
@@ -213,7 +227,7 @@ export async function refineLanding(options: RefineOptions): Promise<string> {
     // Sanitize hardcoded colors to semantic classes. themeColors lets the
     // sanitizer map arbitrary `bg-[#hex]` to the nearest semantic role using
     // RGB distance against the active palette (instead of HSL hue fallback).
-    html = sanitizeSemanticColors(html, themeColors);
+    html = sanitizeSemanticColors(html, themeColors, inheritedBg);
 
     // Enrich images (DALL-E if openaiApiKey, otherwise Pexels)
     html = await enrichImages(html, { pexelsApiKey, openaiApiKey, persistImage });

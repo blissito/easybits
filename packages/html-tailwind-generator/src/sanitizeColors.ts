@@ -199,7 +199,7 @@ const chromaticReplacements = buildChromaticReplacements();
 
 // ==================== ANCESTOR-AWARE WALKER ====================
 
-type BgFamily = "primary" | "secondary" | "accent" | "surface" | "surface-deep" | null;
+export type BgFamily = "primary" | "secondary" | "accent" | "surface" | "surface-deep" | null;
 
 const VOID_TAGS = new Set([
   "br", "hr", "img", "input", "meta", "link", "area", "base", "col",
@@ -239,13 +239,19 @@ function detectBgFamily(classStr: string): BgFamily {
   return null;
 }
 
-/** Walk the stack bottom-to-top to find the nearest defined bg family; default to surface. */
-function effectiveBg(stack: BgFamily[]): Exclude<BgFamily, null> {
+/** Walk the stack bottom-to-top to find the nearest defined bg family.
+ *  Falls back to `inherited` (the fragment's context, when known) and then to
+ *  `surface` — the safe assumption for a whole document, which starts on the page
+ *  background. */
+function effectiveBg(
+  stack: BgFamily[],
+  inherited?: BgFamily
+): Exclude<BgFamily, null> {
   for (let i = stack.length - 1; i >= 0; i--) {
     const v = stack[i];
     if (v !== null) return v;
   }
-  return "surface";
+  return inherited ?? "surface";
 }
 
 function onClass(bg: Exclude<BgFamily, null>): string {
@@ -304,10 +310,23 @@ function fixTextClassesForBg(classStr: string, bg: Exclude<BgFamily, null>): str
   return s;
 }
 
-/** Ancestor-aware pass: walk HTML, maintain bg stack, rewrite text-* per element. */
-function ancestorAwareTextPass(html: string): string {
+/** Ancestor-aware pass: walk HTML, maintain bg stack, rewrite text-* per element.
+ *
+ *  `inheritedBg` seeds the stack for FRAGMENTS — a single element refined on its
+ *  own has no ancestors in the string, so without it the walker falls back to its
+ *  `surface` default and happily rewrites a correct class into a wrong one:
+ *
+ *    '<span class="bg-secondary/20 text-on-secondary">'  (fragment, no context)
+ *      → text-on-surface        ✗ assumes a light page
+ *      → text-on-surface-deep   ✓ when the real <section class="bg-surface-deep"> is present
+ *
+ *  Whole documents carry their own context and pass nothing.
+ */
+function ancestorAwareTextPass(html: string, inheritedBg?: BgFamily): string {
   try {
     const tagRe = /<(\/?)([a-zA-Z][a-zA-Z0-9]*)\b([^>]*?)(\/?)>/g;
+    // NOT seeded into `stack`: every closing tag pops, so a fragment with an
+    // unbalanced </div> would eat the seed and silently fall back to surface.
     const stack: BgFamily[] = [];
     let out = "";
     let lastIdx = 0;
@@ -328,7 +347,8 @@ function ancestorAwareTextPass(html: string): string {
       // Opening (or self-closing) tag
       const classMatch = attrs.match(/\bclass="([^"]*)"/);
       const ownBg = classMatch ? detectBgFamily(classMatch[1]) : null;
-      const effective: Exclude<BgFamily, null> = ownBg ?? effectiveBg(stack);
+      const effective: Exclude<BgFamily, null> =
+        ownBg ?? effectiveBg(stack, inheritedBg);
 
       let newAttrs = attrs;
       if (classMatch) {
@@ -343,21 +363,22 @@ function ancestorAwareTextPass(html: string): string {
       if (!isVoid) stack.push(ownBg);
     }
     out += html.slice(lastIdx);
-
-    // Clean up any remaining markers that slipped through (e.g. in malformed fragments)
-    out = out
-      .replace(/\btext-on-surface-LIGHT\b/g, "text-on-surface")
-      .replace(/\btext-on-surface-DARK\b/g, "text-on-surface")
-      .replace(/\btext-on-surface-MUTED\b/g, "text-on-surface-muted");
-
-    return out;
+    return stripMarkers(out, inheritedBg);
   } catch {
     // Defensive: if tokenizer trips on weird HTML, return input with markers stripped.
-    return html
-      .replace(/\btext-on-surface-LIGHT\b/g, "text-on-surface")
-      .replace(/\btext-on-surface-DARK\b/g, "text-on-surface")
-      .replace(/\btext-on-surface-MUTED\b/g, "text-on-surface-muted");
+    return stripMarkers(html, inheritedBg);
   }
+}
+
+/** Resolve leftover seed markers (malformed fragments never reached the walker).
+ *  Honours `inheritedBg` for the same reason the walker does: defaulting to
+ *  `text-on-surface` inside a dark section produces invisible text. */
+function stripMarkers(html: string, inheritedBg?: BgFamily): string {
+  const bg = inheritedBg ?? "surface";
+  return html
+    .replace(/\btext-on-surface-LIGHT\b/g, onClass(bg))
+    .replace(/\btext-on-surface-DARK\b/g, onClass(bg))
+    .replace(/\btext-on-surface-MUTED\b/g, onMutedClass(bg));
 }
 
 /** Strip Tailwind JIT arbitrary-value chromatic classes (bg-[#hex], text-[#hex],
@@ -405,7 +426,12 @@ function arbitraryValueReplacements(html: string, themeColors?: Record<string, s
 
 export function sanitizeSemanticColors(
   html: string,
-  themeColors?: Record<string, string>
+  themeColors?: Record<string, string>,
+  /** Background family this HTML sits inside. Pass it when `html` is a FRAGMENT
+   *  (a single element refined on its own); without it the ancestor walker
+   *  assumes the page background and can rewrite a correct text colour into an
+   *  unreadable one. Whole documents don't need it. */
+  inheritedBg?: BgFamily
 ): string {
   let result = html;
 
@@ -433,7 +459,7 @@ export function sanitizeSemanticColors(
   }
 
   // 5. Ancestor-aware pass: resolve seed markers and fix mis-matched text-on-X classes.
-  result = ancestorAwareTextPass(result);
+  result = ancestorAwareTextPass(result, inheritedBg);
 
   return result;
 }
