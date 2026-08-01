@@ -28,7 +28,7 @@ import { getSecretValue } from "~/.server/core/secretOperations";
 import { attributeSandboxSession } from "~/.server/core/sandboxSessions";
 import { getReservedCapacity } from "~/.server/core/sandboxReservations";
 import { getUserPlan, PLANS } from "~/lib/plans";
-import { engineHasVision, getEngineForAgent, getEngine } from "~/lib/fleetEngines";
+import { engineHasVision, getEngineForAgent, getEngine, resolveEngineSecret } from "~/lib/fleetEngines";
 import { profileToToolsParam, DEFAULT_PROFILE, GROUP_ALLOWLISTS, type ToolGroupKey } from "~/.server/mcp/toolGroups";
 import { getPlatformDefaultClient, buildPublicAssetUrl } from "~/.server/storage";
 import { checkSandboxRateLimit } from "~/.server/rateLimiter";
@@ -1203,7 +1203,7 @@ export function selectHotSpares(vms: { id: string; routes: number }[], warmSpare
 
 // Spawn a fresh VM for the fleetAgent, branded from persona, RAM-gated.
 
-async function spawnVm(ctx: AuthContext, fleetAgent: { id: string; name: string | null; workerTemplate: string; persona: unknown; vmMemMb: number; maxVms: number; oauthSecretName: string | null; token: string; idleSuspendMin: number }) {
+async function spawnVm(ctx: AuthContext, fleetAgent: { id: string; name: string | null; workerTemplate: string; persona: unknown; vmMemMb: number; maxVms: number; oauthSecretName: string | null; engineSecretName?: string | null; token: string; idleSuspendMin: number }) {
   // ── Account sandbox budget (la fuente de verdad, consistente con el HUD) ──
   // El plan da `concurrentSandboxes` y las reservas (add-ons) suman. TODAS las
   // sandboxes del owner en el host consumen este budget — workers de CUALQUIER
@@ -1238,16 +1238,24 @@ async function spawnVm(ctx: AuthContext, fleetAgent: { id: string; name: string 
   }
   const persona = (fleetAgent.persona ?? {}) as Persona;
   const env = { ...(persona.env ?? {}) };
-  // Resolve the channel's Claude OAuth from the chosen vault secret (default
-  // CLAUDE_CODE_OAUTH_TOKEN) and inject it for claude-worker. Lets different
-  // channels use different Max accounts. persona.env wins if it already set it.
-  // Gated by template: un codex-worker/ghosty-gc no habla con Anthropic, así que
-  // mandarle el OAuth Max del dueño sólo expone la credencial en un microVM que
-  // nunca la usa.
-  if (fleetAgent.workerTemplate === "claude-worker" && !env.CLAUDE_CODE_OAUTH_TOKEN) {
-    const secretName = fleetAgent.oauthSecretName || "CLAUDE_CODE_OAUTH_TOKEN";
-    const oauth = await getSecretValue(ctx.user.id, secretName).catch(() => null);
-    if (oauth) env.CLAUDE_CODE_OAUTH_TOKEN = oauth;
+  // Credencial del MOTOR, para cualquier proveedor. La env var la dicta el motor del
+  // agente (CLAUDE_CODE_OAUTH_TOKEN / OPENAI_API_KEY / DEEPSEEK_API_KEY) y el nombre
+  // del secreto sale de resolveEngineSecret (engineSecretName > oauthSecretName >
+  // canónico) → una cuenta puede tener varias llaves del mismo proveedor sin que
+  // ninguna se escriba en claro en persona.env.
+  //
+  // Se resuelve AQUÍ y no en createAgent a propósito: aquel ya sólo inyecta lo que
+  // falta (`if (!env.X)`), así que precargar el env local lo deja pasar de largo sin
+  // duplicar sus ramas. Y sigue estando gateado por motor — a un codex-worker nunca
+  // se le manda el OAuth Max de Anthropic, porque el envKey lo dicta SU motor.
+  // persona.env gana si ya trae la credencial.
+  {
+    const engine = getEngineForAgent(fleetAgent.workerTemplate, env);
+    const sec = resolveEngineSecret(fleetAgent, engine);
+    if (sec && !env[sec.envKey]) {
+      const value = await getSecretValue(ctx.user.id, sec.vaultName).catch(() => null);
+      if (value) env[sec.envKey] = value;
+    }
   }
   // WhatsApp action callback — lets the worker's in-process `wa` MCP send polls/
   // reactions/locations/files into the chat via the shared Baileys socket. The
@@ -2306,6 +2314,8 @@ export async function createFleetAgent(
     workerTemplate?: string;
     persona?: Persona;
     oauthSecretName?: string;
+    /** Secreto del vault con la credencial del motor (cualquier proveedor). Ver resolveEngineSecret. */
+    engineSecretName?: string;
     llm?: string; // ghosty-gc: "deepseek" (BYOK) | "easybits" (medido) → GHOSTY_LLM
     env?: Record<string, string>; // env extra del motor (registro FLEET_ENGINES) → persona.env
     maxWorkersPerVm?: number;
@@ -2371,6 +2381,7 @@ export async function createFleetAgent(
       // aparecen con su nombre real en la flota en vez de todos como "Ghosty".
       assistantName: persona.env?.ASSISTANT_NAME ?? opts.name ?? basePersona.name ?? "Ghosty",
       oauthSecretName: opts.oauthSecretName ?? null,
+      engineSecretName: opts.engineSecretName ?? null,
       // Seed the MCP menu with the builtins so the UI/agent can immediately see
       // the surface and start enabling custom servers per group.
       mcpCatalog: DEFAULT_MCP_CATALOG,

@@ -161,6 +161,31 @@ export const engineHasVision = (
   env?: Record<string, string> | null
 ): boolean => getEngineForAgent(template, env)?.vision === true;
 
+/**
+ * ¿De qué secreto del vault sale la credencial del motor de ESTE agente?
+ *
+ * `envKey` = la env var que el worker espera (la dicta el motor). `vaultName` = el
+ * nombre bajo el que vive en el vault del DUEÑO. Normalmente coinciden, pero se
+ * separan para poder tener VARIAS credenciales del mismo proveedor en una cuenta
+ * (p.ej. la llave de un cliente concreto) sin escribirla en claro en `persona.env`.
+ *
+ * Precedencia: `engineSecretName` (genérico, cualquier motor) > `oauthSecretName`
+ * (legacy, sólo se usaba para Claude) > el nombre canónico del motor. Con ambos en
+ * null el resultado es exactamente el comportamiento previo.
+ *
+ * Devuelve null para motores sin credencial propia (el proxy medido de EasyBits).
+ */
+export const resolveEngineSecret = (
+  agent: { engineSecretName?: string | null; oauthSecretName?: string | null },
+  engine: FleetEngine | undefined
+): { envKey: string; vaultName: string } | null => {
+  if (!engine?.secret) return null;
+  return {
+    envKey: engine.secret.name,
+    vaultName: agent.engineSecretName || agent.oauthSecretName || engine.secret.name,
+  };
+};
+
 /** ¿El proveedor tiene al menos un modelo listo? (si no, se puede elegir pero no crear). */
 export const engineCreatable = (e: FleetEngine): boolean =>
   e.models.some((m) => m.ready !== false);

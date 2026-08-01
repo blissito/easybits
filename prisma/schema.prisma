@@ -1165,6 +1165,13 @@ model FleetAgent {
   // different channels use different Max accounts (reselling). null = default
   // "CLAUDE_CODE_OAUTH_TOKEN". spawnVm resolves it → injects into the worker.
   oauthSecretName String?
+  // Generaliza oauthSecretName a CUALQUIER motor (Codex/DeepSeek/GLM, no sólo
+  // Claude): nombre del secreto del vault del dueño que porta la credencial del
+  // motor de este agente. null = nombre canónico del motor (FLEET_ENGINES[].secret).
+  // Existe para poder tener VARIAS credenciales del mismo proveedor en una cuenta
+  // (la llave propia de un cliente) sin escribirla en claro en persona.env.
+  // Precedencia en spawnVm: engineSecretName > oauthSecretName > canónico.
+  engineSecretName String?
   // Scaling knobs. Hierarchy: VM (sandboxId) hosts N workers; worker = 1
   // conversation = 1 sessionId. When a VM hits maxWorkersPerVm, spawn another VM.
   maxWorkersPerVm Int  @default(2)    // conversations (workers) per VM (512MB ≈ 2)
