@@ -9,6 +9,10 @@ interface ImageMatch {
 
 export interface EnrichImagesOptions {
   pexelsApiKey?: string;
+  /** Unsplash API OFICIAL (api.unsplash.com). Sin ella, la cadena cae al
+   *  endpoint interno del sitio, que no tiene contrato ni términos de uso. */
+  unsplashAccessKey?: string;
+  pixabayApiKey?: string;
   openaiApiKey?: string;
   /** Called with temp URL + query, returns permanent URL. Use to persist DALL-E images to S3/etc. */
   persistImage?: (tempUrl: string, query: string) => Promise<string>;
@@ -119,7 +123,8 @@ export function findImageSlots(html: string): ImageMatch[] {
 
 /**
  * Enrich all images in an HTML string.
- * Strategy: Pexels (free) → DALL-E fallback (if openaiApiKey) → placeholder.
+ * Strategy: bancos gratuitos encadenados (Pexels → Unsplash → Pixabay →
+ * Openverse, ver `stockPhotos.ts`) → DALL-E si hay openaiApiKey → placeholder.
  * All images resolved in parallel. If persistImage callback provided, temp DALL-E URLs are persisted.
  */
 export async function enrichImages(html: string, pexelsApiKeyOrOpts?: string | EnrichImagesOptions, openaiApiKey?: string): Promise<string> {
@@ -139,11 +144,14 @@ export async function enrichImages(html: string, pexelsApiKeyOrOpts?: string | E
     slots.map(async (slot) => {
       let url: string | null = null;
 
-      // 1. Pexels first (free)
-      if (opts.pexelsApiKey) {
-        const img = await searchImage(slot.query, opts.pexelsApiKey).catch(() => null);
-        url = img?.url || null;
-      }
+      // 1. Bancos gratuitos. Openverse no pide llave, así que este paso corre
+      //    aunque no haya ninguna configurada.
+      const img = await searchImage(slot.query, {
+        pexelsApiKey: opts.pexelsApiKey,
+        unsplashAccessKey: opts.unsplashAccessKey,
+        pixabayApiKey: opts.pixabayApiKey,
+      }).catch(() => null);
+      url = img?.url || null;
 
       // 2. DALL-E fallback if Pexels found nothing
       if (!url && opts.openaiApiKey) {

@@ -1,54 +1,36 @@
+import { searchStockPhoto, type StockPhotoKeys } from "./stockPhotos";
+
 export interface PexelsResult {
   url: string;
   photographer: string;
   alt: string;
 }
 
-export async function searchImage(query: string, apiKey?: string): Promise<PexelsResult | null> {
-  const key = apiKey || process.env.PEXELS_API_KEY;
-  if (!key) return null;
-  try {
-    const res = await fetch(
-      `https://api.pexels.com/v1/search?query=${encodeURIComponent(query)}&per_page=5&orientation=landscape&locale=en-US`,
-      { headers: { Authorization: key } }
-    );
-    if (!res.ok) {
-      console.warn(`[pexels] ${res.status} for "${query}", trying unsplash fallback`);
-      return searchUnsplash(query);
-    }
-    const data = await res.json();
-    const photos = data.photos;
-    if (!photos || photos.length === 0) {
-      console.warn(`[pexels] 0 results for "${query}"`);
-      return null;
-    }
-    const photo = photos[Math.floor(Math.random() * photos.length)];
-    return {
-      url: photo.src.large,
-      photographer: photo.photographer,
-      alt: photo.alt || query,
-    };
-  } catch {
-    return searchUnsplash(query);
-  }
+/**
+ * Busca una foto de stock. **El nombre del archivo es histórico**: hoy esto
+ * encadena varios bancos (Pexels → Unsplash oficial → Pixabay → Openverse), no
+ * sólo Pexels. La lógica vive en `stockPhotos.ts`.
+ *
+ * Se conserva la firma `(query, apiKey)` porque hay llamadas existentes que
+ * pasan la llave de Pexels como string. El segundo argumento acepta además el
+ * objeto de llaves completo, que es lo que activa el resto de la cadena.
+ */
+export async function searchImage(
+  query: string,
+  apiKeyOrKeys?: string | StockPhotoKeys
+): Promise<PexelsResult | null> {
+  const keys: StockPhotoKeys =
+    typeof apiKeyOrKeys === "string"
+      ? { pexelsApiKey: apiKeyOrKeys }
+      : (apiKeyOrKeys ?? {});
+  const photo = await searchStockPhoto(query, keys);
+  return photo
+    ? { url: photo.url, photographer: photo.photographer, alt: photo.alt }
+    : null;
 }
 
-async function searchUnsplash(query: string): Promise<PexelsResult | null> {
-  try {
-    const res = await fetch(
-      `https://unsplash.com/napi/search/photos?query=${encodeURIComponent(query)}&per_page=5&orientation=landscape`
-    );
-    if (!res.ok) return null;
-    const data = await res.json();
-    const results = data.results;
-    if (!results || results.length === 0) return null;
-    const photo = results[Math.floor(Math.random() * results.length)];
-    return {
-      url: photo.urls?.regular || photo.urls?.small,
-      photographer: photo.user?.name || "Unsplash",
-      alt: photo.alt_description || query,
-    };
-  } catch {
-    return null;
-  }
-}
+export {
+  searchStockPhoto,
+  type StockPhoto,
+  type StockPhotoKeys,
+} from "./stockPhotos";
