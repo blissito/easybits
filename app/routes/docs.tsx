@@ -46,7 +46,7 @@ const SECTIONS = [
 ] as const;
 
 // Sections that show the "Nuevo" badge in the nav (recently shipped).
-const NEW_SECTIONS = new Set<string>(["flota", "video-projects", "calls", "secrets"]);
+const NEW_SECTIONS = new Set<string>(["flota", "video-projects", "calls", "secrets", "images"]);
 
 export default function DocsPage() {
   const location = useLocation();
@@ -760,6 +760,30 @@ console.log(result.deleted); // 3`}
             <h2 className="text-2xl font-bold mb-6">Imágenes</h2>
 
             <Endpoint
+              method="GET"
+              path="/stock-photos"
+              description="Busca una foto libre de regalías en bancos gratuitos (Pexels → Unsplash → Pixabay → Openverse) y devuelve la primera coincidencia"
+              params={[
+                { name: "q", type: "string", desc: "Qué buscar (requerido). En inglés da mejores resultados en todos los bancos" },
+                { name: "save", type: "boolean", desc: "Guarda la foto en tu biblioteca y añade fileId + savedUrl. Requiere scope WRITE; buscar sin guardar, no" },
+              ]}
+              response={`{ "url": "...", "alt": "...", "photographer": "...", "provider": "pexels", "sourceUrl": "...", "attribution": "Foto de ... en ... (...)" }`}
+              note="Cuesta 1 crédito por llamada, también cuando la coincidencia es mala: la búsqueda es difusa y casi siempre devuelve algo, así que revisa `alt` para juzgar la relevancia en vez de esperar un error. Debes mostrar `attribution`: Unsplash y Pixabay exigen acreditar al autor en sus términos."
+              sdk={`const photo = await eb.searchStockPhoto({
+  query: "coffee shop interior",
+  save: true,
+});
+
+console.log(photo.url);
+console.log(photo.attribution); // acredita al autor`}
+            />
+
+            <McpTool
+              name="search_stock_photo"
+              params="query, save?"
+              description="Busca una foto de stock libre de regalías y devuelve su URL. Con save guarda una copia en la biblioteca. Cuesta 1 crédito; muestra siempre attribution."
+            />
+            <Endpoint
               method="POST"
               path="/files/:fileId/optimize"
               description="Convierte la imagen a WebP o AVIF (crea un archivo nuevo)"
@@ -800,30 +824,6 @@ console.log(result.savings); // "75%"`}
 });`}
             />
 
-            <Endpoint
-              method="GET"
-              path="/stock-photos"
-              description="Busca una foto libre de regalías en bancos gratuitos (Pexels → Unsplash → Pixabay → Openverse) y devuelve la primera coincidencia"
-              params={[
-                { name: "q", type: "string", desc: "Qué buscar (requerido). En inglés da mejores resultados en todos los bancos" },
-                { name: "save", type: "boolean", desc: "Guarda la foto en tu biblioteca y añade fileId + savedUrl. Requiere scope WRITE; buscar sin guardar, no" },
-              ]}
-              response={`{ "url": "...", "alt": "...", "photographer": "...", "provider": "pexels", "sourceUrl": "...", "attribution": "Foto de ... en ... (...)" }`}
-              note="Cuesta 1 crédito por llamada, también cuando la coincidencia es mala: la búsqueda es difusa y casi siempre devuelve algo, así que revisa `alt` para juzgar la relevancia en vez de esperar un error. Debes mostrar `attribution`: Unsplash y Pixabay exigen acreditar al autor en sus términos."
-              sdk={`const photo = await eb.searchStockPhoto({
-  query: "coffee shop interior",
-  save: true,
-});
-
-console.log(photo.url);
-console.log(photo.attribution); // acredita al autor`}
-            />
-
-            <McpTool
-              name="search_stock_photo"
-              params="query, save?"
-              description="Busca una foto de stock libre de regalías y devuelve su URL. Con save guarda una copia en la biblioteca. Cuesta 1 crédito; muestra siempre attribution."
-            />
           </section>
 
           {/* Sharing */}
