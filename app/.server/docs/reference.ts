@@ -175,6 +175,17 @@ format: "webp"|"avif"|"png"|"jpeg"
 Creates a new file (original unchanged).
 Returns: \`{ file, originalSize, transformedSize, transforms }\`
 SDK: \`eb.transformImage({ fileId, width?, height?, ... })\`
+
+### Search stock photo
+\`GET /stock-photos?q=<query>&save=true|false\`
+Searches royalty-free banks in order (Pexels → Unsplash → Pixabay → Openverse) and returns the first match.
+\`q\` is required. English queries give better results across all banks.
+\`save=true\` stores the photo in your library and adds \`fileId\` + \`savedUrl\` (requires WRITE scope; searching alone does not).
+Returns: \`{ url, alt, photographer, provider, sourceUrl?, fileId?, savedUrl?, attribution }\`
+Costs 1 credit per call — including when the match is poor. The search is fuzzy and almost always returns *something*, so check \`alt\` to judge relevance instead of expecting an error.
+You must display \`attribution\`: Unsplash and Pixabay require crediting the photographer in their terms.
+SDK: \`eb.searchStockPhoto({ query, save? })\`
+MCP: \`search_stock_photo\`
 `,
 
   sharing: `## Sharing
@@ -410,6 +421,7 @@ Configure via MCP tool \`set_ai_key\` or dashboard. Supports ANTHROPIC and OPENA
 | \`listDeletedFiles(params?)\` | List trashed files |
 | \`duplicateFile(fileId, name?)\` | Copy a file |
 | \`searchFiles(query)\` | AI-powered search |
+| \`searchStockPhoto(params)\` | Royalty-free stock photo search (1 credit; show \`attribution\`) |
 | \`bulkUploadFiles(items)\` | Upload up to 20 files |
 | \`bulkDeleteFiles(fileIds)\` | Delete up to 100 files |
 | \`optimizeImage(params)\` | Convert to WebP/AVIF |
@@ -1442,7 +1454,7 @@ For charts/funnels/flows, use inline SVG inside a \`.diagram\` container:
 
   "all-mcp-tools": `## All MCP Tools (99 tools)
 
-### Files (14 tools)
+### Files (15 tools)
 | Tool | Description |
 |------|-------------|
 | \`list_files\` | List files with pagination |
@@ -1459,6 +1471,7 @@ For charts/funnels/flows, use inline SVG inside a \`.diagram\` container:
 | \`list_deleted_files\` | List files in trash |
 | \`optimize_image\` | Convert image to WebP/AVIF (original unchanged) |
 | \`transform_image\` | Crop, resize, rotate, flip, convert images |
+| \`search_stock_photo\` | Royalty-free photo search (Pexels/Unsplash/Pixabay/Openverse); 1 credit, show \`attribution\` |
 
 ### Sharing & Permissions (5 tools)
 | Tool | Description |
