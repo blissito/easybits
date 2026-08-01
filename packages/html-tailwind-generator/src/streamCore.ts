@@ -156,6 +156,9 @@ export async function enrichSectionImages(
   section: Section3,
   opts: {
     pexelsApiKey?: string;
+  /** Unsplash API OFICIAL. Sin ella la cadena cae al endpoint interno del sitio. */
+  unsplashAccessKey?: string;
+  pixabayApiKey?: string;
     openaiApiKey?: string;
     persistImage?: (tempUrl: string, query: string) => Promise<string>;
     onImageUpdate?: (sectionId: string, html: string) => void;
@@ -166,8 +169,14 @@ export async function enrichSectionImages(
   const results = await Promise.allSettled(
     slots.map(async (slot) => {
       let url: string | null = null;
-      if (opts.pexelsApiKey) {
-        const img = await searchImage(slot.query, opts.pexelsApiKey).catch(() => null);
+      {
+        // Sin gate por llave: Openverse no pide ninguna, así que la cadena
+        // siempre puede aportar algo antes de caer a DALL·E o al placeholder.
+        const img = await searchImage(slot.query, {
+          pexelsApiKey: opts.pexelsApiKey,
+          unsplashAccessKey: opts.unsplashAccessKey,
+          pixabayApiKey: opts.pixabayApiKey,
+        }).catch(() => null);
         url = img?.url || null;
       }
       if (!url && opts.openaiApiKey) {
@@ -260,6 +269,9 @@ export interface StreamGenerateOptions {
   userContent: any[];
   /** Pexels API key for image enrichment */
   pexelsApiKey?: string;
+  /** Unsplash API OFICIAL. Sin ella la cadena cae al endpoint interno del sitio. */
+  unsplashAccessKey?: string;
+  pixabayApiKey?: string;
   /** Persist DALL-E images to permanent storage */
   persistImage?: (tempUrl: string, query: string) => Promise<string>;
   /** Called when a new section is parsed */

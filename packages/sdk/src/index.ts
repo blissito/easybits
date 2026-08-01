@@ -47,6 +47,29 @@ export interface ListFilesResponse {
   total?: number;
 }
 
+export interface SearchStockPhotoParams {
+  /** Qué buscar. En inglés da mejores resultados en todos los bancos. */
+  query: string;
+  /** Guarda la foto en tu biblioteca y devuelve además `fileId`. Requiere scope WRITE. */
+  save?: boolean;
+}
+
+export interface StockPhoto {
+  url: string;
+  alt: string;
+  photographer: string;
+  /** Banco que la sirvió: pexels | unsplash | pixabay | openverse | unsplash-napi. */
+  provider: string;
+  /** Página de la foto en el banco, para enlazar la atribución. */
+  sourceUrl?: string;
+  /** Sólo con `save: true`. */
+  fileId?: string;
+  /** Sólo con `save: true`: la copia pública en tu storage. */
+  savedUrl?: string;
+  /** Texto de atribución listo para usar. Unsplash y Pixabay la exigen. */
+  attribution: string;
+}
+
 export interface UploadFileParams {
   fileName: string;
   contentType: string;
@@ -921,6 +944,19 @@ export class EasybitsClient {
 
   async searchFiles(query: string): Promise<{ items: EasybitsFile[] }> {
     return this.request<{ items: EasybitsFile[] }>(`/files/search?q=${encodeURIComponent(query)}`);
+  }
+
+  /**
+   * Busca una foto de stock libre de regalías en bancos gratuitos
+   * (Pexels → Unsplash → Pixabay → Openverse) y devuelve la primera coincidencia.
+   *
+   * Cuesta 1 crédito. Con `save: true` además la guarda en tu biblioteca.
+   * Acredita al autor con el campo `attribution` — Unsplash y Pixabay lo exigen.
+   */
+  async searchStockPhoto(params: SearchStockPhotoParams): Promise<StockPhoto> {
+    const search = new URLSearchParams({ q: params.query });
+    if (params.save) search.set("save", "true");
+    return this.request<StockPhoto>(`/stock-photos?${search.toString()}`);
   }
 
   // ── Websites ────────────────────────────────────────────────

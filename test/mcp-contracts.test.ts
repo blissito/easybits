@@ -138,6 +138,16 @@ describe("registry smoke — createMcpServer('all')", () => {
     }
   });
 
+  it("search_stock_photo llega al grupo design, no sólo a 'all'", () => {
+    // Registrar la tool no basta: si no está en el allowlist del grupo, queda
+    // deshabilitada y sólo alcanzable por discover_tools/run_tool. Es el error
+    // que más veces deja una tool "invisible" para el agente.
+    for (const group of ["all", "design"] as const) {
+      const tools = getRegisteredTools(createMcpServer([group]));
+      expect(Object.keys(tools), group).toContain("search_stock_photo");
+    }
+  });
+
   it("sandbox_list returns the unified paginate envelope (not a raw array)", async () => {
     // sandbox_list is in the 'sandbox' group; its underlying op is mocked above
     // so this exercises the handler's ok(paginate(...)) wrapping in isolation.

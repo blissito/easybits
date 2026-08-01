@@ -99,6 +99,9 @@ export interface RefineOptions {
   model?: string | import("ai").LanguageModel;
   /** Pexels API key for image enrichment. Falls back to PEXELS_API_KEY env var */
   pexelsApiKey?: string;
+  /** Unsplash API OFICIAL. Sin ella la cadena cae al endpoint interno del sitio. */
+  unsplashAccessKey?: string;
+  pixabayApiKey?: string;
   /** Called with temp DALL-E URL + query, returns permanent URL. Use to persist to S3/etc. */
   persistImage?: (tempUrl: string, query: string) => Promise<string>;
   /** Called with accumulated HTML as it streams */
@@ -150,6 +153,8 @@ export async function refineLanding(options: RefineOptions): Promise<string> {
     systemPrompt = REFINE_SYSTEM,
     model: modelId,
     pexelsApiKey,
+    unsplashAccessKey,
+    pixabayApiKey,
     persistImage,
     onChunk,
     onDone,
@@ -230,7 +235,7 @@ export async function refineLanding(options: RefineOptions): Promise<string> {
     html = sanitizeSemanticColors(html, themeColors, inheritedBg);
 
     // Enrich images (DALL-E if openaiApiKey, otherwise Pexels)
-    html = await enrichImages(html, { pexelsApiKey, openaiApiKey, persistImage });
+    html = await enrichImages(html, { pexelsApiKey, unsplashAccessKey, pixabayApiKey, openaiApiKey, persistImage });
 
     onDone?.(html);
     return html;

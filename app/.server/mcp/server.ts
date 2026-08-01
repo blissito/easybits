@@ -5667,6 +5667,36 @@ function registerVideoTools(server: McpServer) {
   );
 
   server.tool(
+    "search_stock_photo",
+    "Busca una FOTO de stock libre de regalías en bancos gratuitos (Pexels, Unsplash, Pixabay, Openverse) y devuelve su URL lista para usar. Úsala cuando pidan una imagen, foto o fotografía REAL para una landing, documento, presentación o post — NO genera nada con IA, busca fotos existentes (para generar usa `create_or_edit_image`).\n\nHow to use:\n- `query` en INGLÉS da muchos mejores resultados en todos los bancos, aunque el usuario pregunte en español (ej. pide 'barbería' → busca 'barbershop').\n- `save: true` la guarda en la biblioteca del usuario y devuelve `fileId` (reusable como referencia o para embeber).\n- Devuelve `attribution`: MUÉSTRALA al usuario. Unsplash y Pixabay exigen acreditar al autor.\n- REVISA el campo `alt` antes de usar la foto: los bancos casi nunca devuelven vacío, así que una consulta rara devuelve algo IRRELEVANTE en vez de un error. Si `alt` no tiene que ver con lo pedido, dilo y reformula la búsqueda en vez de insertar la imagen.\n- Cost: 1 crédito por búsqueda.",
+    {
+      query: z.string().min(1).max(200).describe("Qué foto buscar. En inglés funciona mejor (ej. 'barbershop interior', 'gamer setup')."),
+      save: z.boolean().optional().describe("true = guardarla en la biblioteca del usuario y devolver fileId. Default false (sólo la URL)."),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { consumeService } = await import("../services/consume");
+      try {
+        const result = await consumeService<import("../services/providers/stockPhotos").StockPhotoSearchOutput>(
+          "image.stock.search",
+          { query: params.query, save: params.save },
+          { userId: ctx.user.id },
+        );
+        return ok({
+          ...result.data,
+          hint: result.data.fileId
+            ? `Foto guardada en la biblioteca (fileId: ${result.data.fileId}). Acredita: ${result.data.attribution}`
+            : `Acredita al autor: ${result.data.attribution}`,
+        });
+      } catch (e) {
+        const f = failService(e, "Stock photos");
+        if (f) return f;
+        throw e;
+      }
+    })
+  );
+
+  server.tool(
     "voice_tts_create",
     "Sintetiza una nota de voz desde texto con el motor self-hosted de EasyBits (kokoro). Servicio de flota on-demand, sin proveedores externos. Devuelve un File público cuyo `audioUrl` puedes mandar al chat (con `send_message({url})` sale como nota de voz) o pasar a `avatar_video_create`.\n\nVOZ: elige con `voice` (usa `list_voices` para ver las disponibles). Default em_santa (masculina).\n\nHow to use:\n- Required: `text` (max ~5000 chars).\n- `voice`: id de voz (ej. em_santa, em_alex, ef_dora).\n- `format`: 'ogg' (nota de voz WhatsApp, default-friendly) | 'wav' (para avatar).\n- Returns `audioUrl` + `voice` usado.",
     {

@@ -159,3 +159,34 @@ describe("eb.fleet.* contract", () => {
     expect(last().headers.Authorization).toBe(`Bearer ${KEY}`);
   });
 });
+
+// Congela el contrato de la búsqueda de fotos de stock — la superficie SDK de
+// `image.stock.search`. Lo que importa es el path y cómo viaja `save`: el
+// servidor exige scope WRITE sólo cuando viene, así que mandarlo de más
+// convertiría una lectura en una escritura.
+describe("eb.searchStockPhoto contract", () => {
+  let calls: ReturnType<typeof mockFetch>;
+  let eb: EasybitsClient;
+  beforeEach(() => {
+    calls = mockFetch();
+    eb = new EasybitsClient({ apiKey: KEY, baseUrl: BASE });
+  });
+  const last = () => calls[calls.length - 1];
+
+  it("GET /stock-photos con la query codificada", async () => {
+    await eb.searchStockPhoto({ query: "barbershop interior" });
+    expect(last().method).toBe("GET");
+    expect(last().url).toBe(`${BASE}/api/v2/stock-photos?q=barbershop+interior`);
+    expect(last().headers.Authorization).toBe(`Bearer ${KEY}`);
+  });
+
+  it("no manda `save` cuando no se pidió", async () => {
+    await eb.searchStockPhoto({ query: "gym" });
+    expect(last().url).not.toContain("save");
+  });
+
+  it("manda save=true cuando se pide guardar", async () => {
+    await eb.searchStockPhoto({ query: "gym", save: true });
+    expect(last().url).toBe(`${BASE}/api/v2/stock-photos?q=gym&save=true`);
+  });
+});

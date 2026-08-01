@@ -157,6 +157,9 @@ export interface GenerateOptions {
    *  and uses the model directly. */
   model?: string | import("ai").LanguageModel;
   pexelsApiKey?: string;
+  /** Unsplash API OFICIAL. Sin ella la cadena cae al endpoint interno del sitio. */
+  unsplashAccessKey?: string;
+  pixabayApiKey?: string;
   persistImage?: (tempUrl: string, query: string) => Promise<string>;
   onSection?: (section: Section3) => void;
   onImageUpdate?: (sectionId: string, html: string) => void;

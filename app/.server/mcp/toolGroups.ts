@@ -206,6 +206,7 @@ export const DESIGN_ALLOWLIST = new Set<string>([
   "edit_image",
   "describe_image",
   "pdf_to_images",
+  "search_stock_photo",
   // Video
   "video_create", "list_videos",
   "avatar_video_create",
@@ -512,6 +513,9 @@ export const IMAGENES_ALLOWLIST = new Set<string>([
   "transform_image",
   "optimize_image",
   "describe_image",
+  // Fotos de stock: buscar una foto real es distinto de generarla con IA, y es lo
+  // que la gente pide la mayor parte de las veces.
+  "search_stock_photo",
   "get_file", "list_files", "upload_file",
 ]);
 

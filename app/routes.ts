@@ -275,6 +275,7 @@ export default [
     route("templates", "routes/api/v2/templates.ts"),
     route("files", "routes/api/v2/files.ts"),
     route("files/search", "routes/api/v2/file-search.ts"),
+    route("stock-photos", "routes/api/v2/stock-photos.ts"),
     route("files/bulk-delete", "routes/api/v2/files-bulk-delete.ts"),
     route("files/bulk-upload", "routes/api/v2/files-bulk-upload.ts"),
     route("files/:fileId", "routes/api/v2/file.ts"),
