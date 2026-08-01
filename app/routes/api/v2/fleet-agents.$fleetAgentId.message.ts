@@ -101,6 +101,12 @@ export async function action({ request, params }: Route.ActionArgs) {
       // Web channels (denik admin) scope the org per turn instead of pre-registering
       // a groupKey; WhatsApp omits it and falls back to fleetAgent.groupKeys.
       denikApiKey: typeof body?.denikApiKey === "string" ? body.denikApiKey : undefined,
+      // BYOK del ENGINE por turno: la llave del proveedor con la que corre el
+      // modelo. Es la llave del propio caller, así que sólo cambia a quién le
+      // factura su proveedor — no da acceso a nada de esta plataforma.
+      // `resolveEngineApiKey` ya la prefiere sobre `groupEngineKeys` y sobre la
+      // horneada; lo único que faltaba era dejarla entrar por HTTP.
+      engineApiKey: typeof body?.engineApiKey === "string" ? body.engineApiKey : undefined,
       // Per-org personalization (layer 3) appended to the fleetAgent persona by the worker.
       appendSystemPrompt:
         typeof body?.appendSystemPrompt === "string" ? body.appendSystemPrompt : undefined,

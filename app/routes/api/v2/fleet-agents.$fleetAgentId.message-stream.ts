@@ -137,6 +137,13 @@ export async function action({ request, params }: Route.ActionArgs) {
           files,
           mediaUrl,
           denikApiKey: typeof body?.denikApiKey === "string" ? body.denikApiKey : undefined,
+          // BYOK del ENGINE por turno: la llave del proveedor con la que corre
+          // el modelo. Es la llave del propio caller, así que sólo cambia a
+          // quién le factura su proveedor — no da acceso a nada de esta
+          // plataforma. `resolveEngineApiKey` ya la prefiere sobre
+          // `groupEngineKeys` y sobre la horneada; faltaba dejarla entrar por HTTP.
+          engineApiKey:
+            typeof body?.engineApiKey === "string" ? body.engineApiKey : undefined,
           appendSystemPrompt:
             typeof body?.appendSystemPrompt === "string" ? body.appendSystemPrompt : undefined,
           // IANA timezone del tenant → localiza la fecha/hora fresca del turno.
