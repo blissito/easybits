@@ -1,0 +1,47 @@
+---
+title: "Bubblewrap: el sandbox que tu agente necesita en Linux"
+description: "Qué es bubblewrap, por qué Codex lo usa para aislar lo que ejecuta un agente, qué dice OpenAI al respecto y qué revisar antes de correr su SDK en tu propia infraestructura."
+date: "2026-08-01"
+author: "Equipo Easybits"
+tags: ["agentes", "sandboxes", "infraestructura", "openai", "build in public"]
+featuredImage: "/blog/assets/sandbox-ghosty.jpg"
+published: true
+---
+
+# Bubblewrap: el sandbox que tu agente necesita en Linux
+
+Un agente que escribe archivos y ejecuta comandos necesita un límite. Sin él, cada acción se vuelve una pregunta al usuario, y la alternativa —dejarlo hacer lo que quiera— convierte cualquier error en un problema de toda la máquina.
+
+En Linux, la pieza que pone ese límite suele ser **bubblewrap**.
+
+## Qué es
+
+Bubblewrap (`bwrap`) es una utilidad de Linux que crea espacios aislados usando *namespaces* del kernel: monta un sistema de archivos acotado, separa procesos y red, y corre el comando dentro de esa vista recortada. Es mucho más ligero que un contenedor completo y no requiere privilegios de root.
+
+Viene del mundo de Flatpak, donde el problema era el mismo con otro nombre: cómo correr una aplicación de escritorio sin entregarle la máquina entera. Los agentes heredaron el problema tal cual.
+
+## Qué dice OpenAI
+
+En su documentación, OpenAI describe el sandbox como *"the boundary that lets the agent act autonomously without giving it unrestricted access to your machine"*, y su beneficio principal como reducir la fatiga de aprobaciones: en vez de confirmar cada comando de bajo riesgo, el agente trabaja dentro de límites ya establecidos.
+
+El mecanismo cambia por plataforma. En macOS usan el framework Seatbelt del sistema y funciona sin instalar nada. En Linux y WSL2 usan bubblewrap, con un detalle que conviene leer con cuidado:
+
+> "Codex uses the first `bwrap` executable it finds on `PATH`. If no `bwrap` executable is available, Codex falls back to a bundled helper, but that helper requires support for unprivileged user namespace creation."
+
+Es decir: bubblewrap no es estrictamente obligatorio, hay un helper de respaldo, y ese respaldo depende de que el kernel permita crear *user namespaces* sin privilegios —algo que AppArmor restringe en varias distribuciones—. Por eso la propia documentación recomienda instalar el paquete de la distribución en lugar de confiar en el fallback.
+
+Los modos son tres: `read-only` (inspecciona sin editar), `workspace-write` (el default de baja fricción: edita dentro del workspace y corre comandos locales) y `danger-full-access` (sin restricciones de disco ni red).
+
+## Nuestra opinión
+
+Corta: la parte frágil no es bubblewrap, es la suposición de que el fallback siempre va a estar disponible. En imágenes base mínimas y en microVMs, esa suposición se cae con facilidad, y el modo en que se cae puede ser silencioso. Instalar el paquete cuesta una línea de Dockerfile y elimina la variable.
+
+## Qué considerar antes de correr el SDK en tu infraestructura
+
+- **Tu imagen base probablemente no trae `bwrap`.** Las variantes `slim` de Node y Debian no lo incluyen. Agrégalo explícitamente.
+- **El fallback depende del kernel del host, no de tu imagen.** Si tu plataforma restringe user namespaces sin privilegios, no vas a poder apoyarte en él.
+- **Elige el modo a conciencia.** `danger-full-access` tiene sentido cuando el aislamiento real ya lo da la capa de abajo —una microVM, por ejemplo—. En una laptop es otra cosa.
+- **Fija la versión del CLI.** El comportamiento del sandbox cambia entre versiones, y una actualización arrastrada sin querer cambia cómo se ejecuta tu agente.
+- **Verifica dentro del entorno, no en el código.** Que el Dockerfile diga que instalaste algo no prueba que la imagen desplegada lo tenga.
+
+En Easybits cada conversación corre en su propia microVM, así que el aislamiento fuerte vive en la capa de abajo. Aun así, las herramientas del agente pasan por el sandbox del motor, y esa dependencia conviene tratarla como lo que es: parte de tu infraestructura.
