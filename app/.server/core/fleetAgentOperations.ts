@@ -1241,7 +1241,10 @@ async function spawnVm(ctx: AuthContext, fleetAgent: { id: string; name: string 
   // Resolve the channel's Claude OAuth from the chosen vault secret (default
   // CLAUDE_CODE_OAUTH_TOKEN) and inject it for claude-worker. Lets different
   // channels use different Max accounts. persona.env wins if it already set it.
-  if (!env.CLAUDE_CODE_OAUTH_TOKEN) {
+  // Gated by template: un codex-worker/ghosty-gc no habla con Anthropic, así que
+  // mandarle el OAuth Max del dueño sólo expone la credencial en un microVM que
+  // nunca la usa.
+  if (fleetAgent.workerTemplate === "claude-worker" && !env.CLAUDE_CODE_OAUTH_TOKEN) {
     const secretName = fleetAgent.oauthSecretName || "CLAUDE_CODE_OAUTH_TOKEN";
     const oauth = await getSecretValue(ctx.user.id, secretName).catch(() => null);
     if (oauth) env.CLAUDE_CODE_OAUTH_TOKEN = oauth;
@@ -1254,7 +1257,12 @@ async function spawnVm(ctx: AuthContext, fleetAgent: { id: string; name: string 
   env.FLEET_WA_ACTION_URL = `${appBaseUrl()}/api/v2/fleet-agents/wa-action`;
   // Modelo del worker — persona.env gana (override por-agente), si no el default
   // de flota. El CLI del worker lo lee de su env (ver FLEET_DEFAULT_MODEL).
-  if (!env.ANTHROPIC_MODEL) env.ANTHROPIC_MODEL = FLEET_DEFAULT_MODEL;
+  // Sólo claude-worker: los otros motores traen su modelo en su propia env var
+  // (CODEX_MODEL / DEEPSEEK_MODEL, ver fleetEngines.modelEnv) y un ANTHROPIC_MODEL
+  // colado ahí no hace nada salvo confundir el debug del motor.
+  if (fleetAgent.workerTemplate === "claude-worker" && !env.ANTHROPIC_MODEL) {
+    env.ANTHROPIC_MODEL = FLEET_DEFAULT_MODEL;
+  }
   // Effort del worker — mismo patrón: persona.env gana, si no el default de flota.
   // Baja el thinking-antes-del-primer-token (snappy). Ver FLEET_DEFAULT_EFFORT.
   if (!env.FLEET_EFFORT) env.FLEET_EFFORT = FLEET_DEFAULT_EFFORT;

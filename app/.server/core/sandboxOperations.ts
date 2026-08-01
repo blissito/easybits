@@ -2103,6 +2103,61 @@ function tuiCommandFor(template: string, agentId: string, embedToken: string): s
   return `ghosty-tui --agent ${agentId} --token ${embedToken}`;
 }
 
+// Templates cuyo cerebro arma el MCP `easybits` a partir de EASYBITS_API_KEY (y, en
+// Code Mode, pega a la REST API v2 con EASYBITS_BASE_URL). SIN la key el runtime NO
+// registra el server → el agente se queda sin NINGUNA tool de EasyBits y su
+// EASYBITS_TOOL_GROUP/buckets quedan inertes, aunque la app se los mande por turno.
+// Vivía duplicado en 3 ramas por template (y faltaba entero en codex-worker, que por
+// eso arrancaba mudo de tools); una sola lista evita que el próximo motor lo repita.
+const EASYBITS_TOOLED_TEMPLATES = new Set<string>([
+  "claude-worker",
+  "codex-worker",
+  "ghosty-gc",
+  "open-ghosty",
+  "lang-ghosty",
+  "rust-ghosty",
+  "cagent-ghosty",
+]);
+
+// Los workers de la FLOTA son always-on y su llave ES su acceso a las tools: si el
+// dueño no tiene una en el vault se MINTEA persistente con sus scopes. Los demás
+// templates se quedan en solo-vault (comportamiento previo): sin key corren con sus
+// tools locales, que es aceptable para ellos y evita minteos sorpresa.
+const EASYBITS_MINTING_TEMPLATES = new Set<string>([
+  "claude-worker",
+  "codex-worker",
+  "ghosty-gc",
+]);
+
+async function injectEasybitsAccess(
+  ctx: AuthContext,
+  params: { template: SandboxTemplate; name?: string },
+  env: Record<string, string>
+): Promise<void> {
+  // Base de la REST API v2 para Code Mode. Se inyecta siempre (inofensivo); el grupo
+  // lean se activa per-fleet-agent vía persona.env.EASYBITS_TOOL_GROUP = "scripting".
+  if (!env.EASYBITS_BASE_URL) {
+    env.EASYBITS_BASE_URL = (
+      process.env.BASE_URL ||
+      process.env.EASYBITS_URL ||
+      process.env.SITE_URL ||
+      "https://www.easybits.cloud"
+    ).replace(/\/$/, "");
+  }
+  if (env.EASYBITS_API_KEY) return; // el env del caller siempre gana
+  const ebKey = await getSecretValue(ctx.user.id, "EASYBITS_API_KEY").catch(() => null);
+  if (ebKey) {
+    env.EASYBITS_API_KEY = ebKey;
+    return;
+  }
+  if (!EASYBITS_MINTING_TEMPLATES.has(params.template)) return;
+  const minted = await createApiKey(ctx.user.id, {
+    name: `${params.template}-${params.name || "fleetAgent"}`,
+    scopes: ctx.scopes,
+  });
+  env.EASYBITS_API_KEY = minted.raw;
+}
+
 export async function createAgent(
   ctx: AuthContext,
   params: {
@@ -2167,34 +2222,8 @@ export async function createAgent(
       const oauth = await getSecretValue(ctx.user.id, "CLAUDE_CODE_OAUTH_TOKEN").catch(() => null);
       if (oauth) env.CLAUDE_CODE_OAUTH_TOKEN = oauth;
     }
-    // Code Mode: el agente escribe scripts que pegan a la REST API v2 con su
-    // $EASYBITS_API_KEY + esta base. Se inyecta siempre (inofensivo); el grupo
-    // lean se activa per-fleet-agent vía persona.env.EASYBITS_TOOL_GROUP =
-    // "scripting" (ya fluye al env del VM y el worker lo lee → --tools scripting).
-    // NO se fuerza un default aquí para no voltear toda la flota de golpe.
-    if (!env.EASYBITS_BASE_URL) {
-      env.EASYBITS_BASE_URL = (
-        process.env.BASE_URL ||
-        process.env.EASYBITS_URL ||
-        process.env.SITE_URL ||
-        "https://www.easybits.cloud"
-      ).replace(/\/$/, "");
-    }
-    // EASYBITS_API_KEY = la llave que le da al worker las tools de EasyBits vía MCP
-    // (el runtime arma el server `easybits` cuando esta var existe). Del vault del
-    // dueño; si no hay, se mintea una persistente con sus scopes (como ghosty-gc).
-    if (!env.EASYBITS_API_KEY) {
-      const ebKey = await getSecretValue(ctx.user.id, "EASYBITS_API_KEY").catch(() => null);
-      if (ebKey) {
-        env.EASYBITS_API_KEY = ebKey;
-      } else {
-        const minted = await createApiKey(ctx.user.id, {
-          name: `claude-worker-${params.name || "fleetAgent"}`,
-          scopes: ctx.scopes,
-        });
-        env.EASYBITS_API_KEY = minted.raw;
-      }
-    }
+    // EASYBITS_BASE_URL + EASYBITS_API_KEY los resuelve injectEasybitsAccess (abajo,
+    // común a todos los templates con tools de EasyBits).
     // FORMMY_SECRET_KEY: hasta ahora sólo llegaba al env del PROCESO HIJO del MCP de
     // formmy, no al del worker — así que un script del agente (Code Mode / una skill)
     // no podía registrar en el CRM aunque el conector estuviera conectado. Se inyecta
@@ -2218,25 +2247,8 @@ export async function createAgent(
     // dueño (permanente). El box notifica acá con su ADMIN_TOKEN (= embedToken).
     if (!env.EASYBITS_INGEST_URL) env.EASYBITS_INGEST_URL = "https://www.easybits.cloud/api/v2/studio/ingest";
   }
-  // open-ghosty / lang-ghosty / rust-ghosty / cagent-ghosty connect to the easybits MCP
-  // (dynamic tools) when they have the user's EasyBits key. Pull it from the vault; without
-  // it the agent still runs on local tools. Caller env wins. (rust-ghosty's wrapper writes
-  // ~/.deepseek/mcp.json from EASYBITS_API_KEY; cagent-ghosty's start script writes the MCP
-  // toolset into /data/agent.yaml from the same key.)
-  if (
-    (params.template === "open-ghosty" ||
-      params.template === "lang-ghosty" ||
-      params.template === "rust-ghosty" ||
-      params.template === "cagent-ghosty" ||
-      // claude-worker wires the easybits MCP (upload_file, docs, DBs) over stdio
-      // when EASYBITS_API_KEY is present; pull it from the owner's vault so the
-      // fleetAgent's workers get the catalog without persona.env having to carry it.
-      params.template === "claude-worker") &&
-    !env.EASYBITS_API_KEY
-  ) {
-    const ebKey = await getSecretValue(ctx.user.id, "EASYBITS_API_KEY").catch(() => null);
-    if (ebKey) env.EASYBITS_API_KEY = ebKey;
-  }
+  // (open-ghosty / lang-ghosty / rust-ghosty / cagent-ghosty también arman el MCP de
+  // easybits desde EASYBITS_API_KEY — lo resuelve injectEasybitsAccess más abajo.)
   // cagent-ghosty (cerebro Docker cagent) elige modelo por prioridad de key (start script):
   // Claude (ANTHROPIC) > GPT-5 (OPENAI) > DeepSeek. La cred Anthropic managed sale del
   // SANDBOX_HOST_ANTHROPIC_KEY del host (igual que ghosty/openclaw) — el dueño no pega nada;
@@ -2294,18 +2306,8 @@ export async function createAgent(
     if (!env.DEEPSEEK_RUNTIME_TOKEN) {
       env.DEEPSEEK_RUNTIME_TOKEN = "dsr_" + randomBytes(32).toString("hex");
     }
-    if (!env.EASYBITS_API_KEY) {
-      const ebKey = await getSecretValue(ctx.user.id, "EASYBITS_API_KEY").catch(() => null);
-      if (ebKey) {
-        env.EASYBITS_API_KEY = ebKey;
-      } else {
-        const minted = await createApiKey(ctx.user.id, {
-          name: `ghosty-gc-${params.name || "agent"}`,
-          scopes: ctx.scopes,
-        });
-        env.EASYBITS_API_KEY = minted.raw;
-      }
-    }
+    // EASYBITS_API_KEY (obligatoria acá: es a la vez la llave del LLM medido y la del
+    // MCP) la resuelve/mintea injectEasybitsAccess más abajo.
     // Motor LLM (form): "easybits" (medido) NO inyecta la DeepSeek key → ghosty-gc-start
     // cae al proxy medido. Default / "deepseek" → inyecta la key del vault (off-meter,
     // gana en ghosty-gc-start por la precedencia BYOK) si el dueño la tiene.
@@ -2314,12 +2316,19 @@ export async function createAgent(
       if (dsKey) env.DEEPSEEK_API_KEY = dsKey;
     }
   }
-  // codex-worker (motor Codex / OpenAI): el Codex SDK headless usa OPENAI_API_KEY
-  // (doc oficial). Se resuelve del vault por su nombre canónico, igual que la
-  // inyección DeepSeek. CODEX_MODEL llega por persona.env (modelEnv del registro).
+  // codex-worker (motor Codex / OpenAI): el CLI headless usa OPENAI_API_KEY (doc
+  // oficial; el launcher hace `codex login --with-api-key` con ella porque el
+  // app-server NO la lee del entorno). Se resuelve del vault por su nombre canónico,
+  // igual que la inyección DeepSeek. CODEX_MODEL llega por persona.env (modelEnv).
   if (params.template === "codex-worker" && !env.OPENAI_API_KEY) {
     const k = await getSecretValue(ctx.user.id, "OPENAI_API_KEY").catch(() => null);
     if (k) env.OPENAI_API_KEY = k;
+  }
+  // Acceso a las tools de EasyBits — UNA sola vez, para todos los templates que las
+  // consumen. Va después de las ramas por template para que el env que ellas fijen
+  // (o el del caller) siga ganando.
+  if (EASYBITS_TOOLED_TEMPLATES.has(params.template)) {
+    await injectEasybitsAccess(ctx, params, env);
   }
   // NOTA: la GOOGLE key (visión Gemini) NO se inyecta aquí — las credenciales de provider
   // del user viven en ghosty-studio (provider-credentials), no en el `db.secret` de easybits.

@@ -894,6 +894,87 @@ export async function action({ request }: Route.ActionArgs) {
     await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { persona: { ...persona, env } as object } });
     return data({ ok: true });
   }
+  if (intent === "set-engine") {
+    // Cambiar el MOTOR de un agente EXISTENTE (claude-worker ↔ codex-worker ↔
+    // ghosty-gc) sin recrearlo. Recrear costaría el `token` (que los tenants tienen
+    // en sus env vars), groupKeys, groupConfigs, skills, wabaConfig y el PAREO de
+    // baileys — por eso esto toca EXACTAMENTE tres columnas y nada más.
+    // Es la misma palanca de ida y de vuelta: probar un motor nuevo es reversible.
+    const engine = getEngine(String(fd.get("engine") || ""));
+    if (!engine) return data({ error: "Motor desconocido" }, { status: 400 });
+    if (!engineCreatable(engine)) return data({ error: "Motor aún no disponible" }, { status: 400 });
+    const persona = ((fleetAgent.persona ?? {}) as { env?: Record<string, string> });
+    const prevEngine = getEngineForAgent(fleetAgent.workerTemplate, persona.env);
+    // Modelo destino: del motor NUEVO (el form manda ambos en un solo POST para no
+    // dejar un estado intermedio con el modelo vacío). Inválido/no-ready → default.
+    const pickedModel = String(fd.get("model") || "").trim();
+    const model = engine.modelEnv
+      ? engine.models.some((m) => m.id === pickedModel && m.ready !== false)
+        ? pickedModel
+        : engine.defaultModel
+      : undefined;
+    // No-op: mismo motor Y mismo modelo → no reciclamos cajas por gusto. Se compara
+    // por engine.id, no por template (deepseek/easybits/glm comparten ghosty-gc).
+    const sameEngine = prevEngine?.id === engine.id;
+    const sameModel = !engine.modelEnv || persona.env?.[engine.modelEnv] === model;
+    if (sameEngine && sameModel) return data({ ok: true, noop: true });
+
+    // Credencial ANTES de tocar la DB: si falta y no la mandaron, se falla limpio y
+    // el agente queda como estaba (nunca a medias, con motor nuevo y sin llave).
+    let oauthSecretName: string | null = fleetAgent.oauthSecretName;
+    if (engine.secret) {
+      const owned = (await listSecrets(user.id)).some((s) => s.name === engine.secret!.name);
+      if (!owned) {
+        const val = String(fd.get("secretValue") || "").trim();
+        if (!val) {
+          return data(
+            { error: `Falta ${engine.secret.name}`, needsSecret: engine.secret.name },
+            { status: 400 }
+          );
+        }
+        await createSecret(user.id, { name: engine.secret.name, value: val });
+      }
+      // Solo OAuth se persiste en el FleetAgent; las apiKey las resuelve el spawn.
+      oauthSecretName = engine.secret.kind === "oauth" ? engine.secret.name : null;
+    } else {
+      oauthSecretName = null; // motor medido (easybits): sin credencial propia
+    }
+
+    // Limpieza del env cruzado POR RESTA sobre el registro, no con una blacklist a
+    // mano: se borran todas las modelEnv conocidas (ANTHROPIC_MODEL/CODEX_MODEL/
+    // DEEPSEEK_MODEL) y todas las env de motor (hoy GHOSTY_LLM), y luego se aplica
+    // sólo lo del motor nuevo. Así un motor futuro con GEMINI_MODEL se limpia solo,
+    // en vez de dejar env contradictorias en el spawn.
+    const env = { ...(persona.env ?? {}) };
+    for (const e of FLEET_ENGINES) {
+      if (e.modelEnv) delete env[e.modelEnv];
+      for (const k of Object.keys(e.env ?? {})) delete env[k];
+    }
+    Object.assign(env, engine.env ?? {});
+    if (engine.modelEnv && model) env[engine.modelEnv] = model;
+
+    await db.fleetAgent.update({
+      where: { id: fleetAgentId },
+      data: {
+        workerTemplate: engine.template,
+        persona: { ...persona, env } as object,
+        oauthSecretName,
+      },
+    });
+
+    // El env es SPAWN-BAKED (va al env del microVM en spawnVm, no se lee por turno):
+    // sin reciclar, la caja viva seguiría con el motor viejo. Va DESPUÉS del update y
+    // con catch — que el host falle no debe revertir un cambio ya guardado; la UI
+    // avisa y el reaper recoge lo que quede.
+    const { recycleFleetAgentBoxes } = await import("~/.server/core/fleetAgentOperations");
+    const { recycled } = await recycleFleetAgentBoxes({ id: fleetAgentId, ownerId: user.id }).catch(
+      (e) => {
+        console.error("set-engine: recycle failed:", e);
+        return { recycled: 0 };
+      }
+    );
+    return data({ ok: true, engine: engine.id, recycled });
+  }
   if (intent === "toggle-group-builtin") {
     // Turn a BUILTIN (easybits/wa) on/off for one group. `on=0` adds it to
     // disabledBuiltins → the worker removes it from the merged MCP set that turn.
@@ -2459,6 +2540,10 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
       (p.machines?.length ?? 0) > 0
   );
   const [phones, setPhones] = useState<Record<string, string>>({});
+  // Motor pendiente por agente (fleetAgentId → engineId). El selector de motor NO
+  // auto-envía como el de modelo: cambiar de motor DESTRUYE las cajas, así que
+  // primero se elige, se pide la credencial si falta, y se confirma.
+  const [engineSel, setEngineSel] = useState<Record<string, string>>({});
   const [showAllGroups, setShowAllGroups] = useState<Record<string, boolean>>({});
   // Which group's capabilities modal is open: { fleetAgentId, groupId } | null.
   const [capModal, setCapModal] = useState<{ fleetAgentId: string; groupId: string } | null>(null);
@@ -2557,6 +2642,31 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
       return () => clearTimeout(t);
     }
     prevFetch.current = fetcher.state;
+  }, [fetcher.state, fetcher.data]);
+  // Resultado del cambio de motor, por agente. El flash global "✓ Guardado" no basta:
+  // hay que decir CUÁNTAS cajas se reciclaron (0 con cajas vivas = una está a mitad de
+  // turno) y mostrar el error de credencial faltante donde el usuario está mirando.
+  const lastEngineReq = useRef<string | null>(null);
+  const [engineMsg, setEngineMsg] = useState<Record<string, string>>({});
+  useEffect(() => {
+    if (fetcher.state === "submitting" && fetcher.formData?.get("intent") === "set-engine") {
+      lastEngineReq.current = String(fetcher.formData.get("fleetAgentId") || "");
+    }
+    if (fetcher.state === "idle" && lastEngineReq.current && fetcher.data) {
+      const id = lastEngineReq.current;
+      lastEngineReq.current = null;
+      const d = fetcher.data as { ok?: boolean; error?: string; recycled?: number; noop?: boolean };
+      setEngineMsg((m) => ({
+        ...m,
+        [id]: d.error
+          ? d.error
+          : d.noop
+            ? "Sin cambios"
+            : `Motor cambiado · ${d.recycled ?? 0} caja(s) recicladas${
+                d.recycled === 0 ? " (si había una en un turno, se recicla al terminar)" : ""
+              }`,
+      }));
+    }
   }, [fetcher.state, fetcher.data]);
   // Abierto/cerrado por agente — PERSISTIDO en localStorage para que recuerde el
   // estado entre recargas. Client-only (carga en useEffect, no en el initializer)
@@ -3024,6 +3134,108 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                           ? `Completo + ${p.defaultMcps.length} conector${p.defaultMcps.length === 1 ? "" : "es"}`
                           : "Sin restricción"}
                     </span>
+                  </div>
+                );
+              })()}
+
+              {/* Motor del agente — la palanca de ida Y VUELTA entre cerebros
+                  (Claude ↔ Codex ↔ DeepSeek). Cambia workerTemplate + la env var del
+                  modelo, y NADA más: tools, grupos, skills y el pareo de WhatsApp
+                  sobreviven. A diferencia del chip de Modelo, esto NO auto-envía:
+                  recicla las cajas del agente, así que se confirma primero. */}
+              {isOpen && (() => {
+                const current = p.engineId ?? "";
+                const sel = engineSel[p.id] ?? current;
+                const target = getEngine(sel);
+                const changed = !!target && sel !== current;
+                // La credencial es del OWNER (vault), no del agente: si ya la tiene por
+                // otro agente, no se vuelve a pedir.
+                const askSecret = !!target?.secret && !engineHasSecret[target.id];
+                return (
+                  <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                    <span className="text-gray-400">Motor:</span>
+                    <fetcher.Form
+                      method="post"
+                      key={`se-${p.id}-${current}`}
+                      className="contents"
+                      onSubmit={(e) => {
+                        if (!changed) { e.preventDefault(); return; }
+                        const ok = window.confirm(
+                          `¿Cambiar el motor a ${target!.label}?\n\n` +
+                            "Se reinician las cajas del agente: el siguiente mensaje arranca en frío (~14s) " +
+                            "y el historial de las conversaciones NO cruza de motor (los archivos del " +
+                            "workspace sí).\n\nLas herramientas, los grupos y el pareo de WhatsApp NO se pierden, " +
+                            "y puedes volver al motor anterior desde aquí mismo."
+                        );
+                        if (!ok) e.preventDefault();
+                      }}
+                    >
+                      <input type="hidden" name="intent" value="set-engine" />
+                      <input type="hidden" name="fleetAgentId" value={p.id} />
+                      <select
+                        name="engine"
+                        value={sel}
+                        onChange={(e) => setEngineSel((s) => ({ ...s, [p.id]: e.target.value }))}
+                        className="border-2 border-gray-200 rounded-full px-2 py-0.5 text-xs bg-white font-semibold text-gray-600"
+                      >
+                        {!current && <option value="">(motor no reconocido)</option>}
+                        {FLEET_ENGINES.map((e) => {
+                          const ready = engineCreatable(e);
+                          const has = !e.secret || engineHasSecret[e.id];
+                          return (
+                            <option key={e.id} value={e.id} disabled={!ready}>
+                              {e.label}
+                              {!ready ? " · próximamente" : !has ? " · requiere key" : ""}
+                            </option>
+                          );
+                        })}
+                      </select>
+                      {/* El modelo del motor DESTINO viaja en el MISMO POST: así no
+                          queda un estado intermedio con el motor nuevo y sin modelo. */}
+                      {changed && target?.modelEnv && (
+                        <select
+                          name="model"
+                          defaultValue={target.defaultModel}
+                          className="border-2 border-gray-200 rounded-full px-2 py-0.5 text-xs bg-white font-semibold text-gray-600"
+                        >
+                          {target.models.map((m) => (
+                            <option key={m.id} value={m.id} disabled={m.ready === false}>
+                              {m.label}{m.ready === false ? " · próximamente" : ""}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                      {changed && askSecret && (
+                        <input
+                          type="password"
+                          name="secretValue"
+                          required
+                          placeholder={target!.secret!.placeholder || target!.secret!.name}
+                          className="border-2 border-gray-200 rounded-full px-2 py-0.5 text-xs bg-white w-44"
+                        />
+                      )}
+                      {changed && (
+                        <>
+                          <button
+                            type="submit"
+                            disabled={isBusy("set-engine", p.id)}
+                            className="border-2 border-brand-500 bg-brand-500 text-white rounded-full px-3 py-0.5 text-xs font-semibold disabled:opacity-50"
+                          >
+                            {isBusy("set-engine", p.id) ? "Cambiando…" : "Cambiar motor"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEngineSel((s) => ({ ...s, [p.id]: current }))}
+                            className="text-gray-400 hover:text-gray-600"
+                          >
+                            Cancelar
+                          </button>
+                        </>
+                      )}
+                    </fetcher.Form>
+                    {engineMsg[p.id] && (
+                      <span className="text-gray-400 basis-full">{engineMsg[p.id]}</span>
+                    )}
                   </div>
                 );
               })()}
