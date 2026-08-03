@@ -21,7 +21,10 @@ URL del PDF. El folio y los montos que imprime el script son los oficiales.
 2. **Folio:** genera uno único `YYMMDD-NNN` (corre `date +%y%m%d` por Bash + un
    consecutivo, ej. `260706-001`).
 3. **Descarga el script** a `/tmp` (su URL está en tu manifiesto de archivos,
-   nombre `quote.mjs`) y arma el input JSON:
+   nombre `quote.mjs`) y arma el input JSON. **Toma la URL del manifiesto de ESTE
+   turno, nunca de un mensaje anterior de la conversación**: el script se actualiza
+   y la URL cambia con él; una URL vieja sigue respondiendo 200 con la versión
+   obsoleta y cotizarías con un script sin las correcciones.
 
 ```bash
 curl -sL "<URL de quote.mjs>" -o /tmp/quote.mjs
