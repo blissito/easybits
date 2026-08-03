@@ -509,8 +509,17 @@ export function currentMode() {
 /**
  * Deja constancia del uso de overrides. Nunca lanza: un log no escribible no puede
  * costarle al cliente su cotización.
+ *
+ * Con el guard en enforce, el override es **el único camino que le queda a un precio
+ * malo** para llegar al PDF. Eso lo vuelve el registro más importante de los dos, no el
+ * menos: un rechazo es el sistema funcionando, un override es el sistema siendo
+ * puenteado — con autorización o sin ella. Por eso va al mismo sink durable
+ * (`quote_overrides` en la DB del catálogo) y no solo a un archivo que muere con la caja.
+ *
+ * `catalog` guarda los escalones vigentes al momento: el delta entre lo que se cobró y
+ * lo que decía el catálogo es lo que de veras mira un humano al revisar.
  */
-export function recordOverrides(folio, overrides) {
+export async function recordOverrides(folio, overrides) {
   if (!overrides.length) return;
   const ts = new Date().toISOString();
   for (const o of overrides) {
@@ -523,6 +532,38 @@ export function recordOverrides(folio, overrides) {
     fs.appendFileSync(process.env.QUOTE_OVERRIDE_LOG || '/tmp/quote-overrides.log', line + '\n');
   } catch (e) {
     console.error(`[quote-guard] no se pudo escribir el log de overrides: ${e.message}`);
+  }
+  await auditToDb(
+    'quote_overrides',
+    'CREATE TABLE IF NOT EXISTS quote_overrides (ts TEXT, folio TEXT, sku TEXT, nombre TEXT, ' +
+    'qty REAL, unit_price REAL, kind TEXT, reason TEXT, catalogo TEXT)',
+    'INSERT INTO quote_overrides (ts, folio, sku, nombre, qty, unit_price, kind, reason, catalogo) VALUES (?,?,?,?,?,?,?,?,?)',
+    overrides.map((o) => [ts, folio, o.sku, o.nombre, o.qty, o.unit_price, o.kind, o.reason, o.catalog ?? null])
+  );
+}
+
+/**
+ * Append best-effort a la DB del catálogo. Compartido por overrides y rechazos.
+ * NUNCA lanza ni propaga: la auditoría no puede costarle al cliente su cotización,
+ * que es el fallo exacto que este archivo existe para evitar.
+ */
+async function auditToDb(label, ddl, insert, rows) {
+  try {
+    const apiKey = (process.env.EASYBITS_API_KEY || '').trim();
+    if (!apiKey) return;
+    const base = (process.env.EASYBITS_BASE_URL || 'https://www.easybits.cloud').replace(/\/+$/, '');
+    const url = `${base}/api/v2/databases/${CATALOG_DB_ID}/query`;
+    const post = (sql, args) =>
+      fetch(url, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sql, args }),
+        signal: AbortSignal.timeout(CATALOG_QUERY_TIMEOUT_MS),
+      });
+    await post(ddl);
+    for (const args of rows) await post(insert, args);
+  } catch (e) {
+    console.error(`[quote-guard] no se pudo registrar en ${label}: ${e.message}`);
   }
 }
 
@@ -567,32 +608,14 @@ export async function recordRejections(folio, rejections, mode) {
     fs.appendFileSync(process.env.QUOTE_REJECTION_LOG || '/tmp/quote-rejections.log', line + '\n');
   } catch { /* archivo inescribible: el stderr y la DB siguen en pie */ }
 
-  try {
-    const apiKey = (process.env.EASYBITS_API_KEY || '').trim();
-    if (!apiKey) return;
-    const base = (process.env.EASYBITS_BASE_URL || 'https://www.easybits.cloud').replace(/\/+$/, '');
-    const url = `${base}/api/v2/databases/${CATALOG_DB_ID}/query`;
-    const post = (sql, args) =>
-      fetch(url, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sql, args }),
-        signal: AbortSignal.timeout(CATALOG_QUERY_TIMEOUT_MS),
-      });
-    await post(
-      'CREATE TABLE IF NOT EXISTS quote_rejections (ts TEXT, folio TEXT, mode TEXT, sku TEXT, ' +
-      'nombre TEXT, tipo TEXT, qty REAL, enviado REAL, esperado REAL, requiere_qty REAL, catalogo TEXT)'
-    );
-    for (const f of flat) {
-      await post(
-        'INSERT INTO quote_rejections (ts, folio, mode, sku, nombre, tipo, qty, enviado, esperado, requiere_qty, catalogo) ' +
-        'VALUES (?,?,?,?,?,?,?,?,?,?,?)',
-        [f.ts, f.folio, f.mode, f.sku, f.nombre, f.tipo, f.qty, f.enviado, f.esperado, f.requiere_qty, f.catalogo]
-      );
-    }
-  } catch (e) {
-    console.error(`[quote-guard] no se pudo registrar el rechazo en la DB: ${e.message}`);
-  }
+  await auditToDb(
+    'quote_rejections',
+    'CREATE TABLE IF NOT EXISTS quote_rejections (ts TEXT, folio TEXT, mode TEXT, sku TEXT, ' +
+    'nombre TEXT, tipo TEXT, qty REAL, enviado REAL, esperado REAL, requiere_qty REAL, catalogo TEXT)',
+    'INSERT INTO quote_rejections (ts, folio, mode, sku, nombre, tipo, qty, enviado, esperado, requiere_qty, catalogo) ' +
+    'VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+    flat.map((f) => [f.ts, f.folio, f.mode, f.sku, f.nombre, f.tipo, f.qty, f.enviado, f.esperado, f.requiere_qty, f.catalogo])
+  );
 }
 
 /**
@@ -627,12 +650,17 @@ export async function assertCatalogPrices(items, folio) {
       'Consulta el catálogo con db_query y cotiza con los precios vigentes.';
     if (mode === 'enforce') throw new QuotePriceError(msg);
     console.error(`[quote-guard] WOULD REJECT (tope de overrides): ${overrides.length}/${items.length}`);
-    recordOverrides(folio, overrides);
+    await recordOverrides(folio, overrides);
     return { mode: 'dry-run', overrides, warnings: [msg] };
   }
 
   const toCheck = items.filter((it) => !it.price_override);
-  const keys = [...new Set(toCheck.map((it) => String(it.sku ?? '').trim()).filter(Boolean))];
+  // Se consultan TAMBIÉN las claves overrideadas. No para validarlas —el override es
+  // justamente la dispensa— sino para poder guardar contra qué precio se dispensó. Sin
+  // esto, una cotización 100% overrideada (el caso normal de una promo de paquete) no
+  // trae claves que consultar y el registro queda sin el delta, que es lo único que un
+  // humano de verdad mira al auditar.
+  const keys = [...new Set(items.map((it) => String(it.sku ?? '').trim()).filter(Boolean))];
 
   let rowsByKey;
   try {
@@ -640,7 +668,7 @@ export async function assertCatalogPrices(items, folio) {
   } catch (e) {
     if (e instanceof GuardUnavailable) {
       console.error(`[quote-guard] verificación omitida — ${e.message}`);
-      recordOverrides(folio, overrides);
+      await recordOverrides(folio, overrides);
       return {
         mode: /EASYBITS_API_KEY/.test(e.message) ? 'skipped:no_key' : 'skipped:unreachable',
         overrides,
@@ -658,7 +686,7 @@ export async function assertCatalogPrices(items, folio) {
     const rows = rowsByKey.get(String(rec.sku ?? '').trim().toUpperCase());
     if (rows?.length) rec.catalog = describeTiers(rows[0].tiers);
   }
-  recordOverrides(folio, overrides);
+  await recordOverrides(folio, overrides);
 
   if (rejections.length) {
     const message = buildRejectionMessage(rejections);
