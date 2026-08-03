@@ -527,6 +527,75 @@ export function recordOverrides(folio, overrides) {
 }
 
 /**
+ * Deja constancia de los RECHAZOS. Gemelo de `recordOverrides`, y la razón por la que
+ * se puede prender enforce sin volar a ciegas.
+ *
+ * El sink que importa es el DURABLE. En la flota el worker vive en un microVM efímero:
+ * su stderr muere con la caja, y un archivo en /tmp también. Prueba de que no basta:
+ * en sofi-0, tras una semana en dry-run, quedaban CERO `WOULD REJECT` recuperables en
+ * cualquier lado — o sea, una semana de datos perdidos justo cuando se necesitaban para
+ * decidir el enforce.
+ *
+ * Por eso la tabla `quote_rejections` en la DB del catálogo. Es la fuente para saber si
+ * el enforce está bien calibrado: un falso rechazo se ve en horas, no cuando se queja un
+ * cliente.
+ *
+ * Best-effort de principio a fin: NUNCA lanza. Un log caído no puede costarle al cliente
+ * su cotización — que es exactamente el fallo que este archivo existe para evitar.
+ */
+export async function recordRejections(folio, rejections, mode) {
+  if (!rejections.length) return;
+  const ts = new Date().toISOString();
+  const flat = rejections.map((r) => ({
+    ts, folio, mode,
+    sku: r.sku,
+    nombre: r.nombre,
+    tipo: r.type,
+    qty: r.type === 'unknown_sku' ? null : r.qty,
+    enviado: r.type === 'unknown_sku' ? null : r.sent,
+    esperado: r.type === 'unknown_sku' ? null : r.expected,
+    requiere_qty: r.requiresQty ?? null,
+    catalogo: r.type === 'unknown_sku' ? null : r.rows.map((x) => `${x.presentacion}: ${describeTiers(x.tiers)}`).join(' | '),
+  }));
+
+  for (const f of flat) console.error(JSON.stringify({ tag: 'quote-price-rejection', ...f }));
+
+  try {
+    const line = flat
+      .map((f) => `${f.ts}  ${f.mode}  ${f.folio}  ${f.sku}  ${f.tipo}  qty=${f.qty ?? '-'}  enviado=${f.enviado ?? '-'}  esperado=${f.esperado ?? '-'}  ${f.nombre}`)
+      .join('\n');
+    fs.appendFileSync(process.env.QUOTE_REJECTION_LOG || '/tmp/quote-rejections.log', line + '\n');
+  } catch { /* archivo inescribible: el stderr y la DB siguen en pie */ }
+
+  try {
+    const apiKey = (process.env.EASYBITS_API_KEY || '').trim();
+    if (!apiKey) return;
+    const base = (process.env.EASYBITS_BASE_URL || 'https://www.easybits.cloud').replace(/\/+$/, '');
+    const url = `${base}/api/v2/databases/${CATALOG_DB_ID}/query`;
+    const post = (sql, args) =>
+      fetch(url, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sql, args }),
+        signal: AbortSignal.timeout(CATALOG_QUERY_TIMEOUT_MS),
+      });
+    await post(
+      'CREATE TABLE IF NOT EXISTS quote_rejections (ts TEXT, folio TEXT, mode TEXT, sku TEXT, ' +
+      'nombre TEXT, tipo TEXT, qty REAL, enviado REAL, esperado REAL, requiere_qty REAL, catalogo TEXT)'
+    );
+    for (const f of flat) {
+      await post(
+        'INSERT INTO quote_rejections (ts, folio, mode, sku, nombre, tipo, qty, enviado, esperado, requiere_qty, catalogo) ' +
+        'VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+        [f.ts, f.folio, f.mode, f.sku, f.nombre, f.tipo, f.qty, f.enviado, f.esperado, f.requiere_qty, f.catalogo]
+      );
+    }
+  } catch (e) {
+    console.error(`[quote-guard] no se pudo registrar el rechazo en la DB: ${e.message}`);
+  }
+}
+
+/**
  * Valida el `unit_price` de cada ítem contra el catálogo vivo.
  *
  * Lanza QuotePriceError cuando un precio está mal (solo en modo enforce). NUNCA lanza
@@ -593,6 +662,9 @@ export async function assertCatalogPrices(items, folio) {
 
   if (rejections.length) {
     const message = buildRejectionMessage(rejections);
+    // Se registra ANTES de lanzar: en enforce el throw corta el flujo, y es
+    // justamente el caso donde saber qué se bloqueó vale más.
+    await recordRejections(folio, rejections, mode === 'enforce' ? 'enforce' : 'dry-run');
     if (mode === 'enforce') throw new QuotePriceError(message);
     for (const r of rejections) {
       console.error(
