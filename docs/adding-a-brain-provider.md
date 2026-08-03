@@ -136,12 +136,55 @@ Para mandar mensajes/archivos/encuestas/reacciones/ubicación al chat, el cerebr
 `send_location`, `get_invite_link`, y (solo grupo main) `list_groups`/`set_group_key`.
 En el Camino B esto ya lo expone `server.js` como MCP `wa` en `~/.<provider>/mcp.json`.
 
+## ⚠️ Deuda conocida: no hay forma uniforme de RESETEAR una sesión
+
+Anotado el 2026-08-03 desde ghosty-studio, después de tropezarse con esto en producción.
+Importa aquí porque el día que EasyBits levante cajas efímeras con cerebros Codex o
+DeepSeek, la asimetría de abajo **cambia qué significa "destruir la caja"**.
+
+**Dónde vive la sesión, por cerebro:**
+
+| worker | sesión | ¿sobrevive a destruir la caja? |
+|---|---|---|
+| `claude-worker` | `SessionStore` en **Tigris** + caché local en `/data` | **SÍ** |
+| `codex-worker` | `~/.codex/sessions`, disco de la caja | no |
+| `deepseek-worker` / `ghosty-gc` | store del runtime bajo `/data` | no |
+
+**Esa diferencia NO es un defecto**, y conviene entenderla antes de "arreglarla": el SDK
+de Anthropic acepta un `SessionStore`, así que el transcript mismo puede vivir en Tigris y
+un puntero durable significa algo real — cualquier caja puede resumir cualquier
+conversación. Codex y ghostycode persisten el hilo en el disco de **esa** caja y no tienen
+API para restaurarlo en otra: un puntero durable ahí prometería una continuidad que no
+existe (la caja nueva sabría *qué* resumir y no tendría *con qué*).
+
+**El defecto real es que no hay una operación para reiniciar una conversación:**
+
+- **Ninguno de los tres implementa `POST /reset`**, pese a que el contrato g.studio lo
+  declara ("limpia la sesión, recomendado"). El hueco está en el contrato, no en el diseño.
+- Por eso **"reciclar la caja" significa cosas distintas según el motor**: en codex y
+  deepseek borra la memoria; en claude no, porque vuelve de Tigris. Nada lo avisa.
+- Reiniciar una sesión de claude hoy exige entrar a la caja, importar
+  `dist/sessionStore.js` y llamar `clearPointer(sessionId)` a mano. Ése no debería ser el
+  procedimiento.
+
+**Cómo se manifestó**: un agente sacó una conclusión equivocada por un bug de otra capa.
+Se arregló el bug — y **la conclusión siguió ahí**, guardada en su sesión, repitiéndose
+turno tras turno. Borrar el `continuation` local no sirvió: `loadContinuation` lo rehidrata
+desde Tigris y lo reescribe. Es decir: **arreglar la causa no deshace lo que el agente ya
+creyó**, y sin `/reset` no hay forma limpia de deshacerlo.
+
+**Al agregar un cerebro nuevo**: implementa `POST /reset {sessionId}` desde el día uno y
+que borre TODO lo que sostiene la conversación — el hilo del runtime, el puntero local y
+el durable si lo hubiera. Es una hora de trabajo entonces y un incidente después.
+
 ## Checklist mínimo
 
 **Camino A (nativo):**
 - [ ] `POST :3000/message {content,sessionId}` → SSE `token`/`done`/`error`.
 - [ ] Un proceso por `sessionId`; `.jsonl`/resume en `/data`; sobrevive suspend/resume.
 - [ ] Lee credencial del provider de `env`; (opc) `health_path`.
+- [ ] **`POST /reset {sessionId}`** que borre TODO lo que sostiene la conversación
+      (hilo del runtime + puntero local + durable si lo hay). Ver la deuda de arriba.
 - [ ] Registro EasyBits (enum + createAgent + BRAINS) + imagen en sandbox-host.
 
 **Camino B (`/v1/threads` + server.js):**
@@ -149,6 +192,7 @@ En el Camino B esto ya lo expone `server.js` como MCP `wa` en `~/.<provider>/mcp
       `/events?since_seq=N` (SSE con `item.delta`/`turn.completed`).
 - [ ] Auth bearer por `--auth-token`/`<PROVIDER>_RUNTIME_TOKEN`.
 - [ ] Template reusa `server.js` (siembra mcp.json + config); binario en `:7878`.
+- [ ] **`POST /reset {sessionId}`** — mismo criterio (ver la deuda de arriba).
 - [ ] Registro EasyBits (enum + createAgent + BRAINS) + imagen en sandbox-host.
 
 ## Ejemplo vivo: `ghosty-gc` = ghostycode (cerebro propio)
