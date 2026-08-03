@@ -108,6 +108,506 @@ export function computeTotals(input) {
   return { amounts, subtotal, envioCost, envioLabel, envioValueText, envioColor, total };
 }
 
+// =============================================================================
+// Guard de precios — el modelo NO es la fuente de verdad del dinero.
+//
+// Incidente que lo motiva (sofi-0, 2026-07-27, nanoclaw cbc12ad): una sesión de
+// WhatsApp llevaba viva desde mayo. La única consulta completa al catálogo corrió
+// el día uno; los precios subieron en junio. Dos meses y medio después el agente
+// cotizó $90/u sacados de su propio contexto. El tell: TODOS los aromas con el
+// precio viejo excepto el único SKU que le tocó re-consultar en junio.
+//
+// tania-0 (flota) tenía el mismo hueco: `unit_price` llegaba del modelo y solo se
+// validaba `>= 0`. Este bloque es el port de `catalog-price-guard.ts` de nanoclaw,
+// adaptado al esquema de `catalogo_totequim` (escalones en prosa, no numéricos).
+//
+// Decisiones que vale la pena conservar:
+//  - Fail OPEN si el catálogo no responde: comparte host con el render, así que la
+//    cotización fallaría segundos después de todos modos. Fallar cerrado aquí solo
+//    agrega una forma nueva de tumbar una venta durante un parpadeo.
+//  - Fail CLOSED en clave desconocida: esa sí se imprimiría en el PDF.
+//  - El mensaje de rechazo NUNCA nombra `price_override`. Los modelos aprenden
+//    bypasses del texto de error mucho más rápido que del system prompt; el escape
+//    hatch se enseña solo en el SKILL.md, donde controlamos el encuadre.
+// =============================================================================
+
+/** `totequim-tania` — catálogo TOTEQUIM (519 productos), el que cotiza tania-0. */
+const CATALOG_DB_ID = process.env.QUOTE_CATALOG_DB_ID || '6a10c84c1b7bf9a7cc596d56';
+/** `siiqtec-catalogo` — respaldo, DB DISTINTA (960 productos). Ojo: `totequim-tania`
+ *  tiene además su propia tabla `catalogo` con solo 200 filas, un remanente parcial;
+ *  apuntar el respaldo ahí daría claves "inexistentes" que sí existen. */
+const CATALOG_FALLBACK_DB_ID = process.env.QUOTE_CATALOG_FALLBACK_DB_ID || '69fd58e5fb8904ba077f0fba';
+const CATALOG_QUERY_TIMEOUT_MS = 6000;
+const CATALOG_RETRY_DELAY_MS = 400;
+
+/** Medio centavo. Los precios de catálogo son pesos enteros o 2 decimales, así que
+ *  esto cacha $95 vs $95.01 y absorbe el ruido de float del round-trip por JSON.
+ *  Deliberadamente ABSOLUTO, no porcentaje: 1% de $110 es $1.10, suficientemente
+ *  ancho para dejar pasar un precio genuinamente equivocado. */
+const PRICE_EPSILON = 0.005;
+
+/** Tope al escape hatch. Generoso a propósito: las promos aquí se autorizan
+ *  conversando en el grupo admin ("un MOSSI y un cloro por $250"), así que una
+ *  cotización con TODAS las líneas overrideadas es un martes normal, no una
+ *  anomalía — una regla de proporción rechazaría ventas reales. Esto solo caza
+ *  el uso absurdo; el control de verdad es que cada override queda logueado. */
+const MAX_OVERRIDES = Number(process.env.QUOTE_MAX_OVERRIDES) || 8;
+
+const OVERRIDE_KINDS = new Set([
+  'promocion',
+  'precio_especial_autorizado',
+  'servicio_sin_sku',
+  'producto_no_catalogado',
+]);
+
+/** Las dos tablas de catálogo tienen esquemas distintos. Se normalizan a una forma
+ *  común `{key, nombre, presentacion, tiers[]}` para que el resto no sepa de cuál vino.
+ *
+ *  `catalogo_totequim` (TOTEQUIM, el que cotiza tania-0): llave `clave`, precio base
+ *  `precio_publico`, escalones con `condicion_precio_N` en PROSA.
+ *  `catalogo` (SIIQTEC, respaldo): llave `sku`, precio base `precio_publico_directo`,
+ *  escalones con mínimos numéricos. */
+const CATALOG_SOURCES = [
+  {
+    dbId: CATALOG_DB_ID,
+    table: process.env.QUOTE_CATALOG_TABLE || 'catalogo_totequim',
+    keyCols: ['clave', 'clave_alterna'],
+    cols: [
+      'clave', 'clave_alterna', 'nombre', 'presentacion', 'precio_publico',
+      'precio_2', 'condicion_precio_2', 'precio_3', 'condicion_precio_3',
+      'precio_4', 'condicion_precio_4',
+    ],
+    base: 'precio_publico',
+    tiers: [
+      ['precio_2', 'condicion_precio_2'],
+      ['precio_3', 'condicion_precio_3'],
+      ['precio_4', 'condicion_precio_4'],
+    ],
+    prose: true,
+  },
+  {
+    dbId: CATALOG_FALLBACK_DB_ID,
+    table: 'catalogo',
+    keyCols: ['sku'],
+    cols: [
+      'sku', 'nombre', 'presentacion', 'precio_publico_directo',
+      'precio_2', 'min_piezas_precio_2', 'precio_3', 'min_piezas_precio_3',
+    ],
+    base: 'precio_publico_directo',
+    tiers: [
+      ['precio_2', 'min_piezas_precio_2'],
+      ['precio_3', 'min_piezas_precio_3'],
+    ],
+    prose: false,
+  },
+];
+
+class QuotePriceError extends Error {
+  constructor(msg) { super(msg); this.name = 'QuotePriceError'; }
+}
+class GuardUnavailable extends Error {}
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const pricesEqual = (a, b) => Math.abs(a - b) < PRICE_EPSILON;
+
+function num(v) {
+  if (v === null || v === undefined || v === '') return null;
+  const n = typeof v === 'number' ? v : Number(String(v).replace(/[^0-9.\-]/g, ''));
+  return Number.isFinite(n) ? n : null;
+}
+
+const WORD_NUMS = {
+  UN: 1, UNA: 1, DOS: 2, TRES: 3, CUATRO: 4, CINCO: 5, SEIS: 6,
+  SIETE: 7, OCHO: 8, NUEVE: 9, DIEZ: 10, DOCE: 12, VEINTICUATRO: 24,
+};
+
+/**
+ * `condicion_precio_N` → cantidad mínima que activa ese escalón.
+ *
+ * Los 50 valores distintos vivos en `catalogo_totequim` caen en cuatro formas:
+ * "A PARTIR DE 6 PIEZAS" (y sus erratas APARTIR / A PASRTIR), "MAS DE 2 PIEZAS",
+ * "DE 10 GARRAFAS EN ADELANTE" y "SOLO POR PAQUETE DE 36 PIEZAS". El resto
+ * ('PIPA', 'NEGOCIABLE SI LLEVA MAS PRODUCTOS', 'nan', 'SOLO POR PAQUETE DE' sin
+ * número) NO son condiciones de volumen y por diseño devuelven null.
+ *
+ * Devolver null significa QUE EL ESCALÓN NO CALIFICA NUNCA, no que se acepte a
+ * ciegas. Sin eso el guard degrada de calificación a mera pertenencia, que es
+ * exactamente lo que dejaba pasar el incidente original.
+ *
+ * "MAS DE N" se interpreta como N+1, no como N: estrictamente significa "más que
+ * N", y ante la duda conviene el lado que exige más volumen.
+ */
+export function parseCondicionMin(raw) {
+  if (raw === null || raw === undefined) return null;
+  const s = String(raw)
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase().trim();
+  if (!s || s === 'NAN') return null;
+
+  const qty = (tok) => {
+    const n = Number(tok);
+    if (Number.isFinite(n) && n >= 1) return n;
+    return WORD_NUMS[tok] ?? null;
+  };
+
+  let m = s.match(/M[AÁ]S\s+DE\s+([A-Z]+|\d+)/);
+  if (m) { const n = qty(m[1]); return n === null ? null : n + 1; }
+
+  m = s.match(/A\s*PA[RS]*TIR\s*(?:DE\s*)?([A-Z]+|\d+)/);
+  if (m) return qty(m[1]);
+
+  m = s.match(/\bDE\s+(\d+)\s+\w+\s+EN\s+ADELANTE/);
+  if (m) return qty(m[1]);
+
+  m = s.match(/SOLO\s+POR\s+PAQUETE\s+DE\s+(\d+)/);
+  if (m) return qty(m[1]);
+
+  return null;
+}
+
+/** Fila cruda → escalones `[{min, price}]` ordenados por min ascendente. */
+export function tiersFor(row, src) {
+  const out = [];
+  const base = num(row[src.base]);
+  if (base !== null && base > 0) out.push({ min: 1, price: base });
+
+  for (const [priceCol, condCol] of src.tiers) {
+    const price = num(row[priceCol]);
+    if (price === null || price <= 0) continue;
+    const min = src.prose ? parseCondicionMin(row[condCol]) : num(row[condCol]);
+    // Sin un mínimo confiable el escalón no puede calificar. `precio_distribuidor`
+    // se ignora en la lista de columnas por la misma razón: no es precio de lista
+    // al público, y si de veras aplica va por price_override auditado.
+    if (min === null || !(min >= 1)) continue;
+    out.push({ min, price });
+  }
+  return out.sort((a, b) => a.min - b.min);
+}
+
+/** El escalón que le toca a esta cantidad (el de mayor `min` que no la rebasa). */
+function expectedTier(tiers, qty) {
+  let best = null;
+  for (const t of tiers) if (t.min <= qty && (!best || t.min > best.min)) best = t;
+  return best;
+}
+
+/** "$110.00 (1 pza) · $95.00 (desde 2 pzas)" */
+export function describeTiers(tiers) {
+  if (!tiers.length) return 'sin precio en catálogo';
+  return tiers
+    .map((t) => (t.min <= 1 ? `${fmtMoney(t.price)} (1 pza)` : `${fmtMoney(t.price)} (desde ${t.min} pzas)`))
+    .join(' · ');
+}
+
+async function queryCatalog(src, keys) {
+  const apiKey = (process.env.EASYBITS_API_KEY || '').trim();
+  if (!apiKey) throw new GuardUnavailable('EASYBITS_API_KEY no está definida');
+  const base = (process.env.EASYBITS_BASE_URL || 'https://www.easybits.cloud').replace(/\/+$/, '');
+
+  // Una clave puede vivir en `clave` o en `clave_alterna` — buscar en ambas evita
+  // un unknown_sku falso, que al ser fail-CLOSED tumbaría una cotización buena.
+  const where = src.keyCols
+    .map((c) => `${c} IN (${keys.map(() => '?').join(',')})`)
+    .join(' OR ');
+  const sql = `SELECT ${src.cols.join(', ')} FROM ${src.table} WHERE ${where}`;
+  const args = src.keyCols.flatMap(() => keys);
+  const body = JSON.stringify({ sql, args });
+  const url = `${base}/api/v2/databases/${src.dbId}/query`;
+
+  let lastErr;
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+        body,
+        signal: AbortSignal.timeout(CATALOG_QUERY_TIMEOUT_MS),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return await res.json();
+    } catch (e) {
+      lastErr = e;
+      if (attempt === 1) await sleep(CATALOG_RETRY_DELAY_MS);
+    }
+  }
+  throw new GuardUnavailable(`catálogo inalcanzable: ${lastErr?.message || lastErr}`);
+}
+
+/** Indexa la respuesta por CADA una de sus columnas-llave, normalizada. */
+function indexRows(json, src) {
+  const cols = Array.isArray(json?.cols) ? json.cols : [];
+  const rows = Array.isArray(json?.rows) ? json.rows : [];
+  const out = new Map();
+  for (const raw of rows) {
+    const row = {};
+    cols.forEach((c, i) => { row[c] = Array.isArray(raw) ? raw[i] : raw?.[c]; });
+    const entry = {
+      nombre: String(row.nombre ?? '').trim(),
+      presentacion: String(row.presentacion ?? '').trim() || '(sin presentación)',
+      tiers: tiersFor(row, src),
+    };
+    for (const c of src.keyCols) {
+      const k = String(row[c] ?? '').trim().toUpperCase();
+      if (!k) continue;
+      const list = out.get(k);
+      if (list) list.push(entry); else out.set(k, [entry]);
+    }
+  }
+  return out;
+}
+
+/**
+ * Busca las claves en `catalogo_totequim` y cae a `catalogo` (SIIQTEC) solo para
+ * las que no aparecieron — el mismo orden de lookup que ya usa el agente.
+ */
+export async function fetchCatalogRows(keys) {
+  const found = new Map();
+  let pending = keys.map((k) => k.trim().toUpperCase()).filter(Boolean);
+  let firstErr = null;
+
+  for (const src of CATALOG_SOURCES) {
+    if (!pending.length) break;
+    try {
+      const idx = indexRows(await queryCatalog(src, pending), src);
+      for (const k of pending) { const v = idx.get(k); if (v?.length) found.set(k, v); }
+      pending = pending.filter((k) => !found.has(k));
+    } catch (e) {
+      // Si la PRIMERA fuente no responde no sabemos nada: es indisponibilidad real.
+      // Si falla el respaldo pero la principal contestó, seguimos con lo que hay.
+      if (!firstErr) firstErr = e;
+    }
+  }
+  if (!found.size && firstErr) throw firstErr;
+  return found;
+}
+
+/**
+ * Decide, con las filas ya en mano, qué ítems están mal.
+ *
+ * Una clave puede mapear a varias filas (GARRAFA 10L y CAJA 2 PZAS 10L a precios
+ * distintos), así que se acepta el precio si coincide con un escalón PARA EL QUE LA
+ * CANTIDAD CALIFICA, en cualquier fila.
+ *
+ * La parte de calificación no es opcional. Una versión anterior en nanoclaw aceptaba
+ * cualquier escalón de la fila, bajo la teoría de que un precio presente en el
+ * catálogo no puede ser un fósil. Dejaba pasar el incidente exacto: el SKU tenía un
+ * tercer escalón a $90 desde 10 piezas, así que el $90 en una orden de 4 se veía
+ * válido. Cobrar precio de volumen sin el volumen es la misma falla con otra forma.
+ *
+ * Cobrar de MÁS (precio de lista habiendo mayoreo disponible) queda en warning, no
+ * en rechazo: es un precio real de catálogo al que el cliente sí califica.
+ */
+export function checkItems(items, rowsByKey) {
+  const rejections = [];
+  const warnings = [];
+
+  for (const item of items) {
+    if (item.price_override) continue;
+    const key = String(item.sku ?? '').trim().toUpperCase();
+    const rows = rowsByKey.get(key) ?? [];
+    if (!rows.length) {
+      rejections.push({ type: 'unknown_sku', sku: item.sku, nombre: item.nombre });
+      continue;
+    }
+
+    const matched = rows.find((r) =>
+      r.tiers.some((t) => t.min <= item.qty && pricesEqual(t.price, item.unit_price)),
+    );
+    if (matched) {
+      const exp = expectedTier(matched.tiers, item.qty);
+      if (exp && !pricesEqual(exp.price, item.unit_price)) {
+        warnings.push(
+          `${item.sku} (${matched.nombre}): cotizaste ${fmtMoney(item.unit_price)} para qty ${item.qty}; ` +
+          `el escalón que corresponde es ${fmtMoney(exp.price)}. Revisa si aplica mayoreo.`,
+        );
+      }
+      continue;
+    }
+
+    // La fila con más escalones es la mejor apuesta de "presentación principal"
+    // cuando no podemos saber a cuál se refería el agente.
+    const richest = rows.reduce((a, b) => (b.tiers.length > a.tiers.length ? b : a));
+    const exp = expectedTier(richest.tiers, item.qty);
+
+    // ¿El precio existía, pero solo por encima de esta cantidad? Es un error distinto
+    // y merece su propia redacción: dio precio de mayoreo sin el mayoreo.
+    let requiresQty;
+    for (const r of rows) {
+      for (const t of r.tiers) {
+        if (pricesEqual(t.price, item.unit_price) && t.min > item.qty) {
+          requiresQty = requiresQty === undefined ? t.min : Math.min(requiresQty, t.min);
+        }
+      }
+    }
+
+    rejections.push({
+      type: requiresQty === undefined ? 'price_mismatch' : 'insufficient_qty',
+      sku: item.sku,
+      nombre: richest.nombre || item.nombre,
+      qty: item.qty,
+      sent: item.unit_price,
+      rows: rows.map((r) => ({ presentacion: r.presentacion, tiers: r.tiers })),
+      expected: exp ? exp.price : null,
+      ...(requiresQty !== undefined && { requiresQty }),
+    });
+  }
+
+  return { rejections, warnings };
+}
+
+/**
+ * El mensaje que ve el agente. Dos propiedades cargan peso:
+ *  1. TODOS los ítems malos en UN mensaje. Rechazar de a uno quema 3-4 round-trips
+ *     por cotización y termina con el agente disculpándose con el cliente.
+ *  2. Nunca menciona `price_override` (ver nota del encabezado).
+ */
+export function buildRejectionMessage(rejections) {
+  const lines = ['PRECIO RECHAZADO — el precio enviado no coincide con el catálogo vigente.', ''];
+
+  for (const r of rejections) {
+    if (r.type === 'unknown_sku') {
+      lines.push(`• ${r.sku} — "${r.nombre}"`);
+      lines.push('  Esta clave no existe en el catálogo. Verifícala con db_query antes de cotizar.');
+      lines.push('');
+      continue;
+    }
+    lines.push(`• ${r.sku} — ${r.nombre}`);
+    lines.push(`  Enviaste: ${fmtMoney(r.sent)} · qty ${r.qty}`);
+    if (r.type === 'insufficient_qty') {
+      lines.push(`  ${fmtMoney(r.sent)} es precio de mayoreo desde ${r.requiresQty} pzas — el cliente pide ${r.qty}.`);
+    }
+    lines.push('  Precios vigentes en catálogo:');
+    for (const row of r.rows) lines.push(`    - ${row.presentacion}: ${describeTiers(row.tiers)}`);
+    if (r.expected !== null) lines.push(`  Para qty ${r.qty} corresponde: ${fmtMoney(r.expected)}`);
+    lines.push('');
+  }
+
+  // Decirle "usa los precios de arriba" cuando el único problema era una clave
+  // inexistente lo manda a buscar precios que no están ahí.
+  if (rejections.every((r) => r.type === 'unknown_sku')) {
+    lines.push('No se generó ningún PDF. Busca la clave correcta en el catálogo con db_query y vuelve a correr el script.');
+  } else {
+    lines.push(
+      'No se generó ningún PDF. Los precios que recuerdas de mensajes anteriores pueden estar',
+      'desactualizados: el catálogo cambia. Vuelve a correr el script con los precios de arriba, y',
+      'ANTES avisa al cliente en el chat que corriges el precio (ej: "Una corrección: MOSSI 10L',
+      'quedó en $95 c/u, no $90").',
+    );
+  }
+  return lines.join('\n');
+}
+
+/** Leído en cada llamada, no al cargar el módulo: pasar de dry-run a enforce es un
+ *  cambio de env y reciclar la caja, sin re-subir el script. */
+export function currentMode() {
+  const raw = (process.env.QUOTE_GUARD_MODE || '').trim().toLowerCase();
+  if (raw === 'enforce') return 'enforce';
+  if (raw === 'off') return 'off';
+  return 'dry-run';
+}
+
+/**
+ * Deja constancia del uso de overrides. Nunca lanza: un log no escribible no puede
+ * costarle al cliente su cotización.
+ */
+export function recordOverrides(folio, overrides) {
+  if (!overrides.length) return;
+  const ts = new Date().toISOString();
+  for (const o of overrides) {
+    console.error(JSON.stringify({ tag: 'quote-price-override', ts, folio, ...o }));
+  }
+  try {
+    const line = overrides
+      .map((o) => `${ts}  ${folio}  ${o.sku}  ${o.nombre}  qty=${o.qty}  ${fmtMoney(o.unit_price)}  ${o.kind}  "${o.reason}"${o.catalog ? `  (catálogo: ${o.catalog})` : ''}`)
+      .join('\n');
+    fs.appendFileSync(process.env.QUOTE_OVERRIDE_LOG || '/tmp/quote-overrides.log', line + '\n');
+  } catch (e) {
+    console.error(`[quote-guard] no se pudo escribir el log de overrides: ${e.message}`);
+  }
+}
+
+/**
+ * Valida el `unit_price` de cada ítem contra el catálogo vivo.
+ *
+ * Lanza QuotePriceError cuando un precio está mal (solo en modo enforce). NUNCA lanza
+ * por problemas de infraestructura — esos vuelven como modo `skipped:*` más un
+ * warning, porque un parpadeo del catálogo no puede tumbar una venta.
+ */
+export async function assertCatalogPrices(items, folio) {
+  const mode = currentMode();
+  const overrides = items
+    .filter((it) => it.price_override)
+    .map((it) => ({
+      sku: it.sku, nombre: it.nombre, qty: it.qty, unit_price: it.unit_price,
+      kind: it.price_override.kind, reason: it.price_override.reason,
+    }));
+
+  if (mode === 'off') return { mode: 'off', overrides, warnings: [] };
+
+  const bad = overrides.find((o) => !OVERRIDE_KINDS.has(o.kind) || !String(o.reason || '').trim());
+  if (bad) {
+    const msg = `price_override inválido en ${bad.sku}: requiere kind ∈ {${[...OVERRIDE_KINDS].join(', ')}} y un reason no vacío.`;
+    if (mode === 'enforce') throw new QuotePriceError(msg);
+    console.error(`[quote-guard] WOULD REJECT (override inválido): ${bad.sku}`);
+  }
+
+  if (overrides.length > MAX_OVERRIDES) {
+    const msg =
+      `Demasiados price_override (${overrides.length} de ${items.length} ítems). Los overrides son ` +
+      'para promociones puntuales y servicios sin clave, no para cotizaciones completas. ' +
+      'Consulta el catálogo con db_query y cotiza con los precios vigentes.';
+    if (mode === 'enforce') throw new QuotePriceError(msg);
+    console.error(`[quote-guard] WOULD REJECT (tope de overrides): ${overrides.length}/${items.length}`);
+    recordOverrides(folio, overrides);
+    return { mode: 'dry-run', overrides, warnings: [msg] };
+  }
+
+  const toCheck = items.filter((it) => !it.price_override);
+  const keys = [...new Set(toCheck.map((it) => String(it.sku ?? '').trim()).filter(Boolean))];
+
+  let rowsByKey;
+  try {
+    rowsByKey = keys.length ? await fetchCatalogRows(keys) : new Map();
+  } catch (e) {
+    if (e instanceof GuardUnavailable) {
+      console.error(`[quote-guard] verificación omitida — ${e.message}`);
+      recordOverrides(folio, overrides);
+      return {
+        mode: /EASYBITS_API_KEY/.test(e.message) ? 'skipped:no_key' : 'skipped:unreachable',
+        overrides,
+        warnings: [`No se pudo verificar precios contra el catálogo (${e.message}).`],
+      };
+    }
+    throw e;
+  }
+
+  const { rejections, warnings } = checkItems(toCheck, rowsByKey);
+
+  // El delta entre lo que se cobró y lo que dice el catálogo es lo que de veras mira
+  // un humano al revisar el log.
+  for (const rec of overrides) {
+    const rows = rowsByKey.get(String(rec.sku ?? '').trim().toUpperCase());
+    if (rows?.length) rec.catalog = describeTiers(rows[0].tiers);
+  }
+  recordOverrides(folio, overrides);
+
+  if (rejections.length) {
+    const message = buildRejectionMessage(rejections);
+    if (mode === 'enforce') throw new QuotePriceError(message);
+    for (const r of rejections) {
+      console.error(
+        r.type === 'unknown_sku'
+          ? `[quote-guard] WOULD REJECT sku=${r.sku} reason=unknown_sku`
+          : `[quote-guard] WOULD REJECT sku=${r.sku} sent=${r.sent} expected=${r.expected ?? 'n/a'} qty=${r.qty} reason=${r.type}`,
+      );
+    }
+    return { mode: 'dry-run', overrides, warnings: [...warnings, message] };
+  }
+
+  for (const w of warnings) console.error(`[quote-guard] warning: ${w}`);
+  return { mode: mode === 'enforce' ? 'enforced' : 'dry-run', overrides, warnings };
+}
+
 /** Link de pago MercadoPago (checkout preference). Devuelve init_point. */
 async function createMpLink(total, folio) {
   const token = process.env.MP_ACCESS_TOKEN;
@@ -671,6 +1171,10 @@ export async function runQuote(input) {
     if (tel) { input.cliente.tel = tel; console.error(`[quote] tel del cliente tomado del chat: ${tel}`); }
   }
   validate(input);
+  // Antes de calcular un solo peso: el precio que mandó el modelo se contrasta
+  // contra el catálogo vivo. En dry-run solo loguea WOULD REJECT.
+  const guard = await assertCatalogPrices(input.items, input.folio);
+  console.error(`[quote-guard] modo=${guard.mode} overrides=${guard.overrides.length} warnings=${guard.warnings.length}`);
   await pruneBrokenImages(input.items);
   const totals = computeTotals(input);
   const paymentUrl = input.include_payment_link ? await createMpLink(totals.total, input.folio) : null;
@@ -680,7 +1184,7 @@ export async function runQuote(input) {
   const pdf = await exportPdfRest(documentId);
   const pdfUrl = await uploadPublicPdf(pdf, `COT-${input.folio}.pdf`);
   const crmConversationId = await registerOrderInFormmy({ input, totals, pdfUrl });
-  return { pdfUrl, documentId, folio: input.folio, total: totals.total, paymentUrl, pages: pages.length, crmConversationId };
+  return { pdfUrl, documentId, folio: input.folio, total: totals.total, paymentUrl, pages: pages.length, crmConversationId, guardMode: guard.mode };
 }
 
 // --- CLI ---------------------------------------------------------------------

@@ -57,6 +57,35 @@ node /tmp/quote.mjs /tmp/cot.json
    `paymentUrl`. Confirma el total con el número que devolvió el script, no con
    uno que hayas calculado tú.
 
+## Precios: SIEMPRE del catálogo, nunca de memoria
+
+**Consulta el catálogo con `db_query` en cada cotización.** No reutilices precios que
+viste antes en esta conversación, por reciente que se sienta: el catálogo cambia y una
+plática puede llevar semanas viva. Un precio de hace un mes se ve idéntico a uno vigente.
+
+El script verifica cada `unit_price` contra el catálogo antes de calcular nada. Si un
+precio no corresponde, te lo dice con los precios vigentes: corrige el input, **avisa al
+cliente en el chat que estás corrigiendo el precio** y vuelve a correr.
+
+Ojo con los **escalones por volumen**: un precio de mayoreo solo aplica si la cantidad
+llega al mínimo. $90 a partir de 10 piezas no es un precio válido para una orden de 4.
+
+### `price_override` — solo para precios que legítimamente no están en el catálogo
+
+Cuando el precio es correcto pero no puede salir del catálogo, agrégalo al ítem:
+
+```json
+{ "sku": "12485", "qty": 2, "unit": "GARRAFA", "nombre": "MOSSI 10L", "unit_price": 125.00,
+  "price_override": { "kind": "promocion", "reason": "paquete MOSSI + cloro $250 autorizado por Brenda" } }
+```
+
+`kind` ∈ `promocion` · `precio_especial_autorizado` · `servicio_sin_sku` ·
+`producto_no_catalogado`. El `reason` es obligatorio y queda auditado.
+
+**No lo uses para saltarte una corrección.** Si el script rechaza un precio porque
+recordabas mal, la respuesta es consultar el catálogo, no marcarlo como promoción. Un
+override sin autorización real del equipo es un precio mal cobrado con papeleo.
+
 ## Registro en el CRM — automático, no lo hagas tú
 
 El script registra la orden en **Formmy** por su cuenta: resuelve la conversación
@@ -77,7 +106,9 @@ Ya vienen en el entorno del worker; solo importa si estás depurando:
 `EASYBITS_API_KEY`, `EASYBITS_BASE_URL`, `FORMMY_SECRET_KEY`, `FORMMY_API_URL`,
 `NANOCLAW_CHAT_JID` (identifica la conversación), `QUOTE_CRM_ESTATUS` (etapa
 inicial), `WABA_LAST_LOCATION_URL` (última ubicación compartida), `MP_ACCESS_TOKEN`
-y las `QUOTE_*` de marca. Sin `FORMMY_SECRET_KEY` o sin `NANOCLAW_CHAT_JID` el
+y las `QUOTE_*` de marca. Del guard de precios: `QUOTE_GUARD_MODE`
+(`dry-run` por default · `enforce` · `off`), `QUOTE_CATALOG_DB_ID`,
+`QUOTE_CATALOG_TABLE`, `QUOTE_MAX_OVERRIDES`. Sin `FORMMY_SECRET_KEY` o sin `NANOCLAW_CHAT_JID` el
 registro en CRM se omite en silencio y el PDF sale igual.
 
 ## Errores

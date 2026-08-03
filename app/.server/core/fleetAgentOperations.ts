@@ -91,6 +91,35 @@ export const MODEL_IDENTITY_SONNET5 = [
   "Si te preguntan qué modelo o IA eres, responde: Claude Sonnet 5, de Anthropic.",
 ].join(" ");
 
+/**
+ * Frescura de precios, inyectada FRESCA por turno.
+ *
+ * El guard del script de cotización solo protege el PDF. Antes de llegar ahí el
+ * agente ya dijo un precio EN EL CHAT, y ese sale de su contexto: en el incidente
+ * sofi-0 (2026-07-27) la sesión llevaba dos meses viva y el precio de mayo se veía
+ * idéntico a uno vigente.
+ *
+ * Va aquí y no en la persona por dos razones: `persona.env.SYSTEM_PROMPT` está
+ * horneado al spawn (una caja viva no lo ve hasta reciclarse), y una regla fresca
+ * al final del contexto pesa más que una enterrada en 77 KB de prompt.
+ *
+ * Solo lo reciben agentes con un skill de cotización encendido — un tenant que no
+ * vende no necesita esta regla (mismo criterio que los guardrails de Ghosty).
+ */
+export const PRICE_FRESHNESS_GUARDRAIL = [
+  "PRECIOS: nunca cites un precio de memoria. Antes de decir CUALQUIER precio en el chat —aunque lo hayas dicho hace un momento en esta misma conversación— consúltalo en el catálogo con db_query en ESTE turno.",
+  "Un precio que viste antes en esta conversación puede tener semanas y se ve idéntico a uno vigente; el catálogo cambia y tú no te enteras.",
+  "Los precios de mayoreo solo aplican si la cantidad alcanza el mínimo: si el escalón es desde 10 piezas, no es el precio de una orden de 4.",
+  "Si te equivocaste en un precio, corrígelo con el cliente de forma directa y sin rodeos antes de cotizar.",
+].join(" ");
+
+/** ¿Este agente vende? (skill de cotización encendido) */
+export function hasQuotingSkill(fleetAgent: { skills?: unknown }): boolean {
+  return fleetSkills(fleetAgent).some(
+    (s) => s.enabled !== false && /cotiza|quote/i.test(`${s.name} ${s.description ?? ""}`)
+  );
+}
+
 // Fecha/hora local actual, inyectada FRESCA por turno (como MODEL_IDENTITY_SONNET5) —
 // un LLM no tiene reloj y su training tiene cutoff; sin esto el agente ADIVINA el día
 // ("mañana es sábado") y falla al agendar/interpretar "hoy"/"mañana". Se COMPUTA en cada
@@ -1403,6 +1432,46 @@ async function ensureRunning(ctx: AuthContext, agent: AgentRow): Promise<AgentRo
 // so N cold conversations boot in parallel instead of serializing.
 //   - Counts "building" VMs as candidates so two concurrent placements SHARE a
 //     booting VM (up to maxWorkersPerVm) rather than each spawning its own.
+/**
+ * TTL de sesión — el habilitador de fondo de las cotizaciones con precios viejos.
+ *
+ * Una ruta es pegajosa de por vida: `sessionUuid` se crea una vez y se reusa para
+ * siempre, así que una conversación de WhatsApp puede llevar meses viva. El agente
+ * consultó el catálogo el día uno, los precios cambiaron, y sigue citando los de su
+ * propio contexto (incidente sofi-0 2026-07-27: una sesión de mayo cotizando en
+ * julio). El auto-compact NO ayuda: resume el hilo, y el resumen se lleva el precio
+ * viejo con él.
+ *
+ * Rotar el `sessionUuid` arranca un hilo limpio, obligando al agente a re-consultar.
+ *
+ * Dos candados para que esto nunca corte una conversación viva:
+ *  - OFF por default (`FLEET_SESSION_TTL_HOURS` sin poner = comportamiento actual).
+ *  - Además de vieja, la conversación tiene que estar OCIOSA
+ *    (`FLEET_SESSION_TTL_MIN_IDLE_MIN`, default 60). Sin esto una plática larga se
+ *    quedaría amnésica a media negociación, que es peor que un precio viejo.
+ *
+ * El blob de memoria viejo queda huérfano por diseño; `sweepOrphanMemoryBlobs` ya
+ * recoge los que ninguna ruta referencia.
+ */
+function sessionTtlMs(): number {
+  const h = Number(process.env.FLEET_SESSION_TTL_HOURS);
+  return Number.isFinite(h) && h > 0 ? h * 3600_000 : 0;
+}
+function sessionTtlMinIdleMs(): number {
+  const m = Number(process.env.FLEET_SESSION_TTL_MIN_IDLE_MIN);
+  return Number.isFinite(m) && m > 0 ? m * 60_000 : 60 * 60_000;
+}
+export function shouldRotateSession(
+  route: { createdAt: Date; lastMessageAt: Date },
+  now = new Date()
+): boolean {
+  const ttl = sessionTtlMs();
+  if (!ttl) return false;
+  const age = now.getTime() - route.createdAt.getTime();
+  const idle = now.getTime() - route.lastMessageAt.getTime();
+  return age > ttl && idle > sessionTtlMinIdleMs();
+}
+
 type Reservation = { agentId: string; sessionUuid: string; needsRestore: boolean };
 async function reserveVm(ctx: AuthContext, fleetAgent: PoolRow, groupId: string): Promise<Reservation> {
   const key = { fleetAgentId_groupId: { fleetAgentId: fleetAgent.id, groupId } };
@@ -1453,6 +1522,25 @@ async function reserveVm(ctx: AuthContext, fleetAgent: PoolRow, groupId: string)
 
     // Claim/refresh the route to point at the target, reserving the slot.
     if (fresh) {
+      // Sesión vencida y ociosa → hilo limpio. Se conserva la ruta (mismo groupId,
+      // mismo VM si aplica); solo cambia el handle de resume, así que el worker
+      // arranca sin transcript previo y vuelve a consultar el catálogo. No hay nada
+      // que restaurar: la memoria vieja se queda con el sessionUuid viejo.
+      if (shouldRotateSession(fresh)) {
+        const rotated = randomUUID();
+        await db.fleetAgentRoute.update({
+          where: { id: fresh.id },
+          data: { agentId: target.id, detachedAt: null, sessionUuid: rotated, createdAt: new Date() },
+        });
+        auditLog("session.rotate", {
+          fleetAgent: fleetAgent.id,
+          groupId,
+          from: fresh.sessionUuid,
+          to: rotated,
+          ageHours: Math.round((Date.now() - fresh.createdAt.getTime()) / 3600_000),
+        });
+        return { agentId: target.id, sessionUuid: rotated, needsRestore: false };
+      }
       const moved = fresh.agentId !== target.id;
       if (moved) {
         await db.fleetAgentRoute.update({ where: { id: fresh.id }, data: { agentId: target.id, detachedAt: null } });
@@ -1913,6 +2001,9 @@ export async function routeMessage(
             (fleetAgent.persona as Persona | null)?.env?.EASYBITS_TOOL_GROUP?.startsWith("scripting")
               ? CODE_MODE_GUIDANCE
               : null,
+            // Frescura de precios: solo para agentes que cotizan. Cubre el hueco que
+            // el guard del script no ve — el precio que el agente dice en el chat.
+            hasQuotingSkill(fleetAgent) ? PRICE_FRESHNESS_GUARDRAIL : null,
             msg.admin ? ADMIN_NOTE : null,
             // Per-canal: system prompt del dueño (editable por número/grupo) + docs
             // de las capacidades code-mode habilitadas (cómo pegarle a su API).
