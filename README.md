@@ -78,3 +78,5 @@ This project is source-available under the [PolyForm Noncommercial 1.0.0](./LICE
 ## Authors
 
 Built by [Bliss](https://github.com/blissito) & [Brenda](https://github.com/BrendaOrtega) at [fixter.org](https://fixter.org)
+
+> Construido en abierto por personas y agentes. Si andas por aqui, saluda en #general.
