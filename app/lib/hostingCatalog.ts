@@ -51,19 +51,22 @@ export const TIER_ORDER = [
 export type TierKey = (typeof TIER_ORDER)[number];
 
 export const HOSTING_CATALOG: Record<TierKey, HostingTier> = {
-  nano:            { key: "nano",            vcpus: 1,  memoryMb: 512,   diskMb: 2048,   priceShared: 49,   priceReserved: null,  minPlan: "Mega" },
-  micro:           { key: "micro",           vcpus: 1,  memoryMb: 1024,  diskMb: 4096,   priceShared: 99,   priceReserved: null,  minPlan: "Mega" },
-  mini:            { key: "mini",            vcpus: 2,  memoryMb: 1024,  diskMb: 8192,   priceShared: 149,  priceReserved: null,  minPlan: "Mega" },
-  lite:            { key: "lite",            vcpus: 1,  memoryMb: 2048,  diskMb: 6144,   priceShared: 129,  priceReserved: null,  minPlan: "Mega" },
-  base:            { key: "base",            vcpus: 2,  memoryMb: 2048,  diskMb: 16384,  priceShared: 249,  priceReserved: null,  minPlan: "Mega" },
-  plus:            { key: "plus",            vcpus: 2,  memoryMb: 4096,  diskMb: 24576,  priceShared: 299,  priceReserved: null,  minPlan: "Mega" },
-  // "App estándar": disco grande para correr una app 24/7 (migrar desde Fly, etc.).
-  // Premium sobre la caja Flota ($299, agentic efímero) — disco es el diferenciador.
-  estandar:        { key: "estandar",        vcpus: 2,  memoryMb: 2048,  diskMb: 81920,  priceShared: 449,  priceReserved: null,  minPlan: "Mega" },
-  pro:             { key: "pro",             vcpus: 4,  memoryMb: 4096,  diskMb: 32768,  priceShared: 449,  priceReserved: null,  minPlan: "Mega" },
-  focus:           { key: "focus",           vcpus: 4,  memoryMb: 8192,  diskMb: 65536,  priceShared: 690,  priceReserved: 1725,  minPlan: "Tera" },
-  performance:     { key: "performance",     vcpus: 8,  memoryMb: 16384, diskMb: 131072, priceShared: 1290, priceReserved: 3225,  minPlan: "Tera" },
-  "performance-4x":{ key: "performance-4x",  vcpus: 16, memoryMb: 32768, diskMb: 262144, priceShared: 4980, priceReserved: 12450, minPlan: "Tera" },
+  // Escalón de entrada estilo Fly: 256MB corre un binario static/Go o un
+  // side-project, NO un build de Node. Para Node el piso real es `micro`.
+  nano:            { key: "nano",            vcpus: 1,  memoryMb: 256,   diskMb: 1024,   priceShared: 49,   priceReserved: null,  minPlan: "Mega" },
+  micro:           { key: "micro",           vcpus: 1,  memoryMb: 1024,  diskMb: 2048,   priceShared: 99,   priceReserved: null,  minPlan: "Mega" },
+  mini:            { key: "mini",            vcpus: 2,  memoryMb: 1024,  diskMb: 4096,   priceShared: 149,  priceReserved: null,  minPlan: "Mega" },
+  lite:            { key: "lite",            vcpus: 1,  memoryMb: 2048,  diskMb: 3072,   priceShared: 129,  priceReserved: null,  minPlan: "Mega" },
+  base:            { key: "base",            vcpus: 2,  memoryMb: 2048,  diskMb: 8192,   priceShared: 249,  priceReserved: null,  minPlan: "Mega" },
+  plus:            { key: "plus",            vcpus: 2,  memoryMb: 4096,  diskMb: 12288,  priceShared: 299,  priceReserved: null,  minPlan: "Mega" },
+  // "App estándar": correr una app 24/7 (migrar desde Fly, etc.). Diferencia vs
+  // la caja Flota ($299, agentic efímero) = permanencia, no disco. Más disco se
+  // compra con add-ons de 100GB.
+  estandar:        { key: "estandar",        vcpus: 2,  memoryMb: 2048,  diskMb: 16384,  priceShared: 449,  priceReserved: null,  minPlan: "Mega" },
+  pro:             { key: "pro",             vcpus: 4,  memoryMb: 4096,  diskMb: 16384,  priceShared: 449,  priceReserved: null,  minPlan: "Mega" },
+  focus:           { key: "focus",           vcpus: 4,  memoryMb: 8192,  diskMb: 32768,  priceShared: 690,  priceReserved: 1725,  minPlan: "Tera" },
+  performance:     { key: "performance",     vcpus: 8,  memoryMb: 16384, diskMb: 65536,  priceShared: 1290, priceReserved: 3225,  minPlan: "Tera" },
+  "performance-4x":{ key: "performance-4x",  vcpus: 16, memoryMb: 32768, diskMb: 131072, priceShared: 4980, priceReserved: 12450, minPlan: "Tera" },
 };
 
 /**
@@ -91,7 +94,9 @@ export const FLEET_BOX = {
  */
 export const HIDDEN_TIERS = new Set<TierKey>([
   // Baratos que canibalizan la Flota / hosting barato.
-  "nano", "micro", "mini", "lite", "base",
+  // `nano` ($49, 256MB) y `micro` ($99, 1GB) SÍ se venden: son el escalón de
+  // entrada (nano = static/side-project; micro = piso real para Node).
+  "mini", "lite", "base",
   // plus = $299 (mismo precio que una caja Flota) → canibaliza.
   "plus",
   // pro = $449 (colisiona con `estandar`, misma tarifa, distinta forma).

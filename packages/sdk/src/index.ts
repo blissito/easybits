@@ -1789,6 +1789,14 @@ export class EasybitsClient {
    */
   get machines() {
     const req = <T>(path: string, opts?: RequestInit) => this.request<T>(path, opts);
+    const qs = (p?: { limit?: number; cursor?: string }) => {
+      if (!p) return "";
+      const s = new URLSearchParams();
+      if (p.limit != null) s.set("limit", String(p.limit));
+      if (p.cursor) s.set("cursor", p.cursor);
+      const out = s.toString();
+      return out ? `?${out}` : "";
+    };
     return {
       /** The hosting catalog: tiers + disk add-on pricing. */
       tiers: () => req<MachineTiers>("/machines/tiers"),
@@ -1807,6 +1815,73 @@ export class EasybitsClient {
         if (params.waitForReady !== false) await sbx.waitUntilReady();
         return sbx;
       },
+
+      // ── Releases: the app code, versioned and recoverable ──
+      //
+      // A machine is disposable only if you can rebuild it. Fly/Vercel get that
+      // for free (a deploy rebuilds from an image); here the app is written
+      // into the box, so a release is what lets it come back.
+      //
+      //   await eb.machines.setRunspec(id, { appDir: "/app", buildCommand: "npm ci && npm run build", unit: "myapp", dataPaths: ["data"] });
+      //   const rel = await eb.machines.deploy(id, { message: "v1" });
+      //   const fresh = await eb.machines.redeploy(rel.releaseId, { tier: "mini", replaceSandboxId: id });
+
+      /** How this machine's app is built, started and backed up. */
+      runspec: (sandboxId: string): Promise<{ runspec: Runspec | null }> =>
+        req(`/machines/${sandboxId}/runspec`),
+      /** Declare build/start/backup config. Merges with what is already set. */
+      setRunspec: (sandboxId: string, spec: Runspec): Promise<Runspec> =>
+        req(`/machines/${sandboxId}/runspec`, { method: "PUT", body: JSON.stringify(spec) }),
+      /** Publish the current app code as a versioned release. Requires a runspec. */
+      deploy: (sandboxId: string, params?: { message?: string }): Promise<MachineRelease> =>
+        req(`/machines/${sandboxId}/releases`, {
+          method: "POST",
+          body: JSON.stringify(params ?? {}),
+        }),
+      /** Published releases, newest version first. */
+      releases: (
+        sandboxId: string,
+        params?: { limit?: number; cursor?: string }
+      ): Promise<{ items: MachineRelease[]; nextCursor?: string }> =>
+        req(`/machines/${sandboxId}/releases${qs(params)}`),
+      /** Put a previous release back on the SAME machine. Data is untouched. */
+      rollback: (sandboxId: string, releaseId: string): Promise<{ sandboxId: string; releaseId: string; version: number; exitCode: number }> =>
+        req(`/machines/${sandboxId}/rollback`, {
+          method: "POST",
+          body: JSON.stringify({ releaseId }),
+        }),
+      /**
+       * Build a BRAND NEW machine from a release — recovery AND resize (there
+       * is no in-place resize; you recreate at another tier). Pass
+       * replaceSandboxId to release the old one once the new is running, or you
+       * pay for both. The new box starts with no data: restore a backup after.
+       */
+      redeploy: (
+        releaseId: string,
+        params?: {
+          tier?: string;
+          name?: string;
+          cpuMode?: "shared" | "reserved";
+          diskAddonsGB?: number;
+          replaceSandboxId?: string;
+        }
+      ): Promise<{ sandboxId: string; releaseId: string; exitCode: number; replaced?: string }> =>
+        req(`/machine-releases/${releaseId}/redeploy`, {
+          method: "POST",
+          body: JSON.stringify(params ?? {}),
+        }),
+
+      // ── Backups: the app data, off-host, included in the price ──
+
+      /** Daily data backups, newest first. Kept 7 days. */
+      backups: (
+        sandboxId: string,
+        params?: { limit?: number; cursor?: string }
+      ): Promise<{ items: MachineBackup[]; nextCursor?: string }> =>
+        req(`/machines/${sandboxId}/backups${qs(params)}`),
+      /** Take a backup now instead of waiting for tonight's run. */
+      backup: (sandboxId: string): Promise<MachineBackup> =>
+        req(`/machines/${sandboxId}/backups`, { method: "POST" }),
     };
   }
 
@@ -2456,6 +2531,66 @@ export interface MachineTier {
 export interface MachineTiers {
   tiers: MachineTier[];
   diskAddon: { gb: number; price: number };
+}
+
+/**
+ * How to rebuild and run a machine's app in a FRESH box. This is what makes a
+ * machine reproducible — the box is disposable, the runspec plus a release
+ * artifact are what survive it.
+ */
+export interface Runspec {
+  /** Absolute path where the app lives, e.g. "/app". */
+  appDir: string;
+  buildCommand?: string;
+  /** Used only when there is no systemd unit. */
+  startCommand?: string;
+  /** systemd unit to restart. Preferred over startCommand. */
+  unit?: string;
+  port?: number;
+  buildTimeoutSec?: number;
+  /** Extra paths kept OUT of the release tarball (node_modules/.git are excluded already). */
+  excludes?: string[];
+  /**
+   * Paths the daily backup copies (absolute, or relative to appDir). Without
+   * these the machine has NOTHING backed up.
+   */
+  dataPaths?: string[];
+  /** Non-secret runtime config only — it is stored and baked into every release. */
+  env?: Record<string, string>;
+}
+
+/** A versioned tarball of the app CODE in durable storage. Not a backup: no data. */
+export interface MachineRelease {
+  releaseId: string;
+  sandboxId: string;
+  version: number;
+  sizeBytes: number;
+  sha256: string | null;
+  status: "pending" | "available" | "failed" | string;
+  message: string | null;
+  tier: string | null;
+  runspec: Runspec | null;
+  createdAt: string;
+}
+
+/** A daily off-host copy of the machine's DATA. Kept 7 days, included in the price. */
+export interface MachineBackup {
+  id: string;
+  sandboxId: string;
+  /** YYYY-MM-DD — one per machine per day. */
+  stamp: string;
+  scope: string;
+  /**
+   * How consistent the copy actually is. "crash" means it was taken from a live
+   * filesystem, so a database mid-write could be torn. Reported honestly.
+   */
+  consistency: string;
+  bytes: number;
+  sha256: string | null;
+  status: "uploading" | "available" | "failed" | "expired" | string;
+  verifiedAt: string | null;
+  expiresAt: string | null;
+  createdAt: string;
 }
 
 export interface CreatePermanentParams {

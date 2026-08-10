@@ -1326,7 +1326,7 @@ export async function mkdir(
 
 // Single-quote a string for safe interpolation into a /bin/sh command line.
 // Wraps in '…' and escapes embedded single quotes as '\'' — the standard trick.
-function shQuote(s: string): string {
+export function shQuote(s: string): string {
   return `'${s.replace(/'/g, `'\\''`)}'`;
 }
 

@@ -1834,7 +1834,7 @@ console.log(status.result);  // resultado final del agente`} />
               </table>
             </div>
             <p className="text-gray-600 text-sm mb-6">
-              Precios MXN/mes, NVMe, sin cobro de tráfico. Disco add-on: <strong>+100GB NVMe = $99/mes</strong> (apilable). CPU <strong>reserved</strong> (piso garantizado por cgroup) solo desde <code className="bg-gray-100 px-1 rounded">focus</code>. <code className="bg-gray-100 px-1 rounded">estandar</code> trae disco grande (80GB) para correr una app 24/7 — pensado para migrar desde Fly/Render.
+              Precios MXN/mes, NVMe, sin cobro de tráfico. Disco add-on: <strong>+100GB NVMe = $99/mes</strong> (apilable). CPU <strong>reserved</strong> (piso garantizado por cgroup) solo desde <code className="bg-gray-100 px-1 rounded">focus</code>. Para correr una app 24/7 (migrar desde Fly/Render) empieza en <code className="bg-gray-100 px-1 rounded">micro</code>; <code className="bg-gray-100 px-1 rounded">nano</code> (256MB) da para un binario estático o un side-project, no para un build de Node.
             </p>
 
             <h3 className="text-lg font-bold mb-3">Crear un sandbox permanente</h3>
@@ -1865,6 +1865,83 @@ DELETE /api/v2/machines/:sandboxId` },
 create_machine({ tier: "focus" })   // crea always-on, cobra flat/mes
 list_machines()                     // tus sandboxes + monthlyMxn
 release_machine({ sandboxId })      // quita cobro + destruye VM` },
+              ]}
+            />
+
+            <h3 className="text-lg font-bold mb-3 mt-8">Releases: que tu caja sea reconstruible</h3>
+            <p className="text-gray-600 text-sm mb-3">
+              Fly y Vercel pueden tratar el disco como desechable porque cada deploy lo reconstruye desde una imagen. Aquí la app se escribe <em>dentro</em> de la caja, así que si la caja muere no pierdes solo los datos — pierdes la app. Un <strong>release</strong> lo resuelve: un tarball versionado de tu código en almacenamiento durable, más un <strong>runspec</strong> que dice cómo construirlo y arrancarlo. Con los dos, cualquier caja se reconstruye — y eso es también como se <strong>cambia de tier</strong> (no hay resize en caliente: se recrea).
+            </p>
+            <p className="text-gray-600 text-sm mb-3">
+              Un release guarda <strong>código, no datos</strong>. Una caja recreada arranca vacía; los datos los cubre el backup.
+            </p>
+            <TabbedCode
+              tabs={[
+                { label: "SDK", code: `// 1. Declara cómo se construye y arranca tu app
+await eb.machines.setRunspec(sandboxId, {
+  appDir: "/app",
+  buildCommand: "npm ci && npm run build",
+  unit: "myapp",            // o startCommand
+  port: 3000,
+  dataPaths: ["data", "uploads"],  // esto es lo que respalda el backup diario
+});
+
+// 2. Publica el código actual como release
+const rel = await eb.machines.deploy(sandboxId, { message: "v1" });
+
+// 3a. ¿Deploy malo? Vuelve al anterior, misma caja
+await eb.machines.rollback(sandboxId, releaseAnterior);
+
+// 3b. ¿Caja muerta, o quieres otro tier? Recrea desde el release
+const fresh = await eb.machines.redeploy(rel.releaseId, {
+  tier: "mini",                    // así se hace un "resize"
+  replaceSandboxId: sandboxId,     // libera la vieja al confirmar la nueva
+});                                // sin esto pagas las dos` },
+                { label: "REST", code: `# Runspec
+GET /api/v2/machines/:id/runspec
+PUT /api/v2/machines/:id/runspec
+{ "appDir": "/app", "buildCommand": "npm ci && npm run build", "dataPaths": ["data"] }
+
+# Publicar / listar releases
+POST /api/v2/machines/:id/releases   { "message": "v1" }
+GET  /api/v2/machines/:id/releases
+
+# Rollback (misma caja)
+POST /api/v2/machines/:id/rollback   { "releaseId": "rel_..." }
+
+# Recrear en una caja nueva (recuperación o cambio de tier).
+# Colección aparte a propósito: funciona aunque la máquina original ya no exista.
+POST /api/v2/machine-releases/:releaseId/redeploy
+{ "tier": "mini", "replaceSandboxId": "sb_abc123" }` },
+                { label: "MCP", code: `set_machine_runspec({ sandboxId, appDir: "/app", buildCommand: "npm ci && npm run build", dataPaths: ["data"] })
+deploy_machine({ sandboxId, message: "v1" })   // publica release
+list_machine_releases({ sandboxId })
+rollback_machine({ sandboxId, releaseId })     // misma caja
+redeploy_machine({ releaseId, tier: "mini", replaceSandboxId })  // caja nueva / resize` },
+              ]}
+            />
+
+            <h3 className="text-lg font-bold mb-3 mt-8">Backups: incluidos, 7 días</h3>
+            <p className="text-gray-600 text-sm mb-3">
+              Cada noche copiamos los <code className="bg-gray-100 px-1 rounded">dataPaths</code> de tu runspec a almacenamiento durable <strong>fuera del host</strong>, con 7 días de retención y <strong>sin costo extra</strong>. No respaldamos el sistema operativo: eso se reconstruye del template, igual que Fly respalda volúmenes y no el rootfs.
+            </p>
+            <p className="text-gray-600 text-sm mb-3">
+              Dos cosas dichas de frente: el RPO es de <strong>24 horas</strong>, y el backup se toma del filesystem en caliente, así que una base de datos escribiendo durante la copia puede quedar inconsistente — cada backup reporta su nivel en el campo <code className="bg-gray-100 px-1 rounded">consistency</code>. Si tu app tiene una DB, tenla fuera de la caja (libSQL de EasyBits, Atlas) o toma un <code className="bg-gray-100 px-1 rounded">create_backup</code> tras detenerla.
+            </p>
+            <TabbedCode
+              tabs={[
+                { label: "SDK", code: `// Backups diarios automáticos; este es bajo demanda
+const bk = await eb.machines.backup(sandboxId);   // antes de algo riesgoso
+const { items } = await eb.machines.backups(sandboxId);
+console.log(items[0].stamp, items[0].bytes, items[0].consistency);` },
+                { label: "REST", code: `GET  /api/v2/machines/:id/backups   # 7 días, más reciente primero
+POST /api/v2/machines/:id/backups   # tomar uno ahora` },
+                { label: "MCP", code: `list_backups({ sandboxId })
+create_backup({ sandboxId })       // antes de algo riesgoso
+// Restaurar SOBREESCRIBE datos → exige confirm:true.
+// Restaurar sobre la caja origen toma un backup previo automático.
+restore_machine_from_backup({ backupId, confirm: true })
+restore_machine_from_backup({ backupId, targetSandboxId, confirm: true })  // a una caja nueva` },
               ]}
             />
 

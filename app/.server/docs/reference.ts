@@ -705,13 +705,13 @@ call_stop({ sandboxId })    → { url }  ← link permanente al MP4
 
   hosting: `## Hosting — Sandboxes permanentes (always-on)
 
-Un sandbox efímero se auto-destruye al TTL. Una **sandbox permanente** corre 24/7 y se cobra **flat en MXN/mes** como item de suscripción encima de tu plan. Mismo recurso, mismo \`sandboxId\` — "permanente" es solo un flag + cobro. Requiere plan de pago (Mega/Tera). Grupo MCP: \`hosting\` (5 tools).
+Un sandbox efímero se auto-destruye al TTL. Una **sandbox permanente** corre 24/7 y se cobra **flat en MXN/mes** como item de suscripción encima de tu plan. Mismo recurso, mismo \`sandboxId\` — "permanente" es solo un flag + cobro. Requiere plan de pago (Mega/Tera). Grupo MCP: \`hosting\`.
 
 ### Catálogo de tiers
 \`GET /machines/tiers\` · MCP: \`list_machine_tiers()\` · SDK: \`eb.machines.tiers()\`
 Tiers (vCPU/RAM/NVMe → MXN/mes shared):
 ${HOSTING_TIERS_MD}
-\`estandar\` trae disco grande (80GB) para correr una app 24/7 (migrar desde Fly/Render). Disco add-on: +100GB NVMe = $99/mes (apilable). CPU **reserved** (piso garantizado) solo desde focus.
+Para una app Node 24/7 el piso real es \`micro\`: \`nano\` (256MB) corre un binario estático o un side-project, pero NO aguanta un build de Node. Disco add-on: +100GB NVMe = $99/mes (apilable). CPU **reserved** (piso garantizado) solo desde focus.
 
 ### Crear sandbox permanente
 \`POST /machines\` · Body: \`{ tier, cpuMode?, diskAddonsGB?, template?, name? }\`
@@ -728,6 +728,28 @@ MCP: \`list_machines()\` · SDK: \`eb.machines.list()\` — tus sandboxes perman
 \`DELETE /machines/:sandboxId\` · MCP: \`release_machine({ sandboxId })\` · SDK: \`sb.release()\` — quita el cobro (prorrateado) y destruye la VM. **Destructiva**, idempotente.
 
 El plan es el gate de acceso; cada sandbox factura aparte. Si tu plan se cancela, tus sandboxes se suspenden.
+
+### Releases — hacer la caja reconstruible
+Fly/Vercel tratan el disco como desechable porque el deploy lo reconstruye desde una imagen. Aquí la app se escribe DENTRO de la caja, así que sin un release una caja muerta se lleva la app, no solo los datos. Un **release** es un tarball versionado del código en almacenamiento durable + un **runspec** que dice cómo construirlo y arrancarlo.
+
+**Release = CÓDIGO. Backup = DATOS.** Una caja recreada desde un release arranca vacía.
+
+1. \`set_machine_runspec({ sandboxId, appDir, buildCommand?, startCommand?, unit?, port?, dataPaths? })\` — obligatorio antes del primer deploy. \`dataPaths\` es lo que respalda el backup diario: sin eso la máquina NO tiene nada respaldado. No metas secretos en \`env\` (se guarda y viaja dentro de cada tarball).
+2. \`deploy_machine({ sandboxId, message? })\` → publica release. SDK: \`eb.machines.deploy(id)\`
+3. \`list_machine_releases({ sandboxId })\` · \`rollback_machine({ sandboxId, releaseId })\` — vuelve a una versión anterior en la MISMA caja.
+4. \`redeploy_machine({ releaseId, tier?, replaceSandboxId? })\` — construye una caja NUEVA. Sirve para dos cosas: recuperar una máquina muerta y **cambiar de tier** (no hay resize en caliente — se recrea). \`replaceSandboxId\` libera la vieja al confirmar que la nueva quedó corriendo; sin él pagas las dos.
+
+REST: \`PUT /machines/:id/runspec\` · \`POST|GET /machines/:id/releases\` · \`POST /machines/:id/rollback\` · \`POST /machine-releases/:releaseId/redeploy\` (colección aparte: funciona aunque la máquina original ya no exista).
+
+### Backups — incluidos, 7 días
+Cada noche se copian los \`dataPaths\` del runspec a almacenamiento durable **fuera del host**, 7 días de retención, **sin costo extra** (mismo trato que Fly da en volúmenes). No se respalda el sistema operativo: se reconstruye del template.
+
+- \`list_backups({ sandboxId })\` · \`create_backup({ sandboxId })\` — el segundo, antes de algo riesgoso.
+- \`restore_machine_from_backup({ backupId, targetSandboxId?, confirm: true })\` — **sobreescribe datos**, por eso exige \`confirm\`. Restaurar sobre la caja origen toma un backup previo automático. Con \`targetSandboxId\` restauras a una caja nueva (p.ej. recién hecha con \`redeploy_machine\`).
+
+Dos límites dichos de frente: el RPO es de **24 horas**, y el backup se toma del filesystem en caliente, así que una DB escribiendo durante la copia puede quedar inconsistente — cada backup reporta su nivel en \`consistency\`. Si la app tiene DB, tenla fuera de la caja (Databases de EasyBits, Atlas) o para el servicio antes de \`create_backup\`.
+
+Recuperación completa de una máquina = \`redeploy_machine\` (código) + \`restore_machine_from_backup\` (datos).
 
 ### Dashboard (UI)
 También se administran desde \`/dash/hosting\`: crear (con precio en vivo), ver estado, promover un sandbox efímero a permanente, y liberar. Lista permanentes (cobradas) y sandboxes efímeros en secciones separadas.

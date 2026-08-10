@@ -138,6 +138,46 @@ describe("registry smoke — createMcpServer('all')", () => {
     }
   });
 
+  it("hosting group exposes the release + backup surface", () => {
+    // Registering a tool is not enough: if it is missing from the group
+    // allowlist it stays invisible to the agent. These eleven are what make a
+    // machine recoverable — a silently-absent one is only noticed the day a
+    // customer needs to rebuild a box.
+    const tools = getRegisteredTools(createMcpServer(["hosting"]));
+    for (const name of [
+      "set_machine_runspec",
+      "get_machine_runspec",
+      "deploy_machine",
+      "list_machine_releases",
+      "rollback_machine",
+      "redeploy_machine",
+      "delete_machine_release",
+      "list_backups",
+      "create_backup",
+      "restore_machine_from_backup",
+      // Serving the app on the customer's own domain is the point of hosting;
+      // a hosting-only agent must not have to borrow the sandbox group for it.
+      "sandbox_expose_port",
+      "sandbox_domain_add",
+      "sandbox_domain_verify",
+    ]) {
+      expect(tools[name], name).toBeDefined();
+      expect(typeof tools[name].handler).toBe("function");
+    }
+  });
+
+  it("restore_machine_from_backup refuses to run without confirm", async () => {
+    // Guardrail on a destructive op: restoring overwrites live data, so an
+    // agent must opt in explicitly rather than discover it after the fact.
+    const tools = getRegisteredTools(createMcpServer(["hosting"]));
+    const res = await tools["restore_machine_from_backup"].handler(
+      { backupId: "b1", confirm: false },
+      { authInfo: { user: { id: "u1" }, scopes: ["WRITE"] } }
+    );
+    expect(res.isError).toBe(true);
+    expect(parseText(res).error).toMatch(/confirm/i);
+  });
+
   it("search_stock_photo llega al grupo design, no sólo a 'all'", () => {
     // Registrar la tool no basta: si no está en el allowlist del grupo, queda
     // deshabilitada y sólo alcanzable por discover_tools/run_tool. Es el error

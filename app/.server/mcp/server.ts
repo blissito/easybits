@@ -147,6 +147,20 @@ import {
   releasePermanent,
   restoreMachine,
 } from "../core/machineOperations";
+import {
+  getRunspec,
+  setRunspec,
+  publishRelease,
+  listReleases,
+  applyRelease,
+  recreateFromRelease,
+  deleteRelease,
+} from "../core/releaseOperations";
+import {
+  listBackups,
+  createBackup,
+  restoreFromBackup,
+} from "../core/machineBackupOperations";
 import { grantAccess, revokeAccess, listAccess } from "../delegation";
 import {
   HOSTING_CATALOG,
@@ -265,6 +279,16 @@ const SANDBOX_TOOL_KIND: Record<string, "create" | "op"> = {
   agent_run: "create",
   create_machine: "create",
   make_permanent: "create",
+  deploy_machine: "create",
+  redeploy_machine: "create",
+  create_backup: "create",
+  set_machine_runspec: "op",
+  get_machine_runspec: "op",
+  list_machine_releases: "op",
+  rollback_machine: "op",
+  delete_machine_release: "op",
+  list_backups: "op",
+  restore_machine_from_backup: "op",
   list_machines: "op",
   release_machine: "op",
   restore_machine: "op",
@@ -1601,6 +1625,162 @@ How to embed safely (the only reliable rule):
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await restoreMachine(ctx, params.sandboxId);
       return ok(result);
+    })
+  );
+
+  // ─── Releases: making a machine reproducible ────────────────────────────
+  // A box is disposable only if you can rebuild it. These tools are what let a
+  // dead machine come back — and what make "resize" possible (recreate at
+  // another tier) without a host-side resize primitive.
+
+  server.tool(
+    "set_machine_runspec",
+    "Declare HOW to build and run the app on a machine: appDir (required), plus buildCommand/startCommand or a systemd unit, port, and dataPaths (what the daily backup captures). Required before deploy_machine. Merges with the existing runspec. Do NOT put secrets in env — it is stored and baked into every release tarball; use the vault instead.",
+    {
+      sandboxId: z.string().describe("Sandbox ID of the machine"),
+      appDir: z.string().describe("Absolute path where the app lives, e.g. /app"),
+      buildCommand: z.string().optional().describe("e.g. 'npm ci && npm run build'"),
+      startCommand: z.string().optional().describe("Used only when there is no systemd unit"),
+      unit: z.string().optional().describe("systemd unit to restart, e.g. 'myapp'. Preferred over startCommand."),
+      port: z.number().int().min(1).max(65535).optional().describe("Port the app listens on (pair with sandbox_expose_port)"),
+      buildTimeoutSec: z.number().int().min(1).max(3600).optional(),
+      excludes: z.array(z.string()).optional().describe("Extra paths to keep OUT of the release tarball"),
+      dataPaths: z.array(z.string()).optional().describe("Paths the daily backup copies (absolute, or relative to appDir). Without these the machine has NOTHING backed up."),
+      env: z.record(z.string()).optional().describe("Non-secret runtime config only"),
+    },
+    { destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { sandboxId, ...spec } = params;
+      return ok(await setRunspec(ctx, sandboxId, spec as any));
+    })
+  );
+
+  server.tool(
+    "get_machine_runspec",
+    "Read a machine's runspec (how its app is built, started and backed up). Returns null if none is set yet.",
+    { sandboxId: z.string().describe("Sandbox ID of the machine") },
+    { readOnlyHint: true, openWorldHint: false },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      return ok({ runspec: await getRunspec(ctx, params.sandboxId) });
+    })
+  );
+
+  server.tool(
+    "deploy_machine",
+    "Publish the machine's current app code as a versioned RELEASE in durable storage. This is what makes the box recoverable: with a release you can rebuild the machine anywhere (redeploy_machine) or roll back (rollback_machine). Requires a runspec. NOTE: a release captures CODE, not data — data is covered by backups.",
+    {
+      sandboxId: z.string().describe("Sandbox ID of the machine to publish from"),
+      message: z.string().max(200).optional().describe("Note for this release, e.g. 'fix checkout'"),
+    },
+    { destructiveHint: false, idempotentHint: false, openWorldHint: false },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      return ok(await publishRelease(ctx, params.sandboxId, { message: params.message }));
+    })
+  );
+
+  server.tool(
+    "list_machine_releases",
+    "List published releases, newest version first. Omit sandboxId to list every release in the account.",
+    {
+      sandboxId: z.string().optional().describe("Filter to one machine"),
+      limit: z.number().int().min(1).max(100).optional(),
+      cursor: z.string().optional(),
+    },
+    { readOnlyHint: true, openWorldHint: false },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { items, nextCursor } = await listReleases(ctx, params);
+      return ok(paginate(items, { nextCursor }));
+    })
+  );
+
+  server.tool(
+    "rollback_machine",
+    "Put a previous release back on the SAME machine: unpack it (atomically), rebuild and restart. Use after a bad deploy. Data is untouched.",
+    {
+      sandboxId: z.string().describe("Sandbox ID of the machine"),
+      releaseId: z.string().describe("Release to apply (from list_machine_releases)"),
+    },
+    { destructiveHint: true, idempotentHint: true, openWorldHint: false },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      return ok(await applyRelease(ctx, params.sandboxId, params.releaseId));
+    })
+  );
+
+  server.tool(
+    "redeploy_machine",
+    "Build a BRAND NEW machine from a release: provisions a box, unpacks the code, builds and starts it. Two jobs, one path — recovering a machine that died, and CHANGING TIER (there is no in-place resize: you recreate at the new tier). Pass replaceSandboxId to release the old machine once the new one is confirmed running, or you pay for both. The new box starts with NO data — restore a backup after.",
+    {
+      releaseId: z.string().describe("Release to build from"),
+      tier: z.enum(TIER_ORDER as unknown as [string, ...string[]]).optional().describe("Target tier (defaults to the release's original tier). This is how you resize."),
+      name: z.string().max(64).optional(),
+      cpuMode: z.enum(["shared", "reserved"]).optional(),
+      diskAddonsGB: z.number().int().min(0).max(2000).optional(),
+      replaceSandboxId: z.string().optional().describe("Machine this one replaces — released (soft-delete, 7-day grace) only after the new box is running"),
+    },
+    { destructiveHint: false, idempotentHint: false, openWorldHint: false },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      return ok(await recreateFromRelease(ctx, params as Parameters<typeof recreateFromRelease>[1]));
+    })
+  );
+
+  server.tool(
+    "delete_machine_release",
+    "Delete a release and its stored artifact. Refuses if it is the release currently deployed on a live machine.",
+    { releaseId: z.string().describe("Release to delete") },
+    { destructiveHint: true, idempotentHint: true, openWorldHint: false },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      return ok(await deleteRelease(ctx, params.releaseId));
+    })
+  );
+
+  // ─── Backups: the machine's DATA, off-host, included in the price ────────
+
+  server.tool(
+    "list_backups",
+    "List a machine's daily data backups (newest first), with size, consistency level and expiry. Backups run nightly, are kept 7 days, and are included in the machine price.",
+    {
+      sandboxId: z.string().describe("Sandbox ID of the machine"),
+      limit: z.number().int().min(1).max(100).optional(),
+      cursor: z.string().optional(),
+    },
+    { readOnlyHint: true, openWorldHint: false },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { items, nextCursor } = await listBackups(ctx, params as any);
+      return ok(paginate(items, { nextCursor }));
+    })
+  );
+
+  server.tool(
+    "create_backup",
+    "Take a data backup right now instead of waiting for tonight's run. Copies the paths declared in runspec.dataPaths to durable off-host storage. Run this before anything risky.",
+    { sandboxId: z.string().describe("Sandbox ID of the machine") },
+    { destructiveHint: false, idempotentHint: false, openWorldHint: false },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      return ok(await createBackup(ctx, params.sandboxId));
+    })
+  );
+
+  server.tool(
+    "restore_machine_from_backup",
+    "Restore a backup's data into a machine, OVERWRITING what is there. Requires confirm:true. Restoring onto the source machine automatically takes a pre-restore backup first. Pass targetSandboxId to restore into a different box (e.g. one just built with redeploy_machine).",
+    {
+      backupId: z.string().describe("Backup to restore (from list_backups)"),
+      targetSandboxId: z.string().optional().describe("Machine to restore INTO (defaults to the backup's own machine)"),
+      confirm: z.boolean().describe("Must be true — this overwrites data"),
+    },
+    { destructiveHint: true, idempotentHint: false, openWorldHint: false },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      return ok(await restoreFromBackup(ctx, params as Parameters<typeof restoreFromBackup>[1]));
     })
   );
 

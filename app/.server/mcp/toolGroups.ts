@@ -438,9 +438,12 @@ export const SANDBOX_ALLOWLIST = new Set<string>([
 ]);
 
 /**
- * Hosting — always-on machines (sandboxes permanentes). MVP surface:
- * catalog + create/list/get/destroy. resize_machine / add_machine_disk join
- * once the host contract (reserved CPU floor, live resize) lands.
+ * Hosting — always-on machines (sandboxes permanentes): catalog, lifecycle,
+ * releases (reproducibility) and backups (data).
+ *
+ * There is no `resize_machine`: `redeploy_machine` IS the resize, by recreating
+ * the box at another tier from a release — which is also how a dead machine
+ * comes back. `add_machine_disk` still waits on the host contract.
  */
 export const HOSTING_ALLOWLIST = new Set<string>([
   "list_machine_tiers",
@@ -449,6 +452,27 @@ export const HOSTING_ALLOWLIST = new Set<string>([
   "list_machines",
   "release_machine",
   "restore_machine",
+  // Releases: the app code, versioned and recoverable.
+  "set_machine_runspec",
+  "get_machine_runspec",
+  "deploy_machine",
+  "list_machine_releases",
+  "rollback_machine",
+  "redeploy_machine",
+  "delete_machine_release",
+  // Backups: the app data, off-host, included in the price.
+  "list_backups",
+  "create_backup",
+  "restore_machine_from_backup",
+  // Serving it. These also live in the `sandbox` group, but a hosting-only
+  // agent that can provision and deploy a machine yet cannot put a domain on
+  // it is missing the point of hosting — the customer's domain IS the product.
+  "sandbox_expose_port",
+  "sandbox_domain_add",
+  "sandbox_domain_verify",
+  "sandbox_domain_list",
+  "sandbox_domain_remove",
+  "sandbox_logs",
   "grant_access",
   "revoke_access",
   "list_access",

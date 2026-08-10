@@ -255,6 +255,8 @@ model User {
   computeKeys          ComputeKey[]
   sandboxes            Sandbox[]
   sandboxSnapshots     SandboxSnapshot[]
+  machineReleases      MachineRelease[]
+  sandboxBackups       SandboxBackup[]
   fleetAgents          FleetAgent[]
 }
 
@@ -1355,6 +1357,21 @@ model Sandbox {
   // Fork lineage: when this box was booted from a snapshot (clone/fork), the
   // snapshotId it descends from. Null for boxes created from a template.
   parentSnapshotId String?
+  // runspec: how to rebuild and run the customer's app in a FRESH box —
+  // { appDir, buildCommand?, startCommand?, unit?, port?, env?, excludes?,
+  //   dataPaths?, buildTimeoutSec? }. This is what makes a machine reproducible:
+  // the box itself is disposable (Fly/Vercel model), the runspec + a release
+  // artifact are what survive it. Mirrored into <appDir>/easybits.json inside
+  // each release tarball so the artifact is self-describing, but THIS field
+  // wins on conflict.
+  runspec          Json?
+  // Last release deployed onto this box (MachineRelease.releaseId). Null until
+  // the first deploy_machine.
+  currentReleaseId String?
+  // What the daily backup captures: "data" (runspec.dataPaths — the default,
+  // matching Fly, which snapshots volumes and NOT the rebuildable rootfs) or
+  // "none" (owner opted out). The rootfs is reconstructible from `template`.
+  backupScope      String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -1385,6 +1402,72 @@ model SandboxSnapshot {
   updatedAt       DateTime @updatedAt
 
   @@index([ownerId])
+}
+
+// A versioned, immutable tarball of the customer's APP CODE, living in object
+// storage (Tigris) — not on the host. This is what makes a permanent machine
+// reproducible: Fly/Vercel/Netlify can treat the disk as disposable because a
+// deploy rebuilds it from an image; here the app is written into the box by an
+// agent, so without a release artifact a dead box loses the app itself.
+//
+// Release = CODE. It is NOT a backup: a box recreated from a release starts
+// with no data. Data lives in SandboxBackup.
+model MachineRelease {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  ownerId    String   @db.ObjectId
+  owner      User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  releaseId  String   @unique // "rel_…"
+  sandboxId  String   // box that published it (origin — a release outlives it)
+  version    Int      // monotonic per sandboxId (1,2,3…)
+  storageKey String   // releases/<ownerId>/<sandboxId>/<releaseId>.tar.gz
+  sizeBytes  BigInt   @default(0)
+  sha256     String?
+  runspec    Json?    // runspec frozen at publish time
+  template   String?
+  tier       String?
+  message    String?  // free-form note from the agent ("fix checkout")
+  // pending → available (only after the uploaded object is verified) | failed.
+  // NEVER mark available without confirming the stored object's size matches.
+  status     String   @default("pending")
+  error      String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([ownerId])
+  @@index([sandboxId, version])
+}
+
+// A daily off-host copy of a permanent machine's DATA (runspec.dataPaths), kept
+// 7 days and included in the machine price — same deal Fly gives on volumes.
+//
+// Why off-host matters: the host's own snapshots (internal/fc/snapshot.go) sit
+// on the same NVMe as the VM they came from, and the host is a single box. A
+// copy that dies with the machine it protects is not a backup.
+model SandboxBackup {
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  ownerId     String    @db.ObjectId
+  owner       User      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  sandboxId   String
+  key         String    // backups/machines/<sandboxId>/<stamp>.tar.gz
+  stamp       String    // YYYY-MM-DD — one backup per machine per day
+  scope       String    @default("data") // data | full
+  // How consistent the copy actually is. "crash" = tarred while the app was
+  // writing (stage 1); "fsfreeze"/"app" once the host-side path lands. Recorded
+  // honestly — a backup that overstates itself is worse than none.
+  consistency String    @default("crash")
+  bytes       BigInt    @default(0)
+  sha256      String?
+  manifest    Json?     // paths captured + per-path byte counts
+  status      String    @default("uploading") // uploading | available | failed | expired
+  error       String?
+  verifiedAt  DateTime? // last successful restore drill
+  expiresAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([sandboxId, stamp])
+  @@index([ownerId])
+  @@index([sandboxId, createdAt])
 }
 
 // Tracks an EPHEMERAL livekit-svc call box for the idle reaper (reapIdleStudios).

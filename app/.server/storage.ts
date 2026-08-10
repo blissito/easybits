@@ -48,6 +48,9 @@ export type StorageClient = {
   getReadUrl(key: string, expiresIn?: number): Promise<string>;
   deleteObject(key: string): Promise<void>;
   putObject(key: string, body: Buffer, contentType: string): Promise<void>;
+  /** Size of a stored object, or null if it isn't there. Used to VERIFY an
+   *  upload actually landed before anything is marked available. */
+  headObject(key: string): Promise<{ size: number } | null>;
   listObjects(): Promise<{ key: string; lastModified?: Date }[]>;
   createMultipart(key: string): Promise<{ uploadId: string }>;
   getPutPartUrl(key: string, uploadId: string, partNumber: number): Promise<string>;
@@ -122,6 +125,22 @@ function buildStorageClient(s3: S3Client, bucket: string, prefix = DEFAULT_PREFI
       await s3.send(
         new DeleteObjectCommand({ Bucket: bucket, Key: prefix + key })
       );
+    },
+
+    async headObject(key) {
+      try {
+        const res = await s3.send(
+          new HeadObjectCommand({ Bucket: bucket, Key: prefix + key })
+        );
+        return { size: res.ContentLength ?? 0 };
+      } catch (e: any) {
+        // 404/NotFound => the object isn't there. Anything else is a real error
+        // and must propagate: silently reporting "missing" on a transient S3
+        // failure would make a good upload look failed.
+        const status = e?.$metadata?.httpStatusCode;
+        if (status === 404 || e?.name === "NotFound" || e?.name === "NoSuchKey") return null;
+        throw e;
+      }
     },
 
     async putObject(key, body: Buffer, contentType: string) {

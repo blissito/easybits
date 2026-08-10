@@ -44,6 +44,7 @@ import {
 import { getUserPlan, isPaidPlan, type PlanKey } from "../../lib/plans";
 import type { SandboxTemplate } from "../sandbox/schemas";
 import { can, delegatedAccountIds, SCOPES } from "../delegation";
+import { backupMachine, extendBackupsForDeletedMachine } from "./machineBackupOperations";
 
 // Host clamp today is 8 vCPU; performance-4x (16) is by-request (human provisions).
 const BIG_TIERS_ENABLED = process.env.HOSTING_BIG_TIERS_ENABLED === "1";
@@ -442,6 +443,12 @@ export async function releasePermanent(ctx: AuthContext, sandboxId: string): Pro
   if (row.stripeSubItemId) {
     await removeMachineSubscriptionItem(row.stripeSubItemId).catch(() => undefined);
   }
+  // Last-chance backup BEFORE the box goes to sleep: the 7-day grace protects
+  // the VM, this protects the data if the grace lapses (or the host dies during
+  // it). Best-effort — a machine with no dataPaths simply has nothing to copy.
+  await backupMachine(sandboxId, { force: true }).catch((e) => {
+    console.warn(`releasePermanent: final backup of ${sandboxId} failed:`, e?.message ?? e);
+  });
   // Suspend (snapshot + free CPU/RAM) instead of destroy → data survives for the
   // 7-day grace. Best-effort: a lost/error box just gets marked.
   await suspendSandbox(ctx, sandboxId).catch(() => undefined);
@@ -493,6 +500,9 @@ export async function purgeExpiredMachines(): Promise<{ purged: number; ids: str
     await db.sandbox
       .update({ where: { sandboxId: m.sandboxId }, data: { status: "destroyed", deletionScheduledAt: null } })
       .catch(() => undefined);
+    // The VM is gone; hold its last backup well past it. "I deleted it by
+    // mistake" tends to surface after the grace window, not during it.
+    await extendBackupsForDeletedMachine(m.sandboxId).catch(() => undefined);
     ids.push(m.sandboxId);
   }
   return { purged: ids.length, ids };

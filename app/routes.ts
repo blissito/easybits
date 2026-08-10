@@ -177,6 +177,8 @@ export default [
   route("api/cron/purge-files", "routes/api/cron/purge-files.ts"),
   route("api/cron/purge-machines", "routes/api/cron/purge-machines.ts"),
   route("api/cron/backup-agents", "routes/api/cron/backup-agents.ts"),
+  route("api/cron/backup-machines", "routes/api/cron/backup-machines.ts"),
+  route("api/cron/prune-backups", "routes/api/cron/prune-backups.ts"),
   route("api/cron/purge-certs", "routes/api/cron/purge-certs.ts"),
   route("api/cron/purge-keys", "routes/api/cron/purge-keys.ts"),
   route("api/cron/reap-embed-agents", "routes/api/cron/reap-embed-agents.ts"),
@@ -265,6 +267,14 @@ export default [
     route("machines/tiers", "routes/api/v2/machines-tiers.ts"),
     route("machines", "routes/api/v2/machines-collection.ts"),
     route("machines/:id", "routes/api/v2/machine.ts"),
+    // Releases (código reproducible) + backups (datos) de una máquina.
+    route("machines/:id/runspec", "routes/api/v2/machine-runspec.ts"),
+    route("machines/:id/releases", "routes/api/v2/machine-releases.ts"),
+    route("machines/:id/rollback", "routes/api/v2/machine-rollback.ts"),
+    route("machines/:id/backups", "routes/api/v2/machine-backups.ts"),
+    // Colección aparte a propósito: recrear desde un release debe funcionar
+    // cuando la máquina original YA NO EXISTE.
+    route("machine-releases/:id/redeploy", "routes/api/v2/machine-release-redeploy.ts"),
     // eb.compute — gateway OpenAI-compatible (LLM managed dentro de sandboxes)
     route("compute/v1/chat/completions", "routes/api/v2/compute-chat.ts"),
     // eb.llm — proxy OpenAI→DeepSeek + balance + recargas

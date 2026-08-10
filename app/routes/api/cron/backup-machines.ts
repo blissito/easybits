@@ -1,0 +1,32 @@
+import { data } from "react-router";
+import {
+  backupPermanentMachines,
+  staleBackupMachines,
+} from "~/.server/core/machineBackupOperations";
+import type { Route } from "./+types/backup-machines";
+
+// Daily off-host backup of permanent machines' DATA to Tigris (7-day retention,
+// included in the machine price — the same deal Fly gives on volumes). Same auth
+// pattern as backup-agents: Authorization: Bearer ${CRON_SECRET}.
+//
+// Reports stale machines alongside the run: a backup that quietly stopped
+// happening looks exactly like one that is working until you need it.
+export const loader = async ({ request }: Route.LoaderArgs) => {
+  const expected = process.env.CRON_SECRET;
+  const authHeader = request.headers.get("Authorization");
+  const secret = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : null;
+
+  if (!expected || secret !== expected) {
+    throw data({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const result = await backupPermanentMachines();
+  const stale = await staleBackupMachines();
+  if (stale.length) {
+    console.error(
+      `[backup-machines] ${stale.length} machine(s) without a fresh backup:`,
+      stale.map((s) => s.sandboxId).join(", ")
+    );
+  }
+  return data({ ...result, stale });
+};

@@ -1,0 +1,21 @@
+name: Backup permanent machines
+on:
+  schedule:
+    - cron: '0 3 * * *'   # daily at 03:00 UTC — staggered off backup-agents (02:00)
+  workflow_dispatch: {}
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      # Backups run sequentially server-side (one host, shared I/O), so give the
+      # request room rather than letting a slow night look like a failure.
+      - name: Back up machine data to Tigris
+        run: |
+          curl -fsS --max-time 1800 -X GET \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            https://easybits.cloud/api/cron/backup-machines
+      - name: Rotate expired backups
+        run: |
+          curl -fsS --max-time 600 -X GET \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            https://easybits.cloud/api/cron/prune-backups
