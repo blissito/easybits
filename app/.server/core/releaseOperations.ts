@@ -34,6 +34,7 @@ import {
   getSandbox,
   runtimeControl,
   shQuote,
+  waitUntilRunning,
   writeFile,
 } from "./sandboxOperations";
 import { createPermanent, releasePermanent } from "./machineOperations";
@@ -470,14 +471,30 @@ async function unpackInto(
   const dir = appDir.replace(/\/$/, "");
   const staging = `${dir}.new-${stamp}`;
   const old = `${dir}.old-${stamp}`;
+  // appDir is usually the machine's data volume (`diskMb` mounts an ext4 at
+  // /app), and you cannot rename a mount point — `mv /app /app.old` fails with
+  // EBUSY. So: swap the DIRECTORY when it is a plain dir, and swap its CONTENTS
+  // when it is a mount. Both paths stage first and only touch the live tree
+  // once the download and untar succeeded.
   const script = [
     "set -e",
     `rm -rf ${shQuote(staging)} && mkdir -p ${shQuote(staging)}`,
     `curl -fsSL -o ${shQuote(`${TMPDIR}/${stamp}.tgz`)} "$(cat ${shQuote(urlFile)})"`,
     `tar xzf ${shQuote(`${TMPDIR}/${stamp}.tgz`)} -C ${shQuote(staging)}`,
-    `if [ -d ${shQuote(dir)} ]; then mv ${shQuote(dir)} ${shQuote(old)}; fi`,
-    `mv ${shQuote(staging)} ${shQuote(dir)}`,
-    `rm -rf ${shQuote(old)} ${shQuote(`${TMPDIR}/${stamp}.tgz`)} ${shQuote(urlFile)}`,
+    `if mountpoint -q ${shQuote(dir)} 2>/dev/null || ! [ -d ${shQuote(dir)} ]; then`,
+    // Mount point (or missing): replace what's inside, keeping the mount.
+    // lost+found belongs to the filesystem, not to the app — never delete it.
+    `  mkdir -p ${shQuote(dir)}`,
+    `  find ${shQuote(dir)} -mindepth 1 -maxdepth 1 ! -name 'lost+found' -exec rm -rf {} +`,
+    `  cp -a ${shQuote(staging)}/. ${shQuote(dir)}/`,
+    `  rm -rf ${shQuote(staging)}`,
+    "else",
+    // Plain directory: atomic rename, the old tree survives until the swap.
+    `  mv ${shQuote(dir)} ${shQuote(old)}`,
+    `  mv ${shQuote(staging)} ${shQuote(dir)}`,
+    `  rm -rf ${shQuote(old)}`,
+    "fi",
+    `rm -f ${shQuote(`${TMPDIR}/${stamp}.tgz`)} ${shQuote(urlFile)}`,
     "echo UNPACK_OK",
   ].join("\n");
   const res = await execSandboxRaw(ownerId, sandboxId, script, 300);
@@ -722,6 +739,18 @@ export async function launchApp(
 
   try {
     const owner = await effectiveOwnerId(ctx, sandboxId);
+    // A freshly provisioned box reports "provisioning" for a moment, and the
+    // host answers 503 "sandbox not running" to anything sent meanwhile. The
+    // webhook path hits this every time: the customer pays and the launch dies
+    // on a race. Wait for it before touching the box.
+    await waitUntilRunning(ctx, sandboxId, { timeoutMs: 90_000 }).catch(() => {
+      const e: any = new Error(
+        `Machine ${sandboxId} did not reach "running" in time; nothing was deployed onto it.`
+      );
+      e.code = "MachineNotRunning";
+      e.status = 503;
+      throw e;
+    });
 
     // A runspec (and therefore a release, and therefore recoverability) needs a
     // Sandbox row to live on, and only PERMANENT machines have one. Launching
