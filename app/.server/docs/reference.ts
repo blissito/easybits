@@ -481,7 +481,8 @@ Configure via MCP tool \`set_ai_key\` or dashboard. Supports ANTHROPIC and OPENA
 |--------|-------------|
 | \`machines.tiers()\` | Catálogo de tiers + precio del disco add-on |
 | \`machines.list()\` | Tus máquinas permanentes |
-| \`machines.create({ tier })\` | Provisiona una máquina always-on |
+| \`machines.launch({ repo \\| archiveUrl \\| sandboxId, domain? })\` | **Una app en producción en UNA llamada** (el \`fly launch\` de EasyBits). Empieza por aquí. |
+| \`machines.create({ tier })\` | Provisiona una máquina always-on (caja vacía) |
 | \`machines.setRunspec(id, spec)\` | Declara appDir/build/start/**dataPaths** — obligatorio antes del primer deploy |
 | \`machines.runspec(id)\` | Lee el runspec |
 | \`machines.deploy(id, { message? })\` | Publica el código actual como release |
@@ -497,19 +498,29 @@ Configure via MCP tool \`set_ai_key\` or dashboard. Supports ANTHROPIC and OPENA
 | \`sb.makePermanent(tier)\` | Promueve un sandbox efímero (mismo sandboxId) |
 | \`sb.release()\` | Libera la máquina (corta cobro, 7 días de gracia) |
 
-Receta completa de una app en producción con su dominio:
+Una app en producción, con dominio, en una llamada:
 \`\`\`ts
-const sb = await eb.machines.create({ tier: "micro" });
-await sb.exec("cd /app && npm ci && npm run build");
-await eb.machines.setRunspec(sb.sandboxId, {
-  appDir: "/app", buildCommand: "npm ci && npm run build",
-  startCommand: "npm start", port: 3000, dataPaths: ["data"],
+const app = await eb.machines.launch({
+  repo: "https://github.com/cliente/tienda",   // o archiveUrl, o sandboxId
+  tier: "micro",
+  port: 3000,
+  dataPaths: ["data", "uploads"],              // sin esto NO hay backup
+  domain: "tienda.com",
 });
-await eb.machines.deploy(sb.sandboxId, { message: "v1" }); // sin esto la caja NO es recuperable
-await sb.exposePort(3000);
-const { dns } = await sb.addDomain("tienda.com", 3000);    // dale ESE registro al cliente
-await sb.verifyDomain("tienda.com");                        // cuando propague
+console.log(app.url);          // ya sirve por HTTPS
+console.log(app.domain?.dns);  // el registro EXACTO que el cliente debe crear
+console.log(app.releaseId);    // ya es recuperable
 \`\`\`
+
+¿Sin repo, subiendo desde su compu? Empaqueta la carpeta, súbela y pasa la URL:
+\`\`\`ts
+// tar czf app.tar.gz -C ./mi-tienda .
+const up = await eb.uploadFile({ name: "app.tar.gz", access: "private" });
+await fetch(up.uploadUrl, { method: "PUT", body: fs.readFileSync("app.tar.gz") });
+const app = await eb.machines.launch({ archiveUrl: up.url, domain: "tienda.com" });
+\`\`\`
+
+Si prefieres el control paso a paso (o ya tienes la caja armada), el camino largo sigue disponible: \`create\` → \`exec\` → \`setRunspec\` → \`deploy\` → \`exposePort\` → \`addDomain\`. Solo no olvides el \`deploy\`.
 `,
 
   agents: `## Agentes & Sandboxes
@@ -764,6 +775,23 @@ MCP: \`list_machines()\` · SDK: \`eb.machines.list()\` — tus sandboxes perman
 \`DELETE /machines/:sandboxId\` · MCP: \`release_machine({ sandboxId })\` · SDK: \`sb.release()\` — quita el cobro (prorrateado) y destruye la VM. **Destructiva**, idempotente.
 
 El plan es el gate de acceso; cada sandbox factura aparte. Si tu plan se cancela, tus sandboxes se suspenden.
+
+### launch_app — una app en producción en UNA llamada
+El equivalente a \`fly launch\`. Provisiona la máquina, mete el código, buildea, arranca, expone URL pública HTTPS, **publica el release de recuperación** y opcionalmente pega el dominio del cliente. Devuelve \`{ url, releaseId, domain.dns }\`.
+
+**Usa esto en vez de encadenar create + deploy + expose + domain a mano.** Hecho a mano, el paso que se salta es el release — y una máquina sin release no se puede reconstruir si muere.
+
+Fuente: exactamente UNA de las tres.
+- \`repo\` — git clone. El camino reproducible.
+- \`archiveUrl\` — URL de un \`.tar.gz\`/\`.zip\` de la app; para cuando el cliente la sube **desde su compu** y todavía no tiene repo. Acepta zip y tarball, y aplana el folder anidado que suele traer un zip.
+- \`sandboxId\` — el agente ya escribió la app dentro de esa caja; haz el resto.
+
+MCP: \`launch_app({ repo | archiveUrl | sandboxId, tier?, port?, dataPaths?, domain? })\`
+REST: \`POST /machines/launch\` · SDK: \`eb.machines.launch({ … })\`
+
+Defaults: \`tier: "micro"\` (nano son 256MB — NO aguanta un build de Node), \`appDir: "/app"\`, \`buildCommand: "npm ci && npm run build"\`, \`startCommand: "npm start"\`, \`port: 3000\`.
+
+Si el build falla, la máquina que creó \`launch_app\` se libera sola: no te deja pagando una caja rota. Una caja que tú pasaste por \`sandboxId\` NUNCA se toca.
 
 ### Releases — hacer la caja reconstruible
 Fly/Vercel tratan el disco como desechable porque el deploy lo reconstruye desde una imagen. Aquí la app se escribe DENTRO de la caja, así que sin un release una caja muerta se lleva la app, no solo los datos. Un **release** es un tarball versionado del código en almacenamiento durable + un **runspec** que dice cómo construirlo y arrancarlo.

@@ -145,6 +145,7 @@ describe("registry smoke — createMcpServer('all')", () => {
     // customer needs to rebuild a box.
     const tools = getRegisteredTools(createMcpServer(["hosting"]));
     for (const name of [
+      "launch_app",
       "set_machine_runspec",
       "get_machine_runspec",
       "deploy_machine",

@@ -1816,6 +1816,25 @@ export class EasybitsClient {
         return sbx;
       },
 
+      /**
+       * An app in production in ONE call — the `fly launch` of EasyBits:
+       * provisions the machine, gets the code in, builds it, starts it,
+       * exposes a public HTTPS URL, publishes a recovery release and
+       * optionally attaches a custom domain.
+       *
+       * Prefer this over wiring create + deploy + expose + domain by hand: the
+       * step that gets skipped is the release, and a machine without one
+       * cannot be rebuilt if it dies.
+       *
+       *   const app = await eb.machines.launch({ repo: "https://github.com/…", domain: "tienda.com" });
+       *   console.log(app.url, app.domain?.dns);
+       *
+       * Source is exactly one of: repo (git), archiveUrl (.tar.gz/.zip — e.g.
+       * uploaded from a laptop), or sandboxId (app already inside a box).
+       */
+      launch: (params: LaunchParams): Promise<LaunchResult> =>
+        req("/machines/launch", { method: "POST", body: JSON.stringify(params) }),
+
       // ── Releases: the app code, versioned and recoverable ──
       //
       // A machine is disposable only if you can rebuild it. Fly/Vercel get that
@@ -2557,6 +2576,48 @@ export interface Runspec {
   dataPaths?: string[];
   /** Non-secret runtime config only — it is stored and baked into every release. */
   env?: Record<string, string>;
+}
+
+/** Input for `eb.machines.launch()`. Exactly one source: repo | archiveUrl | sandboxId. */
+export interface LaunchParams {
+  /** Git URL to clone — the reproducible path. */
+  repo?: string;
+  branch?: string;
+  /** URL of a .tar.gz/.zip of the app, e.g. uploaded from the customer's computer. */
+  archiveUrl?: string;
+  /** Existing machine where the app was ALREADY written; launch what is in it. */
+  sandboxId?: string;
+  /** Tier for the new machine. Default "micro" — nano's 256MB won't survive a Node build. */
+  tier?: string;
+  name?: string;
+  template?: string;
+  /** Default "/app". */
+  appDir?: string;
+  /** Default "npm ci && npm run build". */
+  buildCommand?: string;
+  /** Default "npm start" when there is no systemd unit. */
+  startCommand?: string;
+  unit?: string;
+  /** Default 3000. */
+  port?: number;
+  /** What the nightly backup copies. Without this the machine has NOTHING backed up. */
+  dataPaths?: string[];
+  env?: Record<string, string>;
+  /** Custom domain, e.g. "tienda.com". The result's domain.dns is the record to create. */
+  domain?: string;
+  message?: string;
+}
+
+export interface LaunchResult {
+  sandboxId: string;
+  /** Public HTTPS URL serving the app right away. */
+  url: string;
+  releaseId: string;
+  version: number;
+  exitCode: number;
+  buildOutput?: string;
+  /** Present when `domain` was requested. `dns` is the exact record to create. */
+  domain?: { domain: string; url: string; dns: unknown };
 }
 
 /** A versioned tarball of the app CODE in durable storage. Not a backup: no data. */

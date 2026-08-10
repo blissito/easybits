@@ -148,6 +148,7 @@ import {
   restoreMachine,
 } from "../core/machineOperations";
 import {
+  launchApp,
   getRunspec,
   setRunspec,
   publishRelease,
@@ -279,6 +280,7 @@ const SANDBOX_TOOL_KIND: Record<string, "create" | "op"> = {
   agent_run: "create",
   create_machine: "create",
   make_permanent: "create",
+  launch_app: "create",
   deploy_machine: "create",
   redeploy_machine: "create",
   create_backup: "create",
@@ -1632,6 +1634,34 @@ How to embed safely (the only reliable rule):
   // A box is disposable only if you can rebuild it. These tools are what let a
   // dead machine come back — and what make "resize" possible (recreate at
   // another tier) without a host-side resize primitive.
+
+  server.tool(
+    "launch_app",
+    "Put an app in production in ONE call — the `fly launch` of EasyBits: provisions the machine, gets the code in, builds, starts it, exposes a public HTTPS URL, publishes a recovery release and (optionally) attaches the customer's domain. Returns { url, releaseId, domain.dns }. PREFER THIS over wiring create_machine + deploy_machine + expose + domain by hand: doing it manually, the step that gets skipped is the release, and a machine without a release cannot be rebuilt if it dies. Pass exactly ONE source.",
+    {
+      repo: z.string().optional().describe("Git URL to clone (the reproducible path)"),
+      branch: z.string().optional(),
+      archiveUrl: z.string().optional().describe("URL of a .tar.gz/.zip of the app — e.g. uploaded from the customer's computer"),
+      sandboxId: z.string().optional().describe("Existing machine where the app was ALREADY written; launch what is in it"),
+      tier: z.enum(TIER_ORDER as unknown as [string, ...string[]]).optional().describe("Tier for the new machine (default micro; nano's 256MB will not survive a Node build)"),
+      name: z.string().max(64).optional(),
+      template: z.string().optional(),
+      appDir: z.string().optional().describe("Where the app lives (default /app)"),
+      buildCommand: z.string().optional().describe("Default 'npm ci && npm run build'"),
+      startCommand: z.string().optional().describe("Default 'npm start' when there is no systemd unit"),
+      unit: z.string().optional(),
+      port: z.number().int().min(1).max(65535).optional().describe("Default 3000"),
+      dataPaths: z.array(z.string()).optional().describe("What the nightly backup copies. Without this the machine has NOTHING backed up."),
+      env: z.record(z.string()).optional().describe("Non-secret runtime config only"),
+      domain: z.string().optional().describe("Custom domain to attach, e.g. 'tienda.com' or 'www.tienda.com'. The response's domain.dns is the exact record the customer must create."),
+      message: z.string().max(200).optional(),
+    },
+    { destructiveHint: false, idempotentHint: false, openWorldHint: false },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      return ok(await launchApp(ctx, params as Parameters<typeof launchApp>[1]));
+    })
+  );
 
   server.tool(
     "set_machine_runspec",

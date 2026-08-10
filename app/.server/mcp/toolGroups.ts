@@ -110,8 +110,8 @@ export const TOOL_GROUPS: ToolGroup[] = [
     key: "hosting",
     label: "Hosting",
     description:
-      "Sandboxes permanentes (VM always-on) sobre Firecracker: tiers fijos en MXN/mes (nano…performance), crear/listar/destruir, delegar acceso de tu cuenta a otra (grant/revoke/list_access) para co-administración, descubrir templates+env (list_machine_templates) y admin passthrough al box (sandbox_admin: pairing WhatsApp, CLAUDE.md). El plan da acceso; cada sandbox factura flat al mes.",
-    toolCount: 10,
+      "Hosting de apps sobre microVMs Firecracker, always-on, tiers fijos en MXN/mes (nano…performance). launch_app pone una app en producción en UNA llamada (caja + código + build + URL pública + release + dominio con TLS) — el equivalente a `fly launch`. Además: releases con rollback y redeploy (que es también el cambio de tier), backups diarios de datos incluidos con 7 días de retención, dominios propios, logs, y delegación de acceso para co-administrar. El plan da acceso; cada máquina factura flat al mes.",
+    toolCount: 28,
   },
   {
     key: "payments",
@@ -452,6 +452,8 @@ export const HOSTING_ALLOWLIST = new Set<string>([
   "list_machines",
   "release_machine",
   "restore_machine",
+  // One-shot: box → code → build → serve → release → domain.
+  "launch_app",
   // Releases: the app code, versioned and recoverable.
   "set_machine_runspec",
   "get_machine_runspec",

@@ -27,8 +27,10 @@ import type { AuthContext } from "../apiAuth";
 import { requireScope } from "../apiAuth";
 import { db } from "../db";
 import {
+  addSandboxDomain,
   effectiveOwnerId,
   execSandboxRaw,
+  exposeSandboxPort,
   getSandbox,
   runtimeControl,
   shQuote,
@@ -626,6 +628,201 @@ export async function recreateFromRelease(
     // The box exists and is billed; leaving it orphaned after a failed deploy
     // would charge for nothing. Release it (soft-delete, still restorable).
     await releasePermanent(ctx, created.sandboxId).catch(() => {});
+    throw err;
+  }
+}
+
+// --- launch: the whole thing in one call ------------------------------------
+
+export interface LaunchResult {
+  sandboxId: string;
+  url: string;
+  releaseId: string;
+  version: number;
+  exitCode: number;
+  buildOutput?: string;
+  domain?: { domain: string; url: string; dns: unknown };
+}
+
+/**
+ * Put an app in production in ONE call: box → code → runspec → build → start →
+ * public URL → release → (optional) custom domain.
+ *
+ * Why this exists: doing it by hand is six chained calls, and the one an agent
+ * skips is `publishRelease` — which is precisely the step that makes the
+ * machine recoverable. A box that serves traffic but has no release is a box
+ * that dies for good. Same reason `fly launch` is one command.
+ *
+ * Three sources, because not every customer starts from a repo:
+ *  - `repo`: clone it (the reproducible path — like `fly launch`).
+ *  - `archiveUrl`: a .tar.gz/.zip of the app, e.g. uploaded straight from the
+ *    customer's laptop (what `fly deploy` does with your local directory).
+ *  - `sandboxId`: the agent already wrote the app into that box; do the rest.
+ * Exactly one of them.
+ */
+export async function launchApp(
+  ctx: AuthContext,
+  params: {
+    repo?: string;
+    branch?: string;
+    archiveUrl?: string;
+    sandboxId?: string;
+    tier?: string;
+    name?: string;
+    template?: string;
+    appDir?: string;
+    buildCommand?: string;
+    startCommand?: string;
+    unit?: string;
+    port?: number;
+    dataPaths?: string[];
+    env?: Record<string, string>;
+    domain?: string;
+    message?: string;
+  }
+): Promise<LaunchResult> {
+  requireScope(ctx, "WRITE");
+  const sources = [params.repo, params.archiveUrl, params.sandboxId].filter(Boolean);
+  if (sources.length !== 1) {
+    const e: any = new Error(
+      sources.length === 0
+        ? "Pass exactly one source: `repo` (git clone), `archiveUrl` (.tar.gz/.zip of the app), or `sandboxId` (app already inside an existing box)."
+        : "Pass exactly ONE of `repo`, `archiveUrl` or `sandboxId`."
+    );
+    e.code = sources.length === 0 ? "LaunchSourceMissing" : "LaunchSourceAmbiguous";
+    throw e;
+  }
+  const needsNewBox = Boolean(params.repo || params.archiveUrl);
+
+  const spec = runspecSchema.parse({
+    appDir: params.appDir ?? "/app",
+    buildCommand: params.buildCommand ?? "npm ci && npm run build",
+    startCommand: params.startCommand,
+    unit: params.unit,
+    port: params.port ?? 3000,
+    dataPaths: params.dataPaths,
+    env: params.env,
+  });
+  // Neither a unit nor a start command means nothing would actually serve.
+  if (!spec.unit && !spec.startCommand) spec.startCommand = "npm start";
+
+  // Only a box WE created gets torn down on failure — never the caller's.
+  let sandboxId = params.sandboxId!;
+  let createdHere = false;
+  if (needsNewBox) {
+    const created = await createPermanent(ctx, {
+      tier: params.tier ?? "micro",
+      template: (params.template as any) ?? undefined,
+      name: params.name,
+      env: spec.env,
+    });
+    sandboxId = created.sandboxId;
+    createdHere = true;
+  }
+
+  try {
+    const owner = await effectiveOwnerId(ctx, sandboxId);
+
+    if (params.repo) {
+      const branch = params.branch ? `-b ${shQuote(params.branch)} ` : "";
+      const res = await execSandboxRaw(
+        owner,
+        sandboxId,
+        [
+          "set -e",
+          "command -v git >/dev/null || (apt-get update -qq && apt-get install -y -qq git)",
+          `rm -rf ${shQuote(spec.appDir)}`,
+          `git clone --depth 1 ${branch}${shQuote(params.repo)} ${shQuote(spec.appDir)}`,
+          "echo CLONE_OK",
+        ].join("\n"),
+        300
+      );
+      if (!(res.stdout || "").includes("CLONE_OK")) {
+        throw new Error(
+          `git clone failed (exit ${res.exitCode}): ${(res.stderr || res.stdout || "").slice(-600)}`
+        );
+      }
+    }
+
+    if (params.archiveUrl) {
+      // The URL may be presigned, so it is read from a file rather than sitting
+      // on a command line. Zip and tarball are both accepted because "what the
+      // customer had on their laptop" is not something we get to dictate.
+      const tag = nanoid(8);
+      const urlFile = `${TMPDIR}/.eb-src-${tag}.url`;
+      const archive = `${TMPDIR}/src-${tag}`;
+      await writeFile(ctx, sandboxId, { path: urlFile, content: params.archiveUrl });
+      const res = await execSandboxRaw(
+        owner,
+        sandboxId,
+        [
+          "set -e",
+          `rm -rf ${shQuote(spec.appDir)} && mkdir -p ${shQuote(spec.appDir)}`,
+          `curl -fsSL -o ${shQuote(archive)} "$(cat ${shQuote(urlFile)})"`,
+          `if head -c4 ${shQuote(archive)} | grep -q PK; then`,
+          `  command -v unzip >/dev/null || (apt-get update -qq && apt-get install -y -qq unzip)`,
+          `  unzip -q ${shQuote(archive)} -d ${shQuote(spec.appDir)}`,
+          `else tar xzf ${shQuote(archive)} -C ${shQuote(spec.appDir)}; fi`,
+          // A zip/tar of a folder usually nests everything one level down; flatten
+          // it so appDir is the app, not a directory containing the app.
+          `cd ${shQuote(spec.appDir)}`,
+          `if [ "$(ls -A | wc -l)" = "1" ] && [ -d "$(ls -A)" ]; then inner="$(ls -A)"; mv "$inner"/* "$inner"/.[!.]* . 2>/dev/null || true; rmdir "$inner" 2>/dev/null || true; fi`,
+          `rm -f ${shQuote(archive)} ${shQuote(urlFile)}`,
+          "echo UNPACK_SRC_OK",
+        ].join("\n"),
+        300
+      );
+      if (!(res.stdout || "").includes("UNPACK_SRC_OK")) {
+        await execSandboxRaw(owner, sandboxId, `rm -f ${shQuote(archive)} ${shQuote(urlFile)}`, 30).catch(
+          () => {}
+        );
+        throw new Error(
+          redact(
+            `Could not unpack the app archive (exit ${res.exitCode}): ${(res.stderr || res.stdout || "").slice(-600)}`
+          )
+        );
+      }
+    }
+
+    await setRunspec(ctx, sandboxId, spec);
+    const started = await buildAndStart(ctx, sandboxId, owner, spec);
+    if (started.exitCode !== 0) {
+      const e: any = new Error(
+        `Build/start failed (exit ${started.exitCode}). Output: ${(started.buildOutput ?? started.startOutput ?? "").slice(-1200)}`
+      );
+      e.code = "LaunchBuildFailed";
+      throw e;
+    }
+
+    const exposed = await exposeSandboxPort(ctx, sandboxId, spec.port!);
+
+    // Publish AFTER it is confirmed building and serving: a release should
+    // represent a state that actually worked, not whatever happened to be on
+    // disk. This is the step that makes the box recoverable, so it is not
+    // optional and not the caller's job to remember.
+    const release = await publishRelease(ctx, sandboxId, {
+      message:
+        params.message ??
+        (params.repo ? `launch ${params.repo}` : params.archiveUrl ? "launch (upload)" : "launch"),
+    });
+
+    let domain: LaunchResult["domain"];
+    if (params.domain) {
+      const d = await addSandboxDomain(ctx, sandboxId, params.domain, spec.port!);
+      domain = { domain: d.domain, url: d.url, dns: (d as any).dns };
+    }
+
+    return {
+      sandboxId,
+      url: exposed.url,
+      releaseId: release.releaseId,
+      version: release.version,
+      exitCode: 0,
+      buildOutput: started.buildOutput,
+      domain,
+    };
+  } catch (err) {
+    if (createdHere) await releasePermanent(ctx, sandboxId).catch(() => {});
     throw err;
   }
 }

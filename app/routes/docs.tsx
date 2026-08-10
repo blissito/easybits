@@ -1837,7 +1837,54 @@ console.log(status.result);  // resultado final del agente`} />
               Precios MXN/mes, NVMe, sin cobro de tráfico. Disco add-on: <strong>+100GB NVMe = $99/mes</strong> (apilable). CPU <strong>reserved</strong> (piso garantizado por cgroup) solo desde <code className="bg-gray-100 px-1 rounded">focus</code>. Para correr una app 24/7 (migrar desde Fly/Render) empieza en <code className="bg-gray-100 px-1 rounded">micro</code>; <code className="bg-gray-100 px-1 rounded">nano</code> (256MB) da para un binario estático o un side-project, no para un build de Node.
             </p>
 
-            <h3 className="text-lg font-bold mb-3">Crear un sandbox permanente</h3>
+            <h3 className="text-lg font-bold mb-3">Tu app en producción en una sola llamada</h3>
+            <p className="text-gray-600 text-sm mb-3">
+              <code className="bg-gray-100 px-1 rounded">launch_app</code> es el <code className="bg-gray-100 px-1 rounded">fly launch</code> de EasyBits: provisiona la máquina, mete el código, lo buildea, lo arranca, te da una URL HTTPS pública, <strong>publica el release de recuperación</strong> y, si le pasas un dominio, lo conecta con TLS. Te devuelve <code className="bg-gray-100 px-1 rounded">{`{ url, releaseId, domain.dns }`}</code>.
+            </p>
+            <p className="text-gray-600 text-sm mb-3">
+              El código puede venir de <strong>tres lados</strong>: <code className="bg-gray-100 px-1 rounded">repo</code> (git clone), <code className="bg-gray-100 px-1 rounded">archiveUrl</code> (un .tar.gz o .zip subido desde tu compu, por si aún no tienes repo), o <code className="bg-gray-100 px-1 rounded">sandboxId</code> (ya escribiste la app dentro de una caja). Si el build falla, la máquina que creó se libera sola — no te quedas pagando una caja rota.
+            </p>
+            <TabbedCode
+              tabs={[
+                { label: "SDK", code: `const app = await eb.machines.launch({
+  repo: "https://github.com/cliente/tienda",   // o archiveUrl, o sandboxId
+  tier: "micro",
+  port: 3000,
+  dataPaths: ["data", "uploads"],              // sin esto NO hay backup
+  domain: "tienda.com",
+});
+app.url          // ya sirve por HTTPS
+app.domain?.dns  // el registro EXACTO que tu cliente debe crear en su DNS
+app.releaseId    // ya es recuperable
+
+// ¿Sin repo? Sube la carpeta desde tu compu:
+// tar czf app.tar.gz -C ./mi-tienda .
+const up = await eb.uploadFile({ name: "app.tar.gz", access: "private" });
+await fetch(up.uploadUrl, { method: "PUT", body: fs.readFileSync("app.tar.gz") });
+await eb.machines.launch({ archiveUrl: up.url, domain: "tienda.com" });` },
+                { label: "REST", code: `POST /api/v2/machines/launch
+{
+  "repo": "https://github.com/cliente/tienda",
+  "tier": "micro",
+  "port": 3000,
+  "dataPaths": ["data"],
+  "domain": "tienda.com"
+}
+# → { sandboxId, url, releaseId, domain: { dns: { type, name, value } } }
+
+# Sin repo, desde un archivo subido:
+{ "archiveUrl": "https://…/app.tar.gz", "domain": "tienda.com" }` },
+                { label: "MCP", code: `launch_app({
+  repo: "https://github.com/cliente/tienda",  // o archiveUrl / sandboxId
+  tier: "micro", port: 3000,
+  dataPaths: ["data"],
+  domain: "tienda.com",
+})
+// → { url, releaseId, domain: { dns } }` },
+              ]}
+            />
+
+            <h3 className="text-lg font-bold mb-3 mt-8">Crear un sandbox permanente</h3>
             <TabbedCode
               tabs={[
                 { label: "SDK", code: `import { EasybitsClient } from "@easybits.cloud/sdk";
