@@ -1,5 +1,5 @@
 import { data } from "react-router";
-import { purgeExpiredMachines } from "~/.server/core/machineOperations";
+import { purgeExpiredMachines, reconcileProtection } from "~/.server/core/machineOperations";
 import type { Route } from "./+types/purge-machines";
 
 // Hard-delete permanent machines whose 7-day soft-delete grace has elapsed.
@@ -14,5 +14,9 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
     throw data({ error: "Unauthorized" }, { status: 401 });
   }
   const result = await purgeExpiredMachines();
-  return data(result);
+  // Re-apply the destroy lock on every billed machine. Cheap and idempotent,
+  // and it closes the window where a failed protect call left a paid box
+  // deletable by the host's stale sweep.
+  const protection = await reconcileProtection();
+  return data({ ...result, protection });
 };

@@ -274,7 +274,7 @@ export async function createPermanent(
   // Billing attached → lock the box against destroy/suspend. Done AFTER billing
   // so the rollback above (a normal destroy) still works on failure. Only the
   // operator token can override the lock now (releasePermanent uses it).
-  await persistSandbox(ctx, sandbox.sandboxId, { protected: true }).catch(() => undefined);
+  await lockBox(ctx, sandbox.sandboxId);
 
   // Managed-runtime templates (ghostyclaw, etc.): inject env + start the runtime
   // in the background (ghostyclaw readiness can take minutes — don't block the
@@ -364,7 +364,7 @@ export async function makePermanent(
     // Billing failed — the VM stays as the user's persistent sandbox, unbilled.
   });
   // Billing attached → lock against destroy/suspend (operator override only).
-  await persistSandbox(ctx, sandboxId, { protected: true }).catch(() => undefined);
+  await lockBox(ctx, sandboxId);
   return result;
 }
 
@@ -483,6 +483,61 @@ export async function restoreMachine(ctx: AuthContext, sandboxId: string): Promi
   return attachBilling(ctx, cleared as SandboxRow, tier, mode, row.diskAddonsGB, undefined, async () => {
     // Billing re-attach failed — leave it running but unbilled; owner can retry.
   });
+}
+
+/**
+ * Lock a paid box against destroy/suspend, and MEAN it.
+ *
+ * `Protected` is the only thing standing between a customer's machine and the
+ * host's 72h sweep of stale suspended boxes (sweepStaleSuspended runs whether
+ * or not the box is Persistent). Setting it best-effort — `.catch(() => {})` —
+ * meant one flaky call left a machine billed, permanent, and destroyable, with
+ * nothing to ever notice. The host itself carries a comment about exactly that
+ * outcome: "La caja y sus datos se perdieron".
+ *
+ * So: retry, and if it still fails, say so loudly. `reconcileProtection()`
+ * below is the safety net that catches whatever slips through.
+ */
+async function lockBox(ctx: AuthContext, sandboxId: string): Promise<boolean> {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      await persistSandbox(ctx, sandboxId, { protected: true });
+      return true;
+    } catch (e) {
+      if (attempt === 2) {
+        console.error(
+          `[hosting] CRITICAL: could not protect paid machine ${sandboxId} after 3 tries — it is billed but destroyable by the host's stale sweep. reconcileProtection should pick it up.`,
+          e
+        );
+        return false;
+      }
+      await new Promise((r) => setTimeout(r, 500 * (attempt + 1)));
+    }
+  }
+  return false;
+}
+
+/**
+ * Re-apply the destroy lock on every billed machine. Idempotent and cheap
+ * (the host just sets a flag), so it runs on the same cron as the purge.
+ *
+ * Defense in depth: a machine the customer pays for must not be one failed
+ * HTTP call away from deletion.
+ */
+export async function reconcileProtection(): Promise<{ checked: number; relocked: number }> {
+  const rows = await db.sandbox.findMany({
+    where: { persistent: true, status: { notIn: ["destroyed", "pending_deletion"] } },
+    select: { sandboxId: true, ownerId: true },
+  });
+  let relocked = 0;
+  for (const m of rows) {
+    const ctx = { user: { id: m.ownerId }, scopes: ["WRITE"] } as AuthContext;
+    const ok = await persistSandbox(ctx, m.sandboxId, { protected: true })
+      .then(() => true)
+      .catch(() => false);
+    if (ok) relocked++;
+  }
+  return { checked: rows.length, relocked };
 }
 
 // Cron: hard-destroy machines whose 7-day grace has elapsed. Returns a summary.

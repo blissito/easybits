@@ -723,6 +723,31 @@ export async function launchApp(
   try {
     const owner = await effectiveOwnerId(ctx, sandboxId);
 
+    // A runspec (and therefore a release, and therefore recoverability) needs a
+    // Sandbox row to live on, and only PERMANENT machines have one. Launching
+    // onto an ephemeral box used to blow up deep inside setRunspec with an
+    // opaque 500; say it here, and say what to do about it.
+    if (params.sandboxId) {
+      const row = await db.sandbox.findUnique({
+        where: { sandboxId },
+        select: { persistent: true, status: true },
+      });
+      if (!row) {
+        const e: any = new Error(
+          `${sandboxId} is not a permanent machine — it is an ephemeral sandbox, which cannot hold a runspec or a release (it self-destructs at its TTL). Promote it first with make_permanent({ sandboxId, tier }), then launch.`
+        );
+        e.code = "NotAPermanentMachine";
+        e.status = 422;
+        throw e;
+      }
+      if (row.status === "pending_deletion" || row.status === "destroyed") {
+        const e: any = new Error(`Machine ${sandboxId} is ${row.status}. Restore it first.`);
+        e.code = "MachineNotLaunchable";
+        e.status = 409;
+        throw e;
+      }
+    }
+
     if (params.repo) {
       const branch = params.branch ? `-b ${shQuote(params.branch)} ` : "";
       const res = await execSandboxRaw(

@@ -13,6 +13,19 @@ export async function action({ request }: Route.ActionArgs) {
   const ctx = requireAuth(await authenticateRequest(request));
   const limited = await applySandboxRateLimit(ctx.apiKey?.id ?? ctx.user.id, "create");
   if (limited) return limited;
-  const body = await request.json();
-  return Response.json(await launchApp(ctx, body));
+  const body = await request.json().catch(() => ({}));
+  try {
+    return Response.json(await launchApp(ctx, body));
+  } catch (e: any) {
+    // Errors thrown as a Response (billing/plan gates) already carry their own
+    // status and body — pass them through untouched.
+    if (e instanceof Response) return e;
+    // Everything else used to surface as a bare 500 "Unexpected Server Error",
+    // which tells the caller nothing about a bad payload or an ephemeral box.
+    const status = e?.status ?? (e?.code ? 400 : 500);
+    return Response.json(
+      { error: e?.code ?? "LaunchFailed", message: String(e?.message ?? e) },
+      { status }
+    );
+  }
 }
