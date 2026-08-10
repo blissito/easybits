@@ -55,22 +55,6 @@ const RESERVED_ENABLED = process.env.HOSTING_RESERVED_ENABLED === "1";
 
 const PLAN_RANK: Record<PlanKey, number> = { Byte: 0, Mega: 1, Tera: 2 };
 
-/**
- * Which box new machines are provisioned on. Empty ⇒ the default host, i.e.
- * exactly today's behaviour until HOSTING_HOST_URL is set.
- *
- * Hosting belongs on the biggest box available: a sold machine holds its RAM
- * and disk 24/7 (fleet boxes sleep and give them back), and the small host
- * cannot physically serve the top of the catalog — a `performance` tier
- * (8 vCPU / 16 GB) IS that whole machine.
- *
- * Read per call, not memoized at import: a fly secret change takes effect on
- * the next boot without special handling, and tests can set it.
- */
-function hostingHostUrl(): string | undefined {
-  return process.env.HOSTING_HOST_URL || undefined;
-}
-
 /** A permanent sandbox as seen by API/SDK/MCP — addressed by sandboxId. */
 export interface PermanentSandbox {
   sandboxId: string;
@@ -288,10 +272,9 @@ export async function provisionPaidMachine(params: {
   const template = (params.template ?? "ubuntu") as SandboxTemplate;
   const ctx = { user: { id: params.ownerId }, scopes: ["WRITE"] } as AuthContext;
 
-  let sandbox: SandboxRecord & { host?: string };
+  let sandbox: SandboxRecord;
   try {
     sandbox = await createSandboxRaw(ctx, {
-      hostUrl: hostingHostUrl(),
       template,
       name: params.name,
       metadata: { eb_persistent: "1", eb_tier: tier.key, eb_cpu_mode: params.cpuMode },
@@ -324,7 +307,6 @@ export async function provisionPaidMachine(params: {
       status: sandbox.status === "running" ? "running" : "provisioning",
       stripeSubscriptionId: params.subscriptionId,
       backupScope: "data",
-      host: sandbox.host ?? null,
     },
   });
   await lockBox(ctx, sandbox.sandboxId);
@@ -406,10 +388,9 @@ export async function createPermanent(
   assertCanProvision(ctx, tier, mode);
 
   const res = resourcesFor(tier, diskAddonsGB);
-  let sandbox: SandboxRecord & { host?: string };
+  let sandbox: SandboxRecord;
   try {
     sandbox = await createSandboxRaw(ctx, {
-      hostUrl: hostingHostUrl(),
       template,
       name: params.name,
       metadata: { eb_persistent: "1", eb_tier: tier.key, eb_cpu_mode: mode },
@@ -451,9 +432,6 @@ export async function createPermanent(
       // passthrough). Persisted from env, parallel to Agent.embedToken.
       adminToken: params.env?.NANOCLAW_ADMIN_TOKEN ?? null,
       runtimeStatus: hasRuntime ? "starting" : null,
-      // Sin esto la máquina queda inalcanzable: cada llamada al host se
-      // resuelve desde esta columna.
-      host: sandbox.host ?? null,
     },
   });
 

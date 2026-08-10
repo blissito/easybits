@@ -100,15 +100,22 @@ The digital asset platform where AI agents can store, manage, and consume files 
   - **3 motores de render, no mezclar**: facturas/cotizaciones/reportes JSON → `structured_doc`/`@react-pdf/renderer` (sin browser); HTML/URL/office → Gotenberg-caja; `fast_pdf` (Typst) deprecado.
 - **service_start/service_status/service_stop** (MCP, server.ts): warm/estado/stop manual de una caja; enum `["voice","render"]`.
 
-## Hosting multi-fierro (🚨 leer ANTES de tocar env de hosts)
+## Multi-fierro: el ROUTER decide, EasyBits no se entera (🚨 no lo puentees)
 
-Vender VPS ("máquinas permanentes") reparte cajas entre varios fierros físicos. El ruteo NO es una constante: `callHost` (`sandboxOperations.ts`) saca el `sandboxId` del path (`/v1/sandbox/<id>/…`) y resuelve el fierro desde `Sandbox.host` (caché en memoria + fallback a DB). Así ningún call-site tiene que acordarse del fierro — olvidarlo en uno solo manda un exec o un destroy al fierro equivocado y da 404 **sin forma de recuperar el binding**.
+Ya existe y está en producción: **`cmd/sandbox-router/`** en el repo `sandbox-host` (binario aparte, no `internal/`). Fronta N fierros y hace que la flota parezca UN host. `SANDBOX_HOST_URL` **apunta al router**, no al daemon de un fierro.
 
-- **Dónde nacen**: `HOSTING_HOST_URL` (si está vacío, el default `SANDBOX_HOST_URL`). Hosting va al fierro MÁS GRANDE: una caja vendida retiene RAM y disco 24/7 (las de flota duermen y los devuelven), y el fierro chico no puede servir el catálogo — un tier `performance` (8 vCPU/16 GB) ES la máquina entera de A. Fierros: **A** `kvm-poc` 54.38.94.14 (4 núcleos, 31 GB, 410 GB) · **B** `box-b` 51.91.75.231 (8 núcleos, 125 GB, 878 GB).
-- 🚨 **`host = null` es un PUNTERO al default, no "fierro A".** Si se repunta `SANDBOX_HOST_URL` a otro fierro, todas las filas viejas se resuelven en silencio al fierro nuevo y quedan inalcanzables. **Antes de repuntar el default, backfillear**: `db.sandbox.updateMany({ where:{host:null}, data:{host:"<url actual>"} })`. Añadir un fierro nuevo es seguro; cambiar el default NO.
-- 🚨 **`Agent.host` (flota) puede MENTIR**: `pickHost`/`SANDBOX_HOSTS` (`fleetAgentOperations.ts:386`) elige host y lo guarda, pero la VM se crea contra el default. Hoy es inofensivo solo porque `SANDBOX_HOSTS` no está poblado en prod — **poblarlo sin arreglarlo orfana cajas de flota**. La flota aún no usa el ruteo por fila que ya tiene hosting.
-- **Una caja vendida NO se mueve de fierro**: `host` se escribe al aprovisionar y no se toca. Rebalancear es recrear desde release + restaurar backup (`redeploy_machine` + `restore_machine_from_backup`), con downtime — no editar la columna.
-- **Verificación tras añadir fierro**: crear una máquina de prueba, confirmar `Sandbox.host` esperado, y hacerle `exec`. Si el exec responde, el binding es correcto.
+Qué hace solo, sin que EasyBits sepa de fierros:
+- **Coloca** (`POST /v1/sandbox`) por RAM libre (`GET /v1/stats` de cada box) + afinidad por tenant, degradando hosts con poco disco de `.mem`; si el elegido responde 503 por cap de RAM, reintenta en el siguiente.
+- **Rutea por id** (`/v1/sandbox/{id}/*`): caché `id→box` con lazy-probe, invalidada al ver DELETE o mutación de `/domain`.
+- **Fan-out** de `list`/`stats` y **hairpin del dominio público**: Caddy corre SOLO en el fierro A y el wildcard DNS apunta ahí, pero el router parsea `sb-<id>-<port>` y proxea al `:8081` del box dueño por Tailscale. Una caja en B **sí** es alcanzable públicamente.
+
+**Fierros hoy**: A `kvm-poc` 54.38.94.14 (4 núcleos, 31 GB, 410 GB · Caddy + router) · B `box-b` 51.91.75.231 (8 núcleos, 125 GB, 878 GB · solo sandbox-host). Como coloca por RAM libre, **las cajas nuevas ya caen en B** sin configurar nada. Alta de un fierro = una entrada en `hosts.json` del router + restart; **cero cambios en EasyBits**.
+
+🚨 **NUNCA apuntar EasyBits al daemon de un fierro** (ni `HOSTING_HOST_URL`, ni `SANDBOX_HOSTS` con URLs de boxes). Puentear el router pierde colocación, afinidad y el hairpin del dominio, y cada box tiene **su propio token** — el `SANDBOX_HOST_TOKEN` único de EasyBits solo sirve contra el router. Si hace falta influir dónde nace una caja, el lugar correcto es la política del router, no una env de EasyBits.
+
+⚠️ **`pickHost`/`SANDBOX_HOSTS` (`fleetAgentOperations.ts:377-410`) es un gate de admisión, NO un router** — su resultado no dirige el create. Y si `SANDBOX_HOST_URL` es el router (lo es), el `/v1/stats` que lee es el **agregado** de todos los fierros: `freeMb` es la suma A+B y no garantiza que quepa en ninguno. Poblar `SANDBOX_HOSTS` con URLs de boxes reintroduce el problema del token por fierro. Ver `docs/multi-host-scaling.md` en sandbox-host.
+
+⚠️ **B corría un binario viejo** (1-ago) cuando se revisó el 2026-08-10 — sin el fix de `isBilledBox`. Al añadir o revisar fierros, verificar que todos tengan el mismo binario, o un sweep viejo puede barrer en un box lo que otro protege.
 
 ## EasyBits DB (libSQL / sqld)
 - **Servidor**: `infra/easybits-db/` — Fly app `easybits-db` (región `dfw`). Es la imagen oficial `ghcr.io/tursodatabase/libsql-server:latest` con flags; no hay código propietario.

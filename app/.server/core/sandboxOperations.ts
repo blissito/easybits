@@ -19,16 +19,6 @@ import {
 
 const HOST_URL = process.env.SANDBOX_HOST_URL || "";
 const HOST_TOKEN = process.env.SANDBOX_HOST_TOKEN || "";
-/**
- * Where NEW hosting machines are provisioned. Defaults to the same box as
- * everything else, so nothing changes until it is set.
- *
- * Hosting belongs on the bigger box: an always-on machine holds its RAM and
- * disk 24/7 (a fleet box sleeps and gives them back), and the small host
- * physically cannot serve the top half of the catalog — a `performance` tier
- * (8 vCPU / 16 GB) IS the whole machine there.
- */
-const HOSTING_HOST_URL = process.env.HOSTING_HOST_URL || "";
 // Break-glass operator token: lets deliberate platform flows (releasePermanent,
 // billing rollback) destroy/suspend a Protected box. NEVER exposed to agents or
 // user API keys — the MCP-reachable destroy path omits it, so a leaked WRITE key
@@ -430,66 +420,16 @@ function transformAcpStream(
   });
 }
 
-/**
- * Which physical box a sandbox lives on.
- *
- * Resolved HERE, centrally, instead of at ~25 call sites: every host call goes
- * through callHost and carries the sandboxId in its path, so the routing can be
- * derived rather than remembered. Forgetting it at one call site would send an
- * exec or a destroy to the wrong box and 404 — with no way to recover the
- * binding.
- *
- * `Sandbox.host` null ⇒ the default box, which is where everything lived before
- * multi-host. No migration, no backfill.
- */
-const hostCache = new Map<string, string>();
-
-function hostUrlFor(sandboxId: string | null): string {
-  if (!sandboxId) return HOST_URL;
-  return hostCache.get(sandboxId) || HOST_URL;
-}
-
-/** Remember a machine's box (called after create and on row load). */
-export function rememberSandboxHost(sandboxId: string, host?: string | null): void {
-  if (host) hostCache.set(sandboxId, host);
-}
-
-/** Warm the cache from the DB — a machine may be operated by a fresh process. */
-export async function loadSandboxHost(sandboxId: string): Promise<string> {
-  const cached = hostCache.get(sandboxId);
-  if (cached) return cached;
-  const row = await db.sandbox
-    .findUnique({ where: { sandboxId }, select: { host: true } })
-    .catch(() => null);
-  if (row?.host) {
-    hostCache.set(sandboxId, row.host);
-    return row.host;
-  }
-  return HOST_URL;
-}
-
-/** Pull the sandbox id out of a host path like /v1/sandbox/<id>/exec. */
-function sandboxIdFromPath(path: string): string | null {
-  const m = path.match(/\/v1\/sandbox\/([^/?]+)/);
-  return m ? decodeURIComponent(m[1]) : null;
-}
-
 async function callHost<T>(
   method: "GET" | "POST" | "DELETE" | "PATCH",
   path: string,
   body?: unknown,
   ownerId?: string,
   timeoutMs = 120_000,
-  asOperator = false,
-  hostOverride?: string
+  asOperator = false
 ): Promise<T> {
   ensureConfigured();
-  const sbId = sandboxIdFromPath(path);
-  // Cache first (hot path, no DB); fall back to the row for a cold process.
-  const base =
-    hostOverride ||
-    (sbId ? (hostCache.get(sbId) ?? (await loadSandboxHost(sbId))) : HOST_URL);
-  const url = `${base.replace(/\/$/, "")}${path}`;
+  const url = `${HOST_URL.replace(/\/$/, "")}${path}`;
   const headers: Record<string, string> = {
     Authorization: `Bearer ${HOST_TOKEN}`,
     "Content-Type": "application/json",
@@ -750,16 +690,8 @@ export async function createSandboxRaw(
     // destroy) still works; callers lock the box via persistSandbox AFTER
     // billing is attached. See createPermanent.
     protected?: boolean;
-    /**
-     * Physical box to provision on. Hosting passes HOSTING_HOST_URL so sold
-     * machines land on the big box; everything else keeps the default. The
-     * chosen host is returned on the record so the caller can persist it —
-     * a machine whose box is not recorded becomes unreachable forever.
-     */
-    hostUrl?: string;
   }
-): Promise<SandboxRecord & { host?: string }> {
-  const targetHost = params.hostUrl || HOST_URL;
+): Promise<SandboxRecord> {
   const rec = await callHost<SandboxRecord>(
     "POST",
     "/v1/sandbox",
@@ -774,14 +706,8 @@ export async function createSandboxRaw(
       diskMb: params.diskMb,
       cpuMode: params.cpuMode ?? "shared",
     },
-    ctx.user.id,
-    undefined,
-    undefined,
-    targetHost
+    ctx.user.id
   );
-  // Remember it BEFORE anything else touches the box: the next call already
-  // needs to reach the right host.
-  rememberSandboxHost(rec.sandboxId, targetHost);
   // Máquina always-on (hosting): mismo intervalo, kind "machine" para poder
   // separar el consumo facturado del efímero.
   void openSandboxSession({
@@ -794,7 +720,7 @@ export async function createSandboxRaw(
     persistent: true,
     startedAt: rec.createdAt ? new Date(rec.createdAt) : undefined,
   });
-  return { ...rec, host: targetHost };
+  return rec;
 }
 
 // Promote an existing (ephemeral) sandbox to always-on: clears the host reaper

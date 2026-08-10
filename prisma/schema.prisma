@@ -1378,13 +1378,6 @@ model Sandbox {
   // matching Fly, which snapshots volumes and NOT the rebuildable rootfs) or
   // "none" (owner opted out). The rootfs is reconstructible from `template`.
   backupScope      String?
-  // Which physical box this machine lives on (multi-host). Null = the default
-  // host, where everything lived before hosting moved to its own box — so old
-  // rows keep resolving with no backfill. Set at provisioning and never
-  // changed: moving a sold machine between boxes is a migration with downtime,
-  // not a config flip. Every host call resolves through it (callHost), because
-  // reaching the wrong box means a 404 with no way to recover the binding.
-  host             String?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
