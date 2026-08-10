@@ -4,7 +4,6 @@ import { applySandboxRateLimit } from "~/.server/rateLimiter";
 import { MachineCreateBody } from "~/.server/sandbox/schemas";
 import {
   buyMachine,
-  createPermanent,
   makePermanent,
   listPermanent,
 } from "~/.server/core/machineOperations";
