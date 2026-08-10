@@ -802,6 +802,8 @@ Defaults: \`tier: "micro"\` (nano son 256MB — NO aguanta un build de Node), \`
 
 Si el build falla, la máquina que creó \`launch_app\` se libera sola: no te deja pagando una caja rota. Una caja que tú pasaste por \`sandboxId\` NUNCA se toca.
 
+**Sin plan de pago también funciona**: si la cuenta no tiene plan, \`launch_app\` (y \`create_machine\`) devuelven \`{ checkoutUrl }\` en vez de fallar. Le pasas ese link al cliente; cuando paga, la máquina se crea sola y aparece en \`list_machines()\`. Entonces vuelves a llamar \`launch_app\` con su \`sandboxId\` para desplegar encima.
+
 ### Releases — hacer la caja reconstruible
 Fly/Vercel tratan el disco como desechable porque el deploy lo reconstruye desde una imagen. Aquí la app se escribe DENTRO de la caja, así que sin un release una caja muerta se lleva la app, no solo los datos. Un **release** es un tarball versionado del código en almacenamiento durable + un **runspec** que dice cómo construirlo y arrancarlo.
 

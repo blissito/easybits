@@ -1638,7 +1638,7 @@ How to embed safely (the only reliable rule):
 
   server.tool(
     "launch_app",
-    "Put an app in production in ONE call — the `fly launch` of EasyBits: provisions the machine, gets the code in, builds, starts it, exposes a public HTTPS URL, publishes a recovery release and (optionally) attaches the customer's domain. Returns { url, releaseId, domain.dns }. PREFER THIS over wiring create_machine + deploy_machine + expose + domain by hand: doing it manually, the step that gets skipped is the release, and a machine without a release cannot be rebuilt if it dies. Pass exactly ONE source.",
+    "Put an app in production in ONE call — the `fly launch` of EasyBits: provisions the machine, gets the code in, builds, starts it, exposes a public HTTPS URL, publishes a recovery release and (optionally) attaches the customer's domain. Returns { url, releaseId, domain.dns }. PREFER THIS over wiring create_machine + deploy_machine + expose + domain by hand: doing it manually, the step that gets skipped is the release, and a machine without a release cannot be rebuilt if it dies. NO platform plan needed: if the account has none, this returns { checkoutUrl } instead — give it to the customer, and once they pay the machine is created automatically (find it with list_machines, then launch again with its sandboxId). Pass exactly ONE source.",
     {
       repo: z.string().optional().describe("Git URL to clone (the reproducible path)"),
       branch: z.string().optional(),

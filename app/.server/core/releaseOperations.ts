@@ -37,7 +37,7 @@ import {
   waitUntilRunning,
   writeFile,
 } from "./sandboxOperations";
-import { createPermanent, releasePermanent } from "./machineOperations";
+import { buyMachine, releasePermanent } from "./machineOperations";
 import { getPlatformDefaultClient } from "../storage";
 import { nanoid } from "nanoid";
 
@@ -606,7 +606,7 @@ export async function recreateFromRelease(
   }
   const spec = runspecSchema.parse(rel.runspec ?? {});
 
-  const created = await createPermanent(ctx, {
+  const bought = await buyMachine(ctx, {
     tier: params.tier ?? rel.tier ?? "micro",
     template: (rel.template as any) ?? undefined,
     name: params.name ?? `${rel.sandboxId}-r${rel.version}`,
@@ -614,6 +614,16 @@ export async function recreateFromRelease(
     diskAddonsGB: params.diskAddonsGB,
     env: spec.env,
   });
+  if (bought.checkoutUrl) {
+    const e: any = new Error(
+      `This account has no plan to bill the new machine against. Pay for it first: ${bought.checkoutUrl} — then redeploy onto the machine it creates.`
+    );
+    e.code = "MachinePaymentRequired";
+    e.status = 402;
+    e.checkoutUrl = bought.checkoutUrl;
+    throw e;
+  }
+  const created = bought.machine!;
 
   try {
     const owner = await effectiveOwnerId(ctx, created.sandboxId);
@@ -652,6 +662,14 @@ export async function recreateFromRelease(
 // --- launch: the whole thing in one call ------------------------------------
 
 export interface LaunchResult {
+  /**
+   * Set INSTEAD of the machine when the account has no plan to bill against:
+   * hosting is its own subscription, so the customer pays first and the box is
+   * provisioned by the webhook. Nothing was deployed yet — launch again with
+   * the resulting sandboxId once it exists.
+   */
+  checkoutUrl?: string;
+  monthlyMxn?: number;
   sandboxId: string;
   url: string;
   releaseId: string;
@@ -727,13 +745,27 @@ export async function launchApp(
   let sandboxId = params.sandboxId!;
   let createdHere = false;
   if (needsNewBox) {
-    const created = await createPermanent(ctx, {
+    const bought = await buyMachine(ctx, {
       tier: params.tier ?? "micro",
       template: (params.template as any) ?? undefined,
       name: params.name,
       env: spec.env,
     });
-    sandboxId = created.sandboxId;
+    // No plan to bill against → the customer pays first. Hand back the link
+    // instead of an upsell error; the box is born in the webhook, and the
+    // caller launches again with its sandboxId.
+    if (bought.checkoutUrl) {
+      return {
+        checkoutUrl: bought.checkoutUrl,
+        monthlyMxn: bought.monthlyMxn,
+        sandboxId: "",
+        url: "",
+        releaseId: "",
+        version: 0,
+        exitCode: 0,
+      };
+    }
+    sandboxId = bought.machine!.sandboxId;
     createdHere = true;
   }
 

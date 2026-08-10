@@ -2633,6 +2633,13 @@ export interface LaunchParams {
 }
 
 export interface LaunchResult {
+  /**
+   * Present INSTEAD of the machine when the account has no plan: hosting bills
+   * on its own subscription, so the customer pays first and the box is created
+   * by the webhook. Nothing was deployed — launch again with its sandboxId.
+   */
+  checkoutUrl?: string;
+  monthlyMxn?: number;
   sandboxId: string;
   /** Public HTTPS URL serving the app right away. */
   url: string;
