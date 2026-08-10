@@ -482,7 +482,8 @@ Configure via MCP tool \`set_ai_key\` or dashboard. Supports ANTHROPIC and OPENA
 | \`machines.tiers()\` | Catálogo de tiers + precio del disco add-on |
 | \`machines.list()\` | Tus máquinas permanentes |
 | \`machines.launch({ repo \\| archiveUrl \\| sandboxId, domain? })\` | **Una app en producción en UNA llamada** (el \`fly launch\` de EasyBits). Empieza por aquí. |
-| \`machines.create({ tier })\` | Provisiona una máquina always-on (caja vacía) |
+| \`machines.create({ tier })\` | Provisiona una máquina always-on (caja vacía). Lanza \`MachinePaymentRequired\` con \`.checkoutUrl\` si la cuenta no tiene plan |
+| \`machines.buy({ tier })\` | Igual pero sin lanzar: devuelve la máquina **o** \`{ checkoutUrl }\` para que el cliente pague |
 | \`machines.setRunspec(id, spec)\` | Declara appDir/build/start/**dataPaths** — obligatorio antes del primer deploy |
 | \`machines.runspec(id)\` | Lee el runspec |
 | \`machines.deploy(id, { message? })\` | Publica el código actual como release |
@@ -752,7 +753,15 @@ call_stop({ sandboxId })    → { url }  ← link permanente al MP4
 
   hosting: `## Hosting — Sandboxes permanentes (always-on)
 
-Un sandbox efímero se auto-destruye al TTL. Una **sandbox permanente** corre 24/7 y se cobra **flat en MXN/mes** como item de suscripción encima de tu plan. Mismo recurso, mismo \`sandboxId\` — "permanente" es solo un flag + cobro. Requiere plan de pago (Mega/Tera). Grupo MCP: \`hosting\`.
+Un sandbox efímero se auto-destruye al TTL. Una **sandbox permanente** corre 24/7 y se cobra **flat en MXN/mes**. Mismo recurso, mismo \`sandboxId\` — "permanente" es solo un flag + cobro. Grupo MCP: \`hosting\`.
+
+**NO necesitas plan de pago para hostear.** Hosting se factura solo, con su propia suscripción: alguien en Free paga su caja y nada más. El plan sigue gateando IA, storage y flota; dejó de gatear hosting.
+
+\`create_machine\` devuelve una de dos cosas:
+- **con plan activo** → la máquina, aprovisionada al instante, cobrada en la misma factura del plan.
+- **sin plan** → \`{ checkoutUrl }\`. Le pasas ese link al cliente; **la máquina se crea sola cuando el pago se confirma** (nada corre gratis mientras tanto). Después de que pague, \`list_machines()\` la muestra.
+
+Cancelar la suscripción de una máquina NO toca tu plan, y viceversa: son cobros independientes. Al cancelar, la caja pasa a borrado suave con 7 días de gracia y se toma un backup final.
 
 ### Catálogo de tiers
 \`GET /machines/tiers\` · MCP: \`list_machine_tiers()\` · SDK: \`eb.machines.tiers()\`

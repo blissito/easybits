@@ -141,6 +141,7 @@ import {
   sandboxAdmin,
 } from "../core/sandboxOperations";
 import {
+  buyMachine,
   createPermanent,
   makePermanent,
   listPermanent,
@@ -1554,7 +1555,7 @@ How to embed safely (the only reliable rule):
 
   server.tool(
     "create_machine",
-    "Provision an ALWAYS-ON machine (permanent VM, billed flat MXN/month as a subscription item on top of your plan). Requires a paid plan (Mega/Tera). Addressed by sandboxId. Returns the record (sandboxId, tier, monthlyMxn, status). Reserved CPU and performance-4x are by-request until enabled.",
+    "Buy an ALWAYS-ON machine (permanent VM, flat MXN/month). NO platform plan needed — hosting bills on its own. If the account has an active plan the machine is provisioned right away and rides that invoice; otherwise this returns { checkoutUrl } for the customer to pay, and the machine is provisioned automatically once payment clears (poll list_machines). Reserved CPU and performance-4x are by-request until enabled.",
     {
       tier: z.enum(TIER_ORDER as unknown as [string, ...string[]]).describe("Catalog tier key (see list_machine_tiers)"),
       cpuMode: z.enum(["shared", "reserved"]).optional().describe("shared (default, best-effort) or reserved (guaranteed CPU floor, only focus+)"),
@@ -1566,8 +1567,8 @@ How to embed safely (the only reliable rule):
     { destructiveHint: false, idempotentHint: false, openWorldHint: false },
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
-      const result = await createPermanent(ctx, params as Parameters<typeof createPermanent>[1]);
-      return ok(result);
+      const result = await buyMachine(ctx, params as Parameters<typeof buyMachine>[1]);
+      return ok(result.checkoutUrl ? result : result.machine);
     })
   );
 

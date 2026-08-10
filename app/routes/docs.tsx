@@ -1884,6 +1884,34 @@ await eb.machines.launch({ archiveUrl: up.url, domain: "tienda.com" });` },
               ]}
             />
 
+            <h3 className="text-lg font-bold mb-3 mt-8">Hosting sin plan: la máquina se paga sola</h3>
+            <p className="text-gray-600 text-sm mb-3">
+              <strong>No necesitas plan de pago para hostear.</strong> Una máquina se factura con su propia suscripción, así que desde una cuenta Free pagas tu caja y nada más. El plan sigue siendo el gate de IA, storage y flota — dejó de serlo para hosting.
+            </p>
+            <p className="text-gray-600 text-sm mb-3">
+              <code className="bg-gray-100 px-1 rounded">create_machine</code> devuelve una de dos cosas: <strong>con plan</strong>, la máquina lista y cobrada en la misma factura; <strong>sin plan</strong>, un <code className="bg-gray-100 px-1 rounded">checkoutUrl</code> que le pasas al cliente. La máquina <strong>se crea sola en cuanto el pago se confirma</strong> — nada corre gratis mientras tanto. Cancelar la máquina no toca tu plan, y cancelar tu plan no se lleva la máquina.
+            </p>
+            <TabbedCode
+              tabs={[
+                { label: "SDK", code: `const r = await eb.machines.buy({ tier: "micro" });
+if (r.checkoutUrl) {
+  // Cuenta sin plan: mándale el link. La caja nace cuando pague.
+  console.log("Paga aquí:", r.checkoutUrl);
+} else {
+  console.log("Lista:", r.sandboxId);
+}` },
+                { label: "REST", code: `POST /api/v2/machines
+{ "tier": "micro" }
+
+# Con plan  → { sandboxId, tier, monthlyMxn, status, ... }
+# Sin plan  → { checkoutUrl, tier, monthlyMxn }` },
+                { label: "MCP", code: `create_machine({ tier: "micro" })
+// Con plan → la máquina.
+// Sin plan → { checkoutUrl }. Pásaselo al cliente y, cuando pague,
+// aparece en list_machines().` },
+              ]}
+            />
+
             <h3 className="text-lg font-bold mb-3 mt-8">Crear un sandbox permanente</h3>
             <TabbedCode
               tabs={[

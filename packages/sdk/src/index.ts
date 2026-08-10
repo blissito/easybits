@@ -1807,14 +1807,38 @@ export class EasybitsClient {
       },
       /** Provision a permanent machine (alias of eb.sandboxes.createPermanent). */
       create: async (params: CreatePermanentParams): Promise<Sandbox> => {
-        const rec = await req<SandboxRecord>("/machines", {
+        const rec = await req<SandboxRecord & { checkoutUrl?: string }>("/machines", {
           method: "POST",
           body: JSON.stringify(params),
         });
+        // No platform plan → hosting bills on its own subscription and the box
+        // is provisioned after payment. There is no Sandbox to hand back yet.
+        if ((rec as { checkoutUrl?: string }).checkoutUrl) {
+          const err = new Error(
+            `Payment required before this machine exists. Send the customer to: ${(rec as any).checkoutUrl}`
+          ) as Error & { checkoutUrl?: string; code?: string };
+          err.code = "MachinePaymentRequired";
+          err.checkoutUrl = (rec as any).checkoutUrl;
+          throw err;
+        }
         const sbx = new Sandbox(rec, req);
         if (params.waitForReady !== false) await sbx.waitUntilReady();
         return sbx;
       },
+
+      /**
+       * Buy a machine, returning either the machine or a payment link — the
+       * non-throwing form of `create()` for accounts with no platform plan.
+       *
+       *   const r = await eb.machines.buy({ tier: "micro" });
+       *   if (r.checkoutUrl) sendToCustomer(r.checkoutUrl);  // box arrives after payment
+       */
+      buy: (
+        params: CreatePermanentParams
+      ): Promise<
+        | { checkoutUrl: string; tier: string; monthlyMxn: number }
+        | (SandboxRecord & { checkoutUrl?: undefined })
+      > => req("/machines", { method: "POST", body: JSON.stringify(params) }),
 
       /**
        * An app in production in ONE call — the `fly launch` of EasyBits:

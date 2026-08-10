@@ -32,6 +32,8 @@ import {
   getActivePlanSubscription,
   addMachineSubscriptionItem,
   removeMachineSubscriptionItem,
+  createMachineCheckout,
+  cancelMachineSubscription,
 } from "../stripe_machines";
 import {
   resolveTier,
@@ -128,18 +130,16 @@ function fail(status: number, error: string, message: string, extra?: object): n
   );
 }
 
-/** Throw a Response if the user can't provision this tier/cpuMode. */
-function assertCanProvision(ctx: AuthContext, tier: HostingTier, mode: CpuMode): void {
-  const plan = getUserPlan(ctx.user);
-  if (!isPaidPlan(plan)) {
-    fail(403, "MachineSubscriptionRequired",
-      "Necesitas un plan de pago (Mega o Tera) para crear sandboxes permanentes.");
-  }
-  if (PLAN_RANK[plan] < PLAN_RANK[tier.minPlan]) {
-    fail(403, "MachinePlanRequired",
-      `El tier "${tier.key}" requiere el plan ${tier.minPlan} o superior.`,
-      { requested: tier.key, requiredPlan: tier.minPlan, currentPlan: plan });
-  }
+/**
+ * Throw a Response if this tier/cpuMode can't be provisioned at all.
+ *
+ * NOTE (Aug 2026): hosting no longer requires a platform plan. A machine is now
+ * its own Stripe subscription, so someone on Free pays for their box and
+ * nothing else — asking them for a $299 plan on top of a $99 VPS was killing
+ * the sale. The plan still gates AI, storage and fleet; it just stopped gating
+ * hosting. What remains here are capability gates, not commercial ones.
+ */
+function assertCanProvision(_ctx: AuthContext, tier: HostingTier, mode: CpuMode): void {
   if (mode === "reserved") {
     if (!reservedAvailable(tier)) {
       fail(422, "ReservedNotAvailableForTier",
@@ -193,6 +193,173 @@ async function attachBilling(
     fail(502, "MachineBillingFailed",
       `No se pudo crear el cobro de el sandbox: ${e instanceof Error ? e.message : String(e)}`);
   }
+}
+
+/**
+ * Start payment for a machine bought WITHOUT a platform plan.
+ *
+ * Returns a Stripe Checkout URL and provisions nothing: the box is born in the
+ * webhook once the payment clears (`provisionPaidMachine`). No free compute, no
+ * pending-machine rows to reconcile when someone abandons the checkout.
+ */
+export async function startMachineCheckout(
+  ctx: AuthContext,
+  params: {
+    tier: string;
+    cpuMode?: CpuMode;
+    diskAddonsGB?: number;
+    template?: SandboxTemplate;
+    name?: string;
+    successUrl?: string;
+    cancelUrl?: string;
+  }
+): Promise<{ checkoutUrl: string; tier: string; monthlyMxn: number }> {
+  requireScope(ctx, "WRITE");
+  const tier = resolveTier(params.tier);
+  if (!tier) fail(400, "UnknownTier", `Tier desconocido: "${params.tier}".`);
+  const mode: CpuMode = params.cpuMode === "reserved" ? "reserved" : "shared";
+  const diskAddonsGB = params.diskAddonsGB ?? 0;
+  assertCanProvision(ctx, tier, mode);
+
+  const monthlyMxn = machineMonthly(tier, mode, diskAddonsGB);
+  const base = process.env.APP_URL || "https://www.easybits.cloud";
+  const user = ctx.user as { id: string; email?: string | null; stripeId?: string | null; stripeIds?: string[] };
+  const { url } = await createMachineCheckout({
+    userId: user.id,
+    email: user.email ?? null,
+    customerId: user.stripeId || user.stripeIds?.[0] || null,
+    monthlyMxn,
+    tier: tier.key,
+    cpuMode: mode,
+    diskAddonsGB,
+    template: params.template,
+    name: params.name,
+    successUrl: params.successUrl || `${base}/dash/hosting?paid=1`,
+    cancelUrl: params.cancelUrl || `${base}/dash/hosting?canceled=1`,
+  });
+  return { checkoutUrl: url, tier: tier.key, monthlyMxn };
+}
+
+/**
+ * Provision a machine whose STANDALONE subscription is already paid. Called
+ * from the Stripe webhook, so there is no AuthContext — the owner comes from
+ * the session metadata.
+ *
+ * Idempotent on `subscriptionId`: Stripe retries webhooks, and billing a
+ * customer once but booting two VMs would be the worst possible bug here.
+ */
+export async function provisionPaidMachine(params: {
+  ownerId: string;
+  subscriptionId: string;
+  tier: string;
+  cpuMode: CpuMode;
+  diskAddonsGB: number;
+  template?: string;
+  name?: string;
+}): Promise<{ sandboxId: string } | null> {
+  const existing = await db.sandbox.findFirst({
+    where: { stripeSubscriptionId: params.subscriptionId },
+    select: { sandboxId: true },
+  });
+  if (existing) return existing; // webhook replay
+
+  const tier = resolveTier(params.tier);
+  if (!tier) {
+    console.error(`[hosting] paid machine with unknown tier "${params.tier}" — sub ${params.subscriptionId}`);
+    return null;
+  }
+  const res = resourcesFor(tier, params.diskAddonsGB);
+  const template = (params.template ?? "ubuntu") as SandboxTemplate;
+  const ctx = { user: { id: params.ownerId }, scopes: ["WRITE"] } as AuthContext;
+
+  let sandbox: SandboxRecord;
+  try {
+    sandbox = await createSandboxRaw(ctx, {
+      template,
+      name: params.name,
+      metadata: { eb_persistent: "1", eb_tier: tier.key, eb_cpu_mode: params.cpuMode },
+      vcpus: res.vcpus,
+      memoryMb: res.memoryMb,
+      diskMb: res.diskMb,
+      cpuMode: params.cpuMode,
+    });
+  } catch (e) {
+    // They PAID and we couldn't deliver. Loud, and leave the subscription alone
+    // so a human can refund or retry deliberately — silently cancelling
+    // someone's subscription is worse than an alert.
+    console.error(
+      `[hosting] CRITICAL: paid subscription ${params.subscriptionId} (owner ${params.ownerId}, tier ${tier.key}) could not be provisioned:`,
+      e
+    );
+    return null;
+  }
+
+  await db.sandbox.create({
+    data: {
+      ownerId: params.ownerId,
+      sandboxId: sandbox.sandboxId,
+      persistent: true,
+      tier: tier.key,
+      template,
+      cpuMode: params.cpuMode,
+      diskAddonsGB: params.diskAddonsGB,
+      name: params.name ?? null,
+      status: sandbox.status === "running" ? "running" : "provisioning",
+      stripeSubscriptionId: params.subscriptionId,
+      backupScope: "data",
+    },
+  });
+  await lockBox(ctx, sandbox.sandboxId);
+  return { sandboxId: sandbox.sandboxId };
+}
+
+/** Release the machine attached to a cancelled standalone subscription. */
+export async function releaseMachineBySubscription(subscriptionId: string): Promise<void> {
+  const row = await db.sandbox.findFirst({ where: { stripeSubscriptionId: subscriptionId } });
+  if (!row || row.status === "destroyed" || row.status === "pending_deletion") return;
+  const ctx = { user: { id: row.ownerId }, scopes: ["DELETE"] } as AuthContext;
+  // Same soft-delete as a manual release: data survives the 7-day grace, and a
+  // final backup is taken. Cancelling a subscription must not shred data on the
+  // spot — people re-subscribe.
+  await backupMachine(row.sandboxId, { force: true }).catch(() => undefined);
+  await suspendSandboxRaw(row.ownerId, row.sandboxId).catch(() => undefined);
+  await db.sandbox.update({
+    where: { sandboxId: row.sandboxId },
+    data: { status: "pending_deletion", deletionScheduledAt: new Date(), stripeSubscriptionId: null },
+  });
+  void ctx;
+}
+
+/**
+ * Buy a machine, whichever way the account can pay.
+ *
+ * - Has an active plan subscription → bill it as an item on that (one invoice,
+ *   provisioned immediately) — the behaviour every existing machine relies on.
+ * - No plan (Free) → return a Checkout URL for a standalone subscription; the
+ *   box is born in the webhook once payment clears.
+ *
+ * Callers get either a machine or a `checkoutUrl`, never a plan-upsell error.
+ */
+export async function buyMachine(
+  ctx: AuthContext,
+  params: {
+    tier: string;
+    cpuMode?: CpuMode;
+    diskAddonsGB?: number;
+    template?: SandboxTemplate;
+    name?: string;
+    env?: Record<string, string>;
+    successUrl?: string;
+    cancelUrl?: string;
+  }
+): Promise<
+  | { machine: PermanentSandbox; checkoutUrl?: undefined }
+  | { checkoutUrl: string; tier: string; monthlyMxn: number; machine?: undefined }
+> {
+  requireScope(ctx, "WRITE");
+  const plan = await getActivePlanSubscription(ctx.user).catch(() => null);
+  if (plan) return { machine: await createPermanent(ctx, params) };
+  return startMachineCheckout(ctx, params);
 }
 
 /** Provision a fresh always-on machine. */
@@ -439,9 +606,16 @@ export async function releasePermanent(ctx: AuthContext, sandboxId: string): Pro
   if (!row || row.ownerId !== ctx.user.id || row.status === "destroyed") {
     fail(404, "MachineNotFound", "Sandbox no encontrado.");
   }
-  // Stop the meter immediately — the owner asked to release it.
+  // Stop the meter immediately — the owner asked to release it. Two billing
+  // shapes: an item on the plan subscription, or a standalone subscription that
+  // IS the machine. Cancelling the wrong one leaves the customer paying.
   if (row.stripeSubItemId) {
     await removeMachineSubscriptionItem(row.stripeSubItemId).catch(() => undefined);
+  }
+  if (row.stripeSubscriptionId) {
+    await cancelMachineSubscription(row.stripeSubscriptionId).catch((e) => {
+      console.error(`[hosting] could not cancel subscription ${row.stripeSubscriptionId}:`, e);
+    });
   }
   // Last-chance backup BEFORE the box goes to sleep: the 7-day grace protects
   // the VM, this protects the data if the grace lapses (or the host dies during
@@ -455,7 +629,7 @@ export async function releasePermanent(ctx: AuthContext, sandboxId: string): Pro
   const deletionScheduledAt = new Date();
   await db.sandbox.update({
     where: { sandboxId },
-    data: { status: "pending_deletion", stripeSubItemId: null, deletionScheduledAt },
+    data: { status: "pending_deletion", stripeSubItemId: null, stripeSubscriptionId: null, deletionScheduledAt },
   });
   return { ok: true, deletionScheduledAt };
 }

@@ -7,8 +7,16 @@
  * resize or a disk change just re-prices the same item. Machines bill on the
  * same invoice cycle as the plan → one invoice, clean UX.
  *
- * The plan subscription is the ACCESS GATE: no active plan subscription ⇒ no
- * machine (`getActivePlanSubscription` returns null).
+ * SINCE Aug 2026 hosting no longer hangs off the plan. A machine can be bought
+ * on its OWN Stripe subscription via Checkout (`createMachineCheckout`), so
+ * someone on Free pays $99 for their box instead of $99 + a $299 plan they
+ * didn't want. Hosting is its own product line; the plan still gates AI,
+ * storage and fleet.
+ *
+ * Two billing shapes coexist, and `Sandbox` records which one it is:
+ *  - `stripeSubItemId`  → legacy/plan-holder: an item on the plan subscription.
+ *  - `stripeSubscriptionId` → standalone: the machine IS the subscription.
+ * Release must cancel the right one.
  */
 
 import type { Stripe } from "stripe";
@@ -57,6 +65,81 @@ export async function getActivePlanSubscription(
   // Prefer the subscription that carries the plan metadata; fall back to the
   // first active one (machine items can ride on any active subscription).
   return subs.data.find((s: Stripe.Subscription) => s.metadata?.plan) ?? subs.data[0];
+}
+
+/**
+ * Checkout for a STANDALONE machine subscription — the "hosting without a
+ * plan" path. Returns the URL the customer opens to pay.
+ *
+ * Nothing is provisioned here: the machine is born in the webhook, once Stripe
+ * confirms the payment. That way nobody gets free compute, not even for a few
+ * minutes, and there is no pending-machine state to reconcile if they abandon
+ * the checkout.
+ *
+ * Everything the webhook needs to build the box travels in `metadata` — it is
+ * the only thing Stripe hands back.
+ */
+export async function createMachineCheckout(params: {
+  email?: string | null;
+  customerId?: string | null;
+  userId: string;
+  monthlyMxn: number;
+  tier: string;
+  cpuMode: string;
+  diskAddonsGB: number;
+  template?: string;
+  name?: string;
+  successUrl: string;
+  cancelUrl: string;
+}): Promise<{ url: string; sessionId: string }> {
+  const product = await ensureHostingProduct();
+  const session = await getStripe().checkout.sessions.create({
+    mode: "subscription",
+    ...(params.customerId
+      ? { customer: params.customerId }
+      : params.email
+        ? { customer_email: params.email }
+        : {}),
+    line_items: [
+      {
+        quantity: 1,
+        price_data: {
+          currency: "mxn",
+          product,
+          recurring: { interval: "month" },
+          unit_amount: Math.round(params.monthlyMxn * 100),
+        },
+      },
+    ],
+    // On the session (read at checkout.session.completed) …
+    metadata: {
+      eb_machine: "1",
+      eb_user_id: params.userId,
+      eb_tier: params.tier,
+      eb_cpu_mode: params.cpuMode,
+      eb_disk_addons: String(params.diskAddonsGB),
+      ...(params.template ? { eb_template: params.template } : {}),
+      ...(params.name ? { eb_name: params.name } : {}),
+    },
+    // … and on the subscription itself, so a later cancellation still knows
+    // which machine it belongs to.
+    subscription_data: {
+      metadata: {
+        eb_machine: "1",
+        eb_user_id: params.userId,
+        eb_tier: params.tier,
+      },
+    },
+    success_url: params.successUrl,
+    cancel_url: params.cancelUrl,
+  });
+  if (!session.url) throw new Error("Stripe returned a checkout session without a URL");
+  return { url: session.url, sessionId: session.id };
+}
+
+/** Cancel a standalone machine subscription (the release path for those). */
+export async function cancelMachineSubscription(subscriptionId: string): Promise<void> {
+  await getStripe().subscriptions.cancel(subscriptionId, { prorate: true });
 }
 
 /**

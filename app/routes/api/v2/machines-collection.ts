@@ -3,6 +3,7 @@ import { authenticateRequest, requireAuth } from "~/.server/apiAuth";
 import { applySandboxRateLimit } from "~/.server/rateLimiter";
 import { MachineCreateBody } from "~/.server/sandbox/schemas";
 import {
+  buyMachine,
   createPermanent,
   makePermanent,
   listPermanent,
@@ -40,6 +41,8 @@ export async function action({ request }: Route.ActionArgs) {
         diskAddonsGB: rest.diskAddonsGB,
         name: rest.name,
       })
-    : await createPermanent(ctx, rest);
+    // No plan? buyMachine returns { checkoutUrl } instead of failing with an
+    // upsell — hosting bills on its own subscription.
+    : await buyMachine(ctx, rest).then((r) => (r.checkoutUrl ? r : r.machine));
   return Response.json(result);
 }

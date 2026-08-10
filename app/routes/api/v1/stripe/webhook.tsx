@@ -312,6 +312,43 @@ export async function action({ request }: ActionFunctionArgs) {
         // event with both metadata.plan AND customer_details.email — older
         // code tried to read these from customer.subscription.created (which
         // is a Subscription object lacking both), causing 100% silent fails.
+        // Standalone hosting: the machine is its own subscription (no platform
+        // plan involved). This is where the box is actually born — provisioning
+        // only after Stripe confirms payment means nobody ever gets free
+        // compute, and an abandoned checkout leaves nothing behind.
+        if (session.mode === "subscription" && session.metadata?.eb_machine === "1") {
+          const md = session.metadata;
+          const subId = typeof session.subscription === "string" ? session.subscription : null;
+          if (!subId || !md.eb_user_id) {
+            logger.error("Machine checkout missing subscription or user", { sessionId: session.id });
+            break;
+          }
+          try {
+            const { provisionPaidMachine } = await import("~/.server/core/machineOperations");
+            const created = await provisionPaidMachine({
+              ownerId: md.eb_user_id,
+              subscriptionId: subId,
+              tier: md.eb_tier,
+              cpuMode: (md.eb_cpu_mode === "reserved" ? "reserved" : "shared") as "shared" | "reserved",
+              diskAddonsGB: Number(md.eb_disk_addons || 0),
+              template: md.eb_template || undefined,
+              name: md.eb_name || undefined,
+            });
+            logger.info("Machine provisioned from checkout", {
+              sandboxId: created?.sandboxId ?? null,
+              subscriptionId: subId,
+            });
+          } catch (e) {
+            // They paid. Never swallow this.
+            logger.error("Machine provisioning from checkout FAILED", {
+              sessionId: session.id,
+              subscriptionId: subId,
+              error: e instanceof Error ? e.message : String(e),
+            });
+          }
+          break;
+        }
+
         if (session.mode === "subscription" && session.metadata?.plan) {
           const planKey = session.metadata.plan as string;
           const planEmail =
@@ -393,6 +430,26 @@ export async function action({ request }: ActionFunctionArgs) {
             );
             await cancelReservationBySubscription(subscriptionEvent.id);
             logger.info("Sandbox reservation cancelled", {
+              subscriptionId: subscriptionEvent.id,
+            });
+          }
+          break;
+        }
+
+        // Standalone hosting subscription. MUST short-circuit: the plan
+        // handling below strips plan roles on cancellation, so without this a
+        // customer who cancels a $99 VPS would silently lose the Tera plan
+        // they still pay for.
+        if (subscriptionEvent.metadata?.eb_machine === "1") {
+          if (
+            event.type === "customer.subscription.deleted" ||
+            event.type === "invoice.payment_failed"
+          ) {
+            const { releaseMachineBySubscription } = await import(
+              "~/.server/core/machineOperations"
+            );
+            await releaseMachineBySubscription(subscriptionEvent.id);
+            logger.info("Hosting machine released by subscription end", {
               subscriptionId: subscriptionEvent.id,
             });
           }

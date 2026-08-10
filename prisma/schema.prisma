@@ -1339,8 +1339,14 @@ model Sandbox {
   diskAddonsGB    Int      @default(0)        // stackable 100GB NVMe units * 100
   name            String?
   status          String   @default("provisioning") // provisioning|running|suspended|error|lost|destroyed
-  // Single Stripe subscription item per permanent sandbox (tier + disk combined).
+  // Two billing shapes, and this row records which one applies:
+  //  - stripeSubItemId: an item appended to the owner's PLAN subscription
+  //    (plan holders, and every machine sold before Aug 2026).
+  //  - stripeSubscriptionId: a STANDALONE subscription — hosting bought
+  //    without a plan, where the machine itself is the subscription.
+  // Releasing must cancel the right one; never assume the item.
   stripeSubItemId String?
+  stripeSubscriptionId String?
   // adminToken: Bearer for the box's in-VM admin API (:8787), persisted at
   // create when a managed-runtime template (ghostyclaw) is provisioned with env.
   // Used by the sandbox admin passthrough (/api/v2/sandbox/:id/admin) for
