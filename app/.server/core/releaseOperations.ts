@@ -50,6 +50,9 @@ const KEEP_PER_SANDBOX = Number(process.env.RELEASE_KEEP || 10);
 /** Presigned PUT lifetime. Short — the URL is a write capability on our bucket. */
 const PUT_TTL_SECONDS = 3600;
 
+/** What a prebuilt release must KEEP: the built output and the runtime deps. */
+const PREBUILT_KEEP = new Set(["node_modules", "dist", "build", ".next"]);
+
 const DEFAULT_EXCLUDES = [
   "node_modules",
   ".git",
@@ -74,6 +77,15 @@ export const runspecSchema = z.object({
   unit: z.string().optional(),
   port: z.number().int().positive().max(65535).optional(),
   buildTimeoutSec: z.number().int().positive().max(3600).optional(),
+  /**
+   * The release carries the app ALREADY BUILT (dist + node_modules), so a
+   * deploy is download → extract → start, with no npm ci and no bundler in the
+   * box. This is what makes deploys sub-minute for a real app, and it is how
+   * Fly gets its speed: the image is built before it ever reaches the machine.
+   *
+   * Costs a bigger artifact. Worth it: the build runs once, not on every box.
+   */
+  prebuilt: z.boolean().optional(),
   excludes: z.array(z.string()).optional(),
   /** Paths (relative to appDir, or absolute) the daily backup captures. */
   dataPaths: z.array(z.string()).optional(),
@@ -143,7 +155,12 @@ export function buildPublishScript(args: {
 }): string {
   const { spec, tarball, urlFile } = args;
   const maxBytes = args.maxBytes ?? MAX_BYTES;
-  const excludes = [...DEFAULT_EXCLUDES, ...(spec.excludes ?? [])]
+  // A prebuilt release must SHIP the build output and the runtime deps —
+  // excluding them is exactly what forces a slow rebuild on the other side.
+  const base = spec.prebuilt
+    ? DEFAULT_EXCLUDES.filter((x) => !PREBUILT_KEEP.has(x))
+    : DEFAULT_EXCLUDES;
+  const excludes = [...base, ...(spec.excludes ?? [])]
     .map((x) => `--exclude=${shQuote(x)}`)
     .join(" ");
   return [
@@ -519,7 +536,14 @@ async function buildAndStart(
   spec: Runspec
 ): Promise<{ buildOutput?: string; startOutput?: string; exitCode: number }> {
   let buildOutput: string | undefined;
-  if (spec.buildCommand) {
+  // Prebuilt: the artifact already contains dist/ and node_modules, so building
+  // again would only burn a minute of the customer's downtime for nothing.
+  if (spec.prebuilt) {
+    if (spec.unit) {
+      const r = await runtimeControl(ctx, sandboxId, { action: "restart", unit: spec.unit });
+      return { startOutput: r.output, exitCode: r.exitCode };
+    }
+  } else if (spec.buildCommand) {
     const r = await runtimeControl(ctx, sandboxId, {
       action: "rebuild",
       buildCommand: spec.buildCommand,
@@ -711,6 +735,7 @@ export async function launchApp(
     unit?: string;
     port?: number;
     dataPaths?: string[];
+    prebuilt?: boolean;
     env?: Record<string, string>;
     domain?: string;
     message?: string;
@@ -736,6 +761,7 @@ export async function launchApp(
     unit: params.unit,
     port: params.port ?? 3000,
     dataPaths: params.dataPaths,
+    prebuilt: params.prebuilt,
     env: params.env,
   });
   // Neither a unit nor a start command means nothing would actually serve.

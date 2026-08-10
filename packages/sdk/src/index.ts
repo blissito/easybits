@@ -2591,6 +2591,13 @@ export interface Runspec {
   unit?: string;
   port?: number;
   buildTimeoutSec?: number;
+  /**
+   * The release ships the app ALREADY BUILT (dist + node_modules), so a deploy
+   * is download → start with no npm ci in the box. This is what keeps a real
+   * app's deploy under a minute — same reason Fly is fast: the image is built
+   * before it reaches the machine.
+   */
+  prebuilt?: boolean;
   /** Extra paths kept OUT of the release tarball (node_modules/.git are excluded already). */
   excludes?: string[];
   /**
@@ -2626,6 +2633,8 @@ export interface LaunchParams {
   port?: number;
   /** What the nightly backup copies. Without this the machine has NOTHING backed up. */
   dataPaths?: string[];
+  /** The code you pass is ALREADY BUILT → skip the build, just start it. */
+  prebuilt?: boolean;
   env?: Record<string, string>;
   /** Custom domain, e.g. "tienda.com". The result's domain.dns is the record to create. */
   domain?: string;

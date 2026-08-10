@@ -68,3 +68,42 @@ describe("runspec validation", () => {
     expect(() => runspecSchema.parse({ appDir: "app" })).toThrow();
   });
 });
+
+// Deploys de subminuto: un release "prebuilt" DEBE llevar el build y las deps.
+// Excluirlos es justo lo que obliga a un npm ci + bundler dentro de la caja, que
+// es de donde salen los deploys de varios minutos. Fly es rápido por lo mismo:
+// la imagen llega construida.
+describe("prebuilt releases — el artefacto lleva el build hecho", () => {
+  const spec = runspecSchema.parse({ appDir: "/app", prebuilt: true });
+  const script = buildPublishScript({ spec, tarball: "/tmp/r.tgz", urlFile: "/tmp/r.url" });
+
+  it("NO excluye node_modules ni dist cuando es prebuilt", () => {
+    expect(script).not.toContain("--exclude='node_modules'");
+    expect(script).not.toContain("--exclude='dist'");
+    expect(script).not.toContain("--exclude='build'");
+  });
+
+  it("sigue excluyendo lo que nunca sirve en producción", () => {
+    expect(script).toContain("--exclude='.git'");
+    expect(script).toContain("--exclude='.cache'");
+  });
+
+  it("respeta los excludes explícitos del usuario aunque sea prebuilt", () => {
+    const s = buildPublishScript({
+      spec: runspecSchema.parse({ appDir: "/app", prebuilt: true, excludes: ["secretos"] }),
+      tarball: "/tmp/r.tgz",
+      urlFile: "/tmp/r.url",
+    });
+    expect(s).toContain("--exclude='secretos'");
+  });
+
+  it("sin prebuilt, sigue excluyendo el build (el default)", () => {
+    const s = buildPublishScript({
+      spec: runspecSchema.parse({ appDir: "/app" }),
+      tarball: "/tmp/r.tgz",
+      urlFile: "/tmp/r.url",
+    });
+    expect(s).toContain("--exclude='node_modules'");
+    expect(s).toContain("--exclude='dist'");
+  });
+});
