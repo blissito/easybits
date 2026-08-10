@@ -474,6 +474,42 @@ Configure via MCP tool \`set_ai_key\` or dashboard. Supports ANTHROPIC and OPENA
 | \`setVideoMusic(id, url, name?)\` | Set/clear background music |
 | \`renderVideoProject(id)\` | Render to MP4 |
 | \`getDocs(section?)\` | Get this documentation |
+
+**Hosting — máquinas always-on** (\`eb.machines.*\`; la VM además se opera por \`sb.*\`)
+
+| Method | Description |
+|--------|-------------|
+| \`machines.tiers()\` | Catálogo de tiers + precio del disco add-on |
+| \`machines.list()\` | Tus máquinas permanentes |
+| \`machines.create({ tier })\` | Provisiona una máquina always-on |
+| \`machines.setRunspec(id, spec)\` | Declara appDir/build/start/**dataPaths** — obligatorio antes del primer deploy |
+| \`machines.runspec(id)\` | Lee el runspec |
+| \`machines.deploy(id, { message? })\` | Publica el código actual como release |
+| \`machines.releases(id)\` | Lista releases (versión más nueva primero) |
+| \`machines.rollback(id, releaseId)\` | Vuelve a un release anterior, MISMA caja |
+| \`machines.redeploy(releaseId, { tier?, replaceSandboxId? })\` | Caja NUEVA desde un release: recuperación **y** cambio de tier |
+| \`machines.backups(id)\` | Backups diarios de datos (7 días, incluidos) |
+| \`machines.backup(id)\` | Toma un backup ahora |
+| \`sb.exec(cmd)\` | Corre un comando dentro de la caja |
+| \`sb.exposePort(port)\` | URL pública \`sb-<id>-<port>.sandboxes.easybits.cloud\` |
+| \`sb.addDomain(domain, port)\` | Dominio propio + TLS automático; devuelve el registro DNS exacto (apex → A, subdominio → CNAME) |
+| \`sb.verifyDomain(domain)\` | Confirma que el dominio ya resuelve y sirve por HTTPS |
+| \`sb.makePermanent(tier)\` | Promueve un sandbox efímero (mismo sandboxId) |
+| \`sb.release()\` | Libera la máquina (corta cobro, 7 días de gracia) |
+
+Receta completa de una app en producción con su dominio:
+\`\`\`ts
+const sb = await eb.machines.create({ tier: "micro" });
+await sb.exec("cd /app && npm ci && npm run build");
+await eb.machines.setRunspec(sb.sandboxId, {
+  appDir: "/app", buildCommand: "npm ci && npm run build",
+  startCommand: "npm start", port: 3000, dataPaths: ["data"],
+});
+await eb.machines.deploy(sb.sandboxId, { message: "v1" }); // sin esto la caja NO es recuperable
+await sb.exposePort(3000);
+const { dns } = await sb.addDomain("tienda.com", 3000);    // dale ESE registro al cliente
+await sb.verifyDomain("tienda.com");                        // cuando propague
+\`\`\`
 `,
 
   agents: `## Agentes & Sandboxes
