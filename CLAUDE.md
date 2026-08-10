@@ -100,6 +100,16 @@ The digital asset platform where AI agents can store, manage, and consume files 
   - **3 motores de render, no mezclar**: facturas/cotizaciones/reportes JSON → `structured_doc`/`@react-pdf/renderer` (sin browser); HTML/URL/office → Gotenberg-caja; `fast_pdf` (Typst) deprecado.
 - **service_start/service_status/service_stop** (MCP, server.ts): warm/estado/stop manual de una caja; enum `["voice","render"]`.
 
+## Hosting multi-fierro (🚨 leer ANTES de tocar env de hosts)
+
+Vender VPS ("máquinas permanentes") reparte cajas entre varios fierros físicos. El ruteo NO es una constante: `callHost` (`sandboxOperations.ts`) saca el `sandboxId` del path (`/v1/sandbox/<id>/…`) y resuelve el fierro desde `Sandbox.host` (caché en memoria + fallback a DB). Así ningún call-site tiene que acordarse del fierro — olvidarlo en uno solo manda un exec o un destroy al fierro equivocado y da 404 **sin forma de recuperar el binding**.
+
+- **Dónde nacen**: `HOSTING_HOST_URL` (si está vacío, el default `SANDBOX_HOST_URL`). Hosting va al fierro MÁS GRANDE: una caja vendida retiene RAM y disco 24/7 (las de flota duermen y los devuelven), y el fierro chico no puede servir el catálogo — un tier `performance` (8 vCPU/16 GB) ES la máquina entera de A. Fierros: **A** `kvm-poc` 54.38.94.14 (4 núcleos, 31 GB, 410 GB) · **B** `box-b` 51.91.75.231 (8 núcleos, 125 GB, 878 GB).
+- 🚨 **`host = null` es un PUNTERO al default, no "fierro A".** Si se repunta `SANDBOX_HOST_URL` a otro fierro, todas las filas viejas se resuelven en silencio al fierro nuevo y quedan inalcanzables. **Antes de repuntar el default, backfillear**: `db.sandbox.updateMany({ where:{host:null}, data:{host:"<url actual>"} })`. Añadir un fierro nuevo es seguro; cambiar el default NO.
+- 🚨 **`Agent.host` (flota) puede MENTIR**: `pickHost`/`SANDBOX_HOSTS` (`fleetAgentOperations.ts:386`) elige host y lo guarda, pero la VM se crea contra el default. Hoy es inofensivo solo porque `SANDBOX_HOSTS` no está poblado en prod — **poblarlo sin arreglarlo orfana cajas de flota**. La flota aún no usa el ruteo por fila que ya tiene hosting.
+- **Una caja vendida NO se mueve de fierro**: `host` se escribe al aprovisionar y no se toca. Rebalancear es recrear desde release + restaurar backup (`redeploy_machine` + `restore_machine_from_backup`), con downtime — no editar la columna.
+- **Verificación tras añadir fierro**: crear una máquina de prueba, confirmar `Sandbox.host` esperado, y hacerle `exec`. Si el exec responde, el binding es correcto.
+
 ## EasyBits DB (libSQL / sqld)
 - **Servidor**: `infra/easybits-db/` — Fly app `easybits-db` (región `dfw`). Es la imagen oficial `ghcr.io/tursodatabase/libsql-server:latest` con flags; no hay código propietario.
   - Dockerfile CMD: `sqld --http-listen-addr 0.0.0.0:8080 --admin-listen-addr 0.0.0.0:9090 --db-path /data/sqld --enable-namespaces`
