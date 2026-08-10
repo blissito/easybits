@@ -105,7 +105,8 @@ The digital asset platform where AI agents can store, manage, and consume files 
 Ya existe y está en producción: **`cmd/sandbox-router/`** en el repo `sandbox-host` (binario aparte, no `internal/`). Fronta N fierros y hace que la flota parezca UN host. `SANDBOX_HOST_URL` **apunta al router**, no al daemon de un fierro.
 
 Qué hace solo, sin que EasyBits sepa de fierros:
-- **Coloca** (`POST /v1/sandbox`) por RAM libre (`GET /v1/stats` de cada box) + afinidad por tenant, degradando hosts con poco disco de `.mem`; si el elegido responde 503 por cap de RAM, reintenta en el siguiente.
+- **Coloca** (`POST /v1/sandbox`) con este orden: *elegible* > **es el box de hosting** > afinidad por tenant > RAM libre (`GET /v1/stats` de cada box). Degrada hosts con poco disco de `.mem`; si el elegido responde 503 por cap de RAM, reintenta en el siguiente.
+- 🔒 **Las cajas VENDIDAS van al box marcado `"hosting": true`** en `/etc/sandbox-router/hosts.json` (hoy `box-b`). Se detectan por `metadata.eb_tier`, que sólo escribe `createPermanent` — NO por `persistent`, porque las cajas de servicio (render-svc, whisper-svc…) también son persistentes y no deben acaparar ese box. Efímeras y spares del warmpool siguen cayendo donde haya lugar. Es **preferencia, no pin**: si el box de hosting está inelegible o caído, la caja nace en otro fierro (servir al cliente pesa más que la colocación ideal). Antes esto sólo pasaba *por casualidad* (box-b gana por RAM libre) — y una caja vendida no se muda de fierro sin downtime.
 - **Rutea por id** (`/v1/sandbox/{id}/*`): caché `id→box` con lazy-probe, invalidada al ver DELETE o mutación de `/domain`.
 - **Fan-out** de `list`/`stats` y **hairpin del dominio público**: Caddy corre SOLO en el fierro A y el wildcard DNS apunta ahí, pero el router parsea `sb-<id>-<port>` y proxea al `:8081` del box dueño por Tailscale. Una caja en B **sí** es alcanzable públicamente.
 
