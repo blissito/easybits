@@ -756,7 +756,11 @@ export async function launchApp(
 
   const spec = runspecSchema.parse({
     appDir: params.appDir ?? "/app",
-    buildCommand: params.buildCommand ?? "npm ci && npm run build",
+    // `npm ci` exige package-lock.json y falla en seco sin él — un cliente que
+    // no commiteó el lock veía su primer deploy morir sin explicación. El
+    // fallback a `npm install` cubre ese caso sin perder el determinismo
+    // cuando el lock sí está.
+    buildCommand: params.buildCommand ?? "(npm ci || npm install) && npm run build",
     startCommand: params.startCommand,
     unit: params.unit,
     port: params.port ?? 3000,

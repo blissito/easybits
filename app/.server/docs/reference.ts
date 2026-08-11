@@ -798,7 +798,20 @@ Fuente: exactamente UNA de las tres.
 MCP: \`launch_app({ repo | archiveUrl | sandboxId, tier?, port?, dataPaths?, domain? })\`
 REST: \`POST /machines/launch\` · SDK: \`eb.machines.launch({ … })\`
 
-Defaults: \`tier: "micro"\` (nano son 256MB — NO aguanta un build de Node), \`appDir: "/app"\`, \`buildCommand: "npm ci && npm run build"\`, \`startCommand: "npm start"\`, \`port: 3000\`.
+Defaults: \`tier: "micro"\` (nano son 256MB — NO aguanta un build de Node), \`appDir: "/app"\`, \`buildCommand: "(npm ci || npm install) && npm run build"\`, \`startCommand: "npm start"\`, \`port: 3000\`.
+
+**Tiempos medidos** con una app React Router v7 real (204 MB de \`node_modules\`, release de 49.5 MB), en tier \`micro\`:
+
+| paso | tiempo |
+|---|---|
+| provisionar la caja | 3.7 s |
+| \`npm ci\` + build dentro de la caja (primer deploy) | 6.9 s |
+| publicar el release \`prebuilt\` | 11.3 s |
+| **redeploy a una caja limpia** | **12.0 s** |
+
+Una app más pesada tarda más, sobre todo en bajar el release. Con \`prebuilt: true\` el deploy no ejecuta build: baja, extrae y arranca.
+
+⚠️ **Buildea DENTRO de la caja, no en tu máquina.** Un \`node_modules\` con módulos nativos (sharp, better-sqlite3) compilado en macOS revienta en Linux. El primer deploy paga el \`npm ci\`; a partir de ahí publicas \`prebuilt\` y cada deploy es de segundos.
 
 Si el build falla, la máquina que creó \`launch_app\` se libera sola: no te deja pagando una caja rota. Una caja que tú pasaste por \`sandboxId\` NUNCA se toca.
 

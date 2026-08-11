@@ -1648,7 +1648,7 @@ How to embed safely (the only reliable rule):
       name: z.string().max(64).optional(),
       template: z.string().optional(),
       appDir: z.string().optional().describe("Where the app lives (default /app)"),
-      buildCommand: z.string().optional().describe("Default 'npm ci && npm run build'"),
+      buildCommand: z.string().optional().describe("Default '(npm ci || npm install) && npm run build' — el fallback cubre apps sin package-lock.json"),
       startCommand: z.string().optional().describe("Default 'npm start' when there is no systemd unit"),
       unit: z.string().optional(),
       port: z.number().int().min(1).max(65535).optional().describe("Default 3000"),

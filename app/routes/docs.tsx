@@ -1884,6 +1884,10 @@ await eb.machines.launch({ archiveUrl: up.url, domain: "tienda.com" });` },
               ]}
             />
 
+            <p className="text-gray-600 text-sm mb-6">
+              <strong>Tiempos medidos</strong> con una app React Router v7 real (204 MB de <code className="bg-gray-100 px-1 rounded">node_modules</code>, release de 49.5 MB) en tier <code className="bg-gray-100 px-1 rounded">micro</code>: provisionar la caja <strong>3.7 s</strong> · <code className="bg-gray-100 px-1 rounded">npm ci</code> + build en la caja <strong>6.9 s</strong> · publicar el release <strong>11.3 s</strong> · <strong>redeploy a una caja limpia 12.0 s</strong>. Con <code className="bg-gray-100 px-1 rounded">prebuilt: true</code> el deploy no ejecuta build: baja, extrae y arranca. ⚠️ Buildea <em>dentro</em> de la caja, no en tu Mac: un <code className="bg-gray-100 px-1 rounded">node_modules</code> con módulos nativos compilado en macOS revienta en Linux.
+            </p>
+
             <h3 className="text-lg font-bold mb-3 mt-8">Hosting sin plan: la máquina se paga sola</h3>
             <p className="text-gray-600 text-sm mb-3">
               <strong>No necesitas plan de pago para hostear.</strong> Una máquina se factura con su propia suscripción, así que desde una cuenta Free pagas tu caja y nada más. El plan sigue siendo el gate de IA, storage y flota — dejó de serlo para hosting.
