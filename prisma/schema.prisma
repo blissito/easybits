@@ -195,6 +195,9 @@ model User {
   metadata       Metadata?
   stripeId       String?
   stripeIds      String[] // new. To work in dev and prod with confidence
+  /// Hosting de cortesía: la cuenta provisiona máquinas sin pasar por Stripe.
+  /// Para invitados y cuentas de la casa. Se pone a mano, nunca desde la app.
+  courtesyHosting Boolean @default(false)
   // domain stuff
   host           String?        @unique
   dnsConfig      Json?

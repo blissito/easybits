@@ -167,6 +167,12 @@ async function attachBilling(
   host: SandboxRecord | undefined,
   onRollback: () => Promise<void>
 ): Promise<PermanentSandbox> {
+  // Cortesía: la caja existe y se opera igual, pero no cuelga de ninguna
+  // suscripción. Sin esto el cobro falla y el rollback destruye la máquina
+  // recién creada, que es justo lo contrario de regalarla.
+  if ((ctx.user as { courtesyHosting?: boolean }).courtesyHosting) {
+    return toPermanent(row as SandboxRow, host);
+  }
   const subscription = await getActivePlanSubscription(ctx.user);
   if (!subscription) {
     await onRollback();
@@ -369,6 +375,12 @@ export async function buyMachine(
   | { checkoutUrl: string; tier: string; monthlyMxn: number; machine?: undefined }
 > {
   requireScope(ctx, "WRITE");
+  // Cortesía: cuentas invitadas y de la casa provisionan sin pasar por Stripe.
+  // Va antes que el plan porque no hay suscripción que consultar, y se marca a
+  // mano en la DB — la app nunca lo enciende sola.
+  if ((ctx.user as { courtesyHosting?: boolean }).courtesyHosting) {
+    return { machine: await createPermanent(ctx, params) };
+  }
   const plan = await getActivePlanSubscription(ctx.user).catch(() => null);
   if (plan) return { machine: await createPermanent(ctx, params) };
   return startMachineCheckout(ctx, params);
