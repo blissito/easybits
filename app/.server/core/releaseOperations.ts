@@ -881,6 +881,8 @@ export async function launchApp(
     dataPaths?: string[];
     prebuilt?: boolean;
     env?: Record<string, string>;
+    /** Nombres de los secretos del vault que la app necesita. */
+    secretNames?: string[];
     domain?: string;
     message?: string;
   }
@@ -911,6 +913,7 @@ export async function launchApp(
     dataPaths: params.dataPaths,
     prebuilt: params.prebuilt,
     env: params.env,
+    secretNames: params.secretNames,
   });
   // Neither a unit nor a start command means nothing would actually serve.
   if (!spec.unit && !spec.startCommand) spec.startCommand = "npm start";
@@ -1044,8 +1047,13 @@ export async function launchApp(
       }
     }
 
-    await setRunspec(ctx, sandboxId, spec);
-    const started = await buildAndStart(ctx, sandboxId, owner, spec);
+    // Se construye con el runspec MERGEADO, no con el que se armó de los
+    // params: la máquina ya puede traer campos que esta llamada no menciona
+    // —secretNames, sin ir más lejos— y arrancar con el spec local los
+    // perdería. Un relanzamiento sobre una caja existente dejaría la app sin
+    // sus secretos aunque estuvieran cargados.
+    const merged = await setRunspec(ctx, sandboxId, spec);
+    const started = await buildAndStart(ctx, sandboxId, owner, merged);
     if (started.exitCode !== 0) {
       const e: any = new Error(
         `Build/start failed (exit ${started.exitCode}). Output: ${(started.buildOutput ?? started.startOutput ?? "").slice(-1200)}`
