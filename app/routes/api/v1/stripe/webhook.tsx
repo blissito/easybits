@@ -456,6 +456,23 @@ export async function action({ request }: ActionFunctionArgs) {
           break;
         }
 
+        // Esta cuenta de Stripe sirve a VARIAS apps (fixtergeek.com, animaciones,
+        // aio…), así que aquí entran suscripciones que no son de EasyBits. Las
+        // nuestras siempre llevan marca: `plan` la pone el checkout de planes
+        // (plans.tsx:23) y `eb_machine` el de hosting.
+        //
+        // Sin este filtro, un pago fallido de OTRO producto le quitaría el plan
+        // a un usuario de EasyBits que compartiera customer — y encima le
+        // suspendería sus máquinas. Ante la duda no se toca nada: dejar un plan
+        // de más es recuperable, quitárselo a quien paga no.
+        if (!subscriptionEvent.metadata?.plan) {
+          logger.info("Stripe subscription event from another product; ignoring", {
+            subscriptionId: subscriptionEvent.id,
+            eventType: event.type,
+          });
+          return new Response("Not an EasyBits subscription; nothing to do", { status: 200 });
+        }
+
         const custId = subscriptionEvent.customer as string;
         const subscriptionUser = await db.user.findFirst({
           where: { stripeIds: { has: custId } },
