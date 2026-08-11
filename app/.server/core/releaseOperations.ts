@@ -676,10 +676,22 @@ async function materializeSecrets(
   return true;
 }
 
-/** Envuelve un comando para que corra con los secretos ya en el entorno. */
-function conSecretos(comando: string, spec: Runspec, haySecretos: boolean) {
-  if (!haySecretos) return comando;
-  return `set -a; . ${shQuote(`${spec.appDir}/${SECRETS_FILE}`)}; set +a; ${comando}`;
+/**
+ * Envuelve un comando para que corra con los secretos ya en el entorno.
+ *
+ * `exec` va pegado al comando final, nunca delante de todo: `exec set -a`
+ * revienta porque `set` es un builtin del shell y no un ejecutable, y el
+ * arranque muere antes de llegar a la app.
+ */
+function conSecretos(
+  comando: string,
+  spec: Runspec,
+  haySecretos: boolean,
+  opts: { exec?: boolean } = {}
+) {
+  const final = opts.exec ? `exec ${comando}` : comando;
+  if (!haySecretos) return final;
+  return `set -a; . ${shQuote(`${spec.appDir}/${SECRETS_FILE}`)}; set +a; ${final}`;
 }
 
 /**
@@ -700,7 +712,7 @@ export function buildStartScript(spec: Runspec, haySecretos: boolean): string {
   const dir = shQuote(spec.appDir);
   const pid = shQuote(PID_FILE);
   const puerto = spec.port ?? 3000;
-  const comando = shQuote(`exec ${conSecretos(spec.startCommand!, spec, haySecretos)}`);
+  const comando = shQuote(conSecretos(spec.startCommand!, spec, haySecretos, { exec: true }));
   return [
     `cd ${dir}`,
     // 1. La instancia anterior, por su pid.

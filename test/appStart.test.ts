@@ -55,3 +55,29 @@ describe("arranque de la app", () => {
     expect(sinSecretos).not.toContain(".easybits.env");
   });
 });
+
+// El `exec` sirve para que el pid anotado sea el de la app y no el de un
+// shell padre. Pero tiene que ir pegado al comando final: con secretos, el
+// script empieza por `set -a`, y `exec set -a` revienta —`set` es un builtin,
+// no un ejecutable— así que la app no llega ni a arrancar.
+describe("exec y secretos en el mismo arranque", () => {
+  const spec = runspecSchema.parse({
+    appDir: "/srv/store",
+    startCommand: "npm start",
+    port: 3000,
+    secretNames: ["DATABASE_URL"],
+  });
+
+  it("no antepone exec al `set` de los secretos", () => {
+    const script = buildStartScript(spec, true);
+    expect(script).not.toContain("exec set");
+    expect(script).toContain("exec npm start");
+    // Y el orden es: cargar secretos, luego exec.
+    expect(script.indexOf("set -a")).toBeLessThan(script.indexOf("exec npm start"));
+  });
+
+  it("sin secretos, el exec sigue pegado al comando", () => {
+    const sin = runspecSchema.parse({ appDir: "/srv/store", startCommand: "npm start", port: 3000 });
+    expect(buildStartScript(sin, false)).toContain("exec npm start");
+  });
+});
