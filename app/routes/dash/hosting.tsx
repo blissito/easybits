@@ -12,6 +12,7 @@ import {
   readLogs,
   suspendSandbox,
   resumeSandbox,
+  verifySandboxDomain,
 } from "~/.server/core/sandboxOperations";
 import { listReleases, applyRelease } from "~/.server/core/releaseOperations";
 import {
@@ -38,6 +39,18 @@ export const meta = () => [
  * carga con la página; el detalle de cada caja se pide al abrirla, porque
  * releases, dominios y secretos son tres viajes al host por máquina.
  */
+
+/** La IP pública del host: la misma que sirve addSandboxDomain. */
+const PUBLIC_IP = process.env.SANDBOX_PUBLIC_IP || "54.38.94.14";
+const CNAME_TARGET = "cname.sandboxes.easybits.cloud";
+
+/** Un apex no admite CNAME; un subdominio sí. */
+function dnsRecordFor(domain: string) {
+  const apex = domain.split(".").length <= 2;
+  return apex
+    ? { type: "A", name: domain, value: PUBLIC_IP }
+    : { type: "CNAME", name: domain, value: CNAME_TARGET };
+}
 
 export const loader = async ({ request }: Route.LoaderArgs) => {
   const user = await getUserOrRedirect(request);
@@ -89,7 +102,20 @@ export const action = async ({ request }: Route.ActionArgs) => {
       // debe impedir ver sus versiones o su dominio.
       const [releases, domains, secrets, logs] = await Promise.all([
         listReleases(ctx, { sandboxId: id, limit: 8 }).catch(() => ({ items: [] })),
-        listSandboxDomains(ctx, id).catch(() => []),
+        // Cada dominio con su registro y si ya está resolviendo: el paso que
+        // ocurre fuera de aquí es justamente el que se olvida, y hasta ahora
+        // sólo se veía en el instante de darlo de alta.
+        listSandboxDomains(ctx, id)
+          .then((ds) =>
+            Promise.all(
+              ds.map(async (d: any) => ({
+                ...d,
+                dns: dnsRecordFor(d.domain),
+                check: await verifySandboxDomain(ctx, d.domain).catch(() => null),
+              }))
+            )
+          )
+          .catch(() => []),
         listMachineSecrets(ctx, id).catch(() => ({ secretNames: [], inVault: [] })),
         readLogs(ctx, id, { lines: 40 }).catch(() => ({ output: "" })),
       ]);
@@ -135,6 +161,11 @@ function title(machine: any) {
   if (machine.domains?.[0]) return machine.domains[0];
   const name = machine.name ?? "";
   return !name || /^sb_[0-9a-f-]{8}/i.test(name) ? "Sitio sin dominio" : name;
+}
+
+/** El id, recortado: sirve para hablar con soporte, no para leerlo entero. */
+function shortId(sandboxId: string) {
+  return sandboxId.replace(/^sb_/, "").slice(0, 8);
 }
 
 const DOT: Record<string, string> = {
@@ -267,7 +298,11 @@ function MachineCard({
           >
             {title(machine)}
           </a>
-          <p className="text-[11px] text-metal tabular-nums truncate">
+          {/* El id de la caja, en pequeño: hace falta para hablar de ella con
+              soporte, pero no es lo que su dueño viene a leer. */}
+          <p className="text-[11px] text-metal/70 tabular-nums truncate">
+            <span className="font-mono">{shortId(machine.sandboxId)}</span>
+            {" · "}
             {tier ? `${tier.vcpus} vCPU · ${tier.memoryMb / 1024} GB` : machine.tier}
             {machine.currentReleaseId ? "" : " · sin publicar"}
           </p>
@@ -350,30 +385,53 @@ function Domains({ machine, detail, fetcher }: any) {
             Ninguno todavía. Tu sitio se ve en la dirección de arriba.
           </li>
         )}
-        {detail.domains.map((d: any) => (
-          <li key={d.domain} className="flex items-center gap-2 text-sm min-w-0">
-            <a
-              href={`https://${d.domain}`}
-              target="_blank"
-              rel="noreferrer"
-              className="font-medium text-dark hover:text-brand-600 truncate"
+        {detail.domains.map((d: any) => {
+          const live = d.check?.https?.ok;
+          return (
+            <li
+              key={d.domain}
+              className="p-2.5 rounded-lg border-[2px] border-black/10 bg-white min-w-0"
             >
-              {d.domain}
-            </a>
-            <button
-              onClick={() =>
-                fetcher.submit(
-                  { intent: "domain-remove", sandboxId: machine.sandboxId, domain: d.domain },
-                  { method: "post" }
-                )
-              }
-              className="text-metal hover:text-red-500 shrink-0 transition-colors"
-              title="Quitar"
-            >
-              <LuTrash2 className="w-3.5 h-3.5" />
-            </button>
-          </li>
-        ))}
+              <div className="flex items-center gap-2 min-w-0">
+                <span
+                  className={`w-2 h-2 rounded-full shrink-0 ${live ? "bg-emerald-500" : "bg-amber-400"}`}
+                />
+                <a
+                  href={`https://${d.domain}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="font-medium text-dark hover:text-brand-600 truncate text-sm"
+                >
+                  {d.domain}
+                </a>
+                <span className="text-[11px] text-metal shrink-0">
+                  {live ? "funcionando" : "falta el DNS"}
+                </span>
+                <button
+                  onClick={() =>
+                    fetcher.submit(
+                      { intent: "domain-remove", sandboxId: machine.sandboxId, domain: d.domain },
+                      { method: "post" }
+                    )
+                  }
+                  className="ml-auto text-metal hover:text-red-500 shrink-0 transition-colors"
+                  title="Quitar"
+                >
+                  <LuTrash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+              {/* El registro se enseña siempre, no sólo al darlo de alta: es el
+                  paso que ocurre fuera de aquí, y el que hay que consultar
+                  justo cuando algo no funciona. */}
+              {d.dns && (
+                <p className="mt-1.5 font-mono text-[11px] text-metal break-all">
+                  {d.dns.type} · {d.dns.name} → {d.dns.value}
+                </p>
+              )}
+            </li>
+          );
+        })}
       </ul>
 
       <div className="flex gap-2 min-w-0">
