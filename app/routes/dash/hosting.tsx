@@ -23,7 +23,7 @@ import {
 import { HOSTING_CATALOG } from "~/lib/hostingCatalog";
 import { ConfirmDialog } from "~/components/common/ConfirmDialog";
 import {
-  LuExternalLink, LuGlobe, LuKeyRound, LuHistory, LuScrollText,
+  LuExternalLink, LuLink, LuKeyRound, LuHistory, LuScrollText,
   LuPlay, LuPause, LuRotateCcw, LuTrash2, LuPlus, LuCircleCheck,
 } from "react-icons/lu";
 
@@ -255,7 +255,7 @@ export default function Hosting({ loaderData }: Route.ComponentProps) {
 }
 
 const TABS = [
-  { key: "dominios", label: "Dominios", icon: LuGlobe },
+  { key: "dominios", label: "Dominios", icon: LuLink },
   { key: "versiones", label: "Versiones", icon: LuHistory },
   { key: "variables", label: "Variables", icon: LuKeyRound },
   { key: "registro", label: "Registro", icon: LuScrollText },

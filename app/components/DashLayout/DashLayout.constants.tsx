@@ -163,9 +163,9 @@ export const ITEMS = {
     {
       icon: (
         <svg className="scale" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M17.5 19a4.5 4.5 0 0 0 .5-8.97A6 6 0 0 0 6.1 10.6 3.5 3.5 0 0 0 6.5 19z" />
-          <path d="M12 12v5" />
-          <path d="M9.5 14.5 12 12l2.5 2.5" />
+          <circle cx="12" cy="12" r="9" />
+          <path d="M3 12h18" />
+          <path d="M12 3a14 14 0 0 1 0 18a14 14 0 0 1 0-18" />
         </svg>
       ),
       path: "/dash/hosting",
