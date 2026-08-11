@@ -38,6 +38,7 @@ import {
   writeFile,
 } from "./sandboxOperations";
 import { buyMachine, releasePermanent } from "./machineOperations";
+import { createSecret, getSecretValue, listSecrets } from "./secretOperations";
 import { getPlatformDefaultClient } from "../storage";
 import { nanoid } from "nanoid";
 
@@ -53,6 +54,13 @@ const PUT_TTL_SECONDS = 3600;
 /** What a prebuilt release must KEEP: the built output and the runtime deps. */
 const PREBUILT_KEEP = new Set(["node_modules", "dist", "build", ".next"]);
 
+/**
+ * Dónde se materializan los secretos de la app dentro de la máquina. Vive en
+ * el appDir para que el build y el arranque lo tengan a mano, con permisos
+ * 0600, y está en los excludes: nunca viaja dentro de un release.
+ */
+export const SECRETS_FILE = ".easybits.env";
+
 const DEFAULT_EXCLUDES = [
   "node_modules",
   ".git",
@@ -63,6 +71,7 @@ const DEFAULT_EXCLUDES = [
   "__pycache__",
   ".venv",
   "target",
+  SECRETS_FILE,
 ];
 
 // Secrets must NOT live in the runspec: it is stored in Mongo AND embedded in
@@ -96,9 +105,16 @@ export const runspecSchema = z.object({
       (env) => !env || !Object.keys(env).some((k) => SECRETISH.test(k)),
       {
         message:
-          "runspec.env must not carry secrets (it is stored in the DB and baked into every release tarball). Put secrets in the vault and inject them at boot.",
+          "runspec.env must not carry secrets (it is stored in the DB and baked into every release tarball). Put secrets in the vault with PUT /api/v2/machines/:id/secrets and list their names in runspec.secretNames.",
       }
     ),
+  /**
+   * Nombres —no valores— de los secretos del vault del dueño que esta app
+   * necesita. Los nombres sí pueden vivir aquí: viajan en el runspec y en el
+   * tarball sin exponer nada, y son lo que permite volver a materializarlos
+   * al reconstruir la máquina desde un release.
+   */
+  secretNames: z.array(z.string().regex(/^[A-Z_][A-Z0-9_]*$/)).optional(),
 });
 
 export type Runspec = z.infer<typeof runspecSchema>;
@@ -219,6 +235,75 @@ export async function setRunspec(
     console.warn(`setRunspec: could not mirror easybits.json into ${sandboxId}:`, e);
   }
   return merged;
+}
+
+// --- secretos de la app ----------------------------------------------------
+
+/**
+ * Guarda secretos para la app de una máquina.
+ *
+ * Los valores van al vault del dueño (cifrados, `db.secret`) y en el runspec
+ * queda sólo la lista de nombres. Así el runspec y el tarball del release
+ * siguen sin llevar nada sensible, y aun así una máquina reconstruida sabe
+ * qué tiene que volver a pedirle al vault.
+ *
+ * Surten efecto en el siguiente build o arranque, no al vuelo: cambiar un
+ * secreto es cambiarlo aquí y redesplegar.
+ */
+export async function setMachineSecrets(
+  ctx: AuthContext,
+  sandboxId: string,
+  secretos: Record<string, string>
+): Promise<{ ok: true; secretNames: string[] }> {
+  requireScope(ctx, "WRITE");
+  await requireMachine(ctx, sandboxId);
+
+  const nombres = Object.keys(secretos);
+  if (!nombres.length) {
+    const e: any = new Error("Manda al menos un secreto, con la forma { NOMBRE: valor }.");
+    e.code = "NoSecrets";
+    e.status = 400;
+    throw e;
+  }
+
+  for (const nombre of nombres) {
+    await createSecret(ctx.user.id, { name: nombre, value: secretos[nombre] });
+  }
+
+  // La lista se acumula: cargar un secreto nuevo no debe desactivar los que
+  // la app ya estaba usando.
+  const { row } = await requireMachine(ctx, sandboxId);
+  const actual = ((row.runspec as Runspec)?.secretNames ?? []) as string[];
+  const secretNames = [...new Set([...actual, ...nombres])].sort();
+  await setRunspec(ctx, sandboxId, { secretNames });
+
+  return { ok: true, secretNames };
+}
+
+/** Qué secretos usa esta app. Devuelve nombres, nunca valores. */
+export async function listMachineSecrets(
+  ctx: AuthContext,
+  sandboxId: string
+): Promise<{ secretNames: string[]; enElVault: string[] }> {
+  requireScope(ctx, "READ");
+  const { row } = await requireMachine(ctx, sandboxId);
+  const secretNames = ((row.runspec as Runspec)?.secretNames ?? []) as string[];
+  const vault = await listSecrets(ctx.user.id);
+  return { secretNames, enElVault: vault.map((s) => s.name) };
+}
+
+/** Deja de inyectar un secreto en esta app (no lo borra del vault). */
+export async function unsetMachineSecret(
+  ctx: AuthContext,
+  sandboxId: string,
+  nombre: string
+): Promise<{ ok: true; secretNames: string[] }> {
+  requireScope(ctx, "WRITE");
+  const { row } = await requireMachine(ctx, sandboxId);
+  const actual = ((row.runspec as Runspec)?.secretNames ?? []) as string[];
+  const secretNames = actual.filter((n) => n !== nombre);
+  await setRunspec(ctx, sandboxId, { secretNames });
+  return { ok: true, secretNames };
 }
 
 // --- publish ---------------------------------------------------------------
@@ -529,6 +614,62 @@ async function unpackInto(
 }
 
 /** Build + start, honouring the runspec. Prefers a systemd unit over a raw command. */
+/**
+ * Baja los secretos que la app declaró y los deja en un archivo dentro de la
+ * máquina, legible solo por root.
+ *
+ * Es el paso que le faltaba a una máquina normal: provisionRuntime inyecta
+ * `env` sólo para los templates con runtime gestionado (ghostyclaw y
+ * compañía) y se sale antes en cualquier otro, así que una app cualquiera no
+ * tenía forma de recibir su DATABASE_URL. Los valores nunca tocan el runspec
+ * ni el tarball: se resuelven del vault en cada build y en cada arranque, de
+ * modo que rotar un secreto es cambiarlo en el vault y redesplegar.
+ */
+async function materializeSecrets(
+  ctx: AuthContext,
+  sandboxId: string,
+  spec: Runspec
+): Promise<boolean> {
+  const nombres = spec.secretNames ?? [];
+  if (!nombres.length) return false;
+
+  const lineas: string[] = [];
+  const faltantes: string[] = [];
+  for (const nombre of nombres) {
+    const valor = await getSecretValue(ctx.user.id, nombre).catch(() => null);
+    if (valor == null) {
+      faltantes.push(nombre);
+      continue;
+    }
+    // Comillas simples con el escape de shell habitual: un valor puede traer
+    // espacios, `$`, comillas — una URL de Mongo con contraseña las trae.
+    lineas.push(`${nombre}='${valor.replace(/'/g, `'\\''`)}'`);
+  }
+
+  // Arrancar sin un secreto que la app declaró da un fallo mucho más oscuro
+  // (la app revienta al conectar) que decirlo aquí.
+  if (faltantes.length) {
+    const e: any = new Error(
+      `Estos secretos están declarados en el runspec pero no existen en el vault: ${faltantes.join(", ")}. Cárgalos con PUT /api/v2/machines/${sandboxId}/secrets.`
+    );
+    e.code = "SecretsMissing";
+    e.status = 422;
+    throw e;
+  }
+
+  const ruta = `${spec.appDir}/${SECRETS_FILE}`;
+  await writeFile(ctx, sandboxId, { path: ruta, content: lineas.join("\n") + "\n" });
+  // El contenido es lo más sensible de la máquina; que no lo lea nadie más.
+  await execSandboxRaw(ctx.user.id, sandboxId, `chmod 600 ${shQuote(ruta)}`, 30).catch(() => {});
+  return true;
+}
+
+/** Envuelve un comando para que corra con los secretos ya en el entorno. */
+function conSecretos(comando: string, spec: Runspec, haySecretos: boolean) {
+  if (!haySecretos) return comando;
+  return `set -a; . ${shQuote(`${spec.appDir}/${SECRETS_FILE}`)}; set +a; ${comando}`;
+}
+
 async function buildAndStart(
   ctx: AuthContext,
   sandboxId: string,
@@ -536,6 +677,9 @@ async function buildAndStart(
   spec: Runspec
 ): Promise<{ buildOutput?: string; startOutput?: string; exitCode: number }> {
   let buildOutput: string | undefined;
+  // Antes de construir: el build también los necesita (prisma generate lee
+  // DATABASE_URL, los bundlers leen sus tokens).
+  const haySecretos = await materializeSecrets(ctx, sandboxId, spec);
   // Prebuilt: the artifact already contains dist/ and node_modules, so building
   // again would only burn a minute of the customer's downtime for nothing.
   if (spec.prebuilt) {
@@ -546,7 +690,7 @@ async function buildAndStart(
   } else if (spec.buildCommand) {
     const r = await runtimeControl(ctx, sandboxId, {
       action: "rebuild",
-      buildCommand: spec.buildCommand,
+      buildCommand: conSecretos(spec.buildCommand, spec, haySecretos),
       cwd: spec.appDir,
       unit: spec.unit,
     });
@@ -563,7 +707,7 @@ async function buildAndStart(
     const res = await execSandboxRaw(
       ownerId,
       sandboxId,
-      `cd ${shQuote(spec.appDir)} && (nohup ${spec.startCommand} >/var/log/easybits-app.log 2>&1 &) && sleep 2 && echo STARTED`,
+      `cd ${shQuote(spec.appDir)} && (nohup sh -c ${shQuote(conSecretos(spec.startCommand, spec, haySecretos))} >/var/log/easybits-app.log 2>&1 &) && sleep 2 && echo STARTED`,
       60
     );
     return { buildOutput, startOutput: res.stdout || res.stderr, exitCode: res.exitCode };

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildPublishScript, runspecSchema } from "~/.server/core/releaseOperations";
+import { buildPublishScript, runspecSchema, SECRETS_FILE } from "~/.server/core/releaseOperations";
 
 // These assertions exist because both rules look like needless verbosity and
 // have a tempting one-line "simplification" that silently breaks uploads:
@@ -105,5 +105,57 @@ describe("prebuilt releases — el artefacto lleva el build hecho", () => {
     });
     expect(s).toContain("--exclude='node_modules'");
     expect(s).toContain("--exclude='dist'");
+  });
+});
+
+// Los secretos de la app viven en el vault del dueño y sólo se materializan
+// DENTRO de la máquina, en un archivo que el build y el arranque cargan. Si ese
+// archivo se colara en el tarball, cada release publicado llevaría dentro la
+// contraseña de la base de datos del cliente — y los releases se guardan en
+// object storage y se restauran en cajas nuevas.
+describe("secretos de la app", () => {
+  it("el archivo de secretos nunca entra en el tarball", () => {
+    const spec = runspecSchema.parse({
+      appDir: "/app",
+      buildCommand: "npm run build",
+      secretNames: ["DATABASE_URL", "JWT_SECRET"],
+    });
+    const script = buildPublishScript({
+      spec,
+      tarball: "/tmp/rel_x.tar.gz",
+      urlFile: "/tmp/.eb-rel_x.url",
+    });
+    expect(script).toContain(`--exclude='${SECRETS_FILE}'`);
+  });
+
+  it("tampoco en un release prebuilt, que conserva casi todos los excludes", () => {
+    const spec = runspecSchema.parse({
+      appDir: "/app",
+      prebuilt: true,
+      secretNames: ["DATABASE_URL"],
+    });
+    const script = buildPublishScript({
+      spec,
+      tarball: "/tmp/rel_y.tar.gz",
+      urlFile: "/tmp/.eb-rel_y.url",
+    });
+    expect(script).toContain(`--exclude='${SECRETS_FILE}'`);
+  });
+
+  it("el runspec guarda nombres, nunca valores", () => {
+    // Un nombre en minúsculas o con forma rara suele ser un valor pegado por
+    // error en el campo equivocado.
+    expect(() =>
+      runspecSchema.parse({ appDir: "/app", secretNames: ["mongodb://user:pass@host"] })
+    ).toThrow();
+    expect(() =>
+      runspecSchema.parse({ appDir: "/app", secretNames: ["DATABASE_URL"] })
+    ).not.toThrow();
+  });
+
+  it("sigue rechazando un secreto metido en runspec.env", () => {
+    expect(() =>
+      runspecSchema.parse({ appDir: "/app", env: { JWT_SECRET: "algo" } })
+    ).toThrow();
   });
 });

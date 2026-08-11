@@ -275,6 +275,8 @@ export default [
     route("machines/:id/releases", "routes/api/v2/machine-releases.ts"),
     route("machines/:id/rollback", "routes/api/v2/machine-rollback.ts"),
     route("machines/:id/backups", "routes/api/v2/machine-backups.ts"),
+    // Secretos de la app: valores al vault, sólo sus nombres al runspec.
+    route("machines/:id/secrets", "routes/api/v2/machine-secrets.ts"),
     // Colección aparte a propósito: recrear desde un release debe funcionar
     // cuando la máquina original YA NO EXISTE.
     route("machine-releases/:id/redeploy", "routes/api/v2/machine-release-redeploy.ts"),
