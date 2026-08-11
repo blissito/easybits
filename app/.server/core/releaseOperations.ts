@@ -61,6 +61,9 @@ const PREBUILT_KEEP = new Set(["node_modules", "dist", "build", ".next"]);
  */
 export const SECRETS_FILE = ".easybits.env";
 
+/** Dónde se anota el pid de la app, para poder pararla en el siguiente deploy. */
+export const PID_FILE = ".easybits-app.pid";
+
 const DEFAULT_EXCLUDES = [
   "node_modules",
   ".git",
@@ -72,6 +75,7 @@ const DEFAULT_EXCLUDES = [
   ".venv",
   "target",
   SECRETS_FILE,
+  PID_FILE,
 ];
 
 // Secrets must NOT live in the runspec: it is stored in Mongo AND embedded in
@@ -678,6 +682,44 @@ function conSecretos(comando: string, spec: Runspec, haySecretos: boolean) {
   return `set -a; . ${shQuote(`${spec.appDir}/${SECRETS_FILE}`)}; set +a; ${comando}`;
 }
 
+/**
+ * Arranca la app REEMPLAZANDO la que ya estuviera corriendo.
+ *
+ * Sin el paso de parada, un deploy dejaba viva la instancia anterior: el
+ * `nohup … &` devolvía 0, se publicaba el release y todo parecía correcto,
+ * pero el puerto seguía ocupado por el proceso viejo —con su código y su
+ * entorno viejos— y el nuevo moría al no poder escuchar. Un redeploy no
+ * cambiaba nada de lo que el visitante veía.
+ *
+ * Se para por pidfile y, como red de seguridad, por quien tenga tomado el
+ * puerto: un pidfile puede perderse (cajas anteriores a esto no lo tienen).
+ * Y se comprueba que quede alguien escuchando antes de dar el arranque por
+ * bueno.
+ */
+export function buildStartScript(spec: Runspec, haySecretos: boolean): string {
+  const dir = shQuote(spec.appDir);
+  const pid = shQuote(PID_FILE);
+  const puerto = spec.port ?? 3000;
+  const comando = shQuote(`exec ${conSecretos(spec.startCommand!, spec, haySecretos)}`);
+  return [
+    `cd ${dir}`,
+    // 1. La instancia anterior, por su pid.
+    `if [ -f ${pid} ]; then OLD=$(cat ${pid}); kill "$OLD" 2>/dev/null || true; fi`,
+    // 2. Y quien siga ocupando el puerto, venga de donde venga.
+    `command -v fuser >/dev/null && fuser -k ${puerto}/tcp 2>/dev/null || true`,
+    // 3. Darles un momento para soltar el puerto antes de insistir.
+    `for i in 1 2 3 4 5; do command -v ss >/dev/null && ss -ltn 2>/dev/null | grep -q ":${puerto} " || break; sleep 1; done`,
+    `command -v fuser >/dev/null && fuser -k -9 ${puerto}/tcp 2>/dev/null || true`,
+    // `exec` dentro del sh: el pid anotado ES el del proceso de la app, no el
+    // de un shell padre que al morir dejaría al hijo huérfano y escuchando.
+    `nohup sh -c ${comando} >/var/log/easybits-app.log 2>&1 &`,
+    `echo $! > ${pid}`,
+    `sleep 3`,
+    // Que el proceso siga vivo Y escuchando; si no, el log dice por qué.
+    `if kill -0 "$(cat ${pid})" 2>/dev/null; then echo STARTED; else echo "NO_ARRANCO"; tail -30 /var/log/easybits-app.log; exit 1; fi`,
+  ].join("\n");
+}
+
 async function buildAndStart(
   ctx: AuthContext,
   sandboxId: string,
@@ -715,10 +757,16 @@ async function buildAndStart(
     const res = await execSandboxRaw(
       ownerId,
       sandboxId,
-      `cd ${shQuote(spec.appDir)} && (nohup sh -c ${shQuote(conSecretos(spec.startCommand, spec, haySecretos))} >/var/log/easybits-app.log 2>&1 &) && sleep 2 && echo STARTED`,
-      60
+      buildStartScript(spec, haySecretos),
+      90
     );
-    return { buildOutput, startOutput: res.stdout || res.stderr, exitCode: res.exitCode };
+    const salida = res.stdout || res.stderr || "";
+    // Arrancar y no quedarse escuchando es un fallo, aunque el shell devuelva
+    // 0: el `nohup … &` sale bien aunque el proceso muera al segundo.
+    if (!salida.includes("STARTED")) {
+      return { buildOutput, startOutput: salida, exitCode: res.exitCode || 1 };
+    }
+    return { buildOutput, startOutput: salida, exitCode: res.exitCode };
   }
   return { buildOutput, exitCode: 0 };
 }
