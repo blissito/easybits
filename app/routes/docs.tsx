@@ -2045,6 +2045,55 @@ POST /api/v2/machines
             <div className="bg-yellow-50 border-2 border-yellow-300 rounded-xl p-4 text-sm mt-6">
               <strong>Cobro:</strong> el plan da acceso; cada sandbox factura aparte (flat MXN/mes, prorrateado). <code className="bg-gray-100 px-1 rounded">release_machine</code> es <strong>destructiva</strong> (quita el cobro y destruye la VM). Si tu plan se cancela, tus sandboxes se suspenden.
             </div>
+
+            <h3 className="text-lg font-bold mb-3 mt-10">Variables secretas de tu app</h3>
+            <p className="text-gray-600 text-sm mb-3">
+              Tu app necesita su <code className="bg-gray-100 px-1 rounded">DATABASE_URL</code>, su <code className="bg-gray-100 px-1 rounded">STRIPE_SECRET_KEY</code>. <strong>No las metas en <code className="bg-gray-100 px-1 rounded">runspec.env</code></strong>: eso se guarda en la base y viaja dentro de cada tarball de release. La API las rechaza por nombre.
+            </p>
+            <p className="text-gray-600 text-sm mb-3">
+              Los valores se guardan cifrados en tu bóveda y en el runspec queda solo la <strong>lista de nombres</strong>. Se materializan dentro de la máquina —en un archivo que solo root puede leer— justo antes de construir y de arrancar. No entran al release: una caja reconstruida desde un tarball sigue sin llevarlos dentro, pero sabe cuáles pedir.
+            </p>
+            <TabbedCode
+              tabs={[
+                { label: "REST", code: `PUT /api/v2/machines/:sandboxId/secrets
+{ "DATABASE_URL": "mongodb+srv://...", "JWT_SECRET": "..." }
+
+GET    /api/v2/machines/:id/secrets            # nombres, nunca valores
+DELETE /api/v2/machines/:id/secrets?name=DATABASE_URL` },
+              ]}
+            />
+            <p className="text-gray-600 text-sm mt-3 mb-6">
+              Surten efecto en el <strong>siguiente despliegue</strong>, no al vuelo: rotar un secreto es cambiarlo aquí y volver a desplegar. Si el runspec declara uno que no está en la bóveda, el deploy falla diciendo cuál — mejor que ver la app morir al conectar. También se administran en <code className="bg-gray-100 px-1 rounded">/dash/hosting</code> → pestaña Variables.
+            </p>
+
+            <h3 className="text-lg font-bold mb-3 mt-10">Desplegar desde GitHub en cada push</h3>
+            <p className="text-gray-600 text-sm mb-3">
+              El patrón recomendado para el sitio de un cliente: <strong>construir en el runner de GitHub</strong> y mandarle a la máquina el resultado ya hecho. La caja no compila nada, así que un sitio que necesitaría 4 GB para bundlear cabe en <code className="bg-gray-100 px-1 rounded">micro</code>.
+            </p>
+            <TabbedCode
+              tabs={[
+                { label: "CLI", code: `npx @easybits.cloud/cli init
+
+# Escribe el workflow y el script de deploy en tu repo, y te dice
+# los tres pasos que quedan fuera: crear la máquina, guardar los
+# secretos del repo y cargar las variables de la app.` },
+                { label: "REST", code: `# 1. Una vez: crear la máquina
+POST /api/v2/machines/launch
+{ "repo": "https://github.com/usuario/repo.git", "branch": "main",
+  "tier": "micro", "template": "node", "appDir": "/srv/app", "port": 3000 }
+
+# 2. En cada push, desde el runner: subes el build y despliegas
+POST /api/v2/files            { "fileName": "...", "access": "public", ... }
+POST /api/v2/machines/launch  { "sandboxId": "sb_...", "archiveUrl": "...",
+                                "prebuilt": true, "appDir": "/srv/app" }` },
+              ]}
+            />
+            <p className="text-gray-600 text-sm mt-3">
+              Por qué <code className="bg-gray-100 px-1 rounded">sandboxId</code> <strong>y</strong> <code className="bg-gray-100 px-1 rounded">archiveUrl</code> juntos: <code className="bg-gray-100 px-1 rounded">sandboxId</code> es el <strong>destino</strong>, no una fuente. Puedes mandar un artefacto ya construido a una máquina que ya existe — sin eso, el único sitio donde podría ocurrir el build sería dentro de la caja del cliente.
+            </p>
+            <div className="bg-blue-50 border-2 border-blue-300 rounded-xl p-4 text-sm mt-4">
+              El runner de GitHub es Linux x64, igual que la microVM, así que los módulos nativos compilan para el destino correcto. <strong>Construir en una Mac sí rompe</strong>: un <code className="bg-gray-100 px-1 rounded">node_modules</code> con sharp o better-sqlite3 compilado en macOS revienta en Linux. Cada despliegue publica un release, así que historial y rollback siguen funcionando igual.
+            </div>
           </section>
 
           {/* Bases de datos (SQLite-as-a-Service) */}
