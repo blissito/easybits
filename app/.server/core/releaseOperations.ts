@@ -970,17 +970,26 @@ export async function launchApp(
   }
 ): Promise<LaunchResult> {
   requireScope(ctx, "WRITE");
-  const sources = [params.repo, params.archiveUrl, params.sandboxId].filter(Boolean);
-  if (sources.length !== 1) {
-    const e: any = new Error(
-      sources.length === 0
-        ? "Pass exactly one source: `repo` (git clone), `archiveUrl` (.tar.gz/.zip of the app), or `sandboxId` (app already inside an existing box)."
-        : "Pass exactly ONE of `repo`, `archiveUrl` or `sandboxId`."
-    );
-    e.code = sources.length === 0 ? "LaunchSourceMissing" : "LaunchSourceAmbiguous";
+  // `sandboxId` es el DESTINO, no una fuente. Tratarlo como tercera fuente
+  // excluyente impedía lo que más falta hace: mandar un artefacto ya
+  // construido a una máquina que ya existe. Sin eso, el build sólo puede
+  // ocurrir DENTRO de la caja del cliente, que es lo que obliga a pagar un
+  // tier grande por unos segundos de bundler al mes.
+  const sources = [params.repo, params.archiveUrl].filter(Boolean);
+  if (sources.length > 1) {
+    const e: any = new Error("Pass at most ONE of `repo` or `archiveUrl`.");
+    e.code = "LaunchSourceAmbiguous";
     throw e;
   }
-  const needsNewBox = Boolean(params.repo || params.archiveUrl);
+  if (!sources.length && !params.sandboxId) {
+    const e: any = new Error(
+      "Pass a source (`repo` to clone, or `archiveUrl` with a .tar.gz/.zip of the app) and/or a `sandboxId` to deploy onto. With neither there is nothing to deploy and nowhere to put it."
+    );
+    e.code = "LaunchSourceMissing";
+    throw e;
+  }
+  // Sólo se compra caja si no dieron una.
+  const needsNewBox = !params.sandboxId;
 
   const spec = runspecSchema.parse({
     appDir: params.appDir ?? "/app",
@@ -1183,7 +1192,20 @@ export async function launchApp(
       domain,
     };
   } catch (err) {
-    if (createdHere) await releasePermanent(ctx, sandboxId).catch(() => {});
+    // Deshacer una caja que ESTA llamada acaba de crear es limpieza interna,
+    // no una acción del usuario: no puede depender de que su key tenga scope
+    // DELETE. Con una key READ+WRITE, releasePermanent lanzaba, el catch se lo
+    // tragaba y la máquina se quedaba encendida —y facturando— después de un
+    // launch fallido, sin que nadie se enterara.
+    if (createdHere) {
+      const cleanupCtx = { ...ctx, scopes: [...(ctx.scopes ?? []), "DELETE"] } as AuthContext;
+      await releasePermanent(cleanupCtx, sandboxId).catch((e) => {
+        console.error(
+          `launchApp: no se pudo liberar ${sandboxId} tras un fallo; queda encendida:`,
+          e?.message ?? e
+        );
+      });
+    }
     throw err;
   }
 }
