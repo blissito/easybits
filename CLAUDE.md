@@ -100,6 +100,26 @@ The digital asset platform where AI agents can store, manage, and consume files 
   - **3 motores de render, no mezclar**: facturas/cotizaciones/reportes JSON → `structured_doc`/`@react-pdf/renderer` (sin browser); HTML/URL/office → Gotenberg-caja; `fast_pdf` (Typst) deprecado.
 - **service_start/service_status/service_stop** (MCP, server.ts): warm/estado/stop manual de una caja; enum `["voice","render"]`.
 
+## Hosting: vender un VPS (releases, backups, cobro)
+
+Vendible desde 2026-08-10. **No requiere plan de pago**: una máquina es su PROPIA suscripción de Stripe (`buyMachine` → con plan, máquina al instante; sin plan, `{checkoutUrl}` y la caja **nace en el webhook** al confirmarse el pago, idempotente por `subscriptionId`). `Sandbox.stripeSubscriptionId` vs `stripeSubItemId` distinguen las dos formas de cobro — `release` debe cancelar la correcta.
+
+- **Release = CÓDIGO, backup = DATOS.** `releaseOperations.ts`: `runspec` + tarball en Tigris; `rollback_machine` (misma caja) y `redeploy_machine` (caja nueva) — este último ES el "resize" (no hay resize en caliente) y la recuperación. `machineBackupOperations.ts`: diario, 7 días, incluido, copia `runspec.dataPaths` (NO el rootfs: eso lo reconstruye el release) y declara `consistency:"crash"` porque se toma en caliente.
+- **`launch_app`** hace todo en UNA llamada (caja → código → build → URL pública → release → dominio). Tres fuentes: `repo` | `archiveUrl` | `sandboxId`. Preferirlo: hecho a mano, el paso que se salta es el release, y una máquina sin release no se reconstruye.
+- **Tiempos MEDIDOS** (app RRv7 real, tier `micro`, 204MB de node_modules → release de 49.5MB): provisionar 3.7s · `npm ci`+build en la caja 6.9s · publicar release 11.3s · **redeploy a caja limpia 12.0s** · **recuperación total tras pérdida 11.9s**.
+- **⚠️ `runspec.prebuilt`**: el release lleva `dist`+`node_modules` y el deploy NO ejecuta build. **Buildear DENTRO de la caja**, nunca en la Mac — módulos nativos (sharp, better-sqlite3) compilados en macOS revientan en Linux.
+- **⚠️ Transporte, dos reglas que parecen verbosidad y no lo son** (fijadas en `test/releaseTransport.test.ts`): nunca `tar | base64` por stdout de exec (trunca), nunca `tar | curl -T -` (chunked sin Content-Length → Tigris rechaza el PUT presignado). Siempre tar a ARCHIVO y `curl -T <archivo>`.
+- **⚠️ Una caja VENDIDA se distingue por `metadata.eb_tier`** (sólo lo escribe `createPermanent`), NO por `persistent`: las cajas de servicio (render-svc, whisper-svc…) también son persistentes. Ese marcador gobierna la colocación en box-b (router) y la exención de los barridos (host `isBilledBox`).
+
+### Stripe (🚨 leer antes de tocar cobros)
+- **La cuenta de Stripe sirve a VARIAS apps** (fixtergeek.com, animaciones, aio, image-to-video). El webhook IGNORA toda suscripción sin `metadata.plan` o `eb_machine`: sin ese filtro, un pago fallido de otro producto le quita el plan a un usuario de EasyBits y le suspende sus máquinas.
+- **La firma se verifica con `STRIPE_SIGN`**, no con `STRIPE_WEBHOOK_SECRET` (`webhook.tsx:238`). Endpoint: `we_1U33XBJ7Zwl77LqniDCmZ1T6` → `https://www.easybits.cloud/api/v1/stripe/webhook`. **No existía ninguno hasta 2026-08-10** — se pagaba y no pasaba nada.
+- Responder no-2xx hace que Stripe **reintente 3 días**: un evento inaccionable (usuario desconocido, otra app) se responde 200 + log.
+- Precios **al vuelo** (`price_data`) mientras el producto itere. `EB_HOSTING_PRODUCT_ID` fijado: sin él, `ensureHostingProduct` memoiza por PROCESO y crea un producto nuevo por deploy.
+
+### ⚠️ `npm run build` antes de pushear cambios que toquen rutas
+Cuatro deploys fallaron en silencio el 2026-08-10: typecheck y tests pasaban, pero un import de `~/.server` sin usar en una ruta rompe el bundle del cliente ("Server-only module referenced by client"). Sólo `npm run build` lo detecta.
+
 ## Multi-fierro: el ROUTER decide, EasyBits no se entera (🚨 no lo puentees)
 
 Ya existe y está en producción: **`cmd/sandbox-router/`** en el repo `sandbox-host` (binario aparte, no `internal/`). Fronta N fierros y hace que la flota parezca UN host. `SANDBOX_HOST_URL` **apunta al router**, no al daemon de un fierro.
