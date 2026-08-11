@@ -21,6 +21,7 @@ import {
   unsetMachineSecret,
 } from "~/.server/core/releaseOperations";
 import { HOSTING_CATALOG } from "~/lib/hostingCatalog";
+import { ConfirmDialog } from "~/components/common/ConfirmDialog";
 import {
   LuExternalLink, LuGlobe, LuKeyRound, LuHistory, LuScrollText,
   LuPlay, LuPause, LuRotateCcw, LuTrash2, LuPlus, LuCircleCheck,
@@ -218,7 +219,7 @@ export default function Hosting({ loaderData }: Route.ComponentProps) {
   const [openId, setOpenId] = useState<string | null>(null);
 
   return (
-    <section className="max-w-4xl mx-auto px-4 md:px-6 py-8 md:py-10">
+    <section className="w-full max-w-4xl mx-auto px-4 md:px-6 py-8 md:py-10 min-w-0">
       <header className="mb-6">
         <h1 className="text-2xl md:text-3xl font-bold text-dark">Hosting</h1>
         <p className="mt-1 text-sm text-metal">
@@ -234,7 +235,7 @@ export default function Hosting({ loaderData }: Route.ComponentProps) {
         </p>
       </header>
 
-      <div className="grid gap-3">
+      <div className="grid gap-3 w-full min-w-0">
         {machines.map((m: any) => (
           <MachineCard
             key={m.sandboxId}
@@ -255,6 +256,8 @@ const TABS = [
   { key: "registro", label: "Registro", icon: LuScrollText },
 ] as const;
 
+type Pending = { title: string; message: string; label: string; run: () => void };
+
 function MachineCard({
   machine,
   open,
@@ -266,6 +269,9 @@ function MachineCard({
 }) {
   const fetcher = useFetcher<any>();
   const [tab, setTab] = useState<(typeof TABS)[number]["key"]>("dominios");
+  // Lo que está esperando confirmación. Vive en la tarjeta para que las tres
+  // pestañas compartan el mismo diálogo.
+  const [pending, setPending] = useState<Pending | null>(null);
   const tier = HOSTING_CATALOG[machine.tier as keyof typeof HOSTING_CATALOG];
   const detail = fetcher.data?.detail;
   const address = machine.domains?.[0]
@@ -283,7 +289,7 @@ function MachineCard({
   };
 
   return (
-    <article className="rounded-2xl border-[2px] border-black bg-white overflow-hidden transition-shadow hover:shadow-[4px_4px_0_0_#000]">
+    <article className="w-full min-w-0 rounded-2xl border-[2px] border-black bg-white overflow-hidden transition-shadow hover:shadow-[4px_4px_0_0_#000]">
       <div className="flex items-center gap-3 p-3 md:p-4 min-w-0">
         <span
           className={`w-2.5 h-2.5 rounded-full shrink-0 ${DOT[machine.status] ?? "bg-gray-300"}`}
@@ -323,7 +329,7 @@ function MachineCard({
       </div>
 
       {open && (
-        <div className="border-t-[2px] border-black bg-cream/30">
+        <div className="border-t-[2px] border-black bg-cream/30 min-w-0 overflow-hidden">
           {/* En pestañas y no todo apilado: el panel entero no cabía en una
               tablet, y a diario sólo se mira una de las cuatro cosas. */}
           <div className="flex gap-1 p-2 overflow-x-auto border-b-[2px] border-black/10">
@@ -345,27 +351,40 @@ function MachineCard({
             {detail && (
               <>
                 {tab === "dominios" && (
-                  <Domains machine={machine} detail={detail} fetcher={fetcher} />
+                  <Domains machine={machine} detail={detail} fetcher={fetcher} confirm={setPending} />
                 )}
                 {tab === "versiones" && (
                   <Releases machine={machine} detail={detail} fetcher={fetcher} />
                 )}
                 {tab === "variables" && (
-                  <Secrets machine={machine} detail={detail} fetcher={fetcher} />
+                  <Secrets machine={machine} detail={detail} fetcher={fetcher} confirm={setPending} />
                 )}
                 {tab === "registro" && <Logs detail={detail} />}
 
-                <Danger machine={machine} fetcher={fetcher} />
+                <Danger machine={machine} fetcher={fetcher} confirm={setPending} />
               </>
             )}
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        isOpen={!!pending}
+        title={pending?.title ?? ""}
+        message={pending?.message}
+        confirmLabel={pending?.label ?? "Confirmar"}
+        destructive
+        onCancel={() => setPending(null)}
+        onConfirm={() => {
+          pending?.run();
+          setPending(null);
+        }}
+      />
     </article>
   );
 }
 
-function Domains({ machine, detail, fetcher }: any) {
+function Domains({ machine, detail, fetcher, confirm }: any) {
   const [value, setValue] = useState("");
   const added = fetcher.data?.domain;
   const send = () => {
@@ -378,7 +397,7 @@ function Domains({ machine, detail, fetcher }: any) {
   };
 
   return (
-    <div className="grid gap-3">
+    <div className="grid gap-3 w-full min-w-0">
       <ul className="grid gap-1.5">
         {detail.domains.length === 0 && (
           <li className="text-sm text-metal">
@@ -409,13 +428,20 @@ function Domains({ machine, detail, fetcher }: any) {
                 </span>
                 <button
                   onClick={() =>
-                    fetcher.submit(
-                      { intent: "domain-remove", sandboxId: machine.sandboxId, domain: d.domain },
-                      { method: "post" }
-                    )
+                    confirm({
+                      title: `¿Quitar ${d.domain}?`,
+                      message:
+                        "El sitio dejará de responder en ese dominio. Puedes volver a darlo de alta cuando quieras, y el registro DNS seguirá sirviendo.",
+                      label: "Quitar dominio",
+                      run: () =>
+                        fetcher.submit(
+                          { intent: "domain-remove", sandboxId: machine.sandboxId, domain: d.domain },
+                          { method: "post" }
+                        ),
+                    })
                   }
                   className="ml-auto text-metal hover:text-red-500 shrink-0 transition-colors"
-                  title="Quitar"
+                  title={`Quitar ${d.domain}`}
                 >
                   <LuTrash2 className="w-3.5 h-3.5" />
                 </button>
@@ -507,7 +533,7 @@ function Releases({ machine, detail, fetcher }: any) {
   );
 }
 
-function Secrets({ machine, detail, fetcher }: any) {
+function Secrets({ machine, detail, fetcher, confirm }: any) {
   const [name, setName] = useState("");
   const [value, setValue] = useState("");
   const send = () => {
@@ -534,13 +560,20 @@ function Secrets({ machine, detail, fetcher }: any) {
             {n}
             <button
               onClick={() =>
-                fetcher.submit(
-                  { intent: "secret-unset", sandboxId: machine.sandboxId, name: n },
-                  { method: "post" }
-                )
+                confirm({
+                  title: `¿Dejar de usar ${n}?`,
+                  message:
+                    "La app dejará de recibirla en el próximo despliegue. Si la necesita para arrancar, no levantará. El valor sigue guardado y puedes volver a activarla.",
+                  label: "Dejar de usarla",
+                  run: () =>
+                    fetcher.submit(
+                      { intent: "secret-unset", sandboxId: machine.sandboxId, name: n },
+                      { method: "post" }
+                    ),
+                })
               }
               className="text-metal hover:text-red-500"
-              title="Dejar de usarla"
+              title={`Dejar de usar ${n}`}
             >
               <LuTrash2 className="w-3 h-3" />
             </button>
@@ -582,46 +615,62 @@ function Logs({ detail }: any) {
   return (
     // break-all + scroll horizontal propio: una línea de systemd es larguísima
     // y sin esto estiraba la tarjeta entera fuera de la pantalla.
-    <pre className="max-h-56 overflow-auto p-3 rounded-lg bg-dark text-cream text-[11px] leading-relaxed font-mono whitespace-pre-wrap break-all">
-      {output || "Sin salida todavía."}
-    </pre>
+    <div className="w-full min-w-0 max-h-56 overflow-auto rounded-lg bg-dark">
+      <pre className="p-3 text-[11px] leading-relaxed font-mono text-cream whitespace-pre-wrap break-all">
+        {output || "Sin salida todavía."}
+      </pre>
+    </div>
   );
 }
 
-function Danger({ machine, fetcher }: any) {
+function Danger({ machine, fetcher, confirm }: any) {
   const suspended = machine.status === "suspended";
   return (
     <div className="flex flex-wrap items-center gap-2 mt-4 pt-3 border-t border-black/10">
+      {/* "Pausar" y "Dar de baja" a secas no decían QUÉ se pausa: la pestaña de
+          al lado va de dominios, y se leían como si fueran de eso. */}
       <Btn
         tone="quiet"
-        onClick={() =>
-          fetcher.submit(
-            { intent: suspended ? "resume" : "suspend", sandboxId: machine.sandboxId },
-            { method: "post" }
-          )
-        }
+        onClick={() => {
+          const run = () =>
+            fetcher.submit(
+              { intent: suspended ? "resume" : "suspend", sandboxId: machine.sandboxId },
+              { method: "post" }
+            );
+          // Reanudar no rompe nada; pausar tira el sitio.
+          if (suspended) return run();
+          confirm({
+            title: "¿Pausar el sitio?",
+            message:
+              "Dejará de responder hasta que lo reanudes. Nada se borra: sus datos y sus versiones siguen ahí.",
+            label: "Pausar sitio",
+            run,
+          });
+        }}
       >
         <span className="flex items-center gap-1.5">
-          {suspended ? <LuPlay className="w-3.5 h-3.5" /> : <LuPause className="w-3.5 h-3.5" />}
-          {suspended ? "Reanudar" : "Pausar"}
+          {suspended ? <LuPlay className="w-4 h-4" /> : <LuPause className="w-4 h-4" />}
+          {suspended ? "Reanudar sitio" : "Pausar sitio"}
         </span>
       </Btn>
 
       <Btn
         tone="danger"
-        onClick={() => {
-          // Se recupera durante 7 días; decirlo evita el susto, y también que
-          // alguien crea que ya no hay vuelta atrás.
-          if (
-            confirm(
-              "Se apaga el sitio y se programa su borrado. Puedes recuperarlo durante 7 días. ¿Seguimos?"
-            )
-          ) {
-            fetcher.submit({ intent: "release", sandboxId: machine.sandboxId }, { method: "post" });
-          }
-        }}
+        onClick={() =>
+          confirm({
+            title: "¿Dar de baja el sitio?",
+            message:
+              "Se apaga y deja de responder en todos sus dominios. Se puede recuperar durante 7 días; pasados, se borra la máquina. Los datos que vivan fuera (tu base de datos) no se tocan.",
+            label: "Dar de baja el sitio",
+            run: () =>
+              fetcher.submit({ intent: "release", sandboxId: machine.sandboxId }, { method: "post" }),
+          })
+        }
       >
-        Dar de baja
+        <span className="flex items-center gap-1.5">
+          <LuTrash2 className="w-4 h-4" />
+          Dar de baja
+        </span>
       </Btn>
     </div>
   );
