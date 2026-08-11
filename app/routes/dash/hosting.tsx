@@ -219,7 +219,11 @@ export default function Hosting({ loaderData }: Route.ComponentProps) {
   const [openId, setOpenId] = useState<string | null>(null);
 
   return (
-    <section className="w-full max-w-4xl mx-auto px-4 md:px-6 py-8 md:py-10 min-w-0">
+    // El sidebar es fijo y no ocupa sitio en el flujo: sin el pl-20 la página
+    // se le mete debajo y se ve cortada por la izquierda. Es la misma
+    // estructura que packs.tsx y el resto del dash.
+    <section className="w-full min-w-0 md:pl-20 pt-14 md:pt-0">
+      <div className="max-w-4xl mx-auto px-4 md:px-6 py-8 md:py-10 min-w-0">
       <header className="mb-6">
         <h1 className="text-2xl md:text-3xl font-bold text-dark">Hosting</h1>
         <p className="mt-1 text-sm text-metal">
@@ -243,7 +247,8 @@ export default function Hosting({ loaderData }: Route.ComponentProps) {
             open={openId === m.sandboxId}
             onToggle={() => setOpenId(openId === m.sandboxId ? null : m.sandboxId)}
           />
-        ))}
+          ))}
+        </div>
       </div>
     </section>
   );
