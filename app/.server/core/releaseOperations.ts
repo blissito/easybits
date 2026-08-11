@@ -223,7 +223,15 @@ export async function setRunspec(
 ): Promise<Runspec> {
   requireScope(ctx, "WRITE");
   const { row } = await requireMachine(ctx, sandboxId);
-  const merged = runspecSchema.parse({ ...((row.runspec as object) ?? {}), ...patch });
+  // Las claves con `undefined` se quitan del patch antes de mezclar: en JS
+  // `{...{a:1}, ...{a:undefined}}` deja `a` en undefined, así que un patch
+  // parcial —que es lo normal, y lo que arma launchApp con sus params
+  // opcionales— BORRABA lo que no mencionaba. Así se perdían los secretNames
+  // cargados aparte, y con ellos los secretos de la app al reconstruirla.
+  const limpio = Object.fromEntries(
+    Object.entries(patch).filter(([, v]) => v !== undefined)
+  );
+  const merged = runspecSchema.parse({ ...((row.runspec as object) ?? {}), ...limpio });
   await db.sandbox.update({ where: { sandboxId }, data: { runspec: merged } });
   // Best-effort mirror — a suspended box must not block a config change.
   try {
