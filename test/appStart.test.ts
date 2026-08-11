@@ -17,9 +17,18 @@ describe("arranque de la app", () => {
 
   it("para la instancia anterior antes de arrancar", () => {
     expect(script).toContain(`kill "$OLD"`);
-    expect(script).toContain(`fuser -k 3000/tcp`);
     // El orden importa: matar DESPUÉS de arrancar mataría al nuevo.
-    expect(script.indexOf("fuser -k 3000/tcp")).toBeLessThan(script.indexOf("nohup"));
+    expect(script.indexOf("matar")).toBeLessThan(script.indexOf("nohup"));
+  });
+
+  it("mata al que tenga el puerto sin depender de paquetes opcionales", () => {
+    // Una caja anterior a esto no tiene pidfile, y su proceso es justo el que
+    // hay que reemplazar. Se hizo con `fuser` y no funcionaba: psmisc no viene
+    // en el template y la guarda `command -v` saltaba el kill en silencio.
+    expect(script).not.toContain("fuser");
+    expect(script).toContain("ss -ltnp");
+    expect(script).toContain(`grep ":3000 "`);
+    expect(script).toContain("matar -9");
   });
 
   it("anota el pid del proceso de la app, no el de un shell padre", () => {

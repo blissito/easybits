@@ -705,11 +705,17 @@ export function buildStartScript(spec: Runspec, haySecretos: boolean): string {
     `cd ${dir}`,
     // 1. La instancia anterior, por su pid.
     `if [ -f ${pid} ]; then OLD=$(cat ${pid}); kill "$OLD" 2>/dev/null || true; fi`,
-    // 2. Y quien siga ocupando el puerto, venga de donde venga.
-    `command -v fuser >/dev/null && fuser -k ${puerto}/tcp 2>/dev/null || true`,
-    // 3. Darles un momento para soltar el puerto antes de insistir.
-    `for i in 1 2 3 4 5; do command -v ss >/dev/null && ss -ltn 2>/dev/null | grep -q ":${puerto} " || break; sleep 1; done`,
-    `command -v fuser >/dev/null && fuser -k -9 ${puerto}/tcp 2>/dev/null || true`,
+    // 2. Y quien siga ocupando el puerto, venga de donde venga: una caja
+    //    anterior a esto no tiene pidfile, y ese proceso es justo el que hay
+    //    que reemplazar. El pid sale de `ss`, que está en el template; con
+    //    `fuser` no funcionaba porque psmisc no viene instalado y la guarda
+    //    `command -v` hacía que el kill se saltara en silencio.
+    `matar() { ss -ltnp 2>/dev/null | grep ":${puerto} " | grep -o "pid=[0-9]*" | cut -d= -f2 | sort -u | while read P; do [ -n "$P" ] && kill $1 "$P" 2>/dev/null || true; done; }`,
+    `matar`,
+    // 3. Darle un momento a soltar el puerto antes de insistir a la mala.
+    `for i in 1 2 3 4 5; do ss -ltn 2>/dev/null | grep -q ":${puerto} " || break; sleep 1; done`,
+    `matar -9`,
+    `for i in 1 2 3; do ss -ltn 2>/dev/null | grep -q ":${puerto} " || break; sleep 1; done`,
     // `exec` dentro del sh: el pid anotado ES el del proceso de la app, no el
     // de un shell padre que al morir dejaría al hijo huérfano y escuchando.
     `nohup sh -c ${comando} >/var/log/easybits-app.log 2>&1 &`,
