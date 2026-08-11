@@ -34,6 +34,17 @@ const HIDDEN = new Set([
 const visible = <T extends { title: string }>(items: T[]) =>
   items.filter((i) => !HIDDEN.has(i.title));
 
+/**
+ * Qué va primero en el menú. Lo de arriba es lo que se usa a diario: el sitio
+ * de un cliente y los agentes que lo atienden.
+ *
+ * Se ordena por título y no por dónde esté pegado cada bloque, para que
+ * mover un ítem sea editar esta lista y no cortar y pegar JSX.
+ */
+const ORDEN = ["Hosting", "Flota"];
+
+// Lo que no está en ORDEN conserva su posición, detrás de lo que sí.
+
 export const ITEMS = {
   /** Primer ítem suelto — el "home" del dash */
   inicioItem: {
@@ -219,7 +230,10 @@ export const ITEMS = {
       path: "/dash/developer",
       title: "Developer",
     },
-  ].filter((i) => !HIDDEN.has(i.title)) as SidebarItem[],
+  ].filter((i) => !HIDDEN.has(i.title)).sort((a, b) => {
+    const ia = ORDEN.indexOf(a.title), ib = ORDEN.indexOf(b.title);
+    return (ia === -1 ? ORDEN.length : ia) - (ib === -1 ? ORDEN.length : ib);
+  }) as SidebarItem[],
 
   /** Cuentas de clientes — "operar como"; se inserta para admins junto a Admin */
   cuentasItem: {
