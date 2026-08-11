@@ -232,10 +232,10 @@ export async function setRunspec(
   // parcial —que es lo normal, y lo que arma launchApp con sus params
   // opcionales— BORRABA lo que no mencionaba. Así se perdían los secretNames
   // cargados aparte, y con ellos los secretos de la app al reconstruirla.
-  const limpio = Object.fromEntries(
+  const defined = Object.fromEntries(
     Object.entries(patch).filter(([, v]) => v !== undefined)
   );
-  const merged = runspecSchema.parse({ ...((row.runspec as object) ?? {}), ...limpio });
+  const merged = runspecSchema.parse({ ...((row.runspec as object) ?? {}), ...defined });
   await db.sandbox.update({ where: { sandboxId }, data: { runspec: merged } });
   // Best-effort mirror — a suspended box must not block a config change.
   try {
@@ -265,28 +265,28 @@ export async function setRunspec(
 export async function setMachineSecrets(
   ctx: AuthContext,
   sandboxId: string,
-  secretos: Record<string, string>
+  secrets: Record<string, string>
 ): Promise<{ ok: true; secretNames: string[] }> {
   requireScope(ctx, "WRITE");
   await requireMachine(ctx, sandboxId);
 
-  const nombres = Object.keys(secretos);
-  if (!nombres.length) {
+  const names = Object.keys(secrets);
+  if (!names.length) {
     const e: any = new Error("Manda al menos un secreto, con la forma { NOMBRE: valor }.");
     e.code = "NoSecrets";
     e.status = 400;
     throw e;
   }
 
-  for (const nombre of nombres) {
-    await createSecret(ctx.user.id, { name: nombre, value: secretos[nombre] });
+  for (const name of names) {
+    await createSecret(ctx.user.id, { name, value: secrets[name] });
   }
 
   // La lista se acumula: cargar un secreto nuevo no debe desactivar los que
   // la app ya estaba usando.
   const { row } = await requireMachine(ctx, sandboxId);
-  const actual = ((row.runspec as Runspec)?.secretNames ?? []) as string[];
-  const secretNames = [...new Set([...actual, ...nombres])].sort();
+  const current = ((row.runspec as Runspec)?.secretNames ?? []) as string[];
+  const secretNames = [...new Set([...current, ...names])].sort();
   await setRunspec(ctx, sandboxId, { secretNames });
 
   return { ok: true, secretNames };
@@ -296,24 +296,24 @@ export async function setMachineSecrets(
 export async function listMachineSecrets(
   ctx: AuthContext,
   sandboxId: string
-): Promise<{ secretNames: string[]; enElVault: string[] }> {
+): Promise<{ secretNames: string[]; inVault: string[] }> {
   requireScope(ctx, "READ");
   const { row } = await requireMachine(ctx, sandboxId);
   const secretNames = ((row.runspec as Runspec)?.secretNames ?? []) as string[];
   const vault = await listSecrets(ctx.user.id);
-  return { secretNames, enElVault: vault.map((s) => s.name) };
+  return { secretNames, inVault: vault.map((s) => s.name) };
 }
 
 /** Deja de inyectar un secreto en esta app (no lo borra del vault). */
 export async function unsetMachineSecret(
   ctx: AuthContext,
   sandboxId: string,
-  nombre: string
+  name: string
 ): Promise<{ ok: true; secretNames: string[] }> {
   requireScope(ctx, "WRITE");
   const { row } = await requireMachine(ctx, sandboxId);
-  const actual = ((row.runspec as Runspec)?.secretNames ?? []) as string[];
-  const secretNames = actual.filter((n) => n !== nombre);
+  const current = ((row.runspec as Runspec)?.secretNames ?? []) as string[];
+  const secretNames = current.filter((n) => n !== name);
   await setRunspec(ctx, sandboxId, { secretNames });
   return { ok: true, secretNames };
 }
@@ -642,37 +642,37 @@ async function materializeSecrets(
   sandboxId: string,
   spec: Runspec
 ): Promise<boolean> {
-  const nombres = spec.secretNames ?? [];
-  if (!nombres.length) return false;
+  const names = spec.secretNames ?? [];
+  if (!names.length) return false;
 
-  const lineas: string[] = [];
-  const faltantes: string[] = [];
-  for (const nombre of nombres) {
-    const valor = await getSecretValue(ctx.user.id, nombre).catch(() => null);
-    if (valor == null) {
-      faltantes.push(nombre);
+  const lines: string[] = [];
+  const missing: string[] = [];
+  for (const name of names) {
+    const value = await getSecretValue(ctx.user.id, name).catch(() => null);
+    if (value == null) {
+      missing.push(name);
       continue;
     }
     // Comillas simples con el escape de shell habitual: un valor puede traer
     // espacios, `$`, comillas — una URL de Mongo con contraseña las trae.
-    lineas.push(`${nombre}='${valor.replace(/'/g, `'\\''`)}'`);
+    lines.push(`${name}='${value.replace(/'/g, `'\\''`)}'`);
   }
 
   // Arrancar sin un secreto que la app declaró da un fallo mucho más oscuro
   // (la app revienta al conectar) que decirlo aquí.
-  if (faltantes.length) {
+  if (missing.length) {
     const e: any = new Error(
-      `Estos secretos están declarados en el runspec pero no existen en el vault: ${faltantes.join(", ")}. Cárgalos con PUT /api/v2/machines/${sandboxId}/secrets.`
+      `Estos secretos están declarados en el runspec pero no existen en el vault: ${missing.join(", ")}. Cárgalos con PUT /api/v2/machines/${sandboxId}/secrets.`
     );
     e.code = "SecretsMissing";
     e.status = 422;
     throw e;
   }
 
-  const ruta = `${spec.appDir}/${SECRETS_FILE}`;
-  await writeFile(ctx, sandboxId, { path: ruta, content: lineas.join("\n") + "\n" });
+  const filePath = `${spec.appDir}/${SECRETS_FILE}`;
+  await writeFile(ctx, sandboxId, { path: filePath, content: lines.join("\n") + "\n" });
   // El contenido es lo más sensible de la máquina; que no lo lea nadie más.
-  await execSandboxRaw(ctx.user.id, sandboxId, `chmod 600 ${shQuote(ruta)}`, 30).catch(() => {});
+  await execSandboxRaw(ctx.user.id, sandboxId, `chmod 600 ${shQuote(filePath)}`, 30).catch(() => {});
   return true;
 }
 
@@ -683,14 +683,14 @@ async function materializeSecrets(
  * revienta porque `set` es un builtin del shell y no un ejecutable, y el
  * arranque muere antes de llegar a la app.
  */
-function conSecretos(
-  comando: string,
+function withSecrets(
+  command: string,
   spec: Runspec,
-  haySecretos: boolean,
+  hasSecrets: boolean,
   opts: { exec?: boolean } = {}
 ) {
-  const final = opts.exec ? `exec ${comando}` : comando;
-  if (!haySecretos) return final;
+  const final = opts.exec ? `exec ${command}` : command;
+  if (!hasSecrets) return final;
   return `set -a; . ${shQuote(`${spec.appDir}/${SECRETS_FILE}`)}; set +a; ${final}`;
 }
 
@@ -708,11 +708,11 @@ function conSecretos(
  * Y se comprueba que quede alguien escuchando antes de dar el arranque por
  * bueno.
  */
-export function buildStartScript(spec: Runspec, haySecretos: boolean): string {
+export function buildStartScript(spec: Runspec, hasSecrets: boolean): string {
   const dir = shQuote(spec.appDir);
   const pid = shQuote(PID_FILE);
-  const puerto = spec.port ?? 3000;
-  const comando = shQuote(conSecretos(spec.startCommand!, spec, haySecretos, { exec: true }));
+  const port = spec.port ?? 3000;
+  const command = shQuote(withSecrets(spec.startCommand!, spec, hasSecrets, { exec: true }));
   return [
     `cd ${dir}`,
     // 1. La instancia anterior, por su pid.
@@ -722,15 +722,15 @@ export function buildStartScript(spec: Runspec, haySecretos: boolean): string {
     //    que reemplazar. El pid sale de `ss`, que está en el template; con
     //    `fuser` no funcionaba porque psmisc no viene instalado y la guarda
     //    `command -v` hacía que el kill se saltara en silencio.
-    `matar() { ss -ltnp 2>/dev/null | grep ":${puerto} " | grep -o "pid=[0-9]*" | cut -d= -f2 | sort -u | while read P; do [ -n "$P" ] && kill $1 "$P" 2>/dev/null || true; done; }`,
-    `matar`,
+    `killPortHolders() { ss -ltnp 2>/dev/null | grep ":${port} " | grep -o "pid=[0-9]*" | cut -d= -f2 | sort -u | while read P; do [ -n "$P" ] && kill $1 "$P" 2>/dev/null || true; done; }`,
+    `killPortHolders`,
     // 3. Darle un momento a soltar el puerto antes de insistir a la mala.
-    `for i in 1 2 3 4 5; do ss -ltn 2>/dev/null | grep -q ":${puerto} " || break; sleep 1; done`,
-    `matar -9`,
-    `for i in 1 2 3; do ss -ltn 2>/dev/null | grep -q ":${puerto} " || break; sleep 1; done`,
+    `for i in 1 2 3 4 5; do ss -ltn 2>/dev/null | grep -q ":${port} " || break; sleep 1; done`,
+    `killPortHolders -9`,
+    `for i in 1 2 3; do ss -ltn 2>/dev/null | grep -q ":${port} " || break; sleep 1; done`,
     // `exec` dentro del sh: el pid anotado ES el del proceso de la app, no el
     // de un shell padre que al morir dejaría al hijo huérfano y escuchando.
-    `nohup sh -c ${comando} >/var/log/easybits-app.log 2>&1 &`,
+    `nohup sh -c ${command} >/var/log/easybits-app.log 2>&1 &`,
     `echo $! > ${pid}`,
     `sleep 3`,
     // Que el proceso siga vivo Y escuchando; si no, el log dice por qué.
@@ -747,7 +747,7 @@ async function buildAndStart(
   let buildOutput: string | undefined;
   // Antes de construir: el build también los necesita (prisma generate lee
   // DATABASE_URL, los bundlers leen sus tokens).
-  const haySecretos = await materializeSecrets(ctx, sandboxId, spec);
+  const hasSecrets = await materializeSecrets(ctx, sandboxId, spec);
   // Prebuilt: the artifact already contains dist/ and node_modules, so building
   // again would only burn a minute of the customer's downtime for nothing.
   if (spec.prebuilt) {
@@ -758,7 +758,7 @@ async function buildAndStart(
   } else if (spec.buildCommand) {
     const r = await runtimeControl(ctx, sandboxId, {
       action: "rebuild",
-      buildCommand: conSecretos(spec.buildCommand, spec, haySecretos),
+      buildCommand: withSecrets(spec.buildCommand, spec, hasSecrets),
       cwd: spec.appDir,
       unit: spec.unit,
     });
@@ -775,16 +775,16 @@ async function buildAndStart(
     const res = await execSandboxRaw(
       ownerId,
       sandboxId,
-      buildStartScript(spec, haySecretos),
+      buildStartScript(spec, hasSecrets),
       90
     );
-    const salida = res.stdout || res.stderr || "";
+    const output = res.stdout || res.stderr || "";
     // Arrancar y no quedarse escuchando es un fallo, aunque el shell devuelva
     // 0: el `nohup … &` sale bien aunque el proceso muera al segundo.
-    if (!salida.includes("STARTED")) {
-      return { buildOutput, startOutput: salida, exitCode: res.exitCode || 1 };
+    if (!output.includes("STARTED")) {
+      return { buildOutput, startOutput: output, exitCode: res.exitCode || 1 };
     }
-    return { buildOutput, startOutput: salida, exitCode: res.exitCode };
+    return { buildOutput, startOutput: output, exitCode: res.exitCode };
   }
   return { buildOutput, exitCode: 0 };
 }

@@ -24,11 +24,11 @@ export async function action({ request, params }: Route.ActionArgs) {
   const ctx = requireAuth(await authenticateRequest(request));
 
   if (request.method === "DELETE") {
-    const nombre = new URL(request.url).searchParams.get("name");
-    if (!nombre) {
+    const name = new URL(request.url).searchParams.get("name");
+    if (!name) {
       return Response.json({ error: "Falta ?name=NOMBRE" }, { status: 400 });
     }
-    return Response.json(await unsetMachineSecret(ctx, params.id!, nombre));
+    return Response.json(await unsetMachineSecret(ctx, params.id!, name));
   }
 
   if (request.method !== "PUT" && request.method !== "POST") {
@@ -46,7 +46,7 @@ export async function action({ request, params }: Route.ActionArgs) {
     );
   }
 
-  const secretos: Record<string, string> = {};
+  const secrets: Record<string, string> = {};
   for (const [k, v] of Object.entries(body as Record<string, unknown>)) {
     if (typeof v !== "string") {
       return Response.json(
@@ -54,11 +54,11 @@ export async function action({ request, params }: Route.ActionArgs) {
         { status: 400 }
       );
     }
-    secretos[k] = v;
+    secrets[k] = v;
   }
 
   try {
-    return Response.json(await setMachineSecrets(ctx, params.id!, secretos));
+    return Response.json(await setMachineSecrets(ctx, params.id!, secrets));
   } catch (e: any) {
     if (e instanceof Response) return e;
     return Response.json(
