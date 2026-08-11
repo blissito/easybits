@@ -1,5 +1,8 @@
 import { data } from "react-router";
-import { pruneExpiredBackups } from "~/.server/core/machineBackupOperations";
+import {
+  pruneExpiredBackups,
+  purgeDeletedMachineArtifacts,
+} from "~/.server/core/machineBackupOperations";
 import type { Route } from "./+types/prune-backups";
 
 // Rotate machine backups past their retention window. Never drops a machine's
@@ -15,5 +18,9 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
   }
 
   const result = await pruneExpiredBackups();
-  return data(result);
+  // Y lo que quedó de máquinas ya destruidas: su último backup es intocable
+  // para la rotación normal (nunca llega uno más nuevo), así que sin esto el
+  // bucket sólo crece con cada cliente que se da de baja.
+  const purged = await purgeDeletedMachineArtifacts();
+  return data({ ...result, purged });
 };

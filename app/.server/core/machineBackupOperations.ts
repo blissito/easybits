@@ -273,6 +273,10 @@ export async function pruneExpiredBackups(): Promise<{ deleted: number; kept: nu
       },
     });
     if (!newer) {
+      // Guardar el último es para máquinas VIVAS, donde el siguiente backup
+      // puede llegar esta noche. Las destruidas las limpia
+      // purgeDeletedMachineArtifacts pasada su ventana de gracia; si no, su
+      // último backup sería inmortal.
       kept++;
       continue;
     }
@@ -281,6 +285,51 @@ export async function pruneExpiredBackups(): Promise<{ deleted: number; kept: nu
     deleted++;
   }
   return { deleted, kept };
+}
+
+/**
+ * Borrar TODO lo que quedó de máquinas ya destruidas, pasada su ventana de
+ * gracia: backups y releases, objeto y fila.
+ *
+ * Hace falta porque `pruneExpiredBackups` nunca puede tocar el último backup de
+ * una caja muerta — su regla es "sólo borro si existe uno más nuevo", y a una
+ * máquina destruida no le llega ninguno. Sin esto, cada máquina que un cliente
+ * dio de baja deja residuo permanente en el bucket, y eso sólo crece.
+ *
+ * La ventana (30 días desde el borrado duro) es a propósito la misma que
+ * `extendBackupsForDeletedMachine`: primero se conserva por si el cliente
+ * vuelve, y después se limpia de verdad.
+ */
+export async function purgeDeletedMachineArtifacts(): Promise<{
+  machines: number;
+  backups: number;
+  releases: number;
+}> {
+  const cutoff = new Date(Date.now() - POST_DELETE_RETENTION_DAYS * 86400_000);
+  const dead = await db.sandbox.findMany({
+    where: { status: "destroyed", updatedAt: { lt: cutoff } },
+    select: { sandboxId: true },
+  });
+  if (!dead.length) return { machines: 0, backups: 0, releases: 0 };
+
+  const storage = getPlatformDefaultClient({ prefix: "" });
+  let backups = 0;
+  let releases = 0;
+  for (const m of dead) {
+    const bks = await db.sandboxBackup.findMany({ where: { sandboxId: m.sandboxId } });
+    for (const b of bks) {
+      await storage.deleteObject(b.key).catch(() => {});
+      await db.sandboxBackup.delete({ where: { id: b.id } }).catch(() => {});
+      backups++;
+    }
+    const rels = await db.machineRelease.findMany({ where: { sandboxId: m.sandboxId } });
+    for (const r of rels) {
+      await storage.deleteObject(r.storageKey).catch(() => {});
+      await db.machineRelease.delete({ where: { id: r.id } }).catch(() => {});
+      releases++;
+    }
+  }
+  return { machines: dead.length, backups, releases };
 }
 
 /** Machines whose newest available backup is older than the alert threshold. */
