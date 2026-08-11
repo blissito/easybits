@@ -905,6 +905,23 @@ export async function recreateFromRelease(
       if (box?.status === "running") {
         await releasePermanent(ctx, params.replaceSandboxId);
         replaced = params.replaceSandboxId;
+
+        // El historial se muda con la máquina. Los releases cuelgan del
+        // sandboxId, así que una caja recreada nacía sin ninguno: cero
+        // versiones a las que volver, justo después de la operación en la que
+        // más falta hace poder volver. Y los de la vieja quedaban colgando de
+        // una caja que ya no existe.
+        await db.machineRelease
+          .updateMany({
+            where: { sandboxId: params.replaceSandboxId },
+            data: { sandboxId: created.sandboxId },
+          })
+          .catch((e: unknown) =>
+            console.error(
+              `recreateFromRelease: el historial de ${params.replaceSandboxId} no se pudo mudar a ${created.sandboxId}:`,
+              e
+            )
+          );
       }
     }
     return {

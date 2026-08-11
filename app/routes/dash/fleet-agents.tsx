@@ -427,6 +427,14 @@ export async function loader({ request }: Route.LoaderArgs) {
     // Cajas NO-worker del host: sistema (voz/render/llamadas) o custom. Incluye
     // DORMIDAS (suspended) → así una caja de servicio parada se ve dormida en el HUD.
     ...(hostVms as any[])
+      // Las cajas VENDIDAS (hosting) no son flota: son el sitio de un cliente y
+      // se administran en /dash/hosting. Aparecían aquí como cuadritos con el
+      // nombre de su template —"node", "ubuntu"— y encima contaban contra el
+      // cupo de agentes, así que un cliente con sitios veía su flota llena de
+      // cosas que no son agentes. Se distinguen por `eb_tier`, que sólo escribe
+      // createPermanent (las de servicio también son persistentes, así que
+      // `persistent` no sirve para separarlas).
+      .filter((v) => !v.metadata?.eb_tier)
       .filter((v) => !workerSandboxIds.has(v.sandboxId) && ["running", "starting", "building", "suspended"].includes(v.status))
       .map((v) =>
         SYSTEM_TEMPLATES[v.template]
