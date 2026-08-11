@@ -877,6 +877,19 @@ export async function recreateFromRelease(
 
   try {
     const owner = await effectiveOwnerId(ctx, created.sandboxId);
+    // Una caja recién comprada dice "provisioning" un momento, y el host
+    // responde 503 "sandbox not running" a todo lo que le llegue mientras
+    // tanto. Sin esperarla, el primer files/write moría y el redeploy —que es
+    // también el resize y la recuperación tras perder una máquina— fallaba
+    // siempre. launchApp ya lo hacía; este camino no.
+    await waitUntilRunning(ctx, created.sandboxId, { timeoutMs: 90_000 }).catch(() => {
+      const e: any = new Error(
+        `Machine ${created.sandboxId} did not reach "running" in time; nothing was deployed onto it.`
+      );
+      e.code = "MachineNotRunning";
+      e.status = 503;
+      throw e;
+    });
     await unpackInto(ctx, created.sandboxId, owner, rel.storageKey, spec.appDir);
     const started = await buildAndStart(ctx, created.sandboxId, owner, spec);
     await db.sandbox.update({
@@ -904,7 +917,18 @@ export async function recreateFromRelease(
   } catch (err) {
     // The box exists and is billed; leaving it orphaned after a failed deploy
     // would charge for nothing. Release it (soft-delete, still restorable).
-    await releasePermanent(ctx, created.sandboxId).catch(() => {});
+    //
+    // Con el ctx del usuario esto NO limpiaba: releasePermanent exige scope
+    // DELETE y una key READ+WRITE lanzaba contra el catch vacío, dejando la
+    // caja encendida y facturando. Es limpieza de algo que esta llamada acaba
+    // de crear, no una acción del usuario.
+    const cleanupCtx = { ...ctx, scopes: [...(ctx.scopes ?? []), "DELETE"] } as AuthContext;
+    await releasePermanent(cleanupCtx, created.sandboxId).catch((e) => {
+      console.error(
+        `recreateFromRelease: no se pudo liberar ${created.sandboxId} tras un fallo; queda encendida:`,
+        e?.message ?? e
+      );
+    });
     throw err;
   }
 }
