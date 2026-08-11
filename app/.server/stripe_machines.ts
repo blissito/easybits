@@ -29,6 +29,18 @@ let cachedProductId: string | null = process.env.EB_HOSTING_PRODUCT_ID || null;
 
 async function ensureHostingProduct(): Promise<string> {
   if (cachedProductId) return cachedProductId;
+  // Look before creating. The memo is per-PROCESS, so without this every deploy
+  // and every machine restart minted another "EasyBits Hosting" product in
+  // Stripe — three of them had already piled up by Aug 2026. Reporting by
+  // product becomes meaningless once there are dozens.
+  const existing = await getStripe()
+    .products.search({ query: `active:'true' AND metadata['eb_kind']:'hosting'`, limit: 1 })
+    .catch(() => null);
+  if (existing?.data.length) {
+    const found = existing.data[0].id;
+    cachedProductId = found;
+    return found;
+  }
   const product = await getStripe().products.create({
     name: "EasyBits Hosting",
     metadata: { eb_kind: "hosting" },
