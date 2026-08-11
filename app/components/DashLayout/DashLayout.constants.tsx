@@ -13,6 +13,27 @@ export interface SidebarSection {
   items: SidebarItem[];
 }
 
+/**
+ * Entradas escondidas del menú, por título.
+ *
+ * No se borran: el dash acumuló superficies más rápido de lo que se depuran, y
+ * con todas visibles cuesta encontrar lo que se usa. Quitar un título de esta
+ * lista lo devuelve al menú tal cual estaba; su ruta sigue viva mientras tanto,
+ * así que un enlace guardado no se rompe.
+ */
+const HIDDEN = new Set([
+  "Formularios",
+  "Presentaciones",
+  "Videos",
+  "Personajes",
+  "Estadísticas",
+  "Email",
+  "Ghosty Teams",
+]);
+
+const visible = <T extends { title: string }>(items: T[]) =>
+  items.filter((i) => !HIDDEN.has(i.title));
+
 export const ITEMS = {
   /** Primer ítem suelto — el "home" del dash */
   inicioItem: {
@@ -121,7 +142,7 @@ export const ITEMS = {
       ],
     },
 
-  ] as SidebarSection[],
+  ].map((s) => ({ ...s, items: visible(s.items) })) as SidebarSection[],
 
   /** Ítems sueltos entre las secciones y el bottom — cuenta + tools */
   middleItems: [
@@ -198,7 +219,7 @@ export const ITEMS = {
       path: "/dash/developer",
       title: "Developer",
     },
-  ] as SidebarItem[],
+  ].filter((i) => !HIDDEN.has(i.title)) as SidebarItem[],
 
   /** Cuentas de clientes — "operar como"; se inserta para admins junto a Admin */
   cuentasItem: {
