@@ -268,6 +268,18 @@ export async function provisionPaidMachine(params: {
     console.error(`[hosting] paid machine with unknown tier "${params.tier}" — sub ${params.subscriptionId}`);
     return null;
   }
+  // El dueño viene de la metadata del checkout, así que pudo dejar de existir
+  // entre "pagué" y "Stripe nos avisó". Sin esta comprobación crearíamos una
+  // máquina con dueño fantasma: nadie puede administrarla ni liberarla, y el
+  // cobro sigue corriendo. Alguien PAGÓ, así que se grita y se deja la
+  // suscripción intacta para que un humano reembolse o corrija.
+  const owner = await db.user.findUnique({ where: { id: params.ownerId }, select: { id: true } });
+  if (!owner) {
+    console.error(
+      `[hosting] CRITICAL: paid subscription ${params.subscriptionId} references a user that no longer exists (${params.ownerId}). NOT provisioning — needs a human.`
+    );
+    return null;
+  }
   const res = resourcesFor(tier, params.diskAddonsGB);
   const template = (params.template ?? "ubuntu") as SandboxTemplate;
   const ctx = { user: { id: params.ownerId }, scopes: ["WRITE"] } as AuthContext;

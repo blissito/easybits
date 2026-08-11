@@ -461,7 +461,17 @@ export async function action({ request }: ActionFunctionArgs) {
           where: { stripeIds: { has: custId } },
           select: { id: true, email: true, roles: true, metadata: true },
         });
-        if (!subscriptionUser) return new Response("User not found", { status: 404 });
+        if (!subscriptionUser) {
+          // 2xx a propósito: no hay nada que hacer con un evento de alguien que
+          // no está en nuestra base, y Stripe REINTENTA durante 3 días cualquier
+          // respuesta que no sea 2xx. Un usuario inexistente no aparece por
+          // reintentar — solo llena la cola y esconde fallos de verdad.
+          logger.warn("Stripe subscription event for an unknown customer", {
+            customerId: custId,
+            eventType: event.type,
+          });
+          return new Response("No user for this customer; nothing to do", { status: 200 });
+        }
 
         // On cancellation/failure, remove plan roles AND reset metadata.plan so
         // both sources fall back to Byte consistentemente.
