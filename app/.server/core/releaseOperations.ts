@@ -201,9 +201,17 @@ async function requireMachine(ctx: AuthContext, sandboxId: string) {
   const owner = await effectiveOwnerId(ctx, sandboxId);
   const row = await db.sandbox.findUnique({ where: { sandboxId } });
   if (!row || row.ownerId !== owner) {
-    const e: any = new Error(`Machine ${sandboxId} not found`);
-    e.code = "MachineNotFound";
-    throw e;
+    // Una Response y no un Error: React Router convierte cualquier excepción
+    // en 500, así que pedir una máquina inexistente contestaba "error del
+    // servidor" en runspec, releases, backups y secrets. Con esto todas
+    // devuelven 404 sin que cada ruta tenga que acordarse de mapearlo.
+    throw new Response(
+      JSON.stringify({
+        error: "MachineNotFound",
+        message: `Machine ${sandboxId} not found`,
+      }),
+      { status: 404, headers: { "content-type": "application/json" } }
+    );
   }
   return { row, owner };
 }
@@ -1068,7 +1076,13 @@ export async function launchApp(
         [
           "set -e",
           "command -v git >/dev/null || (apt-get update -qq && apt-get install -y -qq git)",
-          `rm -rf ${shQuote(spec.appDir)}`,
+// Se vacía el CONTENIDO, no el directorio: si appDir es un punto de
+          // montaje —/app lo es en varios templates— `rm -rf` sobre él falla con
+          // "Device or resource busy" y el deploy muere antes de empezar. Es el
+          // mismo patrón que usa unpackInto.
+          `mkdir -p ${shQuote(spec.appDir)}`,
+          `find ${shQuote(spec.appDir)} -mindepth 1 -maxdepth 1 ! -name 'lost+found' -exec rm -rf {} +`,
+          // git clone exige un directorio vacío, que es justo como quedó.
           `git clone --depth 1 ${branch}${shQuote(params.repo)} ${shQuote(spec.appDir)}`,
           "echo CLONE_OK",
         ].join("\n"),
@@ -1094,7 +1108,12 @@ export async function launchApp(
         sandboxId,
         [
           "set -e",
-          `rm -rf ${shQuote(spec.appDir)} && mkdir -p ${shQuote(spec.appDir)}`,
+// Se vacía el CONTENIDO, no el directorio: si appDir es un punto de
+          // montaje —/app lo es en varios templates— `rm -rf` sobre él falla con
+          // "Device or resource busy" y el deploy muere antes de empezar. Es el
+          // mismo patrón que usa unpackInto.
+          `mkdir -p ${shQuote(spec.appDir)}`,
+          `find ${shQuote(spec.appDir)} -mindepth 1 -maxdepth 1 ! -name 'lost+found' -exec rm -rf {} +`,
           `curl -fsSL -o ${shQuote(archive)} "$(cat ${shQuote(urlFile)})"`,
           `if head -c4 ${shQuote(archive)} | grep -q PK; then`,
           `  command -v unzip >/dev/null || (apt-get update -qq && apt-get install -y -qq unzip)`,
