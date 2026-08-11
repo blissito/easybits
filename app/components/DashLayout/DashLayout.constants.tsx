@@ -142,6 +142,17 @@ export const ITEMS = {
     {
       icon: (
         <svg className="scale" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="2" y="4" width="20" height="7" rx="2" />
+          <rect x="2" y="13" width="20" height="7" rx="2" />
+          <path d="M6 7.5h.01M6 16.5h.01" />
+        </svg>
+      ),
+      path: "/dash/hosting",
+      title: "Hosting",
+    },
+    {
+      icon: (
+        <svg className="scale" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <rect x="4" y="8" width="16" height="12" rx="2" />
           <path d="M12 4v4" />
           <circle cx="12" cy="3" r="1" />

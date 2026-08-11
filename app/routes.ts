@@ -126,10 +126,13 @@ export default [
       route("perfil", "routes/profile/profile.tsx"),
       // Ghosty Teams — lanzar/abrir el chat de equipo (redirige a la instancia)
       route("teams", "routes/dash/teams.tsx"),
-      // Hosting (máquinas permanentes + sandboxes) — UNIFICADO en la Flota. La ruta
-      // /dash/hosting se retiró del nav y del router; sus cajas se ven y administran
-      // (pausar/eliminar) desde /dash/flota. Los archivos de la ruta quedan en disco
-      // por si se reactiva. La API eb.machines.* (abajo) sigue viva para SDK/MCP.
+      // Hosting: el panel del DUEÑO de un sitio (su URL, dominios, versiones,
+      // variables y logs). Distinto de /dash/flota, que es el HUD de capacidad
+      // de los agentes: ahí una caja de hosting salía como un cuadrito con el
+      // nombre de su template y nada más, así que quien tenía un sitio no
+      // tenía dónde verlo. La versión anterior (routes/dash/hosting/*, mezclada
+      // con WhatsApp) se borró en ce77fcd8; ésta se reescribió desde la API.
+      route("hosting", "routes/dash/hosting.tsx"),
       // FleetAgents de WhatsApp ("Líneas") — superficie Baileys + workers efímeros
       route("flota", "routes/dash/fleet-agents.tsx"),
       // Poll resiliente del HUD de la flota (JSON, no tumba la página en deploys)
