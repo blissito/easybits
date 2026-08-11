@@ -1,7 +1,7 @@
 {
   "name": "@easybits.cloud/cli",
-  "version": "0.1.0",
-  "description": "Official CLI for Easybits — manage files, storage, and MCP from your terminal",
+  "version": "0.2.0",
+  "description": "Official CLI for Easybits \u2014 manage files, storage, and MCP from your terminal",
   "type": "module",
   "bin": {
     "easybits": "./dist/index.js"
@@ -31,7 +31,7 @@
     "access": "public"
   },
   "dependencies": {
-    "@easybits.cloud/sdk": "^0.1.0"
+    "@easybits.cloud/sdk": "^0.28.0"
   },
   "devDependencies": {
     "tsup": "^8.0.0",

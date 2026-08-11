@@ -839,8 +839,47 @@ Dos límites dichos de frente: el RPO es de **24 horas**, y el backup se toma de
 
 Recuperación completa de una máquina = \`redeploy_machine\` (código) + \`restore_machine_from_backup\` (datos).
 
+### Variables secretas de la app
+Tu app necesita su \`DATABASE_URL\`, su \`STRIPE_SECRET_KEY\`. **No las metas en \`runspec.env\`**: eso se guarda en la base y viaja dentro de cada tarball de release. La API las rechaza por nombre.
+
+\`PUT /machines/:sandboxId/secrets\` · Body: \`{ "DATABASE_URL": "...", "JWT_SECRET": "..." }\`
+
+Los valores se guardan cifrados en tu bóveda y en el runspec queda solo la LISTA de nombres. Se materializan dentro de la máquina —en un archivo que solo root puede leer— justo antes de construir y de arrancar. No entran al release: una caja reconstruida desde un tarball sigue sin llevarlos dentro, pero sabe cuáles pedir.
+
+- \`GET /machines/:id/secrets\` → \`{ secretNames, inVault }\`. Nombres, nunca valores: un secreto guardado no se vuelve a leer por API.
+- \`DELETE /machines/:id/secrets?name=DATABASE_URL\` → deja de inyectarlo (el valor sigue en la bóveda).
+
+Surten efecto en el **siguiente despliegue**, no al vuelo. Rotar un secreto es cambiarlo aquí y volver a desplegar. Si el runspec declara uno que no está en la bóveda, el deploy falla diciendo cuál — mejor que ver la app morir al conectar.
+
+### Desplegar desde GitHub en cada push
+El patrón recomendado para el sitio de un cliente: **construir en el runner de GitHub** y mandarle a la máquina el resultado ya hecho. La caja no compila nada, así que un sitio que necesitaría 4 GB para bundlear cabe en \`micro\`.
+
+Una vez, para crear la máquina:
+
+\`\`\`bash
+curl -X POST https://www.easybits.cloud/api/v2/machines/launch \\
+  -H "Authorization: Bearer $EASYBITS_API_KEY" -H "Content-Type: application/json" \\
+  -d '{"repo":"https://x-access-token:GH_TOKEN@github.com/usuario/repo.git",
+       "branch":"main","tier":"micro","template":"node","appDir":"/srv/app","port":3000}'
+\`\`\`
+
+Guarda el \`sandboxId\` que devuelve. Luego, en el repo del cliente, dos secretos (\`EASYBITS_API_KEY\`, \`EASYBITS_SANDBOX_ID\`) y un workflow que en cada push a \`main\`:
+
+1. \`npm ci && npm run build\` **en el runner** — si el build está roto no llega a producción y el sitio sigue en pie.
+2. \`npm prune --omit=dev\` y empaquetar \`build\`, \`node_modules\`, \`package*.json\` y lo que la app lea al arrancar.
+3. Subirlo con \`POST /files\` (\`access: "public"\`) y quedarse con \`file.url\`.
+4. \`POST /machines/launch\` con \`{ sandboxId, archiveUrl, prebuilt: true, appDir, port }\`.
+
+**\`npx @easybits.cloud/cli init\` escribe ese workflow por ti.**
+
+Por qué \`sandboxId\` **y** \`archiveUrl\` juntos: \`sandboxId\` es el DESTINO, no una fuente. Puedes mandar un artefacto ya construido a una máquina que ya existe — sin eso, el único sitio donde podría ocurrir el build sería dentro de la caja del cliente.
+
+El runner de GitHub es Linux x64, igual que la microVM, así que los módulos nativos compilan para el destino correcto. **Construir en una Mac sí rompe**: un \`node_modules\` con sharp o better-sqlite3 compilado en macOS revienta en Linux.
+
+Cada despliegue publica un release, así que historial y rollback siguen funcionando igual.
+
 ### Dashboard (UI)
-También se administran desde \`/dash/hosting\`: crear (con precio en vivo), ver estado, promover un sandbox efímero a permanente, y liberar. Lista permanentes (cobradas) y sandboxes efímeros en secciones separadas.
+También se administran desde \`/dash/hosting\`: cada sitio con su estado y su dirección, y al abrirlo cuatro pestañas — **Dominios** (con el registro DNS que hay que crear y si ya resuelve), **Versiones** (con vuelta atrás en un clic), **Variables** y **Registro** (las últimas líneas del log). Desde ahí también se pausa y se da de baja.
 `,
 
   databases: `## Databases (SQLite-as-a-Service)
