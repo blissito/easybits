@@ -208,13 +208,6 @@ export async function uploadFile(
     region: opts.region,
   });
 
-  // Workspace files are namespaced under `ws/{workspaceId}/…` (mirrors the
-  // `sites/{websiteId}/` convention) so a workspace is a real folder in storage.
-  const baseKey = opts.assetId
-    ? `${ctx.user.id}/${opts.assetId}/${nanoid(3)}`
-    : `${ctx.user.id}/${nanoid(3)}`;
-  const storageKey = workspaceId ? `ws/${workspaceId}/${baseKey}` : baseKey;
-
   // Public platform uploads must land in PUBLIC_BUCKET at root prefix —
   // the `mcp/` prefix is unreadable by the public bucket policy and would
   // 403 when embedded. Custom providers handle their own ACL.
@@ -225,26 +218,44 @@ export async function uploadFile(
       ? getPlatformPublicClient()
       : getPlatformDefaultClient();
 
-  const putUrl = await client.getPutUrl(storageKey);
-  const url = isPublicPlatform ? buildPublicAssetUrl(storageKey) : "";
+  // `storageKey` y `slug` son únicos: si el id aleatorio choca con uno ya
+  // guardado, Prisma tira P2002. Se regenera la clave y se reintenta.
+  let file;
+  let putUrl = "";
+  for (let attempt = 0; ; attempt++) {
+    // Workspace files are namespaced under `ws/{workspaceId}/…` (mirrors the
+    // `sites/{websiteId}/` convention) so a workspace is a real folder in storage.
+    const baseKey = opts.assetId
+      ? `${ctx.user.id}/${opts.assetId}/${nanoid(12)}`
+      : `${ctx.user.id}/${nanoid(12)}`;
+    const storageKey = workspaceId ? `ws/${workspaceId}/${baseKey}` : baseKey;
 
-  const file = await db.file.create({
-    data: {
-      name: opts.fileName,
-      storageKey,
-      slug: storageKey,
-      size: opts.size,
-      contentType: opts.contentType,
-      ownerId: ctx.user.id,
-      access: opts.access || "private",
-      url,
-      status: "DONE",
-      storageProviderId: provider?.id ?? null,
-      ...(workspaceId ? { workspaceId } : {}),
-      ...(opts.source ? { source: opts.source } : {}),
-      ...(opts.assetId ? { assetIds: [opts.assetId] } : {}),
-    },
-  });
+    putUrl = await client.getPutUrl(storageKey);
+    const url = isPublicPlatform ? buildPublicAssetUrl(storageKey) : "";
+
+    try {
+      file = await db.file.create({
+        data: {
+          name: opts.fileName,
+          storageKey,
+          slug: storageKey,
+          size: opts.size,
+          contentType: opts.contentType,
+          ownerId: ctx.user.id,
+          access: opts.access || "private",
+          url,
+          status: "DONE",
+          storageProviderId: provider?.id ?? null,
+          ...(workspaceId ? { workspaceId } : {}),
+          ...(opts.source ? { source: opts.source } : {}),
+          ...(opts.assetId ? { assetIds: [opts.assetId] } : {}),
+        },
+      });
+      break;
+    } catch (error: any) {
+      if (error?.code !== "P2002" || attempt >= 9) throw error;
+    }
+  }
 
   if (workspaceId) await bumpWorkspaceUsage(workspaceId, opts.size, 1);
 
@@ -1420,8 +1431,8 @@ export async function duplicateFile(ctx: AuthContext, fileId: string, newName?: 
 
   // Create a new storage key (namespaced to the workspace if any) and copy the object
   const newStorageKey = file.workspaceId
-    ? `ws/${file.workspaceId}/${ctx.user.id}/${nanoid(3)}`
-    : `${ctx.user.id}/${nanoid(3)}`;
+    ? `ws/${file.workspaceId}/${ctx.user.id}/${nanoid(12)}`
+    : `${ctx.user.id}/${nanoid(12)}`;
   const client = await getClientForFile(file.storageProviderId, ctx.user.id);
 
   const bucket = file.access === "public" ? PUBLIC_BUCKET : PRIVATE_BUCKET;
