@@ -10,6 +10,23 @@ import matter from "gray-matter";
 // Map of known blog posts with their file paths and metadata
 const BLOG_POSTS = [
   {
+    slug: "una-linea-de-kernel-y-el-sitio-dejo-de-arrastrarse",
+    filePath:
+      "app/content/blog/2026-08-12-una-linea-de-kernel-y-el-sitio-dejo-de-arrastrarse.mdx",
+    title:
+      "Una línea de kernel: por qué un sitio rapidísimo se veía lentísimo desde México",
+    description:
+      "El servidor entregaba la imagen en 1.3 milisegundos. Al visitante le llegaba en diez segundos. No era el peso, ni la máquina, ni la red: era el algoritmo de control de congestión de TCP replegándose. Cómo lo encontramos y la prueba de 30 segundos que lo delata.",
+    date: "2026-08-12",
+    author: "Equipo Easybits",
+    tags: ["infraestructura", "performance", "build in public", "flota", "tcp"],
+    featuredImage: "/blog/assets/blog-tcp-bbr-editorial.png",
+    readingTime: 8,
+    excerpt:
+      "Todos los tableros decían que estaba bien: CPU de sobra, TTFB normal, la app sirviendo el archivo en 1.3 ms. Y el visitante recibía 16 KB/s. La falla vivía en el único tramo que nadie instrumenta.",
+    published: true,
+  },
+  {
     slug: "una-caja-una-base-por-cliente",
     filePath:
       "app/content/blog/2026-07-16-una-caja-una-base-por-cliente.mdx",

@@ -10,6 +10,8 @@ import matter from "gray-matter";
 
 // Map of known blog posts with their file paths
 const BLOG_POSTS = {
+  "una-linea-de-kernel-y-el-sitio-dejo-de-arrastrarse":
+    "app/content/blog/2026-08-12-una-linea-de-kernel-y-el-sitio-dejo-de-arrastrarse.mdx",
   "bubblewrap-el-sandbox-que-tu-agente-necesita":
     "app/content/blog/2026-08-01-bubblewrap-el-sandbox-que-tu-agente-necesita.mdx",
   "una-caja-una-base-por-cliente":
@@ -60,6 +62,10 @@ const BLOG_POSTS = {
 
 // Array con slug y featuredImage igual que en la lista de blog
 const BLOG_POSTS_LIST = [
+  {
+    slug: "una-linea-de-kernel-y-el-sitio-dejo-de-arrastrarse",
+    featuredImage: "/blog/assets/blog-tcp-bbr-editorial.png",
+  },
   {
     slug: "una-caja-una-base-por-cliente",
     featuredImage: "/blog/assets/sandbox-ghosty.jpg",
