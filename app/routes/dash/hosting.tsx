@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useFetcher, data } from "react-router";
 import type { Route } from "./+types/hosting";
 import { getUserOrRedirect } from "~/.server/getters";
@@ -278,18 +278,31 @@ function MachineCard({
   // pestañas compartan el mismo diálogo.
   const [pending, setPending] = useState<Pending | null>(null);
   const tier = HOSTING_CATALOG[machine.tier as keyof typeof HOSTING_CATALOG];
-  const detail = fetcher.data?.detail;
+  // El detalle vive en estado, no en `fetcher.data`: el mismo fetcher sirve
+  // para mutar (dar de alta una variable, un dominio, volver a una versión) y
+  // su respuesta PISABA el detalle → el panel se quedaba en "Cargando…" y
+  // nunca mostraba lo recién guardado.
+  const [detail, setDetail] = useState<any>(null);
   const address = machine.domains?.[0]
     ? `https://${machine.domains[0]}`
     : machine.url;
 
+  const loadDetail = () =>
+    fetcher.submit(
+      { intent: "detail", sandboxId: machine.sandboxId },
+      { method: "post" }
+    );
+
+  useEffect(() => {
+    if (fetcher.state !== "idle" || !fetcher.data) return;
+    if (fetcher.data.detail) setDetail(fetcher.data.detail);
+    // Cualquier otra respuesta es una mutación ya aplicada: recargar para que
+    // la lista muestre el estado nuevo.
+    else if (!fetcher.data.error) loadDetail();
+  }, [fetcher.state, fetcher.data]);
+
   const openAndLoad = () => {
-    if (!open && !detail) {
-      fetcher.submit(
-        { intent: "detail", sandboxId: machine.sandboxId },
-        { method: "post" }
-      );
-    }
+    if (!open && !detail) loadDetail();
     onToggle();
   };
 
@@ -495,6 +508,20 @@ function Domains({ machine, detail, fetcher, confirm }: any) {
   );
 }
 
+/** Fecha corta de una versión: "12 ago, 14:03" (el año sólo si es otro). */
+function releaseDate(iso: string | Date) {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "";
+  const sameYear = d.getFullYear() === new Date().getFullYear();
+  return d.toLocaleString("es-MX", {
+    day: "numeric",
+    month: "short",
+    year: sameYear ? undefined : "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 function Releases({ machine, detail, fetcher }: any) {
   const items = detail.releases.items ?? detail.releases ?? [];
   if (items.length === 0)
@@ -513,6 +540,16 @@ function Releases({ machine, detail, fetcher }: any) {
               v{r.version}
             </span>
             <span className="flex-1 truncate text-dark">{r.message || "sin mensaje"}</span>
+            {/* Cuándo se publicó: sin esto, "volver a esta versión" es a
+                ciegas — el mensaje casi nunca dice de qué día es. */}
+            {r.createdAt && (
+              <span
+                className="text-[11px] text-metal/70 tabular-nums shrink-0 hidden sm:block"
+                title={new Date(r.createdAt).toLocaleString("es-MX")}
+              >
+                {releaseDate(r.createdAt)}
+              </span>
+            )}
             {live ? (
               <span className="flex items-center gap-1 text-xs font-semibold text-emerald-600 shrink-0">
                 <LuCircleCheck className="w-3.5 h-3.5" /> en vivo
