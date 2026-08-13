@@ -2055,11 +2055,25 @@ POST /api/v2/machines
             </p>
             <TabbedCode
               tabs={[
+                { label: "SDK", code: `await eb.machines.setSecrets(sandboxId, {
+  DATABASE_URL: "mongodb+srv://...",
+  JWT_SECRET: "...",
+});
+
+await eb.machines.secrets(sandboxId);      // { secretNames, inVault }
+await eb.machines.unsetSecret(sandboxId, "DATABASE_URL");` },
                 { label: "REST", code: `PUT /api/v2/machines/:sandboxId/secrets
 { "DATABASE_URL": "mongodb+srv://...", "JWT_SECRET": "..." }
 
 GET    /api/v2/machines/:id/secrets            # nombres, nunca valores
 DELETE /api/v2/machines/:id/secrets?name=DATABASE_URL` },
+                { label: "MCP", code: `set_machine_secrets({ sandboxId, secrets: { DATABASE_URL: "..." } })
+list_machine_secrets({ sandboxId })
+unset_machine_secret({ sandboxId, name: "DATABASE_URL" })
+
+// OJO: secret_set a secas SOLO guarda el valor en la bóveda de la
+// cuenta. Para que la máquina lo reciba hace falta enlazarlo a su
+// runspec — eso es lo que hace set_machine_secrets.` },
               ]}
             />
             <p className="text-gray-600 text-sm mt-3 mb-6">

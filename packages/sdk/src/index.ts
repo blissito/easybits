@@ -1914,6 +1914,36 @@ export class EasybitsClient {
           body: JSON.stringify(params ?? {}),
         }),
 
+      // ── Secrets: the app's environment variables ──
+      //
+      // Two things happen at once: the value is stored encrypted in the
+      // account vault, and its NAME is wired into the machine's runspec so the
+      // app gets it as an env var. Values never enter the runspec or the
+      // release tarball, and are never readable again.
+      //
+      //   await eb.machines.setSecrets(id, { DATABASE_URL: "postgres://…" });
+
+      /** Which env vars this app uses, plus what else the vault has to wire up. Names only. */
+      secrets: (sandboxId: string): Promise<{ secretNames: string[]; inVault: string[] }> =>
+        req(`/machines/${sandboxId}/secrets`),
+      /** Store values and inject them as env vars. Accumulative — does not unset the rest. */
+      setSecrets: (
+        sandboxId: string,
+        secrets: Record<string, string>
+      ): Promise<{ ok: true; secretNames: string[] }> =>
+        req(`/machines/${sandboxId}/secrets`, {
+          method: "PUT",
+          body: JSON.stringify(secrets),
+        }),
+      /** Stop injecting one env var. The value stays in the vault. */
+      unsetSecret: (
+        sandboxId: string,
+        name: string
+      ): Promise<{ ok: true; secretNames: string[] }> =>
+        req(`/machines/${sandboxId}/secrets?name=${encodeURIComponent(name)}`, {
+          method: "DELETE",
+        }),
+
       // ── Backups: the app data, off-host, included in the price ──
 
       /** Daily data backups, newest first. Kept 7 days. */

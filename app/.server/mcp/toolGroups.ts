@@ -462,6 +462,11 @@ export const HOSTING_ALLOWLIST = new Set<string>([
   "rollback_machine",
   "redeploy_machine",
   "delete_machine_release",
+  // Las variables de entorno de la app. Sin esto, un agente puede montar la
+  // máquina pero no darle su DATABASE_URL — media app en producción.
+  "set_machine_secrets",
+  "list_machine_secrets",
+  "unset_machine_secret",
   // Backups: the app data, off-host, included in the price.
   "list_backups",
   "create_backup",

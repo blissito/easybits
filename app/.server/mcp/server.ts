@@ -157,6 +157,9 @@ import {
   applyRelease,
   recreateFromRelease,
   deleteRelease,
+  listMachineSecrets,
+  setMachineSecrets,
+  unsetMachineSecret,
 } from "../core/releaseOperations";
 import {
   listBackups,
@@ -1727,6 +1730,48 @@ How to embed safely (the only reliable rule):
       const ctx = extra.authInfo as unknown as AuthContext;
       const { items, nextCursor } = await listReleases(ctx, params);
       return ok(paginate(items, { nextCursor }));
+    })
+  );
+
+  // Las variables de entorno de una app en producción. `secret_set` a secas
+  // sólo guarda el valor en el vault de la cuenta: para que la máquina lo
+  // reciba hay que ADEMÁS enlazarlo a su runspec, que es lo que hacen estas.
+  server.tool(
+    "set_machine_secrets",
+    "Give an app its environment variables: stores each value encrypted in the account vault AND wires the name into the machine's runspec so the app receives it as an env var when it builds and starts. This is what `secret_set` alone does NOT do — that one only stores the value. Accumulative: passing a new name does not unset the ones already in use. Values never enter the runspec or the release tarball, and can never be read back. Takes effect on the next deploy/restart.",
+    {
+      sandboxId: z.string().describe("Sandbox ID of the machine"),
+      secrets: z.record(z.string()).describe("Flat object { NAME: value }. Names must be UPPER_SNAKE, e.g. { DATABASE_URL: 'postgres://…' }"),
+    },
+    { destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      return ok(await setMachineSecrets(ctx, params.sandboxId, params.secrets));
+    })
+  );
+
+  server.tool(
+    "list_machine_secrets",
+    "Which env vars this app uses (`secretNames`) and what else is available in the account vault to wire up (`inVault`). Names only — a stored value is never readable again, not even by its owner.",
+    { sandboxId: z.string().describe("Sandbox ID of the machine") },
+    { readOnlyHint: true, openWorldHint: false },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      return ok(await listMachineSecrets(ctx, params.sandboxId));
+    })
+  );
+
+  server.tool(
+    "unset_machine_secret",
+    "Stop injecting an env var into this machine. The app loses it on the next deploy/restart — if it needs it to boot, it will not come up. The value stays in the account vault, so it can be wired back with set_machine_secrets.",
+    {
+      sandboxId: z.string().describe("Sandbox ID of the machine"),
+      name: z.string().describe("Env var name to stop injecting"),
+    },
+    { destructiveHint: true, idempotentHint: true, openWorldHint: false },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      return ok(await unsetMachineSecret(ctx, params.sandboxId, params.name));
     })
   );
 
