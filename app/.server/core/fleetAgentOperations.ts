@@ -1417,7 +1417,27 @@ type AgentRow = NonNullable<Awaited<ReturnType<typeof db.agent.findUnique>>>;
 async function ensureRunning(ctx: AuthContext, agent: AgentRow): Promise<AgentRow | null> {
   if (agent.status === "running") return agent;
   if (agent.status === "suspended") {
-    await resumeSandbox(ctx, agent.sandboxId);
+    // Una caja suspendida puede haberse EVAPORADO del fierro (rebake, restart del
+    // host, barrido) sin que su fila se entere: el snapshot ya no existe y el
+    // resume responde 404. Sin este catch la excepción sube por una ruta que NO
+    // pasa por el clasificador de `isBoxDeadError`, así que el worker nunca se
+    // marca `lost` y la fila fantasma se queda pegada a la conversación PARA
+    // SIEMPRE — cada turno reintenta el mismo id muerto y muere en ~200ms.
+    // Rompió el asistente de denik el 2026-08-13 (caja sb_8c45a517…): dejó de
+    // responder ~1h hasta que se marcó la fila a mano.
+    // Con self-heal: `lost` + rutas desatadas → el caller cold-spawnea una VM
+    // limpia y el turno sale, sin que el usuario vuelva a escribir.
+    try {
+      await resumeSandbox(ctx, agent.sandboxId);
+    } catch (e) {
+      if (!isBoxDeadError(e)) throw e;
+      console.error(`fleet ensureRunning: resume ${agent.sandboxId} → caja perdida, self-heal:`, e);
+      await markWorkerLost(agent.id);
+      await db.fleetAgentRoute
+        .updateMany({ where: { agentId: agent.id }, data: { agentId: null, detachedAt: new Date() } })
+        .catch(() => {});
+      return null; // caller restaura sobre una VM fresca
+    }
     await db.agent.update({ where: { id: agent.id }, data: { status: "running" } });
     return waitAgentRunning(agent.id);
   }
@@ -2208,7 +2228,16 @@ export async function reapIdleFleetAgents(): Promise<{ suspended: number; destro
           }
         }
         await db.fleetAgentRoute.updateMany({ where: { agentId: w.id }, data: { agentId: null, detachedAt: new Date() } });
-        await destroySandbox(ctx, w.sandboxId);
+        // Un 404 del host significa que la caja YA no está — el objetivo del
+        // destroy ya se cumplió. Antes la excepción saltaba el `delete` de la
+        // fila, así que la fila fantasma sobrevivía y el reaper la reintentaba
+        // cada 60s para siempre (se vio en los logs del 2026-08-13). Borrarla
+        // igual es lo correcto: la fuente de verdad de si la VM existe es el
+        // fierro, no Mongo.
+        await destroySandbox(ctx, w.sandboxId).catch((e) => {
+          if (!isBoxDeadError(e)) throw e;
+          console.error(`fleet reaper: ${w.sandboxId} ya no existe en el host, se borra la fila:`, e);
+        });
         await db.agent.delete({ where: { id: w.id } }).catch(() => {});
         destroyed++;
       } catch (e) {
