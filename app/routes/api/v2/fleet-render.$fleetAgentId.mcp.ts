@@ -5,7 +5,7 @@ import { z } from "zod";
 import { db } from "~/.server/db";
 import type { AuthContext } from "~/.server/apiAuth";
 import { ok, fail } from "~/.server/mcp/responses";
-import { renderViaGotenbergBox, type RenderOptions } from "~/.server/core/fleetRender";
+import { renderViaBoxAndStore, BOX_HONORS_WAIT, type RenderOptions } from "~/.server/core/fleetRender";
 
 // Dedicated, always-on `render` MCP server for FleetAgents — Streamable-HTTP.
 // Injected per-turn into EVERY fleet agent (NOT gated by the easybits builtin
@@ -36,7 +36,7 @@ function buildRenderServer(ctx: AuthContext): McpServer {
 
   tool(
     "render_url",
-    "Captura una URL pública como PNG (screenshot) o PDF, usando la caja de render on-demand de la flota (Gotenberg/Chromium). Devuelve { fileId, url } — manda esa url al chat como ADJUNTO (wa send_message). Para sitios que bloquean bots (Cloudflare) puede fallar. format='png' default.",
+    "NO DISPONIBLE todavía: la caja de render de esta cuenta aún no navega URLs. Usa `render_html` pasando el HTML completo. (Se habilitará cuando el template de la caja gane navegación; la firma no va a cambiar.)",
     {
       url: z.string().url().describe("URL pública (https://…) a capturar"),
       format: z.enum(["pdf", "png"]).default("png"),
@@ -57,17 +57,17 @@ function buildRenderServer(ctx: AuthContext): McpServer {
           waitMs: p.wait_ms,
           ...(p.paper ? { paperWidth: PAPER[p.paper].w, paperHeight: PAPER[p.paper].h } : {}),
         };
-        const r = await renderViaGotenbergBox(ctx, { format: p.format, url: p.url, options });
+        const r = await renderViaBoxAndStore(ctx, { format: p.format, url: p.url, options });
         return ok(r);
       } catch (e) {
-        return fail((e as Error).message);
+        return fail((e as Error).message, { retryable: false, useInstead: "render_html" });
       }
     }
   );
 
   tool(
     "render_html",
-    "Renderiza HTML auto-contenido a PDF o PNG con la caja de render on-demand (Gotenberg/Chromium). El HTML debe traer su CSS inline o por CDN. Devuelve { fileId, url } — mándala al chat como ADJUNTO. Para facturas/cotizaciones/reportes estructurados usa structured_doc, NO esto.",
+    "Renderiza HTML auto-contenido a PDF o PNG con la caja de render on-demand (Chromium). El HTML debe traer su CSS inline (un CDN también sirve, pero ojo: la caja captura al `load` y NO espera, así que un CSS que llega tarde sale sin aplicar — inline es más seguro). Devuelve { fileId, url } — mándala al chat como ADJUNTO. Para facturas/cotizaciones/reportes estructurados usa structured_doc, NO esto.",
     {
       html: z.string().describe("HTML completo y auto-contenido"),
       format: z.enum(["pdf", "png"]).default("pdf"),
@@ -76,7 +76,7 @@ function buildRenderServer(ctx: AuthContext): McpServer {
       height: z.number().optional(),
       landscape: z.boolean().optional(),
       paper: z.enum(["letter", "a4", "legal"]).optional(),
-      wait_ms: z.number().optional(),
+      wait_ms: z.number().optional().describe("aceptado pero AÚN NO honrado por la caja (captura al load)"),
       file_name: z.string().optional().describe("nombre base del archivo de salida"),
     },
     async (p) => {
@@ -89,30 +89,19 @@ function buildRenderServer(ctx: AuthContext): McpServer {
           waitMs: p.wait_ms,
           ...(p.paper ? { paperWidth: PAPER[p.paper].w, paperHeight: PAPER[p.paper].h } : {}),
         };
-        const r = await renderViaGotenbergBox(ctx, { format: p.format, html: p.html, fileName: p.file_name, options });
-        return ok(r);
+        const r = await renderViaBoxAndStore(ctx, { format: p.format, html: p.html, fileName: p.file_name, options });
+        // Never let the agent believe a wait happened that didn't.
+        return ok({ ...r, ...(p.wait_ms ? { waitHonored: BOX_HONORS_WAIT } : {}) });
       } catch (e) {
         return fail((e as Error).message);
       }
     }
   );
 
-  tool(
-    "office_to_pdf",
-    "Convierte un documento de oficina (docx, xlsx, pptx, odt, …) a PDF vía LibreOffice en la caja de render on-demand. Pasa la URL pública del archivo. Devuelve { fileId, url } del PDF.",
-    {
-      file_url: z.string().url().describe("URL pública del documento de oficina"),
-      file_name: z.string().optional().describe("nombre original (para inferir el formato)"),
-    },
-    async (p) => {
-      try {
-        const r = await renderViaGotenbergBox(ctx, { format: "pdf", fileUrl: p.file_url, fileName: p.file_name });
-        return ok(r);
-      } catch (e) {
-        return fail((e as Error).message);
-      }
-    }
-  );
+  // `office_to_pdf` (docx/xlsx/pptx → PDF) was removed 2026-08-17: it routed to
+  // a LibreOffice endpoint the render-svc box does not serve, so it had never
+  // worked. Offering every fleet agent a tool that always fails is worse than
+  // not having it. Restore it when the box template gains LibreOffice.
 
   return server;
 }

@@ -1,45 +1,62 @@
-// Fleet render — channel-agnostic HTML/URL/office → PDF/PNG for FleetAgents.
-// Mirrors fleetVoice.ts: consumes the on-demand render-svc box (Gotenberg, MIT)
-// keyed per-owner. Gotenberg drives Chromium (URL/HTML→PDF + screenshots) and
-// LibreOffice (office→PDF). No browser logic here — we just POST multipart and
-// upload the bytes to the owner's Files, returning a public URL the agent can
-// send to the chat as an attachment.
+// Fleet render — channel-agnostic HTML → PDF/PNG for FleetAgents.
+// Mirrors fleetVoice.ts: consumes the on-demand render-svc box keyed per-owner.
+// No browser logic here — we POST the box's JSON contract (renderClient.ts owns
+// the transport) and upload the bytes to the owner's Files, returning a public
+// URL the agent can send to the chat as an attachment.
 //
 // This is the Chromium-class path ONLY. Structured docs (facturas, cotizaciones,
 // reportes JSON) go through `structured_doc`/@react-pdf/renderer in-process — NOT
-// here. EasyBits documents (Landing v4) keep their Playwright path.
+// here.
+//
+// ⚠️ HISTORY: until 2026-08-17 this module POSTed Gotenberg multipart routes
+// (/forms/chromium/…). The render-svc box does not serve them — it is a Chromium
+// server speaking JSON at /render/{pdf,screenshot} — so EVERY call 404'd and the
+// three fleet render tools were dead in production. Verify against a live box
+// (not the docs) before adding a route here.
 import type { AuthContext } from "../apiAuth";
-import { ensureServiceBox, touchServiceBox } from "./fleetServiceOperations";
+import { renderOnBox, type RenderPayload } from "./renderClient";
 
 export type RenderFormat = "pdf" | "png";
 
-// Option vocabulary modeled on ScreenshotOne/Urlbox/Gotenberg. Mapped to
-// Gotenberg form fields in buildForm().
+// Option vocabulary modeled on ScreenshotOne/Urlbox. Mapped to the box's
+// Playwright-shaped payload in buildPayload().
 export interface RenderOptions {
-  /** Screenshot: capture the full scrollable page (Gotenberg clip=false). */
+  /** Screenshot: capture the full scrollable page. */
   fullPage?: boolean;
   /** Screenshot viewport width/height (px). */
   width?: number;
   height?: number;
   /** PDF: landscape orientation. */
   landscape?: boolean;
-  /** PDF: paper size in inches (defaults to US Letter on the Gotenberg side). */
+  /** PDF: paper size in inches (defaults to US Letter on the box side). */
   paperWidth?: number;
   paperHeight?: number;
-  /** Wait this long after load before capturing (lets late JS settle). */
+  /**
+   * Wait this long after load before capturing.
+   * ⚠️ NOT HONORED by the current box build — measured 2026-08-17: identical
+   * bytes for waitMs 0 vs 3000. The box captures at load. Kept in the API so
+   * callers can express intent (and so it starts working the day the template
+   * gains it), but never promise the wait happened — see `waitHonored` in the
+   * tool responses.
+   */
   waitMs?: number;
   /** PDF: print CSS backgrounds (default true). */
   printBackground?: boolean;
 }
 
+/** The box captures at load; it does not honor waitMs/waitAssets yet. */
+export const BOX_HONORS_WAIT = false;
+
 export interface RenderInput {
   format: RenderFormat;
-  /** Render a live public URL. */
+  /**
+   * Render a live public URL.
+   * ⚠️ NOT SUPPORTED by the current box build — it answers 400 "missing html".
+   * Throws a clear error until the template gains navigation.
+   */
   url?: string;
   /** Render self-contained HTML. */
   html?: string;
-  /** Convert an office document (docx/xlsx/pptx/…) to PDF (forces format=pdf). */
-  fileUrl?: string;
   /** Optional output base name (for the File row). */
   fileName?: string;
   options?: RenderOptions;
@@ -50,127 +67,81 @@ export interface RenderResult {
   url: string;
   contentType: string;
   size: number;
+  /** count of <img> that failed to load and were swapped for a placeholder */
+  broken: number;
 }
 
-async function ensureBox(
-  ctx: AuthContext
-): Promise<{ renderUrl?: string; sandboxId: string } | null> {
-  return ensureServiceBox(ctx, "render").catch((e) => {
-    console.error("[render] ensureBox FAILED:", (e as Error)?.message || e);
-    return null;
-  });
-}
-
-function gotenbergRoute(input: RenderInput): { path: string; isPdf: boolean } {
-  if (input.fileUrl) return { path: "/forms/libreoffice/convert", isPdf: true };
-  const kind = input.url ? "url" : "html";
-  if (input.format === "png")
-    return { path: `/forms/chromium/screenshot/${kind}`, isPdf: false };
-  return { path: `/forms/chromium/convert/${kind}`, isPdf: true };
-}
-
-async function buildForm(input: RenderInput): Promise<FormData> {
-  const fd = new FormData();
+function buildPayload(input: RenderInput): RenderPayload {
+  if (!input.html) throw new Error("render needs html");
   const o = input.options ?? {};
+  const payload: RenderPayload = { html: input.html };
 
-  // office → pdf: fetch the source bytes and attach as `files`.
-  if (input.fileUrl) {
-    const r = await fetch(input.fileUrl, { signal: AbortSignal.timeout(30_000) });
-    if (!r.ok) throw new Error(`fetch office file failed: ${r.status}`);
-    const bytes = Buffer.from(await r.arrayBuffer());
-    const name = input.fileName || input.fileUrl.split("/").pop() || "document";
-    fd.append("files", new Blob([new Uint8Array(bytes)]), name);
-    return fd;
+  if (o.width || o.height) {
+    payload.viewport = { width: Math.round(o.width ?? 1280), height: Math.round(o.height ?? 800) };
   }
-
-  if (input.url) {
-    fd.append("url", input.url);
-  } else if (input.html) {
-    fd.append("files", new Blob([input.html], { type: "text/html" }), "index.html");
-  } else {
-    throw new Error("render needs url, html, or fileUrl");
-  }
+  if (o.waitMs) payload.waitMs = Math.round(o.waitMs);
 
   if (input.format === "png") {
-    fd.append("format", "png");
-    if (o.width) fd.append("width", String(Math.round(o.width)));
-    if (o.height) fd.append("height", String(Math.round(o.height)));
-    // Gotenberg: clip=false captures the full page; clip=true clips to width/height.
-    if (o.fullPage != null) fd.append("clip", String(!o.fullPage));
-    if (o.waitMs) fd.append("waitDelay", `${Math.round(o.waitMs)}ms`);
+    payload.screenshot = { type: "png", ...(o.fullPage != null ? { fullPage: o.fullPage } : {}) };
   } else {
-    if (o.landscape != null) fd.append("landscape", String(o.landscape));
-    fd.append("printBackground", String(o.printBackground ?? true));
-    if (o.paperWidth) fd.append("paperWidth", String(o.paperWidth));
-    if (o.paperHeight) fd.append("paperHeight", String(o.paperHeight));
-    if (o.waitMs) fd.append("waitDelay", `${Math.round(o.waitMs)}ms`);
+    payload.pdf = {
+      printBackground: o.printBackground ?? true,
+      ...(o.landscape != null ? { landscape: o.landscape } : {}),
+      ...(o.paperWidth && o.paperHeight
+        ? { width: `${o.paperWidth}in`, height: `${o.paperHeight}in` }
+        : { format: "Letter" }),
+    };
   }
-  return fd;
+  return payload;
 }
 
-async function postGotenberg(
-  renderUrl: string,
-  route: string,
-  form: FormData,
-  isPdf: boolean
-): Promise<{ bytes: Buffer; contentType: string } | null> {
-  try {
-    const r = await fetch(`${renderUrl.replace(/\/$/, "")}${route}`, {
-      method: "POST",
-      body: form,
-      signal: AbortSignal.timeout(60_000),
-    });
-    if (!r.ok) {
-      const detail = await r.text().catch(() => "");
-      console.error(`[render] gotenberg http=${r.status} route=${route} ${detail.slice(0, 300)}`);
-      return null;
-    }
-    const buf = Buffer.from(await r.arrayBuffer());
-    if (!buf.length) {
-      console.error("[render] gotenberg empty body");
-      return null;
-    }
-    return { bytes: buf, contentType: isPdf ? "application/pdf" : "image/png" };
-  } catch (e) {
-    console.error(`[render] gotenberg fetch FAILED route=${route}:`, (e as Error)?.message || e);
-    return null;
-  }
-}
-
-// Render via the owner's on-demand Gotenberg box and persist the result to the
-// owner's Files. Throws when the box can't be brought up or returns no bytes.
-export async function renderViaGotenbergBox(
+/**
+ * Render via the owner's on-demand render box and persist the result to the
+ * owner's Files. Throws (with the box's status + route) when it can't.
+ */
+export async function renderViaBoxAndStore(
   ctx: AuthContext,
   input: RenderInput
 ): Promise<RenderResult> {
-  const box = await ensureBox(ctx);
-  if (!box?.renderUrl) throw new Error("render box unavailable (host down or plan cap)");
+  if (input.url && !input.html) {
+    throw new Error(
+      "esta caja de render aún no navega URLs (responde 400 \"missing html\"). " +
+        "Usa render_html pasando el HTML completo y auto-contenido."
+    );
+  }
 
-  const { path: route, isPdf } = gotenbergRoute(input);
-  const form = await buildForm(input);
-  const out = await postGotenberg(box.renderUrl, route, form, isPdf);
-  void touchServiceBox(box.sandboxId);
-  if (!out) throw new Error("render failed (gotenberg box returned no bytes)");
+  const isPdf = input.format !== "png";
+  const out = await renderOnBox(ctx, isPdf ? "pdf" : "screenshot", buildPayload(input));
+  const contentType = isPdf ? "application/pdf" : "image/png";
 
   const { uploadFile } = await import("./operations");
   const ext = isPdf ? "pdf" : "png";
-  const rawBase = input.fileName || input.url || input.fileUrl || "render";
+  const rawBase = input.fileName || input.url || "render";
   const base =
     rawBase.replace(/^https?:\/\//, "").slice(0, 40).replace(/[^\w]+/g, "-").replace(/^-+|-+$/g, "") ||
     "render";
   const fileName = `${base}.${ext}`;
   const { file, putUrl } = await uploadFile(ctx, {
     fileName,
-    contentType: out.contentType,
+    contentType,
     size: out.bytes.length,
     access: "public",
     source: "render",
   });
   const put = await fetch(putUrl, {
     method: "PUT",
-    headers: { "content-type": out.contentType },
+    headers: { "content-type": contentType },
     body: new Uint8Array(out.bytes),
   });
   if (!put.ok) throw new Error(`render upload failed: ${put.status}`);
-  return { fileId: file.id, url: file.url || "", contentType: out.contentType, size: out.bytes.length };
+  return {
+    fileId: file.id,
+    url: file.url || "",
+    contentType,
+    size: out.bytes.length,
+    broken: out.broken,
+  };
 }
+
+/** @deprecated misleading name — the box is not Gotenberg. Use renderViaBoxAndStore. */
+export const renderViaGotenbergBox = renderViaBoxAndStore;

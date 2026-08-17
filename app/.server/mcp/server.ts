@@ -2807,7 +2807,7 @@ How to embed safely (the only reliable rule):
     "service_start",
     "Levanta un servicio de flota on-demand y devuelve sus URLs. kind='voice' arranca una caja con STT (whisper) + TTS (kokoro): retorna { sandboxId, transcribeUrl, speakUrl }. Para transcribir: POST el audio (bytes) a transcribeUrl → { text }. Para sintetizar voz: POST { text } a speakUrl → bytes de audio. Idempotente: si ya hay una caja de ese tipo corriendo, la reusa. La caja se auto-destruye tras ~10 min sin uso; usa service_stop para liberarla antes.",
     {
-      kind: z.enum(["voice", "render", "collab"]).describe("tipo de servicio: 'voice' (STT+TTS), 'render' (PDF/PNG via Gotenberg) o 'collab' (co-edición Yjs/Hocuspocus)"),
+      kind: z.enum(["voice", "render", "collab"]).describe("tipo de servicio: 'voice' (STT+TTS), 'render' (PDF/PNG via Chromium) o 'collab' (co-edición Yjs/Hocuspocus)"),
     },
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
