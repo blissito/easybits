@@ -14,6 +14,7 @@ export default defineConfig({
     buildHtmlV4: "src/buildHtmlV4.ts",
     grapesToSections: "src/grapesToSections.ts",
     bake: "src/bake.ts",
+    htmlPatch: "src/htmlPatch.ts",
     document: "src/document/index.ts",
     "hooks/useThumbnailCapture": "src/hooks/useThumbnailCapture.ts",
   },
@@ -42,6 +43,7 @@ export default defineConfig({
     "tailwind-merge",
     "postcss",
     "tailwindcss",
+    "parse5",
   ],
   // @ts-expect-error jsx option works at runtime but is not in tsup types
   jsx: "automatic",

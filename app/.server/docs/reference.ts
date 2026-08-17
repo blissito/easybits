@@ -210,6 +210,16 @@ Returns: \`{ fileId, url, width, height, contentType, size, preset, mobileEmulat
 Costs 1 credit per call.
 SDK: \`eb.screenshot({ html?, url?, preset? })\`
 MCP: \`screenshot_url\`
+
+### Node-level editing (\`data-id\` addressing)
+Edit a page **by node** instead of re-emitting it. What you don't touch stays **byte-identical**.
+This matters beyond cost: re-emitting 40 KB to move one sentence is slow, but the real problem is that every full rewrite is a chance to change things nobody asked for.
+The core is a pure HTML→HTML function — \`stampIds\`, \`applyPatches\`, \`indexNodes\` in \`@easybits.cloud/html-tailwind-generator/htmlPatch\` — so it works the same whether your pages live in EasyBits or in your own database. The MCP tools take \`documentId\`+\`pageId\` (applies and saves) **or** raw \`html\` (returns the result, saves nothing).
+Implementation note: it uses parse5 as an *index* over the original string and never re-serializes. A DOM round-trip (jsdom, \`innerHTML\`) normalizes quotes, reorders attributes and closes implicit tags — it would dirty the diff of a page nobody asked to touch, and can break \`<script>\` blocks.
+Ops: \`replace\` · \`remove\` · \`insert\` with \`pos\`: \`append\`/\`prepend\` (inside the anchor) or \`before\`/\`after\` (as a sibling). To add one item to a list or grid, insert on the list — never re-emit the parent.
+Returns \`{ applied: string[], failed: [{ nodeId, reason }] }\` — it never fails silently. \`reason\` ∈ \`missing\` | \`ambiguous\` (two nodes share the id — editing the wrong one is worse than not editing) | \`unparseable\` | \`root\` | \`void\` | \`empty\`. A patch that doesn't apply leaves the document untouched.
+Ids are deterministic by position, so re-stamping is idempotent and an outline you already fetched stays valid.
+MCP: \`get_node_outline\`, \`patch_node\`
 `,
 
   sharing: `## Sharing

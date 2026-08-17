@@ -176,11 +176,11 @@ export const DESIGN_ALLOWLIST = new Set<string>([
   "open_design_in_editor",
   // Documents — pages
   "set_page_html", "get_page_html",
+  "get_node_outline", "patch_node",
   "add_page", "delete_page", "reorder_pages",
   "get_page_screenshot",
   // Documents — sections (granular edits)
   "get_section_html", "set_section_html",
-  "replace_html",
   // Documents — AI mutation
   "refine_document_section",
   "regenerate_document_page",
@@ -242,6 +242,7 @@ export const CORE_ALLOWLIST = new Set<string>([
   "list_documents", "get_document", "create_document", "update_document", "delete_document",
   "open_design_in_editor",
   "set_page_html", "get_page_html", "add_page", "delete_page", "reorder_pages", "deploy_document",
+  "get_node_outline", "patch_node",
   "export_document",
   "create_quotation",
   "edit_quotation",
@@ -297,6 +298,7 @@ export const GHOSTY_ALLOWLIST = new Set<string>([
   "create_document", "get_document", "list_documents", "update_document", "delete_document",
   "add_page", "delete_page", "reorder_pages",
   "set_page_html", "get_page_html",
+  "get_node_outline", "patch_node",
   "deploy_document", "open_design_in_editor",
   // Export a PDF (entrega de archivos): sin esto el agente solo tiene el link web (/s/),
   // no puede traer un PDF real. get_document_pdf → URL del PDF; export_document → idem por formato.
@@ -369,6 +371,7 @@ export const IMAGE_ALLOWLIST = new Set<string>([
 export const MAGNET_ALLOWLIST = new Set<string>([
   "create_lead_magnet",
   "create_document", "set_page_html", "get_page_html",
+  "get_node_outline", "patch_node",
   "create_website", "deploy_website_file",
   "list_websites", "list_website_files",
   "upload_website_file",
@@ -570,6 +573,7 @@ export const DOCUMENTOS_READ_ALLOWLIST = new Set<string>([
 export const DOCUMENTOS_WRITE_ALLOWLIST = new Set<string>([
   "create_document", "update_document", "open_design_in_editor",
   "add_page", "reorder_pages", "set_page_html",
+  "get_node_outline", "patch_node",
   "structured_doc", "deploy_document",
   "create_share_link", "upload_file",
 ]);

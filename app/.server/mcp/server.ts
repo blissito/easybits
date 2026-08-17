@@ -4377,6 +4377,84 @@ Call get_docs("document-design") for full design guide with validated patterns.`
     })
   );
 
+  // --- Node-level editing (data-id addressing) ---
+  //
+  // El núcleo es HTML→HTML puro y vive en el paquete; estas tools son la capa fina
+  // que resuelve "dónde". Aceptan `documentId`+`pageId` (aplica y guarda) O `html`
+  // suelto (devuelve el resultado sin tocar nada), para que sirvan igual a quien
+  // guarda sus páginas fuera de EasyBits.
+
+  const patchOpSchema = z.object({
+    nodeId: z.string().describe("data-id del nodo objetivo. En 'insert', es el ANCLA."),
+    op: z.enum(["replace", "remove", "insert"]).optional().describe("Default 'replace'."),
+    pos: z.enum(["append", "prepend", "before", "after"]).optional().describe("Solo en 'insert'. append/prepend cuelgan DENTRO del ancla; before/after como hermano. Default 'append'."),
+    html: z.string().optional().describe("outerHTML COMPLETO del subárbol nuevo (con sus hijos). Vacío en 'remove'."),
+  });
+
+  server.tool(
+    "get_node_outline",
+    "Mapa DIRECCIONABLE de una página: cada nodo con su `data-id`, tag, clases y texto propio. Léelo ANTES de `patch_node` para saber a qué apuntar, en vez de traerte el HTML entero.\n\nHow to use:\n- `documentId`+`pageId` (siembra los data-id que falten y los guarda) O `html` suelto (solo lee).\n- Devuelve `{ nodes: [{ dataId, tag, depth, classes, text, parentDataId }] }`, hasta 250 nodos.\n- Los ids son DETERMINISTAS por posición: volver a pedirlo da los mismos, así que puedes cachearlos dentro de un turno.",
+    {
+      documentId: z.string().optional().describe("Documento EasyBits. Requiere pageId."),
+      pageId: z.string().optional().describe("Página dentro del documento."),
+      html: z.string().max(2_000_000).optional().describe("HTML suelto. Alternativa a documentId+pageId; no guarda nada."),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { outlineHtml, outlineDocumentPage } = await import("../core/nodePatchOperations");
+      if (params.html) {
+        const { stampIds } = await import("@easybits.cloud/html-tailwind-generator/htmlPatch");
+        const seeded = stampIds(params.html);
+        return ok({ nodes: outlineHtml(seeded.html), html: seeded.html, seeded: seeded.added > 0 });
+      }
+      if (!params.documentId || !params.pageId) {
+        return fail("Pasa `documentId`+`pageId`, o `html`.");
+      }
+      const out = await outlineDocumentPage(ctx, params.documentId, params.pageId);
+      return ok(out);
+    })
+  );
+
+  server.tool(
+    "patch_node",
+    "Edita una página POR NODO: reemplaza, borra o inserta usando el `data-id` como dirección. Lo que no tocas queda BYTE-IDÉNTICO.\n\nÚsala en vez de reescribir la página: reemitir 40 KB para mover un texto es caro y, sobre todo, cada reescritura completa es una oportunidad de cambiar cosas que nadie pidió.\n\nHow to use:\n- Primero `get_node_outline` para ver las direcciones.\n- `documentId`+`pageId` (aplica y guarda) O `html` suelto (devuelve el resultado, no guarda).\n- `patches` es una LISTA: arregla varias cosas en una llamada. Se aplican en orden y puedes tocar un nodo y su ancestro.\n- REGLAS: devuelve el nodo COMPLETO (su outerHTML con todos sus hijos); conserva la misma etiqueta raíz; **conserva los `data-id` de los hijos que no cambian — son direcciones, no adorno**; el resultado debe ser 90%+ IDÉNTICO al original (el cambio más pequeño que cumpla lo pedido, sin 'mejorar' de paso lo que nadie pidió); elige el nodo más PEQUEÑO que contenga todo el cambio.\n- Para AÑADIR un elemento a una lista o rejilla usa `op:'insert'` sobre ella — NUNCA re-emitas el padre entero para agregar o quitar un hijo.\n- NUNCA falla en silencio: devuelve `applied[]` y `failed[{nodeId, reason}]` con reason ∈ missing | ambiguous | unparseable | root | void | empty. Un patch que no aplica deja el documento intacto.\n- En la duda entre un patch dudoso y re-emitir la página completa, elige la página completa: un patch que no aplica no cambia nada.",
+    {
+      documentId: z.string().optional().describe("Documento EasyBits. Requiere pageId."),
+      pageId: z.string().optional().describe("Página dentro del documento."),
+      html: z.string().max(2_000_000).optional().describe("HTML suelto. Alternativa a documentId+pageId; devuelve el resultado sin guardar."),
+      patches: z.array(patchOpSchema).min(1).max(50).describe("Operaciones a aplicar, en orden."),
+      autoDeploy: z.boolean().optional().describe("Auto-deploy si el documento ya está publicado (default true)."),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { patchDocumentPage } = await import("../core/nodePatchOperations");
+      const summarize = (r: { applied: string[]; failed: { nodeId: string; reason: string }[] }) =>
+        r.failed.length
+          ? `${r.applied.length} aplicados, ${r.failed.length} fallaron: ${r.failed.map((f) => `${f.nodeId}=${f.reason}`).join(", ")}. Revisa las direcciones con get_node_outline.`
+          : `${r.applied.length} patches aplicados. El resto del documento quedó intacto.`;
+
+      if (params.html) {
+        const { applyPatches, stampIds } = await import("@easybits.cloud/html-tailwind-generator/htmlPatch");
+        const seeded = stampIds(params.html);
+        const r = applyPatches(seeded.html, params.patches);
+        const final = r.applied.length ? stampIds(r.html).html : r.html;
+        return ok({ ...r, html: final, saved: false, hint: summarize(r) });
+      }
+      if (!params.documentId || !params.pageId) {
+        return fail("Pasa `documentId`+`pageId`, o `html`.");
+      }
+      const r = await patchDocumentPage(ctx, params.documentId, params.pageId, params.patches);
+      const auto =
+        r.saved && params.autoDeploy !== false
+          ? await autoDeployIfPublished(ctx, params.documentId)
+          : { autoDeployed: false as const };
+      // El HTML resultante no se devuelve: en una página real son decenas de KB que
+      // el agente ya conoce. Si lo necesita, get_page_html.
+      const { html: _omit, ...rest } = r;
+      return ok({ ...rest, ...auto, hint: summarize(r) });
+    })
+  );
+
   // --- Document AI Tools ---
 
   const directionSchema = z.object({
