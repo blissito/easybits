@@ -5,7 +5,7 @@ import { z } from "zod";
 import { db } from "~/.server/db";
 import type { AuthContext } from "~/.server/apiAuth";
 import { ok, fail } from "~/.server/mcp/responses";
-import { renderViaBoxAndStore, captureScreenshot, BOX_HONORS_WAIT, type RenderOptions } from "~/.server/core/fleetRender";
+import { renderViaBoxAndStore, captureScreenshot, auditPage, type RenderOptions } from "~/.server/core/fleetRender";
 
 // Dedicated, always-on `render` MCP server for FleetAgents — Streamable-HTTP.
 // Injected per-turn into EVERY fleet agent (NOT gated by the easybits builtin
@@ -36,7 +36,7 @@ function buildRenderServer(ctx: AuthContext): McpServer {
 
   tool(
     "render_url",
-    "NO DISPONIBLE todavía: la caja de render de esta cuenta aún no navega URLs. Usa `render_html` pasando el HTML completo. (Se habilitará cuando el template de la caja gane navegación; la firma no va a cambiar.)",
+    "Captura una URL pública a PDF o PNG con la caja de render (Chromium). Navega de verdad y espera a que la red se calme (networkidle) antes de capturar. Devuelve { fileId, url } — mándala al chat como ADJUNTO.\n\n- Sólo URLs públicas: la caja rechaza direcciones privadas o loopback.\n- Si la página pinta tarde (fuentes, animaciones), sube `wait_ms`.\n- Para HTML que aún no publicas, usa `render_html`.",
     {
       url: z.string().url().describe("URL pública (https://…) a capturar"),
       format: z.enum(["pdf", "png"]).default("png"),
@@ -60,14 +60,14 @@ function buildRenderServer(ctx: AuthContext): McpServer {
         const r = await renderViaBoxAndStore(ctx, { format: p.format, url: p.url, options });
         return ok(r);
       } catch (e) {
-        return fail((e as Error).message, { retryable: false, useInstead: "render_html" });
+        return fail((e as Error).message);
       }
     }
   );
 
   tool(
     "render_html",
-    "Renderiza HTML auto-contenido a PDF o PNG con la caja de render on-demand (Chromium). El HTML debe traer su CSS inline (un CDN también sirve, pero ojo: la caja captura al `load` y NO espera, así que un CSS que llega tarde sale sin aplicar — inline es más seguro). Devuelve { fileId, url } — mándala al chat como ADJUNTO. Para facturas/cotizaciones/reportes estructurados usa structured_doc, NO esto.",
+    "Renderiza HTML auto-contenido a PDF o PNG con la caja de render on-demand (Chromium). La caja espera a las imágenes y a las fuentes antes de capturar, y `wait_ms` añade margen extra si algo entra tarde. Devuelve { fileId, url } — mándala al chat como ADJUNTO. Para facturas/cotizaciones/reportes estructurados usa structured_doc, NO esto.",
     {
       html: z.string().describe("HTML completo y auto-contenido"),
       format: z.enum(["pdf", "png"]).default("pdf"),
@@ -76,7 +76,7 @@ function buildRenderServer(ctx: AuthContext): McpServer {
       height: z.number().optional(),
       landscape: z.boolean().optional(),
       paper: z.enum(["letter", "a4", "legal"]).optional(),
-      wait_ms: z.number().optional().describe("aceptado pero AÚN NO honrado por la caja (captura al load)"),
+      wait_ms: z.number().optional().describe("esperar N ms tras cargar antes de capturar"),
       file_name: z.string().optional().describe("nombre base del archivo de salida"),
     },
     async (p) => {
@@ -90,8 +90,7 @@ function buildRenderServer(ctx: AuthContext): McpServer {
           ...(p.paper ? { paperWidth: PAPER[p.paper].w, paperHeight: PAPER[p.paper].h } : {}),
         };
         const r = await renderViaBoxAndStore(ctx, { format: p.format, html: p.html, fileName: p.file_name, options });
-        // Never let the agent believe a wait happened that didn't.
-        return ok({ ...r, ...(p.wait_ms ? { waitHonored: BOX_HONORS_WAIT } : {}) });
+        return ok(r);
       } catch (e) {
         return fail((e as Error).message);
       }
@@ -100,14 +99,14 @@ function buildRenderServer(ctx: AuthContext): McpServer {
 
   tool(
     "screenshot_url",
-    "VE cómo se ve una página. Renderiza HTML auto-contenido en un Chromium real y devuelve { fileId, url } de la imagen. Úsala para VERIFICAR tu propio trabajo: captura → mírala con `see_image` → corrige → repite.\n\n- `html` es lo normal aquí: te deja revisar un borrador SIN publicarlo.\n- `preset`: 'mobile' (390px, DEFAULT — el peor caso, donde se rompen las landings) o 'desktop' (1440px).\n- ⚠️ La caja captura al `load` y NO ESPERA: si el HTML trae Tailwind por CDN saldrá SIN estilos. Inline el CSS antes.\n- ⚠️ 'mobile' es ANCHO de viewport, no emulación de dispositivo (`mobileEmulation:false`).\n- Si sale de un solo color, la respuesta trae `warning`: significa que el CSS no había pintado, NO que rompiste la página.\n- Gratis, no consume créditos.",
+    "VE cómo se ve una página. Renderiza HTML auto-contenido (o una URL pública) en un Chromium real y devuelve { fileId, url } de la imagen. Úsala para VERIFICAR tu propio trabajo: captura → mírala con `see_image` → corrige → repite.\n\n- `html` es lo normal aquí: te deja revisar un borrador SIN publicarlo. `url` navega de verdad y espera a networkidle.\n- `preset`: 'mobile' (390px, DEFAULT — el peor caso, donde se rompen las landings) o 'desktop' (1440px).\n- La emulación es REAL: 'mobile' trae densidad 3x y touch, no sólo un viewport angosto.\n- `wait_ms` se honra (la caja ya espera imágenes y fuentes por su cuenta).\n- Si sale de un solo color, la respuesta trae `warning`: el CSS no había pintado, NO que rompiste la página — sube `wait_ms` y reintenta.\n- Gratis, no consume créditos.",
     {
       html: z.string().max(2_000_000).optional().describe("HTML completo y auto-contenido. GANA sobre url."),
-      url: z.string().url().optional().describe("URL pública (aún no soportada por la caja)."),
+      url: z.string().url().optional().describe("URL pública http/https a capturar."),
       preset: z.enum(["mobile", "desktop"]).optional().describe("mobile = 390x844 (default). desktop = 1440x900."),
       viewport: z.object({ width: z.number().int().min(240).max(3840), height: z.number().int().min(320).max(4000) }).optional(),
       full_page: z.boolean().optional().describe("Página completa scrolleable. Default true."),
-      wait_ms: z.number().int().min(0).max(30000).optional().describe("Aceptado, pero la caja aún NO lo honra."),
+      wait_ms: z.number().int().min(0).max(30000).optional().describe("Esperar N ms tras cargar, antes de capturar."),
       file_name: z.string().max(120).optional(),
     },
     async (p) => {
@@ -126,6 +125,54 @@ function buildRenderServer(ctx: AuthContext): McpServer {
           hint: r.warning
             ? `Captura lista PERO ${r.warning}`
             : `Captura ${r.preset} lista (${r.width}x${r.height}). Mírala con see_image({imageUrl}) antes de decir que quedó bien.`,
+        });
+      } catch (e) {
+        return fail((e as Error).message);
+      }
+    }
+  );
+
+  tool(
+    "audit_page",
+    "MIDE una página en vez de opinar sobre ella: axe-core sobre el DOM ya pintado (contraste REAL, con los colores que de verdad se ven) más medición de layout, a varios viewports. Devuelve el nodo culpable, no un consejo genérico.\n\n- `html` (auto-contenido) o `url`. `html` GANA.\n- Por default audita móvil (390), tablet (768) y desktop (1440).\n- Lee `axe.violations` y `axe.incomplete` POR SEPARADO: `incomplete` es lo que axe NO PUEDE decidir solo — típicamente texto sobre gradiente o sobre imagen. Eso verifícalo TÚ capturando con `screenshot_url` y mirándola; no lo cuentes como fallo ni lo ignores.\n- `layout.findings`: `horizontal-overflow` (con `measured.overflowPx`), `text-clipped`, `overlap` y `missing-viewport-meta`.\n- Cada hallazgo trae `dataId` — úsalo para arreglar EXACTAMENTE ese nodo en vez de reescribir la página.\n- En desborde horizontal se reporta UN culpable por cadena: arregla ése y vuelve a auditar.\n- Gratis, no consume créditos.",
+    {
+      html: z.string().max(2_000_000).optional().describe("HTML completo y auto-contenido. GANA sobre url."),
+      url: z.string().url().optional().describe("URL pública http/https a auditar."),
+      viewports: z
+        .array(
+          z.object({
+            name: z.string().max(40),
+            width: z.number().int().min(240).max(3840),
+            height: z.number().int().min(320).max(4000),
+            deviceScaleFactor: z.number().min(1).max(4).optional(),
+            isMobile: z.boolean().optional(),
+          })
+        )
+        .max(6)
+        .optional()
+        .describe("Default: mobile 390 · tablet 768 · desktop 1440."),
+      wait_ms: z.number().int().min(0).max(30000).optional().describe("Esperar N ms tras cargar, antes de medir."),
+    },
+    async (p) => {
+      try {
+        const r = await auditPage(ctx, {
+          html: p.html,
+          url: p.url,
+          viewports: p.viewports,
+          waitMs: p.wait_ms,
+        });
+        const vps = r.viewports ?? [];
+        const violations = vps.reduce((n, v) => n + (v.axe?.violations?.length ?? 0), 0);
+        const incomplete = vps.reduce((n, v) => n + (v.axe?.incomplete?.length ?? 0), 0);
+        const layout = vps.reduce((n, v) => n + (v.layout?.findings?.length ?? 0), 0);
+        return ok({
+          ...r,
+          hint:
+            violations + layout === 0
+              ? `Sin fallos en ${vps.length} viewport(s).` +
+                (incomplete ? ` Quedan ${incomplete} caso(s) 'incomplete' que debes verificar mirando la captura.` : "")
+              : `${violations} violación(es) de accesibilidad y ${layout} problema(s) de layout en ${vps.length} viewport(s).` +
+                (incomplete ? ` Además ${incomplete} caso(s) 'incomplete' que debes verificar mirando.` : ""),
         });
       } catch (e) {
         return fail((e as Error).message);

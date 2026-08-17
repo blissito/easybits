@@ -204,12 +204,24 @@ Body: \`{ html?, url?, preset?: "mobile"|"desktop", viewport?: { width, height }
 Renders a page in a real Chromium and stores the PNG as a public file — the "eye" for an agent that edits sites: capture, look at it, fix, repeat.
 \`html\` wins over \`url\` and is the useful one: it lets you review a draft **without publishing it**. POST (not GET) because a landing's HTML doesn't fit in a query string. Requires WRITE scope.
 \`preset\` defaults to \`mobile\` (390x844) — the worst case, and where landings actually break. \`viewport\` overrides it.
-Returns: \`{ fileId, url, width, height, contentType, size, preset, mobileEmulation, waitHonored, broken, warning? }\`
-⚠️ Read the honesty flags. \`mobileEmulation: false\` means you got a narrow viewport, **not** an emulated device (no touch, no pixel density). \`waitHonored: false\` means the capture did not wait, even if you passed \`waitMs\` — the box captures at \`load\`. So inline your CSS: HTML that pulls Tailwind from a CDN will render unstyled.
-\`warning\` appears when the image came out a single flat color. That means the CSS hadn't painted — **not** that you broke the page. Don't undo your work over it.
+Returns: \`{ fileId, url, width, height, contentType, size, preset, broken, warning? }\`
+The emulation is real: a \`mobile\` preset carries device pixel density and touch, not just a narrow viewport. \`waitMs\` is honored, and the box additionally waits for images and \`document.fonts.ready\` before capturing.
+\`warning\` appears when the image came out a single flat color. That means the CSS hadn't painted — **not** that you broke the page. Don't undo your work over it; raise \`waitMs\` and retry.
+Only public URLs: private and loopback addresses are rejected.
 Costs 1 credit per call.
 SDK: \`eb.screenshot({ html?, url?, preset? })\`
 MCP: \`screenshot_url\`
+
+### Audit a page (accessibility + layout)
+\`POST /audits\`
+Body: \`{ html?, url?, viewports?: { name, width, height, deviceScaleFactor?, isMobile? }[], waitMs? }\`
+Measures a page instead of guessing about it: axe-core runs against the **painted DOM**, so contrast is computed from the colors actually rendered, and layout is measured at every viewport.
+Defaults to three viewports: mobile 390, tablet 768, desktop 1440.
+Returns per viewport: \`axe.violations\`, \`axe.incomplete\`, and \`layout.findings\`.
+Read \`violations\` and \`incomplete\` separately — \`incomplete\` is what axe **cannot decide alone** (text over a gradient or an image). Verify those by looking at a screenshot; don't report them as failures and don't ignore them.
+\`layout.findings\` covers \`horizontal-overflow\` (with \`measured.overflowPx\`), \`text-clipped\`, \`overlap\`, and \`missing-viewport-meta\`. Each finding carries \`dataId\`, so you can patch that exact node instead of rewriting the page.
+Costs 1 credit per viewport.
+MCP: \`audit_page\`
 
 ### Node-level editing (\`data-id\` addressing)
 Edit a page **by node** instead of re-emitting it. What you don't touch stays **byte-identical**.

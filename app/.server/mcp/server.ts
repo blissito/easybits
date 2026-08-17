@@ -6066,14 +6066,14 @@ function registerVideoTools(server: McpServer) {
 
   server.tool(
     "screenshot_url",
-    "VE cómo se ve una página: renderiza HTML (o una URL pública) en un Chromium real y devuelve la imagen como archivo público. Úsala para VERIFICAR tu propio trabajo — captura, pásala a `describe_image` y corrige lo que veas.\n\nHow to use:\n- `html` (auto-contenido) o `url`. `html` GANA, y es lo que te deja revisar un borrador SIN publicarlo.\n- `preset`: 'mobile' (390px, DEFAULT — es el peor caso y donde se rompen las landings) o 'desktop' (1440px). `viewport` explícito gana sobre el preset.\n- `fullPage` default true (página completa scrolleable).\n- ⚠️ La caja captura al `load` y NO ESPERA: si el HTML trae Tailwind por CDN u otro CSS tardío, saldrá sin estilos. Inline el CSS antes de capturar. `waitMs` se acepta pero hoy NO se honra (`waitHonored:false` en la respuesta).\n- ⚠️ `preset:'mobile'` es ANCHO de viewport, no emulación de dispositivo (`mobileEmulation:false`): sirve para ver texto cortado y rejillas que desbordan, no para probar `:hover` táctil ni densidad de píxeles.\n- Si la captura sale de un solo color, la respuesta trae `warning` — significa 'el CSS no había pintado', NO 'rompiste la página'. No deshagas tu trabajo por eso.\n- Encadena: `screenshot_url` → `describe_image({imageUrl})` → corregir → repetir.\n- Cost: 1 crédito.",
+    "VE cómo se ve una página: renderiza HTML (o una URL pública) en un Chromium real y devuelve la imagen como archivo público. Úsala para VERIFICAR tu propio trabajo — captura, pásala a `describe_image` y corrige lo que veas.\n\nHow to use:\n- `html` (auto-contenido) o `url`. `html` GANA, y es lo que te deja revisar un borrador SIN publicarlo.\n- `url` navega de verdad y espera a que la red se calme (networkidle) antes de capturar.\n- `preset`: 'mobile' (390px, DEFAULT — es el peor caso y donde se rompen las landings) o 'desktop' (1440px). `viewport` explícito gana sobre el preset, conservando la emulación del preset.\n- La emulación es REAL: 'mobile' trae densidad de píxeles 3x y touch, no sólo un viewport angosto.\n- `fullPage` default true (página completa scrolleable).\n- `waitMs` se honra (además la caja espera a `document.fonts.ready`). Súbelo si el CSS o las fuentes entran tarde.\n- Si la captura sale de un solo color, la respuesta trae `warning` — significa 'el CSS no había pintado', NO 'rompiste la página'. No deshagas tu trabajo por eso: sube `waitMs` y reintenta.\n- ⚠️ Sólo URLs públicas: la caja rechaza direcciones privadas/loopback.\n- Encadena: `screenshot_url` → `describe_image({imageUrl})` → corregir → repetir. Para medir en vez de mirar, usa `audit_page`.\n- Cost: 1 crédito.",
     {
       html: z.string().max(2_000_000).optional().describe("HTML completo y auto-contenido. GANA sobre url."),
       url: z.string().url().optional().describe("URL pública http/https a capturar."),
       preset: z.enum(["mobile", "desktop"]).optional().describe("mobile = 390x844 (default). desktop = 1440x900."),
       viewport: z.object({ width: z.number().int().min(240).max(3840), height: z.number().int().min(320).max(4000) }).optional().describe("Viewport explícito; gana sobre preset."),
       fullPage: z.boolean().optional().describe("Capturar la página completa. Default true."),
-      waitMs: z.number().int().min(0).max(30000).optional().describe("Aceptado, pero la caja aún NO lo honra."),
+      waitMs: z.number().int().min(0).max(30000).optional().describe("Esperar N ms tras cargar, antes de capturar."),
       fileName: z.string().max(120).optional().describe("Nombre base del archivo de salida."),
     },
     wrapHandler(async (params, extra) => {
@@ -6094,6 +6094,61 @@ function registerVideoTools(server: McpServer) {
         });
       } catch (e) {
         const f = failService(e, "Screenshot");
+        if (f) return f;
+        throw e;
+      }
+    })
+  );
+
+  server.tool(
+    "audit_page",
+    "MIDE una página en vez de opinar sobre ella: corre axe-core sobre el DOM ya pintado (contraste REAL, calculado con los colores que de verdad se ven) y mide el layout a varios viewports. Devuelve el nodo culpable, no un consejo genérico.\n\nHow to use:\n- `html` (auto-contenido) o `url`. `html` GANA.\n- `viewports`: por default audita móvil (390), tablet (768) y desktop (1440). Pasa los tuyos para acotar.\n- Lee `axe.violations` (fallos ciertos) y `axe.incomplete` POR SEPARADO: `incomplete` es lo que axe NO PUEDE decidir solo — típicamente texto sobre gradiente o sobre imagen. Eso verifícalo TÚ con `screenshot_url` + `describe_image`; no lo reportes como fallo ni lo ignores.\n- `layout.findings` trae 4 tipos: `horizontal-overflow` (con `measured.overflowPx` — cuánto se sale), `text-clipped`, `overlap` (y con quién choca) y `missing-viewport-meta`.\n- Cada hallazgo trae `dataId`: pásalo a `patch_node({dataId})` para arreglar EXACTAMENTE ese nodo sin reescribir la página.\n- En desborde horizontal la caja reporta UN culpable por cadena, no toda la rama: arregla ese y vuelve a auditar.\n- Cost: 1 crédito por viewport (3 por default).",
+    {
+      html: z.string().max(2_000_000).optional().describe("HTML completo y auto-contenido. GANA sobre url."),
+      url: z.string().url().optional().describe("URL pública http/https a auditar."),
+      viewports: z
+        .array(
+          z.object({
+            name: z.string().max(40).describe("Etiqueta para leer el resultado (ej. 'mobile')."),
+            width: z.number().int().min(240).max(3840),
+            height: z.number().int().min(320).max(4000),
+            deviceScaleFactor: z.number().min(1).max(4).optional().describe("Densidad de píxeles. Default 1."),
+            isMobile: z.boolean().optional().describe("Emular móvil (activa touch). Default false."),
+          })
+        )
+        .max(6)
+        .optional()
+        .describe("Default: mobile 390 · tablet 768 · desktop 1440."),
+      waitMs: z.number().int().min(0).max(30000).optional().describe("Esperar N ms tras cargar, antes de medir."),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      if (!params.html && !params.url) return fail("Pasa `html` o `url`.");
+      const { consumeService } = await import("../services/consume");
+      try {
+        const result = await consumeService<import("../services/providers/render").AuditOutput>(
+          "render.audit",
+          params,
+          { userId: ctx.user.id }
+        );
+        const vps = result.data.viewports ?? [];
+        const violations = vps.reduce((n, v) => n + (v.axe?.violations?.length ?? 0), 0);
+        const incomplete = vps.reduce((n, v) => n + (v.axe?.incomplete?.length ?? 0), 0);
+        const layout = vps.reduce((n, v) => n + (v.layout?.findings?.length ?? 0), 0);
+        return ok({
+          ...result.data,
+          hint:
+            violations + layout === 0
+              ? `Sin fallos en ${vps.length} viewport(s).` +
+                (incomplete
+                  ? ` Quedan ${incomplete} caso(s) en 'incomplete' que axe no pudo decidir — verifícalos mirando la captura.`
+                  : "")
+              : `${violations} violación(es) de accesibilidad y ${layout} problema(s) de layout en ${vps.length} viewport(s).` +
+                (incomplete ? ` Además ${incomplete} caso(s) 'incomplete' que debes verificar mirando.` : "") +
+                " Usa el `dataId` de cada hallazgo con patch_node para arreglar ese nodo.",
+        });
+      } catch (e) {
+        const f = failService(e, "Audit");
         if (f) return f;
         throw e;
       }

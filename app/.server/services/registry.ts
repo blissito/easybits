@@ -32,7 +32,7 @@ import {
   brightdataSearchService,
 } from "./providers/brightdata";
 import { stockPhotoSearchService } from "./providers/stockPhotos";
-import { screenshotService } from "./providers/render";
+import { auditService, screenshotService } from "./providers/render";
 import { iconSearchService } from "./providers/icons";
 
 export const SERVICES = {
@@ -46,6 +46,7 @@ export const SERVICES = {
   "image.openai.generate": openaiImageService,
   "image.stock.search": stockPhotoSearchService,
   "render.screenshot": screenshotService,
+  "render.audit": auditService,
   "icon.iconify.search": iconSearchService,
   // Reservados — implementación pendiente:
   // "voice.elevenlabs.stt": elevenLabsSttService,

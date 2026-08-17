@@ -231,7 +231,7 @@ export default [
     route("fleet-agents/:fleetAgentId/voices", "routes/api/v2/fleet-agents.$fleetAgentId.voices.ts"),
     route("fleet-agents/:fleetAgentId/connect", "routes/api/v2/fleet-agents.$fleetAgentId.connect.ts"),
     route("fleet-agents/:fleetAgentId/groups", "routes/api/v2/fleet-agents.$fleetAgentId.groups.ts"),
-    // Always-on `render` MCP for fleet agents (PDF/screenshots via the on-demand Gotenberg box)
+    // Always-on `render` MCP for fleet agents (PDF/screenshots/audit via the on-demand render-svc box)
     route("fleet-render/:fleetAgentId/mcp", "routes/api/v2/fleet-render.$fleetAgentId.mcp.ts"),
     route("fleet-artifact/:fleetAgentId/mcp", "routes/api/v2/fleet-artifact.$fleetAgentId.mcp.ts"),
     // Always-on `vision` MCP for fleet agents — see_image (Gemini) so a text-only engine SEES an image instead of confabulating
@@ -296,6 +296,7 @@ export default [
     route("stock-photos", "routes/api/v2/stock-photos.ts"),
     route("icons", "routes/api/v2/icons.ts"),
     route("screenshots", "routes/api/v2/screenshots.ts"),
+    route("audits", "routes/api/v2/audits.ts"),
     route("files/bulk-delete", "routes/api/v2/files-bulk-delete.ts"),
     route("files/bulk-upload", "routes/api/v2/files-bulk-upload.ts"),
     route("files/:fileId", "routes/api/v2/file.ts"),

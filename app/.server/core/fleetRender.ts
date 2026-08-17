@@ -10,11 +10,24 @@
 //
 // ⚠️ HISTORY: until 2026-08-17 this module POSTed Gotenberg multipart routes
 // (/forms/chromium/…). The render-svc box does not serve them — it is a Chromium
-// server speaking JSON at /render/{pdf,screenshot} — so EVERY call 404'd and the
-// three fleet render tools were dead in production. Verify against a live box
-// (not the docs) before adding a route here.
+// server speaking JSON at /render/{pdf,screenshot} + /audit — so EVERY call 404'd
+// and the three fleet render tools were dead in production. Verify against a live
+// box (not the docs) before adding a route here.
+//
+// The box gained url navigation, honored waitMs, real device emulation and
+// /audit on 2026-08-17; verified against the baked image on both fierros before
+// this module started sending them. A rebake only reaches NEW/cold boxes, so a
+// live box may still be running an older image until it recycles.
 import type { AuthContext } from "../apiAuth";
-import { renderOnBox, type RenderPayload } from "./renderClient";
+import {
+  auditOnBox,
+  renderOnBox,
+  type AuditResult,
+  type AuditViewport,
+  type RenderPayload,
+} from "./renderClient";
+
+export type { AuditResult, AuditViewport } from "./renderClient";
 
 export type RenderFormat = "pdf" | "png";
 
@@ -31,29 +44,15 @@ export interface RenderOptions {
   /** PDF: paper size in inches (defaults to US Letter on the box side). */
   paperWidth?: number;
   paperHeight?: number;
-  /**
-   * Wait this long after load before capturing.
-   * ⚠️ NOT HONORED by the current box build — measured 2026-08-17: identical
-   * bytes for waitMs 0 vs 3000. The box captures at load. Kept in the API so
-   * callers can express intent (and so it starts working the day the template
-   * gains it), but never promise the wait happened — see `waitHonored` in the
-   * tool responses.
-   */
+  /** Wait this long after load before capturing (clamped box-side to 30s). */
   waitMs?: number;
   /** PDF: print CSS backgrounds (default true). */
   printBackground?: boolean;
 }
 
-/** The box captures at load; it does not honor waitMs/waitAssets yet. */
-export const BOX_HONORS_WAIT = false;
-
 export interface RenderInput {
   format: RenderFormat;
-  /**
-   * Render a live public URL.
-   * ⚠️ NOT SUPPORTED by the current box build — it answers 400 "missing html".
-   * Throws a clear error until the template gains navigation.
-   */
+  /** Render a live public URL (navigated with networkidle by default). */
   url?: string;
   /** Render self-contained HTML. */
   html?: string;
@@ -72,9 +71,10 @@ export interface RenderResult {
 }
 
 function buildPayload(input: RenderInput): RenderPayload {
-  if (!input.html) throw new Error("render needs html");
+  if (!input.html && !input.url) throw new Error("render needs html or url");
   const o = input.options ?? {};
-  const payload: RenderPayload = { html: input.html };
+  // html wins over url, matching the box's own precedence.
+  const payload: RenderPayload = input.html ? { html: input.html } : { url: input.url };
 
   if (o.width || o.height) {
     payload.viewport = { width: Math.round(o.width ?? 1280), height: Math.round(o.height ?? 800) };
@@ -94,10 +94,6 @@ function buildPayload(input: RenderInput): RenderPayload {
   }
   return payload;
 }
-
-const URL_UNSUPPORTED =
-  'esta caja de render aún no navega URLs (responde 400 "missing html"). ' +
-  "Pasa el HTML completo y auto-contenido.";
 
 /** Sube los bytes a los Files del owner y devuelve el File público. */
 async function storeRender(
@@ -135,8 +131,6 @@ export async function renderViaBoxAndStore(
   ctx: AuthContext,
   input: RenderInput
 ): Promise<RenderResult> {
-  if (input.url && !input.html) throw new Error(URL_UNSUPPORTED);
-
   const isPdf = input.format !== "png";
   const out = await renderOnBox(ctx, isPdf ? "pdf" : "screenshot", buildPayload(input));
   const contentType = isPdf ? "application/pdf" : "image/png";
@@ -158,10 +152,9 @@ export async function renderViaBoxAndStore(
  * `mobile` es el DEFAULT a propósito: es el peor caso y donde se rompen las
  * landings (texto cortado, rejillas que desbordan).
  *
- * ⚠️ `deviceScaleFactor` está aquí como INTENCIÓN, no como hecho: la caja lo
- * ignora (medido 2026-08-17 en sus 4 formas). Hasta que el template lo soporte,
- * un preset "mobile" es ancho de viewport, NO emulación de dispositivo — y la
- * respuesta lo declara con `mobileEmulation:false`.
+ * `deviceScaleFactor`/`isMobile` se MANDAN a la caja como `emulate` y viajan a
+ * la creación del contexto de Playwright — o sea que un preset "mobile" es un
+ * móvil de verdad (densidad de píxeles y touch), no sólo un viewport angosto.
  */
 export const SCREENSHOT_PRESETS = {
   mobile: { width: 390, height: 844, deviceScaleFactor: 3, isMobile: true },
@@ -181,6 +174,11 @@ export interface ScreenshotInput {
   fullPage?: boolean;
   waitMs?: number;
   fileName?: string;
+  /**
+   * Playwright context overrides (userAgent, colorScheme, locale…). Merged OVER
+   * the preset's own device emulation.
+   */
+  emulate?: Record<string, unknown>;
 }
 
 export interface ScreenshotResult {
@@ -191,10 +189,6 @@ export interface ScreenshotResult {
   contentType: string;
   size: number;
   preset: ScreenshotPreset;
-  /** false mientras la caja no emule dispositivo: viste un viewport angosto, no un móvil. */
-  mobileEmulation: boolean;
-  /** false mientras la caja capture al `load` sin esperar. */
-  waitHonored: boolean;
   /** count de <img> rotas que la caja sustituyó */
   broken: number;
   /** Presente si la captura salió prácticamente vacía. */
@@ -225,17 +219,26 @@ export async function captureScreenshot(
   ctx: AuthContext,
   input: ScreenshotInput
 ): Promise<ScreenshotResult> {
-  if (!input.html) {
-    // La caja no navega: sin html no hay captura posible (ni con url).
-    throw new Error(input.url ? URL_UNSUPPORTED : "screenshot needs html or url");
-  }
+  if (!input.html && !input.url) throw new Error("screenshot needs html or url");
+
   const preset: ScreenshotPreset = input.preset ?? "mobile";
-  const dims = input.viewport ?? SCREENSHOT_PRESETS[preset];
+  const device = SCREENSHOT_PRESETS[preset];
+  const dims = input.viewport ?? device;
   const fullPage = input.fullPage ?? true;
 
+  // An explicit `viewport` overrides the preset's size but keeps its device
+  // character — asking for 390px wide shouldn't silently drop touch/density.
+  const emulate = {
+    deviceScaleFactor: device.deviceScaleFactor,
+    isMobile: device.isMobile,
+    hasTouch: device.isMobile,
+    ...(input.emulate ?? {}),
+  };
+
   const out = await renderOnBox(ctx, "screenshot", {
-    html: input.html,
+    ...(input.html ? { html: input.html } : { url: input.url }),
     viewport: { width: Math.round(dims.width), height: Math.round(dims.height) },
+    emulate,
     ...(input.waitMs ? { waitMs: Math.round(input.waitMs) } : {}),
     screenshot: { type: "png", fullPage },
   });
@@ -260,17 +263,51 @@ export async function captureScreenshot(
     contentType: "image/png",
     size: out.bytes.length,
     preset,
-    mobileEmulation: false,
-    waitHonored: BOX_HONORS_WAIT,
     broken: out.broken,
     ...(blank
       ? {
           warning:
             "la captura salió de un solo color (probablemente en blanco): el CSS quizá no había pintado. " +
-            "Si el HTML carga Tailwind por CDN, hornéalo antes de capturar — esta caja NO espera.",
+            "Sube `waitMs`, o inline el CSS si viene de un CDN lento.",
         }
       : {}),
   };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// audit_page — medir accesibilidad y layout, en vez de adivinarlos.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface AuditInput {
+  url?: string;
+  /** Gana sobre `url`. */
+  html?: string;
+  /** Default: mobile 390 · tablet 768 · desktop 1440 (los que aplica la caja). */
+  viewports?: AuditViewport[];
+  waitMs?: number;
+}
+
+/** Cuántos viewports audita realmente una petición — la caja cobra por viewport. */
+export const DEFAULT_AUDIT_VIEWPORTS = 3;
+
+export function auditViewportCount(input: Pick<AuditInput, "viewports">): number {
+  return input.viewports?.length || DEFAULT_AUDIT_VIEWPORTS;
+}
+
+/**
+ * Audita una página en la caja: axe-core sobre el DOM PINTADO (contraste real,
+ * no estimado) más medición de layout, a N viewports.
+ *
+ * No sube nada a Files — el valor es el JSON, y `dataId` apunta al nodo exacto
+ * para que el agente lo parche con `patch_node`.
+ */
+export async function auditPage(ctx: AuthContext, input: AuditInput): Promise<AuditResult> {
+  if (!input.html && !input.url) throw new Error("audit needs html or url");
+  return auditOnBox(ctx, {
+    ...(input.html ? { html: input.html } : { url: input.url }),
+    ...(input.waitMs ? { waitMs: Math.round(input.waitMs) } : {}),
+    ...(input.viewports?.length ? { viewports: input.viewports } : {}),
+  });
 }
 
 /** @deprecated misleading name — the box is not Gotenberg. Use renderViaBoxAndStore. */

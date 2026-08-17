@@ -28,17 +28,93 @@ export interface RenderResult {
 }
 
 export interface RenderPayload {
-  html: string;
+  /** Self-contained HTML. WINS over `url` when both are present. */
+  html?: string;
+  /** Public http/https URL to navigate to. Vetted box-side by assertPublicUrl. */
+  url?: string;
   viewport?: { width: number; height: number };
+  /**
+   * Playwright CONTEXT options (deviceScaleFactor/isMobile/hasTouch/userAgent).
+   * They go into newPage() because Playwright can't change them on a live page —
+   * which is why a "mobile" capture without this is just a narrow viewport.
+   */
+  emulate?: Record<string, unknown>;
+  /** `url` path only. Box default is "networkidle". */
+  waitUntil?: "load" | "domcontentloaded" | "networkidle";
   optimizeImages?: boolean;
   waitAssets?: boolean;
   replaceBroken?: boolean;
-  /** Extra wait before capture. NOT honored by the current box build (see fleetRender.BOX_HONORS_WAIT). */
+  /** Extra wait before capture, clamped box-side to 30s. */
   waitMs?: number;
   /** page.pdf() options (format/width/height/landscape/printBackground/margin) */
   pdf?: Record<string, unknown>;
   /** page.screenshot() options (type/clip/fullPage/omitBackground) */
   screenshot?: Record<string, unknown>;
+}
+
+/**
+ * Viewport to audit. The box synthesizes the emulation from these, ignoring the
+ * payload's own `viewport`/`emulate`.
+ */
+export interface AuditViewport {
+  name: string;
+  width: number;
+  height: number;
+  deviceScaleFactor?: number;
+  isMobile?: boolean;
+}
+
+/** One axe finding. Same shape for `violations` and `incomplete`. */
+export interface AxeIssue {
+  id: string;
+  impact: string | null;
+  help: string;
+  helpUrl: string;
+  nodes: {
+    target: string[];
+    dataId: string | null;
+    html: string;
+    failureSummary: string;
+    data: Record<string, unknown> | null;
+  }[];
+}
+
+export interface LayoutFinding {
+  type: "horizontal-overflow" | "text-clipped" | "overlap" | "missing-viewport-meta";
+  severity: "critical" | "serious" | "moderate";
+  selector: string;
+  dataId: string | null;
+  tag: string;
+  text: string;
+  measured: Record<string, number>;
+  /** overlap only: the sibling it collides with. */
+  with?: string;
+  /** missing-viewport-meta only: the tag to add. */
+  fix?: string;
+}
+
+export interface AuditResult {
+  ok: boolean;
+  viewports: {
+    name: string;
+    width: number;
+    height: number;
+    deviceScaleFactor?: number;
+    isMobile?: boolean;
+    axe: {
+      ran: boolean;
+      error?: string;
+      violations: AxeIssue[];
+      /** Absent when axe failed to run — hence optional. */
+      incomplete?: AxeIssue[];
+    };
+    layout: {
+      hasViewportMeta: boolean;
+      documentOverflow: { scrollWidth: number; clientWidth: number; overflowsX: boolean };
+      findings: LayoutFinding[];
+      truncated: boolean;
+    };
+  }[];
 }
 
 // Background AuthContext for the box owner — render runs in HTTP routes and
@@ -76,21 +152,21 @@ export class RenderBoxError extends Error {
  * tools and the document/presentation/quiz renderers go through here, so there's
  * a single URL shape to keep in sync with the `render-svc` template.
  */
-export async function renderOnBox(
+async function postToBox(
   ctx: AuthContext,
-  mode: "pdf" | "screenshot",
-  payload: RenderPayload
-): Promise<RenderResult> {
+  route: string,
+  payload: unknown,
+  timeoutMs: number
+): Promise<{ res: Response; sandboxId: string }> {
   const box = await ensureServiceBox(ctx, "render");
   if (!box.renderUrl) {
     throw new RenderBoxError("render box unavailable (host down or plan cap)");
   }
-  const route = `/render/${mode}`;
   const res = await fetch(`${box.renderUrl}${route}`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(payload),
-    signal: AbortSignal.timeout(60_000),
+    signal: AbortSignal.timeout(timeoutMs),
   });
   if (!res.ok) {
     const detail = (await res.text().catch(() => "")).slice(0, 300);
@@ -101,12 +177,42 @@ export async function renderOnBox(
     );
   }
   void touchServiceBox(box.sandboxId);
+  return { res, sandboxId: box.sandboxId };
+}
+
+export async function renderOnBox(
+  ctx: AuthContext,
+  mode: "pdf" | "screenshot",
+  payload: RenderPayload
+): Promise<RenderResult> {
+  const route = `/render/${mode}`;
+  const { res } = await postToBox(ctx, route, payload, 60_000);
   const bytes = Buffer.from(await res.arrayBuffer());
   if (!bytes.length) {
     throw new RenderBoxError(`render box returned an empty body on ${route}`, 200, route);
   }
   const broken = parseInt(res.headers.get("x-broken-images") || "0", 10) || 0;
   return { bytes, broken };
+}
+
+/**
+ * Audit a page's accessibility + layout on the box (axe-core from disk, plus
+ * in-page layout measurement, across N viewports IN SERIES). Returns JSON, not
+ * bytes — hence a sibling of renderOnBox rather than another `mode`.
+ *
+ * The timeout is generous because the box runs one fresh browser context per
+ * viewport: three viewports is three full page loads.
+ */
+export async function auditOnBox(
+  ctx: AuthContext,
+  payload: RenderPayload & { viewports?: AuditViewport[] }
+): Promise<AuditResult> {
+  const { res } = await postToBox(ctx, "/audit", payload, 180_000);
+  const body = (await res.json().catch(() => null)) as AuditResult | null;
+  if (!body || !Array.isArray(body.viewports)) {
+    throw new RenderBoxError("render box returned an unreadable audit body", 200, "/audit");
+  }
+  return body;
 }
 
 /**

@@ -209,7 +209,7 @@ export const DESIGN_ALLOWLIST = new Set<string>([
   "search_stock_photo",
   // Ojos del agente + iconos: ver lo que hizo y vestirlo. search_icon devuelve SVG
   // inline (sin host externo); screenshot_url captura HTML sin publicar.
-  "search_icon", "screenshot_url",
+  "search_icon", "screenshot_url", "audit_page",
   // Video
   "video_create", "list_videos",
   "avatar_video_create",
@@ -265,7 +265,7 @@ export const CORE_ALLOWLIST = new Set<string>([
   "create_or_edit_image",
   "edit_image",
   "describe_image",
-  "search_icon", "screenshot_url",
+  "search_icon", "screenshot_url", "audit_page",
   "video_create", "list_videos",
   "avatar_video_create",
   "generate_captions", "get_caption_status",
@@ -361,7 +361,7 @@ export const IMAGE_ALLOWLIST = new Set<string>([
   // "image_generate", // DESACTIVADA hasta nuevo aviso (fal.ai sin saldo)
   "edit_image",
   "describe_image",
-  "search_icon", "screenshot_url",
+  "search_icon", "screenshot_url", "audit_page",
   "transform_image",
   "get_file",
   "list_files",
@@ -557,7 +557,7 @@ export const IMAGENES_ALLOWLIST = new Set<string>([
   "search_stock_photo",
   // Ojos del agente + iconos: ver lo que hizo y vestirlo. search_icon devuelve SVG
   // inline (sin host externo); screenshot_url captura HTML sin publicar.
-  "search_icon", "screenshot_url",
+  "search_icon", "screenshot_url", "audit_page",
   "get_file", "list_files", "upload_file",
 ]);
 
