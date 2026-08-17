@@ -106,10 +106,12 @@ export async function deployLanding(ctx: AuthContext, id: string) {
     ? buildLandingHtml2(sections as LandingBlock[], landing.theme, customColors)
     : buildLandingHtml(sections as LandingSection[], landing.theme, customColors);
 
-  // Compile Tailwind server-side for versions that use CDN (v4 docs, v5 landings)
-  const needsCompile = landing.version === 4 || landing.version === 5;
-  const finalHtml = needsCompile ? await replaceCdnWithCompiledCSS(html) : html;
-  const finalPrintHtml = printHtml && needsCompile ? await replaceCdnWithCompiledCSS(printHtml) : printHtml;
+  // Hornear Tailwind: sin esto la página sirve el CDN síncrono en el <head> y se
+  // ve EN BLANCO 20-30s en cada visita mientras bajan ~400 KB. `replaceCdnWithCompiledCSS`
+  // es idempotente y no hace nada si el HTML no trae el CDN, así que se aplica a
+  // TODAS las versiones (v3 quedó fuera hasta 2026-08-17 y arrastraba el blanco).
+  const finalHtml = await replaceCdnWithCompiledCSS(html);
+  const finalPrintHtml = printHtml ? await replaceCdnWithCompiledCSS(printHtml) : printHtml;
   const htmlBuffer = Buffer.from(finalHtml, "utf-8");
 
   // Create or reuse website

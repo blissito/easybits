@@ -13,6 +13,7 @@ export default defineConfig({
     directions: "src/directions.ts",
     buildHtmlV4: "src/buildHtmlV4.ts",
     grapesToSections: "src/grapesToSections.ts",
+    bake: "src/bake.ts",
     document: "src/document/index.ts",
     "hooks/useThumbnailCapture": "src/hooks/useThumbnailCapture.ts",
   },
@@ -39,6 +40,8 @@ export default defineConfig({
     "nanoid",
     "grapesjs",
     "tailwind-merge",
+    "postcss",
+    "tailwindcss",
   ],
   // @ts-expect-error jsx option works at runtime but is not in tsup types
   jsx: "automatic",
