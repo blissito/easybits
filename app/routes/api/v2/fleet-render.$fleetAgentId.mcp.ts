@@ -5,7 +5,7 @@ import { z } from "zod";
 import { db } from "~/.server/db";
 import type { AuthContext } from "~/.server/apiAuth";
 import { ok, fail } from "~/.server/mcp/responses";
-import { renderViaBoxAndStore, BOX_HONORS_WAIT, type RenderOptions } from "~/.server/core/fleetRender";
+import { renderViaBoxAndStore, captureScreenshot, BOX_HONORS_WAIT, type RenderOptions } from "~/.server/core/fleetRender";
 
 // Dedicated, always-on `render` MCP server for FleetAgents — Streamable-HTTP.
 // Injected per-turn into EVERY fleet agent (NOT gated by the easybits builtin
@@ -92,6 +92,41 @@ function buildRenderServer(ctx: AuthContext): McpServer {
         const r = await renderViaBoxAndStore(ctx, { format: p.format, html: p.html, fileName: p.file_name, options });
         // Never let the agent believe a wait happened that didn't.
         return ok({ ...r, ...(p.wait_ms ? { waitHonored: BOX_HONORS_WAIT } : {}) });
+      } catch (e) {
+        return fail((e as Error).message);
+      }
+    }
+  );
+
+  tool(
+    "screenshot_url",
+    "VE cómo se ve una página. Renderiza HTML auto-contenido en un Chromium real y devuelve { fileId, url } de la imagen. Úsala para VERIFICAR tu propio trabajo: captura → mírala con `see_image` → corrige → repite.\n\n- `html` es lo normal aquí: te deja revisar un borrador SIN publicarlo.\n- `preset`: 'mobile' (390px, DEFAULT — el peor caso, donde se rompen las landings) o 'desktop' (1440px).\n- ⚠️ La caja captura al `load` y NO ESPERA: si el HTML trae Tailwind por CDN saldrá SIN estilos. Inline el CSS antes.\n- ⚠️ 'mobile' es ANCHO de viewport, no emulación de dispositivo (`mobileEmulation:false`).\n- Si sale de un solo color, la respuesta trae `warning`: significa que el CSS no había pintado, NO que rompiste la página.\n- Gratis, no consume créditos.",
+    {
+      html: z.string().max(2_000_000).optional().describe("HTML completo y auto-contenido. GANA sobre url."),
+      url: z.string().url().optional().describe("URL pública (aún no soportada por la caja)."),
+      preset: z.enum(["mobile", "desktop"]).optional().describe("mobile = 390x844 (default). desktop = 1440x900."),
+      viewport: z.object({ width: z.number().int().min(240).max(3840), height: z.number().int().min(320).max(4000) }).optional(),
+      full_page: z.boolean().optional().describe("Página completa scrolleable. Default true."),
+      wait_ms: z.number().int().min(0).max(30000).optional().describe("Aceptado, pero la caja aún NO lo honra."),
+      file_name: z.string().max(120).optional(),
+    },
+    async (p) => {
+      try {
+        const r = await captureScreenshot(ctx, {
+          html: p.html,
+          url: p.url,
+          preset: p.preset,
+          viewport: p.viewport,
+          fullPage: p.full_page,
+          waitMs: p.wait_ms,
+          fileName: p.file_name,
+        });
+        return ok({
+          ...r,
+          hint: r.warning
+            ? `Captura lista PERO ${r.warning}`
+            : `Captura ${r.preset} lista (${r.width}x${r.height}). Mírala con see_image({imageUrl}) antes de decir que quedó bien.`,
+        });
       } catch (e) {
         return fail((e as Error).message);
       }

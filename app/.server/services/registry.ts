@@ -32,6 +32,8 @@ import {
   brightdataSearchService,
 } from "./providers/brightdata";
 import { stockPhotoSearchService } from "./providers/stockPhotos";
+import { screenshotService } from "./providers/render";
+import { iconSearchService } from "./providers/icons";
 
 export const SERVICES = {
   "video.fal.avatar": falAvatarService,
@@ -43,6 +45,8 @@ export const SERVICES = {
   "image.gemini.describe": describeImageService,
   "image.openai.generate": openaiImageService,
   "image.stock.search": stockPhotoSearchService,
+  "render.screenshot": screenshotService,
+  "icon.iconify.search": iconSearchService,
   // Reservados — implementación pendiente:
   // "voice.elevenlabs.stt": elevenLabsSttService,
   // "image.transform": imageTransformService,

@@ -95,6 +95,38 @@ function buildPayload(input: RenderInput): RenderPayload {
   return payload;
 }
 
+const URL_UNSUPPORTED =
+  'esta caja de render aún no navega URLs (responde 400 "missing html"). ' +
+  "Pasa el HTML completo y auto-contenido.";
+
+/** Sube los bytes a los Files del owner y devuelve el File público. */
+async function storeRender(
+  ctx: AuthContext,
+  bytes: Buffer,
+  contentType: string,
+  nameBase: string,
+  ext: string
+): Promise<{ fileId: string; url: string }> {
+  const { uploadFile } = await import("./operations");
+  const base =
+    nameBase.replace(/^https?:\/\//, "").slice(0, 40).replace(/[^\w]+/g, "-").replace(/^-+|-+$/g, "") ||
+    "render";
+  const { file, putUrl } = await uploadFile(ctx, {
+    fileName: `${base}.${ext}`,
+    contentType,
+    size: bytes.length,
+    access: "public",
+    source: "render",
+  });
+  const put = await fetch(putUrl, {
+    method: "PUT",
+    headers: { "content-type": contentType },
+    body: new Uint8Array(bytes),
+  });
+  if (!put.ok) throw new Error(`render upload failed: ${put.status}`);
+  return { fileId: file.id, url: file.url || "" };
+}
+
 /**
  * Render via the owner's on-demand render box and persist the result to the
  * owner's Files. Throws (with the box's status + route) when it can't.
@@ -103,43 +135,141 @@ export async function renderViaBoxAndStore(
   ctx: AuthContext,
   input: RenderInput
 ): Promise<RenderResult> {
-  if (input.url && !input.html) {
-    throw new Error(
-      "esta caja de render aún no navega URLs (responde 400 \"missing html\"). " +
-        "Usa render_html pasando el HTML completo y auto-contenido."
-    );
-  }
+  if (input.url && !input.html) throw new Error(URL_UNSUPPORTED);
 
   const isPdf = input.format !== "png";
   const out = await renderOnBox(ctx, isPdf ? "pdf" : "screenshot", buildPayload(input));
   const contentType = isPdf ? "application/pdf" : "image/png";
+  const stored = await storeRender(
+    ctx,
+    out.bytes,
+    contentType,
+    input.fileName || input.url || "render",
+    isPdf ? "pdf" : "png"
+  );
+  return { ...stored, contentType, size: out.bytes.length, broken: out.broken };
+}
 
-  const { uploadFile } = await import("./operations");
-  const ext = isPdf ? "pdf" : "png";
-  const rawBase = input.fileName || input.url || "render";
-  const base =
-    rawBase.replace(/^https?:\/\//, "").slice(0, 40).replace(/[^\w]+/g, "-").replace(/^-+|-+$/g, "") ||
-    "render";
-  const fileName = `${base}.${ext}`;
-  const { file, putUrl } = await uploadFile(ctx, {
-    fileName,
-    contentType,
-    size: out.bytes.length,
-    access: "public",
-    source: "render",
+// ─────────────────────────────────────────────────────────────────────────────
+// screenshot_url — ver una página como la ve un humano.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * `mobile` es el DEFAULT a propósito: es el peor caso y donde se rompen las
+ * landings (texto cortado, rejillas que desbordan).
+ *
+ * ⚠️ `deviceScaleFactor` está aquí como INTENCIÓN, no como hecho: la caja lo
+ * ignora (medido 2026-08-17 en sus 4 formas). Hasta que el template lo soporte,
+ * un preset "mobile" es ancho de viewport, NO emulación de dispositivo — y la
+ * respuesta lo declara con `mobileEmulation:false`.
+ */
+export const SCREENSHOT_PRESETS = {
+  mobile: { width: 390, height: 844, deviceScaleFactor: 3, isMobile: true },
+  desktop: { width: 1440, height: 900, deviceScaleFactor: 2, isMobile: false },
+} as const;
+
+export type ScreenshotPreset = keyof typeof SCREENSHOT_PRESETS;
+
+export interface ScreenshotInput {
+  url?: string;
+  /** Gana sobre `url` — permite ver un borrador SIN publicarlo. */
+  html?: string;
+  preset?: ScreenshotPreset;
+  /** Gana sobre `preset`. */
+  viewport?: { width: number; height: number };
+  /** Default true. */
+  fullPage?: boolean;
+  waitMs?: number;
+  fileName?: string;
+}
+
+export interface ScreenshotResult {
+  fileId: string;
+  url: string;
+  width: number;
+  height: number;
+  contentType: string;
+  size: number;
+  preset: ScreenshotPreset;
+  /** false mientras la caja no emule dispositivo: viste un viewport angosto, no un móvil. */
+  mobileEmulation: boolean;
+  /** false mientras la caja capture al `load` sin esperar. */
+  waitHonored: boolean;
+  /** count de <img> rotas que la caja sustituyó */
+  broken: number;
+  /** Presente si la captura salió prácticamente vacía. */
+  warning?: string;
+}
+
+/**
+ * ¿La imagen es de un solo color? Es la diferencia entre "rompí la página" y
+ * "el CSS todavía no había pintado" — sin esta señal el agente concluye lo
+ * primero y deshace un trabajo que estaba bien.
+ */
+async function looksBlank(bytes: Buffer): Promise<boolean> {
+  try {
+    const sharp = (await import("sharp")).default;
+    const { channels } = await sharp(bytes).stats();
+    // stdev ~0 en todos los canales = un único color en todo el lienzo.
+    return channels.length > 0 && channels.every((c) => c.stdev < 1);
+  } catch {
+    return false; // nunca fallar la captura por el detector
+  }
+}
+
+/**
+ * Captura cómo SE VE una página (URL pública o HTML sin publicar) y la guarda en
+ * los Files del owner, lista para encadenar a una tool de visión.
+ */
+export async function captureScreenshot(
+  ctx: AuthContext,
+  input: ScreenshotInput
+): Promise<ScreenshotResult> {
+  if (!input.html) {
+    // La caja no navega: sin html no hay captura posible (ni con url).
+    throw new Error(input.url ? URL_UNSUPPORTED : "screenshot needs html or url");
+  }
+  const preset: ScreenshotPreset = input.preset ?? "mobile";
+  const dims = input.viewport ?? SCREENSHOT_PRESETS[preset];
+  const fullPage = input.fullPage ?? true;
+
+  const out = await renderOnBox(ctx, "screenshot", {
+    html: input.html,
+    viewport: { width: Math.round(dims.width), height: Math.round(dims.height) },
+    ...(input.waitMs ? { waitMs: Math.round(input.waitMs) } : {}),
+    screenshot: { type: "png", fullPage },
   });
-  const put = await fetch(putUrl, {
-    method: "PUT",
-    headers: { "content-type": contentType },
-    body: new Uint8Array(out.bytes),
-  });
-  if (!put.ok) throw new Error(`render upload failed: ${put.status}`);
+
+  const stored = await storeRender(
+    ctx,
+    out.bytes,
+    "image/png",
+    input.fileName || input.url || `screenshot-${preset}`,
+    "png"
+  );
+
+  // Dimensiones reales del PNG (IHDR) — con fullPage el alto no es el del viewport.
+  const width = out.bytes.length > 24 ? out.bytes.readUInt32BE(16) : dims.width;
+  const height = out.bytes.length > 24 ? out.bytes.readUInt32BE(20) : dims.height;
+
+  const blank = await looksBlank(out.bytes);
   return {
-    fileId: file.id,
-    url: file.url || "",
-    contentType,
+    ...stored,
+    width,
+    height,
+    contentType: "image/png",
     size: out.bytes.length,
+    preset,
+    mobileEmulation: false,
+    waitHonored: BOX_HONORS_WAIT,
     broken: out.broken,
+    ...(blank
+      ? {
+          warning:
+            "la captura salió de un solo color (probablemente en blanco): el CSS quizá no había pintado. " +
+            "Si el HTML carga Tailwind por CDN, hornéalo antes de capturar — esta caja NO espera.",
+        }
+      : {}),
   };
 }
 

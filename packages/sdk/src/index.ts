@@ -47,6 +47,65 @@ export interface ListFilesResponse {
   total?: number;
 }
 
+export interface SearchIconParams {
+  /** Qué icono buscar. En inglés da muchos mejores resultados. */
+  query: string;
+  /** 'brand' = logos de empresas (ojo con `trademark`). */
+  style?: "outline" | "filled" | "duotone" | "brand";
+  /** Cuántos candidatos devolver. Default 6, máx 12. */
+  limit?: number;
+}
+
+export interface Icon {
+  /** `prefix:name`, pegable tal cual en `data-icon-query`. */
+  name: string;
+  prefix: string;
+  set: string;
+  /** SVG inline con `currentColor` y `height:1em`: hereda color y tamaño del padre. */
+  svg: string;
+  /** ISC | MIT | Apache-2.0 | CC0-1.0 — todas permiten uso comercial. */
+  license: string;
+  /**
+   * true = logo de marca. El ARCHIVO es CC0 pero la marca sigue protegida: úsalo
+   * solo para referirte a esa empresa, nunca como logo de tu cliente.
+   */
+  trademark: boolean;
+}
+
+export interface ScreenshotParams {
+  /** HTML completo y auto-contenido. GANA sobre `url` — permite ver un borrador sin publicarlo. */
+  html?: string;
+  /** URL pública a capturar. */
+  url?: string;
+  /** 'mobile' (390x844, default — el peor caso) o 'desktop' (1440x900). */
+  preset?: "mobile" | "desktop";
+  /** Viewport explícito; gana sobre `preset`. */
+  viewport?: { width: number; height: number };
+  /** Página completa scrolleable. Default true. */
+  fullPage?: boolean;
+  /** Aceptado, pero hoy la caja captura al `load` y no espera (ver `waitHonored`). */
+  waitMs?: number;
+  fileName?: string;
+}
+
+export interface Screenshot {
+  fileId: string;
+  url: string;
+  width: number;
+  height: number;
+  contentType: string;
+  size: number;
+  preset: string;
+  /** false = viste un viewport angosto, NO un dispositivo emulado. */
+  mobileEmulation: boolean;
+  /** false = la captura no esperó, aunque hayas mandado `waitMs`. */
+  waitHonored: boolean;
+  /** <img> rotas que se sustituyeron por un placeholder. */
+  broken: number;
+  /** Presente si la captura salió de un solo color (el CSS no había pintado). */
+  warning?: string;
+}
+
 export interface SearchStockPhotoParams {
   /** Qué buscar. En inglés da mejores resultados en todos los bancos. */
   query: string;
@@ -957,6 +1016,34 @@ export class EasybitsClient {
     const search = new URLSearchParams({ q: params.query });
     if (params.save) search.set("save", "true");
     return this.request<StockPhoto>(`/stock-photos?${search.toString()}`);
+  }
+
+  /**
+   * Busca iconos y devuelve el SVG INLINE listo para pegar (no una URL: así no
+   * metes un host externo en la ruta crítica de render de tu página).
+   *
+   * Gratis. Revisa `trademark` antes de usar un logo de marca.
+   */
+  async searchIcon(params: SearchIconParams): Promise<{ icons: Icon[]; query: string }> {
+    const search = new URLSearchParams({ q: params.query });
+    if (params.style) search.set("style", params.style);
+    if (params.limit) search.set("limit", String(params.limit));
+    return this.request<{ icons: Icon[]; query: string }>(`/icons?${search.toString()}`);
+  }
+
+  /**
+   * Captura cómo SE VE una página —HTML sin publicar o URL pública— en un Chromium
+   * real, y la guarda como archivo público.
+   *
+   * Cuesta 1 crédito y requiere scope WRITE. Mira `warning`: si la captura salió de
+   * un solo color, el CSS no había pintado (la caja no espera), no es que la página
+   * esté rota.
+   */
+  async screenshot(params: ScreenshotParams): Promise<Screenshot> {
+    return this.request<Screenshot>("/screenshots", {
+      method: "POST",
+      body: JSON.stringify(params),
+    });
   }
 
   // ── Websites ────────────────────────────────────────────────

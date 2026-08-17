@@ -5955,6 +5955,74 @@ function registerVideoTools(server: McpServer) {
   );
 
   server.tool(
+    "search_icon",
+    "Busca ICONOS y devuelve el SVG INLINE listo para pegar en el HTML — no una URL, así no metes un host externo en la ruta crítica de tu página. Úsala para features, listas, badges, navegación y botones. Para FOTOS reales usa `search_stock_photo`; para ilustraciones generadas, `create_or_edit_image`.\n\nHow to use:\n- `query` en INGLÉS da muchos mejores resultados ('shopping cart', no 'carrito').\n- Devuelve VARIOS candidatos: ELIGE uno y pega su `svg` tal cual. Trae `height:1em` y `color:currentColor`: hereda el COLOR del padre (`text-primary`) y su TAMAÑO DE FUENTE, no su ancho — para agrandarlo usa `text-2xl` en el contenedor, o mete `w-6 h-6` directamente en el `<svg>`. Ponerle `w-8 h-8` al padre NO lo agranda.\n- Alternativa: pon su `name` (ej. 'lucide:heart') en `<span data-icon-query=\"lucide:heart\"></span>` y el pipeline de documentos lo resuelve solo al guardar.\n- ⚠️ REVISA `trademark`: los logos de marca (simple-icons) son CC0 en el ARCHIVO pero la marca sigue protegida — úsalos solo para referirte a esa empresa, nunca como logo de tu cliente ni como adorno, y no los deformes.\n- `license` viene en cada candidato (ISC/MIT/Apache-2.0/CC0-1.0): todas permiten uso comercial.\n- Cost: 0 créditos.",
+    {
+      query: z.string().min(1).max(100).describe("Qué icono buscar. En inglés funciona mucho mejor."),
+      style: z.enum(["outline", "filled", "duotone", "brand"]).optional().describe("Filtra por estilo. 'brand' = logos de empresas (ojo con trademark)."),
+      limit: z.number().int().min(1).max(12).optional().describe("Cuántos candidatos devolver. Default 6."),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { consumeService } = await import("../services/consume");
+      try {
+        const result = await consumeService<import("../services/providers/icons").IconSearchOutput>(
+          "icon.iconify.search",
+          { query: params.query, style: params.style, limit: params.limit },
+          { userId: ctx.user.id }
+        );
+        const icons = result.data.icons;
+        return ok({
+          ...result.data,
+          hint: icons.length
+            ? `${icons.length} candidatos. Pega el \`svg\` del que elijas, o usa su \`name\` en data-icon-query.${icons.some((i) => i.trademark) ? " OJO: hay logos de marca (trademark:true) — solo para referirte a esa empresa." : ""}`
+            : "Sin resultados. Prueba otro término EN INGLÉS, más genérico (ej. 'scissors' en vez de 'barber scissors').",
+        });
+      } catch (e) {
+        const f = failService(e, "Iconos");
+        if (f) return f;
+        throw e;
+      }
+    })
+  );
+
+  server.tool(
+    "screenshot_url",
+    "VE cómo se ve una página: renderiza HTML (o una URL pública) en un Chromium real y devuelve la imagen como archivo público. Úsala para VERIFICAR tu propio trabajo — captura, pásala a `describe_image` y corrige lo que veas.\n\nHow to use:\n- `html` (auto-contenido) o `url`. `html` GANA, y es lo que te deja revisar un borrador SIN publicarlo.\n- `preset`: 'mobile' (390px, DEFAULT — es el peor caso y donde se rompen las landings) o 'desktop' (1440px). `viewport` explícito gana sobre el preset.\n- `fullPage` default true (página completa scrolleable).\n- ⚠️ La caja captura al `load` y NO ESPERA: si el HTML trae Tailwind por CDN u otro CSS tardío, saldrá sin estilos. Inline el CSS antes de capturar. `waitMs` se acepta pero hoy NO se honra (`waitHonored:false` en la respuesta).\n- ⚠️ `preset:'mobile'` es ANCHO de viewport, no emulación de dispositivo (`mobileEmulation:false`): sirve para ver texto cortado y rejillas que desbordan, no para probar `:hover` táctil ni densidad de píxeles.\n- Si la captura sale de un solo color, la respuesta trae `warning` — significa 'el CSS no había pintado', NO 'rompiste la página'. No deshagas tu trabajo por eso.\n- Encadena: `screenshot_url` → `describe_image({imageUrl})` → corregir → repetir.\n- Cost: 1 crédito.",
+    {
+      html: z.string().max(2_000_000).optional().describe("HTML completo y auto-contenido. GANA sobre url."),
+      url: z.string().url().optional().describe("URL pública http/https a capturar."),
+      preset: z.enum(["mobile", "desktop"]).optional().describe("mobile = 390x844 (default). desktop = 1440x900."),
+      viewport: z.object({ width: z.number().int().min(240).max(3840), height: z.number().int().min(320).max(4000) }).optional().describe("Viewport explícito; gana sobre preset."),
+      fullPage: z.boolean().optional().describe("Capturar la página completa. Default true."),
+      waitMs: z.number().int().min(0).max(30000).optional().describe("Aceptado, pero la caja aún NO lo honra."),
+      fileName: z.string().max(120).optional().describe("Nombre base del archivo de salida."),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      if (!params.html && !params.url) return fail("Pasa `html` o `url`.");
+      const { consumeService } = await import("../services/consume");
+      try {
+        const result = await consumeService<import("../services/providers/render").ScreenshotOutput>(
+          "render.screenshot",
+          params,
+          { userId: ctx.user.id }
+        );
+        return ok({
+          ...result.data,
+          hint: result.data.warning
+            ? `Captura lista PERO ${result.data.warning}`
+            : `Captura ${result.data.preset} lista (${result.data.width}x${result.data.height}). Pásala a describe_image({imageUrl}) para verificar el resultado.`,
+        });
+      } catch (e) {
+        const f = failService(e, "Screenshot");
+        if (f) return f;
+        throw e;
+      }
+    })
+  );
+
+  server.tool(
     "voice_tts_create",
     "Sintetiza una nota de voz desde texto con el motor self-hosted de EasyBits (kokoro). Servicio de flota on-demand, sin proveedores externos. Devuelve un File público cuyo `audioUrl` puedes mandar al chat (con `send_message({url})` sale como nota de voz) o pasar a `avatar_video_create`.\n\nVOZ: elige con `voice` (usa `list_voices` para ver las disponibles). Default em_santa (masculina).\n\nHow to use:\n- Required: `text` (max ~5000 chars).\n- `voice`: id de voz (ej. em_santa, em_alex, ef_dora).\n- `format`: 'ogg' (nota de voz WhatsApp, default-friendly) | 'wav' (para avatar).\n- Returns `audioUrl` + `voice` usado.",
     {

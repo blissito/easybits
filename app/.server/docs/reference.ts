@@ -186,6 +186,30 @@ Costs 1 credit per call — including when the match is poor. The search is fuzz
 You must display \`attribution\`: Unsplash and Pixabay require crediting the photographer in their terms.
 SDK: \`eb.searchStockPhoto({ query, save? })\`
 MCP: \`search_stock_photo\`
+
+### Search icon
+\`GET /icons?q=<query>&style=outline|filled|duotone|brand&limit=<1-12>\`
+Searches Iconify (Lucide, Heroicons, Material Symbols, Tabler, Phosphor, Simple Icons) and returns candidates with the **SVG inline** — not a URL. Inline is the point: an external icon host is a failure point in your page's critical render path, it can't inherit \`currentColor\` (so it breaks dark mode and brand tokens), and it disappears when exporting to PDF.
+English queries give much better results. Each SVG ships with \`height:1em\` and \`color:currentColor\`: it inherits the parent's *color* and *font-size* — not its width. Sizing the parent with \`w-8 h-8\` does nothing; use \`text-2xl\` on the container, or put \`w-6 h-6\` on the \`<svg>\` itself.
+Each candidate's \`name\` (e.g. \`lucide:heart\`) is pasteable verbatim into \`<span data-icon-query="lucide:heart"></span>\`, which the document pipeline resolves on save.
+Returns: \`{ icons: [{ name, prefix, set, svg, license, trademark }], query }\`
+⚠️ Check \`trademark\`: brand logos (simple-icons) are CC0 on the *file* but the mark itself stays protected — use them only to refer to that company, never as a client's logo or as decoration, and don't distort them.
+Free — 0 credits. Returns an empty \`icons\` array if the icon service is unreachable; it never errors.
+SDK: \`eb.searchIcon({ query, style?, limit? })\`
+MCP: \`search_icon\`
+
+### Screenshot a page
+\`POST /screenshots\`
+Body: \`{ html?, url?, preset?: "mobile"|"desktop", viewport?: { width, height }, fullPage?, waitMs?, fileName? }\`
+Renders a page in a real Chromium and stores the PNG as a public file — the "eye" for an agent that edits sites: capture, look at it, fix, repeat.
+\`html\` wins over \`url\` and is the useful one: it lets you review a draft **without publishing it**. POST (not GET) because a landing's HTML doesn't fit in a query string. Requires WRITE scope.
+\`preset\` defaults to \`mobile\` (390x844) — the worst case, and where landings actually break. \`viewport\` overrides it.
+Returns: \`{ fileId, url, width, height, contentType, size, preset, mobileEmulation, waitHonored, broken, warning? }\`
+⚠️ Read the honesty flags. \`mobileEmulation: false\` means you got a narrow viewport, **not** an emulated device (no touch, no pixel density). \`waitHonored: false\` means the capture did not wait, even if you passed \`waitMs\` — the box captures at \`load\`. So inline your CSS: HTML that pulls Tailwind from a CDN will render unstyled.
+\`warning\` appears when the image came out a single flat color. That means the CSS hadn't painted — **not** that you broke the page. Don't undo your work over it.
+Costs 1 credit per call.
+SDK: \`eb.screenshot({ html?, url?, preset? })\`
+MCP: \`screenshot_url\`
 `,
 
   sharing: `## Sharing
