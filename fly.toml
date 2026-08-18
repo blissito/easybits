@@ -18,8 +18,14 @@ kill_timeout = '30s'
   processes = ['app']
 
   [[http_service.checks]]
-    interval = "30s"
-    grace_period = "15s"
+    # El deploy espera a que este chequeo pase, así que su cadencia ES el tiempo
+    # de despliegue: con 15s de gracia + hasta 30s al primer intento, se iban
+    # ~45s de los 61s que tardaba. Con 8s/10s el peor caso baja a ~18s.
+    # No se sube a `--strategy immediate` a propósito: hay UNA sola máquina, así
+    # que el rollout no evita el corte — lo que compra la espera es DETECCIÓN.
+    # Sin ella, una imagen que no arranca deja el CI en verde y el sitio caído.
+    interval = "10s"
+    grace_period = "8s"
     method = "GET"
     path = "/api/health"
     timeout = "5s"
