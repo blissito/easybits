@@ -1584,7 +1584,10 @@ async function reserveVm(ctx: AuthContext, fleetAgent: PoolRow, groupId: string)
 //   - warm path (route + running agent): return it, no lock, no wait.
 //   - cold path: reserve under the lock (fast), then boot + restore OUTSIDE the
 //     lock so concurrent cold conversations come up in parallel.
-async function pickOrSpawn(ctx: AuthContext, fleetAgent: PoolRow, groupId: string) {
+// Exportada SÓLO como costura de test (test/fleetPlacementRetry.test.ts): el
+// reintento de caja evaporada es invisible desde routeMessage sin levantar medio
+// mundo, y es justo la ruta que perdía turnos en producción.
+export async function pickOrSpawn(ctx: AuthContext, fleetAgent: PoolRow, groupId: string) {
   // 1. Warm path — route with an already-running worker.
   const route = await db.fleetAgentRoute.findUnique({ where: { fleetAgentId_groupId: { fleetAgentId: fleetAgent.id, groupId } } });
   if (route?.agentId) {
