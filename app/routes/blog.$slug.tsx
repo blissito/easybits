@@ -5,164 +5,16 @@ import { SuscriptionBox } from "./blog/SuscriptionBox";
 import { Footer } from "~/components/common/Footer";
 import type { Route } from "./+types/blog.$slug";
 import path from "path";
-import matter from "gray-matter";
+import {
+  getPostBySlug,
+  listPublishedPosts,
+  SLUG_REDIRECTS,
+} from "~/.server/blogPosts";
 // import readingTime from "reading-time"; // REMOVE this import
 
 // Map of known blog posts with their file paths
-const BLOG_POSTS = {
-  "tu-regla-de-firewall-no-bloquea-nada":
-    "app/content/blog/2026-08-18-tu-regla-de-firewall-no-bloquea-nada.mdx",
-  "una-linea-de-kernel-y-el-sitio-dejo-de-arrastrarse":
-    "app/content/blog/2026-08-12-una-linea-de-kernel-y-el-sitio-dejo-de-arrastrarse.mdx",
-  "bubblewrap-el-sandbox-que-tu-agente-necesita":
-    "app/content/blog/2026-08-01-bubblewrap-el-sandbox-que-tu-agente-necesita.mdx",
-  "una-caja-una-base-por-cliente":
-    "app/content/blog/2026-07-16-una-caja-una-base-por-cliente.mdx",
-  "waba-inbox-estados-de-respuesta":
-    "app/content/blog/2026-06-28-waba-inbox-estados-de-respuesta.mdx",
-  "tres-pruebas-una-sola-herramienta":
-    "app/content/blog/2026-06-25-tres-pruebas-una-sola-herramienta.mdx",
-  "ejemplo-server-url-publica":
-    "app/content/blog/2026-06-08-ejemplo-server-url-publica.mdx",
-  "ejemplo-agente-embebido-en-tu-web":
-    "app/content/blog/2026-06-07-ejemplo-agente-embebido-en-tu-web.mdx",
-  "ejemplo-data-analyst-sandbox":
-    "app/content/blog/2026-06-07-ejemplo-data-analyst-sandbox.mdx",
-  "tu-agente-no-deberia-llamar-tools-una-por-una":
-    "app/content/blog/2026-06-06-tu-agente-no-deberia-llamar-tools-una-por-una.mdx",
-  "migra-tus-pipelines-sandboxes-easybits":
-    "app/content/blog/2026-06-05-migra-tus-pipelines-sandboxes-easybits.mdx",
-  "tu-agente-corre-codigo-sandboxes-easybits":
-    "app/content/blog/2026-06-04-tu-agente-corre-codigo-sandboxes-easybits.mdx",
-  "sandboxes-para-agentes-ia":
-    "app/content/blog/2026-06-04-sandboxes-para-agentes-ia.mdx",
-  "editar-pagina-22k-tokens-mcp":
-    "app/content/blog/2026-05-18-editar-pagina-22k-tokens-mcp.mdx",
-  "oauth-mcp-claude-cowork":
-    "app/content/blog/2026-04-14-oauth-mcp-claude-cowork.mdx",
-  "por-que-tailwind-en-nuestro-editor-de-documentos":
-    "app/content/blog/2026-03-17-por-que-tailwind-en-nuestro-editor-de-documentos.mdx",
-  "mcp-apps-ui-easybits-laboratorio":
-    "app/content/blog/2026-03-07-mcp-apps-ui-easybits-laboratorio.mdx",
-  "conecta-agente-ia-easybits-mcp":
-    "app/content/blog/2026-02-25-conecta-agente-ia-easybits-mcp.mdx",
-  "gestiona-archivos-desde-claude-easybits":
-    "app/content/blog/2026-02-25-gestiona-archivos-desde-claude-easybits.mdx",
-  "como-conectar-stripe-onboarding":
-    "app/content/blog/2025-01-20-como-conectar-stripe-onboarding.mdx",
-  "tendencias-economia-creadores-2025":
-    "app/content/blog/2025-01-16-tendencias-economia-creadores-2025.mdx",
-  "monetizar-conocimiento-online":
-    "app/content/blog/2025-01-14-monetizar-conocimiento-online.mdx",
-  "marketing-digital-para-creadores":
-    "app/content/blog/2025-01-12-marketing-digital-para-creadores.mdx",
-  "como-crear-assets-digitales-exitosos":
-    "app/content/blog/2025-01-10-como-crear-assets-digitales-exitosos.mdx",
-  "herramientas-esenciales-creadores-2025":
-    "app/content/blog/2025-01-18-herramientas-esenciales-creadores-2025.mdx",
-} as const;
-
-// Array con slug y featuredImage igual que en la lista de blog
-const BLOG_POSTS_LIST = [
-  {
-    slug: "tu-regla-de-firewall-no-bloquea-nada",
-    featuredImage: "/blog/assets/netpolicy-bridge-niebla.jpg",
-  },
-  {
-    slug: "una-linea-de-kernel-y-el-sitio-dejo-de-arrastrarse",
-    featuredImage: "/blog/assets/blog-tcp-bbr-editorial.png",
-  },
-  {
-    slug: "una-caja-una-base-por-cliente",
-    featuredImage: "/blog/assets/sandbox-ghosty.jpg",
-  },
-  {
-    slug: "waba-inbox-estados-de-respuesta",
-    featuredImage:
-      "https://images.unsplash.com/photo-1611746872915-64382b5c76da?w=800&auto=format",
-  },
-  {
-    slug: "tres-pruebas-una-sola-herramienta",
-    featuredImage: "https://img.youtube.com/vi/cPIUKyjkhl0/maxresdefault.jpg",
-  },
-  {
-    slug: "tu-agente-corre-codigo-sandboxes-easybits",
-    featuredImage: "/blog/assets/sandbox-sdk.jpg",
-  },
-  {
-    slug: "sandboxes-para-agentes-ia",
-    featuredImage: "/blog/assets/sandbox-ghosty.jpg",
-  },
-  {
-    slug: "editar-pagina-22k-tokens-mcp",
-    featuredImage:
-      "https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=800&auto=format",
-  },
-  {
-    slug: "oauth-mcp-claude-cowork",
-    featuredImage:
-      "https://images.unsplash.com/photo-1633265486064-086b219458ec?w=800&auto=format",
-  },
-  {
-    slug: "por-que-tailwind-en-nuestro-editor-de-documentos",
-    featuredImage:
-      "https://images.unsplash.com/photo-1507721999472-8ed4421c4af2?w=800&auto=format",
-  },
-  {
-    slug: "mcp-apps-ui-easybits-laboratorio",
-    featuredImage:
-      "https://images.unsplash.com/photo-1558494949-ef010cbdcc31?w=800&auto=format",
-  },
-  {
-    slug: "conecta-agente-ia-easybits-mcp",
-    featuredImage:
-      "https://images.unsplash.com/photo-1677442136019-21780ecad995?w=800&auto=format",
-  },
-  {
-    slug: "gestiona-archivos-desde-claude-easybits",
-    featuredImage:
-      "https://images.unsplash.com/photo-1620712943543-bcc4688e7485?w=800&auto=format",
-  },
-  {
-    slug: "como-conectar-stripe-onboarding",
-    featuredImage:
-      "https://images.pexels.com/photos/4968391/pexels-photo-4968391.jpeg?auto=compress&w=800",
-  },
-  {
-    slug: "tendencias-economia-creadores-2025",
-    featuredImage:
-      "https://images.pexels.com/photos/3184465/pexels-photo-3184465.jpeg?auto=compress&w=800",
-  },
-  {
-    slug: "monetizar-conocimiento-online",
-    featuredImage:
-      "https://images.pexels.com/photos/4386375/pexels-photo-4386375.jpeg?auto=compress&w=800",
-  },
-  {
-    slug: "marketing-digital-para-creadores",
-    featuredImage:
-      "https://images.pexels.com/photos/3861964/pexels-photo-3861964.jpeg?auto=compress&w=800",
-  },
-  {
-    slug: "como-crear-assets-digitales-exitosos",
-    featuredImage:
-      "https://images.pexels.com/photos/1181671/pexels-photo-1181671.jpeg?auto=compress&w=800",
-  },
-  {
-    slug: "herramientas-esenciales-creadores-2025",
-    featuredImage:
-      "https://images.pexels.com/photos/1181675/pexels-photo-1181675.jpeg?auto=compress&w=800",
-  },
-];
-
-// Helper para buscar la imagen por slug
-const getFeaturedImageBySlug = (slug: string) => {
-  const post = BLOG_POSTS_LIST.find((p) => p.slug === slug);
-  return post?.featuredImage || null;
-};
-
 // Helper to ensure absolute image URLs
-const getAbsoluteImageUrl = (img: string | undefined) =>
+const getAbsoluteImageUrl = (img: string | null | undefined) =>
   img?.startsWith("http")
     ? img
     : img
@@ -210,12 +62,6 @@ async function measureFeaturedImage(
   return meta;
 }
 
-// Slugs viejos que ya se compartieron → su URL actual. Un post renombrado no
-// puede devolver 404: el link ya vive en un chat de WhatsApp o en un tuit.
-const SLUG_REDIRECTS: Record<string, string> = {
-  "iptables-no-ve-tu-bridge": "tu-regla-de-firewall-no-bloquea-nada",
-};
-
 export const loader = async ({ params }: Route.LoaderArgs) => {
   const slug = params.slug;
 
@@ -225,72 +71,25 @@ export const loader = async ({ params }: Route.LoaderArgs) => {
     throw new Response(null, { status: 301, headers: { Location: `/blog/${movedTo}` } });
   }
 
-  if (!slug || !BLOG_POSTS[slug as keyof typeof BLOG_POSTS]) {
-    throw new Response("Post not found", { status: 404 });
-  }
-
   try {
-    const { promises: fs } = await import("fs");
-    const filePath = BLOG_POSTS[slug as keyof typeof BLOG_POSTS];
-    const fullPath = path.join(process.cwd(), filePath);
+    const post = slug ? await getPostBySlug(slug) : null;
+    if (!post) throw new Response("Post not found", { status: 404 });
 
-    const fileContent = await fs.readFile(fullPath, "utf-8");
-    const { data: frontmatter, content } = matter(fileContent);
-
-    // Import reading-time only in the loader (server-side)
-    const readingTime = (await import("reading-time")).default;
-    const readingTimeResult = readingTime(content);
-    const excerpt =
-      content
-        .replace(/[#*`]/g, "")
-        .replace(/\n+/g, " ")
-        .trim()
-        .substring(0, 160) + "...";
-
-    const post = {
-      slug,
-      title: frontmatter.title,
-      description: frontmatter.description,
-      date: frontmatter.date,
-      author: frontmatter.author,
-      tags: frontmatter.tags || [],
-      featuredImage: frontmatter.featuredImage || getFeaturedImageBySlug(slug),
-      readingTime: Math.ceil(readingTimeResult.minutes),
-      content,
-      excerpt,
-      published: frontmatter.published !== false,
-      imageMeta: await measureFeaturedImage(
-        frontmatter.featuredImage || getFeaturedImageBySlug(slug)
-      ),
-    };
-
-    if (!post.published) {
-      throw new Response("Post not found", { status: 404 });
-    }
-
-    // Get related posts (simplified - just get other posts with similar tags)
-    const relatedPosts = Object.entries(BLOG_POSTS)
-      .filter(([otherSlug]) => otherSlug !== slug)
-      .slice(0, 3)
-      .map(([otherSlug]) => ({
-        slug: otherSlug,
-        title: `Related Post: ${otherSlug}`,
-        description: "Related blog post",
-        date: "2025-01-01",
-        author: "EasyBits Team",
-        tags: [],
-        featuredImage: getFeaturedImageBySlug(otherSlug),
-        readingTime: 5,
-        content: "",
-        excerpt: "Related blog post",
-        published: true,
-      }));
+    // Relacionados por tags compartidos, con los más recientes como relleno.
+    // Antes eran de mentira: título "Related Post: <slug>" y fecha 2025-01-01.
+    const others = (await listPublishedPosts()).filter((p) => p.slug !== post.slug);
+    const shared = (p: (typeof others)[number]) =>
+      p.tags.filter((t) => post.tags.includes(t)).length;
+    const relatedPosts = others
+      .sort((a, b) => shared(b) - shared(a))
+      .slice(0, 3);
 
     return {
-      post,
+      post: { ...post, imageMeta: await measureFeaturedImage(post.featuredImage) },
       relatedPosts,
     };
   } catch (error) {
+    if (error instanceof Response) throw error; // 404/301 son respuestas, no fallos
     console.error("Error loading blog post:", error);
     throw new Response("Error loading post", { status: 500 });
   }
