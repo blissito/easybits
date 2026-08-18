@@ -50,12 +50,19 @@ jobs:
           # binario viejo y tools nuevas (ej. call_create) "desaparecían".
           build-args: |
             CACHEBUST=${{ github.sha }}
-          cache-from: type=gha
+          # El cache vive en el registry de Fly, no en el de GitHub: restaurar
+          # las capas de `builder` (node_modules + cliente de prisma, cientos de
+          # MB) desde el cache de gha costaba ~34s por deploy. El registry ya
+          # está al lado del builder y sirve las capas que faltan y nada más.
+          # `gha` se conserva como respaldo por si el registry no responde.
+          cache-from: |
+            type=registry,ref=registry.fly.io/easybits:buildcache
+            type=gha
           # mode=max, NO min: este Dockerfile es multi-etapa y las capas caras
           # (npm ci, prisma generate) viven en `builder`, que no forma parte de
           # la imagen final. Con `min` no se cachearían y `npm ci` correría
           # entero en cada deploy — cambiar 33s de export por varios minutos.
-          cache-to: type=gha,mode=max
+          cache-to: type=registry,ref=registry.fly.io/easybits:buildcache,mode=max
 
       - name: Deploy
         run: flyctl deploy --image registry.fly.io/easybits:${{ github.sha }}
