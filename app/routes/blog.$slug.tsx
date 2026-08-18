@@ -10,8 +10,8 @@ import matter from "gray-matter";
 
 // Map of known blog posts with their file paths
 const BLOG_POSTS = {
-  "iptables-no-ve-tu-bridge":
-    "app/content/blog/2026-08-18-iptables-no-ve-tu-bridge.mdx",
+  "tu-regla-de-firewall-no-bloquea-nada":
+    "app/content/blog/2026-08-18-tu-regla-de-firewall-no-bloquea-nada.mdx",
   "una-linea-de-kernel-y-el-sitio-dejo-de-arrastrarse":
     "app/content/blog/2026-08-12-una-linea-de-kernel-y-el-sitio-dejo-de-arrastrarse.mdx",
   "bubblewrap-el-sandbox-que-tu-agente-necesita":
@@ -65,7 +65,7 @@ const BLOG_POSTS = {
 // Array con slug y featuredImage igual que en la lista de blog
 const BLOG_POSTS_LIST = [
   {
-    slug: "iptables-no-ve-tu-bridge",
+    slug: "tu-regla-de-firewall-no-bloquea-nada",
     featuredImage: "/blog/assets/netpolicy-bridge-niebla.jpg",
   },
   {
@@ -169,8 +169,55 @@ const getAbsoluteImageUrl = (img: string | undefined) =>
     ? `https://www.easybits.cloud${img}`
     : undefined;
 
+/**
+ * Dimensiones y tipo REALES de la imagen destacada.
+ *
+ * WhatsApp y Facebook usan `og:image:width/height/type` para reservar el
+ * recuadro ANTES de descargar la imagen, así que un valor inventado sale caro:
+ * o recortan mal, o descartan la miniatura y mandan sólo el link pelado.
+ * Estaban fijos en "1024x1024 image/jpeg" con un comentario que decía que todas
+ * las destacadas eran así — y no lo eran: la portada de este post mide 940x627 y
+ * la del post de TCP es un PNG de 1200x630.
+ *
+ * Se mide con sharp sobre el archivo de `public/` y se memoiza: son un puñado de
+ * archivos que no cambian en caliente. Si no se puede medir (imagen remota, por
+ * ejemplo), se devuelve null y las etiquetas se OMITEN — mejor callar que mentir.
+ */
+const imageMetaCache = new Map<string, { width: number; height: number; type: string } | null>();
+
+async function measureFeaturedImage(
+  img: string | null | undefined
+): Promise<{ width: number; height: number; type: string } | null> {
+  if (!img || img.startsWith("http")) return null; // remota: no la descargamos por una etiqueta
+  if (imageMetaCache.has(img)) return imageMetaCache.get(img) ?? null;
+  let meta: { width: number; height: number; type: string } | null = null;
+  try {
+    const sharp = (await import("sharp")).default;
+    const m = await sharp(path.join(process.cwd(), "public", img)).metadata();
+    if (m.width && m.height && m.format) {
+      meta = { width: m.width, height: m.height, type: `image/${m.format === "jpg" ? "jpeg" : m.format}` };
+    }
+  } catch {
+    meta = null; // nunca romper el post por una miniatura
+  }
+  imageMetaCache.set(img, meta);
+  return meta;
+}
+
+// Slugs viejos que ya se compartieron → su URL actual. Un post renombrado no
+// puede devolver 404: el link ya vive en un chat de WhatsApp o en un tuit.
+const SLUG_REDIRECTS: Record<string, string> = {
+  "iptables-no-ve-tu-bridge": "tu-regla-de-firewall-no-bloquea-nada",
+};
+
 export const loader = async ({ params }: Route.LoaderArgs) => {
   const slug = params.slug;
+
+  const movedTo = slug ? SLUG_REDIRECTS[slug] : undefined;
+  if (movedTo) {
+    // 301: el buscador traslada el ranking en vez de indexar dos URLs iguales.
+    throw new Response(null, { status: 301, headers: { Location: `/blog/${movedTo}` } });
+  }
 
   if (!slug || !BLOG_POSTS[slug as keyof typeof BLOG_POSTS]) {
     throw new Response("Post not found", { status: 404 });
@@ -206,6 +253,9 @@ export const loader = async ({ params }: Route.LoaderArgs) => {
       content,
       excerpt,
       published: frontmatter.published !== false,
+      imageMeta: await measureFeaturedImage(
+        frontmatter.featuredImage || getFeaturedImageBySlug(slug)
+      ),
     };
 
     if (!post.published) {
@@ -272,11 +322,17 @@ export const meta = ({ data }: Route.MetaArgs) => {
     { property: "og:url", content: canonical },
     { property: "og:image", content: imageUrl },
     { property: "og:image:alt", content: post.title },
-    // WhatsApp/Facebook render the preview image more reliably with explicit
-    // dimensions + type. Featured images are 1024×1024 JPEG.
-    { property: "og:image:width", content: "1024" },
-    { property: "og:image:height", content: "1024" },
-    { property: "og:image:type", content: "image/jpeg" },
+    // WhatsApp/Facebook reservan el recuadro con estas medidas ANTES de bajar la
+    // imagen: si no coinciden, recortan mal o descartan la miniatura. Se miden
+    // del archivo real; si no se pudieron medir, se omiten (mejor callar).
+    ...(post.imageMeta
+      ? [
+          { property: "og:image:width", content: String(post.imageMeta.width) },
+          { property: "og:image:height", content: String(post.imageMeta.height) },
+          { property: "og:image:type", content: post.imageMeta.type },
+        ]
+      : []),
+    { property: "og:image:secure_url", content: imageUrl },
     { property: "article:author", content: post.author },
     {
       property: "article:published_time",

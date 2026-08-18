@@ -10,8 +10,9 @@ import matter from "gray-matter";
 // Map of known blog posts with their file paths and metadata
 const BLOG_POSTS = [
   {
-    slug: "iptables-no-ve-tu-bridge",
-    filePath: "app/content/blog/2026-08-18-iptables-no-ve-tu-bridge.mdx",
+    slug: "tu-regla-de-firewall-no-bloquea-nada",
+    filePath:
+      "app/content/blog/2026-08-18-tu-regla-de-firewall-no-bloquea-nada.mdx",
     title: "Tu regla de firewall se instaló pero no bloquea nada",
     description:
       "Para tráfico puenteado, el kernel reporta el bridge como interfaz de entrada, no el puerto por el que entró la trama: una regla `iptables -i <tap>` se instala, se lista bien y su contador se queda clavado en cero. Eso, y otras dos cosas que encontramos endureciendo la red de nuestras microVMs midiendo en vez de suponer.",
