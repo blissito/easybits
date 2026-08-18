@@ -10,6 +10,29 @@ import matter from "gray-matter";
 // Map of known blog posts with their file paths and metadata
 const BLOG_POSTS = [
   {
+    slug: "iptables-no-ve-tu-bridge",
+    filePath: "app/content/blog/2026-08-18-iptables-no-ve-tu-bridge.mdx",
+    title:
+      "iptables no ve tu bridge: tres cosas que aprendimos endureciendo la red de nuestras microVMs",
+    description:
+      "Nos reportaron que una microVM podía hablar con toda la red privada del host. El parche propuesto eran tres reglas de iptables, bien argumentadas. Una no habría bloqueado nada —el contador se queda en cero— y otra habría tirado la voz de toda la flota en silencio. Lo que encontramos al medir en vez de suponer.",
+    date: "2026-08-18",
+    author: "Equipo Easybits",
+    tags: [
+      "infraestructura",
+      "seguridad",
+      "build in public",
+      "flota",
+      "firecracker",
+      "redes",
+    ],
+    featuredImage: "/blog/assets/netpolicy-bridge-niebla.jpg",
+    readingTime: 7,
+    excerpt:
+      "La regla se instala sin error, se lista bien y su contador de paquetes se queda clavado en cero mientras el tráfico suplantado pasa. Para tráfico puenteado el kernel reporta el bridge, no el puerto. Eso, y otras dos cosas que sólo se ven midiendo.",
+    published: true,
+  },
+  {
     slug: "una-linea-de-kernel-y-el-sitio-dejo-de-arrastrarse",
     filePath:
       "app/content/blog/2026-08-12-una-linea-de-kernel-y-el-sitio-dejo-de-arrastrarse.mdx",
