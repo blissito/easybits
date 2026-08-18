@@ -1,0 +1,132 @@
+---
+title: "Le dimos a los agentes permiso de crear bases de datos"
+description: "Un agente que necesita guardar algo no pide una base al equipo de infraestructura: la crea él, con el nombre que se le ocurra, mientras trabaja. Eso rompe el modelo de credenciales que usas hoy, porque no puedes emitir un token para una base que todavía no existe."
+date: "2026-08-18"
+author: "Equipo Easybits"
+tags: ["infraestructura", "seguridad", "build in public", "agentes", "multi-tenancy", "bases de datos"]
+featuredImage: "/blog/assets/sandbox-ghosty.jpg"
+published: true
+---
+
+# Le dimos a los agentes permiso de crear bases de datos
+
+Un agente que trabaja de verdad acumula estado. Lleva el registro de lo que ya procesó, guarda lo que aprendió de una conversación, arma una tabla con lo que extrajo de doscientos PDFs. Nada de eso cabe en su contexto, y pedirle al usuario que provisione una base antes de empezar convierte una herramienta en un trámite.
+
+Así que en nuestra flota los agentes crean sus propias bases. En medio de una tarea, sin avisar:
+
+```
+db.create("clientes")
+```
+
+Esto no es una decisión exótica, es la consecuencia de tomarse en serio lo que un agente hace. Pero cambia una cosa que casi todo el mundo da por sentada al diseñar la seguridad de una plataforma: **la base de datos deja de ser algo que existe antes que el código que la usa.**
+
+Y ahí es donde el modelo de credenciales que traes de cualquier otro sistema se rompe.
+
+---
+
+## El diseño que sale solo
+
+Cada caja de la flota tiene acceso a un `sqld` —libSQL con namespaces, un motor SQLite que sirve muchas bases lógicas desde un proceso—. La forma obvia de conectarlo es la que armaría cualquiera en una tarde:
+
+```
+caja → sqld:8100, cabecera `x-namespace: clientes`
+```
+
+El namespace lo manda el llamador. El nombre lo eligió el modelo. Y —esto es lo que lo vuelve grave— `sqld` corría sin autenticación, porque estaba en la red privada.
+
+Léelo otra vez con la lista de quién vive en esa red: **el código arbitrario de todos los clientes**. Cada caja puede pedir el namespace de cualquier otra por nombre, y borrarlo por el puerto de administración. "Es interno" describe la topología, no la confianza.
+
+---
+
+## Por qué un token por caja no resuelve esto
+
+La respuesta de manual es acotar la credencial: emites un token por cliente, limitado a lo suyo, y se acabó. `sqld` incluso lo soporta — un JWT con un claim que lo amarra a un namespace.
+
+No funciona aquí, y el motivo es exactamente lo que dice el título de este post.
+
+**Los namespaces de un agente se crean en tiempo de ejecución, cuando el modelo decide.** No puedes pre-emitir un token para `clientes` si `clientes` va a existir dentro de cuarenta segundos, y tampoco sabes si el siguiente se va a llamar `inventario`, `pdfs_extraidos` o algo que ningún humano escribió nunca. Emitir credenciales por adelantado supone conocer los recursos por adelantado, y ese supuesto es justo el que un agente rompe.
+
+La salida fácil sería emitir un token amplio y confiar en que el nombre que pide cada caja es el suyo. Es decir, volver al principio.
+
+---
+
+## Cambiar la categoría del problema
+
+Lo que arregló esto no fue una regla mejor, fue quitarle al llamador la decisión.
+
+El namespace deja de ser algo que la caja **pide** y pasa a ser algo que el host **deriva**, a partir de quién está llamando:
+
+```
+cliente A: db.query("clientes")  →  namespace real  o4f3a1b2__clientes
+cliente B: db.query("clientes")  →  namespace real  o9c7e0d4__clientes
+```
+
+El prefijo sale de un hash del dueño. Dos clientes pueden llamarle `clientes` a su base sin verse nunca, y ninguno tiene que coordinar nombres con nadie.
+
+Lo importante es la diferencia entre las dos versiones de la misma frase:
+
+- Con validación: pedir la base de otro **está prohibido**.
+- Con derivación: pedir la base de otro **es inexpresable**.
+
+La primera es una comprobación que alguien puede olvidar, invertir o saltarse por un camino nuevo. La segunda no tiene dónde fallar, porque el prefijo no lo escribe el llamador — no hay cadena de texto que pueda mandar para convertirse en otro.
+
+Un proxy en medio emite el token en el momento, ya acotado al namespace derivado. La credencial se crea junto con la base, que es la única forma de acotar algo que no existía hace un segundo.
+
+**El separador es `__`, y no es capricho.** El saneador de nombres del SDK permite un guión bajo simple, así que un nombre elegido por el modelo no puede fabricar un separador y hacerse pasar por otro prefijo. Si el separador fuera `_`, un agente que crea una base llamada `4f3a1b2_clientes` estaría escribiendo la mitad izquierda de la identidad de alguien más.
+
+---
+
+## Esto se apoya entero en la capa de abajo
+
+Y aquí está la parte que no se ve mirando este diseño solo.
+
+El proxy resuelve quién llama **por la dirección IP de origen del paquete**. Si esa dirección se puede falsificar, todo lo anterior se cae: basta con emitir paquetes desde la IP de otra caja para que el host derive el prefijo de otro dueño y te entregue un token perfectamente acotado… a la base equivocada.
+
+Lo que sostiene esto es el anti-spoofing por interfaz que contamos en [el post sobre reglas de firewall que no bloquean nada](/blog/tu-regla-de-firewall-no-bloquea-nada): cada caja sólo puede emitir paquetes con la dirección que le asignamos, y esa regla se aplica en el puerto del bridge, donde el kernel sí distingue quién es quién.
+
+Las dos piezas no son dos casillas de una lista. **Sirven sólo juntas.** Un aislamiento de datos impecable sobre una red que permite suplantar direcciones no protege nada, y el orden en que las construyas no cambia eso.
+
+El firewall queda como red de seguridad debajo de ambas: los puertos de `sqld` salieron de la lista de permitidos global, y sólo los alcanzan las cajas de control. Aunque el proxy tuviera un error, una caja de cliente no puede ni abrir la conexión.
+
+---
+
+## Una advertencia para quien monte esto con sqld
+
+Este es el detalle que más caro sale y no está documentado en ningún lado. Lo dejamos escrito porque quien intente acotar un token de `sqld` va a chocar con esto, y el modo de fallo es de los peores.
+
+Al acotar un JWT a un namespace, el claim que cuenta es **`id`** (y `a` para los permisos, `rw` o `ro`).
+
+Los claims `sub`, `ns` y `namespace` **se ignoran en silencio**.
+
+O sea: emites un token creyendo que lo acotaste a una base, `sqld` lo acepta sin una queja, y lo que tienes en la mano es un **token maestro** con acceso a todo. No hay error, no hay log, no hay nada que te avise. Falla abierto, que es la peor dirección en la que puede fallar algo.
+
+No está en la documentación de `sqld` ni en los símbolos del binario. Se resuelve probando, y por eso vale la pena decirlo en voz alta.
+
+---
+
+## Resumen para quien opera algo parecido
+
+- **Si tus recursos los crea un modelo en tiempo de ejecución, no puedes pre-emitir credenciales para ellos.** Emite en el momento, acotado, o no aciertas.
+- **Deriva la identidad del recurso; no la aceptes como argumento.** Un nombre que manda el llamador es un nombre que el llamador puede cambiar.
+- **Prohibir es más débil que hacer inexpresable.** Una validación se olvida por un camino nuevo; un prefijo que el llamador no escribe, no.
+- **Revisa tu separador contra tu saneador de nombres.** Si el nombre del recurso puede contener el separador, el nombre puede falsificar la identidad.
+- **Si autenticas por IP, tu aislamiento de datos vale lo que valga tu anti-spoofing.**
+- **Con `sqld`, el claim es `id`.** `sub`, `ns` y `namespace` se ignoran sin avisar y te dejan un token maestro creyendo que está acotado.
+
+La decisión de dejar que un agente cree sus propias bases fue correcta, y la volveríamos a tomar: el estado durable es lo que separa un agente que trabaja de uno que demuestra. Lo que aprendimos es que esa decisión trae una factura en el diseño de credenciales, y que la factura llega antes de lo que parece.
+
+---
+
+## O no montas nada de esto
+
+Acabas de leer lo que cuesta que un agente guarde datos sin ver los del vecino: derivar identidades en vez de aceptarlas, emitir credenciales al vuelo, sostenerlo con anti-spoofing en el puerto del bridge, y un claim mal documentado que te deja un token maestro creyendo lo contrario. Y esto es una de las piezas. Faltan el aislamiento de red, los respaldos que de verdad restauran y la contabilidad de capacidad.
+
+Nada de eso es lo que estás construyendo. Es lo que hay debajo de lo que estás construyendo.
+
+En Easybits tu agente crea sus bases y corre su código en microVMs nuestras, con todo lo anterior ya puesto y medido en producción. Tú escribes el agente; la parte difícil ya la peleamos nosotros.
+
+👉 Pruébalo en [www.easybits.cloud](https://www.easybits.cloud)
+
+---
+
+*¿Estás dejando que tus agentes creen su propio estado? Cuéntanos cómo lo estás acotando hoy —y si quieres que entremos a fondo en los respaldos o en el arranque en frío de las cajas, dinos y escribimos la siguiente.*

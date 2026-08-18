@@ -17,8 +17,12 @@ import matter from "gray-matter";
 
 const BLOG_DIR = "app/content/blog";
 
+export type PostLang = "es" | "en";
+
 export interface BlogPost {
   slug: string;
+  /** Idioma del archivo. `mi-post.en.mdx` es la traducción de `mi-post.mdx`. */
+  lang: PostLang;
   filePath: string;
   title: string;
   description: string;
@@ -41,7 +45,20 @@ export interface BlogPost {
 let cache: Promise<BlogPost[]> | null = null;
 
 function slugOf(fileName: string): string {
-  return fileName.replace(/^\d{4}-\d{2}-\d{2}-/, "").replace(/\.mdx$/, "");
+  return fileName
+    .replace(/^\d{4}-\d{2}-\d{2}-/, "")
+    .replace(/\.mdx$/, "")
+    .replace(/\.en$/, "");
+}
+
+/**
+ * El idioma va en el nombre del archivo, no en el frontmatter, para que la
+ * traducción comparta slug con el original y el índice no se duplique:
+ * `2026-08-18-mi-post.mdx` (es) y `2026-08-18-mi-post.en.mdx` (en) son el MISMO
+ * post en `/blog/mi-post`, y el botón de traducir sólo cambia `?lang=`.
+ */
+function langOf(fileName: string): PostLang {
+  return fileName.endsWith(".en.mdx") ? "en" : "es";
 }
 
 function excerptOf(content: string): string {
@@ -67,6 +84,7 @@ async function readAll(): Promise<BlogPost[]> {
       const { data, content } = matter(raw);
       return {
         slug: slugOf(fileName),
+        lang: langOf(fileName),
         filePath: `${BLOG_DIR}/${fileName}`,
         title: data.title ?? slugOf(fileName),
         description: data.description ?? "",
@@ -93,15 +111,33 @@ function allPosts(): Promise<BlogPost[]> {
   return cache;
 }
 
-/** Posts publicados, del más reciente al más viejo. */
+/**
+ * Posts publicados, del más reciente al más viejo.
+ *
+ * SÓLO los originales en español: una traducción no es una entrada más del
+ * índice, es otra vista del mismo post. Listarlas duplicaría cada post traducido
+ * en la portada del blog y en el sitemap.
+ */
 export async function listPublishedPosts(): Promise<BlogPost[]> {
-  return (await allPosts()).filter((p) => p.published);
+  return (await allPosts()).filter((p) => p.published && p.lang === "es");
 }
 
-/** Un post por slug, o null si no existe o es borrador. */
-export async function getPostBySlug(slug: string): Promise<BlogPost | null> {
-  const post = (await allPosts()).find((p) => p.slug === slug);
+/** Un post por slug en un idioma, o null si no existe o es borrador. */
+export async function getPostBySlug(
+  slug: string,
+  lang: PostLang = "es"
+): Promise<BlogPost | null> {
+  const post = (await allPosts()).find(
+    (p) => p.slug === slug && p.lang === lang
+  );
   return post?.published ? post : null;
+}
+
+/** Idiomas disponibles de un post. Vacío si el post no existe. */
+export async function getPostLangs(slug: string): Promise<PostLang[]> {
+  return (await allPosts())
+    .filter((p) => p.slug === slug && p.published)
+    .map((p) => p.lang);
 }
 
 /**

@@ -1,0 +1,132 @@
+---
+title: "We let agents create their own databases"
+description: "An agent that needs to store something doesn't file a ticket with your infra team — it creates a database mid-task, with whatever name occurs to it. That breaks the credential model you use today, because you can't issue a token for a database that doesn't exist yet."
+date: "2026-08-18"
+author: "Easybits Team"
+tags: ["infrastructure", "security", "build in public", "agents", "multi-tenancy", "databases"]
+featuredImage: "/blog/assets/sandbox-ghosty.jpg"
+published: true
+---
+
+# We let agents create their own databases
+
+An agent doing real work accumulates state. It tracks what it already processed, keeps what it learned from a conversation, builds a table out of what it extracted from two hundred PDFs. None of that fits in its context, and making the user provision a database before starting turns a tool into paperwork.
+
+So in our fleet, agents create their own databases. Mid-task, without asking:
+
+```
+db.create("customers")
+```
+
+This isn't an exotic decision — it's what taking an agent's work seriously leads to. But it breaks an assumption almost everyone makes when designing a platform's security: **the database stops being something that exists before the code that uses it.**
+
+And that's where the credential model you'd bring from any other system falls apart.
+
+---
+
+## The design that writes itself
+
+Every box in the fleet has access to a `sqld` — libSQL with namespaces, a SQLite engine serving many logical databases from one process. The obvious way to wire it up is the one anyone would build in an afternoon:
+
+```
+box → sqld:8100, header `x-namespace: customers`
+```
+
+The caller sends the namespace. The model picked the name. And — this is what makes it serious — `sqld` was running with no authentication, because it sat on the private network.
+
+Read that again with the guest list for that network in mind: **arbitrary code from every customer**. Any box could request any other box's namespace by name, and drop it through the admin port. "It's internal" describes the topology, not the trust.
+
+---
+
+## Why a token per box doesn't fix this
+
+The textbook answer is to scope the credential: issue a token per customer, limited to what's theirs, done. `sqld` even supports it — a JWT with a claim that binds it to one namespace.
+
+It doesn't work here, and the reason is exactly what this post's title says.
+
+**An agent's namespaces are created at runtime, when the model decides.** You can't pre-issue a token for `customers` if `customers` will come into existence forty seconds from now, and you don't know whether the next one will be `inventory`, `extracted_pdfs`, or something no human ever typed. Issuing credentials in advance assumes knowing your resources in advance — and that assumption is precisely what an agent breaks.
+
+The easy way out would be to issue a broad token and trust that the name each box asks for is its own. Which is to say: back to the start.
+
+---
+
+## Changing the category of the problem
+
+What fixed this wasn't a better check. It was taking the decision away from the caller.
+
+The namespace stops being something the box **asks for** and becomes something the host **derives**, from who is calling:
+
+```
+customer A: db.query("customers")  →  real namespace  o4f3a1b2__customers
+customer B: db.query("customers")  →  real namespace  o9c7e0d4__customers
+```
+
+The prefix comes from a hash of the owner. Two customers can both call their database `customers` and never see each other, and neither has to coordinate names with anyone.
+
+What matters is the difference between two versions of the same sentence:
+
+- With validation: asking for someone else's database **is forbidden**.
+- With derivation: asking for someone else's database **is unexpressable**.
+
+The first is a check someone can forget, invert, or bypass through a new code path. The second has nowhere to fail, because the caller doesn't write the prefix — there is no string it can send to become someone else.
+
+A proxy in the middle issues the token on the spot, already scoped to the derived namespace. The credential is created alongside the database, which is the only way to scope something that didn't exist a second ago.
+
+**The separator is `__`, and that's not arbitrary.** The SDK's name sanitizer allows a single underscore, so a model-chosen name can't manufacture a separator and pose as another prefix. If the separator were `_`, an agent creating a database named `4f3a1b2_customers` would be writing the left half of somebody else's identity.
+
+---
+
+## This rests entirely on the layer below
+
+And here's the part you can't see by looking at this design on its own.
+
+The proxy resolves the caller **by the source IP of the packet**. If that address can be forged, everything above collapses: emit packets from another box's IP and the host derives someone else's prefix and hands you a perfectly scoped token… to the wrong database.
+
+What holds this up is the per-interface anti-spoofing we wrote about in [the post on firewall rules that block nothing](/blog/tu-regla-de-firewall-no-bloquea-nada): each box can only emit packets with the address we assigned it, and that rule is enforced at the bridge port, where the kernel can actually tell who is who.
+
+These two pieces aren't two checkboxes on a list. **They only work together.** Flawless data isolation on a network that allows address spoofing protects nothing, and the order you build them in doesn't change that.
+
+The firewall stays underneath both as a safety net: `sqld`'s ports came off the global allowlist, and only control boxes can reach them. Even if the proxy had a bug, a tenant box can't open the connection in the first place.
+
+---
+
+## A warning for anyone building this on sqld
+
+This is the detail that costs the most and is documented nowhere. We're writing it down because anyone trying to scope a `sqld` token will hit it, and the failure mode is one of the worst kinds.
+
+When scoping a JWT to a namespace, the claim that counts is **`id`** (and `a` for permissions, `rw` or `ro`).
+
+The claims `sub`, `ns`, and `namespace` **are silently ignored.**
+
+Meaning: you issue a token believing you scoped it to one database, `sqld` accepts it without a complaint, and what you're holding is a **master token** with access to everything. No error, no log, nothing to warn you. It fails open, which is the worst direction for anything to fail in.
+
+It isn't in `sqld`'s documentation or in the binary's symbols. You find it by testing, which is why it's worth saying out loud.
+
+---
+
+## Takeaways if you run something similar
+
+- **If your resources are created by a model at runtime, you can't pre-issue credentials for them.** Issue on the spot, scoped, or don't bother.
+- **Derive the resource's identity; don't accept it as an argument.** A name the caller sends is a name the caller can change.
+- **Forbidding is weaker than making something unexpressable.** A check gets bypassed by a new code path; a prefix the caller doesn't write doesn't.
+- **Check your separator against your name sanitizer.** If a resource name can contain the separator, a name can forge an identity.
+- **If you authenticate by IP, your data isolation is worth exactly what your anti-spoofing is worth.**
+- **On `sqld`, the claim is `id`.** `sub`, `ns`, and `namespace` are ignored without warning and leave you a master token you believe is scoped.
+
+Letting an agent create its own databases was the right call, and we'd make it again: durable state is what separates an agent that works from one that demos. What we learned is that the decision comes with a bill in credential design, and the bill arrives sooner than you'd think.
+
+---
+
+## Or you build none of this
+
+You just read what it costs to let an agent store data without seeing its neighbor's: deriving identities instead of accepting them, issuing credentials on the fly, holding it up with anti-spoofing at the bridge port, and a badly documented claim that hands you a master token while you believe otherwise. And this is one piece. Network isolation, backups that actually restore, and capacity accounting are still missing.
+
+None of that is what you're building. It's what sits underneath what you're building.
+
+On Easybits your agent creates its databases and runs its code inside our microVMs, with all of the above already in place and measured in production. You write the agent; we already fought the hard part.
+
+👉 Try it at [www.easybits.cloud](https://www.easybits.cloud)
+
+---
+
+*Are you letting your agents create their own state? Tell us how you're scoping it today — and if you want us to go deep on backups or on cold-starting the boxes, say so and we'll write the next one.*
