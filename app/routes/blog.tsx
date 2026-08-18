@@ -12,10 +12,9 @@ const BLOG_POSTS = [
   {
     slug: "iptables-no-ve-tu-bridge",
     filePath: "app/content/blog/2026-08-18-iptables-no-ve-tu-bridge.mdx",
-    title:
-      "iptables no ve tu bridge: tres cosas que aprendimos endureciendo la red de nuestras microVMs",
+    title: "Tu regla de firewall se instaló pero no bloquea nada",
     description:
-      "Nos reportaron que una microVM podía hablar con toda la red privada del host. El parche propuesto eran tres reglas de iptables, bien argumentadas. Una no habría bloqueado nada —el contador se queda en cero— y otra habría tirado la voz de toda la flota en silencio. Lo que encontramos al medir en vez de suponer.",
+      "Para tráfico puenteado, el kernel reporta el bridge como interfaz de entrada, no el puerto por el que entró la trama: una regla `iptables -i <tap>` se instala, se lista bien y su contador se queda clavado en cero. Eso, y otras dos cosas que encontramos endureciendo la red de nuestras microVMs midiendo en vez de suponer.",
     date: "2026-08-18",
     author: "Equipo Easybits",
     tags: [
