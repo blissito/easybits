@@ -10,6 +10,8 @@ import matter from "gray-matter";
 
 // Map of known blog posts with their file paths
 const BLOG_POSTS = {
+  "iptables-no-ve-tu-bridge":
+    "app/content/blog/2026-08-18-iptables-no-ve-tu-bridge.mdx",
   "una-linea-de-kernel-y-el-sitio-dejo-de-arrastrarse":
     "app/content/blog/2026-08-12-una-linea-de-kernel-y-el-sitio-dejo-de-arrastrarse.mdx",
   "bubblewrap-el-sandbox-que-tu-agente-necesita":
@@ -62,6 +64,10 @@ const BLOG_POSTS = {
 
 // Array con slug y featuredImage igual que en la lista de blog
 const BLOG_POSTS_LIST = [
+  {
+    slug: "iptables-no-ve-tu-bridge",
+    featuredImage: "/blog/assets/netpolicy-bridge-niebla.jpg",
+  },
   {
     slug: "una-linea-de-kernel-y-el-sitio-dejo-de-arrastrarse",
     featuredImage: "/blog/assets/blog-tcp-bbr-editorial.png",
