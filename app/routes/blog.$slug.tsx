@@ -191,14 +191,20 @@ async function measureFeaturedImage(
   if (!img || img.startsWith("http")) return null; // remota: no la descargamos por una etiqueta
   if (imageMetaCache.has(img)) return imageMetaCache.get(img) ?? null;
   let meta: { width: number; height: number; type: string } | null = null;
-  try {
-    const sharp = (await import("sharp")).default;
-    const m = await sharp(path.join(process.cwd(), "public", img)).metadata();
-    if (m.width && m.height && m.format) {
-      meta = { width: m.width, height: m.height, type: `image/${m.format === "jpg" ? "jpeg" : m.format}` };
+  // En dev los estáticos están en `public/`; en el contenedor ya están copiados a
+  // `build/client/`. Probar sólo uno hace que la medición falle EN PRODUCCIÓN y,
+  // como el fallo es silencioso por diseño, las etiquetas desaparecen sin ruido.
+  for (const base of ["public", "build/client"]) {
+    try {
+      const sharp = (await import("sharp")).default;
+      const m = await sharp(path.join(process.cwd(), base, img)).metadata();
+      if (m.width && m.height && m.format) {
+        meta = { width: m.width, height: m.height, type: `image/${m.format === "jpg" ? "jpeg" : m.format}` };
+        break;
+      }
+    } catch {
+      // sigue con la siguiente ruta; nunca romper el post por una miniatura
     }
-  } catch {
-    meta = null; // nunca romper el post por una miniatura
   }
   imageMetaCache.set(img, meta);
   return meta;
