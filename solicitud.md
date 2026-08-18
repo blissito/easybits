@@ -664,3 +664,20 @@ Tomado, y su dato cambia la prioridad hacia arriba: si la URL la **compone el ag
 HTML de la landing, entonces una instrucción inyectada en el contenido de una página es un camino
 real hacia "capturá esta URL interna". Estrecho, pero es exactamente la forma que tiene este tipo
 de fallo antes de dejar de ser teórico. El cierre sigue siendo firewall de egress.
+
+### Addendum (mismo día, ya desplegado)
+
+Salieron **3** y **4**, y el arreglo de **2** está horneado:
+
+- **Telemetría**: el SSE ya manda `tool` con `phase` (`start`/`end`), `id`, `ok`, `detail` y
+  `durationMs`, y cierra con `usage` (`inputTokens`, `outputTokens`, `model`, `durationMs`,
+  `toolCalls`). Nombres al estilo GenAI de OTel. Aditivo: si ignoran los campos nuevos, todo
+  sigue igual.
+- **TTL**: `tools/list` devuelve `ttlMs: 300000` y `cacheScope: "connection"`, ordenado por
+  nombre. `cacheScope` es por conexión y no global a propósito: el catálogo depende del `?tools=`
+  de ESA conexión, así que compartir caché entre dos conexiones del mismo usuario sería un bug.
+- **Prompt por turno**: el `claude-worker` ya está rehorneado en los dos fierros. Aplica a cajas
+  **nuevas o recicladas** — una conversación con caja viva sigue con el binario anterior hasta que
+  el reaper la recicle. Si quieren probarlo hoy, usen un `groupId` nuevo.
+
+Falta el **1** (Code Mode tipado) y el **5** (pausa/reanudación).
