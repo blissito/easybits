@@ -1596,25 +1596,46 @@ async function pickOrSpawn(ctx: AuthContext, fleetAgent: PoolRow, groupId: strin
   }
 
   // 2. Cold path — fast reservation under the lock; slow boot/restore outside it.
+  //
+  // Se intenta DOS veces porque `ensureRunning` devolviendo null no es un fallo
+  // definitivo: es el self-heal de una caja evaporada, que ya marcó la fila
+  // `lost` y soltó la ruta. Al reintentar, `reserveVm` no encuentra candidata y
+  // arranca una VM fresca (~12s) — que es justo lo que el comentario de
+  // ensureRunning prometía y este caller no hacía: lanzaba, y la curación
+  // llegaba un turno TARDE. En WhatsApp no se notaba porque el buffer del grupo
+  // redrena; por HTTP el turno se perdía y el usuario tenía que reescribir
+  // (reportado por denik el 2026-08-18). Mismo tope que el reintento de
+  // `isBoxDeadError` dentro del turno: una vuelta, nunca un bucle de respawn.
   const t0 = Date.now();
-  const res = await reserveVm(ctx, fleetAgent, groupId);
-  const reserved = await db.agent.findUniqueOrThrow({ where: { id: res.agentId } });
-  const wasBuilding = reserved.status === "building";
-  const vm = await ensureRunning(ctx, reserved); // waits for boot/resume — in PARALLEL across groups
-  if (!vm) throw new Error(`fleetAgent worker ${res.agentId} failed to start`);
-  if (res.needsRestore) {
-    await restoreConversation(ctx, vm, fleetAgent.id, res.sessionUuid).catch((e) =>
-      console.error(`fleetAgent restore ${res.sessionUuid} failed:`, e)
-    );
+  const MAX_PLACE_ATTEMPTS = 2;
+  for (let attempt = 1; ; attempt++) {
+    const res = await reserveVm(ctx, fleetAgent, groupId);
+    const reserved = await db.agent.findUniqueOrThrow({ where: { id: res.agentId } });
+    const wasBuilding = reserved.status === "building";
+    const vm = await ensureRunning(ctx, reserved); // waits for boot/resume — in PARALLEL across groups
+    if (!vm) {
+      if (attempt >= MAX_PLACE_ATTEMPTS) {
+        throw new Error(`fleetAgent worker ${res.agentId} failed to start`);
+      }
+      // La fila quedó `lost` y la ruta desatada: la siguiente vuelta cold-spawnea.
+      auditLog("place.retry", { groupId, agentId: res.agentId, attempt });
+      continue;
+    }
+    if (res.needsRestore) {
+      await restoreConversation(ctx, vm, fleetAgent.id, res.sessionUuid).catch((e) =>
+        console.error(`fleetAgent restore ${res.sessionUuid} failed:`, e)
+      );
+    }
+    auditLog("place.cold", {
+      groupId,
+      agentId: res.agentId,
+      bootMs: Date.now() - t0,
+      building: wasBuilding,
+      restored: res.needsRestore,
+      ...(attempt > 1 ? { attempt } : {}),
+    });
+    return { vm, sessionUuid: res.sessionUuid };
   }
-  auditLog("place.cold", {
-    groupId,
-    agentId: res.agentId,
-    bootMs: Date.now() - t0,
-    building: wasBuilding,
-    restored: res.needsRestore,
-  });
-  return { vm, sessionUuid: res.sessionUuid };
 }
 
 // Compose the prompt for the worker. Group context: prefix the sender so the
