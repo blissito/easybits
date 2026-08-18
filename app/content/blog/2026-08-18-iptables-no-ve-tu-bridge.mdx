@@ -1,0 +1,156 @@
+---
+title: "iptables no ve tu bridge: tres cosas que aprendimos endureciendo la red de nuestras microVMs"
+description: "Nos reportaron que una microVM podía hablar con toda la red privada del host. El parche propuesto eran tres reglas de iptables, bien argumentadas. Una no habría bloqueado nada —el contador se queda en cero— y otra habría tirado la voz de toda la flota en silencio. Lo que encontramos al medir en vez de suponer."
+date: "2026-08-18"
+author: "Equipo Easybits"
+tags: ["infraestructura", "seguridad", "build in public", "flota", "firecracker", "redes"]
+featuredImage: "/blog/assets/netpolicy-bridge-niebla.jpg"
+published: true
+---
+
+# iptables no ve tu bridge
+
+Cada caja de nuestra flota es una microVM de Firecracker colgada de un bridge, `fcbr0`. Nos llegó un reporte razonable: desde dentro de una caja se podía alcanzar la red privada del host —el metadata service del proveedor, las microVMs de otros clientes, el control-plane— y el arreglo propuesto eran tres reglas de `iptables`.
+
+El parche estaba bien pensado. Cerraba la salida a rangos privados, cortaba el cruce entre VMs y limitaba lo que una caja puede pedirle al host. Lo aplicamos… y medimos.
+
+De las tres reglas, **una no bloqueaba absolutamente nada** y **otra habría tirado producción sin un solo error en los logs**.
+
+Este post es sobre las tres cosas que encontramos midiendo. Ninguna se ve leyendo el diff.
+
+---
+
+## 1. La regla que se instala, se lista y no sirve
+
+![Un candado cerrado sobre una reja abierta](/blog/assets/netpolicy-candado-reja-abierta.jpg)
+
+La regla más importante no era ninguna de las tres. Era el **anti-spoofing**: que una caja sólo pueda emitir paquetes con la dirección IP que le asignamos nosotros.
+
+La forma obvia de escribirla:
+
+```bash
+iptables -I FORWARD 1 -i fc-a3f2 ! -s 172.20.4.17 -j DROP
+```
+
+Se instala sin queja. Sale bien en `iptables -S`. Parece correcta en una revisión de código — de hecho **pasó la revisión**.
+
+Y su contador de paquetes se queda clavado en cero mientras el tráfico suplantado pasa tan campante.
+
+El motivo es que `fc-a3f2` no es una interfaz cualquiera: es un **puerto de un bridge**. Para tráfico puenteado, el kernel reporta como interfaz de entrada **el bridge** (`fcbr0`), no el puerto por el que entró la trama. Un `-i fc-a3f2` no coincide con nada, nunca.
+
+La herramienta correcta es `ebtables`, que es el filtro nativo del bridge y sí distingue puertos:
+
+```bash
+ebtables -I FORWARD 1 -i fc-a3f2 -p IPv4 ! --ip-src 172.20.4.17 -j DROP
+```
+
+Existe una alternativa con `iptables` —`-m physdev --physdev-in`— pero exige cargar `br_netfilter` y encender `bridge-nf-call-iptables`, un interruptor **global** que mete el tráfico de *todos* los bridges de la máquina (los de Docker incluidos) por las cadenas de iptables. Demasiado efecto secundario para una regla que ebtables expresa directo.
+
+`rp_filter` tampoco ayuda, por si se te ocurre: una dirección falsificada dentro de `172.20.0.0/16` sigue teniendo ruta de vuelta por `fcbr0`, así que la comprobación de ruta inversa la da por buena.
+
+> **Lo que nos llevamos:** una regla de firewall que no puedes ver bloquear algo no es una regla, es una intención. El contador de paquetes es la única fuente de verdad.
+
+---
+
+## 2. Cuando la red *es* la autenticación, el anti-spoofing es la mitad del mecanismo
+
+![Varios gafetes de identificación idénticos sobre una superficie](/blog/assets/netpolicy-gafetes-identidad.jpg)
+
+Aquí es donde el hallazgo dejó de ser higiene y se volvió urgente.
+
+Nuestro service mesh interno —el que usan las cajas para pedir transcripción, síntesis de voz o render— **no lleva bearer token**. La premisa de diseño era "la red privada ES la autenticación". Para saber de qué cliente es una llamada, el daemon busca **la dirección IP de origen** del paquete en su registro de cajas.
+
+Junta eso con lo del punto 1 y sale una frase incómoda:
+
+```bash
+# dentro de cualquier caja
+ip addr add 172.20.0.99/16 dev eth0
+```
+
+Y ya eres otro cliente. Usas sus servicios, y el medidor de consumo del mesh **le cobra las llamadas a él**. Nada más en toda la pila lo verifica.
+
+Nadie lo había reportado. Llevaba ahí desde que existe el mesh.
+
+Lo interesante no es el agujero, es la relación entre las dos piezas: el anti-spoofing parecía *hardening* opcional —de esas tareas que se posponen— cuando en realidad era **la mitad faltante de un mecanismo de autenticación que ya estaba en producción**. La decisión "la red es la auth" es perfectamente válida; lo que no es válido es tomarla sin lo que la sostiene.
+
+> **Lo que nos llevamos:** si tu autenticación depende de una propiedad del transporte, alguien tiene que garantizar esa propiedad. Si nadie lo hace explícitamente, no la tienes.
+
+---
+
+## 3. El tráfico que parece interno y da la vuelta al mundo
+
+![Curvas de horquilla en una carretera de montaña vistas desde arriba](/blog/assets/netpolicy-curva-horquilla.jpg)
+
+La tercera regla del parche era cortar lo que una caja puede pedirle al host. Sensata. Y habría dejado muda a toda la flota.
+
+Las cajas de trabajo hablan con los servicios compartidos por variables como `GS_TTS_URL` o `GS_RENDER_URL`. Tienen toda la pinta de ser direcciones internas. **No lo son**: son URLs públicas. Salen a DNS, resuelven a la IP pública del host, entran por el proxy y sólo entonces llegan a la caja destino que está a treinta centímetros.
+
+Eso se llama *hairpin* —horquilla—, y es exactamente lo que hace un coche en una curva de montaña: sales, das la vuelta completa y acabas justo encima de donde estabas.
+
+Un `DROP` de "VM → host" lo mata todo. Y no aparece en ningún diagrama de arquitectura, porque en el diagrama esa flecha va derecho de una caja a la otra. Aparece cuando se cae la voz de toda la flota.
+
+Por eso la política real no es una lista de prohibiciones: es una cadena con **excepciones explícitas primero** y un `DROP` al final.
+
+```
+-A SBX-GUEST-IN -m conntrack --ctstate RELATED,ESTABLISHED -j ACCEPT
+-A SBX-GUEST-IN -j SBX-ROLE-IN
+-A SBX-GUEST-IN -p tcp -m multiport --dports 80,443 -j ACCEPT
+-A SBX-GUEST-IN -d 172.20.0.1/32 -p tcp -m tcp --dport 8090 -j ACCEPT
+-A SBX-GUEST-IN -j DROP
+```
+
+> **Lo que nos llevamos:** antes de cerrar un camino, mira quién lo está usando. El tráfico que "obviamente es interno" merece un `tcpdump`, no una suposición.
+
+---
+
+## El hilo conductor: las cajas no son todas iguales
+
+![Contenedores de carga ordenados por colores vistos desde arriba](/blog/assets/netpolicy-contenedores-roles.jpg)
+
+Al escribir la política apareció el problema de fondo. ¿Qué puede alcanzar una caja? Depende de qué **es** esa caja. Y no teníamos dónde decirlo.
+
+El campo que existía era `tier` —el tamaño de la máquina— y ahí convivían un escritorio de usuario y los servicios internos de la flota, que necesitan políticas opuestas. Intentamos inferir el rol del nombre del template (`*-svc` es un servicio, ¿no?). Duró poco: inferir permisos de una convención de nombres es aceptar que un `git mv` cambie tu modelo de seguridad.
+
+Terminamos con un campo explícito, `network_role`, con tres valores:
+
+| Rol | Quién | Qué alcanza |
+|---|---|---|
+| `tenant` | cajas de cliente (el **default**) | el mesh y el hairpin público, nada más |
+| `service` | servicios compartidos (`render-svc`, `whisper-svc`) | lo mismo, pero puede ser destino nombrado de una excepción |
+| `control` | plano de control dentro de una microVM | además, la API del daemon |
+
+Dos detalles que importan más que la tabla:
+
+**Lo desconocido nunca amplía.** Un `network_role` con un valor que no reconocemos se trata como `tenant`, el más restrictivo. Un typo degrada permisos; jamás los sube.
+
+**`control` es sólo para dos templates**, y está escrito a mano en cada uno. Comprometer una de esas cajas es comprometer la flota entera, así que ese valor tenía que ser una decisión deliberada y visible en un diff — no algo que se pegara solo por heredar un nombre.
+
+---
+
+## Cómo probamos que estaba roto
+
+Un detalle de método, porque es lo que más nos costó y lo que más nos sirvió.
+
+La tentación al arreglar algo así es escribir el test *después*: aplicas la regla, compruebas que el ataque falla, verde, a otra cosa. El problema es que **un test que sólo se ejecuta contra el código arreglado no distingue "lo arreglé" de "nunca funcionó como yo creía"**.
+
+Así que el orden fue al revés: primero montamos el escenario de suplantación y verificamos que **devolvía 200** —el agujero, reproducido, en verde—. Recién entonces aplicamos la política y exigimos que el mismo escenario fallara.
+
+Eso es lo que convirtió el punto 1 de "creo que iptables no ve el tap" en un hecho medido. La regla escrita con `iptables` dejaba pasar la petición suplantada con el contador en cero; la de `ebtables` la cortaba. Sin el baseline, habríamos shipeado la primera convencidos de haber cerrado algo.
+
+---
+
+## Resumen para quien opera algo parecido
+
+- **`iptables -i <tap>` no filtra tráfico puenteado.** Usa `ebtables`, o asume el coste global de `br_netfilter`.
+- **Si autenticas por IP de origen, el anti-spoofing no es opcional**: es parte de la autenticación.
+- **Revisa el hairpin antes de cortar VM → host.** Lo que parece interno puede estar saliendo a internet y volviendo.
+- **Haz explícito el rol de cada caja.** Un default seguro y declarado le gana a uno inferido de un nombre.
+- **Mide el contador de paquetes.** Una regla instalada no es una regla que bloquea.
+
+El parche que nos propusieron era bueno: identificó el problema real y apuntó a la solución correcta. Lo que no podía hacer, desde fuera, era saber que uno de nuestros caminos "internos" da la vuelta por internet, ni que el kernel iba a ignorar en silencio la mitad de las reglas.
+
+Por eso el parche es la parte fácil. La revisión —con el contador de paquetes a la vista— es la que cuenta.
+
+---
+
+*Fotos: [David Geib](https://www.pexels.com/photo/brown-wooden-bridge-over-body-of-water-3220685/), [Nikita Nikitin](https://www.pexels.com/photo/grayscale-photo-of-metal-gate-10372450/), [Pavel Danilyuk](https://www.pexels.com/photo/chief-of-surgery-id-cards-7108127/), [Jose Rodriguez Ortega](https://www.pexels.com/photo/cyclists-navigating-mountain-road-hairpin-turns-28607386/) y [RDNE Stock project](https://www.pexels.com/photo/cargo-containers-in-a-port-8783533/) en Pexels.*
