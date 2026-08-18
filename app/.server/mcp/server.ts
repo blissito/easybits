@@ -604,6 +604,58 @@ export function getRegisteredTools(
   return (server as any)._registeredTools as Record<string, RegisteredTool>;
 }
 
+/**
+ * Vida útil del catálogo, declarada EN la respuesta de `tools/list`.
+ *
+ * El problema que resuelve: los clientes MCP piden `tools/list` al arrancar la sesión y
+ * no la vuelven a pedir nunca. Tras un deploy con una tool nueva, la única respuesta que
+ * teníamos era "reinicia tu cliente MCP" — la dimos dos veces y es vergonzosa. Con un TTL
+ * declarado, un cliente que lo honre revalida solo.
+ *
+ * Es aditivo y no rompe a nadie: el `ResultSchema` del SDK es un objeto laxo, así que un
+ * cliente viejo ignora los dos campos y se comporta exactamente como hoy.
+ *
+ * `cacheScope: "connection"` y no "global" a propósito: el catálogo depende del
+ * `?tools=` de ESTA conexión (buckets + denys per-tool), así que dos conexiones del mismo
+ * usuario pueden ver catálogos distintos y compartir la caché sería un bug.
+ *
+ * Sobre `notifications/tools/list_changed`: aquí no aplica. Este servidor es STATELESS
+ * (un `McpServer` nuevo por request, `sessionIdGenerator: undefined`), así que no hay
+ * conexión viva a la que empujarle nada. El TTL es el mecanismo correcto para esta forma.
+ */
+export const CATALOG_TTL_MS = 300_000; // 5 min: un deploy tarda 6-9, así que revalida en el siguiente.
+
+export function applyCatalogCaching(server: McpServer, ttlMs = CATALOG_TTL_MS): void {
+  // El SDK guarda sus handlers en un Map privado. Se envuelve el suyo en vez de
+  // reimplementar el listado (zod → JSON Schema, tools deshabilitadas, paginación):
+  // duplicar eso sería la forma de que el catálogo se desincronice del real.
+  const handlers = (server.server as any)?._requestHandlers as
+    | Map<string, (req: unknown, extra: unknown) => Promise<Record<string, unknown>>>
+    | undefined;
+  const original = handlers?.get("tools/list");
+  if (!handlers || !original) return; // SDK cambió de forma: mejor sin TTL que caído.
+
+  handlers.set("tools/list", async (req, extra) => {
+    const result = await original(req, extra);
+    const tools = result?.tools;
+    return {
+      ...result,
+      // Orden DETERMINISTA: un catálogo que llega en orden distinto en cada respuesta
+      // invalida cualquier caché por hash del lado del cliente, que es justo a quien
+      // este TTL intenta ayudar.
+      ...(Array.isArray(tools)
+        ? {
+            tools: [...tools].sort((a: any, b: any) =>
+              String(a?.name ?? "").localeCompare(String(b?.name ?? ""))
+            ),
+          }
+        : {}),
+      ttlMs,
+      cacheScope: "connection",
+    };
+  });
+}
+
 
 // ─── Core Tools ─────────────────────────────────────────────────
 // Files, sharing, DB, webhooks, AI keys, utilities

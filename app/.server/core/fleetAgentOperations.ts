@@ -1176,6 +1176,40 @@ async function waitAgentRunning(agentId: string, timeoutMs = 120_000) {
   throw new Error(`agent ${agentId} not running after ${timeoutMs}ms`);
 }
 
+/**
+ * Telemetría del turno, tal como la consume una superficie externa (Deník y cualquier
+ * tenant que hable por HTTP). Los nombres siguen las convenciones GenAI de OpenTelemetry
+ * (`gen_ai.usage.input_tokens` → `inputTokens`) a propósito: si algún día emitimos OTel
+ * de verdad, el consumidor no tiene que traducir nada.
+ */
+export type FleetToolEvent = {
+  name: string;
+  id?: string;
+  /** `start` al invocar, `end` al volver. El worker manda las dos mitades. */
+  phase: "start" | "end";
+  /** Sólo en `end`: false si la tool devolvió error. */
+  ok?: boolean;
+  /** Argumento corto (archivo/URL/query) para saber QUÉ hizo, no sólo con qué tool. */
+  detail?: string;
+  /** Sólo en `end`, medido correlacionando por `id`. */
+  durationMs?: number;
+};
+
+export type FleetTurnUsage = {
+  model?: string;
+  inputTokens?: number;
+  outputTokens?: number;
+  cacheReadInputTokens?: number;
+  cacheCreationInputTokens?: number;
+  /** Duración del turno completo, medida por EasyBits (no la reporta el worker). */
+  durationMs?: number;
+  /** Cuántas tools ejecutó el turno. Barato de contar y responde la pregunta frecuente. */
+  toolCalls?: number;
+};
+
+const numOrUndef = (v: unknown): number | undefined =>
+  typeof v === "number" && Number.isFinite(v) ? v : undefined;
+
 // Drain a unified {type:"chunk"|"done"|"error"} SSE stream into plain text.
 // WhatsApp is non-streaming (one message out), so we collect server-side; this
 // also lets us log the full reply as FleetAgentMessage.
@@ -1193,14 +1227,19 @@ async function waitAgentRunning(agentId: string, timeoutMs = 120_000) {
 async function collectStream(
   stream: ReadableStream<Uint8Array>,
   onChunk?: (s: string) => void,
-  onTool?: (name: string) => void,
-  onBlock?: (text: string) => Promise<void> | void
+  onTool?: (name: string, ev?: FleetToolEvent) => void,
+  onBlock?: (text: string) => Promise<void> | void,
+  onUsage?: (u: FleetTurnUsage) => void
 ): Promise<string> {
   const reader = stream.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
   let reply = "";
   let flushedLen = 0;
+  // Correlación start↔end por `tool_use id` para poder DURAR una tool. El worker ya
+  // manda las dos mitades (`phase`, `id`, `ok`) desde siempre; lo que faltaba era no
+  // tirarlas aquí. `name` sólo viene en el start, así que el end lo recupera del mapa.
+  const toolStarts = new Map<string, { name: string; at: number }>();
   // Los envíos deben salir EN ORDEN. `consume` es síncrono (lo llama el read loop), así
   // que encadenamos en vez de await: cada flush espera al anterior y al final esperamos
   // la cadena completa antes de devolver.
@@ -1212,14 +1251,52 @@ async function collectStream(
       const json = t.slice(5).trim();
       if (!json || json === "[DONE]") continue;
       try {
-        const evt = JSON.parse(json) as { type?: string; value?: string; message?: string; name?: string };
+        const evt = JSON.parse(json) as {
+          type?: string;
+          value?: string;
+          message?: string;
+          name?: string;
+          id?: string;
+          phase?: "start" | "end";
+          ok?: boolean;
+          detail?: string;
+          usage?: Record<string, unknown>;
+          model?: string;
+        };
         if (evt.type === "chunk" && typeof evt.value === "string") {
           reply += evt.value;
           onChunk?.(evt.value);
+        } else if (evt.type === "usage") {
+          const u = (evt.usage ?? {}) as Record<string, number | string | undefined>;
+          onUsage?.({
+            model: typeof evt.model === "string" ? evt.model : undefined,
+            inputTokens: numOrUndef(u.input_tokens),
+            outputTokens: numOrUndef(u.output_tokens),
+            cacheReadInputTokens: numOrUndef(u.cache_read_input_tokens),
+            cacheCreationInputTokens: numOrUndef(u.cache_creation_input_tokens),
+          });
         } else if (evt.type === "tool" && typeof evt.name === "string") {
-          onTool?.(evt.name);
+          const end = evt.phase === "end";
+          // `name: ""` en el end: el nombre semántico sólo viaja en el start.
+          const started = evt.id ? toolStarts.get(evt.id) : undefined;
+          const name = evt.name || started?.name || "";
+          if (end) {
+            if (evt.id) toolStarts.delete(evt.id);
+          } else if (evt.id) {
+            toolStarts.set(evt.id, { name, at: Date.now() });
+          }
+          onTool?.(name, {
+            name,
+            id: evt.id,
+            phase: evt.phase ?? "start",
+            ok: evt.ok,
+            detail: evt.detail,
+            durationMs: end && started ? Date.now() - started.at : undefined,
+          });
           // Frontera de bloque: lo dicho ANTES de la tool ya es un mensaje completo.
-          if (onBlock) {
+          // Sólo en el START — el `end` no abre bloque nuevo, y contarlo partía el
+          // texto en dos donde el agente no hizo pausa.
+          if (onBlock && !end) {
             const pend = stripInternal(reply.slice(flushedLen)).trim();
             flushedLen = reply.length;
             if (pend) flushChain = flushChain.then(() => onBlock(pend)).catch(() => {});
@@ -1714,7 +1791,21 @@ export async function routeMessage(
   // `onBlock`: entrega TEMPRANA — se llama con el texto dicho antes de cada tool, para
   // que el "permíteme un momento" salga MIENTRAS el agente trabaja. Con él, el valor
   // devuelto es sólo lo que falta por mandar. Ver collectStream.
-  opts: { skipRateLimit?: boolean; hasMedia?: boolean; skipUserLog?: boolean; onChunk?: (s: string) => void; onTool?: (name: string) => void; onBlock?: (text: string) => Promise<void> | void } = {}
+  opts: {
+    skipRateLimit?: boolean;
+    hasMedia?: boolean;
+    skipUserLog?: boolean;
+    onChunk?: (s: string) => void;
+    onTool?: (name: string, ev?: FleetToolEvent) => void;
+    onBlock?: (text: string) => Promise<void> | void;
+    /**
+     * Cierre del turno con su consumo. Se llama UNA vez, después del último chunk:
+     * los tokens sólo se conocen al final. Si el worker no reporta consumo (caja
+     * vieja sin el evento `usage` en el cable), llega igual con duración y número de
+     * tools — que es lo que EasyBits mide por su cuenta.
+     */
+    onUsage?: (u: FleetTurnUsage) => void;
+  } = {}
 ): Promise<string> {
   const fleetAgent = await db.fleetAgent.findUniqueOrThrow({ where: { id: fleetAgentId } });
   const ctx = await ctxForOwner(fleetAgent.ownerId);
@@ -2089,12 +2180,25 @@ export async function routeMessage(
       // Los bloques entregados temprano salen del `reply` devuelto, pero el transcript
       // debe guardar el turno COMPLETO — si no, el historial pierde lo que el cliente
       // sí vio y el agente se contradice en el turno siguiente.
+      // Telemetría del turno: el consumo lo reporta el worker (evento `usage`), la
+      // duración y el conteo de tools los mide EasyBits. Se emite SIEMPRE al cerrar,
+      // aunque el worker no haya mandado consumo — una caja horneada antes de que ese
+      // evento existiera seguiría dando duración y tools, que ya es más que nada.
+      let workerUsage: FleetTurnUsage | undefined;
+      let toolCalls = 0;
       reply = await collectStream(
         stream,
         opts.onChunk,
-        opts.onTool,
-        opts.onBlock && (async (t) => { earlyBlocks.push(t); await opts.onBlock!(t); })
+        opts.onUsage || opts.onTool
+          ? (name, ev) => {
+              if (!ev || ev.phase === "start") toolCalls++;
+              opts.onTool?.(name, ev);
+            }
+          : undefined,
+        opts.onBlock && (async (t) => { earlyBlocks.push(t); await opts.onBlock!(t); }),
+        opts.onUsage ? (u) => { workerUsage = u; } : undefined
       );
+      opts.onUsage?.({ ...workerUsage, durationMs: Date.now() - turnStart, toolCalls });
       auditLog("turn.ok", {
         groupId: msg.groupId,
         agentId: worker.id,

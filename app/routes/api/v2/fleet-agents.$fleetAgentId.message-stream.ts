@@ -151,7 +151,29 @@ export async function action({ request, params }: Route.ActionArgs) {
           admin,
         }, {
           onChunk: (value) => controller.enqueue(sse({ type: "chunk", value })),
-          onTool: (name) => controller.enqueue(sse({ type: "tool", name })),
+          // `tool` lleva el ciclo COMPLETO: `phase:"start"` con el argumento corto y
+          // `phase:"end"` con `ok` y `durationMs`. El worker mandaba las dos mitades
+          // desde siempre; hasta ahora esta ruta tiraba todo menos el nombre, y el
+          // consumidor no podía saber qué tardó ni qué falló sin cronometrar por fuera.
+          onTool: (name, ev) =>
+            controller.enqueue(
+              sse({
+                type: "tool",
+                name,
+                ...(ev
+                  ? {
+                      id: ev.id,
+                      phase: ev.phase,
+                      ...(ev.ok !== undefined ? { ok: ev.ok } : {}),
+                      ...(ev.detail ? { detail: ev.detail } : {}),
+                      ...(ev.durationMs !== undefined ? { durationMs: ev.durationMs } : {}),
+                    }
+                  : {}),
+              })
+            ),
+          // Cierre contable del turno, ANTES de `done`: tokens, modelo, duración y
+          // número de tools. Nombres alineados con las convenciones GenAI de OTel.
+          onUsage: (u) => controller.enqueue(sse({ type: "usage", ...u })),
         });
         controller.enqueue(sse({ type: "done", value: reply }));
       } catch (e) {

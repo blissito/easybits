@@ -1,5 +1,5 @@
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
-import { createMcpServer } from "~/.server/mcp/server";
+import { applyCatalogCaching, createMcpServer } from "~/.server/mcp/server";
 import { authenticateRequest } from "~/.server/apiAuth";
 import { RateLimiter } from "~/.server/rateLimiter";
 
@@ -57,6 +57,10 @@ export async function handleMcp(request: Request): Promise<Response> {
   const ctxWithKeys = { ...ctx, providerKeys: { openai: openaiKey } };
 
   const server = createMcpServer(groups, denyTools.length ? denyTools : undefined);
+  // `tools/list` declara su propia vida útil (ttlMs + cacheScope) y sale ordenado.
+  // Sin esto, un cliente cachea el catálogo al abrir sesión y una tool nueva no le
+  // aparece hasta que REINICIA — el "reinicia tu cliente MCP" que ya dimos dos veces.
+  applyCatalogCaching(server);
   const transport = new WebStandardStreamableHTTPServerTransport({
     sessionIdGenerator: undefined, // stateless
   });
