@@ -6074,6 +6074,9 @@ function registerVideoTools(server: McpServer) {
       viewport: z.object({ width: z.number().int().min(240).max(3840), height: z.number().int().min(320).max(4000) }).optional().describe("Viewport explícito; gana sobre preset."),
       fullPage: z.boolean().optional().describe("Capturar la página completa. Default true."),
       dataId: z.string().max(200).optional().describe("Recortar a este nodo (el `dataId` que devuelve audit_page). Mucho más barato de mirar."),
+      // La superficie de la flota usa snake_case; un parámetro desconocido lo
+      // descarta zod EN SILENCIO y devuelve la página entera sin avisar.
+      data_id: z.string().max(200).optional().describe("Alias de `dataId`."),
       selector: z.string().max(400).optional().describe("Selector CSS al que recortar, si el nodo no tiene data-id. `dataId` gana."),
       padding: z.number().int().min(0).max(200).optional().describe("Margen alrededor del recorte. Default 16."),
       waitMs: z.number().int().min(0).max(30000).optional().describe("Esperar N ms tras cargar, antes de capturar."),
@@ -6084,16 +6087,19 @@ function registerVideoTools(server: McpServer) {
       if (!params.html && !params.url) return fail("Pasa `html` o `url`.");
       const { consumeService } = await import("../services/consume");
       try {
+        const { data_id, ...rest } = params;
         const result = await consumeService<import("../services/providers/render").ScreenshotOutput>(
           "render.screenshot",
-          params,
+          { ...rest, dataId: params.dataId ?? data_id },
           { userId: ctx.user.id }
         );
         return ok({
           ...result.data,
           hint: result.data.warning
             ? `Captura lista PERO ${result.data.warning}`
-            : `Captura ${result.data.preset} lista (${result.data.width}x${result.data.height}). Pásala a describe_image({imageUrl}) para verificar el resultado.`,
+            : (params.dataId ?? data_id ?? params.selector)
+              ? `Recorte de \`${params.dataId ?? data_id ?? params.selector}\` listo (${result.data.width}x${result.data.height}). Pásalo a describe_image({imageUrl}).`
+              : `Captura ${result.data.preset} lista (${result.data.width}x${result.data.height}). Pásala a describe_image({imageUrl}) para verificar el resultado.`,
         });
       } catch (e) {
         const f = failService(e, "Screenshot");
