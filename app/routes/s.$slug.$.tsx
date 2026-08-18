@@ -76,8 +76,17 @@ export async function loader({ params, request }: Route.LoaderArgs) {
   // don't want to recursively trigger another screenshot job.
   const isOgBot = new URL(request.url).searchParams.has("__og");
 
-  const website = await db.website.findFirst({ where: { slug } });
-  if (!website || website.status === "DELETED") {
+  // El estado se filtra EN LA CONSULTA, no después.
+  //
+  // `slug` sólo es único por dueño (`@@unique([ownerId, slug])`), y un sitio
+  // borrado conserva su fila. Un `findFirst` por slug a secas puede devolver el
+  // borrado teniendo al lado el vivo, y entonces el sitio publicado responde 404
+  // para siempre: republicar no ayuda, porque el que estorba no es el nuevo.
+  // Pasó en producción con un slug reutilizado tras borrar el sitio anterior.
+  const website = await db.website.findFirst({
+    where: { slug, status: { not: "DELETED" } },
+  });
+  if (!website) {
     throw new Response("Site not found", { status: 404 });
   }
 
