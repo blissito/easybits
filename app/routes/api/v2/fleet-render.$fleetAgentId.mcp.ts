@@ -99,13 +99,16 @@ function buildRenderServer(ctx: AuthContext): McpServer {
 
   tool(
     "screenshot_url",
-    "VE cómo se ve una página. Renderiza HTML auto-contenido (o una URL pública) en un Chromium real y devuelve { fileId, url } de la imagen. Úsala para VERIFICAR tu propio trabajo: captura → mírala con `see_image` → corrige → repite.\n\n- `html` es lo normal aquí: te deja revisar un borrador SIN publicarlo. `url` navega de verdad y espera a networkidle.\n- `preset`: 'mobile' (390px, DEFAULT — el peor caso, donde se rompen las landings) o 'desktop' (1440px).\n- La emulación es REAL: 'mobile' trae densidad 3x y touch, no sólo un viewport angosto.\n- `wait_ms` se honra (la caja ya espera imágenes y fuentes por su cuenta).\n- Si sale de un solo color, la respuesta trae `warning`: el CSS no había pintado, NO que rompiste la página — sube `wait_ms` y reintenta.\n- Gratis, no consume créditos.",
+    "VE cómo se ve una página. Renderiza HTML auto-contenido (o una URL pública) en un Chromium real y devuelve { fileId, url } de la imagen. Úsala para VERIFICAR tu propio trabajo: captura → mírala con `see_image` → corrige → repite.\n\n- `html` es lo normal aquí: te deja revisar un borrador SIN publicarlo. `url` navega de verdad y espera a networkidle.\n- `preset`: 'mobile' (390px, DEFAULT — el peor caso, donde se rompen las landings) o 'desktop' (1440px).\n- La emulación es REAL: 'mobile' trae densidad 3x y touch, no sólo un viewport angosto.\n- **`data_id` recorta a UN elemento** — úsalo. Una landing móvil entera sale de 1170x2532 y mirarla tarda minutos; la tarjeta sola son ~400x300. Es el paso 2 tras `audit_page`: por cada `incomplete`, recorta ese `dataId` y MÍRALO. Sin data-id, usa `selector`.\n- `padding` (default 16) deja ver el fondo: en 'texto sobre imagen' el fondo ES lo que juzgas.\n- `wait_ms` se honra (la caja ya espera imágenes y fuentes por su cuenta).\n- Si sale de un solo color, la respuesta trae `warning`: el CSS no había pintado, NO que rompiste la página — sube `wait_ms` y reintenta.\n- Gratis, no consume créditos.",
     {
       html: z.string().max(2_000_000).optional().describe("HTML completo y auto-contenido. GANA sobre url."),
       url: z.string().url().optional().describe("URL pública http/https a capturar."),
       preset: z.enum(["mobile", "desktop"]).optional().describe("mobile = 390x844 (default). desktop = 1440x900."),
       viewport: z.object({ width: z.number().int().min(240).max(3840), height: z.number().int().min(320).max(4000) }).optional(),
       full_page: z.boolean().optional().describe("Página completa scrolleable. Default true."),
+      data_id: z.string().max(200).optional().describe("Recortar a este nodo (el `dataId` de audit_page). Mucho más barato de mirar."),
+      selector: z.string().max(400).optional().describe("Selector CSS al que recortar, si el nodo no tiene data-id. `data_id` gana."),
+      padding: z.number().int().min(0).max(200).optional().describe("Margen alrededor del recorte. Default 16."),
       wait_ms: z.number().int().min(0).max(30000).optional().describe("Esperar N ms tras cargar, antes de capturar."),
       file_name: z.string().max(120).optional(),
     },
@@ -119,6 +122,9 @@ function buildRenderServer(ctx: AuthContext): McpServer {
           fullPage: p.full_page,
           waitMs: p.wait_ms,
           fileName: p.file_name,
+          dataId: p.data_id,
+          selector: p.selector,
+          padding: p.padding,
         });
         return ok({
           ...r,

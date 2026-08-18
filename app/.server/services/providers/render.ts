@@ -32,6 +32,9 @@ export interface ScreenshotInput {
   fullPage?: boolean;
   waitMs?: number;
   fileName?: string;
+  dataId?: string;
+  selector?: string;
+  padding?: number;
 }
 
 export interface ScreenshotOutput extends ServiceResult {

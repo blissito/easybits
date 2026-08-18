@@ -200,7 +200,7 @@ MCP: \`search_icon\`
 
 ### Screenshot a page
 \`POST /screenshots\`
-Body: \`{ html?, url?, preset?: "mobile"|"desktop", viewport?: { width, height }, fullPage?, waitMs?, fileName? }\`
+Body: \`{ html?, url?, preset?: "mobile"|"desktop", viewport?: { width, height }, fullPage?, dataId?, selector?, padding?, waitMs?, fileName? }\`
 Renders a page in a real Chromium and stores the PNG as a public file — the "eye" for an agent that edits sites: capture, look at it, fix, repeat.
 \`html\` wins over \`url\` and is the useful one: it lets you review a draft **without publishing it**. POST (not GET) because a landing's HTML doesn't fit in a query string. Requires WRITE scope.
 \`preset\` defaults to \`mobile\` (390x844) — the worst case, and where landings actually break. \`viewport\` overrides it.
@@ -208,6 +208,7 @@ Returns: \`{ fileId, url, width, height, contentType, size, preset, broken, warn
 The emulation is real: a \`mobile\` preset carries device pixel density and touch, not just a narrow viewport. \`waitMs\` is honored, and the box additionally waits for images and \`document.fonts.ready\` before capturing.
 \`warning\` appears when the image came out a single flat color. That means the CSS hadn't painted — **not** that you broke the page. Don't undo your work over it; raise \`waitMs\` and retry.
 Only public URLs: private and loopback addresses are rejected.
+\`dataId\` (or \`selector\`) crops the capture to a single element, with \`padding\` px of context around it (default 16). Looking is expensive: a full-page mobile landing is 1170x2532, and a card crop is ~400x300. This is the second half of the audit loop — for each \`incomplete\` an audit returns, crop that \`dataId\` and look at it. The padding matters: when text sits on an image, the background **is** the thing being judged.
 Costs 1 credit per call.
 SDK: \`eb.screenshot({ html?, url?, preset? })\`
 MCP: \`screenshot_url\`

@@ -179,6 +179,23 @@ export interface ScreenshotInput {
    * the preset's own device emulation.
    */
   emulate?: Record<string, unknown>;
+  /**
+   * Recortar a UN elemento en vez de a la página entera.
+   *
+   * Mirar cuesta: una landing móvil con fullPage sale de 1170x2532, y pasar esa
+   * tira por un modelo de visión para juzgar UNA tarjeta tarda minutos — así que
+   * el agente acaba evitando el único paso que resuelve el caso. El recorte de
+   * la tarjeta son ~400x300.
+   *
+   * Es el complemento de `auditPage`: sus hallazgos traen `dataId`, y lo que axe
+   * deja en `incomplete` (texto sobre imagen o gradiente) SÓLO se resuelve
+   * mirándolo.
+   */
+  dataId?: string;
+  /** Selector CSS, para cuando el nodo no tiene `data-id`. `dataId` gana. */
+  selector?: string;
+  /** Margen alrededor del recorte (px). Default 16: el fondo ES el juicio. */
+  padding?: number;
 }
 
 export interface ScreenshotResult {
@@ -235,11 +252,16 @@ export async function captureScreenshot(
     ...(input.emulate ?? {}),
   };
 
+  const cropped = Boolean(input.dataId || input.selector);
+
   const out = await renderOnBox(ctx, "screenshot", {
     ...(input.html ? { html: input.html } : { url: input.url }),
     viewport: { width: Math.round(dims.width), height: Math.round(dims.height) },
     emulate,
     ...(input.waitMs ? { waitMs: Math.round(input.waitMs) } : {}),
+    ...(input.dataId ? { dataId: input.dataId } : {}),
+    ...(!input.dataId && input.selector ? { selector: input.selector } : {}),
+    ...(input.padding != null ? { padding: input.padding } : {}),
     screenshot: { type: "png", fullPage },
   });
 
@@ -255,7 +277,9 @@ export async function captureScreenshot(
   const width = out.bytes.length > 24 ? out.bytes.readUInt32BE(16) : dims.width;
   const height = out.bytes.length > 24 ? out.bytes.readUInt32BE(20) : dims.height;
 
-  const blank = await looksBlank(out.bytes);
+  // En un recorte, un solo color es un resultado PLAUSIBLE (un badge, un bloque
+  // de fondo) — avisar ahí entrenaría al agente a desconfiar de capturas buenas.
+  const blank = cropped ? false : await looksBlank(out.bytes);
   return {
     ...stored,
     width,

@@ -50,6 +50,12 @@ export interface RenderPayload {
   pdf?: Record<string, unknown>;
   /** page.screenshot() options (type/clip/fullPage/omitBackground) */
   screenshot?: Record<string, unknown>;
+  /** Screenshot: recortar a UN elemento (CSS selector). */
+  selector?: string;
+  /** Azúcar para `[data-id="…"]` — el mismo id que devuelve /audit. */
+  dataId?: string;
+  /** Margen en px alrededor del recorte. Default 16 box-side. */
+  padding?: number;
 }
 
 /**
