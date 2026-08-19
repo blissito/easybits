@@ -1,0 +1,414 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Fotos infantiles | Cyberlol</title>
+<link rel="canonical" href="https://www.easybits.cloud/s/colina-fulgurante/">
+<meta name="description" content="Herramienta gratis para armar una hoja de fotos infantiles lista para imprimir: sube una foto, encuádrala y descarga papel foto 6×4″ u hoja Carta a 300 dpi con guías de corte. Tamaños 2.5×3, 3×4 y 3.5×4.5 cm.">
+<meta name="robots" content="index,follow,max-image-preview:large">
+<meta name="theme-color" content="#7c5cff">
+<meta name="author" content="Cyberlol">
+
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Cyberlol">
+<meta property="og:locale" content="es_MX">
+<meta property="og:title" content="Fotos infantiles | Cyberlol">
+<meta property="og:description" content="Sube una foto, encuádrala y descarga la hoja lista para imprimir: papel foto 6×4″ u hoja Carta, 300 dpi, con guías de corte.">
+<meta property="og:url" content="https://www.easybits.cloud/s/colina-fulgurante/">
+<meta property="og:image" content="https://easybits-public.t3.storage.dev/og/6a84b3bd7b4429064de720fa-cyberlol.png">
+<meta property="og:image:secure_url" content="https://easybits-public.t3.storage.dev/og/6a84b3bd7b4429064de720fa-cyberlol.png">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Editor de fotos infantiles: encuadre y hoja de impresión con 8 fotos">
+
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Fotos infantiles | Cyberlol">
+<meta name="twitter:description" content="Sube una foto, encuádrala y descarga la hoja lista para imprimir: papel foto 6×4″ u hoja Carta, 300 dpi, con guías de corte.">
+<meta name="twitter:image" content="https://easybits-public.t3.storage.dev/og/6a84b3bd7b4429064de720fa-cyberlol.png">
+<meta name="twitter:image:alt" content="Editor de fotos infantiles: encuadre y hoja de impresión con 8 fotos">
+
+<!-- Schema.org para buscadores y agentes: qué es, qué hace, qué cuesta,
+     y con qué parámetros trabaja (tamaños y hojas soportadas). -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebApplication",
+      "@id": "https://www.easybits.cloud/s/colina-fulgurante/#app",
+      "name": "Fotos infantiles",
+      "url": "https://www.easybits.cloud/s/colina-fulgurante/",
+      "applicationCategory": "MultimediaApplication",
+      "applicationSubCategory": "Photo printing",
+      "operatingSystem": "Cualquiera con navegador web",
+      "browserRequirements": "Requiere JavaScript y HTML5 Canvas",
+      "inLanguage": "es-MX",
+      "isAccessibleForFree": true,
+      "offers": { "@type": "Offer", "price": "0", "priceCurrency": "MXN" },
+      "author": { "@type": "Organization", "name": "Cyberlol" },
+      "description": "Arma una hoja de fotos infantiles lista para imprimir a 300 dpi. Recorta y repite la foto en una rejilla, con guías de corte opcionales.",
+      "featureList": [
+        "Encuadre con zoom y arrastre",
+        "Tamaños 2.5×3 cm (infantil MX), 3×4 cm (carnet) y 3.5×4.5 cm (visa/ICAO)",
+        "Hoja papel foto 6×4 pulgadas (8 fotos) u hoja Carta (hasta 56 fotos)",
+        "Guías de corte opcionales muy tenues más marcas al margen",
+        "Descarga PNG a 300 dpi e impresión directa a tamaño real",
+        "Camisa y fondo blanco con IA usando tu propia API key"
+      ],
+      "permissions": "Ninguna: las imágenes se procesan en el navegador",
+      "potentialAction": {
+        "@type": "CreateAction",
+        "name": "Generar hoja de fotos para imprimir",
+        "result": { "@type": "ImageObject", "encodingFormat": "image/png" }
+      }
+    },
+    {
+      "@type": "HowTo",
+      "name": "Cómo imprimir fotos infantiles en casa",
+      "inLanguage": "es-MX",
+      "totalTime": "PT2M",
+      "step": [
+        { "@type": "HowToStep", "name": "Sube la foto", "text": "Elige una foto de frente, con fondo claro y buena luz." },
+        { "@type": "HowToStep", "name": "Encuadra", "text": "Ajusta zoom y arrastra hasta que la cara quede centrada." },
+        { "@type": "HowToStep", "name": "Elige tamaño y hoja", "text": "Selecciona el tamaño de foto y si imprimirás en papel foto 6×4 pulgadas o en hoja Carta." },
+        { "@type": "HowToStep", "name": "Imprime", "text": "Descarga el PNG o imprime directo, siempre al 100% de escala y con el papel correcto seleccionado." }
+      ]
+    }
+  ]
+}
+</script>
+<style>
+  :root { color-scheme: light dark; }
+  body { font-family: system-ui, sans-serif; margin: 0; padding: 24px; max-width: 900px; margin-inline: auto; }
+  h1 { font-size: 1.25rem; margin: 0 0 4px; }
+  p.sub { margin: 0 0 20px; opacity: .7; font-size: .9rem; }
+  .row { display: flex; gap: 20px; flex-wrap: wrap; align-items: flex-start; }
+  .panel { flex: 1 1 320px; }
+  #stage { position: relative; width: 100%; aspect-ratio: 5/6; background: #222; overflow: hidden; border-radius: 8px; touch-action: none; cursor: grab; }
+  #stage.dragging { cursor: grabbing; }
+  #stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+  label { display: block; font-size: .85rem; margin: 12px 0 4px; }
+  input[type=range] { width: 100%; }
+  button { padding: 10px 16px; font-size: .95rem; border-radius: 6px; border: 1px solid #8884; background: #7c5cff; color: #fff; cursor: pointer; }
+  button.secondary { background: transparent; color: inherit; }
+  button:disabled { opacity: .4; cursor: default; }
+  #preview { width: 100%; border: 1px solid #8884; border-radius: 6px; background: #fff; display: block; }
+  .actions { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
+  select, input[type=file] { font-size: .9rem; }
+</style>
+</head>
+<body>
+<h1>Fotos infantiles → hoja 6×4"</h1>
+<p class="sub">Sube una foto, encuádrala y descarga una hoja de papel foto 6×4 pulgadas (1800×1200 px, 300 dpi) con 8 fotos listas para imprimir y recortar.</p>
+
+<div class="row">
+  <div class="panel">
+    <input type="file" id="file" accept="image/*">
+    <div id="stage"><canvas id="crop"></canvas></div>
+    <label>Zoom <span id="zv"></span></label>
+    <input type="range" id="zoom" min="1" max="4" step="0.01" value="1">
+    <label>Tamaño de foto</label>
+    <select id="size">
+      <option value="2.5,3">Infantil MX 2.5 × 3 cm</option>
+      <option value="3,4">Carnet 3 × 4 cm</option>
+      <option value="3.5,4.5">Visa/ICAO 3.5 × 4.5 cm</option>
+    </select>
+    <label>Hoja</label>
+    <select id="sheet">
+      <option value="6,4">Papel foto 6 × 4" (10 × 15 cm)</option>
+      <option value="8.5,11">Carta 8.5 × 11"</option>
+    </select>
+    <label><input type="checkbox" id="guides"> Guías de corte (líneas muy tenues + ticks al margen)</label>
+    <label for="key">OpenAI API key <small style="opacity:.6">(se guarda solo en tu navegador)</small></label>
+    <input type="password" id="key" placeholder="sk-..." autocomplete="off" style="width:100%;padding:8px;border-radius:6px;border:1px solid #8884;background:transparent;color:inherit">
+    <div class="actions">
+      <button id="ai" disabled>✨ Camisa y fondo blanco</button>
+      <button id="undo" class="secondary" hidden>Volver al original</button>
+    </div>
+    <p class="sub" style="margin-top:8px">Al imprimir: escala <b>100%</b> (no “ajustar a página”) y selecciona el papel que elegiste arriba.</p>
+    <p id="status" class="sub" style="margin-top:8px"></p>
+  </div>
+  <div class="panel">
+    <canvas id="preview" width="1800" height="1200"></canvas>
+    <div class="actions">
+      <button id="dl" disabled>Descargar PNG</button>
+      <button id="print" class="secondary" disabled>Imprimir</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const DPI = 300;
+// La hoja deja de ser una constante: 6x4" (default) o Carta.
+function sheetIn() { const [w,h] = sheetEl.value.split(',').map(Number); return { w, h }; }
+function sheetPx() { const s = sheetIn(); return { w: Math.round(s.w*DPI), h: Math.round(s.h*DPI) }; }
+const isLetter = () => sheetEl.value === '8.5,11';
+// Margen de la variante Carta: el bloque va cerca de la esquina superior
+// izquierda, no pegado al borde (las impresoras no imprimen ahí) y sin centrar,
+// para que el resto de la hoja quede utilizable.
+const LETTER_MARGIN = Math.round(0.5*DPI); // 0.5" ~ 1.27 cm
+const stage = document.getElementById('stage');
+const cropC = document.getElementById('crop'), cropX = cropC.getContext('2d');
+const prevC = document.getElementById('preview'), prevX = prevC.getContext('2d');
+const zoomEl = document.getElementById('zoom'), sizeEl = document.getElementById('size');
+const guidesEl = document.getElementById('guides');
+const sheetEl = document.getElementById('sheet');
+const dl = document.getElementById('dl'), printBtn = document.getElementById('print');
+
+const aiBtn = document.getElementById('ai'), undoBtn = document.getElementById('undo');
+const statusEl = document.getElementById('status');
+
+let img = null, original = null, offX = 0, offY = 0, drag = null;
+
+function cell() { const [w,h] = sizeEl.value.split(',').map(Number); return { w, h, ar: w/h }; }
+function cellPx() { const c = cell(); return { w: Math.round(c.w/2.54*DPI), h: Math.round(c.h/2.54*DPI) }; }
+
+function setStageAspect() { stage.style.aspectRatio = cell().ar; }
+
+// Base scale = cover fit at zoom 1; offsets are in source-image pixels.
+function baseScale() {
+  const c = cropC.width / cropC.height;
+  return img.width/img.height > c ? cropC.height/img.height : cropC.width/img.width;
+}
+function drawCrop() {
+  const r = stage.getBoundingClientRect();
+  cropC.width = Math.round(r.width); cropC.height = Math.round(r.height);
+  cropX.fillStyle = '#222'; cropX.fillRect(0,0,cropC.width,cropC.height);
+  if (!img) return;
+  const s = baseScale() * Number(zoomEl.value);
+  const w = img.width*s, h = img.height*s;
+  offX = Math.min(0, Math.max(cropC.width - w, offX));
+  offY = Math.min(0, Math.max(cropC.height - h, offY));
+  cropX.drawImage(img, offX, offY, w, h);
+  document.getElementById('zv').textContent = Number(zoomEl.value).toFixed(2) + '×';
+  drawSheet();
+}
+
+// Source rect currently visible in the crop box.
+function srcRect() {
+  const s = baseScale() * Number(zoomEl.value);
+  return { x: -offX/s, y: -offY/s, w: cropC.width/s, h: cropC.height/s };
+}
+
+function grid(p) {
+  const S = sheetPx();
+  if (!isLetter()) return { COLS: 4, ROWS: 2 };
+  // Carta: tantas fotos como quepan dejando el margen en los cuatro lados.
+  const usableW = S.w - 2*LETTER_MARGIN, usableH = S.h - 2*LETTER_MARGIN;
+  return { COLS: Math.max(1, Math.floor(usableW/p.w)), ROWS: Math.max(1, Math.floor(usableH/p.h)) };
+}
+
+function drawSheet() {
+  const S = sheetPx();
+  if (prevC.width !== S.w || prevC.height !== S.h) { prevC.width = S.w; prevC.height = S.h; }
+  prevX.fillStyle = '#fff'; prevX.fillRect(0,0,S.w,S.h);
+  if (!img) return;
+  // Sin separación: el bloque es un rectángulo continuo, un solo corte por línea.
+  const p = cellPx();
+  const { COLS, ROWS } = grid(p);
+  const totalW = COLS*p.w, totalH = ROWS*p.h;
+  // 6x4 se centra (es una hoja dedicada); Carta se ancla arriba-izquierda con margen.
+  const x0 = isLetter() ? LETTER_MARGIN : Math.round((S.w-totalW)/2);
+  const y0 = isLetter() ? LETTER_MARGIN : Math.round((S.h-totalH)/2);
+  const r = srcRect();
+  for (let row=0; row<ROWS; row++) for (let col=0; col<COLS; col++) {
+    prevX.drawImage(img, r.x, r.y, r.w, r.h, x0 + col*p.w, y0 + row*p.h, p.w, p.h);
+  }
+
+  // Guías de corte: línea tenue en las uniones interiores (para guiar la tijera
+  // sobre el bloque continuo) + ticks negros en el margen blanco para guillotina.
+  if (guidesEl.checked) {
+    // 1) líneas interiores, gris claro y finas: se ven al recortar, casi
+    //    invisibles en la foto ya cortada.
+    prevX.strokeStyle = 'rgba(0,0,0,.12)'; prevX.lineWidth = 1; prevX.beginPath();
+    for (let c = 1; c < COLS; c++) {
+      const x = x0 + c*p.w + 0.5;
+      prevX.moveTo(x, y0); prevX.lineTo(x, y0 + totalH);
+    }
+    for (let r2 = 1; r2 < ROWS; r2++) {
+      const y = y0 + r2*p.h + 0.5;
+      prevX.moveTo(x0, y); prevX.lineTo(x0 + totalW, y);
+    }
+    // borde exterior del bloque, mismo tono
+    prevX.rect(x0 + 0.5, y0 + 0.5, totalW - 1, totalH - 1);
+    prevX.stroke();
+
+    // 2) ticks en el margen, nunca sobre la foto.
+    const tick = Math.round(0.12*DPI);
+    prevX.strokeStyle = '#000'; prevX.lineWidth = 2; prevX.beginPath();
+    for (let c = 0; c <= COLS; c++) {
+      const x = x0 + c*p.w;
+      prevX.moveTo(x, y0 - tick); prevX.lineTo(x, y0);
+      prevX.moveTo(x, y0 + totalH); prevX.lineTo(x, y0 + totalH + tick);
+    }
+    for (let r2 = 0; r2 <= ROWS; r2++) {
+      const y = y0 + r2*p.h;
+      prevX.moveTo(x0 - tick, y); prevX.lineTo(x0, y);
+      prevX.moveTo(x0 + totalW, y); prevX.lineTo(x0 + totalW + tick, y);
+    }
+    prevX.stroke();
+  }
+}
+
+document.getElementById('file').addEventListener('change', e => {
+  const f = e.target.files[0]; if (!f) return;
+  const i = new Image();
+  i.onload = () => {
+    img = original = i; zoomEl.value = 1; offX = offY = 0;
+    dl.disabled = printBtn.disabled = aiBtn.disabled = false;
+    undoBtn.hidden = true; statusEl.textContent = '';
+    drawCrop();
+  };
+  i.src = URL.createObjectURL(f);
+});
+
+zoomEl.addEventListener('input', drawCrop);
+guidesEl.addEventListener('change', drawSheet);
+sheetEl.addEventListener('change', drawSheet);
+sizeEl.addEventListener('change', () => { setStageAspect(); requestAnimationFrame(drawCrop); });
+window.addEventListener('resize', drawCrop);
+
+stage.addEventListener('pointerdown', e => {
+  if (!img) return;
+  drag = { x: e.clientX - offX, y: e.clientY - offY };
+  stage.classList.add('dragging'); stage.setPointerCapture(e.pointerId);
+});
+stage.addEventListener('pointermove', e => {
+  if (!drag) return;
+  offX = e.clientX - drag.x; offY = e.clientY - drag.y; drawCrop();
+});
+stage.addEventListener('pointerup', () => { drag = null; stage.classList.remove('dragging'); });
+
+dl.addEventListener('click', () => {
+  const a = document.createElement('a');
+  a.download = isLetter() ? 'fotos-infantiles-carta.png' : 'fotos-infantiles-6x4.png';
+  a.href = prevC.toDataURL('image/png');
+  a.click();
+});
+
+printBtn.addEventListener('click', () => {
+  const si = sheetIn();
+  const paper = isLetter() ? 'Carta (8.5 × 11 pulg)' : '4 × 6 pulg / 10 × 15 cm';
+  // La imagen se mide en PORCENTAJE del área imprimible, no en pulgadas fijas.
+  // Con `width:6in` sobre un papel más angosto (o en vertical) el navegador
+  // aplicaba su "ajustar a página" y la hoja salía reducida y centrada.
+  const css = '@page{size:' + si.w + 'in ' + si.h + 'in;margin:0}'
+    + 'html,body{margin:0;padding:0}'
+    + 'img{display:block;width:100%;height:auto}'
+    + '@media screen{body{background:#14121f;color:#eee;font:15px/1.5 system-ui,sans-serif}'
+    + '.hint{max-width:640px;margin:0 auto;padding:20px}'
+    + '.hint h2{font-size:1.05rem;margin:0 0 10px}'
+    + '.hint ol{margin:0;padding-left:20px}.hint li{margin:6px 0}'
+    + '.hint b{color:#b9a8ff}'
+    + '.hint p{opacity:.7;font-size:.85rem}'
+    + 'img{max-width:640px;margin:0 auto;border:1px solid #fff3}}'
+    + '@media print{.hint{display:none}img{max-width:none;border:0}}';
+  const w = window.open('');
+  w.document.write('<style>' + css + '</style>'
+    + '<div class="hint"><h2>Antes de dar Imprimir, revisa el diálogo:</h2><ol>'
+    + '<li>Papel / Tamaño: <b>' + paper + '</b></li>'
+    + '<li>Escala: <b>100%</b> — nunca “Ajustar a página”. Suele estar en <b>Más ajustes</b>.</li>'
+    + '<li>Márgenes: <b>Ninguno</b></li>'
+    + '<li>Orientación: <b>' + (isLetter() ? 'Vertical' : 'Horizontal') + '</b></li>'
+    + '</ol><p>Si tu impresora no ofrece el papel correcto, descarga el PNG y mándalo a imprimir desde la app de Fotos o desde una tienda: el archivo ya trae el tamaño exacto a 300 dpi.</p></div>'
+    + '<img src="' + prevC.toDataURL('image/png') + '">'
+    + '<script>setTimeout(function(){window.print()},400)<\/script>');
+  w.document.close();
+});
+
+// --- Retoque IA: camisa blanca + fondo blanco (OpenAI images/edits vía server.js) ---
+
+// Región 2:3 (formato que devuelve el modelo) alrededor del encuadre actual,
+// para mandar la foto ya recortada sin deformarla.
+function portraitSrcRect() {
+  const r = srcRect(), AR = 2/3;
+  let w = r.w, h = r.h;
+  if (w/h > AR) h = w/AR; else w = h*AR;
+  let x = r.x + r.w/2 - w/2, y = r.y + r.h/2 - h/2;
+  if (w > img.width)  { const k = img.width/w;  w *= k; h *= k; x = r.x + r.w/2 - w/2; y = r.y + r.h/2 - h/2; }
+  if (h > img.height) { const k = img.height/h; w *= k; h *= k; x = r.x + r.w/2 - w/2; y = r.y + r.h/2 - h/2; }
+  x = Math.min(Math.max(0, x), img.width - w);
+  y = Math.min(Math.max(0, y), img.height - h);
+  return { x, y, w, h };
+}
+
+function cropBlob() {
+  const c = document.createElement('canvas');
+  c.width = 1024; c.height = 1536;
+  const r = portraitSrcRect();
+  c.getContext('2d').drawImage(img, r.x, r.y, r.w, r.h, 0, 0, c.width, c.height);
+  return new Promise(res => c.toBlob(res, 'image/png'));
+}
+
+const PROMPT = [
+  'Retrato tipo foto de identificación oficial.',
+  'Reemplaza la ropa por una camisa blanca de vestir con cuello, lisa, sin logos.',
+  'Reemplaza el fondo por un blanco liso y uniforme, sin sombras ni degradados.',
+  'Conserva EXACTAMENTE el rostro, peinado, tono de piel, edad y expresión de la persona original: no alteres los rasgos.',
+  'Iluminación frontal suave y pareja, sin sombras duras en la cara ni en el fondo.',
+  'Hombros rectos, encuadre de cabeza y hombros, mirada al frente. Resultado fotorrealista.',
+].join(' ');
+
+const keyEl = document.getElementById('key');
+keyEl.value = localStorage.getItem('openai_key') || '';
+keyEl.addEventListener('change', () => localStorage.setItem('openai_key', keyEl.value.trim()));
+
+// Con key pegada llama a OpenAI directo desde el navegador; si no, usa el proxy local.
+async function enhance(blob) {
+  const key = keyEl.value.trim();
+  if (key) {
+    const fd = new FormData();
+    fd.append('model', 'gpt-image-1');
+    fd.append('image', blob, 'foto.png');
+    fd.append('prompt', PROMPT);
+    fd.append('size', '1024x1536');
+    fd.append('quality', 'high');
+    fd.append('input_fidelity', 'high');
+    const r = await fetch('https://api.openai.com/v1/images/edits', {
+      method: 'POST', headers: { Authorization: 'Bearer ' + key }, body: fd,
+    });
+    const j = await r.json();
+    if (!r.ok) throw new Error(j?.error?.message || 'Error de OpenAI');
+    return j.data[0].b64_json;
+  }
+  const fd = new FormData();
+  fd.append('image', blob, 'foto.png');
+  const r = await fetch('/api/enhance', { method: 'POST', body: fd });
+  const j = await r.json();
+  if (!r.ok) throw new Error(j.error || 'Pega tu API key arriba');
+  return j.b64;
+}
+
+aiBtn.addEventListener('click', async () => {
+  if (!img) return;
+  aiBtn.disabled = true;
+  statusEl.textContent = 'Procesando con IA… (30–60 s)';
+  try {
+    const b64 = await enhance(await cropBlob());
+    const out = new Image();
+    out.onload = () => {
+      img = out; zoomEl.value = 1; offX = offY = 0;
+      undoBtn.hidden = false; statusEl.textContent = 'Listo. Reencuadra si hace falta.';
+      drawCrop();
+    };
+    out.src = 'data:image/png;base64,' + b64;
+  } catch (e) {
+    statusEl.textContent = 'Error: ' + e.message;
+  } finally {
+    aiBtn.disabled = false;
+  }
+});
+
+undoBtn.addEventListener('click', () => {
+  img = original; zoomEl.value = 1; offX = offY = 0;
+  undoBtn.hidden = true; statusEl.textContent = '';
+  drawCrop();
+});
+
+setStageAspect();
+requestAnimationFrame(drawCrop);
+</script>
+</body>
+</html>
