@@ -295,3 +295,36 @@ El logo de la marca = **icono de ojitos + wordmark "EasyBits" animado**. Aparece
 - **Fuente:** `"Jersey 10"` (Google Font). Import en `app/app.css`: `@import url("https://fonts.googleapis.com/css2?family=Jersey+10&display=swap")`; clase `.font-jersey { font-family: "Jersey 10", serif; }`.
 
 **Transportarlo a HTML plano / contextos sin React (ej. páginas servidas por un box):** usar **Motion One** (`motion` vanilla, misma familia) por CDN — `import { animate, stagger } from "https://cdn.jsdelivr.net/npm/motion@11/+esm"` — y replicar el flip con dos `<div>` de `<span>` por letra + los mismos keyframes (`rotateX`, `y`, `stagger(0.05)`, `duration 0.3`). **Implementación de referencia ya hecha** en `sandbox-host/templates/livekit-svc/room.html` (el estudio de grabación): copiar de ahí el bloque CSS (`#ebWord`/`.ebRow`/`.font-jersey`), el markup (ojitos + dos `.ebRow`) y el `<script type="module">` con Motion One.
+
+## Oportunidad editorial: el libro corto de A2A v1.0
+
+**Verificado el 18 ago 2026: no existe NINGÚN libro sobre el protocolo A2A** (Agent2Agent,
+Linux Foundation). Ni de v0.3 ni de v1.0. Se buscó en O'Reilly, Manning/MEAP, Packt, Apress,
+Amazon y Leanpub. Lo más cercano son libros de agentes que le dedican un capítulo, escritos
+antes del release de v1.0.
+
+**Por qué el hueco es real y no sólo un vacío de catálogo.** La v1.0 (abril 2026) rompió con
+v0.3: métodos PascalCase (`SendMessage` en vez de `message/send`), el AgentCard perdió `url`
+en la raíz a favor de `supportedInterfaces[]`, desapareció el discriminador `kind`, los Part se
+aplanaron a un oneof, los TaskState pasaron a SCREAMING_SNAKE y los eventos de stream perdieron
+`final`. **Casi toda la literatura pedagógica que existe enseña la versión equivocada**: el curso
+de DeepLearning.AI (con Google Cloud e IBM, enero 2026) es anterior al release, igual que casi
+todos los codelabs de Google y todo lo de Udemy. Lo único confiablemente v1.0 es la doc oficial,
+los SDKs de Python/JS/Java y un par de artículos de Medium.
+
+No es un protocolo de nicho: la Linux Foundation reportó en abril 150+ organizaciones y un TSC
+con AWS, Cisco, Google, IBM, Microsoft, Salesforce, SAP y ServiceNow.
+
+**Por qué nos toca a nosotros.** EasyBits va a ser consumidor de A2A, y sandbox-host lo está
+implementando de verdad —no leyéndolo— contra el `a2a.proto` normativo del tag v1.0.1. Ese
+trabajo genera el material: el mapeo de un dialecto propio al cable A2A, las dos contradicciones
+internas de la spec (`securityRequirements` vs `security`; `SubscribeToTask` como GET vs POST),
+qué no tiene equivalente en el protocolo (consumo/facturación, inyección en turno vivo) y cómo se
+resuelve sin inventar campos. Eso no está escrito en ningún lado.
+
+- Referencia técnica ya publicada (base del libro): https://claude.ai/code/artifact/a413ce56-a063-4849-bf6d-fb217c98d75b
+- Implementación de referencia: `sandbox-host/templates/claude-worker/src/a2a/`
+- Fuente normativa: `github.com/a2aproject/A2A`, tag `v1.0.1`, `specification/a2a.proto`
+
+**Ventana:** se cierra cuando O'Reilly o Manning saquen el suyo. El ciclo de un libro técnico es
+de 12 a 18 meses, así que hay margen — pero es margen, no eternidad.
