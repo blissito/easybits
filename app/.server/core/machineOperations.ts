@@ -648,8 +648,10 @@ export async function releasePermanent(ctx: AuthContext, sandboxId: string): Pro
     console.warn(`releasePermanent: final backup of ${sandboxId} failed:`, e?.message ?? e);
   });
   // Suspend (snapshot + free CPU/RAM) instead of destroy → data survives for the
-  // 7-day grace. Best-effort: a lost/error box just gets marked.
-  await suspendSandbox(ctx, sandboxId).catch(() => undefined);
+  // 7-day grace. NOT best-effort: billing was already cancelled above, so a
+  // suspend that silently fails leaves a machine running for free with nobody
+  // watching — six of them did exactly that for a week (Aug 2026).
+  await suspendReleasedBox(ctx, sandboxId);
   const deletionScheduledAt = new Date();
   await db.sandbox.update({
     where: { sandboxId },
@@ -736,6 +738,69 @@ export async function reconcileProtection(): Promise<{ checked: number; relocked
     if (ok) relocked++;
   }
   return { checked: rows.length, relocked };
+}
+
+/**
+ * Put a just-released box to sleep, and VERIFY it actually slept.
+ *
+ * The meter is already stopped by the time this runs, so an unnoticed failure
+ * here is pure loss: the VM keeps its CPU/RAM reservation, `protected` keeps
+ * the host's stale sweep off it, and the row says `pending_deletion` — so no
+ * dashboard, alarm or reaper considers it alive. Retry, confirm against the
+ * host, and if it still won't sleep, say so loudly. `reconcileReleasedBoxes()`
+ * is the net that catches whatever slips through.
+ *
+ * Never throws: the release itself must complete (the customer asked for it and
+ * we already cancelled their subscription).
+ */
+async function suspendReleasedBox(ctx: AuthContext, sandboxId: string): Promise<boolean> {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      // asOperator: la caja está Protected (lockBox la blindó al cobrarla) y el
+      // host rechaza el suspend sin el token de operador.
+      await suspendSandbox(ctx, sandboxId, { asOperator: true });
+    } catch {
+      // fall through to the check — the host may have suspended it anyway
+    }
+    const state = await getSandbox(ctx, sandboxId)
+      .then((rec) => rec.status as string)
+      .catch(() => null);
+    // Anything that is not awake is fine — asleep, stopped or already gone all
+    // mean the box stopped costing us CPU and RAM.
+    if (state === null || (state !== "running" && state !== "starting")) return true;
+    if (attempt < 2) await new Promise((r) => setTimeout(r, 500 * (attempt + 1)));
+  }
+  console.error(
+    `[hosting] CRITICAL: released machine ${sandboxId} would not suspend after 3 tries — it is UNBILLED and still running. reconcileReleasedBoxes should pick it up.`
+  );
+  return false;
+}
+
+/**
+ * Re-suspend every released box that is somehow still running.
+ *
+ * Runs on the purge cron, next to reconcileProtection, and for the same reason:
+ * a single failed HTTP call must not be able to strand a machine forever. A
+ * host restart can also revive one on its own ("suspended without .mem snapshot
+ * after restart"), which no amount of care at release time would have caught.
+ */
+export async function reconcileReleasedBoxes(): Promise<{ checked: number; resuspended: number; stuck: string[] }> {
+  const rows = await db.sandbox.findMany({
+    where: { status: "pending_deletion" },
+    select: { sandboxId: true, ownerId: true },
+  });
+  let resuspended = 0;
+  const stuck: string[] = [];
+  for (const m of rows) {
+    const ctx = { user: { id: m.ownerId }, scopes: ["WRITE"] } as AuthContext;
+    const state = await getSandbox(ctx, m.sandboxId)
+      .then((rec) => rec.status)
+      .catch(() => null);
+    if (state !== "running" && state !== "starting") continue;
+    if (await suspendReleasedBox(ctx, m.sandboxId)) resuspended++;
+    else stuck.push(m.sandboxId);
+  }
+  return { checked: rows.length, resuspended, stuck };
 }
 
 // Cron: hard-destroy machines whose 7-day grace has elapsed. Returns a summary.

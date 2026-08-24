@@ -913,14 +913,24 @@ export async function extendSandbox(
 // so no extendSandbox call is needed afterward. Resume with resumeSandbox.
 export async function suspendSandbox(
   ctx: AuthContext,
-  sandboxId: string
+  sandboxId: string,
+  opts?: { asOperator?: boolean }
 ): Promise<SandboxRecord> {
   requireScope(ctx, "WRITE");
+  // asOperator: igual que en destroySandbox, solo flujos deliberados de
+  // plataforma pueden dormir una caja Protected — el host responde 403
+  // ("X-Operator-Token required to suspend") a todo lo demás. Sin esto,
+  // releasePermanent no podía suspender NINGUNA caja pagada: lockBox la protege
+  // al comprarla y nadie la desprotege al liberarla, así que el suspend moría en
+  // un 403 silencioso y la VM se quedaba corriendo, ya sin cobro, hasta que el
+  // purge la alcanzaba 7 días después.
   const rec = await callHost<SandboxRecord>(
     "POST",
     `/v1/sandbox/${sandboxId}/suspend`,
     {},
-    await effectiveOwnerId(ctx, sandboxId)
+    await effectiveOwnerId(ctx, sandboxId),
+    undefined,
+    opts?.asOperator ?? false
   );
   // Sella el segmento RUNNING. Va por sandboxId (la sesión abierta ya sabe de
   // quién es), así no añadimos ninguna resolución de owner al path caliente.
