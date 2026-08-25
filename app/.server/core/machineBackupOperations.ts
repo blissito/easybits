@@ -40,6 +40,24 @@ const MAX_BYTES = Number(process.env.BACKUP_MAX_BYTES || 4 * 1024 * 1024 * 1024)
 /** A machine with no fresh backup for this long is a problem worth surfacing. */
 const STALE_ALERT_HOURS = 48;
 
+/**
+ * "Not opted out of backups", written so it actually matches.
+ *
+ * `NOT: { backupScope: "none" }` looks equivalent and is not: on MongoDB a
+ * field that is ABSENT from the document matches neither `{not: "none"}` nor
+ * `{equals: null}` — only `{isSet: false}`. Prisma reports absent as `null` on
+ * read, so the rows look fine while every query quietly skips them.
+ *
+ * `backupScope` is only written by createPermanent and the redeploy path, so
+ * every machine predating it has the field absent — 13 of 15 rows when this was
+ * found. They were silently excluded from BOTH the nightly backup and the
+ * staleness alert: the daily backup sold with the machine never ran for them,
+ * and nothing said so.
+ */
+const NOT_OPTED_OUT = {
+  OR: [{ backupScope: { not: "none" } }, { backupScope: { isSet: false } }],
+};
+
 function stampFor(d = new Date()): string {
   return d.toISOString().slice(0, 10);
 }
@@ -53,6 +71,41 @@ function resolveDataPaths(spec: Runspec | null): string[] {
   if (!spec?.dataPaths?.length) return [];
   const base = spec.appDir.replace(/\/$/, "");
   return spec.dataPaths.map((p) => (p.startsWith("/") ? p : `${base}/${p}`));
+}
+
+/**
+ * Where a machine stands with respect to backups.
+ *
+ * `unprotected` is the whole point of this type. A machine that declares no
+ * `dataPaths` cannot be backed up — backupMachine throws NoDataPaths — and both
+ * the nightly run and the staleness alert used to `continue` past it. So the
+ * detector meant to catch "backups quietly stopped" was blind to the case where
+ * they never started: such a machine showed up in no failure list at all, and
+ * looked exactly like one being backed up correctly.
+ *
+ * That is fine for a genuinely stateless box (app rebuilt from a release, data
+ * in an external DB) and a silent data-loss trap for one keeping a sqlite file
+ * or uploads on disk. Nothing here can tell the two apart, so the honest move is
+ * to name them and let a human judge.
+ */
+export type BackupPosture =
+  | { kind: "protected"; paths: string[] }
+  | { kind: "unprotected"; reason: "no-datapaths" }
+  | { kind: "opted-out" };
+
+/**
+ * Pure classifier behind the nightly report. Mirrors the `NOT: {backupScope:
+ * "none"}` filter the queries already apply — note that a NULL scope is NOT an
+ * opt-out there (Prisma lets null through), so it must not be one here either.
+ */
+export function classifyBackupTarget(
+  spec: Runspec | null,
+  backupScope: string | null
+): BackupPosture {
+  if (backupScope === "none") return { kind: "opted-out" };
+  const paths = resolveDataPaths(spec);
+  if (!paths.length) return { kind: "unprotected", reason: "no-datapaths" };
+  return { kind: "protected", paths };
 }
 
 export interface BackupRecord {
@@ -225,7 +278,7 @@ export async function backupPermanentMachines(): Promise<{
     where: {
       persistent: true,
       status: "running",
-      NOT: { backupScope: "none" },
+      ...NOT_OPTED_OUT,
     },
   });
   const failed: { sandboxId: string; error: string }[] = [];
@@ -333,25 +386,35 @@ export async function purgeDeletedMachineArtifacts(): Promise<{
 }
 
 /** Machines whose newest available backup is older than the alert threshold. */
-export async function staleBackupMachines(): Promise<{ sandboxId: string; lastBackupAt: Date | null }[]> {
+export async function staleBackupMachines(): Promise<{
+  stale: { sandboxId: string; name: string | null; lastBackupAt: Date | null }[];
+  unprotected: { sandboxId: string; name: string | null }[];
+}> {
   const machines = await db.sandbox.findMany({
-    where: { persistent: true, status: "running", NOT: { backupScope: "none" } },
-    select: { sandboxId: true, runspec: true },
+    where: { persistent: true, status: "running", ...NOT_OPTED_OUT },
+    select: { sandboxId: true, name: true, runspec: true, backupScope: true },
   });
   const cutoff = new Date(Date.now() - STALE_ALERT_HOURS * 3600_000);
-  const stale: { sandboxId: string; lastBackupAt: Date | null }[] = [];
+  const stale: { sandboxId: string; name: string | null; lastBackupAt: Date | null }[] = [];
+  const unprotected: { sandboxId: string; name: string | null }[] = [];
   for (const m of machines) {
-    if (!resolveDataPaths(m.runspec as Runspec).length) continue;
+    const posture = classifyBackupTarget(m.runspec as Runspec, m.backupScope);
+    // Reported, not skipped: a machine that CANNOT be backed up is the failure
+    // mode this alert exists for, and it used to be the one case it dropped.
+    if (posture.kind !== "protected") {
+      if (posture.kind === "unprotected") unprotected.push({ sandboxId: m.sandboxId, name: m.name });
+      continue;
+    }
     const last = await db.sandboxBackup.findFirst({
       where: { sandboxId: m.sandboxId, status: "available" },
       orderBy: { createdAt: "desc" },
       select: { createdAt: true },
     });
     if (!last || last.createdAt < cutoff) {
-      stale.push({ sandboxId: m.sandboxId, lastBackupAt: last?.createdAt ?? null });
+      stale.push({ sandboxId: m.sandboxId, name: m.name, lastBackupAt: last?.createdAt ?? null });
     }
   }
-  return stale;
+  return { stale, unprotected };
 }
 
 // --- owner-facing --------------------------------------------------------

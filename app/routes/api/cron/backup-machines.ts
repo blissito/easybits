@@ -21,12 +21,24 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
   }
 
   const result = await backupPermanentMachines();
-  const stale = await staleBackupMachines();
+  const { stale, unprotected } = await staleBackupMachines();
+  const label = (m: { sandboxId: string; name: string | null }) =>
+    m.name ? `${m.sandboxId} (${m.name})` : m.sandboxId;
   if (stale.length) {
     console.error(
       `[backup-machines] ${stale.length} machine(s) without a fresh backup:`,
-      stale.map((s) => s.sandboxId).join(", ")
+      stale.map(label).join(", ")
     );
   }
-  return data({ ...result, stale });
+  // Same severity as stale on purpose: these are not being backed up at all.
+  // Either the box is genuinely stateless (fine) or someone forgot to declare
+  // runspec.dataPaths and its data is one lost host away from gone — and from
+  // here the two are indistinguishable, so a human has to look.
+  if (unprotected.length) {
+    console.error(
+      `[backup-machines] ${unprotected.length} machine(s) with no backup configured (no runspec.dataPaths):`,
+      unprotected.map(label).join(", ")
+    );
+  }
+  return data({ ...result, stale, unprotected });
 };
