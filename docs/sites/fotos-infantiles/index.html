@@ -81,61 +81,161 @@
 </script>
 <style>
   :root { color-scheme: light dark; }
-  body { font-family: system-ui, sans-serif; margin: 0; padding: 24px; max-width: 900px; margin-inline: auto; }
+  *, *::before, *::after { box-sizing: border-box; }
+  body { font-family: system-ui, sans-serif; margin: 0; padding: 20px 24px; max-width: 1200px; margin-inline: auto; }
   h1 { font-size: 1.25rem; margin: 0 0 4px; }
-  p.sub { margin: 0 0 20px; opacity: .7; font-size: .9rem; }
+  p.sub { margin: 0 0 16px; opacity: .7; font-size: .9rem; }
   .row { display: flex; gap: 20px; flex-wrap: wrap; align-items: flex-start; }
-  .panel { flex: 1 1 320px; }
+  .panel { flex: 1 1 300px; display: flex; flex-direction: column; min-width: 0; }
+  .stage-wrap { display: flex; min-height: 0; }
+  .stage-col { display: flex; flex-direction: column; width: 100%; min-width: 0; }
   #stage { position: relative; width: 100%; aspect-ratio: 5/6; background: #222; overflow: hidden; border-radius: 8px; touch-action: none; cursor: grab; }
   #stage.dragging { cursor: grabbing; }
   #stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
   label { display: block; font-size: .85rem; margin: 12px 0 4px; }
   input[type=range] { width: 100%; }
-  button { padding: 10px 16px; font-size: .95rem; border-radius: 6px; border: 1px solid #8884; background: #7c5cff; color: #fff; cursor: pointer; }
-  button.secondary { background: transparent; color: inherit; }
+  button { display: inline-flex; align-items: center; gap: 8px; padding: 10px 16px; font-size: .95rem; border-radius: 6px; border: 1px solid #8884; background: #7c5cff; color: #fff; cursor: pointer; }
+  button svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  button.secondary { background: transparent; color: inherit; border-color: #8886; }
+  button.secondary:hover:not(:disabled) { border-color: #7c5cff; }
+  button.icon-only { padding: 10px 12px; }
+  button.icon-only svg { width: 19px; height: 19px; }
   button:disabled { opacity: .4; cursor: default; }
   #preview { width: 100%; border: 1px solid #8884; border-radius: 6px; background: #fff; display: block; }
   .actions { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
-  select, input[type=file] { font-size: .9rem; }
+  select { font-size: .9rem; }
+
+  .drop {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 4px; text-align: center; padding: 20px 16px; margin-bottom: 12px;
+    border: 1.5px dashed #8886; border-radius: 8px; cursor: pointer;
+    background: color-mix(in srgb, currentColor 4%, transparent);
+    transition: border-color .15s ease, background .15s ease;
+  }
+  .drop:hover { border-color: #7c5cff; }
+  .drop.over { border-color: #7c5cff; background: color-mix(in srgb, #7c5cff 12%, transparent); }
+  .drop svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 1.5; opacity: .7; }
+  .drop strong { font-size: .95rem; font-weight: 600; }
+  .drop span { font-size: .8rem; opacity: .65; }
+
+  .toggle {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    margin: 16px 0 4px; padding: 10px 12px; font-size: .85rem;
+    border: 1px solid #8884; border-radius: 8px; cursor: pointer;
+  }
+  .toggle input { position: absolute; opacity: 0; width: 0; height: 0; }
+  .toggle .track {
+    flex: none; width: 40px; height: 22px; border-radius: 999px;
+    background: #8886; position: relative; transition: background .18s ease;
+  }
+  .toggle .track::after {
+    content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px;
+    border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.3);
+    transition: transform .18s ease;
+  }
+  .toggle input:checked + .track { background: #7c5cff; }
+  .toggle input:checked + .track::after { transform: translateX(18px); }
+  .toggle input:focus-visible + .track { outline: 2px solid #7c5cff; outline-offset: 2px; }
+
+  /* Una sola pantalla: nada de scroll vertical cuando hay altura suficiente. */
+  @media (min-width: 900px) and (min-height: 620px) {
+    html { height: 100%; }
+    body { height: 100dvh; display: flex; flex-direction: column; overflow: hidden; padding: 18px 24px; }
+    p.sub.intro { margin-bottom: 12px; }
+    .row { flex: 1; min-height: 0; flex-wrap: nowrap; align-items: stretch; }
+    .panel { overflow: hidden; }
+    .panel.crop { flex: 0 1 430px; }
+    .panel.opts { flex: 0 1 270px; }
+    .panel.out  { flex: 1 1 380px; }
+    .panel.crop .stage-wrap { flex: 1 1 auto; align-items: flex-start; justify-content: center; }
+    .panel.crop .stage-col { width: auto; max-width: 100%; }
+    .panel.crop #stage { flex: 0 0 auto; }
+    .panel > :first-child { margin-top: 0; }
+    label { margin: 10px 0 4px; }
+    .drop { padding: 14px 12px; margin-bottom: 10px; }
+    .toggle { margin: 12px 0 4px; padding: 8px 10px; }
+    .actions { margin-top: 12px; }
+    #preview { max-height: 72vh; width: auto; max-width: 100%; margin-inline: auto; }
+    .spacer { flex: 1; min-height: 0; }
+  }
 </style>
 </head>
 <body>
 <h1>Fotos infantiles → hoja 6×4"</h1>
-<p class="sub">Sube una foto, encuádrala y descarga una hoja de papel foto 6×4 pulgadas (1800×1200 px, 300 dpi) con 8 fotos listas para imprimir y recortar.</p>
+<p class="sub intro">Sube una foto, encuádrala y descarga una hoja de papel foto 6×4 pulgadas (1800×1200 px, 300 dpi) con 8 fotos listas para imprimir y recortar.</p>
 
 <div class="row">
-  <div class="panel">
-    <input type="file" id="file" accept="image/*">
-    <div id="stage"><canvas id="crop"></canvas></div>
-    <label>Zoom <span id="zv"></span></label>
-    <input type="range" id="zoom" min="1" max="4" step="0.01" value="1">
+  <div class="panel crop">
+    <div class="drop" id="drop" role="button" tabindex="0" aria-label="Sube una foto: arrástrala aquí o haz clic">
+      <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M12 16V4"></path><path d="m7 9 5-5 5 5"></path>
+        <path d="M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"></path>
+      </svg>
+      <strong id="dropTitle">Arrastra tu foto aquí</strong>
+      <span>o haz clic para elegirla</span>
+    </div>
+    <input type="file" id="file" accept="image/*" hidden>
+    <div class="stage-wrap">
+      <div class="stage-col">
+        <div id="stage"><canvas id="crop"></canvas></div>
+        <label>Zoom <span id="zv"></span></label>
+        <input type="range" id="zoom" min="0.2" max="4" step="0.01" value="1">
+      </div>
+    </div>
+  </div>
+
+  <div class="panel opts">
     <label>Tamaño de foto</label>
     <select id="size">
       <option value="2.5,3">Infantil MX 2.5 × 3 cm</option>
+      <option value="3,3">Cuadrada 3 × 3 cm</option>
       <option value="3,4">Carnet 3 × 4 cm</option>
       <option value="3.5,4.5">Visa/ICAO 3.5 × 4.5 cm</option>
+      <option value="fit3">Planilla 3 × 3 (proporción de la foto)</option>
     </select>
+    <div id="colsRow" hidden>
+      <label>Columnas de la planilla</label>
+      <select id="cols">
+        <option value="2">2 columnas</option>
+        <option value="3" selected>3 columnas</option>
+        <option value="4">4 columnas</option>
+        <option value="5">5 columnas</option>
+      </select>
+    </div>
     <label>Hoja</label>
     <select id="sheet">
       <option value="6,4">Papel foto 6 × 4" (10 × 15 cm)</option>
       <option value="8.5,11">Carta 8.5 × 11"</option>
+      <option value="8.27,11.69">A4 21 × 29.7 cm</option>
     </select>
-    <label><input type="checkbox" id="guides"> Guías de corte (líneas muy tenues + ticks al margen)</label>
+    <label class="toggle">
+      <span>Guías de corte <small style="opacity:.6">(líneas tenues + ticks al margen)</small></span>
+      <input type="checkbox" id="guides" checked>
+      <span class="track"></span>
+    </label>
     <label for="key">OpenAI API key <small style="opacity:.6">(se guarda solo en tu navegador)</small></label>
     <input type="password" id="key" placeholder="sk-..." autocomplete="off" style="width:100%;padding:8px;border-radius:6px;border:1px solid #8884;background:transparent;color:inherit">
     <div class="actions">
-      <button id="ai" disabled>✨ Camisa y fondo blanco</button>
+      <button id="ai" class="secondary" disabled>✨ Camisa y fondo blanco</button>
       <button id="undo" class="secondary" hidden>Volver al original</button>
     </div>
-    <p class="sub" style="margin-top:8px">Al imprimir: escala <b>100%</b> (no “ajustar a página”) y selecciona el papel que elegiste arriba.</p>
-    <p id="status" class="sub" style="margin-top:8px"></p>
+    <p id="status" class="sub" style="margin:8px 0 0"></p>
+    <div class="spacer"></div>
   </div>
-  <div class="panel">
+
+  <div class="panel out">
     <canvas id="preview" width="1800" height="1200"></canvas>
     <div class="actions">
-      <button id="dl" disabled>Descargar PNG</button>
-      <button id="print" class="secondary" disabled>Imprimir</button>
+      <button id="dl" disabled>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11"></path><path d="m7 11 5 5 5-5"></path><path d="M5 20h14"></path></svg>
+        Descargar PNG
+      </button>
+      <button id="print" class="secondary icon-only" disabled title="Imprimir" aria-label="Imprimir">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 9V4h10v5"></path><path d="M7 19H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2"></path><path d="M7 15h10v5H7z"></path></svg>
+      </button>
     </div>
+    <p class="sub" style="margin:12px 0 0">Al imprimir: escala <b>100%</b> (no “ajustar a página”) y selecciona el papel que elegiste arriba.</p>
+    <div class="spacer"></div>
   </div>
 </div>
 
@@ -144,16 +244,27 @@ const DPI = 300;
 // La hoja deja de ser una constante: 6x4" (default) o Carta.
 function sheetIn() { const [w,h] = sheetEl.value.split(',').map(Number); return { w, h }; }
 function sheetPx() { const s = sheetIn(); return { w: Math.round(s.w*DPI), h: Math.round(s.h*DPI) }; }
-const isLetter = () => sheetEl.value === '8.5,11';
+// Hoja grande = cualquier papel que no sea el 6x4 dedicado (Carta, A4...).
+const SHEETS = {
+  '6,4':        { big: false, label: '4 × 6 pulg / 10 × 15 cm', file: '6x4',  orient: 'Horizontal' },
+  '8.5,11':     { big: true,  label: 'Carta (8.5 × 11 pulg)',   file: 'carta', orient: 'Vertical' },
+  '8.27,11.69': { big: true,  label: 'A4 (21 × 29.7 cm)',       file: 'a4',    orient: 'Vertical' }
+};
+const sheetDef = () => SHEETS[sheetEl.value] || SHEETS['6,4'];
+const isLetter = () => sheetDef().big;
 // Margen de la variante Carta: el bloque va cerca de la esquina superior
 // izquierda, no pegado al borde (las impresoras no imprimen ahí) y sin centrar,
 // para que el resto de la hoja quede utilizable.
-const LETTER_MARGIN = Math.round(0.5*DPI); // 0.5" ~ 1.27 cm
+// Margen minimo imprimible (0.25" ~ 0.64 cm): antes eran 0.5" y con el bloque
+// anclado arriba-izquierda sobraba media hoja. Ahora el bloque se centra y el
+// margen solo reserva lo que la impresora no alcanza.
+const LETTER_MARGIN = Math.round(0.25*DPI);
 const stage = document.getElementById('stage');
 const cropC = document.getElementById('crop'), cropX = cropC.getContext('2d');
 const prevC = document.getElementById('preview'), prevX = prevC.getContext('2d');
 const zoomEl = document.getElementById('zoom'), sizeEl = document.getElementById('size');
 const guidesEl = document.getElementById('guides');
+const colsEl = document.getElementById('cols'), colsRow = document.getElementById('colsRow');
 const sheetEl = document.getElementById('sheet');
 const dl = document.getElementById('dl'), printBtn = document.getElementById('print');
 
@@ -162,7 +273,29 @@ const statusEl = document.getElementById('status');
 
 let img = null, original = null, offX = 0, offY = 0, drag = null;
 
-function cell() { const [w,h] = sizeEl.value.split(',').map(Number); return { w, h, ar: w/h }; }
+// Modo planilla: la celda no es un tamaño fijo, toma la proporción de la foto y
+// crece lo más posible para llenar una rejilla 3×3 en la hoja elegida. Así la
+// foto entra completa sin franjas blancas (a costa de no medir 3×4 cm exactos).
+function isFit() { return sizeEl.value === 'fit3'; }
+// Las columnas las elige el usuario; las filas son las que quepan con esa altura,
+// para no desperdiciar hoja (antes eran 3×3 fijas y sobraba una franja grande).
+function fitCols() { return Math.max(1, Number(colsEl.value) || 3); }
+function fitCell() {
+  const S = sheetPx(), m = isLetter() ? LETTER_MARGIN : 0;
+  const boxW = (S.w - 2*m)/fitCols(), boxH = S.h - 2*m;
+  const ar = img ? img.width/img.height : 3/4;
+  let w = boxW, h = w/ar;
+  if (h > boxH) { h = boxH; w = h*ar; }
+  return { w: w/DPI*2.54, h: h/DPI*2.54, ar };
+}
+function fitRows(p) {
+  const S = sheetPx(), m = isLetter() ? LETTER_MARGIN : 0;
+  return Math.max(1, Math.floor((S.h - 2*m)/p.h));
+}
+function cell() {
+  if (isFit()) return fitCell();
+  const [w,h] = sizeEl.value.split(',').map(Number); return { w, h, ar: w/h };
+}
 function cellPx() { const c = cell(); return { w: Math.round(c.w/2.54*DPI), h: Math.round(c.h/2.54*DPI) }; }
 
 function setStageAspect() { stage.style.aspectRatio = cell().ar; }
@@ -172,15 +305,50 @@ function baseScale() {
   const c = cropC.width / cropC.height;
   return img.width/img.height > c ? cropC.height/img.height : cropC.width/img.width;
 }
+// Zoom 1 = cover (la celda queda llena, se recortan los bordes). Por debajo de 1
+// se llega al "contain": la foto completa dentro de la celda, con relleno blanco.
+// El mínimo del slider es justo ese contain, distinto para cada proporción.
+function minZoom() {
+  if (!img || !cropC.width) return 1;
+  const containS = Math.min(cropC.width/img.width, cropC.height/img.height);
+  return Math.min(1, containS / baseScale());
+}
+// El stage debe respetar SIEMPRE la proporción de la foto; CSS solo no puede
+// resolverlo dentro de un layout de altura fija, así que lo medimos aquí.
+function fitStage() {
+  const col = stage.parentElement, wrap = col.parentElement;
+  // Fuera del layout de una sola pantalla, el CSS (width 100% + aspect-ratio) manda.
+  if (!window.matchMedia('(min-width: 900px) and (min-height: 620px)').matches) {
+    stage.style.width = ''; stage.style.height = '';
+    return;
+  }
+  const box = wrap.getBoundingClientRect();
+  if (!box.width) return;
+  const extra = col.offsetHeight - stage.offsetHeight; // zoom label + slider
+  const ar = cell().ar;
+  let w = box.width, h = w / ar;
+  const maxH = box.height - extra;
+  if (maxH > 60 && h > maxH) { h = maxH; w = h * ar; }
+  stage.style.width = w + 'px';
+  stage.style.height = h + 'px';
+}
+
 function drawCrop() {
+  fitStage();
   const r = stage.getBoundingClientRect();
   cropC.width = Math.round(r.width); cropC.height = Math.round(r.height);
   cropX.fillStyle = '#222'; cropX.fillRect(0,0,cropC.width,cropC.height);
   if (!img) return;
+  const mz = minZoom();
+  zoomEl.min = mz.toFixed(3);
+  if (Number(zoomEl.value) < mz) zoomEl.value = mz;
   const s = baseScale() * Number(zoomEl.value);
   const w = img.width*s, h = img.height*s;
-  offX = Math.min(0, Math.max(cropC.width - w, offX));
-  offY = Math.min(0, Math.max(cropC.height - h, offY));
+  // Si la foto es mas chica que la celda (zoom < 1) se centra y el resto es blanco;
+  // si la llena, se arrastra dentro de los limites.
+  offX = w <= cropC.width  ? (cropC.width - w)/2  : Math.min(0, Math.max(cropC.width - w, offX));
+  offY = h <= cropC.height ? (cropC.height - h)/2 : Math.min(0, Math.max(cropC.height - h, offY));
+  if (w < cropC.width || h < cropC.height) { cropX.fillStyle = '#fff'; cropX.fillRect(0,0,cropC.width,cropC.height); }
   cropX.drawImage(img, offX, offY, w, h);
   document.getElementById('zv').textContent = Number(zoomEl.value).toFixed(2) + '×';
   drawSheet();
@@ -194,10 +362,23 @@ function srcRect() {
 
 function grid(p) {
   const S = sheetPx();
+  if (isFit()) return { COLS: fitCols(), ROWS: fitRows(p) };
   if (!isLetter()) return { COLS: 4, ROWS: 2 };
   // Carta: tantas fotos como quepan dejando el margen en los cuatro lados.
   const usableW = S.w - 2*LETTER_MARGIN, usableH = S.h - 2*LETTER_MARGIN;
   return { COLS: Math.max(1, Math.floor(usableW/p.w)), ROWS: Math.max(1, Math.floor(usableH/p.h)) };
+}
+
+// Celda ya compuesta (blanco + foto encuadrada) a resolucion de impresion. Se
+// dibuja una vez y se repite en la rejilla: asi el caso "contain" conserva el
+// relleno blanco en vez de estirar la foto.
+const tileC = document.createElement('canvas'), tileX = tileC.getContext('2d');
+function drawTile(p) {
+  if (tileC.width !== p.w || tileC.height !== p.h) { tileC.width = p.w; tileC.height = p.h; }
+  tileX.fillStyle = '#fff'; tileX.fillRect(0,0,p.w,p.h);
+  const k = p.w / cropC.width; // crop box -> celda impresa
+  tileX.drawImage(img, offX*k, offY*k, img.width*baseScale()*Number(zoomEl.value)*k, img.height*baseScale()*Number(zoomEl.value)*k);
+  return tileC;
 }
 
 function drawSheet() {
@@ -209,12 +390,12 @@ function drawSheet() {
   const p = cellPx();
   const { COLS, ROWS } = grid(p);
   const totalW = COLS*p.w, totalH = ROWS*p.h;
-  // 6x4 se centra (es una hoja dedicada); Carta se ancla arriba-izquierda con margen.
-  const x0 = isLetter() ? LETTER_MARGIN : Math.round((S.w-totalW)/2);
-  const y0 = isLetter() ? LETTER_MARGIN : Math.round((S.h-totalH)/2);
-  const r = srcRect();
+  // El bloque siempre va centrado: el sobrante se reparte en los cuatro lados.
+  const x0 = Math.round((S.w-totalW)/2);
+  const y0 = Math.round((S.h-totalH)/2);
+  const tile = drawTile(p);
   for (let row=0; row<ROWS; row++) for (let col=0; col<COLS; col++) {
-    prevX.drawImage(img, r.x, r.y, r.w, r.h, x0 + col*p.w, y0 + row*p.h, p.w, p.h);
+    prevX.drawImage(tile, x0 + col*p.w, y0 + row*p.h);
   }
 
   // Guías de corte: línea tenue en las uniones interiores (para guiar la tijera
@@ -252,22 +433,55 @@ function drawSheet() {
   }
 }
 
-document.getElementById('file').addEventListener('change', e => {
-  const f = e.target.files[0]; if (!f) return;
+const fileEl = document.getElementById('file');
+const dropEl = document.getElementById('drop');
+const dropTitle = document.getElementById('dropTitle');
+
+function loadFile(f) {
+  if (!f) return;
+  if (!/^image\//.test(f.type)) { statusEl.textContent = 'Ese archivo no es una imagen.'; return; }
   const i = new Image();
   i.onload = () => {
     img = original = i; zoomEl.value = 1; offX = offY = 0;
+    setStageAspect(); // en modo planilla la celda toma la proporcion de la foto
     dl.disabled = printBtn.disabled = aiBtn.disabled = false;
     undoBtn.hidden = true; statusEl.textContent = '';
+    dropTitle.textContent = f.name.length > 28 ? f.name.slice(0, 25) + '…' : f.name;
     drawCrop();
   };
   i.src = URL.createObjectURL(f);
+}
+
+fileEl.addEventListener('change', e => loadFile(e.target.files[0]));
+dropEl.addEventListener('click', () => fileEl.click());
+dropEl.addEventListener('keydown', e => {
+  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileEl.click(); }
+});
+['dragenter', 'dragover'].forEach(ev => dropEl.addEventListener(ev, e => {
+  e.preventDefault(); dropEl.classList.add('over');
+}));
+['dragleave', 'dragend'].forEach(ev => dropEl.addEventListener(ev, () => dropEl.classList.remove('over')));
+dropEl.addEventListener('drop', e => {
+  e.preventDefault(); dropEl.classList.remove('over');
+  if (e.dataTransfer && e.dataTransfer.files) loadFile(e.dataTransfer.files[0]);
+});
+window.addEventListener('dragover', e => e.preventDefault());
+window.addEventListener('drop', e => e.preventDefault());
+window.addEventListener('paste', e => {
+  const items = e.clipboardData && e.clipboardData.items;
+  if (!items) return;
+  for (const it of items) {
+    if (it.type && it.type.indexOf('image/') === 0) { loadFile(it.getAsFile()); break; }
+  }
 });
 
 zoomEl.addEventListener('input', drawCrop);
 guidesEl.addEventListener('change', drawSheet);
-sheetEl.addEventListener('change', drawSheet);
-sizeEl.addEventListener('change', () => { setStageAspect(); requestAnimationFrame(drawCrop); });
+sheetEl.addEventListener('change', () => { setStageAspect(); requestAnimationFrame(drawCrop); });
+function syncCols() { colsRow.hidden = !isFit(); }
+colsEl.addEventListener('change', () => { setStageAspect(); requestAnimationFrame(drawCrop); });
+sizeEl.addEventListener('change', () => { syncCols(); setStageAspect(); requestAnimationFrame(drawCrop); });
+syncCols();
 window.addEventListener('resize', drawCrop);
 
 stage.addEventListener('pointerdown', e => {
@@ -283,14 +497,14 @@ stage.addEventListener('pointerup', () => { drag = null; stage.classList.remove(
 
 dl.addEventListener('click', () => {
   const a = document.createElement('a');
-  a.download = isLetter() ? 'fotos-infantiles-carta.png' : 'fotos-infantiles-6x4.png';
+  a.download = 'fotos-infantiles-' + sheetDef().file + '.png';
   a.href = prevC.toDataURL('image/png');
   a.click();
 });
 
 printBtn.addEventListener('click', () => {
   const si = sheetIn();
-  const paper = isLetter() ? 'Carta (8.5 × 11 pulg)' : '4 × 6 pulg / 10 × 15 cm';
+  const paper = sheetDef().label;
   // La imagen se mide en PORCENTAJE del área imprimible, no en pulgadas fijas.
   // Con `width:6in` sobre un papel más angosto (o en vertical) el navegador
   // aplicaba su "ajustar a página" y la hoja salía reducida y centrada.
@@ -311,7 +525,7 @@ printBtn.addEventListener('click', () => {
     + '<li>Papel / Tamaño: <b>' + paper + '</b></li>'
     + '<li>Escala: <b>100%</b> — nunca “Ajustar a página”. Suele estar en <b>Más ajustes</b>.</li>'
     + '<li>Márgenes: <b>Ninguno</b></li>'
-    + '<li>Orientación: <b>' + (isLetter() ? 'Vertical' : 'Horizontal') + '</b></li>'
+    + '<li>Orientación: <b>' + sheetDef().orient + '</b></li>'
     + '</ol><p>Si tu impresora no ofrece el papel correcto, descarga el PNG y mándalo a imprimir desde la app de Fotos o desde una tienda: el archivo ya trae el tamaño exacto a 300 dpi.</p></div>'
     + '<img src="' + prevC.toDataURL('image/png') + '">'
     + '<script>setTimeout(function(){window.print()},400)<\/script>');
