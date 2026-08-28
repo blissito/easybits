@@ -16,7 +16,7 @@ export type GetBasicMetaTagsPros = {
 
 export default function getBasicMetaTags({
   title,
-  description = "Convierte esas ilustraciones, ese libro, ese cuento o esas conferencias en assets digitales", // description should be at least 100 chars
+  description = "MicroVMs aisladas, archivos, datos y acciones para tu agente IA — ejecuta código, guarda archivos y publica, todo desde un solo MCP.", // description should be at least 100 chars
   image = "https://brendiwebsite.t3.storage.dev/metaImage-easybits.webp",
   twitterCard = "summary_large_image",
   url = "https://www.easybits.cloud",
@@ -25,11 +25,11 @@ export default function getBasicMetaTags({
   if (!title) {
     return [
       {
-        title: "Vende tu primer asset digital en línea con EasyBits",
+        title: "EasyBits — Sandboxes y backend para tu agente IA",
       },
       {
         name: "description",
-        content: "Vende tu primer asset digital en línea con EasyBits",
+        content: "MicroVMs aisladas, archivos, datos y acciones para tu agente IA, todo desde un solo MCP.",
       },
     ];
   }
