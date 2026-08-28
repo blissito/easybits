@@ -36,8 +36,9 @@ export const clientLoader = async ({ serverLoader }: Route.ClientLoaderArgs) => 
 
 export const meta = () =>
   getBasicMetaTags({
-    title: "EasyBits",
-    description: "Vende tus assets digitales en línea con EasyBits",
+    title: "EasyBits — Sandboxes y backend para tu agente IA",
+    description:
+      "MicroVMs aisladas, archivos, datos y acciones desde un solo MCP. Tu agente ya tiene dónde correr y dónde guardar.",
   });
 
 export default function Home({ loaderData }: Route.ComponentProps) {
