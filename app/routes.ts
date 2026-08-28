@@ -287,6 +287,7 @@ export default [
     route("compute/v1/chat/completions", "routes/api/v2/compute-chat.ts"),
     // eb.llm — proxy OpenAI→DeepSeek + balance + recargas
     route("llm/v1/chat/completions", "routes/api/v2/llm-proxy.ts"),
+    route("llm/v1/models", "routes/api/v2/llm-models.ts"),
     route("llm/balance", "routes/api/v2/llm-balance.ts"),
     route("llm/recharge", "routes/api/v2/llm-recharge.ts"),
     route("public-stats", "routes/api/v2/public-stats.ts"),
