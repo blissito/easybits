@@ -120,78 +120,62 @@ export default function KeysPage() {
 
       {/* Show raw key once */}
       {createdKey && (
-        <div className="mb-4 p-4 bg-lime border-2 border-black rounded-xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
-          <p className="text-sm font-bold mb-2">
-            Key created! Copy it now — you won't see it again:
-          </p>
+        <div className="mb-6 p-4 bg-lime border-2 border-black rounded-xl shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+          <div className="flex justify-between items-center mb-2">
+            <p className="text-sm font-bold">Key creada. Cópiala ahora — no se vuelve a mostrar:</p>
+            <CopyButton text={createdKey.raw} />
+          </div>
           <code className="block bg-white p-3 rounded-lg text-sm font-mono break-all border-2 border-black">
             {createdKey.raw}
           </code>
+          <GhostyInstall apiKey={createdKey.raw} />
         </div>
       )}
 
-      {/* Keys table */}
-      <div className="border-2 border-black rounded-xl overflow-hidden shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] bg-white">
+      {/* Keys list — discreta: la key nueva y el instalador son lo importante */}
+      <div className="border border-black/20 rounded-xl overflow-hidden bg-white">
         <table className="w-full text-sm">
-          <thead className="bg-black text-white">
-            <tr>
-              <th scope="col" className="text-left px-4 py-3 font-bold text-xs uppercase tracking-wider">Name</th>
-              <th scope="col" className="text-left px-4 py-3 font-bold text-xs uppercase tracking-wider">Prefix</th>
-              <th scope="col" className="text-left px-4 py-3 font-bold text-xs uppercase tracking-wider">Scopes</th>
-              <th scope="col" className="text-left px-4 py-3 font-bold text-xs uppercase tracking-wider">Status</th>
-              <th scope="col" className="text-left px-4 py-3 font-bold text-xs uppercase tracking-wider">Created</th>
-              <th scope="col" className="px-4 py-3"></th>
+          <thead>
+            <tr className="text-[11px] uppercase tracking-wider text-gray-500 border-b border-black/10">
+              <th scope="col" className="text-left px-4 py-2 font-bold">Name</th>
+              <th scope="col" className="text-left px-4 py-2 font-bold">Prefix</th>
+              <th scope="col" className="text-left px-4 py-2 font-bold hidden md:table-cell">Scopes</th>
+              <th scope="col" className="text-left px-4 py-2 font-bold hidden sm:table-cell">Created</th>
+              <th scope="col" className="px-4 py-2"></th>
             </tr>
           </thead>
           <tbody>
             {keys.map((k) => (
-              <tr key={k.id} className="border-t-2 border-black hover:bg-brand-100 transition-colors">
-                <td className="px-4 py-3 font-bold">{k.name}</td>
-                <td className="px-4 py-3 font-mono text-xs bg-gray-50">{k.prefix}...</td>
-                <td className="px-4 py-3">
-                  <div className="flex gap-1 flex-wrap">
-                    {k.scopes.map((s) => (
-                      <span
-                        key={s}
-                        className="bg-brand-aqua text-xs font-bold px-2 py-0.5 rounded-md border border-black"
-                      >
-                        {s}
-                      </span>
-                    ))}
-                  </div>
+              <tr key={k.id} className={`border-t border-black/10 ${k.status !== "ACTIVE" ? "opacity-50" : ""}`}>
+                <td className="px-4 py-2.5 font-bold">
+                  {k.name}
+                  {k.status !== "ACTIVE" && <span className="ml-2 text-[10px] uppercase text-gray-500">revocada</span>}
                 </td>
-                <td className="px-4 py-3">
-                  <span
-                    className={`text-xs font-bold px-2 py-1 rounded-md border-2 border-black ${
-                      k.status === "ACTIVE"
-                        ? "bg-lime"
-                        : "bg-brand-red text-white"
-                    }`}
-                  >
-                    {k.status}
-                  </span>
+                <td className="px-4 py-2.5 font-mono text-xs text-gray-600">{k.prefix}…</td>
+                <td className="px-4 py-2.5 font-mono text-[11px] text-gray-500 hidden md:table-cell">
+                  {k.scopes.join(" · ")}
                 </td>
-                <td className="px-4 py-3 font-mono text-xs">
+                <td className="px-4 py-2.5 text-xs text-gray-500 hidden sm:table-cell">
                   {new Date(k.createdAt).toLocaleDateString()}
                 </td>
-                <td className="px-4 py-3">
+                <td className="px-4 py-2.5 text-right">
                   {k.status === "ACTIVE" && (
-                    <BrutalButton
-                      mode="danger"
-                      size="chip"
+                    <button
+                      type="button"
                       onClick={() => setRevokeTarget({ id: k.id, name: k.name })}
-                      isLoading={fetcher.state !== "idle" && fetcher.formData?.get("keyId") === k.id}
+                      disabled={fetcher.state !== "idle" && fetcher.formData?.get("keyId") === k.id}
+                      className="text-xs font-bold text-gray-500 hover:text-brand-red underline-offset-2 hover:underline disabled:opacity-50"
                     >
-                      Revoke
-                    </BrutalButton>
+                      Revocar
+                    </button>
                   )}
                 </td>
               </tr>
             ))}
             {keys.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-12 text-center font-bold text-gray-400 uppercase tracking-wider">
-                  No API keys yet
+                <td colSpan={5} className="px-4 py-10 text-center text-sm text-gray-400">
+                  Aún no tienes API keys
                 </td>
               </tr>
             )}
@@ -215,6 +199,48 @@ export default function KeysPage() {
         onCancel={() => setRevokeTarget(null)}
         destructive
       />
+    </div>
+  );
+}
+
+/**
+ * One-liner para instalar Ghosty ya apuntando a EasyBits con la key recién
+ * creada (LLM vía el proxy DeepSeek + MCP core). Solo se ofrece aquí porque es
+ * el único momento en que la key existe en claro.
+ */
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  const copy = () => {
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+  return (
+    <BrutalButton size="chip" onClick={copy} className="text-xs px-3 py-1">
+      {copied ? "Copiado ✓" : "Copiar"}
+    </BrutalButton>
+  );
+}
+
+function GhostyInstall({ apiKey }: { apiKey: string }) {
+  const cmd = [
+    "curl -fsSL https://formmy.app/ghosty/install.sh | sh",
+    `ghosty auth set --provider easybits --api-key "${apiKey}"`,
+    `ghosty mcp add easybits --url "https://www.easybits.cloud/api/mcp?tools=core" --bearer "${apiKey}"`,
+  ].join(" && \\\n  ");
+  return (
+    <div className="mt-4">
+      <div className="flex justify-between items-center mb-2">
+        <p className="text-sm font-bold">Instalar Ghosty con esta key (macOS / Linux):</p>
+        <CopyButton text={cmd} />
+      </div>
+      <pre className="bg-black text-lime p-3 rounded-lg text-xs font-mono overflow-x-auto border-2 border-black whitespace-pre">
+        {cmd}
+      </pre>
+      <p className="text-xs mt-2 opacity-70">
+        Instala el CLI, guarda la key para el proveedor <code>easybits</code> (DeepSeek vía el proxy) y conecta el MCP. Luego: <code>ghosty</code>.
+      </p>
     </div>
   );
 }
