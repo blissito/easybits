@@ -36,8 +36,9 @@ export const clientLoader = async () => {
 
 export const meta = () =>
   getBasicMetaTags({
-    title: "Monetiza tu trabajo creativo",
-    description: "Échale un ojo a todo lo que puedes hacer con EasyBits",
+    title: "Todo lo que puede hacer tu agente con EasyBits",
+    description:
+      "MicroVMs, storage, archivos y automatizaciones para tu agente IA, todo desde un solo MCP.",
   });
 
 export default function Blog({ loaderData }: Route.ComponentProps) {
