@@ -1,5 +1,5 @@
 import type { Route } from "./+types/llm-proxy";
-import { authenticateRequest, requireAuth } from "~/.server/apiAuth";
+import { authenticateRequest, requireAuth, requireScope } from "~/.server/apiAuth";
 import { getSecretValue } from "~/.server/core/secretOperations";
 import { checkLLMTokenLimit, formatTokens } from "~/.server/llmTokenLimit";
 import { bill } from "~/.server/llmProxyBilling";
@@ -37,11 +37,18 @@ export async function action({ request }: Route.ActionArgs) {
   // ── Auth ──────────────────────────────────────────────────────────────
   let userId: string;
   try {
-    userId = requireAuth(await authenticateRequest(request)).user.id;
-  } catch {
+    const ctx = requireAuth(await authenticateRequest(request));
+    requireScope(ctx, "WRITE"); // gasta saldo de tokens → no es una operación de lectura
+    userId = ctx.user.id;
+  } catch (e) {
+    const forbidden = e instanceof Response && e.status === 403;
     return Response.json(
-      { error: { message: "Invalid API key. Use your EasyBits key (eb_sk_live_...).", type: "invalid_api_key" } },
-      { status: 401, headers: CORS },
+      {
+        error: forbidden
+          ? { message: "This key lacks the WRITE scope required to spend LLM tokens.", type: "permission_error" }
+          : { message: "Invalid API key. Use your EasyBits key (eb_sk_live_...).", type: "invalid_api_key" },
+      },
+      { status: forbidden ? 403 : 401, headers: CORS },
     );
   }
 

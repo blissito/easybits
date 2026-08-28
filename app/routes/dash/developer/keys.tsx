@@ -81,9 +81,9 @@ export default function KeysPage() {
                 <legend className="text-sm font-bold mb-2">Scopes</legend>
                 <div className="space-y-2">
                   {[
-                    { value: "READ", desc: "List and get your files, websites, documents, and usage stats." },
-                    { value: "WRITE", desc: "Create, upload, update, optimize, transform, and share resources." },
-                    { value: "DELETE", desc: "Soft-delete and permanently remove resources." },
+                    { value: "READ", desc: "Ver archivos, sitios, documentos, bases de datos, sandboxes y tu saldo de tokens." },
+                    { value: "WRITE", desc: "Crear y modificar: subir archivos, ejecutar SQL, lanzar sandboxes y apps, usar el proxy LLM." },
+                    { value: "DELETE", desc: "Borrar archivos, documentos, bases de datos y sandboxes de forma permanente." },
                   ].map((s) => (
                     <label key={s.value} className="flex items-start gap-2 cursor-pointer">
                       <input type="checkbox" name="scopes" value={s.value} defaultChecked className="mt-0.5 accent-black" />
@@ -94,7 +94,7 @@ export default function KeysPage() {
                     </label>
                   ))}
                 </div>
-                <p className="text-xs text-gray-400 mt-2">All keys get READ + WRITE + DELETE by default. For ADMIN scope, ask the team.</p>
+                <p className="text-xs text-gray-400 mt-2">Por default READ + WRITE + DELETE. El proxy LLM exige WRITE: toda key con WRITE consume el saldo de tokens de la cuenta. Para ADMIN, pide al equipo.</p>
               </fieldset>
               <div className="flex gap-2 justify-end">
                 <BrutalButton

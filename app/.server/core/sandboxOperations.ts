@@ -3,7 +3,7 @@ import { promises as dns } from "node:dns";
 import { db } from "../db";
 import type { AuthContext } from "../apiAuth";
 import { requireScope } from "../apiAuth";
-import { getSecretValue } from "./secretOperations";
+import { getSecretValue, createSecret } from "./secretOperations";
 import { createApiKey } from "../iam";
 import { can, delegatedAccountIds, SCOPES } from "../delegation";
 import { mintComputeKey, revokeSandboxKeys, COMPUTE_BASE_URL } from "../compute/gateway";
@@ -2164,10 +2164,15 @@ async function injectEasybitsAccess(
     return;
   }
   if (!EASYBITS_MINTING_TEMPLATES.has(params.template)) return;
+  // Mint UNA vez y guardarla en el vault como EASYBITS_API_KEY: el siguiente spawn
+  // (recycle, cold boot) la reusa por la rama de arriba. Antes se minteaba una key
+  // nueva por cada spawn y nunca se revocaba — 469 keys ACTIVE huérfanas en 3
+  // semanas (222 solo de tania-0), todas con WRITE/DELETE vivas para siempre.
   const minted = await createApiKey(ctx.user.id, {
     name: `${params.template}-${params.name || "fleetAgent"}`,
     scopes: ctx.scopes,
   });
+  await createSecret(ctx.user.id, { name: "EASYBITS_API_KEY", value: minted.raw }).catch(() => {});
   env.EASYBITS_API_KEY = minted.raw;
 }
 
