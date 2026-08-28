@@ -18,8 +18,9 @@ export const clientLoader = async () => {
 
 export const meta = () =>
   getBasicMetaTags({
-    title: "Planes flexibles para cada etapa de tu negocio creativo",
-    description: "Elige tu plan y vende tu primer asset",
+    title: "Planes flexibles para tu agente IA",
+    description:
+      "Elige el plan de sandboxes, storage y MCP que necesita tu agente — sin comisiones abusivas.",
   });
 
 export default function Planes({ loaderData }: Route.ComponentProps) {
