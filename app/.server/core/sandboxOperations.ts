@@ -1567,14 +1567,37 @@ export async function exposeSandboxRawPort(
   protocol: "udp" | "tcp" = "udp"
 ): Promise<RawForwardResult> {
   requireScope(ctx, "WRITE");
-  const res = await callHost<RawForwardResult>(
+  const raw = await callHost<RawForwardResult>(
     "POST",
     `/v1/sandbox/${sandboxId}/expose-raw`,
     { port, protocol },
     await effectiveOwnerId(ctx, sandboxId)
-  );
-  await rememberRawForward(sandboxId, res);
+  ).catch(rethrowNoSshForTemplate);
+  // Los fallbacks que ya hacía enableSandboxSsh, aquí también: quien llama a la
+  // tool suelta recibía `hostPort` a secas y no tenía a dónde marcar. `guestPort`
+  // cae al puerto pedido, que es el que el host acaba de gatear por capability.
+  const host = raw.host || SANDBOX_CNAME_TARGET;
+  const res: RawForwardResult = {
+    ...raw,
+    guestPort: raw.guestPort ?? port,
+    host,
+    endpoint: raw.endpoint || `${host}:${raw.hostPort}`,
+  };
+  await rememberRawForward(sandboxId, res, port);
   return res;
+}
+
+// Un 403 del host significa "este template no declara ese raw port" y es una
+// respuesta DEFINITIVA: reintentar o probar otro puerto no lleva a ningún lado.
+// Sin esto sube el error crudo del transporte y el agente lo lee como un fallo
+// transitorio.
+function rethrowNoSshForTemplate(e: unknown): never {
+  const msg = e instanceof Error ? e.message : String(e);
+  if (/\b403\b/.test(msg))
+    throw new Error(
+      `este template no expone ese puerto (SSH sólo en templates que lo declaran, hoy ghosty-studio). Respuesta definitiva: no reintentes. Detalle: ${msg}`
+    );
+  throw e instanceof Error ? e : new Error(msg);
 }
 
 // Tear down a raw forward. Same capability gate as expose-raw.
@@ -1604,13 +1627,17 @@ type RawForwardCache = Record<string, { hostPort: number; host?: string; endpoin
 
 const rawKey = (port: number, protocol: string) => `${protocol}:${port}`;
 
-async function rememberRawForward(sandboxId: string, res: RawForwardResult) {
+// `requestedPort` es el puerto del guest que pedimos. El host DEBERÍA devolverlo
+// en `guestPort`, pero un daemon viejo no lo hace: sin este default la clave
+// quedaba `tcp:undefined` y TODOS los forwards TCP de la caja se pisaban entre sí
+// — y `forgetRawForward`, que sí usa el puerto del argumento, nunca los borraba.
+async function rememberRawForward(sandboxId: string, res: RawForwardResult, requestedPort: number) {
   if (!res?.ok) return;
   try {
     const row = await db.sandbox.findUnique({ where: { sandboxId }, select: { rawForwards: true } });
     if (!row) return; // ephemeral box (no Prisma row) — nothing to cache
     const map = ((row.rawForwards as RawForwardCache) || {}) as RawForwardCache;
-    map[rawKey(res.guestPort, res.protocol)] = {
+    map[rawKey(res.guestPort ?? requestedPort, res.protocol)] = {
       hostPort: res.hostPort,
       host: res.host,
       endpoint: res.endpoint,
@@ -1674,8 +1701,20 @@ export async function enableSandboxSsh(
   const value = assertSshKeys(publicKeys);
   // El unit reintenta solo (arrancaría en unos segundos con sólo escribir el
   // archivo), pero hacemos el restart explícito para no depender del timing.
+  // REEMPLAZA la línea, no la anexa: con `>>` la segunda llamada dejaba dos
+  // SSH_AUTHORIZED_KEYS en el archivo, ganaba la última y las llaves anteriores
+  // se perdían EN SILENCIO (y el archivo crecía sin fin). También volvía ambiguo
+  // el "revocar quitando la llave" que promete la doc.
+  //
+  // `is-active` al final porque `systemctl restart` sale 0 aunque el servicio
+  // muera después: sin comprobarlo devolvíamos un endpoint hacia un sshd caído.
   const r = await execCommand(ctx, sandboxId, {
-    command: `mkdir -p /app && echo ${shQuote(`SSH_AUTHORIZED_KEYS=${value}`)} >> /app/secrets.env && systemctl restart box-sshd`,
+    command:
+      `mkdir -p /app && touch /app/secrets.env && ` +
+      `grep -v '^SSH_AUTHORIZED_KEYS=' /app/secrets.env > /app/secrets.env.tmp; ` +
+      `echo ${shQuote(`SSH_AUTHORIZED_KEYS=${value}`)} >> /app/secrets.env.tmp && ` +
+      `mv /app/secrets.env.tmp /app/secrets.env && ` +
+      `systemctl restart box-sshd && systemctl is-active box-sshd`,
     timeoutSeconds: 60,
   });
   if (r.exitCode !== 0)

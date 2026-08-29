@@ -1602,7 +1602,7 @@ console.log(url); // https://sb-abc123-3000.sandboxes.easybits.cloud`} />
             <p className="text-gray-600 text-sm mb-3">
               <code className="bg-gray-100 px-1 rounded">sandbox_expose_port</code> publica <strong>solo HTTP</strong>: los puertos 22, 23, 25, 445 y 3389 se rechazan con 400. Para un servicio que no habla HTTP usa el forward de capa 4.
             </p>
-            <CodeExample title="SDK" code={`const fwd = await eb.sandboxExposeRawPort(sb.sandboxId, 22, "tcp");
+            <CodeExample title="SDK" code={`const fwd = await sb.exposeRawPort(22, "tcp");
 // {
 //   hostPort: 49123, guestPort: 22, protocol: "tcp",
 //   host: "cname.sandboxes.easybits.cloud",
@@ -1620,10 +1620,10 @@ console.log(fwd.endpoint); // marca ESTO; no lo armes a mano`} />
             <p className="text-gray-600 text-sm mb-3">
               Una sola llamada inyecta tu llave, reinicia el sshd de la caja y abre el 22. Te devuelve el comando listo para pegar.
             </p>
-            <CodeExample title="SDK" code={`const ssh = await eb.sandboxSshEnable(sb.sandboxId, [
+            <CodeExample title="SDK" code={`const ssh = await sb.enableSsh([
   "ssh-ed25519 AAAA... yo@mi-laptop",
 ]);
-console.log(ssh.command); // ssh -p 49002 root@cname.sandboxes.easybits.cloud`} />
+console.log(ssh.command); // ssh -p 49002 root@<host de ESA caja>`} />
             <ul className="list-disc ml-5 mt-3 text-sm text-gray-600 space-y-1">
               <li>El sshd de la caja es <strong>fail-closed</strong>: sin llave no arranca. Por eso la llave va primero — una caja sin llave no tiene superficie SSH ni siquiera cerrada.</li>
               <li>Acceso <strong>solo por llave</strong>, como <code className="bg-gray-100 px-1 rounded">root</code>. Varias llaves: una por elemento del array.</li>
