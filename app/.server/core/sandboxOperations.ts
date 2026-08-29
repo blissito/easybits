@@ -100,6 +100,8 @@ export interface TemplateInfo {
 
 export interface SandboxRecord {
   sandboxId: string;
+  /** Etiqueta humana del create. NO es única y NO es secreta. */
+  name?: string;
   template: SandboxTemplate;
   status: "starting" | "running" | "suspended" | "stopped" | "error" | "lost";
   createdAt: string;
@@ -1701,6 +1703,19 @@ function assertSshKeys(keys: string[]): string {
 //
 // Sólo templates que declaren el 22 en raw_ports (hoy: ghosty-studio). Un 403
 // del expose-raw significa "este template no tiene SSH": es definitivo.
+// Devuelve el nombre de la caja si NINGUNA otra del mismo dueño lo comparte; si
+// no, el sandboxId. Es lo que decide si el comando que entregamos puede ser corto.
+async function uniqueSandboxName(ctx: AuthContext, sandboxId: string): Promise<string> {
+  try {
+    const all = await listSandboxes(ctx);
+    const me = all.find((s) => s.sandboxId === sandboxId);
+    if (!me?.name) return sandboxId;
+    return all.filter((s) => s.name === me.name).length === 1 ? me.name : sandboxId;
+  } catch {
+    return sandboxId;
+  }
+}
+
 export async function enableSandboxSsh(
   ctx: AuthContext,
   sandboxId: string,
@@ -1731,6 +1746,10 @@ export async function enableSandboxSsh(
 
   const fwd = await exposeSandboxRawPort(ctx, sandboxId, 22, "tcp");
   const host = fwd.host || SANDBOX_CNAME_TARGET;
+  // El nombre resuelve sólo si es inequívoco: `ssh-proxy` falla ante un nombre
+  // repetido en vez de elegir, porque entrar a la caja equivocada es peor que no
+  // entrar. Si hay duda, se entrega el id.
+  const sshHostLabel = await uniqueSandboxName(ctx, sandboxId);
   return {
     ...fwd,
     host,
@@ -1751,7 +1770,11 @@ export async function enableSandboxSsh(
         `  ProxyCommand easybits ssh-proxy %h`,
         `  User root`,
       ].join("\n"),
-      command: `ssh ${sandboxId}.ghosty`,
+      // Con el NOMBRE si la caja tiene uno: `ssh taller.ghosty` son 15 caracteres
+      // contra 46 del id. Va decidido AQUÍ, no en las docs, para que el agente
+      // sólo tenga que entregar lo que recibe — pedirle que lo construya es
+      // pedirle que se equivoque.
+      command: `ssh ${sshHostLabel}.ghosty`,
       why: "Rides 443, so it works from offices and corporate VPNs where a high port silently fails. The tunnel does not authenticate: the SSH session authenticates end-to-end against the box's sshd.",
     },
   };

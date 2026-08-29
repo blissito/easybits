@@ -388,10 +388,22 @@ async function sshProxy() {
     console.error("uso: easybits ssh-proxy <sandboxId|caja.ghosty>");
     process.exit(2);
   }
-  // Acepta `sb_xxx` o `sb_xxx.ghosty` (que es lo que ssh pasa como %h).
-  const sandboxId = target.split(".")[0];
+  // Acepta `sb_xxx`, `sb_xxx.ghosty`, o el NOMBRE de la caja (`taller.ghosty`).
+  // El nombre existe para que una persona escriba 15 caracteres en vez de 46; no
+  // es secreto, y da igual que no lo sea: la sesión se autentica con tu llave y
+  // con el ticket firmado, nunca con el nombre.
+  let sandboxId = target.split(".")[0];
 
   const eb = await createClientFromEnv();
+  if (!sandboxId.startsWith("sb_")) {
+    const hits = (await eb.sandboxes.list()).filter((s) => s.name === sandboxId);
+    // Los nombres NO son únicos. Fallar es mejor que elegir: entrar a la caja
+    // equivocada es peor que no entrar.
+    if (hits.length === 0) throw new Error(`no hay ninguna caja llamada "${sandboxId}"`);
+    if (hits.length > 1)
+      throw new Error(`"${sandboxId}" es ambiguo: ${hits.length} cajas lo usan; pasa el sandboxId`);
+    sandboxId = hits[0].sandboxId;
+  }
   const sb = await eb.sandboxes.get(sandboxId);
   const { url } = await sb.sshTicket();
 
@@ -414,6 +426,38 @@ async function sshProxy() {
   await new Promise<void>((resolve) => (ws.onopen = () => resolve()));
   process.stdin.on("data", (chunk: Buffer) => ws.send(chunk));
   process.stdin.on("end", () => ws.close());
+}
+
+
+// ─── ssh-key ─────────────────────────────────────────────────────
+//
+// Devuelve la llave PÚBLICA para inyectar en una caja, creándola la primera vez.
+//
+// Existe para quitarle una decisión al agente. Elegir entre las llaves de ~/.ssh
+// —o generar una y acordarse de cuál— es donde se equivoca: inyecta una pública
+// que no corresponde a la privada con la que luego conecta, y el sshd responde
+// "Permission denied" aunque todo lo demás esté bien. Como este mismo CLI es el
+// ProxyCommand, usar SIEMPRE esta llave hace imposible que no coincidan.
+//
+// La privada NUNCA sale de esta máquina: EasyBits sólo recibe la pública.
+async function sshKey() {
+  const { homedir } = await import("node:os");
+  const { join } = await import("node:path");
+  const { existsSync, readFileSync, mkdirSync } = await import("node:fs");
+  const { execFileSync } = await import("node:child_process");
+
+  const dir = join(homedir(), ".ssh");
+  const key = join(dir, "easybits_ed25519");
+  const pub = `${key}.pub`;
+
+  if (!existsSync(pub)) {
+    mkdirSync(dir, { recursive: true, mode: 0o700 });
+    execFileSync("ssh-keygen", ["-t", "ed25519", "-N", "", "-f", key, "-C", "easybits"], {
+      stdio: ["ignore", "ignore", "inherit"],
+    });
+    console.error(`easybits: llave creada en ${key}`);
+  }
+  process.stdout.write(readFileSync(pub, "utf8").trim() + "\n");
 }
 
 // ─── Router ──────────────────────────────────────────────────────
@@ -445,6 +489,9 @@ switch (cmd) {
   case "ssh-proxy":
     sshProxy();
     break;
+  case "ssh-key":
+    sshKey();
+    break;
   case "help":
   case undefined:
     console.log(`easybits CLI — @easybits.cloud/cli
@@ -459,6 +506,7 @@ Commands:
   providers list    Show storage providers
   config            Print MCP config JSON (streamable HTTP)
   mcp               Print MCP stdio config JSON
+  ssh-key           Print your public key for sandbox_ssh_enable (creates it once)
   ssh-proxy <id>    SSH tunnel over 443 (use as ssh ProxyCommand)
 
 SSH to a box — add to ~/.ssh/config:

@@ -2215,6 +2215,12 @@ type SandboxReq = <T>(path: string, opts?: RequestInit) => Promise<T>;
  */
 export class Sandbox {
   readonly sandboxId: string;
+  /**
+   * Human label from create time. Lets `easybits ssh-proxy` accept
+   * `ssh mybox.ghosty` instead of the full id. Not unique, not a secret — the
+   * SSH session authenticates with your key and a signed ticket, never the name.
+   */
+  readonly name?: string;
   readonly template: SandboxTemplate;
   status: SandboxStatus;
   createdAt: string;
@@ -2231,6 +2237,7 @@ export class Sandbox {
 
   constructor(record: SandboxRecord, req: SandboxReq) {
     this.sandboxId = record.sandboxId;
+    this.name = record.name;
     this.template = record.template;
     this.status = record.status;
     this.createdAt = record.createdAt;
@@ -2708,6 +2715,8 @@ export interface CreateSandboxParams {
 
 export interface SandboxRecord {
   sandboxId: string;
+  /** Human label given at create time. NOT unique and NOT a secret. */
+  name?: string;
   template: SandboxTemplate;
   status: SandboxStatus;
   createdAt: string;
