@@ -636,6 +636,8 @@ Está **gateado por capacidad del template**: si el template no declara ese puer
 MCP: \`sandbox_ssh_enable({ sandboxId, publicKeys })\` · SDK: \`sb.enableSsh(publicKeys)\`
 Cerrar: \`POST /sandboxes/:id/ssh-disable\` — MCP \`sandbox_ssh_disable\` · SDK \`sb.disableSsh()\`
 
+**La llave pública sale del CLI, no la escribas a mano.** \`easybits ssh-key\` la crea en \`~/.ssh/easybits_ed25519\` la primera vez y siempre devuelve la misma — y es la que \`easybits ssh-proxy\` usa al conectar, así que no pueden desfasarse. Elegir otra de \`~/.ssh\` es el error más común: inyectas una pública que no corresponde a la privada con la que luego conectas, y el sshd responde \`Permission denied\` con todo lo demás correcto. La privada nunca sale de la máquina del usuario.
+
 Una sola llamada hace las dos mitades: inyecta las llaves, reinicia \`box-sshd\` y expone el 22 por L4. Devuelve el forward más el comando listo para pegar:
 
 \`\`\`

@@ -1623,10 +1623,20 @@ console.log(fwd.endpoint); // marca ESTO; no lo armes a mano`} />
             <p className="text-gray-600 text-sm mb-3">
               Una sola llamada inyecta tu llave, reinicia el sshd de la caja y abre el 22. Te devuelve el comando listo para pegar.
             </p>
-            <CodeExample title="SDK" code={`const ssh = await sb.enableSsh([
-  "ssh-ed25519 AAAA... yo@mi-laptop",
-]);
-console.log(ssh.command); // ssh -p 49002 root@<host de ESA caja>`} />
+            <p className="text-gray-600 text-sm mb-3">
+              La llave pública sale del CLI. <strong>No la escribas a mano ni elijas una de <code className="bg-gray-100 px-1 rounded">~/.ssh</code></strong>: inyectar una pública que no corresponde a la privada con la que luego conectas da <code className="bg-gray-100 px-1 rounded">Permission denied</code> con todo lo demás correcto, y es el error más común de este flujo.
+            </p>
+            <CodeExample title="1. En tu máquina" code={`easybits ssh-key
+# ssh-ed25519 AAAAC3Nza... easybits
+#
+# La crea en ~/.ssh/easybits_ed25519 la primera vez y siempre devuelve la misma.
+# Es también la que usa \`easybits ssh-proxy\` al conectar, así que no pueden
+# desfasarse. La PRIVADA nunca sale de tu máquina.`} />
+            <CodeExample title="2. Inyectarla en la caja" code={`// pásale exactamente lo que imprimió \`easybits ssh-key\`
+const ssh = await sb.enableSsh([process.env.MY_SSH_PUBKEY!]);
+
+console.log(ssh.tunnel.command);  // ssh mi-caja.ghosty        ← entrégale ESTE
+console.log(ssh.command);         // ssh -p 49002 root@<host>  ← respaldo`} />
             <ul className="list-disc ml-5 mt-3 text-sm text-gray-600 space-y-1">
               <li>El sshd de la caja es <strong>fail-closed</strong>: sin llave no arranca. Por eso la llave va primero — una caja sin llave no tiene superficie SSH ni siquiera cerrada.</li>
               <li>Acceso <strong>solo por llave</strong>, como <code className="bg-gray-100 px-1 rounded">root</code>. Varias llaves: una por elemento del array.</li>
