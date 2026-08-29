@@ -1,7 +1,7 @@
 {
   "name": "@easybits.cloud/sdk",
-  "version": "0.29.0",
-  "description": "Agentic-first file storage SDK — typed HTTP client for AI agents to manage, share, and transform files via API/MCP",
+  "version": "0.30.0",
+  "description": "Agentic-first file storage SDK \u2014 typed HTTP client for AI agents to manage, share, and transform files via API/MCP",
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",

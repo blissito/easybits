@@ -1788,7 +1788,7 @@ export async function issueSandboxSshTicket(
 ): Promise<SandboxSshTicket> {
   requireScope(ctx, "WRITE");
   const secret = process.env.SSH_TICKET_SECRET;
-  if (!secret) throw new Error("SSH_TICKET_SECRET no configurado; el túnel está deshabilitado");
+  if (!secret) throw new Error("SSH_TICKET_SECRET not configured; tunnel is disabled");
   // Autoriza igual que cualquier otra operación sobre la caja: 404 si no es tuya
   // ni tienes delegación.
   await effectiveOwnerId(ctx, sandboxId);
