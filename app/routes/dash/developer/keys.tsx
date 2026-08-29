@@ -223,33 +223,93 @@ function CopyButton({ text }: { text: string }) {
   );
 }
 
-function GhostyInstall({ apiKey }: { apiKey: string }) {
-  const cmd = [
-    `export EASYBITS_API_KEY="${apiKey}"`,
-    "# limpia cualquier instalación previa antes de bajar la nueva",
-    "npm uninstall -g ghostycode 2>/dev/null; rm -f ~/.local/bin/ghosty ~/.ghosty/bin/ghosty",
-    "curl -fsSL https://formmy.app/ghosty/install.sh | sh",
-    'export PATH="$HOME/.local/bin:$PATH"',
-    'ghosty auth set --provider easybits --api-key "$EASYBITS_API_KEY"',
-    `ghosty mcp add easybits --url "https://www.easybits.cloud/api/mcp?tools=core" --bearer-token-env-var EASYBITS_API_KEY`,
-  ].join("\n");
+/** Copiar de un paso, sobre el fondo negro del bloque. */
+function CopyStepButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
   return (
-    <div className="mt-4">
-      <div className="flex justify-between items-center mb-2">
+    <button
+      type="button"
+      onClick={() => {
+        navigator.clipboard.writeText(text).then(() => {
+          setCopied(true);
+          setTimeout(() => setCopied(false), 2000);
+        });
+      }}
+      className="text-[11px] font-sans px-2 py-0.5 rounded border border-white/20 text-white/50 hover:text-lime hover:border-lime transition-colors shrink-0"
+      aria-label="Copiar este paso"
+    >
+      {copied ? "Copiado ✓" : "Copiar"}
+    </button>
+  );
+}
+
+function GhostyInstall({ apiKey }: { apiKey: string }) {
+  // Cada paso es un bloque visual; `Copiar` pega solo las líneas ejecutables.
+  const steps = [
+    {
+      title: "1. Guarda la key en tu entorno",
+      lines: [`export EASYBITS_API_KEY="${apiKey}"`],
+    },
+    {
+      title: "2. Limpia cualquier Ghosty anterior",
+      lines: [
+        "npm uninstall -g ghostycode 2>/dev/null",
+        "rm -f ~/.local/bin/ghosty ~/.ghosty/bin/ghosty",
+      ],
+    },
+    {
+      title: "3. Instala el CLI",
+      lines: [
+        "curl -fsSL https://formmy.app/ghosty/install.sh | sh",
+        'export PATH="$HOME/.local/bin:$PATH"',
+      ],
+    },
+    {
+      title: "4. Conecta EasyBits (LLM + MCP)",
+      lines: [
+        'ghosty auth set --provider easybits --api-key "$EASYBITS_API_KEY"',
+        'ghosty mcp add easybits \\\n  --url "https://www.easybits.cloud/api/mcp?tools=core" \\\n  --bearer-token-env-var EASYBITS_API_KEY',
+      ],
+    },
+  ];
+  const cmd = steps.flatMap((step) => step.lines).join("\n");
+  return (
+    <div className="mt-6">
+      <div className="flex justify-between items-center mb-3">
         <p className="text-sm font-bold">Instalar Ghosty con esta key (macOS / Linux):</p>
         <CopyButton text={cmd} />
       </div>
-      <pre className="bg-black text-lime p-3 rounded-lg text-xs font-mono overflow-x-auto border-2 border-black whitespace-pre">
-        {cmd}
-      </pre>
-      <p className="text-xs mt-2 opacity-70">
-        Borra el binario viejo, instala el CLI, guarda la key para el proveedor <code>easybits</code> y conecta el MCP. Luego: <code>ghosty</code>.
-        El <code>rm</code> solo toca el binario: tus keys y sesiones en <code>~/.ghosty</code> se quedan.
-        Los <code>export</code> valen solo para esa terminal: agrega{" "}
-        <code>export EASYBITS_API_KEY="..."</code> y{" "}
-        <code>export PATH="$HOME/.local/bin:$PATH"</code> a tu{" "}
-        <code>~/.zshrc</code> para que el MCP siga autenticando mañana.
-      </p>
+      <div className="bg-black rounded-lg border-2 border-black overflow-hidden">
+        {steps.map((step, i) => (
+          <div
+            key={step.title}
+            className={`px-4 py-3 ${i > 0 ? "border-t border-white/15" : ""}`}
+          >
+            <div className="flex justify-between items-center gap-3 mb-1.5">
+              <p className="text-[11px] uppercase tracking-wide text-white/45 font-sans">
+                {step.title}
+              </p>
+              <CopyStepButton text={step.lines.join("\n")} />
+            </div>
+            <pre className="text-lime text-xs font-mono overflow-x-auto whitespace-pre leading-relaxed">
+              {step.lines.join("\n")}
+            </pre>
+          </div>
+        ))}
+      </div>
+      <ul className="text-xs mt-3 space-y-1 opacity-70 list-disc ml-4">
+        <li>
+          El <code>rm</code> solo borra el binario: tus keys y sesiones en{" "}
+          <code>~/.ghosty</code> se quedan.
+        </li>
+        <li>
+          Los <code>export</code> valen solo para esa terminal. Pásalos a tu{" "}
+          <code>~/.zshrc</code> o el MCP dejará de autenticar mañana.
+        </li>
+        <li>
+          Luego solo: <code>ghosty</code>.
+        </li>
+      </ul>
     </div>
   );
 }
