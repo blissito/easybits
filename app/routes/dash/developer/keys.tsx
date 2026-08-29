@@ -2,7 +2,7 @@ import { useFetcher, useLoaderData, useSearchParams } from "react-router";
 import { getUserOrRedirect } from "~/.server/getters";
 import { listApiKeys } from "~/.server/iam";
 import { createApiKey, revokeApiKey } from "~/.server/iam";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { BrutalButton } from "~/components/common/BrutalButton";
 import { ConfirmDialog } from "~/components/common/ConfirmDialog";
 import type { ApiKeyScope } from "@prisma/client";
@@ -56,6 +56,19 @@ export default function KeysPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [welcomeDismissed, setWelcomeDismissed] = useState(false);
   const showWelcome = searchParams.get("welcome") === "trial" && !welcomeDismissed;
+
+  // Confetti al aterrizar desde el checkout — una sola vez
+  useEffect(() => {
+    if (searchParams.get("welcome") !== "trial") return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    import("js-confetti").then(({ default: JSConfetti }) => {
+      new JSConfetti().addConfetti({
+        confettiColors: ["#9870ED", "#ECD66E", "#C8F9AB", "#75BAF9", "#F4B7EC"],
+        confettiNumber: 120,
+      });
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const dismissWelcome = () => {
     setWelcomeDismissed(true);
     const next = new URLSearchParams(searchParams);
