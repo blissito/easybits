@@ -15,11 +15,13 @@ export const action = async ({ request }: Route.ActionArgs) => {
 // @todo if metadata already there, avoid.
 export const loader = async ({ request }: Route.LoaderArgs) => {
   const user = await getUserOrRedirect(request);
-  return { user };
+  // A dónde iba antes de que lo mandáramos a llenar el perfil
+  const next = new URL(request.url).searchParams.get("next");
+  return { user, next };
 };
 
 export default function Onboarding({ loaderData }: Route.ComponentProps) {
-  const { user } = loaderData;
+  const { user, next } = loaderData;
 
   return (
     <section
@@ -36,7 +38,7 @@ export default function Onboarding({ loaderData }: Route.ComponentProps) {
         </div>
       </Link>
 
-      <Steper user={user} />
+      <Steper user={user} next={next} />
     </section>
   );
 }

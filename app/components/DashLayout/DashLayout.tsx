@@ -35,7 +35,11 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
     (!user.metadata?.customer_type ||
       (user.metadata?.asset_types.length || 0) < 1)
   ) {
-    return redirect("/onboarding");
+    const target = new URL(request.url);
+    return redirect(
+      "/onboarding?next=" +
+        encodeURIComponent(target.pathname + target.search)
+    );
   }
   const isAdmin = isAdminUser(user);
   const unreadCount = await countUnread(user.id).catch(() => 0);

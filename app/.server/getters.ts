@@ -11,7 +11,11 @@ import { canImpersonate } from "./delegation";
 
 const throwRedirect = (request: Request) => {
   const url = new URL(request.url);
-  return redirect("/login?next=" + url.pathname);
+  // El query string viaja: quien vuelve del checkout trae ?welcome=trial&session_id=…
+  // y perderlo aquí lo deja sin la bienvenida al otro lado del login.
+  return redirect(
+    "/login?next=" + encodeURIComponent(url.pathname + url.search)
+  );
 };
 
 /**

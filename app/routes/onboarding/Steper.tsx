@@ -17,7 +17,7 @@ const CREATE_ROUTES: Record<CreateChoice, string> = {
   archivo: "/dash/developer/files",
 };
 
-export const Steper = ({ user }: { user: User }) => {
+export const Steper = ({ user, next }: { user: User; next?: string | null }) => {
   const [step, setStep] = useState(0);
   const [createChoice, setCreateChoice] = useState<CreateChoice | null>(null);
   const fetcher = useFetcher();
@@ -80,7 +80,7 @@ export const Steper = ({ user }: { user: User }) => {
     switch (step) {
       case 3:
         return (
-          <OnboardingSuccess createChoice={createChoice} />
+          <OnboardingSuccess createChoice={createChoice} next={next} />
         );
       case 2:
         return (
@@ -130,11 +130,14 @@ export const Steper = ({ user }: { user: User }) => {
 
 export const OnboardingSuccess = ({
   createChoice,
+  next,
 }: {
   createChoice?: CreateChoice | null;
+  next?: string | null;
 }) => {
   const navigate = useNavigate();
-  const destination = createChoice ? CREATE_ROUTES[createChoice] : "/dash";
+  // `next` gana: si venía de un checkout o de un link directo, ahí lo devolvemos.
+  const destination = next || (createChoice ? CREATE_ROUTES[createChoice] : "/dash");
 
   return (
     <section className="flex justify-center items-center w-full h-svh text-center px-4 md:px-[5%] min-h-[500px] ">
