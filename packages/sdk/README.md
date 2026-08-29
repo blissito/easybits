@@ -316,14 +316,16 @@ console.log(ssh.command); // ssh -p 49002 root@<host of THAT box>
 // unreproducible "it won't connect". The tunnel rides the same 443 as the web:
 //
 //   npm i -g @easybits.cloud/cli && easybits login <api-key>
+//   easybits ssh-key      # your public key; created once, never leaves the box
 //
 //   # ~/.ssh/config
 //   Host *.ghosty
 //     ProxyCommand easybits ssh-proxy %h
 //     User root
 //
-//   ssh sb_abc123.ghosty
-//   ssh sb_abc123.ghosty "cd /data/work && ghosty serve --acp"   # remote ACP
+//   ssh my-box.ghosty     # the `name` you gave it at create time
+//   ssh sb_abc123.ghosty  # the id works too
+//   ssh my-box.ghosty "cd /data/work && ghosty serve --acp"   # remote ACP
 //
 // enableSsh() is still needed once, to inject the key (the box sshd is
 // fail-closed). The tunnel moves opaque bytes and does NOT authenticate: the

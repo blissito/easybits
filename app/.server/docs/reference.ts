@@ -590,6 +590,13 @@ MCP: \`sandbox_create({ template, timeoutSeconds? })\`
 Body: \`{ command, cwd?, timeoutSeconds?, env? }\`
 MCP: \`sandbox_exec({ sandboxId, command })\`
 
+### Comandos largos (background)
+\`POST /sandboxes/:id/bg\` · MCP: \`sandbox_exec_background({ sandboxId, command })\`
+Estado: \`GET /sandboxes/:id/bg/:execId\` · MCP: \`sandbox_exec_status({ sandboxId, execId })\`
+Matar: \`POST /sandboxes/:id/bg/:execId/kill\` · MCP: \`sandbox_exec_kill({ sandboxId, execId })\`
+
+\`exec\` es síncrono y tope 600 s: para un build, un dev server o cualquier cosa que sobreviva a la petición, usa background. Y **acuérdate de \`sandbox_exec_kill\`**: sin él un proceso colgado se queda comiendo la caja hasta que vence el TTL.
+
 ### Ejecutar código inline
 \`POST /sandboxes/:id/run-code\`
 Body: \`{ code, lang?, timeoutSeconds? }\`
@@ -648,6 +655,7 @@ El comando de arriba usa un puerto alto del anfitrión, y **un puerto alto no at
 
 \`\`\`sh
 npm i -g @easybits.cloud/cli && easybits login <tu-api-key>
+easybits ssh-key          # tu llave pública; la crea si no existe
 \`\`\`
 
 En \`~/.ssh/config\`:
@@ -661,11 +669,14 @@ Host *.ghosty
 Y ya:
 
 \`\`\`sh
-ssh sb_abc123.ghosty
-ssh sb_abc123.ghosty "cd /data/work && ghosty serve --acp"   # ACP remoto por stdio
+ssh mi-caja.ghosty        # el NOMBRE que le diste al crearla
+ssh sb_abc123.ghosty      # el id también sirve
+ssh mi-caja.ghosty "cd /data/work && ghosty serve --acp"   # ACP remoto por stdio
 \`\`\`
 
-Sigue haciendo falta \`ssh-enable\` una vez, para inyectar la llave: el sshd de la caja es fail-closed.
+Sigue haciendo falta \`ssh-enable\` una vez, para inyectar la llave: el sshd de la caja es fail-closed. Pásale la salida de \`easybits ssh-key\` — es la misma llave que usará \`ssh-proxy\` al conectar, así que no pueden desfasarse. La privada nunca sale de tu máquina.
+
+El **nombre** de la caja (el \`name\` del create) sirve como host: \`ssh mi-caja.ghosty\`. No es único ni secreto — si dos cajas lo comparten el proxy falla en vez de elegir, porque entrar a la caja equivocada es peor que no entrar. Da igual que sea público: la sesión se autentica con tu llave y el ticket, nunca con el nombre.
 
 - **El túnel no autentica.** Mueve bytes opacos; la sesión SSH se autentica de punta a punta entre tu \`ssh\` y el sshd de la caja. Un fallo en el túnel no le da acceso a nadie.
 - El CLI pide un **ticket firmado de vida corta** (\`POST /sandboxes/:id/ssh-ticket\` · SDK \`sb.sshTicket()\`) y abre \`wss://…/_ssh\`. Normalmente no lo llamas tú.

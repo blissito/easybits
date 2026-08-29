@@ -1635,23 +1635,28 @@ console.log(ssh.command); // ssh -p 49002 root@<host de ESA caja>`} />
               <li>Solo en templates que declaren el 22 (hoy <code className="bg-gray-100 px-1 rounded">ghosty-studio</code>).</li>
             </ul>
 
-            <h3 className="text-lg font-bold mt-8 mb-3">SSH por túnel — recomendado</h3>
+            <h3 id="ssh" className="text-lg font-bold mt-8 mb-3 scroll-mt-24">SSH por túnel — recomendado</h3>
             <p className="text-gray-600 text-sm mb-3">
               El comando de arriba usa un puerto alto del anfitrión, y <strong>un puerto alto no atraviesa la red de una oficina ni una VPN corporativa</strong>. Eso te llega como “no me conecta” desde una red que no puedes reproducir. El túnel entra por el mismo 443 de siempre: si el usuario puede abrir una página web, entra a su caja.
             </p>
             <CodeExample title="Una vez" code={`npm i -g @easybits.cloud/cli
-easybits login <tu-api-key>`} />
+easybits login <tu-api-key>
+
+# tu llave pública, para sandbox_ssh_enable (la crea si no existe)
+easybits ssh-key`} />
             <p className="text-gray-600 text-sm mt-3 mb-2">En <code className="bg-gray-100 px-1 rounded">~/.ssh/config</code>:</p>
             <CodeExample title="~/.ssh/config" code={`Host *.ghosty
   ProxyCommand easybits ssh-proxy %h
   User root`} />
             <p className="text-gray-600 text-sm mt-3 mb-2">Y ya:</p>
-            <CodeExample title="Terminal" code={`ssh sb_abc123.ghosty
+            <CodeExample title="Terminal" code={`ssh mi-caja.ghosty      # el nombre que le diste al crearla
+ssh sb_abc123.ghosty    # el id también sirve
 
 # ACP remoto: el editor en tu Mac, el agente en la caja
-ssh sb_abc123.ghosty "cd /data/work && ghosty serve --acp"`} />
+ssh mi-caja.ghosty "cd /data/work && ghosty serve --acp"`} />
             <ul className="list-disc ml-5 mt-3 text-sm text-gray-600 space-y-1">
-              <li>Sigue haciendo falta <code className="bg-gray-100 px-1 rounded">ssh-enable</code> una vez, para inyectar la llave: el sshd de la caja es fail-closed.</li>
+              <li>Sigue haciendo falta <code className="bg-gray-100 px-1 rounded">ssh-enable</code> una vez, para inyectar la llave: el sshd de la caja es fail-closed. Pásale la salida de <code className="bg-gray-100 px-1 rounded">easybits ssh-key</code> — es la misma que usa <code className="bg-gray-100 px-1 rounded">ssh-proxy</code> al conectar, así que no pueden desfasarse. <strong>La privada nunca sale de tu máquina.</strong></li>
+              <li>El <strong>nombre</strong> de la caja sirve como host. No es único ni secreto: si dos cajas lo comparten el proxy falla en vez de elegir, porque entrar a la equivocada es peor que no entrar. Que sea público da igual — la sesión se autentica con tu llave y el ticket, nunca con el nombre.</li>
               <li><strong>El túnel no autentica.</strong> Mueve bytes opacos; la sesión SSH se autentica de punta a punta entre tu <code className="bg-gray-100 px-1 rounded">ssh</code> y el sshd de la caja. Un fallo en el túnel no le da acceso a nadie.</li>
               <li>El CLI pide un <strong>ticket firmado de vida corta</strong> (<code className="bg-gray-100 px-1 rounded">sb.sshTicket()</code>) y abre el WebSocket. Normalmente no lo llamas tú.</li>
               <li>Ticket vencido, firma alterada o caja ajena: <strong>403/404</strong> en el borde, sin llegar al anfitrión.</li>
@@ -1751,6 +1756,7 @@ console.log(status.result);  // resultado final del agente`} />
                 ["sandbox_exec", "sandboxId, command", "Ejecutar comando (sync, 60s timeout)"],
                 ["sandbox_exec_background", "sandboxId, command", "Ejecutar comando en background"],
                 ["sandbox_exec_status", "sandboxId, execId", "Consultar estado de ejecución background"],
+                ["sandbox_exec_kill", "sandboxId, execId", "Matar una ejecución background (lo que falta cuando algo se cuelga)"],
                 ["sandbox_run_code", "sandboxId, code, lang", "Ejecutar Python/Node/Bash inline"],
                 ["sandbox_run_cell", "sandboxId, code", "Ejecutar celda en kernel Jupyter persistente"],
                 ["sandbox_files_write", "sandboxId, path, content", "Escribir archivo en el sandbox"],
@@ -1760,6 +1766,7 @@ console.log(status.result);  // resultado final del agente`} />
                 ["sandbox_logs", "sandboxId, unit?, lines?, since?, grep?", "Logs journald nativos del daemon"],
                 ["sandbox_runtime", "sandboxId, action, unit?, buildCommand?", "systemd status/restart/rebuild del daemon"],
                 ["sandbox_apply_patch", "sandboxId, edits[], rebuild?, restart?", "Hotfix atómico: edita → rebuild → restart"],
+                ["sandbox_admin", "sandboxId, path, method?, body?", "Pasarela al admin API interno (:8787) de una máquina permanente"],
                 ["sandbox_expose_port", "sandboxId, port", "Exponer puerto como URL pública HTTPS (solo HTTP)"],
                 ["sandbox_expose_raw_port", "sandboxId, port, protocol", "Forward TCP/UDP crudo; devuelve endpoint host:hostPort"],
                 ["sandbox_unexpose_raw_port", "sandboxId, port, protocol", "Cerrar el forward TCP/UDP"],
