@@ -1,4 +1,4 @@
-import { useFetcher, useLoaderData } from "react-router";
+import { useFetcher, useLoaderData, useSearchParams } from "react-router";
 import { getUserOrRedirect } from "~/.server/getters";
 import { listApiKeys } from "~/.server/iam";
 import { createApiKey, revokeApiKey } from "~/.server/iam";
@@ -52,8 +52,46 @@ export default function KeysPage() {
 
   const createdKey = fetcher.data && "created" in fetcher.data ? fetcher.data.created : null;
 
+  // Bienvenida tras activar el trial desde el checkout (?welcome=trial)
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [welcomeDismissed, setWelcomeDismissed] = useState(false);
+  const showWelcome = searchParams.get("welcome") === "trial" && !welcomeDismissed;
+  const dismissWelcome = () => {
+    setWelcomeDismissed(true);
+    const next = new URLSearchParams(searchParams);
+    next.delete("welcome");
+    next.delete("session_id");
+    setSearchParams(next, { replace: true, preventScrollReset: true });
+  };
+
   return (
     <div>
+      {showWelcome && (
+        <div className="mb-6 border-2 border-black rounded-xl bg-[#F3EEFF] p-5 relative">
+          <button
+            onClick={dismissWelcome}
+            aria-label="Cerrar"
+            className="absolute top-3 right-4 text-xl leading-none text-black/50 hover:text-black"
+          >
+            ×
+          </button>
+          <h3 className="text-lg font-black uppercase tracking-tight mb-2">
+            Tu trial de 30 días está activo 🎉
+          </h3>
+          <p className="text-sm text-black/70 mb-2">
+            Crea tu API key aquí abajo, expórtala como{" "}
+            <code className="font-mono bg-white border border-black/20 rounded px-1">
+              EASYBITS_API_KEY
+            </code>{" "}
+            y ya puedes correr <code className="font-mono bg-white border border-black/20 rounded px-1">ghosty</code>.
+          </p>
+          <p className="text-sm text-black/70">
+            Al terminar el mes no pasa nada: <strong>no estás obligado a quedarte</strong>. No dejaste
+            tarjeta, así que si no haces nada la suscripción se cancela sola y no hay ningún cargo.
+            Si te sirvió, ahí mismo decides continuar.
+          </p>
+        </div>
+      )}
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-lg font-black uppercase tracking-tight">API Keys</h2>
         <BrutalButton size="chip" onClick={() => setShowCreate(true)} className="text-sm px-4 py-1.5">
