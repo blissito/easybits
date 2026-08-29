@@ -2398,7 +2398,7 @@ How to embed safely (the only reliable rule):
 
   server.tool(
     "sandbox_ssh_enable",
-    "Give the user SSH into the box, in one call: injects their public key(s), restarts the box sshd and opens port 22 over L4. Returns a ready-to-paste `command` (ssh -p <hostPort> root@<host>) — hand THAT to the user; the host port comes from a pool and is neither 22 nor stable, so never write it into docs or remember it across sessions (call this again to read it back). The box's sshd is fail-closed: without a key it does not run at all, which is why the key must go in first. Access is key-only, as root. Only templates that declare port 22 (today: ghosty-studio) work — a 403 means this template has no SSH and is a permanent answer, do NOT retry.",
+    "Give the user SSH into the box, in one call: injects their public key(s) and restarts the box sshd. HAND THE USER `tunnel.setup` THEN `tunnel.command` — that path rides 443, so it works from offices and corporate VPNs where a high port silently fails and reaches you as an unreproducible 'it won't connect'. The top-level `command` uses a pool port: offer it only as a fallback, and never write its port into docs or remember it across sessions (it is neither 22 nor stable — call this again to read it back). The box's sshd is fail-closed: without a key it does not run at all, which is why the key must go in first. Access is key-only, as root. Only templates that declare port 22 (today: ghosty-studio) work — a 403 means this template has no SSH and is a permanent answer, do NOT retry.",
     {
       sandboxId: z.string().describe("Sandbox ID"),
       publicKeys: z

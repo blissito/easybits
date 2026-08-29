@@ -225,10 +225,14 @@ function CopyButton({ text }: { text: string }) {
 
 function GhostyInstall({ apiKey }: { apiKey: string }) {
   const cmd = [
+    `export EASYBITS_API_KEY="${apiKey}"`,
+    "# limpia cualquier instalación previa antes de bajar la nueva",
+    "npm uninstall -g ghostycode 2>/dev/null; rm -f ~/.local/bin/ghosty ~/.ghosty/bin/ghosty",
     "curl -fsSL https://formmy.app/ghosty/install.sh | sh",
-    `ghosty auth set --provider easybits --api-key "${apiKey}"`,
-    `ghosty mcp add easybits --url "https://www.easybits.cloud/api/mcp?tools=core" --bearer "${apiKey}"`,
-  ].join(" && \\\n  ");
+    'export PATH="$HOME/.local/bin:$PATH"',
+    'ghosty auth set --provider easybits --api-key "$EASYBITS_API_KEY"',
+    `ghosty mcp add easybits --url "https://www.easybits.cloud/api/mcp?tools=core" --bearer-token-env-var EASYBITS_API_KEY`,
+  ].join("\n");
   return (
     <div className="mt-4">
       <div className="flex justify-between items-center mb-2">
@@ -239,7 +243,12 @@ function GhostyInstall({ apiKey }: { apiKey: string }) {
         {cmd}
       </pre>
       <p className="text-xs mt-2 opacity-70">
-        Instala el CLI, guarda la key para el proveedor <code>easybits</code> (DeepSeek vía el proxy) y conecta el MCP. Luego: <code>ghosty</code>.
+        Borra el binario viejo, instala el CLI, guarda la key para el proveedor <code>easybits</code> y conecta el MCP. Luego: <code>ghosty</code>.
+        El <code>rm</code> solo toca el binario: tus keys y sesiones en <code>~/.ghosty</code> se quedan.
+        Los <code>export</code> valen solo para esa terminal: agrega{" "}
+        <code>export EASYBITS_API_KEY="..."</code> y{" "}
+        <code>export PATH="$HOME/.local/bin:$PATH"</code> a tu{" "}
+        <code>~/.zshrc</code> para que el MCP siga autenticando mañana.
       </p>
     </div>
   );

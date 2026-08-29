@@ -308,8 +308,28 @@ console.log(fwd.endpoint); // cname.sandboxes.easybits.cloud:49123 — dial this
 // SSH: injects the key, restarts the box sshd and opens 22, in one call.
 // The box sshd is fail-closed, so the key has to go in before the port opens.
 const ssh = await sbx.enableSsh(["ssh-ed25519 AAAA... me@laptop"]);
-console.log(ssh.command); // ssh -p 49002 root@cname.sandboxes.easybits.cloud
+console.log(ssh.command); // ssh -p 49002 root@<host of THAT box>
 // Key-only, as root. disableSsh() closes the port but does NOT revoke the key.
+
+// PREFER THE TUNNEL over that command. A high port does not survive office
+// networks or corporate VPNs, and that failure reaches you as an
+// unreproducible "it won't connect". The tunnel rides the same 443 as the web:
+//
+//   npm i -g @easybits.cloud/cli && easybits login <api-key>
+//
+//   # ~/.ssh/config
+//   Host *.ghosty
+//     ProxyCommand easybits ssh-proxy %h
+//     User root
+//
+//   ssh sb_abc123.ghosty
+//   ssh sb_abc123.ghosty "cd /data/work && ghosty serve --acp"   # remote ACP
+//
+// enableSsh() is still needed once, to inject the key (the box sshd is
+// fail-closed). The tunnel moves opaque bytes and does NOT authenticate: the
+// SSH session authenticates end-to-end against the box's sshd, so a bug in the
+// tunnel cannot let anyone in. sshTicket() mints the short-lived signed ticket
+// the proxy uses — you rarely call it yourself.
 
 // Files
 await sbx.files.write("/tmp/data.json", JSON.stringify({ ok: true }));

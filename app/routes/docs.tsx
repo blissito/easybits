@@ -393,15 +393,18 @@ const eb = await createClientFromEnv();` },
             </p>
             <TabbedCode
               tabs={[
-                { label: "ghosty mcp", code: `# 1. Agregar el servidor con tu key (esto lo activa)
+                { label: "ghosty mcp", code: `# 1. Tu key vive en una variable de entorno (Ghosty la lee en cada request)
+export EASYBITS_API_KEY="TU_EASYBITS_API_KEY"
+
+# 2. Agregar el servidor apuntando al NOMBRE de la variable
 ghosty mcp add easybits \\
   --url "https://www.easybits.cloud/api/mcp?tools=all" \\
-  --bearer TU_EASYBITS_API_KEY
+  --bearer-token-env-var EASYBITS_API_KEY
 
-# 2. Verifica
+# 3. Verifica
 ghosty mcp list
 
-# 3. Listo
+# 4. Listo
 ghosty --yolo` },
               ]}
             />
@@ -1630,6 +1633,28 @@ console.log(ssh.command); // ssh -p 49002 root@<host de ESA caja>`} />
               <li>La host key vive en <code className="bg-gray-100 px-1 rounded">/app/ssh/</code>: el fingerprint sobrevive reinicios y resume, así que no verás el warning de MITM en cada boot.</li>
               <li><code className="bg-gray-100 px-1 rounded">sandbox_ssh_disable</code> cierra el puerto pero <strong>no</strong> revoca: para eso quita la llave de <code className="bg-gray-100 px-1 rounded">/app/secrets.env</code>.</li>
               <li>Solo en templates que declaren el 22 (hoy <code className="bg-gray-100 px-1 rounded">ghosty-studio</code>).</li>
+            </ul>
+
+            <h3 className="text-lg font-bold mt-8 mb-3">SSH por túnel — recomendado</h3>
+            <p className="text-gray-600 text-sm mb-3">
+              El comando de arriba usa un puerto alto del anfitrión, y <strong>un puerto alto no atraviesa la red de una oficina ni una VPN corporativa</strong>. Eso te llega como “no me conecta” desde una red que no puedes reproducir. El túnel entra por el mismo 443 de siempre: si el usuario puede abrir una página web, entra a su caja.
+            </p>
+            <CodeExample title="Una vez" code={`npm i -g @easybits.cloud/cli
+easybits login <tu-api-key>`} />
+            <p className="text-gray-600 text-sm mt-3 mb-2">En <code className="bg-gray-100 px-1 rounded">~/.ssh/config</code>:</p>
+            <CodeExample title="~/.ssh/config" code={`Host *.ghosty
+  ProxyCommand easybits ssh-proxy %h
+  User root`} />
+            <p className="text-gray-600 text-sm mt-3 mb-2">Y ya:</p>
+            <CodeExample title="Terminal" code={`ssh sb_abc123.ghosty
+
+# ACP remoto: el editor en tu Mac, el agente en la caja
+ssh sb_abc123.ghosty "cd /data/work && ghosty serve --acp"`} />
+            <ul className="list-disc ml-5 mt-3 text-sm text-gray-600 space-y-1">
+              <li>Sigue haciendo falta <code className="bg-gray-100 px-1 rounded">ssh-enable</code> una vez, para inyectar la llave: el sshd de la caja es fail-closed.</li>
+              <li><strong>El túnel no autentica.</strong> Mueve bytes opacos; la sesión SSH se autentica de punta a punta entre tu <code className="bg-gray-100 px-1 rounded">ssh</code> y el sshd de la caja. Un fallo en el túnel no le da acceso a nadie.</li>
+              <li>El CLI pide un <strong>ticket firmado de vida corta</strong> (<code className="bg-gray-100 px-1 rounded">sb.sshTicket()</code>) y abre el WebSocket. Normalmente no lo llamas tú.</li>
+              <li>Ticket vencido, firma alterada o caja ajena: <strong>403/404</strong> en el borde, sin llegar al anfitrión.</li>
             </ul>
 
             <h3 className="text-lg font-bold mt-8 mb-3">Dominio personalizado (custom domain + HTTPS automático)</h3>

@@ -369,6 +369,53 @@ Falta, una sola vez:
 Desde ahí, cada push a main despliega.`);
 }
 
+
+// ─── ssh-proxy ───────────────────────────────────────────────────
+//
+// Se usa como ProxyCommand de ssh: mueve bytes entre stdin/stdout y un
+// WebSocket contra el borde. Con esto `ssh caja.ghosty` entra a la microVM SIN
+// que EasyBits abra un puerto por caja — el 443 pasa en redes donde un puerto
+// alto no pasa (oficinas, VPN corporativa), que es de donde vienen los "no me
+// conecta" imposibles de reproducir.
+//
+// El túnel NO autentica: la sesión SSH se autentica de punta a punta entre el
+// cliente y el sshd de la caja. Aquí sólo se mueven bytes opacos.
+//
+// Node 22 trae `WebSocket` global, así que esto no añade ni una dependencia.
+async function sshProxy() {
+  const target = process.argv[3];
+  if (!target) {
+    console.error("uso: easybits ssh-proxy <sandboxId|caja.ghosty>");
+    process.exit(2);
+  }
+  // Acepta `sb_xxx` o `sb_xxx.ghosty` (que es lo que ssh pasa como %h).
+  const sandboxId = target.split(".")[0];
+
+  const eb = await createClientFromEnv();
+  const sb = await eb.sandboxes.get(sandboxId);
+  const { url } = await sb.sshTicket();
+
+  const ws = new WebSocket(url);
+  ws.binaryType = "arraybuffer";
+
+  // Todo el diagnóstico va a stderr: stdout es el canal de SSH y cualquier byte
+  // de más ahí corrompe el handshake.
+  ws.onerror = () => {
+    console.error("easybits ssh-proxy: no se pudo abrir el túnel");
+    process.exit(1);
+  };
+  ws.onclose = () => process.exit(0);
+  ws.onmessage = (ev: MessageEvent) => {
+    const data = ev.data;
+    process.stdout.write(
+      typeof data === "string" ? Buffer.from(data) : Buffer.from(data as ArrayBuffer)
+    );
+  };
+  await new Promise<void>((resolve) => (ws.onopen = () => resolve()));
+  process.stdin.on("data", (chunk: Buffer) => ws.send(chunk));
+  process.stdin.on("end", () => ws.close());
+}
+
 // ─── Router ──────────────────────────────────────────────────────
 
 const [cmd, sub] = [process.argv[2], process.argv[3]];
@@ -395,6 +442,9 @@ switch (cmd) {
   case "mcp":
     printMcpStdioConfig();
     break;
+  case "ssh-proxy":
+    sshProxy();
+    break;
   case "help":
   case undefined:
     console.log(`easybits CLI — @easybits.cloud/cli
@@ -408,7 +458,13 @@ Commands:
   files delete <id> Delete a file
   providers list    Show storage providers
   config            Print MCP config JSON (streamable HTTP)
-  mcp               Print MCP stdio config JSON`);
+  mcp               Print MCP stdio config JSON
+  ssh-proxy <id>    SSH tunnel over 443 (use as ssh ProxyCommand)
+
+SSH to a box — add to ~/.ssh/config:
+  Host *.ghosty
+    ProxyCommand easybits ssh-proxy %h
+    User root`);
     break;
   default:
     console.error(`Unknown command: ${cmd}. Run 'easybits help'`);

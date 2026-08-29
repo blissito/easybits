@@ -2500,6 +2500,25 @@ export class Sandbox {
   }
 
   /**
+   * Mint a short-lived ticket to open the WebSocket SSH tunnel.
+   *
+   * The tunnel reaches the box's port 22 over 443, so no per-box port is opened
+   * on the host's WAN — which matters because a high port does not survive
+   * office networks or corporate VPNs, and that failure reaches you as an
+   * unreproducible "it won't connect".
+   *
+   * The ticket says "this box, until this time" and carries no identity: who may
+   * log in is decided by the box's sshd against the injected keys, and the SSH
+   * session authenticates end-to-end. The tunnel only moves opaque bytes.
+   *
+   * Normally you don't call this directly — `easybits ssh-proxy` does, as an ssh
+   * ProxyCommand.
+   */
+  sshTicket(): Promise<SshTicket> {
+    return this.post("/ssh-ticket", {});
+  }
+
+  /**
    * Attach a custom domain to a port, served over HTTPS with an auto-issued
    * TLS cert. Returns the exact DNS record to create (`dns`): subdomain → CNAME,
    * apex/root → A. Create that record in your DNS, then call verifyDomain().
@@ -2916,9 +2935,29 @@ export interface RawForward {
   ok: boolean;
 }
 
+export interface SshTicket {
+  /** Signed, short-lived. Verified at the edge by HMAC — no DB in the hot path. */
+  ticket: string;
+  /** Ready-to-open `wss://…/_ssh?t=…`. */
+  url: string;
+  expiresAt: string;
+}
+
+/** How to reach the box over 443 — prefer this over the pool-port `command`. */
+export interface SshTunnelHint {
+  /** Paste-ready one-time setup (npm install + ~/.ssh/config block). */
+  setup: string;
+  /** What the user types afterwards, e.g. `ssh sb_abc123.ghosty`. */
+  command: string;
+  why: string;
+}
+
 export interface SshAccess extends RawForward {
   user: "root";
-  command: string; // ssh -p <hostPort> root@<host>
+  /** Pool-port path. Works, but a high port does not survive corporate networks. */
+  command: string;
+  /** Prefer this: rides 443, so it works where the pool port does not. */
+  tunnel: SshTunnelHint;
 }
 
 export interface DomainDnsRecord {

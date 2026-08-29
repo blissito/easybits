@@ -642,6 +642,36 @@ ssh -p 49002 root@cname.sandboxes.easybits.cloud
 - \`ssh-disable\` solo cierra el puerto; la llave sigue inyectada. Para **revocar** de verdad, quítala de \`/app/secrets.env\`.
 - Solo en templates que declaren el 22 (hoy: \`ghosty-studio\`).
 
+### SSH por túnel (recomendado: sin puertos, pasa por el 443)
+
+El comando de arriba usa un puerto alto del anfitrión, y **un puerto alto no atraviesa la red de una oficina ni una VPN corporativa**. Eso te llega como "no me conecta" desde una red que no puedes reproducir. El túnel entra por el mismo 443 de siempre: si el usuario puede abrir una página web, entra a su caja.
+
+\`\`\`sh
+npm i -g @easybits.cloud/cli && easybits login <tu-api-key>
+\`\`\`
+
+En \`~/.ssh/config\`:
+
+\`\`\`
+Host *.ghosty
+  ProxyCommand easybits ssh-proxy %h
+  User root
+\`\`\`
+
+Y ya:
+
+\`\`\`sh
+ssh sb_abc123.ghosty
+ssh sb_abc123.ghosty "cd /data/work && ghosty serve --acp"   # ACP remoto por stdio
+\`\`\`
+
+Sigue haciendo falta \`ssh-enable\` una vez, para inyectar la llave: el sshd de la caja es fail-closed.
+
+- **El túnel no autentica.** Mueve bytes opacos; la sesión SSH se autentica de punta a punta entre tu \`ssh\` y el sshd de la caja. Un fallo en el túnel no le da acceso a nadie.
+- El CLI pide un **ticket firmado de vida corta** (\`POST /sandboxes/:id/ssh-ticket\` · SDK \`sb.sshTicket()\`) y abre \`wss://…/_ssh\`. Normalmente no lo llamas tú.
+- Ticket vencido, firma alterada o caja ajena: **403/404** en el borde, sin llegar al anfitrión.
+- El \`stdout\` del proxy es el canal de SSH: cualquier byte de más ahí corrompe el handshake, así que todo su diagnóstico va a \`stderr\`.
+
 ### Dominios personalizados (custom domain + HTTPS automático)
 Sirve un puerto del sandbox bajo TU dominio (\`app.cliente.com\` o \`cliente.com\`) en vez de la URL \`sb-…\`. El cert TLS se emite solo en el primer acceso (sin egress fees, sin config extra). Un dominio → un sandbox.
 

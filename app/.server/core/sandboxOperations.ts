@@ -1,3 +1,4 @@
+import { createHmac } from "node:crypto";
 import { randomBytes } from "node:crypto";
 import { promises as dns } from "node:dns";
 import { db } from "../db";
@@ -1665,6 +1666,14 @@ async function forgetRawForward(sandboxId: string, port: number, protocol: strin
 export interface SandboxSshAccess extends RawForwardResult {
   command: string; // ssh -p <hostPort> root@<host> — listo para copiar
   user: "root";
+  // El camino por el 443. Va aquí y no en una llamada aparte porque es lo que hay
+  // que entregarle a una persona: el `command` de arriba usa un puerto alto, y un
+  // puerto alto no atraviesa la red de una oficina ni una VPN corporativa.
+  tunnel: {
+    setup: string;
+    command: string;
+    why: string;
+  };
 }
 
 // El sshd de la caja es FAIL-CLOSED: sin llave autorizada no arranca, así que
@@ -1727,7 +1736,71 @@ export async function enableSandboxSsh(
     host,
     endpoint: fwd.endpoint || `${host}:${fwd.hostPort}`,
     user: "root",
-    command: `ssh -p ${fwd.hostPort} root@${host}`,
+    // `command` usa el puerto del pool. Sigue aquí porque funciona y no rompemos a
+    // nadie, pero un puerto alto NO atraviesa la red de una oficina ni una VPN
+    // corporativa — y eso llega como "no me conecta" desde una red que no se puede
+    // reproducir. Por eso se devuelve también el camino por el 443, que es el que
+    // hay que entregarle a una persona.
+    command: `ssh -o HostKeyAlias=${sandboxId} -p ${fwd.hostPort} root@${host}`,
+    tunnel: {
+      setup: [
+        `npm i -g @easybits.cloud/cli`,
+        `easybits login <tu-api-key>`,
+        `# in ~/.ssh/config:`,
+        `Host *.ghosty`,
+        `  ProxyCommand easybits ssh-proxy %h`,
+        `  User root`,
+      ].join("\n"),
+      command: `ssh ${sandboxId}.ghosty`,
+      why: "Rides 443, so it works from offices and corporate VPNs where a high port silently fails. The tunnel does not authenticate: the SSH session authenticates end-to-end against the box's sshd.",
+    },
+  };
+}
+
+// ─────────────── Túnel SSH (sin puertos) ───────────────
+
+// El túnel entra por el 443 de Caddy y sale al 22 del guest, sin gastar un puerto
+// WAN por caja. Existe porque un puerto alto no atraviesa la red de una oficina ni
+// una VPN corporativa, y eso llega como "no me conecta" desde una red que no
+// podemos ver ni reproducir.
+//
+// El ticket se firma con HMAC en vez de validarse contra la base de datos porque
+// el borde (sandbox-router) no puede resolver un `eb_sk_...` — eso exige sha256 +
+// Prisma — y la base de datos no puede estar en el camino crítico de cada
+// conexión SSH.
+//
+// El ticket NO lleva identidad: sólo dice "esta caja, hasta esta hora". Quién
+// puede entrar lo decide el `box-sshd` de la caja contra las llaves inyectadas, y
+// la sesión SSH se autentica de punta a punta — el túnel sólo mueve bytes opacos.
+const SSH_TICKET_TTL_SECONDS = 120;
+const SSH_TUNNEL_HOST =
+  process.env.SSH_TUNNEL_HOST || "cname.sandboxes.easybits.cloud";
+
+export interface SandboxSshTicket {
+  ticket: string;
+  url: string;
+  expiresAt: string;
+}
+
+export async function issueSandboxSshTicket(
+  ctx: AuthContext,
+  sandboxId: string
+): Promise<SandboxSshTicket> {
+  requireScope(ctx, "WRITE");
+  const secret = process.env.SSH_TICKET_SECRET;
+  if (!secret) throw new Error("SSH_TICKET_SECRET no configurado; el túnel está deshabilitado");
+  // Autoriza igual que cualquier otra operación sobre la caja: 404 si no es tuya
+  // ni tienes delegación.
+  await effectiveOwnerId(ctx, sandboxId);
+
+  const exp = Math.floor(Date.now() / 1000) + SSH_TICKET_TTL_SECONDS;
+  const payload = Buffer.from(JSON.stringify({ sid: sandboxId, exp })).toString("base64url");
+  const sig = createHmac("sha256", secret).update(payload).digest("base64url");
+  const ticket = `${payload}.${sig}`;
+  return {
+    ticket,
+    url: `wss://${SSH_TUNNEL_HOST}/_ssh?t=${encodeURIComponent(ticket)}`,
+    expiresAt: new Date(exp * 1000).toISOString(),
   };
 }
 

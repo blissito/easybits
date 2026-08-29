@@ -24,6 +24,7 @@ import {
   unexposeSandboxRawPort,
   enableSandboxSsh,
   disableSandboxSsh,
+  issueSandboxSshTicket,
   addSandboxDomain,
   removeSandboxDomain,
   listSandboxDomains,
@@ -145,6 +146,10 @@ export async function action({ request, params }: Route.ActionArgs) {
     }
     case "ssh-disable":
       return Response.json(await disableSandboxSsh(ctx, id));
+    // Ticket corto para abrir el túnel. Lo pide el CLI en cada conexión: el borde
+    // no puede validar una API key sin base de datos, así que firma la app.
+    case "ssh-ticket":
+      return Response.json(await issueSandboxSshTicket(ctx, id));
     case "domain-add":
       if (typeof body.domain !== "string" || !body.domain.trim())
         return Response.json({ error: "domain required" }, { status: 400 });
