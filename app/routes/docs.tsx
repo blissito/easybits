@@ -1753,6 +1753,31 @@ while (status.status === "running") {
 }
 console.log(status.result);  // resultado final del agente`} />
 
+            <h3 className="text-lg font-bold mt-8 mb-3">¿Se despierta sola?</h3>
+            <p className="mb-3">
+              Depende de quién le hable, y es la pregunta que más se repite:
+            </p>
+            <ul className="list-disc pl-6 mb-6 space-y-2">
+              <li>
+                <strong>Agente de flota</strong> (los que corren tus conversaciones): <strong>sí</strong>.
+                Si su caja está suspendida, el turno la reanuda antes de correr, y si el snapshot
+                se perdió arranca una VM limpia con la memoria restaurada. No hace falta que el
+                usuario vuelva a escribir ni que llames a <code className="bg-gray-100 px-1 rounded">sandbox_resume</code>.
+              </li>
+              <li>
+                <strong>Sandbox tuyo con tu propio servidor</strong>: <strong>no</strong>. Ahí no hay
+                turno de agente, así que nada la reanuda por ti. Llama a{" "}
+                <code className="bg-gray-100 px-1 rounded">sandbox_resume</code> desde tu backend
+                antes de usarla.
+              </li>
+            </ul>
+            <p className="mb-6">
+              ⚠️ <strong>Una conexión no despierta una caja</strong>: abrir un WebSocket contra una
+              caja suspendida no la reanuda, negocia contra una máquina apagada. El error aparece
+              en el cliente mientras tu servidor cree que todo fue bien. Reanuda primero, conecta
+              después.
+            </p>
+
             <h3 className="text-lg font-bold mt-8 mb-3">Herramientas MCP del grupo sandbox</h3>
             <div className="grid md:grid-cols-2 gap-3 mb-6">
               {[
