@@ -8,7 +8,7 @@ import { TIER_ORDER } from "../../lib/hostingCatalog";
 // Lista canónica de templates: el tipo SandboxTemplate (en sandboxOperations)
 // se deriva de aquí — una sola fuente, sin drift entre validador y tipo.
 export const SANDBOX_TEMPLATES = [
-  "ubuntu", "python", "node", "node-agent", "bun", "claude-code", "goose",
+  "ubuntu", "python", "node", "node-agent", "bun", "dev-box", "claude-code", "goose",
   "ghostyclaw", "ghosty-lite", "open-ghosty", "lang-ghosty", "rust-ghosty",
   "ghosty-gc", "ghosty-chat", "claude-worker", "codex-worker",
   "cagent-ghosty", "openclaw", "chat-openai", "chat-anthropic",
