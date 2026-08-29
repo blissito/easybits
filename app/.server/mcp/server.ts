@@ -22,6 +22,7 @@ import {
   RESOURCE_MIME_TYPE,
 } from "@modelcontextprotocol/ext-apps/server";
 import { z } from "zod";
+import { SANDBOX_TEMPLATES } from "../sandbox/schemas";
 import { MAX_SANDBOX_TTL_SECONDS } from "../../lib/plans";
 import { filePreviewHtml, fileUploadHtml, fileListHtml } from "./apps/html";
 import { registerStructuredDocTool } from "./structured/tool";
@@ -122,6 +123,10 @@ import {
   runtimeControl as sandboxRuntimeControl,
   applyPatch as sandboxApplyPatch,
   exposeSandboxPort,
+  exposeSandboxRawPort,
+  unexposeSandboxRawPort,
+  enableSandboxSsh,
+  disableSandboxSsh,
   addSandboxDomain,
   removeSandboxDomain,
   listSandboxDomains,
@@ -321,6 +326,10 @@ const SANDBOX_TOOL_KIND: Record<string, "create" | "op"> = {
   sandbox_files_move: "op",
   sandbox_files_mkdir: "op",
   sandbox_expose_port: "op",
+  sandbox_expose_raw_port: "op",
+  sandbox_ssh_enable: "op",
+  sandbox_ssh_disable: "op",
+  sandbox_unexpose_raw_port: "op",
   sandbox_domain_add: "op",
   sandbox_domain_remove: "op",
   sandbox_domain_list: "op",
@@ -1568,7 +1577,10 @@ How to embed safely (the only reliable rule):
     "sandbox_create",
     "Spawn a Firecracker microVM sandbox. Returns sandboxId used for subsequent calls. Base templates: ubuntu, python, node, bun. Agent/harness templates: node-agent, claude-code, goose, ghostyclaw, openclaw, chat-openai, chat-anthropic (for the chat-* persistent runtimes prefer agent_create). Call templates_list for the full catalog with required env. Default timeout 300s; max session length depends on your plan (Byte 1h · Mega 4h · Tera 24h) — sandbox auto-destroys when timeout elapses (extend with sandbox_extend).",
     {
-      template: z.enum(["ubuntu", "python", "node", "node-agent", "bun", "claude-code", "goose", "ghostyclaw", "openclaw", "chat-openai", "chat-anthropic", "code-interpreter"]).describe("Base image template. 'code-interpreter' = Python with a persistent Jupyter kernel (use sandbox_run_cell — state survives between cells, matplotlib charts as images). 'node-agent' = node + Claude SDK pre-baked (agent_run). 'goose' = Block's coding agent. 'ghostyclaw' = long-lived Ghosty runtime (nanoclaw daemon + Docker + admin-api, always-on). 'openclaw' = OpenClaw personal AI. 'chat-openai' / 'chat-anthropic' = persistent Express+SSE chat runtime — use agent_create instead of sandbox_create for these."),
+      // Enum derivado de SANDBOX_TEMPLATES (misma fuente que el validador REST):
+      // hardcodearlo aquí dejó fuera templates reales — ghosty-studio, el único
+      // con SSH, no se podía crear por MCP aunque REST sí lo aceptaba.
+      template: z.enum(SANDBOX_TEMPLATES).describe("Base image template. 'code-interpreter' = Python with a persistent Jupyter kernel (use sandbox_run_cell — state survives between cells, matplotlib charts as images). 'node-agent' = node + Claude SDK pre-baked (agent_run). 'goose' = Block's coding agent. 'ghostyclaw' = long-lived Ghosty runtime (nanoclaw daemon + Docker + admin-api, always-on). 'openclaw' = OpenClaw personal AI. 'chat-openai' / 'chat-anthropic' = persistent Express+SSE chat runtime — use agent_create instead of sandbox_create for these. 'ghosty-studio' = recording/LiveKit box, and today the only template with SSH (sandbox_ssh_enable). Call templates_list for the full catalog."),
       timeoutSeconds: z.number().int().min(30).max(MAX_SANDBOX_TTL_SECONDS).optional().describe("Auto-destroy after N seconds (default 300). Max depends on your plan: Byte 3600 (1h) · Mega 14400 (4h) · Tera 86400 (24h)"),
       name: z.string().max(64).optional().describe("Optional human-friendly label"),
       metadata: z.record(z.string()).optional().describe("Optional key-value tags"),
@@ -2342,7 +2354,7 @@ How to embed safely (the only reliable rule):
 
   server.tool(
     "sandbox_expose_port",
-    "Expose a port running inside the sandbox as a public HTTPS URL (e.g. https://sb-<id>-<port>.sandboxes.easybits.cloud) — like E2B getHost / Daytona getPreviewLink. The unguessable sandboxId is the capability; anyone with the URL can reach the service. The URL is live while the sandbox is running. Start your server first (e.g. via sandbox_exec) then expose its port.",
+    "Expose a port running inside the sandbox as a public HTTPS URL (e.g. https://sb-<id>-<port>.sandboxes.easybits.cloud) — like E2B getHost / Daytona getPreviewLink. The unguessable sandboxId is the capability; anyone with the URL can reach the service. The URL is live while the sandbox is running. Start your server first (e.g. via sandbox_exec) then expose its port. HTTP ONLY: the public proxy speaks nothing else, so 22/23/25/445/3389 are rejected — use sandbox_expose_raw_port for those.",
     {
       sandboxId: z.string().describe("Sandbox ID"),
       port: z.number().int().min(1).max(65535).describe("Port the service listens on inside the sandbox"),
@@ -2350,6 +2362,66 @@ How to embed safely (the only reliable rule):
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await exposeSandboxPort(ctx, params.sandboxId, params.port);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "sandbox_expose_raw_port",
+    "Expose a RAW layer-4 (TCP/UDP) port of the sandbox — the only way to reach a non-HTTP service inside the box (SSH on 22, media/UDP). sandbox_expose_port publishes HTTP ONLY and rejects 22/23/25/445/3389. Returns { hostPort, guestPort, protocol, host, endpoint }: dial `endpoint` (\"<host>:<hostPort>\") verbatim — the host port comes from a pool (49000-49999), is DIFFERENT per box and is NOT equal to the guest port. It is also not stable: it is released when the box is destroyed, so read it again instead of remembering it. Capability-gated by template: a 403 means this template has no such raw port (permanent — do NOT retry).",
+    {
+      sandboxId: z.string().describe("Sandbox ID"),
+      port: z.number().int().min(1).max(65535).describe("Port inside the VM (e.g. 22 for SSH)"),
+      protocol: z.enum(["tcp", "udp"]).default("tcp").describe("L4 protocol"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await exposeSandboxRawPort(ctx, params.sandboxId, params.port, params.protocol);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "sandbox_unexpose_raw_port",
+    "Tear down a raw TCP/UDP forward created with sandbox_expose_raw_port. The host port returns to the pool and may be re-assigned to another box.",
+    {
+      sandboxId: z.string().describe("Sandbox ID"),
+      port: z.number().int().min(1).max(65535).describe("Port inside the VM"),
+      protocol: z.enum(["tcp", "udp"]).default("tcp").describe("L4 protocol"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await unexposeSandboxRawPort(ctx, params.sandboxId, params.port, params.protocol);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "sandbox_ssh_enable",
+    "Give the user SSH into the box, in one call: injects their public key(s), restarts the box sshd and opens port 22 over L4. Returns a ready-to-paste `command` (ssh -p <hostPort> root@<host>) — hand THAT to the user; the host port comes from a pool and is neither 22 nor stable, so never write it into docs or remember it across sessions (call this again to read it back). The box's sshd is fail-closed: without a key it does not run at all, which is why the key must go in first. Access is key-only, as root. Only templates that declare port 22 (today: ghosty-studio) work — a 403 means this template has no SSH and is a permanent answer, do NOT retry.",
+    {
+      sandboxId: z.string().describe("Sandbox ID"),
+      publicKeys: z
+        .array(z.string())
+        .min(1)
+        .describe("SSH public keys, one per array item (e.g. 'ssh-ed25519 AAAA... user@host')"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await enableSandboxSsh(ctx, params.sandboxId, params.publicKeys);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "sandbox_ssh_disable",
+    "Close the SSH forward (port 22) of a sandbox. The key stays injected and sshd keeps running inside the box — it just becomes unreachable from outside. To actually revoke someone, remove their key from /app/secrets.env.",
+    {
+      sandboxId: z.string().describe("Sandbox ID"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await disableSandboxSsh(ctx, params.sandboxId);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     })
   );

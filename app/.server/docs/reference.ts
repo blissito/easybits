@@ -540,7 +540,9 @@ Configure via MCP tool \`set_ai_key\` or dashboard. Supports ANTHROPIC and OPENA
 | \`machines.backups(id)\` | Backups diarios de datos (7 días, incluidos) |
 | \`machines.backup(id)\` | Toma un backup ahora |
 | \`sb.exec(cmd)\` | Corre un comando dentro de la caja |
-| \`sb.exposePort(port)\` | URL pública \`sb-<id>-<port>.sandboxes.easybits.cloud\` |
+| \`sb.exposePort(port)\` | URL pública \`sb-<id>-<port>.sandboxes.easybits.cloud\` (solo HTTP) |
+| \`sb.exposeRawPort(port, proto)\` | Forward TCP/UDP crudo; devuelve \`endpoint\` \`host:hostPort\` |
+| \`sb.enableSsh(keys)\` | SSH a la caja: inyecta llave + abre el 22; devuelve el comando \`ssh\` |
 | \`sb.addDomain(domain, port)\` | Dominio propio + TLS automático; devuelve el registro DNS exacto (apex → A, subdominio → CNAME) |
 | \`sb.verifyDomain(domain)\` | Confirma que el dominio ya resuelve y sirve por HTTPS |
 | \`sb.makePermanent(tier)\` | Promueve un sandbox efímero (mismo sandboxId) |
@@ -602,6 +604,43 @@ MCP: \`sandbox_kernel_restart({ sandboxId })\` — reiniciar kernel.
 Body: \`{ port }\`
 MCP: \`sandbox_expose_port({ sandboxId, port })\`
 Retorna URL HTTPS pública (viva mientras el sandbox exista).
+
+**Solo HTTP.** El proxy público no habla otro protocolo: los puertos 22, 23, 25, 445 y 3389 se rechazan con 400. Para esos usa el forward L4.
+
+### Puertos raw (TCP/UDP)
+\`POST /sandboxes/:id/expose-raw\` · Body: \`{ port, protocol }\` (\`"tcp"\` | \`"udp"\`)
+MCP: \`sandbox_expose_raw_port({ sandboxId, port, protocol })\` · SDK: \`sb.exposeRawPort(port, protocol)\`
+Cerrar: \`POST /sandboxes/:id/unexpose-raw\` — MCP \`sandbox_unexpose_raw_port\` · SDK \`sb.unexposeRawPort(port, protocol)\`
+
+Devuelve:
+
+\`\`\`json
+{ "hostPort": 49123, "guestPort": 22, "protocol": "tcp",
+  "host": "cname.sandboxes.easybits.cloud",
+  "endpoint": "cname.sandboxes.easybits.cloud:49123", "ok": true }
+\`\`\`
+
+Marca el destino con \`endpoint\` tal cual; no lo armes a mano. El \`hostPort\` sale de un pool (49000-49999), es **distinto por caja** y **no** es igual al \`guestPort\` — eso es justo lo que permite que cada caja tenga su propio 22. Tampoco es estable: se libera al destruir la caja y se re-asigna, así que vuelve a leerlo en vez de guardarlo.
+
+Está **gateado por capacidad del template**: si el template no declara ese puerto, la respuesta es 403 — es un "no", no un fallo transitorio; no reintentes.
+
+### SSH a una caja
+\`POST /sandboxes/:id/ssh-enable\` · Body: \`{ publicKeys: string[] }\`
+MCP: \`sandbox_ssh_enable({ sandboxId, publicKeys })\` · SDK: \`sb.enableSsh(publicKeys)\`
+Cerrar: \`POST /sandboxes/:id/ssh-disable\` — MCP \`sandbox_ssh_disable\` · SDK \`sb.disableSsh()\`
+
+Una sola llamada hace las dos mitades: inyecta las llaves, reinicia \`box-sshd\` y expone el 22 por L4. Devuelve el forward más el comando listo para pegar:
+
+\`\`\`
+ssh -p 49002 root@cname.sandboxes.easybits.cloud
+\`\`\`
+
+- El sshd de la caja es **fail-closed**: sin llave no arranca, así que una caja a la que nadie inyectó nada no tiene superficie SSH ni siquiera cerrada. Por eso la llave va primero.
+- Acceso **solo por llave**, como \`root\` (\`PasswordAuthentication no\`).
+- Varias llaves: una por elemento del array. Internamente van separadas por **coma**, no por salto de línea.
+- La host key persiste en \`/app/ssh/\`, así que el fingerprint sobrevive reinicios y resume — sin warning de MITM en cada boot.
+- \`ssh-disable\` solo cierra el puerto; la llave sigue inyectada. Para **revocar** de verdad, quítala de \`/app/secrets.env\`.
+- Solo en templates que declaren el 22 (hoy: \`ghosty-studio\`).
 
 ### Dominios personalizados (custom domain + HTTPS automático)
 Sirve un puerto del sandbox bajo TU dominio (\`app.cliente.com\` o \`cliente.com\`) en vez de la URL \`sb-…\`. El cert TLS se emite solo en el primer acceso (sin egress fees, sin config extra). Un dominio → un sandbox.

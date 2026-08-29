@@ -20,6 +20,10 @@ import {
   runCell,
   kernelRestart,
   exposeSandboxPort,
+  exposeSandboxRawPort,
+  unexposeSandboxRawPort,
+  enableSandboxSsh,
+  disableSandboxSsh,
   addSandboxDomain,
   removeSandboxDomain,
   listSandboxDomains,
@@ -36,6 +40,7 @@ const invalid = (issues: unknown) =>
 // POST /api/v2/sandboxes/:id/:action
 // action ∈ extend | suspend | resume | snapshot | fork | exec | run-code |
 //          run-cell | kernel-restart | logs | runtime | apply-patch | expose |
+//          expose-raw | unexpose-raw | ssh-enable | ssh-disable |
 //          domain-add | domain-remove | domain-list | domain-verify
 export async function action({ request, params }: Route.ActionArgs) {
   if (request.method !== "POST") {
@@ -110,6 +115,36 @@ export async function action({ request, params }: Route.ActionArgs) {
       if (typeof body.port !== "number")
         return Response.json({ error: "port required" }, { status: 400 });
       return Response.json(await exposeSandboxPort(ctx, id, body.port));
+    // Raw L4 (TCP/UDP) forward. Capability-gated host-side: only templates
+    // that declare raw_ports may use it — a 403 means "this template has no
+    // such port", not a transient failure, so don't retry.
+    case "expose-raw":
+    case "unexpose-raw": {
+      if (typeof body.port !== "number")
+        return Response.json({ error: "port required" }, { status: 400 });
+      const proto = body.protocol === "tcp" ? "tcp" : body.protocol === "udp" ? "udp" : null;
+      if (!proto)
+        return Response.json({ error: "protocol must be 'tcp' or 'udp'" }, { status: 400 });
+      return Response.json(
+        params.action === "expose-raw"
+          ? await exposeSandboxRawPort(ctx, id, body.port, proto)
+          : await unexposeSandboxRawPort(ctx, id, body.port, proto)
+      );
+    }
+    // SSH = llave + forward. El sshd de la caja es fail-closed, así que la
+    // llave va PRIMERO; enableSandboxSsh hace las dos mitades.
+    case "ssh-enable": {
+      const keys = Array.isArray(body.publicKeys)
+        ? body.publicKeys
+        : typeof body.publicKey === "string"
+          ? [body.publicKey]
+          : null;
+      if (!keys?.length || keys.some((k: unknown) => typeof k !== "string"))
+        return Response.json({ error: "publicKeys (string[]) required" }, { status: 400 });
+      return Response.json(await enableSandboxSsh(ctx, id, keys));
+    }
+    case "ssh-disable":
+      return Response.json(await disableSandboxSsh(ctx, id));
     case "domain-add":
       if (typeof body.domain !== "string" || !body.domain.trim())
         return Response.json({ error: "domain required" }, { status: 400 });

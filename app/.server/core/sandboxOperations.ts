@@ -1518,12 +1518,24 @@ export interface ExposedPort {
 // Expose a port running inside the sandbox as a public URL
 // (https://sb-<id>-<port>.sandboxes.easybits.cloud). The unguessable sandboxId
 // is the capability. The URL is live while the sandbox is running.
+// Ports the public proxy can NOT serve: it only speaks HTTP. The host rejects
+// these with a 400 since Aug 2026; we mirror the check here so the caller gets
+// the same message without a round-trip. Before the host fix, expose(22)
+// returned a URL that RESOLVED TO THE HOST — SSH landed on the host's sshd,
+// never inside the box. Use exposeSandboxRawPort for L4.
+const NON_HTTP_PORTS = new Set([22, 23, 25, 445, 3389]);
+
 export async function exposeSandboxPort(
   ctx: AuthContext,
   sandboxId: string,
   port: number
 ): Promise<ExposedPort> {
   requireScope(ctx, "WRITE");
+  if (NON_HTTP_PORTS.has(port)) {
+    throw new Error(
+      `port ${port} is not an HTTP port; /expose only publishes HTTP. Use expose-raw (sandboxExposeRawPort) for TCP/UDP forwards.`
+    );
+  }
   return callHost<ExposedPort>(
     "POST",
     `/v1/sandbox/${sandboxId}/expose`,
@@ -1533,9 +1545,11 @@ export async function exposeSandboxPort(
 }
 
 export interface RawForwardResult {
-  hostPort: number;   // unique host port from the fleetAgent (49000-49999)
+  hostPort: number;   // unique host port from the pool (49000-49999)
   guestPort: number;  // the port the service listens on inside the VM
   protocol: "udp" | "tcp";
+  host?: string;      // public host to dial (cname.sandboxes.easybits.cloud)
+  endpoint?: string;  // "<host>:<hostPort>" — use this, don't build it by hand
   ok: boolean;
 }
 
@@ -1553,12 +1567,139 @@ export async function exposeSandboxRawPort(
   protocol: "udp" | "tcp" = "udp"
 ): Promise<RawForwardResult> {
   requireScope(ctx, "WRITE");
-  return callHost<RawForwardResult>(
+  const res = await callHost<RawForwardResult>(
     "POST",
     `/v1/sandbox/${sandboxId}/expose-raw`,
     { port, protocol },
     await effectiveOwnerId(ctx, sandboxId)
   );
+  await rememberRawForward(sandboxId, res);
+  return res;
+}
+
+// Tear down a raw forward. Same capability gate as expose-raw.
+export async function unexposeSandboxRawPort(
+  ctx: AuthContext,
+  sandboxId: string,
+  port: number,
+  protocol: "udp" | "tcp" = "udp"
+): Promise<{ ok: boolean }> {
+  requireScope(ctx, "WRITE");
+  const res = await callHost<{ ok: boolean }>(
+    "POST",
+    `/v1/sandbox/${sandboxId}/unexpose-raw`,
+    { port, protocol },
+    await effectiveOwnerId(ctx, sandboxId)
+  );
+  await forgetRawForward(sandboxId, port, protocol);
+  return res;
+}
+
+// hostPort is NOT stable: it comes from a pool and is released when the box is
+// destroyed, so it can be re-assigned to somebody else's box. We cache the last
+// mapping on the Sandbox row so a caller can show it without a round-trip, but
+// the row is a cache — re-expose (idempotent) to get the authoritative value,
+// and never hardcode it in docs or UI.
+type RawForwardCache = Record<string, { hostPort: number; host?: string; endpoint?: string }>;
+
+const rawKey = (port: number, protocol: string) => `${protocol}:${port}`;
+
+async function rememberRawForward(sandboxId: string, res: RawForwardResult) {
+  if (!res?.ok) return;
+  try {
+    const row = await db.sandbox.findUnique({ where: { sandboxId }, select: { rawForwards: true } });
+    if (!row) return; // ephemeral box (no Prisma row) — nothing to cache
+    const map = ((row.rawForwards as RawForwardCache) || {}) as RawForwardCache;
+    map[rawKey(res.guestPort, res.protocol)] = {
+      hostPort: res.hostPort,
+      host: res.host,
+      endpoint: res.endpoint,
+    };
+    await db.sandbox.update({ where: { sandboxId }, data: { rawForwards: map } });
+  } catch (e) {
+    console.error("rawForwards cache write failed:", e);
+  }
+}
+
+async function forgetRawForward(sandboxId: string, port: number, protocol: string) {
+  try {
+    const row = await db.sandbox.findUnique({ where: { sandboxId }, select: { rawForwards: true } });
+    if (!row?.rawForwards) return;
+    const map = { ...(row.rawForwards as RawForwardCache) };
+    delete map[rawKey(port, protocol)];
+    await db.sandbox.update({ where: { sandboxId }, data: { rawForwards: map } });
+  } catch (e) {
+    console.error("rawForwards cache clear failed:", e);
+  }
+}
+
+// ─────────────── SSH (llave + forward L4) ───────────────
+
+export interface SandboxSshAccess extends RawForwardResult {
+  command: string; // ssh -p <hostPort> root@<host> — listo para copiar
+  user: "root";
+}
+
+// El sshd de la caja es FAIL-CLOSED: sin llave autorizada no arranca, así que
+// una caja a la que nadie inyectó nada no tiene superficie SSH ni siquiera
+// cerrada. Por eso enableSandboxSsh hace las dos mitades: inyecta la llave y
+// reinicia el unit ANTES de pedir el forward.
+//
+// Varias llaves van separadas por COMA, no por salto de línea: el daemon
+// rechaza valores de env con newline y el unit convierte las comas a renglones.
+function assertSshKeys(keys: string[]): string {
+  if (!keys.length) throw new Error("at least one SSH public key is required");
+  for (const k of keys) {
+    if (/[\n\r]/.test(k)) throw new Error("SSH keys must not contain newlines — pass them as separate array items");
+    if (!/^(ssh-(ed25519|rsa|dss)|ecdsa-sha2-\S+|sk-\S+)\s+\S+/.test(k.trim()))
+      throw new Error(`not a public key: ${k.slice(0, 24)}…`);
+  }
+  return keys.map((k) => k.trim()).join(",");
+}
+
+// Habilita SSH en una caja: inyecta las llaves en /app/secrets.env, reinicia
+// box-sshd y expone el 22 por L4. Acceso SOLO por llave, como root
+// (PasswordAuthentication no). La host key persiste en /app/ssh/, así que el
+// fingerprint sobrevive reinicios y resume — el usuario no ve el warning de
+// MITM en cada boot.
+//
+// Sólo templates que declaren el 22 en raw_ports (hoy: ghosty-studio). Un 403
+// del expose-raw significa "este template no tiene SSH": es definitivo.
+export async function enableSandboxSsh(
+  ctx: AuthContext,
+  sandboxId: string,
+  publicKeys: string[]
+): Promise<SandboxSshAccess> {
+  requireScope(ctx, "WRITE");
+  const value = assertSshKeys(publicKeys);
+  // El unit reintenta solo (arrancaría en unos segundos con sólo escribir el
+  // archivo), pero hacemos el restart explícito para no depender del timing.
+  const r = await execCommand(ctx, sandboxId, {
+    command: `mkdir -p /app && echo ${shQuote(`SSH_AUTHORIZED_KEYS=${value}`)} >> /app/secrets.env && systemctl restart box-sshd`,
+    timeoutSeconds: 60,
+  });
+  if (r.exitCode !== 0)
+    throw new Error(`ssh key injection failed: ${(r.stderr || r.stdout || "").trim().slice(0, 300)}`);
+
+  const fwd = await exposeSandboxRawPort(ctx, sandboxId, 22, "tcp");
+  const host = fwd.host || SANDBOX_CNAME_TARGET;
+  return {
+    ...fwd,
+    host,
+    endpoint: fwd.endpoint || `${host}:${fwd.hostPort}`,
+    user: "root",
+    command: `ssh -p ${fwd.hostPort} root@${host}`,
+  };
+}
+
+// Cierra el forward del 22. La llave sigue inyectada (el sshd queda vivo pero
+// inalcanzable desde fuera); para revocar el acceso hay que quitarla de
+// /app/secrets.env.
+export async function disableSandboxSsh(
+  ctx: AuthContext,
+  sandboxId: string
+): Promise<{ ok: boolean }> {
+  return unexposeSandboxRawPort(ctx, sandboxId, 22, "tcp");
 }
 
 // ─────────────── Custom domains (CNAME) ───────────────

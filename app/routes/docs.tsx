@@ -1598,6 +1598,40 @@ await eb.sandboxExecBackground(sb.sandboxId, {
 const { url } = await eb.sandboxExposePort(sb.sandboxId, 3000);
 console.log(url); // https://sb-abc123-3000.sandboxes.easybits.cloud`} />
 
+            <h3 className="text-lg font-bold mt-8 mb-3">Puertos raw (TCP/UDP)</h3>
+            <p className="text-gray-600 text-sm mb-3">
+              <code className="bg-gray-100 px-1 rounded">sandbox_expose_port</code> publica <strong>solo HTTP</strong>: los puertos 22, 23, 25, 445 y 3389 se rechazan con 400. Para un servicio que no habla HTTP usa el forward de capa 4.
+            </p>
+            <CodeExample title="SDK" code={`const fwd = await eb.sandboxExposeRawPort(sb.sandboxId, 22, "tcp");
+// {
+//   hostPort: 49123, guestPort: 22, protocol: "tcp",
+//   host: "cname.sandboxes.easybits.cloud",
+//   endpoint: "cname.sandboxes.easybits.cloud:49123", ok: true
+// }
+console.log(fwd.endpoint); // marca ESTO; no lo armes a mano`} />
+            <ul className="list-disc ml-5 mt-3 text-sm text-gray-600 space-y-1">
+              <li>El <code className="bg-gray-100 px-1 rounded">hostPort</code> sale de un pool (49000-49999): es distinto por caja y <strong>no</strong> es igual al puerto de adentro — así cada caja tiene su propio 22.</li>
+              <li>No es estable: se libera al destruir la caja y se re-asigna. Vuelve a leerlo; no lo guardes ni lo pongas fijo en tu UI.</li>
+              <li>Gateado por el template: un <strong>403</strong> significa "este template no tiene ese puerto". Es definitivo, no reintentes.</li>
+              <li>Cerrarlo: <code className="bg-gray-100 px-1 rounded">sandbox_unexpose_raw_port</code>.</li>
+            </ul>
+
+            <h3 className="text-lg font-bold mt-8 mb-3">SSH a una caja</h3>
+            <p className="text-gray-600 text-sm mb-3">
+              Una sola llamada inyecta tu llave, reinicia el sshd de la caja y abre el 22. Te devuelve el comando listo para pegar.
+            </p>
+            <CodeExample title="SDK" code={`const ssh = await eb.sandboxSshEnable(sb.sandboxId, [
+  "ssh-ed25519 AAAA... yo@mi-laptop",
+]);
+console.log(ssh.command); // ssh -p 49002 root@cname.sandboxes.easybits.cloud`} />
+            <ul className="list-disc ml-5 mt-3 text-sm text-gray-600 space-y-1">
+              <li>El sshd de la caja es <strong>fail-closed</strong>: sin llave no arranca. Por eso la llave va primero — una caja sin llave no tiene superficie SSH ni siquiera cerrada.</li>
+              <li>Acceso <strong>solo por llave</strong>, como <code className="bg-gray-100 px-1 rounded">root</code>. Varias llaves: una por elemento del array.</li>
+              <li>La host key vive en <code className="bg-gray-100 px-1 rounded">/app/ssh/</code>: el fingerprint sobrevive reinicios y resume, así que no verás el warning de MITM en cada boot.</li>
+              <li><code className="bg-gray-100 px-1 rounded">sandbox_ssh_disable</code> cierra el puerto pero <strong>no</strong> revoca: para eso quita la llave de <code className="bg-gray-100 px-1 rounded">/app/secrets.env</code>.</li>
+              <li>Solo en templates que declaren el 22 (hoy <code className="bg-gray-100 px-1 rounded">ghosty-studio</code>).</li>
+            </ul>
+
             <h3 className="text-lg font-bold mt-8 mb-3">Dominio personalizado (custom domain + HTTPS automático)</h3>
             <p className="text-gray-600 text-sm mb-3">
               Sirve un puerto del sandbox bajo <strong>tu propio dominio</strong> con certificado TLS emitido automáticamente — sin egress fees, sin configurar nada de TLS. Funciona con subdominios (<code className="bg-gray-100 px-1 rounded">app.cliente.com</code>) y dominios raíz (<code className="bg-gray-100 px-1 rounded">cliente.com</code>).
@@ -1701,7 +1735,11 @@ console.log(status.result);  // resultado final del agente`} />
                 ["sandbox_logs", "sandboxId, unit?, lines?, since?, grep?", "Logs journald nativos del daemon"],
                 ["sandbox_runtime", "sandboxId, action, unit?, buildCommand?", "systemd status/restart/rebuild del daemon"],
                 ["sandbox_apply_patch", "sandboxId, edits[], rebuild?, restart?", "Hotfix atómico: edita → rebuild → restart"],
-                ["sandbox_expose_port", "sandboxId, port", "Exponer puerto como URL pública HTTPS"],
+                ["sandbox_expose_port", "sandboxId, port", "Exponer puerto como URL pública HTTPS (solo HTTP)"],
+                ["sandbox_expose_raw_port", "sandboxId, port, protocol", "Forward TCP/UDP crudo; devuelve endpoint host:hostPort"],
+                ["sandbox_unexpose_raw_port", "sandboxId, port, protocol", "Cerrar el forward TCP/UDP"],
+                ["sandbox_ssh_enable", "sandboxId, publicKeys[]", "SSH a la caja: inyecta llave, abre el 22, devuelve el comando"],
+                ["sandbox_ssh_disable", "sandboxId", "Cerrar el puerto SSH (no revoca la llave)"],
                 ["sandbox_domain_add", "sandboxId, domain, port", "Atar dominio propio (devuelve el registro DNS: CNAME o A)"],
                 ["sandbox_domain_remove", "sandboxId, domain", "Quitar dominio personalizado"],
                 ["sandbox_domain_list", "sandboxId", "Listar dominios del sandbox"],

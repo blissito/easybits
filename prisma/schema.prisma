@@ -1381,6 +1381,11 @@ model Sandbox {
   // matching Fly, which snapshots volumes and NOT the rebuildable rootfs) or
   // "none" (owner opted out). The rootfs is reconstructible from `template`.
   backupScope      String?
+  // Cache of raw L4 forwards ("tcp:22" -> { hostPort, host, endpoint }). The
+  // host port comes from a pool (49000-49999) and is released on destroy, so
+  // this is a CACHE, never a source of truth: re-expose to read it back, and
+  // never hardcode it in docs or UI.
+  rawForwards      Json?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 

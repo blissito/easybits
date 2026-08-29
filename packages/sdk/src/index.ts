@@ -2446,9 +2446,57 @@ export class Sandbox {
   }
 
   // ── Networking ──
-  /** Expose a port as a public HTTPS URL (sb-<id>-<port>.sandboxes.easybits.cloud). */
+  /**
+   * Expose a port as a public HTTPS URL (sb-<id>-<port>.sandboxes.easybits.cloud).
+   * HTTP only — the public proxy speaks nothing else. Non-HTTP ports (22, 23,
+   * 25, 445, 3389) are rejected with a 400; use exposeRawPort() for those.
+   */
   exposePort(port: number): Promise<ExposedPort> {
     return this.post("/expose", { port });
+  }
+
+  /**
+   * Expose a raw layer-4 (TCP/UDP) port — the only way to reach a non-HTTP
+   * service inside the box (SSH, LiveKit media). Returns `endpoint`
+   * ("<host>:<hostPort>"); dial THAT, never assume hostPort === port. The host
+   * port comes from a pool (49000-49999), differs per box, and is released when
+   * the box is destroyed, so re-read it instead of persisting it in docs or UI.
+   *
+   * Capability-gated: only templates that declare the port work. A 403 means
+   * "this template doesn't have it" — a permanent answer, don't retry.
+   */
+  exposeRawPort(port: number, protocol: "tcp" | "udp" = "tcp"): Promise<RawForward> {
+    return this.post("/expose-raw", { port, protocol });
+  }
+
+  /** Tear down a raw TCP/UDP forward. */
+  unexposeRawPort(port: number, protocol: "tcp" | "udp" = "tcp"): Promise<{ ok: boolean }> {
+    return this.post("/unexpose-raw", { port, protocol });
+  }
+
+  /**
+   * Open SSH into the box: injects the public key(s), restarts the box sshd and
+   * forwards port 22. Returns a ready-to-paste `command`.
+   *
+   * The box's sshd is fail-closed — without a key it doesn't run at all — so
+   * the key has to go in before the port can be opened; this does both.
+   * Access is key-only, as root. `hostPort` is pool-allocated, so it is neither
+   * 22 nor stable: read it from the result each time, don't hardcode it.
+   *
+   * Only templates that declare port 22 (today: ghosty-studio) support this;
+   * a 403 means "this template has no SSH" and is permanent, not transient.
+   */
+  enableSsh(publicKeys: string[]): Promise<SshAccess> {
+    return this.post("/ssh-enable", { publicKeys });
+  }
+
+  /**
+   * Close the SSH forward. The key stays injected and sshd keeps running inside
+   * the box — it just stops being reachable. To revoke access for real, remove
+   * the key from /app/secrets.env.
+   */
+  disableSsh(): Promise<{ ok: boolean }> {
+    return this.post("/ssh-disable", {});
   }
 
   /**
@@ -2857,6 +2905,20 @@ export interface ExposedPort {
   url: string;
   host: string;
   port: number;
+}
+
+export interface RawForward {
+  hostPort: number; // from the pool (49000-49999); NOT stable across rebuilds
+  guestPort: number; // the port inside the box (e.g. 22)
+  protocol: "tcp" | "udp";
+  host: string; // cname.sandboxes.easybits.cloud
+  endpoint: string; // "<host>:<hostPort>" — dial this
+  ok: boolean;
+}
+
+export interface SshAccess extends RawForward {
+  user: "root";
+  command: string; // ssh -p <hostPort> root@<host>
 }
 
 export interface DomainDnsRecord {

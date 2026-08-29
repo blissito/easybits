@@ -298,6 +298,18 @@ const png = chart.results.find((r) => r.type === "image/png")?.data; // base64
 await sbx.execBackground("python3 -m http.server 3000");
 const { url } = await sbx.exposePort(3000);
 console.log(url); // https://sb-...-3000.sandboxes.easybits.cloud
+// exposePort is HTTP-only (22/23/25/445/3389 are rejected). For a raw L4 port:
+const fwd = await sbx.exposeRawPort(22, "tcp");
+console.log(fwd.endpoint); // cname.sandboxes.easybits.cloud:49123 — dial this
+// hostPort comes from a pool, differs per box and is released on destroy:
+// read it back, never hardcode it. Close it with unexposeRawPort(22, "tcp").
+// Only templates that declare the port work; a 403 is permanent, not transient.
+
+// SSH: injects the key, restarts the box sshd and opens 22, in one call.
+// The box sshd is fail-closed, so the key has to go in before the port opens.
+const ssh = await sbx.enableSsh(["ssh-ed25519 AAAA... me@laptop"]);
+console.log(ssh.command); // ssh -p 49002 root@cname.sandboxes.easybits.cloud
+// Key-only, as root. disableSsh() closes the port but does NOT revoke the key.
 
 // Files
 await sbx.files.write("/tmp/data.json", JSON.stringify({ ok: true }));
