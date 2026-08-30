@@ -540,7 +540,7 @@ Configure via MCP tool \`set_ai_key\` or dashboard. Supports ANTHROPIC and OPENA
 | \`machines.backups(id)\` | Backups diarios de datos (7 días, incluidos) |
 | \`machines.backup(id)\` | Toma un backup ahora |
 | \`sb.exec(cmd)\` | Corre un comando dentro de la caja |
-| \`sb.exposePort(port)\` | URL pública \`sb-<id>-<port>.sandboxes.easybits.cloud\` (solo HTTP) |
+| \`sb.exposePort(port)\` | URL pública \`sb-<id>-<port>.sandboxes.easybits.cloud\` con TLS (HTTP + WebSocket \`wss://\`) |
 | \`sb.exposeRawPort(port, proto)\` | Forward TCP/UDP crudo; devuelve \`endpoint\` \`host:hostPort\` |
 | \`sb.enableSsh(keys)\` | SSH a la caja: inyecta llave + abre el 22; devuelve el comando \`ssh\` |
 | \`sb.addDomain(domain, port)\` | Dominio propio + TLS automático; devuelve el registro DNS exacto (apex → A, subdominio → CNAME) |
@@ -612,7 +612,7 @@ Body: \`{ port }\`
 MCP: \`sandbox_expose_port({ sandboxId, port })\`
 Retorna URL HTTPS pública (viva mientras el sandbox exista).
 
-**Solo HTTP.** El proxy público no habla otro protocolo: los puertos 22, 23, 25, 445 y 3389 se rechazan con 400. Para esos usa el forward L4.
+**Capa 7 con TLS: HTTP y WebSocket.** El certificado ya está en el edge, así que la misma URL sirve \`https://\` y \`wss://\` — no hace falta cloudflared ni un puerto raw para un WebSocket. Lo que no hace es capa 4 cruda: los puertos 22, 23, 25, 445 y 3389 se rechazan con 400. Para esos usa el forward L4.
 
 ### Puertos raw (TCP/UDP)
 \`POST /sandboxes/:id/expose-raw\` · Body: \`{ port, protocol }\` (\`"tcp"\` | \`"udp"\`)

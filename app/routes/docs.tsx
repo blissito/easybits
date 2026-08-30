@@ -1597,7 +1597,7 @@ console.log(url); // https://sb-abc123-3000.sandboxes.easybits.cloud`} />
 
             <h3 className="text-lg font-bold mt-8 mb-3">Puertos raw (TCP/UDP)</h3>
             <p className="text-gray-600 text-sm mb-3">
-              <code className="bg-gray-100 px-1 rounded">sandbox_expose_port</code> publica <strong>solo HTTP</strong>: los puertos 22, 23, 25, 445 y 3389 se rechazan con 400. Para un servicio que no habla HTTP usa el forward de capa 4.
+              <code className="bg-gray-100 px-1 rounded">sandbox_expose_port</code> ya sirve <strong>capa 7 con TLS: HTTP y WebSocket</strong> — la misma URL responde <code className="bg-gray-100 px-1 rounded">https://</code> y <code className="bg-gray-100 px-1 rounded">wss://</code>, sin túnel ni puerto raw. Lo que no hace es <strong>capa 4 cruda</strong>: los puertos 22, 23, 25, 445 y 3389 se rechazan con 400. Para un servicio que no habla HTTP usa el forward de capa 4.
             </p>
             <CodeExample title="SDK" code={`const fwd = await sb.exposeRawPort(22, "tcp");
 // {

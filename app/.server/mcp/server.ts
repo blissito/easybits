@@ -2354,7 +2354,7 @@ How to embed safely (the only reliable rule):
 
   server.tool(
     "sandbox_expose_port",
-    "Expose a port running inside the sandbox as a public HTTPS URL (e.g. https://sb-<id>-<port>.sandboxes.easybits.cloud) — like E2B getHost / Daytona getPreviewLink. The unguessable sandboxId is the capability; anyone with the URL can reach the service. The URL is live while the sandbox is running. Start your server first (e.g. via sandbox_exec) then expose its port. HTTP ONLY: the public proxy speaks nothing else, so 22/23/25/445/3389 are rejected — use sandbox_expose_raw_port for those.",
+    "Expose a port running inside the sandbox as a public HTTPS URL (e.g. https://sb-<id>-<port>.sandboxes.easybits.cloud) — like E2B getHost / Daytona getPreviewLink. The unguessable sandboxId is the capability; anyone with the URL can reach the service. The URL is live while the sandbox is running. Start your server first (e.g. via sandbox_exec) then expose its port. Serves LAYER 7 over an auto-issued TLS cert: HTTP/HTTPS AND WebSocket — connect with wss:// on the SAME hostname, no tunnel (cloudflared etc.) and no raw port needed. What it does NOT do is raw layer 4, so 22/23/25/445/3389 are rejected — use sandbox_expose_raw_port for those.",
     {
       sandboxId: z.string().describe("Sandbox ID"),
       port: z.number().int().min(1).max(65535).describe("Port the service listens on inside the sandbox"),
@@ -2368,7 +2368,7 @@ How to embed safely (the only reliable rule):
 
   server.tool(
     "sandbox_expose_raw_port",
-    "Expose a RAW layer-4 (TCP/UDP) port of the sandbox — the only way to reach a non-HTTP service inside the box (SSH on 22, media/UDP). sandbox_expose_port publishes HTTP ONLY and rejects 22/23/25/445/3389. Returns { hostPort, guestPort, protocol, host, endpoint }: dial `endpoint` (\"<host>:<hostPort>\") verbatim — the host port comes from a pool (49000-49999), is DIFFERENT per box and is NOT equal to the guest port. It is also not stable: it is released when the box is destroyed, so read it again instead of remembering it. Capability-gated by template: a 403 means this template has no such raw port (permanent — do NOT retry).",
+    "Expose a RAW layer-4 (TCP/UDP) port of the sandbox — the only way to reach a service that does not speak HTTP (SSH on 22, media/UDP). NOT needed for WebSocket: wss:// works over sandbox_expose_port, which serves layer 7 (HTTP + WS) and rejects only 22/23/25/445/3389. Returns { hostPort, guestPort, protocol, host, endpoint }: dial `endpoint` (\"<host>:<hostPort>\") verbatim — the host port comes from a pool (49000-49999), is DIFFERENT per box and is NOT equal to the guest port. It is also not stable: it is released when the box is destroyed, so read it again instead of remembering it. Capability-gated by template: a 403 means this template has no such raw port (permanent — do NOT retry).",
     {
       sandboxId: z.string().describe("Sandbox ID"),
       port: z.number().int().min(1).max(65535).describe("Port inside the VM (e.g. 22 for SSH)"),
