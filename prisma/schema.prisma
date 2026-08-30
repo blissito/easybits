@@ -841,6 +841,10 @@ model AiGenerationLog {
   modelId      String?  // "gemini-2.5-pro", "claude-sonnet-4-6"
   inputTokens  Int?
   outputTokens Int?
+  // Porción de inputTokens que pegó en el cache de prompt del proveedor. Se
+  // cobra a una fracción del precio de entrada, así que sin esto el costo real
+  // queda sobreestimado (y no se ve quién reenvía contexto repetido).
+  cachedInputTokens Int?
   resourceId   String?  // landingId of the document/landing
   pageCount    Int?     // pages generated
   durationMs   Int?     // total generation time

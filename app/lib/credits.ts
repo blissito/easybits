@@ -225,6 +225,35 @@ export function computeCreditsForTokens(
   return Math.max(1, Math.ceil(credits));
 }
 
+/**
+ * COSTO REAL (lo que nos cobra DeepSeek), USD por 1M tokens — NO es lo que se
+ * le cobra al usuario; para eso están las `rates` de LLM_PROXY_DEFAULTS arriba.
+ * Sirve para medir margen y para que el usuario vea su gasto sin el markup.
+ *
+ * `cachedIn` = input servido desde el cache de prompt. DeepSeek lo publica como
+ * 1/10 del precio de entrada; verificar contra su tarifario antes de usar este
+ * número para facturar a alguien — aquí es analítica, no cobranza.
+ */
+export const LLM_REAL_COST_USD_PER_M = {
+  in: 0.435,
+  cachedIn: 0.0435,
+  out: 0.87,
+} as const;
+
+/** Costo real en USD de una completion. `cachedIn` se descuenta de `inputTokens`. */
+export function computeRealCostUsd(
+  inputTokens: number,
+  outputTokens: number,
+  cachedInputTokens = 0,
+): number {
+  const r = LLM_REAL_COST_USD_PER_M;
+  const cached = Math.min(cachedInputTokens, inputTokens);
+  const fresh = inputTokens - cached;
+  return (
+    (fresh / 1e6) * r.in + (cached / 1e6) * r.cachedIn + (outputTokens / 1e6) * r.out
+  );
+}
+
 // ──────────────────────────────────────────────────────────────────
 // PRICING BANDS — el plan ahora es categoría + precio continuo
 // ──────────────────────────────────────────────────────────────────

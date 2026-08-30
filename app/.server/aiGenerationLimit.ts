@@ -103,6 +103,8 @@ export interface GenerationLogData {
   modelId?: string;
   inputTokens?: number;
   outputTokens?: number;
+  /** Porción de inputTokens servida desde el cache de prompt del proveedor. */
+  cachedInputTokens?: number;
   resourceId?: string;
   pageCount?: number;
   durationMs?: number;
@@ -124,6 +126,7 @@ export function logAiUsage(userId: string, log: GenerationLogData) {
         modelId: log.modelId,
         inputTokens: log.inputTokens,
         outputTokens: log.outputTokens,
+        cachedInputTokens: log.cachedInputTokens,
         resourceId: log.resourceId,
         pageCount: log.pageCount,
         durationMs: log.durationMs,
