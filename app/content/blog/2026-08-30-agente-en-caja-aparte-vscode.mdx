@@ -4,7 +4,7 @@ description: "Tutorial completo: levantas un agente en una microVM, le pones cre
 date: "2026-08-30"
 author: "Easybits Team"
 tags: ["agents", "sandbox", "acp", "vscode", "tutorial", "build in public"]
-featuredImage: "/blog/assets/netpolicy-candado-reja-abierta.jpg"
+featuredImage: "/blog/assets/blog-agent-sandbox-acp-cover.png"
 published: true
 ---
 
@@ -36,6 +36,9 @@ Guarda ese `sandboxId`: es la dirección de tu agente para todo lo que sigue.
 Ese `suspendOnIdle` vale la pena: cuando la caja lleva un rato sin hacer nada, en vez de destruirse se duerme —snapshot de la VM entera— y despierta en menos de un segundo con todo su estado. Pagas por lo que usas sin perder el hilo de la conversación.
 
 ## Paso 2 · Un secreto, antes de abrir nada
+
+![Una llave luminosa acercándose a la cerradura de una caja servidor](/blog/assets/blog-agent-sandbox-acp-key.png)
+
 
 Aquí es donde conviene ir en el orden correcto, y ahora explico por qué.
 
@@ -88,6 +91,9 @@ curl -o /dev/null -w "%{http_code}\n" \
 Ese `401` es la señal de que el paso 2 quedó bien. Si te responde otra cosa, arréglalo ahora.
 
 ## Paso 4 · El puente hasta tu editor
+
+![Dos islas flotantes separadas por un vacío, unidas por un puente de luz](/blog/assets/blog-agent-sandbox-acp-bridge.png)
+
 
 Falta una pieza pequeña y es la que menos gente espera: **tu editor no consume una URL**. ACP asume agentes locales, así que el editor *ejecuta un comando* y le escribe JSON-RPC por la entrada estándar. La dirección `wss://` perfectamente válida que acabas de conseguir no la puede usar ningún editor tal cual.
 
