@@ -21,6 +21,9 @@ export default [
   route("/logout", "routes/logout.tsx"),
   route("/preview", "routes/preview.tsx"),
   route("/onboarding", "routes/onboarding/onboarding.tsx"),
+  // Aterrizaje del checkout del trial: siembra el perfil mínimo y deja al
+  // usuario en su panel de developer, sin pasar por el onboarding.
+  route("/trial-welcome", "routes/trial-welcome.ts"),
   route("/planes", "routes/planes.tsx"),
   route("/funcionalidades", "routes/funcionalidades.tsx"),
   route("/cuanto-cuesta-mi-agente", "routes/cuanto-cuesta-mi-agente.tsx"),

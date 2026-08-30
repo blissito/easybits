@@ -21,7 +21,9 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
       return { isAdmin: false, isShareSession: true, impersonating: null };
     }
     const url = new URL(request.url);
-    throw redirect("/login?next=" + url.pathname);
+    throw redirect(
+      "/login?next=" + encodeURIComponent(url.pathname + url.search)
+    );
   }
   // "Operar como": si el usuario efectivo (user) difiere del operador real,
   // estamos impersonando. El banner y el bypass de onboarding se basan en esto.
