@@ -1,7 +1,6 @@
 import { Link, useFetcher } from "react-router";
 import { cn } from "~/utils/cn";
-import Logo from "/logo-purple.svg";
-import { FlipLetters } from "~/components/animated/FlipLetters";
+import { BrandLogo } from "~/components/common/BrandLogo";
 import { Steper } from "./Steper";
 import type { Route } from "./+types/onboarding";
 import { getUserOrRedirect } from "~/.server/getters";
@@ -31,12 +30,11 @@ export default function Onboarding({ loaderData }: Route.ComponentProps) {
         "overflow-hidden"
       )}
     >
-      <Link to="/">
-        <div className="flex gap-3 absolute left-4 xl:left-20 z-10">
-          <img src={Logo} alt="easybits" className="w-12" />
-          <FlipLetters word="EasyBits" type="light" />
-        </div>
-      </Link>
+      <BrandLogo
+        to="/"
+        theme="light"
+        className="absolute left-4 xl:left-20 z-10"
+      />
 
       <Steper user={user} next={next} />
     </section>

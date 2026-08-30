@@ -1,11 +1,9 @@
-import TextLogo from "/icons/easybits-logo-text.svg";
-import Logo from "/logo-purple.svg";
 import type { User } from "@prisma/client";
 import { Link } from "react-router";
 import { useEffect, useState } from "react";
 import { motion, useAnimate } from "motion/react";
 import { BrutalButton } from "../common/BrutalButton";
-import { FlipLetters } from "../animated/FlipLetters";
+import { BrandLogo } from "../common/BrandLogo";
 import { cn } from "~/utils/cn";
 
 export const AuthNav = ({ user, noCTA }: { user?: User; noCTA?: boolean }) => {
@@ -50,12 +48,7 @@ export const AuthNav = ({ user, noCTA }: { user?: User; noCTA?: boolean }) => {
       )}
     >
       <nav className=" max-w-7xl z-[99] relative mx-auto h-14 md:h-[80px] text-white flex justify-between items-center px-4 md:px-0">
-        <Link to="/inicio">
-          <div className="flex gap-3 ">
-            <img src={Logo} alt="easybits" className="w-12" />
-            <FlipLetters word="EasyBits" />
-          </div>
-        </Link>
+        <BrandLogo to="/inicio" />
         <div className="h-full items-center content-center hidden md:flex">
           <div className=" flex justify-center items-center h-full">
             {navItems.map(({ title, path }, key) => (

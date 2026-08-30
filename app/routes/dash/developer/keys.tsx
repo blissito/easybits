@@ -326,7 +326,8 @@ function GhostyInstall({ apiKey }: { apiKey: string }) {
       title: "3. Conecta EasyBits (LLM + MCP)",
       lines: [
         `ghosty auth set --provider easybits --api-key "${apiKey}"`,
-        `EASYBITS_API_KEY="${apiKey}" ghosty mcp add easybits \\\n  --url "https://www.easybits.cloud/api/mcp/core" \\\n  --bearer-token-env-var EASYBITS_API_KEY`,
+        'ghosty mcp add easybits --url "https://www.easybits.cloud/api/mcp/core"',
+        "ghosty mcp login easybits",
       ],
     },
   ];

@@ -393,15 +393,9 @@ const eb = await createClientFromEnv();` },
             </p>
             <TabbedCode
               tabs={[
-                { label: "ghosty mcp", code: `# 1. Tu key vive en una variable de entorno (Ghosty la lee en cada request)
-export EASYBITS_API_KEY="TU_EASYBITS_API_KEY"
-
-# 2. Agregar el servidor apuntando al NOMBRE de la variable
-ghosty mcp add easybits \\
-  --url "https://www.easybits.cloud/api/mcp?tools=all" \\
-  --bearer-token-env-var EASYBITS_API_KEY
-
-# 3. Verifica
+                { label: "ghosty mcp", code: `# El toolset va en el path. Autorizas en el navegador, sin key.
+ghosty mcp add easybits --url "https://www.easybits.cloud/api/mcp/all"
+ghosty mcp login easybits
 ghosty mcp list
 
 # 4. Listo
@@ -452,7 +446,7 @@ ghosty --yolo` },
             <h3 className="text-lg font-bold mb-3">Connect in 4 steps</h3>
             <ol className="list-decimal list-inside space-y-2 text-gray-700 mb-6 text-sm">
               <li>In Cowork, open <strong>Settings → Connectors → Add custom connector</strong></li>
-              <li>Paste the MCP URL: <code className="bg-gray-100 px-2 py-0.5 rounded font-mono text-xs">https://www.easybits.cloud/api/mcp</code></li>
+              <li>Paste the MCP URL: <code className="bg-gray-100 px-2 py-0.5 rounded font-mono text-xs">https://www.easybits.cloud/api/mcp</code> (or pick a toolset: <code className="bg-gray-100 px-2 py-0.5 rounded font-mono text-xs">/api/mcp/sandbox</code>)</li>
               <li>Click <strong>Connect</strong> — you'll be redirected to EasyBits to log in</li>
               <li>Authorize the connector. You're done — the agent has access to your workspace</li>
             </ol>
@@ -477,7 +471,7 @@ ghosty --yolo` },
                 </thead>
                 <tbody>
                   {[
-                    ["/.well-known/oauth-protected-resource", "RFC 9728", "Tells clients which Authorization Server protects /api/mcp"],
+                    ["/.well-known/oauth-protected-resource[/<resource path>]", "RFC 9728", "Tells clients which Authorization Server protects /api/mcp. Ask for the toolset path (e.g. /api/mcp/sandbox) and it answers for that exact resource"],
                     ["/.well-known/oauth-authorization-server", "RFC 8414", "Advertises authorize, token, and registration endpoints"],
                     ["/oauth/register", "RFC 7591", "Dynamic Client Registration — client_id + secret issued on POST"],
                     ["/oauth/authorize", "OAuth 2.1", "User consent + code issuance (PKCE S256 required)"],
@@ -2527,18 +2521,19 @@ console.log(\`\${stats.storage.usedGB}/\${stats.storage.maxGB} GB\`);`}
             <h3 className="text-lg font-bold mb-3">Uso</h3>
             <TabbedCode
               tabs={[
-                { label: "Ghosty Code", code: `# Ghosty Code — MCP de EasyBits preconfigurado.
-npm install -g ghostycode
+                { label: "Ghosty Code", code: `npm install -g ghostycode
 ghosty auth set --provider easybits --api-key "TU_EASYBITS_API_KEY"
+ghosty mcp add easybits --url "https://www.easybits.cloud/api/mcp/all"
+ghosty mcp login easybits
 ghosty --yolo` },
                 { label: "Claude Code", code: `# Core + sandboxes + documents
-claude mcp add easybits -- npx -y @easybits.cloud/mcp --key YOUR_KEY --tools sandbox,docs
+claude mcp add --transport http easybits "https://www.easybits.cloud/api/mcp/sandbox,docs"
 
 # Todo
-claude mcp add easybits -- npx -y @easybits.cloud/mcp --key YOUR_KEY --tools all` },
-                { label: "Streamable HTTP", code: `// Agrega ?tools= a la URL
-https://www.easybits.cloud/api/mcp?tools=sandbox,docs
-https://www.easybits.cloud/api/mcp?tools=all` },
+claude mcp add --transport http easybits "https://www.easybits.cloud/api/mcp/all"` },
+                { label: "Streamable HTTP", code: `// El toolset va en el path
+https://www.easybits.cloud/api/mcp/sandbox,docs
+https://www.easybits.cloud/api/mcp/all` },
               ]}
             />
           </section>

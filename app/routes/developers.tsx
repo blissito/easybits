@@ -264,7 +264,8 @@ ghosty`}
                   <span className="text-gray-400 text-xs uppercase font-mono">bash</span>
                 </div>
                 <CodeBlock bare language="bash">
-                  {`npx -y @easybits.cloud/mcp`}
+                  {`ghosty mcp add easybits --url "https://www.easybits.cloud/api/mcp/core"
+ghosty mcp login easybits`}
                 </CodeBlock>
               </div>
             </div>

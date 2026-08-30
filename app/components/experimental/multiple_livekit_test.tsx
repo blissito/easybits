@@ -14,7 +14,7 @@ import {
 import "@livekit/components-styles";
 import { Track } from "livekit-client";
 //
-import { FlipLetters } from "../animated/FlipLetters";
+import { BrandLogo } from "../common/BrandLogo";
 import { BrutalButton } from "../common/BrutalButton";
 import { Form, Link, redirect } from "react-router";
 import { Input } from "../common/Input";
@@ -180,12 +180,7 @@ export function MyVideoConference() {
 const NavBar = () => {
   return (
     <nav className="bg-black h-20 px-20">
-      <Link to="/experiment">
-        <div className="flex gap-3 mx-2">
-          <img src={Logo} alt="easybits" className="w-12" />
-          <FlipLetters word="EasyBits" />
-        </div>
-      </Link>
+      <BrandLogo to="/experiment" className="mx-2" />
     </nav>
   );
 };
