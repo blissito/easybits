@@ -146,4 +146,5 @@ export async function getPostLangs(slug: string): Promise<PostLang[]> {
  */
 export const SLUG_REDIRECTS: Record<string, string> = {
   "iptables-no-ve-tu-bridge": "tu-regla-de-firewall-no-bloquea-nada",
+  "tu-agente-remoto-estaba-abierto": "agente-en-caja-aparte-vscode",
 };
