@@ -305,30 +305,28 @@ function CopyStepButton({ text }: { text: string }) {
 
 function GhostyInstall({ apiKey }: { apiKey: string }) {
   // Cada paso es un bloque visual; `Copiar` pega solo las líneas ejecutables.
+  // Cada bloque se copia solo, así que la key va literal: una variable de
+  // entorno definida en el paso de arriba no existe si copias únicamente éste.
   const steps = [
     {
-      title: "1. Guarda la key en tu entorno",
-      lines: [`export EASYBITS_API_KEY="${apiKey}"`],
-    },
-    {
-      title: "2. Limpia cualquier Ghosty anterior",
+      title: "1. Limpia cualquier Ghosty anterior",
       lines: [
         "npm uninstall -g ghostycode 2>/dev/null",
         "rm -f ~/.local/bin/ghosty ~/.ghosty/bin/ghosty",
       ],
     },
     {
-      title: "3. Instala el CLI",
+      title: "2. Instala el CLI",
       lines: [
         "curl -fsSL https://formmy.app/ghosty/install.sh | sh",
         'export PATH="$HOME/.local/bin:$PATH"',
       ],
     },
     {
-      title: "4. Conecta EasyBits (LLM + MCP)",
+      title: "3. Conecta EasyBits (LLM + MCP)",
       lines: [
-        'ghosty auth set --provider easybits --api-key "$EASYBITS_API_KEY"',
-        'ghosty mcp add easybits \\\n  --url "https://www.easybits.cloud/api/mcp?tools=core" \\\n  --bearer-token-env-var EASYBITS_API_KEY',
+        `ghosty auth set --provider easybits --api-key "${apiKey}"`,
+        `EASYBITS_API_KEY="${apiKey}" ghosty mcp add easybits \\\n  --url "https://www.easybits.cloud/api/mcp/core" \\\n  --bearer-token-env-var EASYBITS_API_KEY`,
       ],
     },
   ];
