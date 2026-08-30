@@ -39,6 +39,7 @@ const SECTIONS = [
   { id: "hosting", label: "Sandboxes permanentes" },
   { id: "databases", label: "Bases de datos" },
   { id: "secrets", label: "Secretos" },
+  { id: "llm", label: "LLM (OpenAI-compatible)" },
   { id: "calls", label: "Llamadas" },
   { id: "account", label: "Cuenta & Uso" },
   { id: "errors", label: "Errores & Límites" },
@@ -1529,8 +1530,82 @@ await eb.destroySandbox(sb.sandboxId);` },
 # sandbox_create(template:"python")
 # sandbox_exec(sandboxId, command:"python3 -c 'print(2+2)'")
 # sandbox_destroy(sandboxId)` },
+                { label: "REST", code: `# 1. Crear sandbox Python
+curl -X POST https://www.easybits.cloud/api/v2/sandboxes \\
+  -H "Authorization: Bearer eb_sk_live_..." \\
+  -H "Content-Type: application/json" \\
+  -d '{"template":"python","timeoutSeconds":300}'
+# → {"sandboxId":"sb_...", ...}
+
+# 2. Ejecutar un comando
+curl -X POST https://www.easybits.cloud/api/v2/sandboxes/sb_.../exec \\
+  -H "Authorization: Bearer eb_sk_live_..." \\
+  -H "Content-Type: application/json" \\
+  -d '{"command":"python3 -c \\'print(2+2)\\'"}'
+# → {"stdout":"4\\n","stderr":"","exitCode":0}
+
+# 3. Destruir
+curl -X DELETE https://www.easybits.cloud/api/v2/sandboxes/sb_... \\
+  -H "Authorization: Bearer eb_sk_live_..."` },
               ]}
             />
+
+            <h3 className="text-lg font-bold mt-8 mb-3">Endpoints REST</h3>
+            <p className="text-gray-600 text-sm mb-3">
+              Todo el SDK corre sobre estos endpoints. Base: <code className="bg-gray-100 px-1 rounded">https://www.easybits.cloud/api/v2</code>. Auth por header <code className="bg-gray-100 px-1 rounded">Authorization: Bearer eb_sk_live_...</code> — ver <a href="#auth" className="underline">Autenticación</a>.
+            </p>
+            <div className="overflow-x-auto mb-6">
+              <table className="w-full text-sm border-2 border-black rounded-xl overflow-hidden">
+                <thead className="bg-black text-white">
+                  <tr>
+                    <th className="text-left px-4 py-2 text-xs uppercase">Método &amp; ruta</th>
+                    <th className="text-left px-4 py-2 text-xs uppercase">Body</th>
+                    <th className="text-left px-4 py-2 text-xs uppercase">Qué hace</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[
+                    ["GET", "/sandboxes", "—", "Lista tus sandboxes vivas"],
+                    ["POST", "/sandboxes", "template*, timeoutSeconds, name, size, metadata, persistent, suspendOnIdle, hardTtlSeconds", "Crea una microVM"],
+                    ["GET", "/sandboxes/:id", "—", "Estado de una caja"],
+                    ["DELETE", "/sandboxes/:id", "—", "La destruye"],
+                    ["POST", "/sandboxes/:id/exec", "command*, cwd, env, timeoutSeconds", "Corre un comando de shell"],
+                    ["POST", "/sandboxes/:id/run-code", "code*, lang (python|node|bash), timeoutSeconds", "Ejecuta código en proceso fresco"],
+                    ["POST", "/sandboxes/:id/run-cell", "code*, timeoutSeconds", "Celda en el kernel persistente"],
+                    ["POST", "/sandboxes/:id/kernel-restart", "—", "Reinicia el kernel Jupyter"],
+                    ["POST", "/sandboxes/:id/expose", "port*", "URL pública HTTPS del puerto"],
+                    ["POST", "/sandboxes/:id/expose-raw", "port*, protocol* (tcp|udp)", "Forward L4 crudo"],
+                    ["POST", "/sandboxes/:id/unexpose-raw", "port*, protocol*", "Cierra el forward L4"],
+                    ["POST", "/sandboxes/:id/suspend", "—", "Duerme la caja (snapshot)"],
+                    ["POST", "/sandboxes/:id/resume", "—", "La despierta"],
+                    ["POST", "/sandboxes/:id/extend", "extendSeconds", "Alarga el TTL"],
+                    ["POST", "/sandboxes/:id/snapshot", "name", "Congela el disco en una imagen"],
+                    ["POST", "/sandboxes/:id/fork", "count, name, metadata, timeoutSeconds", "Clona N hijos copy-on-write"],
+                    ["POST", "/sandboxes/:id/logs", "—", "Lee logs"],
+                    ["POST", "/sandboxes/:id/apply-patch", "—", "Aplica un patch de archivos"],
+                    ["POST", "/sandboxes/:id/ssh-enable", "—", "Habilita SSH (ver arriba)"],
+                    ["POST", "/sandboxes/:id/domain-add", "—", "Dominio propio + HTTPS"],
+                    ["GET", "/sandboxes/:id/files/read", "?path=", "Lee un archivo"],
+                    ["GET", "/sandboxes/:id/files/list", "?path=", "Lista un directorio"],
+                    ["POST", "/sandboxes/:id/files/write", "path*, content*", "Escribe un archivo"],
+                    ["POST", "/sandboxes/:id/files/delete", "path*", "Borra"],
+                    ["POST", "/sandboxes/:id/files/move", "from*, to*", "Mueve o renombra"],
+                    ["POST", "/sandboxes/:id/files/mkdir", "path*", "Crea directorio"],
+                  ].map(([method, path, body, desc], i) => (
+                    <tr key={path as string} className={i % 2 ? "border-t border-gray-200 bg-gray-50" : "border-t border-gray-200"}>
+                      <td className="px-4 py-2 font-mono text-xs whitespace-nowrap">
+                        <span className="font-bold">{method}</span> {path}
+                      </td>
+                      <td className="px-4 py-2 font-mono text-[11px] text-gray-600">{body}</td>
+                      <td className="px-4 py-2 text-xs text-gray-600">{desc}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className="text-gray-500 text-xs mb-6">
+              <code className="bg-gray-100 px-1 rounded">*</code> = requerido. Un body inválido devuelve <code className="bg-gray-100 px-1 rounded">400</code> con <code className="bg-gray-100 px-1 rounded">issues[]</code> de Zod. Crear sandboxes tiene rate limit propio — ver <a href="#errors" className="underline">Errores &amp; Límites</a>.
+            </p>
 
             <h3 className="text-lg font-bold mt-8 mb-3">Snapshot &amp; fork (clonado copy-on-write)</h3>
             <p className="text-gray-600 text-sm mb-3">
@@ -2306,6 +2381,104 @@ agent_run({ prompt: "scrapea ...", secrets: ["BRIGHTDATA_API_TOKEN"] })`}
           </section>
 
           {/* Llamadas */}
+          {/* LLM proxy OpenAI-compatible */}
+          <section id="llm" className="mb-16">
+            <h2 className="text-2xl font-bold mb-4">LLM (OpenAI-compatible)</h2>
+            <p className="text-gray-600 mb-4 text-sm">
+              Un gateway OpenAI-compatible con tu misma llave de EasyBits. No necesitas cuenta con el proveedor ni otra API key: apuntas cualquier cliente OpenAI a nuestra base URL y el consumo se descuenta de tu saldo de tokens.
+            </p>
+
+            <div className="mb-6 bg-yellow-50 border-2 border-yellow-300 rounded-xl p-4 text-sm">
+              <strong>La base URL lleva prefijo <code className="bg-gray-100 px-1 rounded">/api/v2/llm</code>.</strong> Pegarle a <code className="bg-gray-100 px-1 rounded">/v1/chat/completions</code> o <code className="bg-gray-100 px-1 rounded">/chat/completions</code> a secas devuelve <code className="bg-gray-100 px-1 rounded">404</code> — es el error más común al configurar un cliente.
+            </div>
+
+            <h3 className="text-lg font-bold mb-3">Base URL</h3>
+            <TabbedCode
+              tabs={[
+                { label: "curl", code: `curl -X POST https://www.easybits.cloud/api/v2/llm/v1/chat/completions \\
+  -H "Authorization: Bearer eb_sk_live_..." \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "model": "deepseek-chat",
+    "messages": [{"role":"user","content":"Hola"}]
+  }'` },
+                { label: "OpenAI SDK", code: `import OpenAI from "openai";
+
+const client = new OpenAI({
+  apiKey: "eb_sk_live_...",                                  // tu llave de EasyBits
+  baseURL: "https://www.easybits.cloud/api/v2/llm/v1",       // ← el prefijo importa
+});
+
+const res = await client.chat.completions.create({
+  model: "deepseek-chat",
+  messages: [{ role: "user", content: "Hola" }],
+});
+console.log(res.choices[0].message.content);` },
+                { label: "Python", code: `from openai import OpenAI
+
+client = OpenAI(
+    api_key="eb_sk_live_...",
+    base_url="https://www.easybits.cloud/api/v2/llm/v1",
+)
+
+res = client.chat.completions.create(
+    model="deepseek-chat",
+    messages=[{"role": "user", "content": "Hola"}],
+)
+print(res.choices[0].message.content)` },
+              ]}
+            />
+
+            <h3 className="text-lg font-bold mt-8 mb-3">Endpoints</h3>
+            <div className="overflow-x-auto mb-6">
+              <table className="w-full text-sm border-2 border-black rounded-xl overflow-hidden">
+                <thead className="bg-black text-white">
+                  <tr>
+                    <th className="text-left px-4 py-2 text-xs uppercase">Método &amp; ruta</th>
+                    <th className="text-left px-4 py-2 text-xs uppercase">Qué hace</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[
+                    ["POST", "/api/v2/llm/v1/chat/completions", "Completions. Soporta stream: true (SSE)"],
+                    ["GET", "/api/v2/llm/v1/models", "Modelos disponibles (proxy al proveedor, caché 5 min)"],
+                    ["GET", "/api/v2/llm/balance", "Saldo: usado, restante, plan, recargas, fecha de reset"],
+                    ["POST", "/api/v2/llm/recharge", "Compra tokens extra"],
+                  ].map(([method, path, desc], i) => (
+                    <tr key={path as string} className={i % 2 ? "border-t border-gray-200 bg-gray-50" : "border-t border-gray-200"}>
+                      <td className="px-4 py-2 font-mono text-xs whitespace-nowrap">
+                        <span className="font-bold">{method}</span> {path}
+                      </td>
+                      <td className="px-4 py-2 text-xs text-gray-600">{desc}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <h3 className="text-lg font-bold mt-8 mb-3">Notas</h3>
+            <ul className="list-disc pl-5 text-sm text-gray-600 space-y-2 mb-4">
+              <li>
+                <strong>Modelos</strong>: no hardcodeamos la lista — pégale a <code className="bg-gray-100 px-1 rounded">/models</code>. Si omites <code className="bg-gray-100 px-1 rounded">model</code>, el default es <code className="bg-gray-100 px-1 rounded">deepseek-chat</code>.
+              </li>
+              <li>
+                <strong>La llave necesita scope <code className="bg-gray-100 px-1 rounded">WRITE</code></strong>: gastar tokens no es una operación de lectura. Una llave de solo lectura recibe <code className="bg-gray-100 px-1 rounded">403 permission_error</code>.
+              </li>
+              <li>
+                <strong>Se cobra <code className="bg-gray-100 px-1 rounded">prompt_tokens + completion_tokens</code></strong> de cada respuesta contra tu saldo. Sin saldo: <code className="bg-gray-100 px-1 rounded">402 insufficient_quota</code>, con <code className="bg-gray-100 px-1 rounded">used</code> y <code className="bg-gray-100 px-1 rounded">limit</code> en <code className="bg-gray-100 px-1 rounded">meta</code>.
+              </li>
+              <li>
+                <strong>Headers de respuesta</strong>: <code className="bg-gray-100 px-1 rounded">x-llm-tokens-remaining</code> y <code className="bg-gray-100 px-1 rounded">x-ratelimit-remaining-requests</code> — úsalos para no tener que pedir el balance en cada llamada.
+              </li>
+              <li>
+                <strong>CORS abierto</strong>, pero eso no hace segura una llave en el browser: <code className="bg-gray-100 px-1 rounded">eb_sk_live_...</code> es secreta y gasta tu saldo. Llama desde tu servidor.
+              </li>
+              <li>
+                <strong>Contextos largos cuestan</strong>: cada turno reenvía el historial completo y se cobra íntegro. Una conversación de 300K tokens paga 300K <em>por turno</em>. Compacta o recorta.
+              </li>
+            </ul>
+          </section>
+
           <section id="calls" className="mb-16">
             <h2 className="text-2xl font-bold mb-4">Llamadas</h2>
             <p className="text-gray-600 mb-4 text-sm">
