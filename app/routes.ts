@@ -174,6 +174,10 @@ export default [
   route("api/upload", "routes/api/v1/upload.ts"),
   // MCP
   route("api/mcp", "routes/api/mcp.ts"),
+  // Mismo endpoint con el toolset en el path: los clientes MCP estrictos comparan
+  // el `resource` de la metadata contra la URL registrada, y un `?tools=` en el
+  // query nunca coincide. Con el toolset en el path sí.
+  route("api/mcp/:tools", "routes/api/mcp.ts", { id: "api-mcp-toolset" }),
   // SSE
   route("api/sse/files", "routes/api/sse/files.ts"),
   // Cron
@@ -461,6 +465,7 @@ export default [
 
   // OAuth 2.1 (MCP connector flow for Claude.ai / Cowork)
   route("/.well-known/oauth-protected-resource", "routes/api/wellknown/oauth-protected-resource.ts"),
+  route("/.well-known/oauth-protected-resource/*", "routes/api/wellknown/oauth-protected-resource.ts", { id: "oauth-protected-resource-suffix" }),
   route("/.well-known/oauth-authorization-server", "routes/api/wellknown/oauth-authorization-server.ts"),
   route("/oauth/register", "routes/api/oauth/register.ts"),
   route("/oauth/authorize", "routes/api/oauth/authorize.ts"),

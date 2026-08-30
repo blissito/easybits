@@ -13,12 +13,15 @@ export async function handleMcp(request: Request): Promise<Response> {
   const ctx = await authenticateRequest(request);
   if (!ctx) {
     const base = process.env.BASE_URL || "https://www.easybits.cloud";
+    // La metadata se anuncia por recurso: si entraron por /api/mcp/sandbox, ahí
+    // mandamos al cliente, para que el `resource` que lea coincida con su URL.
+    const { pathname } = new URL(request.url);
     return Response.json(
       { error: "Unauthorized" },
       {
         status: 401,
         headers: {
-          "WWW-Authenticate": `Bearer resource_metadata="${base}/.well-known/oauth-protected-resource"`,
+          "WWW-Authenticate": `Bearer resource_metadata="${base}/.well-known/oauth-protected-resource${pathname}"`,
         },
       }
     );
@@ -39,7 +42,11 @@ export async function handleMcp(request: Request): Promise<Response> {
 
   // Parse tool groups from query string
   const url = new URL(request.url);
-  const toolsParam = url.searchParams.get("tools");
+  // El toolset viaja en el query (?tools=) o en el path (/api/mcp/<toolset>)
+  const pathToolset = url.pathname.startsWith("/api/mcp/")
+    ? decodeURIComponent(url.pathname.slice("/api/mcp/".length))
+    : null;
+  const toolsParam = url.searchParams.get("tools") || pathToolset;
   // Entradas con prefijo `-` = per-tool DENY (default = todas las tools del bucket
   // activas; el user destila una → llega como `-<tool>`). El resto = bucket keys.
   const parts = toolsParam ? toolsParam.split(",").map((g) => g.trim()).filter(Boolean) : [];
