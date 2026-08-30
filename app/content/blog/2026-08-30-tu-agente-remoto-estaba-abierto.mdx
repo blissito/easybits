@@ -1,0 +1,141 @@
+---
+title: "Tu agente remoto estaba abierto y el editor decía «Failed to connect»"
+description: "Levantar un agente en una caja aislada y conectarlo a tu editor por ACP toma diez minutos. Los dos problemas que te van a costar la tarde no son los que esperas: el puerto quedó sin credencial, y el editor manda una ruta que la caja no tiene."
+date: "2026-08-30"
+author: "Easybits Team"
+tags: ["agents", "sandbox", "acp", "security", "build in public", "vscode"]
+featuredImage: "/blog/assets/netpolicy-candado-reja-abierta.jpg"
+published: true
+---
+
+# Tu agente remoto estaba abierto y el editor decía «Failed to connect»
+
+Un agente de código que corre en tu laptop tiene tu disco, tus llaves de SSH y tu sesión de npm. Moverlo a una caja aislada arregla eso de golpe: el agente edita lo que hay en la caja y nada más. Lo que no es evidente es la parte de en medio —el cable entre tu editor y esa caja—, y ahí hay dos trampas que se ven idénticas desde fuera.
+
+Este es el recorrido completo, con lo que medimos al hacerlo.
+
+## 1. La caja
+
+Un agente necesita una máquina, no un contenedor compartido. Nosotros lanzamos una microVM por agente y le metemos [goose](https://block.github.io/goose/) dentro:
+
+```bash
+goose serve --host 0.0.0.0 --port 3000
+```
+
+`goose serve` levanta un servidor **ACP** (Agent Client Protocol): JSON-RPC 2.0, el mismo protocolo que hablan Zed y compañía para conectarse a agentes externos. El agente vive ahí dentro, con su propio disco, su propia red y su propio ciclo de vida.
+
+Luego expones el puerto:
+
+```
+https://sb-<id>-3000.sandboxes.easybits.cloud
+```
+
+Ese proxy hace TLS y termina en L7, así que el mismo host sirve `https://` y `wss://`. No hace falta túnel, ni cloudflared, ni abrir nada en tu router. El `<id>` de la caja es impredecible, y esa es la primera capa: nadie llega ahí por escaneo.
+
+Primera capa, no la única. Ya volvemos a eso.
+
+## 2. El cable: por qué hace falta un puente
+
+Aquí viene el detalle que sorprende a todo el mundo. Tu editor no consume una URL: **ejecuta un comando** y le escribe JSON-RPC por la entrada estándar. Esa es la forma que asume ACP, porque nació para agentes locales.
+
+O sea que la dirección `wss://` perfectamente válida que acabas de conseguir no la puede usar ningún editor, por muy correcta que sea.
+
+Falta una pieza de veinte líneas que traduzca el cable: entrada/salida estándar de un lado, WebSocket del otro. Nosotros publicamos la nuestra como [`ghosty-acp`](https://www.npmjs.com/package/ghosty-acp) (Node puro, cero dependencias):
+
+```json
+{
+  "acp.agents": {
+    "mi-agente": {
+      "command": "npx",
+      "args": ["-y", "ghosty-acp", "wss://sb-<id>-3000.sandboxes.easybits.cloud/acp"],
+      "env": { "GHOSTY_ACP_TOKEN": "…" }
+    }
+  }
+}
+```
+
+En **VS Code** eso va en `settings.json`, bajo la clave `acp.agents`. Conviene decirlo claro: VS Code **no** trae ACP de fábrica —Microsoft estandarizó su modo agente sobre MCP— así que hace falta una extensión de la comunidad, como [ACP Client](https://marketplace.visualstudio.com/items?itemName=formulahendry.acp-client). En Zed la forma es la misma (`agent_servers`), porque el protocolo es el mismo.
+
+Dos cosas que ese puente tiene que hacer bien y que no son obvias hasta que fallan:
+
+**El salto de línea no es decoración.** En un WebSocket el frame ya es la frontera del mensaje, así que el otro extremo manda cada respuesta sin `\n`. Pero el editor lee un *flujo* de bytes y espera el delimitador: si vuelcas el frame tal cual, se queda con el mensaje completo en su buffer esperando un salto que no llega, y **cuelga sin un solo error**. Fue el primer bug que tuvo nuestro transporte y no aparece en ninguna traza.
+
+**Hace falta una cola de salida.** El editor escribe `initialize` en cuanto lanza el proceso, antes de que el WebSocket haya abierto —y más aún si la caja estaba dormida y tarda segundos en despertar—. Descartar esas líneas deja al editor esperando una respuesta que nadie llegó a oír: se ve como un agente que no arranca. Se guardan y se sueltan en orden al abrir.
+
+## 3. La trampa uno: el puerto estaba abierto
+
+Nuestra caja de pruebas llevaba días corriendo así:
+
+```bash
+goose serve --host 0.0.0.0 --port 3000 --dangerously-unauthenticated
+```
+
+La bandera dice exactamente lo que hace, y el `--help` de goose no se anda con rodeos: *"Start the ACP endpoint without requiring `GOOSE_SERVER__SECRET_KEY`"*. Aun así llevábamos varios pasos configurando un token en el editor **que nadie estaba validando**. La conexión funcionaba, la config se veía correcta, y el token era decorativo.
+
+La URL impredecible te protege del escaneo. No te protege de que esa URL circule por un chat, un log de acceso o una captura de pantalla — y basta con tenerla para tener el agente completo, con su shell dentro de la caja.
+
+El arreglo es una variable de entorno y quitar la bandera:
+
+```ini
+[Service]
+Environment=GOOSE_SERVER__SECRET_KEY=<token>
+ExecStart=/usr/local/bin/goose serve --host 0.0.0.0 --port 3000
+Restart=always
+```
+
+Un detalle que nos costó un rato: en nuestra caja **no había ninguna unidad de systemd que editar**. El `goose serve` lo había lanzado el agente del host como proceso hijo suelto, así que `systemctl cat` salía vacío y no existía archivo donde poner el token. Convertirlo en servicio de verdad fue parte del arreglo — y de paso ahora sobrevive a un reinicio en vez de depender de que alguien lo lance a mano.
+
+Verificado contra la caja viva, antes y después:
+
+| credencial | antes | después |
+|---|---|---|
+| sin token | conectaba | **401** |
+| token incorrecto | conectaba | **401** |
+| token correcto | conectaba | conecta |
+
+Vale la pena saber que goose acepta el secreto de **dos** formas: el header `X-Secret-Key` y el query param `?token=`. Nosotros asumimos que solo el header y casi republicamos un paquete para arreglar algo que no estaba roto; lo que lo aclaró fue levantar un segundo goose en otro puerto de la misma caja y medir los dos caminos. El header es preferible —el query param termina en los logs de acceso del proxy—, pero ambos autentican.
+
+## 4. La trampa dos: la ruta de tu disco
+
+Con el token puesto, el editor seguía diciendo:
+
+```
+Failed to connect: Invalid params
+```
+
+Y no era la conexión. El WebSocket había abierto perfectamente; lo que fallaba era el mensaje siguiente. Con el detalle completo del JSON-RPC:
+
+```json
+{"code":-32602,"message":"Invalid params","data":"invalid directory path"}
+```
+
+Todo cliente ACP manda en `session/new` el directorio del proyecto **abierto en tu máquina** —`/Users/tu/proyecto`—. El agente vive en una microVM y no comparte disco contigo: esa ruta allá sencillamente no existe. El agente la rechaza, y el editor lo pinta como un fallo de conexión, que te manda a revisar la URL y el token: justo las dos cosas que sí estaban bien.
+
+Lo medimos disparando `session/new` con varios valores contra la misma caja:
+
+| `cwd` | resultado |
+|---|---|
+| `/root` | sesión abierta |
+| `/Users/bliss/mi-proyecto` | `invalid directory path` |
+| ruta relativa | `cwd must be an absolute path` |
+| sin `cwd` | `missing field cwd` |
+
+La solución natural es que el puente reescriba ese campo al pasar, porque es el único punto por donde ya circula todo el tráfico. En `ghosty-acp` es lo **único** que se traduce —el resto de cada mensaje pasa intacto—, se aplica solo a `session/new` y `session/load`, y avisa por la salida de error cuando lo hace:
+
+```
+[ghosty-acp] cwd /Users/bliss/mi-proyecto → /root (el agente no ve tu disco)
+```
+
+Ese aviso importa. Un remapeo silencioso es magia, y el día que estorbe no hay por dónde empezar a mirar.
+
+## Lo que queda dicho
+
+El modelo mental correcto, y conviene tenerlo antes de la primera sesión: **el agente edita lo que hay en la caja, no tu copia de trabajo**. Tu editor va a mostrar la ruta de tu proyecto en la cabecera de la sesión, porque es lo que él cree haber mandado. No es donde está trabajando.
+
+Si vas a montar esto, el orden que ahorra tiempo:
+
+1. Levanta la caja y expón el puerto — la URL impredecible es tu primera capa.
+2. **Pon el token antes de la primera conexión.** Un endpoint abierto que ya funciona no vuelve a pedirte atención.
+3. Conecta el puente y mira su salida de error, no solo la burbuja del editor. El detalle del JSON-RPC está ahí; el rótulo de la interfaz miente.
+
+Y una cosa más, por si la tentación aparece: cuando algo falla en esta cadena, la pregunta útil no es *"¿está bien la URL?"* sino *"¿en qué mensaje exacto falló?"*. Los dos problemas de este post se veían igual desde el editor —una caja de error gris— y estaban a cuatro capas de distancia el uno del otro.
