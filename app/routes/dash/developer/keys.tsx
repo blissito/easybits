@@ -62,10 +62,19 @@ export default function KeysPage() {
     if (searchParams.get("welcome") !== "trial") return;
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     import("js-confetti").then(({ default: JSConfetti }) => {
-      new JSConfetti().addConfetti({
-        confettiColors: ["#9870ED", "#ECD66E", "#C8F9AB", "#75BAF9", "#F4B7EC"],
-        confettiNumber: 120,
-      });
+      const confetti = new JSConfetti();
+      const colors = ["#9870ED", "#ECD66E", "#C8F9AB", "#75BAF9", "#F4B7EC"];
+      // Tres tandas encadenadas: la primera llena la pantalla, las siguientes
+      // caen mientras la anterior todavía baja.
+      confetti.addConfetti({ confettiColors: colors, confettiNumber: 400 });
+      setTimeout(
+        () => confetti.addConfetti({ emojis: ["🎉", "✨", "🚀"], emojiSize: 60, confettiNumber: 40 }),
+        350
+      );
+      setTimeout(
+        () => confetti.addConfetti({ confettiColors: colors, confettiNumber: 300 }),
+        900
+      );
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
