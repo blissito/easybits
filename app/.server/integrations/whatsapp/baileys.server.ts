@@ -420,7 +420,9 @@ export async function connectFleetAgent(fleetAgentId: string, opts: { pairingPho
     return;
   }
 
-  await setStatus(fleetAgentId, "connecting");
+  // Arranque limpio: tira los artefactos del intento anterior (un QR o un código
+  // de otro socket ya están muertos; mostrarlos hace que el teléfono falle).
+  await setStatus(fleetAgentId, "connecting", { qr: null, pairingCode: null, phone: pairingPhone ?? null });
 
   let auth, version;
   try {
@@ -455,7 +457,9 @@ export async function connectFleetAgent(fleetAgentId: string, opts: { pairingPho
       try {
         const code = await sock.requestPairingCode(pairingPhone);
         log(fleetAgentId, `pairing code ${code}`);
-        await setStatus(fleetAgentId, "pairing", { pairingCode: code, phone: pairingPhone });
+        // El QR y el código son EXCLUYENTES: si queda un `qr` de un intento previo
+        // la UI muestra los dos y el usuario escanea/teclea uno muerto.
+        await setStatus(fleetAgentId, "pairing", { pairingCode: code, phone: pairingPhone, qr: null });
       } catch (e) {
         log(fleetAgentId, `requestPairingCode failed: ${e}`);
         await recordPairFail(fleetAgentId);
@@ -467,7 +471,10 @@ export async function connectFleetAgent(fleetAgentId: string, opts: { pairingPho
   sock.ev.on("connection.update", async (u) => {
     const cur = sockets.get(fleetAgentId);
     // In pairing-code mode don't clobber the code with the rotating QR.
-    if (u.qr && !pairingPhone) { log(fleetAgentId, "QR ready"); await setStatus(fleetAgentId, "qr_pending", { qr: u.qr }); }
+    // Limpia el `pairingCode` de un intento anterior: el merge de setStatus lo
+    // conservaba y la UI ofrecía un código MUERTO junto al QR vivo (el teléfono
+    // respondía "No se pudo vincular el dispositivo").
+    if (u.qr && !pairingPhone) { log(fleetAgentId, "QR ready"); await setStatus(fleetAgentId, "qr_pending", { qr: u.qr, pairingCode: null, phone: null }); }
     if (u.connection === "open") {
       if (cur) { cur.attempts = 0; cur.connecting = false; }
       log(fleetAgentId, "connected");
