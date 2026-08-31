@@ -1,5 +1,6 @@
 import type { Route } from "./+types/fleet-agents";
 import { useEffect, useRef, useState, lazy, Suspense, type CSSProperties, type MouseEvent as ReactMouseEvent, type ReactElement } from "react";
+import { createPortal } from "react-dom";
 import { useFetcher, useRevalidator, data } from "react-router";
 import { motion, AnimatePresence } from "motion/react";
 import QRCode from "qrcode";
@@ -1372,27 +1373,51 @@ function ChannelConnectMenu({
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  // El panel se monta en un PORTAL con posición fija: dentro de la tarjeta quedaba
+  // por debajo del contenido de la tarjeta siguiente (se veía "sin fondo").
+  const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
   useEffect(() => {
     if (!open) return;
-    const onDown = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    const place = () => {
+      const r = btnRef.current?.getBoundingClientRect();
+      if (r) setPos({ top: r.bottom + 6, right: Math.max(8, window.innerWidth - r.right) });
+    };
+    place();
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (ref.current?.contains(t) || panelRef.current?.contains(t)) return;
+      setOpen(false);
+    };
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
     document.addEventListener("mousedown", onDown);
     document.addEventListener("keydown", onKey);
-    return () => { document.removeEventListener("mousedown", onDown); document.removeEventListener("keydown", onKey); };
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
+    };
   }, [open]);
+  const panelRef = useRef<HTMLDivElement>(null);
   return (
     <div ref={ref} className="ml-auto relative">
-      <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open}
+      <button ref={btnRef} type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open}
         title="Conectar otro canal a este agente"
         className="px-3 py-2 text-sm font-semibold text-brand-500 hover:text-brand-600 cursor-pointer select-none whitespace-nowrap">
         + Conectar canal{hasTabs && unconnected.length > 0 ? ` (${unconnected.length})` : ""}
       </button>
+      {typeof document !== "undefined" && createPortal(
       <AnimatePresence>
-        {open && (
+        {open && pos && (
           <motion.div
+            ref={panelRef}
             initial={{ y: -4, scale: 0.98 }} animate={{ y: 0, scale: 1 }}
             exit={{ y: -4, scale: 0.98 }} transition={{ duration: 0.12 }}
-            className="absolute right-0 top-10 z-20 w-72 bg-white border-2 border-black rounded-xl shadow-[2px_2px_0_0_#000] p-2">
+            style={{ top: pos.top, right: pos.right }}
+            className="fixed z-[60] w-72 bg-white border-2 border-black rounded-xl shadow-[2px_2px_0_0_#000] p-2">
             <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide px-1 pb-1">Canales disponibles</p>
             {unconnected.map((c) => (
               <button key={c.kind} type="button"
@@ -1420,7 +1445,8 @@ function ChannelConnectMenu({
             <p className="text-[11px] text-gray-400 px-1 pt-1">El canal por API (HTTP/SSE) es genérico: conecta Slack, tu web o cualquier app posteando al endpoint del agente.</p>
           </motion.div>
         )}
-      </AnimatePresence>
+      </AnimatePresence>,
+      document.body)}
     </div>
   );
 }
