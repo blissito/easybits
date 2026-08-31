@@ -1516,6 +1516,11 @@ export interface ExposedPort {
   url: string;
   host: string;
   port: number;
+  // warning: sólo viene cuando el host SONDEÓ el guest y vio que el puerto ya
+  // escucha, pero únicamente en 127.0.0.1 → el proxy público dialea la IP del
+  // guest y dará 502. No viene en el caso normal de exponer antes de arrancar
+  // el server. Es informativo: la ruta se publica igual.
+  warning?: string;
 }
 
 // Expose a port running inside the sandbox as a public URL

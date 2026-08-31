@@ -2354,7 +2354,7 @@ How to embed safely (the only reliable rule):
 
   server.tool(
     "sandbox_expose_port",
-    "Expose a port running inside the sandbox as a public HTTPS URL (e.g. https://sb-<id>-<port>.sandboxes.easybits.cloud) — like E2B getHost / Daytona getPreviewLink. The unguessable sandboxId is the capability; anyone with the URL can reach the service. The URL is live while the sandbox is running. Start your server first (e.g. via sandbox_exec) then expose its port. Serves LAYER 7 over an auto-issued TLS cert: HTTP/HTTPS AND WebSocket — connect with wss:// on the SAME hostname, no tunnel (cloudflared etc.) and no raw port needed. What it does NOT do is raw layer 4, so 22/23/25/445/3389 are rejected — use sandbox_expose_raw_port for those.",
+    "Expose a port running inside the sandbox as a public HTTPS URL (e.g. https://sb-<id>-<port>.sandboxes.easybits.cloud) — like E2B getHost / Daytona getPreviewLink. The unguessable sandboxId is the capability; anyone with the URL can reach the service. The URL is live while the sandbox is running. Start your server first (e.g. via sandbox_exec) then expose its port. Serves LAYER 7 over an auto-issued TLS cert: HTTP/HTTPS AND WebSocket — connect with wss:// on the SAME hostname, no tunnel (cloudflared etc.) and no raw port needed. What it does NOT do is raw layer 4, so 22/23/25/445/3389 are rejected — use sandbox_expose_raw_port for those. If the response carries a `warning` field, the service is listening only on 127.0.0.1 inside the box: the URL is published but will return 502 until you rebind it to 0.0.0.0 (or ::).",
     {
       sandboxId: z.string().describe("Sandbox ID"),
       port: z.number().int().min(1).max(65535).describe("Port the service listens on inside the sandbox"),

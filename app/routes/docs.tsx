@@ -1670,6 +1670,10 @@ await eb.sandboxExecBackground(sb.sandboxId, {
 const { url } = await eb.sandboxExposePort(sb.sandboxId, 3000);
 console.log(url); // https://sb-abc123-3000.sandboxes.easybits.cloud`} />
 
+            <p className="text-gray-600 text-sm mt-3">
+              Tu servicio debe bindear a <code className="bg-gray-100 px-1 rounded">0.0.0.0</code>, no a <code className="bg-gray-100 px-1 rounded">127.0.0.1</code>: el proxy dialea la IP del guest, así que un bind a loopback es inalcanzable por diseño (igual que en Docker, Fly o Cloud Run). Si al exponer el puerto ya hay algo escuchando sólo en loopback, la respuesta trae un campo <code className="bg-gray-100 px-1 rounded">warning</code> y la URL responderá 502 hasta que lo cambies.
+            </p>
+
             <h3 className="text-lg font-bold mt-8 mb-3">Puertos raw (TCP/UDP)</h3>
             <p className="text-gray-600 text-sm mb-3">
               <code className="bg-gray-100 px-1 rounded">sandbox_expose_port</code> ya sirve <strong>capa 7 con TLS: HTTP y WebSocket</strong> — la misma URL responde <code className="bg-gray-100 px-1 rounded">https://</code> y <code className="bg-gray-100 px-1 rounded">wss://</code>, sin túnel ni puerto raw. Lo que no hace es <strong>capa 4 cruda</strong>: los puertos 22, 23, 25, 445 y 3389 se rechazan con 400. Para un servicio que no habla HTTP usa el forward de capa 4.

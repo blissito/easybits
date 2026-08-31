@@ -612,6 +612,8 @@ Body: \`{ port }\`
 MCP: \`sandbox_expose_port({ sandboxId, port })\`
 Retorna URL HTTPS pública (viva mientras el sandbox exista).
 
+Si la respuesta trae \`warning\`, el servicio escucha **sólo en \`127.0.0.1\`** dentro de la caja: la URL queda publicada pero devolverá 502 hasta que bindees a \`0.0.0.0\` (o \`::\`). El proxy dialea la IP del guest, así que un bind a loopback es inalcanzable por diseño — igual que en Docker, Fly o Cloud Run.
+
 **Capa 7 con TLS: HTTP y WebSocket.** El certificado ya está en el edge, así que la misma URL sirve \`https://\` y \`wss://\` — no hace falta cloudflared ni un puerto raw para un WebSocket. Lo que no hace es capa 4 cruda: los puertos 22, 23, 25, 445 y 3389 se rechazan con 400. Para esos usa el forward L4.
 
 ### Puertos raw (TCP/UDP)
