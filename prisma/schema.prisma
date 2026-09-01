@@ -920,6 +920,33 @@ model TelemetryEvent {
   @@index([ownerId, timestamp])
 }
 
+// Una lectura de un post del blog. Modelo propio y no TelemetryEvent porque aquel
+// exige un ownerId (un .mdx no tiene dueño) y guarda la URL dentro de un JSON sin
+// índice, así que no se puede agrupar por post sin recorrer la colección entera.
+//
+// Deliberadamente SIN ip ni userAgent: el user-agent se usa para descartar bots y
+// se tira. TelemetryEvent guarda IPs crudas para siempre y sin retención; no vale
+// la pena repetir eso para saber qué post se leyó.
+model PostView {
+  id String @id @default(auto()) @map("_id") @db.ObjectId
+  // Lo genera el navegador. Une las dos escrituras (alta al abrir, cierre al
+  // salir) para que la segunda pueda ser un sendBeacon puro, que no puede leer
+  // ninguna respuesta.
+  viewId    String   @unique
+  slug      String
+  lang      String?
+  ts        DateTime
+  source    String // google | x | linkedin | reddit | hn | directo | otro
+  // Los tres siguientes llegan en el beacon de salida. Nulos = el lector se fue
+  // sin que llegara: es un dato AUSENTE, no un cero.
+  seconds   Int?
+  depth     Int?
+  completed Boolean?
+
+  @@index([slug, ts])
+  @@index([ts])
+}
+
 model AppConfig {
   id        String   @id @default(auto()) @map("_id") @db.ObjectId
   key       String   @unique

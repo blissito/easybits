@@ -168,6 +168,7 @@ export default [
           index("routes/dash/admin/users.tsx"),
           route("certs", "routes/dash/admin/certs.tsx"),
           route("metrics", "routes/dash/admin/metrics.tsx"),
+      route("blog", "routes/dash/admin/blog.tsx"),
         ]),
       ]),
     ]),
@@ -417,6 +418,9 @@ export default [
   ...prefix("api/v1", [
     // Telemetry
     route("telemetry", "routes/api/v1/telemetry/telemetry.tsx"),
+    // Lectura del blog (vistas, profundidad, segundos). Nombre neutral a
+    // propósito: los bloqueadores filtran "analytics"/"telemetry" por patrón.
+    route("blog-read", "routes/api/v1/blog-read.ts"),
     // AI & LLMs
     ...prefix("llms", [route("devstral", "routes/api/llms/devstral.ts")]), // LLMs communication Jun25
     route(":fileId/main.m3u8", "routes/api/v1/mainm3u8.tsx"), // experiment

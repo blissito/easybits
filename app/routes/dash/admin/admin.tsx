@@ -25,6 +25,7 @@ const tabs = [
   { to: "/dash/admin", label: "Usuarios", end: true },
   { to: "/dash/admin/certs", label: "Certificados", end: false },
   { to: "/dash/admin/metrics", label: "Métricas", end: false },
+  { to: "/dash/admin/blog", label: "Blog", end: false },
 ];
 
 export default function AdminLayout() {
