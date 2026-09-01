@@ -48,6 +48,8 @@ export interface ScreenshotOutput extends ServiceResult {
     preset: string;
     broken: number;
     warning?: string;
+    /** Alto real de la página cuando la captura se recortó para poder mirarse. */
+    fullHeight?: number;
   };
 }
 

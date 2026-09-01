@@ -208,8 +208,57 @@ export interface ScreenshotResult {
   preset: ScreenshotPreset;
   /** count de <img> rotas que la caja sustituyó */
   broken: number;
-  /** Presente si la captura salió prácticamente vacía. */
+  /** Presente si la captura salió prácticamente vacía, o si se recortó por alta. */
   warning?: string;
+  /** Alto REAL de la página cuando la captura se recortó para poder mirarse. */
+  fullHeight?: number;
+}
+
+/**
+ * Límite DURO de lado que acepta la API de visión de Anthropic. Una captura por
+ * encima de esto no es "grande": es VENENO. El modelo la lee con un Read, el CLI
+ * la mete como adjunto en el historial de la conversación, y desde ese momento
+ * CADA turno reenvía esa imagen y la API responde `400 Could not process image`
+ * — la conversación queda muerta para siempre, no sólo el turno que la capturó.
+ * Pasó en producción el 2026-08-31 (grupo Frutopia Ops): un `fullPage` móvil de
+ * 1170x17019 mató el hilo durante ~3h hasta podar el adjunto a mano.
+ *
+ * Se RECORTA (no se escala): a 0.47x un texto de landing deja de leerse, y una
+ * captura ilegible no sirve para lo único que existe —verificar el diseño—. El
+ * agente recibe el alto real en `fullHeight` y el consejo de usar `dataId`.
+ */
+const VISION_MAX_SIDE = 8000;
+
+/** Recorta la captura al alto que la visión puede mirar. No-op si ya cabe. */
+async function capForVision(
+  bytes: Buffer,
+  width: number,
+  height: number
+): Promise<{ bytes: Buffer; width: number; height: number; cropped: boolean }> {
+  if (width <= VISION_MAX_SIDE && height <= VISION_MAX_SIDE) {
+    return { bytes, width, height, cropped: false };
+  }
+  try {
+    const sharp = (await import("sharp")).default;
+    // Ancho fuera de rango (raro: sólo con un viewport enorme) → escalar, que es
+    // lo único posible sin perder la mitad de la página. El alto se recorta.
+    const scaled = width > VISION_MAX_SIDE
+      ? await sharp(bytes).resize({ width: VISION_MAX_SIDE }).png().toBuffer()
+      : bytes;
+    const meta = await sharp(scaled).metadata();
+    const w = meta.width ?? width;
+    const h = meta.height ?? height;
+    if (h <= VISION_MAX_SIDE) return { bytes: scaled, width: w, height: h, cropped: width > VISION_MAX_SIDE };
+    const out = await sharp(scaled)
+      .extract({ left: 0, top: 0, width: w, height: VISION_MAX_SIDE })
+      .png()
+      .toBuffer();
+    return { bytes: out, width: w, height: VISION_MAX_SIDE, cropped: true };
+  } catch {
+    // Nunca fallar la captura por el recorte: vale más una imagen grande que
+    // ninguna. El `warning` de abajo sale igual porque se calcula del alto real.
+    return { bytes, width, height, cropped: false };
+  }
 }
 
 /**
@@ -265,36 +314,48 @@ export async function captureScreenshot(
     screenshot: { type: "png", fullPage },
   });
 
+  // Dimensiones reales del PNG (IHDR) — con fullPage el alto no es el del viewport.
+  const rawWidth = out.bytes.length > 24 ? out.bytes.readUInt32BE(16) : dims.width;
+  const rawHeight = out.bytes.length > 24 ? out.bytes.readUInt32BE(20) : dims.height;
+
+  // El cap va ANTES de guardar: el archivo que se almacena es el que el agente va
+  // a mirar, y guardar uno que la visión no puede procesar sólo aplaza el fallo.
+  const capped = await capForVision(out.bytes, rawWidth, rawHeight);
+  const { bytes: shotBytes, width, height } = capped;
+
   const stored = await storeRender(
     ctx,
-    out.bytes,
+    shotBytes,
     "image/png",
     input.fileName || input.url || `screenshot-${preset}`,
     "png"
   );
 
-  // Dimensiones reales del PNG (IHDR) — con fullPage el alto no es el del viewport.
-  const width = out.bytes.length > 24 ? out.bytes.readUInt32BE(16) : dims.width;
-  const height = out.bytes.length > 24 ? out.bytes.readUInt32BE(20) : dims.height;
-
   // En un recorte, un solo color es un resultado PLAUSIBLE (un badge, un bloque
   // de fondo) — avisar ahí entrenaría al agente a desconfiar de capturas buenas.
-  const blank = cropped ? false : await looksBlank(out.bytes);
+  const blank = cropped ? false : await looksBlank(shotBytes);
   return {
     ...stored,
     width,
     height,
     contentType: "image/png",
-    size: out.bytes.length,
+    size: shotBytes.length,
     preset,
     broken: out.broken,
+    ...(capped.cropped ? { fullHeight: rawHeight } : {}),
     ...(blank
       ? {
           warning:
             "la captura salió de un solo color (probablemente en blanco): el CSS quizá no había pintado. " +
             "Sube `waitMs`, o inline el CSS si viene de un CDN lento.",
         }
-      : {}),
+      : capped.cropped
+        ? {
+            warning:
+              `la página mide ${rawWidth}x${rawHeight}px y la visión no puede mirar más de ${VISION_MAX_SIDE}px por lado: ` +
+              `se guardó recortada a los primeros ${height}px. Para ver el resto, captura por partes con \`dataId\` (o \`selector\`).`,
+          }
+        : {}),
   };
 }
 
