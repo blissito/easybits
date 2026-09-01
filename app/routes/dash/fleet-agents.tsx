@@ -809,7 +809,15 @@ export async function action({ request }: Route.ActionArgs) {
     const on = String(fd.get("on") || "") === "1";
     const configs = { ...((fleetAgent.groupConfigs as Record<string, GroupConfig> | null) ?? {}) };
     const cur = configs[groupId] ?? {};
-    const set = new Set((cur.dbAllow ?? []).filter((s) => s && s.trim()));
+    // El set EFECTIVO (el que la UI pinta y el que `resolveGroupDbScope` inyecta)
+    // hereda de "*" cuando el grupo no tiene entradas propias. Escribir siempre
+    // sobre el set propio hacía que apagar una base heredada borrara de un set
+    // vacío: el cambio no ocurría y el checkbox se volvía a prender solo. Se
+    // MATERIALIZA la herencia antes de togglear, para operar sobre lo que se ve.
+    const clean = (a?: string[]) => (a ?? []).filter((x) => x && x.trim());
+    const own = clean(cur.dbAllow);
+    const inherited = clean((configs["*"] as GroupConfig | undefined)?.dbAllow);
+    const set = new Set(own.length ? own : inherited);
     if (on && ns.trim()) set.add(ns); else set.delete(ns);
     configs[groupId] = { ...cur, dbAllow: [...set] };
     await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { groupConfigs: configs } });
