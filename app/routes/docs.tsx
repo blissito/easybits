@@ -1515,17 +1515,15 @@ console.log(website.url); // https://my-docs.easybits.cloud`}
 const eb = new EasybitsClient({ apiKey: "eb_sk_live_..." });
 
 // 1. Crear sandbox Python
-const sb = await eb.createSandbox({ template: "python", timeoutSeconds: 300 });
-console.log(sb.sandboxId);
+const sbx = await eb.sandboxes.create({ template: "python", timeoutSeconds: 300 });
+console.log(sbx.sandboxId);
 
 // 2. Ejecutar código
-const { stdout } = await eb.sandboxExec(sb.sandboxId, {
-  command: "python3 -c 'print(2+2)'",
-});
+const { stdout } = await sbx.exec("python3 -c 'print(2+2)'");
 console.log(stdout); // "4"
 
 // 3. Destruir (libera recursos)
-await eb.destroySandbox(sb.sandboxId);` },
+await sbx.destroy();` },
                 { label: "MCP", code: `# Mismo flujo desde herramientas MCP:
 # sandbox_create(template:"python")
 # sandbox_exec(sandboxId, command:"python3 -c 'print(2+2)'")
@@ -1659,16 +1657,19 @@ await eb.sandboxes.snapshots.delete(snap.snapshotId);` },
               Arranca un servidor dentro del sandbox y obtén una URL HTTPS pública al instante.
             </p>
             <CodeExample title="SDK" code={`// 1. Crear sandbox ubuntu
-const sb = await eb.createSandbox({ template: "ubuntu" });
+const sbx = await eb.sandboxes.create({ template: "ubuntu" });
 
 // 2. Arrancar un server Node en background
-await eb.sandboxExecBackground(sb.sandboxId, {
-  command: "npx -y serve /app -l 3000",
-});
+//    'exec' hace que el shell sea REEMPLAZADO por node: así el kill
+//    le llega al proceso real y no deja el puerto ocupado.
+const { execId } = await sbx.execBackground("exec npx -y serve /app -l 3000");
 
 // 3. Exponer el puerto → URL pública
-const { url } = await eb.sandboxExposePort(sb.sandboxId, 3000);
-console.log(url); // https://sb-abc123-3000.sandboxes.easybits.cloud`} />
+const { url } = await sbx.exposePort(3000);
+console.log(url); // https://sb-abc123-3000.sandboxes.easybits.cloud
+
+// 4. Cuando termines: await sbx.bgKill(execId);
+//    ¿Perdiste el execId? await sbx.bgList();`} />
 
             <p className="text-gray-600 text-sm mt-3">
               Tu servicio debe bindear a <code className="bg-gray-100 px-1 rounded">0.0.0.0</code>, no a <code className="bg-gray-100 px-1 rounded">127.0.0.1</code>: el proxy dialea la IP del guest, así que un bind a loopback es inalcanzable por diseño (igual que en Docker, Fly o Cloud Run). Si al exponer el puerto ya hay algo escuchando sólo en loopback, la respuesta trae un campo <code className="bg-gray-100 px-1 rounded">warning</code> y la URL responderá 502 hasta que lo cambies.
@@ -1779,19 +1780,16 @@ await sb.removeDomain("app.cliente.com");`} />
             <p className="text-gray-600 text-sm mb-3">
               El template <code className="bg-gray-100 px-1 rounded">code-interpreter</code> mantiene un kernel Jupyter con estado entre celdas. Variables, imports y gráficas (matplotlib) sobreviven.
             </p>
-            <CodeExample title="SDK" code={`const sb = await eb.createSandbox({ template: "code-interpreter" });
+            <CodeExample title="SDK" code={`const sbx = await eb.sandboxes.create({ template: "code-interpreter" });
 
 // Celda 1: cargar datos
-await eb.sandboxRunCell(sb.sandboxId, {
-  code: \`import pandas as pd
+await sbx.runCell(\`import pandas as pd
 df = pd.read_csv("ventas.csv")
-print(df.head())\`,
-});
+print(df.head())\`);
 
 // Celda 2: usar variable de la celda anterior + gráfica
-await eb.sandboxRunCell(sb.sandboxId, {
-  code: \`df.groupby("mes")["total"].sum().plot(kind="bar")\`,
-});  // ← la gráfica se devuelve como imagen`} />
+await sbx.runCell(\`df.groupby("mes")["total"].sum().plot(kind="bar")\`);
+// ← la gráfica se devuelve como imagen`} />
 
             <h3 className="text-lg font-bold mt-8 mb-3">Agentes persistentes (agent_create)</h3>
             <p className="text-gray-600 text-sm mb-3">
@@ -1861,8 +1859,9 @@ console.log(status.result);  // resultado final del agente`} />
                 ["sandbox_extend", "sandboxId, extendSeconds", "Extender TTL del sandbox"],
                 ["sandbox_suspend", "sandboxId", "Snapshot a disco y liberar CPU (pausa el TTL)"],
                 ["sandbox_resume", "sandboxId", "Restaurar desde snapshot (restaura el TTL restante)"],
-                ["sandbox_exec", "sandboxId, command", "Ejecutar comando (sync, 60s timeout)"],
+                ["sandbox_exec", "sandboxId, command", "Ejecutar comando (sync, 60s por defecto, tope 600s)"],
                 ["sandbox_exec_background", "sandboxId, command", "Ejecutar comando en background"],
+                ["sandbox_exec_list", "sandboxId", "Listar procesos en background (recupera un execId perdido)"],
                 ["sandbox_exec_status", "sandboxId, execId", "Consultar estado de ejecución background"],
                 ["sandbox_exec_kill", "sandboxId, execId", "Matar una ejecución background (lo que falta cuando algo se cuelga)"],
                 ["sandbox_run_code", "sandboxId, code, lang", "Ejecutar Python/Node/Bash inline"],

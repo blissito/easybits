@@ -1,8 +1,24 @@
 import type { Route } from "./+types/sandbox-bg";
 import { authenticateRequest, requireAuth } from "~/.server/apiAuth";
 import { applySandboxRateLimit } from "~/.server/rateLimiter";
-import { execBackground } from "~/.server/core/sandboxOperations";
+import {
+  execBackground,
+  execBackgroundList,
+} from "~/.server/core/sandboxOperations";
 import { computeEnvFor } from "~/.server/compute/gateway";
+
+// GET /api/v2/sandboxes/:id/bg — list background processes → { count, processes }
+// Existe para recuperar un execId perdido: sin esto, un proceso vivo en la caja
+// no tiene forma de ser consultado ni matado.
+export async function loader({ request, params }: Route.LoaderArgs) {
+  const ctx = requireAuth(await authenticateRequest(request));
+  const limited = await applySandboxRateLimit(
+    ctx.apiKey?.id ?? ctx.user.id,
+    "op"
+  );
+  if (limited) return limited;
+  return Response.json(await execBackgroundList(ctx, params.id));
+}
 
 // POST /api/v2/sandboxes/:id/bg — start a background command → { execId }
 export async function action({ request, params }: Route.ActionArgs) {

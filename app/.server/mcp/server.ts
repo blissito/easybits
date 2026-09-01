@@ -132,6 +132,7 @@ import {
   listSandboxDomains,
   verifySandboxDomain,
   execBackground,
+  execBackgroundList,
   execBackgroundStatus,
   execBackgroundKill,
   runCell,
@@ -335,6 +336,7 @@ const SANDBOX_TOOL_KIND: Record<string, "create" | "op"> = {
   sandbox_domain_list: "op",
   sandbox_domain_verify: "op",
   sandbox_exec_background: "op",
+  sandbox_exec_list: "op",
   sandbox_exec_status: "op",
   sandbox_exec_kill: "op",
   agent_run_status: "op",
@@ -1580,7 +1582,7 @@ How to embed safely (the only reliable rule):
       // Enum derivado de SANDBOX_TEMPLATES (misma fuente que el validador REST):
       // hardcodearlo aquí dejó fuera templates reales — ghosty-studio, el único
       // con SSH, no se podía crear por MCP aunque REST sí lo aceptaba.
-      template: z.enum(SANDBOX_TEMPLATES).describe("Base image template. 'code-interpreter' = Python with a persistent Jupyter kernel (use sandbox_run_cell — state survives between cells, matplotlib charts as images). 'node-agent' = node + Claude SDK pre-baked (agent_run). 'goose' = Block's coding agent. 'ghostyclaw' = long-lived Ghosty runtime (nanoclaw daemon + Docker + admin-api, always-on). 'openclaw' = OpenClaw personal AI. 'chat-openai' / 'chat-anthropic' = persistent Express+SSE chat runtime — use agent_create instead of sandbox_create for these. 'ghosty-studio' = recording/LiveKit box, and today the only template with SSH (sandbox_ssh_enable). Call templates_list for the full catalog."),
+      template: z.enum(SANDBOX_TEMPLATES).describe("Base image template. 'code-interpreter' = Python with a persistent Jupyter kernel (use sandbox_run_cell — state survives between cells, matplotlib charts as images). 'node-agent' = node + Claude SDK pre-baked (agent_run). 'goose' = Block's coding agent. 'ghostyclaw' = long-lived Ghosty runtime (nanoclaw daemon + Docker + admin-api, always-on). 'openclaw' = OpenClaw personal AI. 'chat-openai' / 'chat-anthropic' = persistent Express+SSE chat runtime — use agent_create instead of sandbox_create for these. 'dev-box' = clean work box (git, curl, build-essential, Node 22) and the recommended one for SSH (sandbox_ssh_enable). Call templates_list for the full catalog."),
       timeoutSeconds: z.number().int().min(30).max(MAX_SANDBOX_TTL_SECONDS).optional().describe("Auto-destroy after N seconds (default 300). Max depends on your plan: Byte 3600 (1h) · Mega 14400 (4h) · Tera 86400 (24h)"),
       name: z.string().max(64).optional().describe("Optional human-friendly label"),
       metadata: z.record(z.string()).optional().describe("Optional key-value tags"),
@@ -2398,7 +2400,7 @@ How to embed safely (the only reliable rule):
 
   server.tool(
     "sandbox_ssh_enable",
-    "Give the user SSH into the box, in one call: injects their public key(s) and restarts the box sshd. HAND THE USER `tunnel.setup` THEN `tunnel.command` — that path rides 443, so it works from offices and corporate VPNs where a high port silently fails and reaches you as an unreproducible 'it won't connect'. The top-level `command` uses a pool port: offer it only as a fallback, and never write its port into docs or remember it across sessions (it is neither 22 nor stable — call this again to read it back). The box's sshd is fail-closed: without a key it does not run at all, which is why the key must go in first. Access is key-only, as root. Only templates that declare port 22 (today: ghosty-studio) work — a 403 means this template has no SSH and is a permanent answer, do NOT retry.",
+    "Give the user SSH into the box, in one call: injects their public key(s) and restarts the box sshd. HAND THE USER `tunnel.setup` THEN `tunnel.command` — that path rides 443, so it works from offices and corporate VPNs where a high port silently fails and reaches you as an unreproducible 'it won't connect'. The top-level `command` uses a pool port: offer it only as a fallback, and never write its port into docs or remember it across sessions (it is neither 22 nor stable — call this again to read it back). The box's sshd is fail-closed: without a key it does not run at all, which is why the key must go in first. Access is key-only, as root. Only templates that declare port 22 work (dev-box is the one to recommend to users) — a 403 means this template has no SSH and is a permanent answer, do NOT retry.",
     {
       sandboxId: z.string().describe("Sandbox ID"),
       publicKeys: z
@@ -2483,7 +2485,7 @@ How to embed safely (the only reliable rule):
 
   server.tool(
     "sandbox_exec_background",
-    "Start a long-running command in the background. Returns { execId, status } immediately instead of blocking like sandbox_exec. Poll with sandbox_exec_status; stop with sandbox_exec_kill. Use for dev servers / long tasks — pair with sandbox_expose_port to reach a server it starts.",
+    "Start a long-running command in the background. Returns { execId, status } immediately instead of blocking like sandbox_exec. Poll with sandbox_exec_status; list with sandbox_exec_list; stop with sandbox_exec_kill. Use for dev servers / long tasks — pair with sandbox_expose_port to reach a server it starts. Do NOT try to background a command inside sandbox_exec with nohup or &: sandbox_exec is a synchronous call and its shell dies with the response, taking the child with it. Prefer writing the command as `exec <program>` (e.g. 'exec node server.mjs'): the shell is REPLACED by your process instead of staying as its parent, so logs and signals go straight to it.",
     {
       sandboxId: z.string().describe("Sandbox ID"),
       command: z.string().describe("Shell command to run in the background (e.g. 'npm run dev', 'python app.py')"),
@@ -2513,15 +2515,37 @@ How to embed safely (the only reliable rule):
   );
 
   server.tool(
-    "sandbox_exec_kill",
-    "Kill a background command started with sandbox_exec_background.",
+    "sandbox_exec_list",
+    "List the background commands of a sandbox: execId, command, status, exit code and log sizes. This is how you recover an execId you lost — without it a running process cannot be polled or killed. Returns sizes, not the log bodies; use sandbox_exec_status for those.",
     {
       sandboxId: z.string().describe("Sandbox ID"),
-      execId: z.string().describe("The execId returned by sandbox_exec_background"),
     },
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
-      const result = await execBackgroundKill(ctx, params.sandboxId, params.execId);
+      const result = await execBackgroundList(ctx, params.sandboxId);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "sandbox_exec_kill",
+    "Kill a background command started with sandbox_exec_background. Signals the whole process GROUP (SIGTERM, then SIGKILL after a grace period), so a dev server's forked children die too instead of surviving and holding the port. Killing an already-finished command is a success, not an error: it returns ok with alreadyExited.",
+    {
+      sandboxId: z.string().describe("Sandbox ID"),
+      execId: z.string().describe("The execId returned by sandbox_exec_background"),
+      graceSeconds: z
+        .number()
+        .int()
+        .min(0)
+        .max(30)
+        .optional()
+        .describe("Seconds to wait between SIGTERM and SIGKILL (default 5). Use 0 to kill immediately."),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await execBackgroundKill(ctx, params.sandboxId, params.execId, {
+        graceSeconds: params.graceSeconds,
+      });
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     })
   );

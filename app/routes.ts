@@ -268,6 +268,11 @@ export default [
     route("sandboxes/:id", "routes/api/v2/sandbox.ts"),
     route("sandboxes/:id/bg", "routes/api/v2/sandbox-bg.ts"),
     route("sandboxes/:id/bg/:execId", "routes/api/v2/sandbox-bg-detail.ts"),
+    // Alias del kill: los docs publicaron esta ruta, el código solo tenía DELETE.
+    route(
+      "sandboxes/:id/bg/:execId/kill",
+      "routes/api/v2/sandbox-bg-kill.ts"
+    ),
     route("sandboxes/:id/files/:op", "routes/api/v2/sandbox-files.ts"),
     route("sandboxes/:id/:action", "routes/api/v2/sandbox-action.ts"),
     // Snapshots catalog (copy-on-write clone sources) — backs eb.sandboxes.snapshots.*

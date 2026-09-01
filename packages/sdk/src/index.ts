@@ -2441,13 +2441,30 @@ export class Sandbox {
   ): Promise<BgStartResult> {
     return this.post("/bg", { command, ...opts });
   }
+  /**
+   * List the sandbox's background processes. Use it to recover an execId you
+   * lost — without it a running process can't be polled or killed. Returns log
+   * sizes, not the bodies; use bgStatus for those.
+   */
+  bgList(): Promise<BgListResult> {
+    return this.req(`${this.base()}/bg`);
+  }
   /** Poll a background process: status + captured stdout/stderr. */
   bgStatus(execId: string): Promise<BgStatusResult> {
     return this.req(`${this.base()}/bg/${encodeURIComponent(execId)}`);
   }
-  /** Kill a background process. */
-  bgKill(execId: string): Promise<{ ok: true }> {
-    return this.req(`${this.base()}/bg/${encodeURIComponent(execId)}`, {
+  /**
+   * Kill a background process. Signals the whole process group (SIGTERM, then
+   * SIGKILL after `graceSeconds`, default 5), so a dev server's forked children
+   * die too instead of surviving and holding the port. Killing an already
+   * finished process succeeds and reports `alreadyExited`.
+   */
+  bgKill(execId: string, opts?: { graceSeconds?: number }): Promise<BgKillResult> {
+    const q =
+      opts?.graceSeconds !== undefined
+        ? `?graceSeconds=${encodeURIComponent(String(opts.graceSeconds))}`
+        : "";
+    return this.req(`${this.base()}/bg/${encodeURIComponent(execId)}${q}`, {
       method: "DELETE",
     });
   }
@@ -3008,6 +3025,38 @@ export interface BgStatusResult {
   stdout: string;
   stderr: string;
   startedAt: string;
+  finishedAt?: string;
+  /** The log bytes were recycled by age; status and exitCode are still real. */
+  logsExpired?: boolean;
+}
+
+export interface BgProcessInfo {
+  execId: string;
+  command: string;
+  cwd?: string;
+  status: "running" | "exited";
+  startedAt: string;
+  finishedAt?: string;
+  exitCode?: number;
+  pid: number;
+  pgid: number;
+  stdoutBytes: number;
+  stderrBytes: number;
+  logsExpired?: boolean;
+}
+
+export interface BgListResult {
+  count: number;
+  processes: BgProcessInfo[];
+}
+
+export interface BgKillResult {
+  ok: true;
+  status?: "running" | "exited";
+  exitCode?: number;
+  signal?: "SIGTERM" | "SIGKILL";
+  /** The process had already finished; nothing was signalled. */
+  alreadyExited?: boolean;
 }
 
 // ─── DatabaseHandle ──────────────────────────────────────────────

@@ -593,9 +593,12 @@ MCP: \`sandbox_exec({ sandboxId, command })\`
 ### Comandos largos (background)
 \`POST /sandboxes/:id/bg\` · MCP: \`sandbox_exec_background({ sandboxId, command })\`
 Estado: \`GET /sandboxes/:id/bg/:execId\` · MCP: \`sandbox_exec_status({ sandboxId, execId })\`
-Matar: \`POST /sandboxes/:id/bg/:execId/kill\` · MCP: \`sandbox_exec_kill({ sandboxId, execId })\`
+Listar: \`GET /sandboxes/:id/bg\` · MCP: \`sandbox_exec_list({ sandboxId })\`
+Matar: \`DELETE /sandboxes/:id/bg/:execId\` (o \`POST /sandboxes/:id/bg/:execId/kill\`) · MCP: \`sandbox_exec_kill({ sandboxId, execId })\`
 
-\`exec\` es síncrono y tope 600 s: para un build, un dev server o cualquier cosa que sobreviva a la petición, usa background. Y **acuérdate de \`sandbox_exec_kill\`**: sin él un proceso colgado se queda comiendo la caja hasta que vence el TTL.
+\`exec\` es síncrono (60 s por defecto, tope 600 s): para un build, un dev server o cualquier cosa que sobreviva a la petición, usa background. No intentes dejar algo corriendo con \`nohup\` o \`&\` dentro de \`exec\`: el shell muere al responder y se lleva al hijo. Escribe el comando como \`exec <programa>\` para que el shell sea REEMPLAZADO por tu proceso en vez de quedar como su padre.
+
+Y **acuérdate de \`sandbox_exec_kill\`**: sin él un proceso colgado se queda comiendo la caja hasta que vence el TTL. Mata al GRUPO entero (SIGTERM, luego SIGKILL tras la gracia), así que los hijos que forkeó el comando también mueren. Si perdiste el \`execId\`, \`sandbox_exec_list\` te lo devuelve.
 
 ### Ejecutar código inline
 \`POST /sandboxes/:id/run-code\`

@@ -1603,7 +1603,7 @@ function rethrowNoSshForTemplate(e: unknown): never {
   const msg = e instanceof Error ? e.message : String(e);
   if (/\b403\b/.test(msg))
     throw new Error(
-      `este template no expone ese puerto (SSH sólo en templates que lo declaran, hoy ghosty-studio). Respuesta definitiva: no reintentes. Detalle: ${msg}`
+      `este template no expone ese puerto (SSH sólo en templates que lo declaran; dev-box es la caja recomendada para entrar por ssh). Respuesta definitiva: no reintentes. Detalle: ${msg}`
     );
   throw e instanceof Error ? e : new Error(msg);
 }
@@ -2027,6 +2027,42 @@ export async function execBackground(
   );
 }
 
+export interface BgProcessInfo {
+  execId: string;
+  command: string;
+  cwd?: string;
+  status: "running" | "exited";
+  startedAt: string;
+  finishedAt?: string;
+  exitCode?: number;
+  pid: number;
+  pgid: number;
+  stdoutBytes: number;
+  stderrBytes: number;
+  logsExpired?: boolean;
+}
+
+export interface BgListResult {
+  count: number;
+  processes: BgProcessInfo[];
+}
+
+// Lista los procesos en background de la caja. Es la salida de emergencia
+// cuando se perdió el execId: sin esto, un proceso vivo queda inalcanzable.
+// Devuelve tamaños, no cuerpos — para los logs está execBackgroundStatus.
+export async function execBackgroundList(
+  ctx: AuthContext,
+  sandboxId: string
+): Promise<BgListResult> {
+  requireScope(ctx, "READ");
+  return callHost<BgListResult>(
+    "GET",
+    `/v1/sandbox/${sandboxId}/exec/background`,
+    undefined,
+    await effectiveOwnerId(ctx, sandboxId)
+  );
+}
+
 export async function execBackgroundStatus(
   ctx: AuthContext,
   sandboxId: string,
@@ -2041,15 +2077,31 @@ export async function execBackgroundStatus(
   );
 }
 
+export interface BgKillResult {
+  ok: true;
+  status?: "running" | "exited";
+  exitCode?: number;
+  signal?: "SIGTERM" | "SIGKILL";
+  alreadyExited?: boolean;
+}
+
+// Mata el GRUPO de procesos, no solo el shell: SIGTERM, gracia, SIGKILL. Matar
+// algo ya terminado devuelve ok:true con alreadyExited — nunca un error, porque
+// el patrón documentado llama kill sin comprobar antes si terminó.
 export async function execBackgroundKill(
   ctx: AuthContext,
   sandboxId: string,
-  execId: string
-): Promise<{ ok: true }> {
+  execId: string,
+  opts?: { graceSeconds?: number }
+): Promise<BgKillResult> {
   requireScope(ctx, "WRITE");
-  return callHost<{ ok: true }>(
+  const q =
+    opts?.graceSeconds !== undefined
+      ? `?graceSeconds=${encodeURIComponent(String(opts.graceSeconds))}`
+      : "";
+  return callHost<BgKillResult>(
     "POST",
-    `/v1/sandbox/${sandboxId}/exec/background/${encodeURIComponent(execId)}/kill`,
+    `/v1/sandbox/${sandboxId}/exec/background/${encodeURIComponent(execId)}/kill${q}`,
     {},
     await effectiveOwnerId(ctx, sandboxId)
   );

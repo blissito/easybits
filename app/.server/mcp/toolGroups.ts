@@ -418,6 +418,7 @@ export const SANDBOX_ALLOWLIST = new Set<string>([
   "sandbox_domain_list",
   "sandbox_domain_verify",
   "sandbox_exec_background",
+  "sandbox_exec_list",
   "sandbox_exec_status",
   "sandbox_exec_kill",
   "sandbox_run_cell",
