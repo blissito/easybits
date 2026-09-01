@@ -1,0 +1,64 @@
+---
+title: "Tu agente no está roto: la conversación sí"
+description: "Un agente respondía bien en cuatro grupos de WhatsApp y en el quinto se cortaba a los nueve segundos. La config era idéntica. El veneno estaba en la memoria de esa conversación: una captura de 17019 píxeles que la API rechazaba en cada turno. Cómo separar 'está mal configurado' de 'este hilo está muerto' en tres pasos."
+date: "2026-09-01"
+author: "Equipo Easybits"
+tags: ["agentes", "debugging", "flota", "build in public", "whatsapp"]
+featuredImage: "/blog/assets/blog-conversacion-envenenada-cover.png"
+published: true
+---
+
+# Tu agente no está roto: la conversación sí
+
+Un cliente reportó que su agente dejó de servir en **un** grupo de WhatsApp. En los otros cuatro respondía normal. Mismo agente, mismo número, misma configuración.
+
+![Cuatro conversaciones sanas y una quinta rota](/blog/assets/blog-conversacion-envenenada-grupos.png)
+
+El síntoma: cada mensaje devolvía *"me quedé a medias"* a los nueve segundos, sin haber llamado una sola herramienta.
+
+Cuando pasa esto, todo el mundo empieza por el mismo lado —el prompt, el modelo, los conectores, "límpiale el contexto"— y ese lado casi nunca es. Vale la pena descartarlo en dos minutos, con una prueba en vez de una corazonada.
+
+## Paso 1: mismo config, conversación nueva
+
+Nuestra API deja mandar un turno con un `groupId` inventado pero apuntando a la configuración de un grupo real:
+
+```bash
+curl -X POST .../fleet-agents/$AGENT/message \
+  -d '{"groupId":"diag-'$RANDOM'","configGroupId":"120363410663973765@g.us","text":"lista tus herramientas"}'
+```
+
+Respondió perfecto, con todas sus herramientas cargadas. **La configuración no era el problema.** Ese `configGroupId` importa: sin él, el turno arranca sin los conectores del grupo y el resultado se parece mucho a un agente roto — un falso positivo que cuesta una hora.
+
+## Paso 2: la conversación de verdad
+
+El mismo turno con el `groupId` real reprodujo el corte: 9 segundos, cero herramientas.
+
+Config sana + conversación enferma. El problema viaja en la **memoria del hilo**, no en la configuración ni en la máquina. Eso ya explica por qué apagar y prender los interruptores del grupo no hacía nada: ninguno de ellos toca el historial.
+
+## Paso 3: leer el historial
+
+Cada conversación es un archivo `.jsonl` en la caja del agente. Un `grep` bastó:
+
+```
+API Error: 400 Could not process image
+```
+
+Repetido en cada turno desde las 23:03 del día anterior. Diez minutos antes, el agente había capturado una página web completa en formato móvil: **1170 × 17019 píxeles**. La visión de la API no acepta más de 8000 por lado.
+
+Lo importante no es que fallara la captura. Es que la imagen quedó **escrita en el historial**. Y como cada turno reanuda la conversación, esa imagen se reenviaba siempre. La captura falló una vez; la conversación quedó muerta para siempre.
+
+Es un modo de fallo desagradable porque no se parece a nada roto: la infraestructura está sana, el agente vivo, los otros hilos funcionando. Reciclar la máquina tampoco cura — el veneno viaja con el hilo, no con la caja.
+
+Podamos la imagen del historial dejando una nota de texto en su lugar. El agente volvió, con toda su memoria: precios, tablero de costos, la guía de estilo de los flyers.
+
+## Los dos arreglos
+
+**En la fuente.** La herramienta de captura ahora recorta a lo que la visión puede mirar *antes* de guardar. Recorta en vez de escalar: a 0.47× el texto de una landing deja de leerse, y una captura ilegible no sirve para lo único que existe, que es verificar cómo quedó el diseño. El agente recibe el alto real y el consejo de mirar por partes.
+
+**En el worker.** Ese error 400 no llegaba como excepción sino como un fin de turno "exitoso" marcado con `is_error`, así que ningún reintento lo veía. Ahora el worker lo reconoce, poda las imágenes del historial y reintenta una vez. Se pierde la imagen; se salva la conversación. Al revés no hay trato posible.
+
+## Lo que nos llevamos
+
+Al historial de un agente no entra un blob de imagen sin límite. Nunca. Todo lo que viene de fuera —lo que sube el usuario y lo que produce una herramienta— se mide y se recorta antes de tocar la memoria de la conversación, o se guarda como archivo y se pasa por referencia.
+
+Un error transitorio que se escribe en la memoria deja de ser transitorio.
