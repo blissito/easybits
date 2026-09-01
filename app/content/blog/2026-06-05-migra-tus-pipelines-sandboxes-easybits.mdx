@@ -16,6 +16,7 @@ Un amigo me preguntó si podía mover sus pipelines a Easybits. La respuesta cor
 const { execId } = await sbx.execBackground("npm run build");
 const st = await sbx.bgStatus(execId); // { status, exitCode?, stdout, stderr }
 // ...y cuando quieras: await sbx.bgKill(execId);
+// ...y si lo perdiste: const { processes } = await sbx.bgList();
 ```
 
 `execBackground` arranca el comando y **vuelve al instante** con un `execId` — no se queda esperando. `bgStatus` te lo consulta cuando quieras: mientras corre da `status: "running"` con el `stdout`/`stderr` acumulado; al terminar, `status: "exited"` y el `exitCode`. `bgKill` lo termina. Ese es el loop de un runner.
@@ -67,6 +68,8 @@ if (Date.now() - start > 600_000) {
   throw new Error("pipeline excedió el tiempo");
 }
 ```
+
+`bgKill` señala al **grupo de procesos** completo: primero un SIGTERM para que lo que corre alcance a cerrar, y un SIGKILL después de la gracia. Importa cuando tu comando forkea —un `npm test` que levanta un server de pruebas, por ejemplo—, porque matar solo al shell dejaría a ese hijo vivo ocupando el puerto. Matar algo que ya terminó no es un error: te responde con `alreadyExited`, así que puedes llamarlo sin preguntar primero.
 
 ## Logs en vivo, gratis
 

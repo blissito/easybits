@@ -31,7 +31,8 @@ const sbx = await eb.sandboxes.create({ template: "node", timeoutSeconds: 600 })
 await sbx.files.write("server.js", readFileSync("server.js", "utf8"));
 
 // 3) Lo arrancamos en segundo plano (vuelve al instante, no se queda esperando).
-await sbx.execBackground("node server.js");
+//    El `exec` hace que el shell sea reemplazado por node, no que lo tenga de padre.
+await sbx.execBackground("exec node server.js");
 
 // 4) Exponemos el puerto 3000 como URL pública con HTTPS.
 const { url } = await sbx.exposePort(3000);
@@ -47,6 +48,8 @@ console.log(await res.json());
 ```
 
 `execBackground` arranca el servidor sin bloquear tu script, y `exposePort` te da la dirección pública. No tocaste tu laptop ni montaste infraestructura: el servidor corre en una caja limpia en la nube.
+
+Cuando quieras bajarlo, `sbx.bgKill(execId)` con el `execId` que devuelve `execBackground` —y si lo perdiste, `sbx.bgList()` te lista lo que está corriendo adentro.
 
 ## La URL vive mientras viva el sandbox
 

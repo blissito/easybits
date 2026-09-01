@@ -59,10 +59,12 @@ Es el mismo patrón que popularizó el "code interpreter" de los grandes, ahora 
 Tu agente arma una app, una demo o un dashboard adentro del sandbox. ¿Cómo se la enseñas a alguien? Expones el puerto:
 
 ```js
-await sbx.execBackground("python3 -m http.server 3000");
+await sbx.execBackground("exec python3 -m http.server 3000");
 const { url } = await sbx.exposePort(3000);
 console.log(url); // https://sb-...-3000.sandboxes.easybits.cloud
 ```
+
+Ese `exec` de más no es adorno: hace que el shell sea **reemplazado** por tu proceso en vez de quedarse como su padre, así que cuando lo mates la señal le llega al servidor de verdad y el puerto queda libre.
 
 Esa URL es **pública, con HTTPS válido** (certificado emitido automáticamente) y vive mientras el sandbox esté encendido. El identificador del sandbox —imposible de adivinar— es la llave: solo quien tiene el link entra. Es el equivalente al `getHost` de E2B o al preview link de Daytona, sin que configures nada.
 
@@ -74,6 +76,7 @@ No todo termina en un segundo. Un build, un server de desarrollo, un scraping. P
 const { execId } = await sbx.execBackground("npm run build");
 const st = await sbx.bgStatus(execId); // { status, exitCode?, stdout, stderr }
 // ...y cuando quieras: await sbx.bgKill(execId);
+// ¿tu agente perdió el execId? const { processes } = await sbx.bgList();
 ```
 
 Tu agente lanza la tarea, sigue con lo suyo, y vuelve a checar después.
@@ -122,7 +125,7 @@ const out = await sbx.runCell("print('hola desde una microVM')");
 console.log(out.stdout); // → hola desde una microVM
 
 // 3. Levanta un server y obtén su URL pública con HTTPS
-await sbx.execBackground("python3 -m http.server 3000");
+await sbx.execBackground("exec python3 -m http.server 3000");
 const { url } = await sbx.exposePort(3000);
 console.log(url);
 
