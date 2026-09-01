@@ -294,10 +294,25 @@ console.log(out.stdout);
 const chart = await sbx.runCell("df.plot(); plt.show()");
 const png = chart.results.find((r) => r.type === "image/png")?.data; // base64
 
-// Run a server and get a public URL
-await sbx.execBackground("python3 -m http.server 3000");
+// Run a server and get a public URL. Write the command as `exec <program>`:
+// the shell is REPLACED by your process instead of staying as its parent, so
+// signals and logs go straight to it. (Do NOT try to background something with
+// nohup or & inside exec(): that call is synchronous and its shell dies with
+// the response, taking the child with it. That is what execBackground is for.)
+const { execId } = await sbx.execBackground("exec python3 -m http.server 3000");
 const { url } = await sbx.exposePort(3000);
 console.log(url); // https://sb-...-3000.sandboxes.easybits.cloud
+
+// Poll it, list them, kill it. bgStatus returns the ACCUMULATED stdout, so
+// live logs are just `st.stdout.slice(seen)` — no websockets needed.
+const st = await sbx.bgStatus(execId); // { status, exitCode?, stdout, stderr }
+const { processes } = await sbx.bgList(); // lost the execId? it is in here
+await sbx.bgKill(execId, { graceSeconds: 2 });
+// bgKill signals the whole process GROUP (SIGTERM, then SIGKILL after the
+// grace), so a dev server's forked children die too instead of surviving and
+// holding the port. Killing an already-finished process succeeds and reports
+// alreadyExited.
+
 // exposePort is HTTP-only (22/23/25/445/3389 are rejected). For a raw L4 port:
 const fwd = await sbx.exposeRawPort(22, "tcp");
 console.log(fwd.endpoint); // cname.sandboxes.easybits.cloud:49123 — dial this
