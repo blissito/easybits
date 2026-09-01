@@ -53,9 +53,21 @@ Podamos la imagen del historial dejando una nota de texto en su lugar. El agente
 
 ## Los dos arreglos
 
-**En la fuente.** La herramienta de captura ahora recorta a lo que la visión puede mirar *antes* de guardar. Recorta en vez de escalar: a 0.47× el texto de una landing deja de leerse, y una captura ilegible no sirve para lo único que existe, que es verificar cómo quedó el diseño. El agente recibe el alto real y el consejo de mirar por partes.
+Uno evita que el veneno entre; el otro cura la conversación si entra de todos modos. Hacen falta los dos.
 
-**En el worker.** Ese error 400 no llegaba como excepción sino como un fin de turno "exitoso" marcado con `is_error`, así que ningún reintento lo veía. Ahora el worker lo reconoce, poda las imágenes del historial y reintenta una vez. Se pierde la imagen; se salva la conversación. Al revés no hay trato posible.
+**Que no entre: la captura se recorta antes de guardarse.**
+
+Antes, la herramienta devolvía la página completa aunque midiera 17019 píxeles. Ahora mide el resultado y, si pasa de 8000, guarda sólo los primeros 8000 y avisa: *"la página mide 17019px, tienes aquí los primeros 8000; para ver el resto captura por partes"*.
+
+Recorta en vez de encoger. Encoger la página entera a 0.47× la deja completa pero ilegible, y una captura donde no se lee el texto no sirve para lo único que existe: revisar cómo quedó el diseño. Media página legible vale más que una página entera borrosa.
+
+**Que se cure: el worker limpia el historial y reintenta.**
+
+Aquí hubo una sorpresa. Ese error 400 no llegaba como excepción —que sí se reintenta— sino disfrazado de turno terminado con éxito, con una banderita `is_error` que nadie miraba. Por eso el reintento que ya existía nunca se disparaba.
+
+Ahora el worker reconoce ese fin de turno, abre el historial de la conversación, sustituye las imágenes por una nota de texto (*"imagen retirada: la API la rechazaba"*) y vuelve a intentar el mismo mensaje. El usuario ve una respuesta normal, un poco más lenta; el agente perdió una imagen que de todas formas nunca pudo mirar.
+
+Y si al abrir el historial no hay ninguna imagen que quitar, no reintenta: el problema era otro y repetirlo sólo gastaría dinero.
 
 ## Lo que nos llevamos
 
