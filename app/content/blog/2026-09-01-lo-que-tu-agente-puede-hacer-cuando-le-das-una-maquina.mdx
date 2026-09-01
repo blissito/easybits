@@ -1,0 +1,103 @@
+---
+title: "Lo que tu agente puede hacer cuando le das una máquina"
+description: "Un agente que solo escribe texto te devuelve código que no sabe si funciona. Con una microVM de Easybits lo ejecuta, levanta el server, te pasa una URL pública con HTTPS y entra por SSH si hace falta. Los tiempos medidos: 3.7s provisionar, 6.9s instalar y buildear dentro de la caja, 12.0s reconstruirla entera desde cero."
+date: "2026-09-01"
+author: "Equipo Easybits"
+tags: ["sandboxes", "agentes", "microVM", "SDK", "API"]
+published: true
+---
+
+# Lo que tu agente puede hacer cuando le das una máquina
+
+Un agente sin máquina te entrega código y una promesa. Escribe la función, te la explica bien, y ninguno de los dos sabe si corre. Tú la pegas en tu proyecto, falla por una dependencia, y la conversación se convierte en un ida y vuelta de capturas de errores.
+
+Dale una máquina y el trabajo cambia de naturaleza: en vez de proponer, comprueba.
+
+Estos son los tiempos reales de una app de React Router recién clonada, medidos, no estimados:
+
+| Paso | Tiempo |
+|---|---|
+| Provisionar la caja | 3.7s |
+| `npm ci` + build **dentro** de la caja | 6.9s |
+| Publicar el release | 11.3s |
+| Reconstruirla entera en una caja limpia | 12.0s |
+| Recuperarla después de perderla | 11.9s |
+
+No son contenedores en un host compartido. Cada caja es una **microVM de Firecracker**: su propio kernel, su propio filesystem, su propia red. Lo que pase adentro se queda adentro, incluido un `postinstall` hostil de un paquete que tu agente decidió instalar.
+
+## Ejecutar, no sugerir
+
+```ts
+import { EasybitsClient } from "@easybits.cloud/sdk";
+const eb = new EasybitsClient({ apiKey: process.env.EASYBITS_API_KEY! });
+
+const sbx = await eb.sandboxes.create({ template: "node", timeoutSeconds: 600 });
+const { stdout } = await sbx.exec("node -e 'console.log(2+2)'");
+```
+
+Eso es todo el ceremonial. No hay Dockerfile, ni registry, ni cluster. La caja nace sin credenciales a propósito y se autodestruye cuando venza su TTL, aunque tu proceso se muera antes de acordarse de apagarla.
+
+## Levantar algo y compartirlo
+
+Un agente que arma un dashboard necesita enseñártelo. Levanta el server en segundo plano y pide una URL:
+
+```ts
+const { execId } = await sbx.execBackground("exec node server.js");
+const { url } = await sbx.exposePort(3000);
+console.log(url); // https://sb-...-3000.sandboxes.easybits.cloud
+```
+
+Esa URL es pública, con certificado válido emitido solo, y vive mientras viva la caja. El identificador es imposible de adivinar: quien tiene el link entra, y nadie más.
+
+Fíjate en el `exec` de la primera línea. Sin él, el shell se queda como padre de node, y cuando mates el proceso la señal le llega al shell mientras el server sigue escuchando. Con él, el shell es *reemplazado* por node. Es un detalle de una palabra que decide si tu puerto queda libre o no — y sí, nosotros lo aprendimos por las malas.
+
+## Procesos largos que sobreviven a la petición
+
+Un build, un test suite, un scraping: nada de eso cabe en una llamada HTTP. Va a segundo plano, y lo consultas cuando quieras:
+
+```ts
+const st = await sbx.bgStatus(execId); // { status, exitCode?, stdout, stderr }
+const { processes } = await sbx.bgList(); // ¿perdiste el execId? aquí está
+await sbx.bgKill(execId);
+```
+
+`bgStatus` devuelve el `stdout` **acumulado**, así que mostrar logs en vivo es restar lo que ya viste. Sin websockets, sin infraestructura de logs, sin agregador. Y `bgKill` señala al grupo de procesos completo —SIGTERM y luego SIGKILL—, de modo que un `npm run dev` que forkeó un hijo no te deja ese hijo vivo ocupando el puerto.
+
+## Cuando el agente ya no alcanza, entras tú
+
+Hay un punto en el que quieres las manos en el teclado. La misma caja abre SSH: inyectas tu llave pública, el sshd arranca —es *fail-closed*: sin llave no existe siquiera cerrado— y entras.
+
+```ts
+await sbx.enableSsh([readFileSync(`${homedir()}/.ssh/id_ed25519.pub`, "utf8")]);
+```
+
+```bash
+npm i -g @easybits.cloud/cli && easybits login <tu-api-key>
+# en ~/.ssh/config:  Host *.ghosty
+#                      ProxyCommand easybits ssh-proxy %h
+#                      User root
+ssh mi-caja.ghosty
+```
+
+Ese acceso viaja por el **443**, el mismo puerto que una página web, porque un puerto alto no atraviesa la red de una oficina ni una VPN corporativa y ese fallo te llega como un "no me conecta" que no puedes reproducir. El túnel no autentica nada: mueve bytes, y tu sesión se autentica punta a punta contra el sshd de la caja.
+
+## Una vez lista, clónala
+
+Preparar un entorno cuesta tiempo una vez. Después, congélalo y arranca N hijos:
+
+```ts
+const snap = await base.snapshot("deps-ready");
+const kids = await base.fork({ count: 3 }); // copy-on-write, cada uno con su IP
+```
+
+Tres variantes de la misma prueba, en paralelo, sin repetir el setup. Es donde un agente empieza a hacer cosas que tú no harías a mano por pereza: probar cinco enfoques en vez de razonar cuál sería el mejor.
+
+## La parte de la que casi nadie habla
+
+Todo lo anterior es fácil de vender. Esto no: **borra la máquina y vuelve en 11.9 segundos**. El release lleva el código; el backup diario lleva los datos. Perder el fierro completo dejó de ser una catástrofe y pasó a ser un `redeploy`.
+
+Un agente con una máquina que puede reconstruir no necesita tenerte pidiendo permiso. Prueba, se equivoca, tira la caja y empieza otra vez.
+
+---
+
+**Empieza por aquí**: `npm i @easybits.cloud/sdk`, una API key en tu dashboard, y las cuatro líneas del primer bloque. Todo lo que hace el SDK lo puede hacer un agente por su cuenta vía MCP —la misma superficie, sin código— porque en Easybits lo que puede hacer la interfaz lo puede hacer el agente.
