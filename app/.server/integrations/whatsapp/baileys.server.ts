@@ -237,11 +237,16 @@ async function drainGroup(sock: WASocket, fleetAgentId: string, jid: string) {
     } else {
       // Rate-limit (intentional anti-spam throttle) and any other error → drop,
       // one brief notice. Queuing a rate-limited group would defeat the throttle.
-      if (e instanceof FleetAgentRateLimited) {
-        const notice = "Voy un poco saturado, dame un momento. 🙏";
-        sendNoticeOnce(sock, fleetAgentId, jid, hasOwnNumber ? notice : `${assistantName}: ${notice}`);
-      }
-      log(fleetAgentId, `route failed in ${jid}: ${e}`);
+      // Un error que no es capacidad ni rate-limit se tragaba ENTERO: el 👀 ya
+      // estaba puesto y el turno moría en silencio ("puros ojitos"), sin ✅ y sin
+      // una sola palabra. El usuario no puede distinguir eso de un bot ignorándolo.
+      const notice =
+        e instanceof FleetAgentRateLimited
+          ? "Voy un poco saturado, dame un momento. 🙏"
+          : "Algo se me atoró con ese mensaje. ¿Me lo repites? 🙏";
+      sendNoticeOnce(sock, fleetAgentId, jid, hasOwnNumber ? notice : `${assistantName}: ${notice}`);
+      if (last.m.key) sock.sendMessage(jid, { react: { text: "⚠️", key: last.m.key } }).catch(() => {});
+      log(fleetAgentId, `route failed in ${jid}: ${e instanceof Error ? `${e.name}: ${e.message}\n${e.stack}` : e}`);
     }
   } finally {
     clearInterval(typingTimer);
