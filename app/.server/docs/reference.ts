@@ -582,8 +582,23 @@ MicroVMs Firecracker para correr agentes y código aislado. 22 herramientas MCP 
 
 ### Crear sandbox
 \`POST /sandboxes\`
-Body: \`{ template, timeoutSeconds?, name? }\`
-MCP: \`sandbox_create({ template, timeoutSeconds? })\`
+Body: \`{ template, timeoutSeconds?, name?, suspendOnIdle?, hardTtlSeconds?, persistent?, size? }\`
+MCP: \`sandbox_create({ template, timeoutSeconds?, suspendOnIdle?, hardTtlSeconds? })\`
+
+⚠️ **Sin \`suspendOnIdle\`, al vencer \`timeoutSeconds\` la caja se DESTRUYE — no se duerme.**
+Y si omites \`timeoutSeconds\` el default son **300 s**: cinco minutos y la caja ya no existe.
+Es la diferencia entre "mi agente sigue ahí mañana" y un 404 sin explicación.
+
+- \`suspendOnIdle: true\` — al idlear, SUSPENDE (snapshot de Firecracker) en vez de destruir.
+  Despertar cuesta ~0.2 s **y lo dispara cualquier petición a su URL pública**, incluido el
+  upgrade de un WebSocket: no hace falta "tocarla" antes (medido el 2026-09-01).
+- \`hardTtlSeconds\` — cuándo destruirla de verdad. Sin esto duerme, pero el janitor barre lo
+  que lleve 72 h suspendido.
+- \`persistent: true\` — la caja salta el reaper por antigüedad (para always-on).
+
+Para cualquier caja que aloje un agente al que le vas a escribir MÁS TARDE —un agente ACP, un
+bot— \`suspendOnIdle\` no es opcional: sin él la pierdes y su URL deja de servir, porque el
+sandboxId de la nueva es otro.
 
 ### Ejecutar comando
 \`POST /sandboxes/:id/exec\`

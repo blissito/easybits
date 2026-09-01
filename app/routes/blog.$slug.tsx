@@ -4,6 +4,7 @@ import { PostHeader } from "./blog/PostHeader";
 import { PostContent } from "./blog/PostContent";
 import { SuscriptionBox } from "./blog/SuscriptionBox";
 import { Footer } from "~/components/common/Footer";
+import { useReadTracking, READ_SENTINEL_ID } from "./blog/useReadTracking";
 import type { Route } from "./+types/blog.$slug";
 import path from "path";
 import {
@@ -213,6 +214,10 @@ export default function BlogPost({ loaderData }: Route.ComponentProps) {
   const relatedPosts = serverData.relatedPosts || [];
   const langs: string[] = serverData.langs || ["es"];
 
+  // Antes del early return de abajo: un hook no puede llamarse condicionalmente.
+  // Con slug vacío no hace nada.
+  useReadTracking(post?.slug ?? "", post?.lang);
+
   if (!post) {
     return (
       <section className="overflow-hidden">
@@ -236,6 +241,9 @@ export default function BlogPost({ loaderData }: Route.ComponentProps) {
         {langs.length > 1 && <TranslateToggle slug={post.slug} lang={post.lang} />}
         <PostHeader post={post} />
         <PostContent post={post} />
+        {/* Fin del artículo. Marca "llegó al final" mejor que un % de scroll:
+            el pie y los relacionados ocupan pantalla y falsean el porcentaje. */}
+        <div id={READ_SENTINEL_ID} aria-hidden="true" className="h-px" />
         <SuscriptionBox />
       </div>
       <Footer />

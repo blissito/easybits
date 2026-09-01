@@ -20,7 +20,7 @@ Dale una máquina y cambia de oficio. En vez de proponer, comprueba.
 
 Con una caja conectada, el agente deja de razonar sobre lo que *debería* pasar:
 
-```
+```text
 sandbox_create(template: "node")
 sandbox_exec(command: "npm ci && npm test")
 ```
@@ -33,7 +33,7 @@ Y lo hace en una **microVM de Firecracker**, no en un contenedor de un host comp
 
 Un agente que armó un dashboard tiene que enseñártelo. Levanta el server y pide una URL pública:
 
-```
+```text
 sandbox_exec_background(command: "exec node server.js")
 sandbox_expose_port(port: 3000)
 → https://sb-...-3000.sandboxes.easybits.cloud
@@ -47,7 +47,7 @@ Fíjate en el `exec` delante del comando. Sin él el shell se queda como padre d
 
 Un build o un test suite no caben en una llamada. El agente los manda al fondo y los consulta cuando quiere:
 
-```
+```text
 sandbox_exec_status(execId: "bg_ae83aea4ead9")
 → { status: "running", exitCode: null, stdout: "...", stderr: "..." }
 ```
@@ -58,7 +58,7 @@ El `stdout` que devuelve es **acumulado**, así que seguir el log en vivo es res
 
 Aquí es donde un agente hace algo que tú no harías a mano por pereza. Prepara el entorno una vez, lo congela y arranca N hijos copy-on-write, cada uno con su IP:
 
-```
+```text
 sandbox_snapshot(name: "deps-ready")
 sandbox_fork(count: 3)
 ```
@@ -71,7 +71,7 @@ Tres variantes de la misma prueba, en paralelo, sin repetir el `npm ci`. Cuando 
 
 Hay un punto en el que quieres las manos adentro. El agente inyecta tu llave pública en **la misma caja** que estaba usando y te deja entrar:
 
-```
+```text
 sandbox_ssh_enable(publicKeys: ["ssh-ed25519 AAAA... tu@laptop"])
 ```
 
