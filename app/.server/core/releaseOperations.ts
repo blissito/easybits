@@ -1207,7 +1207,9 @@ export async function launchApp(
     const started = await buildAndStart(ctx, sandboxId, owner, merged);
     if (started.exitCode !== 0) {
       const e: any = new Error(
-        `Build/start failed (exit ${started.exitCode}). Output: ${(started.buildOutput ?? started.startOutput ?? "").slice(-1200)}`
+        // Si hay salida del arranque, es la que explica el fallo: el build ya
+        // pasó y su cola sólo tapa el "NO_ARRANCO" con el log de la app.
+        `Build/start failed (exit ${started.exitCode}). Output: ${(started.startOutput || started.buildOutput || "").slice(-1200)}`
       );
       e.code = "LaunchBuildFailed";
       throw e;
