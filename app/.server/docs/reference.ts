@@ -762,6 +762,8 @@ Proveedores: \`anthropic\`, \`openai\`, \`custom_deepseek\` (+ \`DEEPSEEK_API_KE
 
 **4. La máquina es tuya** — \`POST /sandboxes/:sandboxId/exec\` para leer lo que el agente escribió; \`DELETE /agents/:id\` la destruye. Sin borrar, se duerme al idlear y despierta con el siguiente mensaje.
 
+**Desde un editor (Zed, JetBrains, VS Code) o cualquier cliente ACP**: pon \`ACP_AGENT_TOKEN\` en el \`env\` al crear, expón el 3000 (\`POST /sandboxes/:sandboxId/expose\` \`{ port: 3000 }\`) y conecta por WebSocket: \`wss://<url expuesta>/acp?token=<ACP_AGENT_TOKEN>\` (con el puente \`npx ghosty-acp <esa url>\`, \`env: {}\`; las llaves ya viven en la caja).
+
 Consumo: cada turno devuelve \`usage {inputTokens, outputTokens, totalTokens}\`; se registra igual para ghosty-lite y goose. Tools propias por ACP (\`mcpServers\` stdio/http en \`session/new\`): hoy sólo por WebSocket (Ghosty Teams, editores); por esta API REST aún no.
 
 ### Agent Run (one-shot)

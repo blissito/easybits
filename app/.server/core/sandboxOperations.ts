@@ -3000,18 +3000,18 @@ const BRAND_DEFAULTS: Record<string, BrandConfig> = {
     envBuilder: openclawEnv,
   },
   "ghosty-lite": {
-    // Caja-agente ligera (Anthropic Agent SDK + tools + WhatsApp Baileys, 1
-    // proceso Node). Managed: la cred Anthropic sale del vault del user o del
-    // SANDBOX_HOST_ANTHROPIC_KEY (igual que ghosty) — sin form. El runtime
-    // normaliza oauth→CLAUDE_CODE_OAUTH_TOKEN para el Agent SDK.
+    // Desde 2026-09-02: el fork Rust de goose (ACP nativo), NO el Node con WhatsApp.
+    // Mismo trato que goose-managed: el binario lee GHOSTY_PROVIDER / GHOSTY_MODEL y la
+    // llave por nombre; el prompt del sistema no entra por env (usa .goosehints horneado).
+    // Sin canal WhatsApp: se habla por /message (ACP) o por WebSocket desde un editor.
     template: "ghosty-lite",
     name: "Ghosty Lite",
-    prompt:
-      "Eres Ghosty, agente de WhatsApp de Formmy. Útil, breve y directo, con " +
-      "inteligencia fría e ironía. Habla en el idioma del usuario. Tienes tools " +
-      "(bash, archivos, web) en tu propia caja aislada y herramientas de EasyBits. " +
-      "Úsalas cuando ayuden; no inventes resultados.",
-    envBuilder: () => ({}),
+    prompt: "",
+    envBuilder: (hostKey) => ({
+      GHOSTY_PROVIDER: "anthropic",
+      GHOSTY_MODEL: MANAGED_MODEL,
+      ANTHROPIC_API_KEY: hostKey,
+    }),
   },
   "goose-managed": {
     template: "goose",
@@ -3125,23 +3125,20 @@ export async function spawnAutonomous(
   if (provider === "deepseek") env.DEEPSEEK_API_KEY = providerKey;
   if (provider === "openrouter") env.OPENROUTER_API_KEY = providerKey;
 
-  if (
-    cfg.template === "openclaw" ||
-    cfg.template === "ghostyclaw" ||
-    cfg.template === "ghosty-lite"
-  ) {
+  if (cfg.template === "openclaw" || cfg.template === "ghostyclaw") {
     env.SYSTEM_PROMPT = params.systemPrompt ?? cfg.prompt;
   }
-  // ghosty-lite corre el Agent SDK (loop agéntico con tools). Haiku es débil
-  // para multi-tool/planeación, así que default a Sonnet (igual que el managed
-  // agent default), salvo que el caller pida un modelo explícito.
   if (cfg.template === "ghosty-lite") {
-    env.ANTHROPIC_MODEL = reqModel || "claude-sonnet-4-6";
-    // Inyecta la EasyBits key del user (de sus secrets) para que el MCP de
-    // easybits cargue sus 31 tools de negocio. Si no la tiene guardada, el
-    // agente igual corre con las tools nativas (bash/archivos/web).
-    const ebKey = await getSecretValue(ctx.user.id, "EASYBITS_API_KEY").catch(() => null);
-    if (ebKey) env.EASYBITS_API_KEY = ebKey;
+    // El proveedor del "provider/model" pedido, en el nombre que entiende el binario.
+    const GHOSTY_PROVIDERS: Record<string, string> = {
+      anthropic: "anthropic",
+      openai: "openai",
+      deepseek: "custom_deepseek",
+      google: "google",
+      openrouter: "openrouter",
+    };
+    env.GHOSTY_PROVIDER = GHOSTY_PROVIDERS[provider] ?? provider;
+    env.GHOSTY_MODEL = model;
   }
 
   if (cfg.template === "openclaw") {
