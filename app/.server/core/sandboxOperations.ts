@@ -3259,7 +3259,14 @@ export async function getAgent(ctx: AuthContext, agentId: string): Promise<Agent
   // Sólo lo hacemos en estados transitorios o cuando running puede mentir —
   // para "lost" ya estamos en estado terminal, no vale la pena re-probe.
   if (row.status === "building" || row.status === "error" || row.status === "running") {
-    const real = await probeRealStatus(ctx, row).catch(() => null);
+    let real = await probeRealStatus(ctx, row).catch(() => null);
+    // Un agente ACP no está listo cuando la VM contesta: está listo cuando el bring-up
+    // guardó el sessionId del handshake. Promover "building" a "running" antes de eso
+    // hacía que el primer mensaje del cliente cayera en "missing sessionId" (ghosty-lite,
+    // 2026-09-02: la VM estaba running a los 4 s, el handshake terminó un par después).
+    if (real === "running" && row.protocol === "acp" && !row.acpSessionId && row.status === "building") {
+      real = null;
+    }
     if (real && real !== row.status) {
       await db.agent.update({ where: { id: row.id }, data: { status: real } });
       return toAgentRecord({ ...row, status: real });
