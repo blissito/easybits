@@ -1135,7 +1135,11 @@ export async function launchApp(
           // git clone exige un directorio 100% vacío y `lost+found` sobrevive al
           // find (es de la partición). Se clona aparte y se copia el contenido.
           `CLONE_TMP=$(mktemp -d ${shQuote(`${TMPDIR}/eb-clone.XXXXXX`)})`,
-          `git clone --depth 1 ${branch}${shQuote(params.repo)} "$CLONE_TMP"`,
+          // git 2.43 (Ubuntu 24.04) + protocolo v2 sobre HTTP/2 revienta contra
+          // GitHub con "expected flush after ref listing" y pide usuario en un
+          // repo PÚBLICO. Con HTTP/1.1 funciona. Sin prompt de terminal para
+          // que un repo privado falle rápido en vez de colgarse.
+          `GIT_TERMINAL_PROMPT=0 git -c http.version=HTTP/1.1 clone --depth 1 ${branch}${shQuote(params.repo)} "$CLONE_TMP"`,
           `cp -a "$CLONE_TMP"/. ${shQuote(spec.appDir)}/`,
           `rm -rf "$CLONE_TMP"`,
           "echo CLONE_OK",
