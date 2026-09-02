@@ -763,7 +763,9 @@ Proveedores: \`anthropic\`, \`openai\`, \`custom_deepseek\` (+ \`DEEPSEEK_API_KE
 
 **4. La máquina es tuya** — \`POST /sandboxes/:sandboxId/exec\` para leer lo que el agente escribió; \`DELETE /agents/:id\` la destruye. Sin borrar, se duerme al idlear y despierta con el siguiente mensaje.
 
-**Desde un editor (Zed, JetBrains, VS Code) o cualquier cliente ACP**: pon \`ACP_AGENT_TOKEN\` en el \`env\` al crear, expón el 3000 (\`POST /sandboxes/:sandboxId/expose\` \`{ port: 3000 }\`) y conecta por WebSocket: \`wss://<url expuesta>/acp?token=<ACP_AGENT_TOKEN>\` (con el puente \`npx ghosty-acp <esa url>\`, \`env: {}\`; las llaves ya viven en la caja).
+**Desde un editor (Zed, JetBrains, VS Code), Ghosty Teams o cualquier cliente ACP**: pon \`ACP_AGENT_TOKEN\` en el \`env\` al crear y conecta por WebSocket a la **URL estable del agente**, que viene en \`agentUrl\` cuando llega a \`running\`: \`wss://acp-<agentId>.sandboxes.easybits.cloud/acp?token=<ACP_AGENT_TOKEN>\` (con el puente \`npx ghosty-acp <esa url>\`, \`env: {}\`; las llaves ya viven en la caja). El puerto 3000 ya está expuesto; no hace falta \`/expose\`.
+
+**5. Identidad estable y revive** — la URL lleva el \`agentId\`, no la máquina: si el host recicla la caja (días sin uso), la URL sigue siendo la misma. \`POST /agents/:id/revive\` (Bearer \`eb_sk\` del dueño **o** el \`embedToken\` / \`ACP_AGENT_TOKEN\` del agente) la vuelve a levantar sobre el mismo agente y devuelve \`{ agentId, sandboxId, status, wsUrl }\`; si la caja existe no hace nada. Tarda lo que tarda el boot (~10-60 s): espera la respuesta, no reintentes. Se pierde el disco (\`/data\`) de la caja anterior. \`/message\` lo hace solo cuando encuentra el agente en \`lost\`. Un cliente WebSocket lo reconoce por un \`404\` con \`preview host not found\` en la URL del agente.
 
 Consumo: cada turno devuelve \`usage {inputTokens, outputTokens, totalTokens}\`; se registra igual para ghosty-lite y goose. Tools propias por ACP (\`mcpServers\` stdio/http en \`session/new\`): hoy sólo por WebSocket (Ghosty Teams, editores); por esta API REST aún no.
 
