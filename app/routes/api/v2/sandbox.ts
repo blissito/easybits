@@ -1,13 +1,21 @@
 import type { Route } from "./+types/sandbox";
 import { authenticateRequest, requireAuth } from "~/.server/apiAuth";
 import { applySandboxRateLimit } from "~/.server/rateLimiter";
-import { getSandbox, destroySandbox } from "~/.server/core/sandboxOperations";
+import {
+  getSandbox,
+  destroySandbox,
+  hostErrorResponse,
+} from "~/.server/core/sandboxOperations";
 
 // GET /api/v2/sandboxes/:id — status
 export async function loader({ request, params }: Route.LoaderArgs) {
   const ctx = requireAuth(await authenticateRequest(request));
-  const sandbox = await getSandbox(ctx, params.id);
-  return Response.json(sandbox);
+  try {
+    return Response.json(await getSandbox(ctx, params.id));
+  } catch (e) {
+    // Un 404 del host ("sandbox not found") llega como 404, no como 500.
+    return hostErrorResponse(e) ?? Promise.reject(e);
+  }
 }
 
 // DELETE /api/v2/sandboxes/:id — destroy
@@ -21,6 +29,9 @@ export async function action({ request, params }: Route.ActionArgs) {
     "op"
   );
   if (limited) return limited;
-  const result = await destroySandbox(ctx, params.id);
-  return Response.json(result);
+  try {
+    return Response.json(await destroySandbox(ctx, params.id));
+  } catch (e) {
+    return hostErrorResponse(e) ?? Promise.reject(e);
+  }
 }

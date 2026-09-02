@@ -1,5 +1,6 @@
 import type { Route } from "./+types/sandbox-action";
 import { authenticateRequest, requireAuth } from "~/.server/apiAuth";
+import { hostErrorResponse } from "~/.server/core/sandboxOperations";
 import { applySandboxRateLimit } from "~/.server/rateLimiter";
 import {
   SandboxExecBody,
@@ -56,7 +57,20 @@ export async function action({ request, params }: Route.ActionArgs) {
   const id = params.id;
   const body = await request.json().catch(() => ({}));
 
-  switch (params.action) {
+  try {
+    return await dispatch(ctx, id, params.action, body);
+  } catch (e) {
+    return hostErrorResponse(e) ?? Promise.reject(e);
+  }
+}
+
+async function dispatch(
+  ctx: ReturnType<typeof requireAuth>,
+  id: string,
+  action: string | undefined,
+  body: any
+): Promise<Response> {
+  switch (action) {
     case "extend":
       return Response.json(await extendSandbox(ctx, id, body.extendSeconds));
     case "suspend":
@@ -127,7 +141,7 @@ export async function action({ request, params }: Route.ActionArgs) {
       if (!proto)
         return Response.json({ error: "protocol must be 'tcp' or 'udp'" }, { status: 400 });
       return Response.json(
-        params.action === "expose-raw"
+        action === "expose-raw"
           ? await exposeSandboxRawPort(ctx, id, body.port, proto)
           : await unexposeSandboxRawPort(ctx, id, body.port, proto)
       );
@@ -168,7 +182,7 @@ export async function action({ request, params }: Route.ActionArgs) {
       return Response.json(await verifySandboxDomain(ctx, body.domain));
     default:
       return Response.json(
-        { error: `unknown action '${params.action}'` },
+        { error: `unknown action '${action}'` },
         { status: 404 }
       );
   }

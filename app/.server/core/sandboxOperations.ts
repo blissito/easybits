@@ -423,6 +423,34 @@ function transformAcpStream(
   });
 }
 
+// Un status !ok del host, con el status y el cuerpo a la mano. El mensaje
+// conserva el formato de siempre: hay callers que lo leen con regex.
+export class SandboxHostError extends Error {
+  constructor(
+    method: string,
+    path: string,
+    public status: number,
+    public body: string
+  ) {
+    super(`sandbox host ${method} ${path} → ${status}: ${body.slice(0, 500)}`);
+    this.name = "SandboxHostError";
+  }
+}
+
+// Para las rutas REST: un 4xx del host se reenvía tal cual al cliente
+// (404 "sandbox not found", 400 "extend would not move expiresAt forward")
+// en vez de morir como 500 "Unexpected Server Error". Los 5xx sí son nuestros.
+export function hostErrorResponse(e: unknown): Response | null {
+  if (!(e instanceof SandboxHostError) || e.status >= 500) return null;
+  let body: unknown;
+  try {
+    body = JSON.parse(e.body);
+  } catch {
+    body = { error: e.body || `sandbox host → ${e.status}` };
+  }
+  return Response.json(body, { status: e.status });
+}
+
 async function callHost<T>(
   method: "GET" | "POST" | "DELETE" | "PATCH",
   path: string,
@@ -469,9 +497,7 @@ async function callHost<T>(
           await new Promise((r) => setTimeout(r, attempt === 1 ? 300 : 900));
           continue;
         }
-        throw new Error(
-          `sandbox host ${method} ${path} → ${res.status}: ${text.slice(0, 500)}`
-        );
+        throw new SandboxHostError(method, path, res.status, text);
       }
       return (await res.json()) as T;
     } catch (e) {
