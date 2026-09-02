@@ -68,15 +68,24 @@ export async function getActivePlanSubscription(
 ): Promise<Stripe.Subscription | null> {
   const customer = customerIdOf(user);
   if (!customer) return null;
-  const subs = await getStripe().subscriptions.list({
+  // Un trial ES un plan vigente: el hosting cuelga de él y se cobra (o se
+  // suspende) cuando el trial termina. Stripe no acepta "active|trialing" en
+  // un solo filtro, así que se lista todo y se filtra aquí.
+  const all = await getStripe().subscriptions.list({
     customer,
-    status: "active",
-    limit: 10,
+    status: "all",
+    limit: 20,
   });
-  if (!subs.data.length) return null;
-  // Prefer the subscription that carries the plan metadata; fall back to the
-  // first active one (machine items can ride on any active subscription).
-  return subs.data.find((s: Stripe.Subscription) => s.metadata?.plan) ?? subs.data[0];
+  const live = all.data.filter(
+    (s: Stripe.Subscription) => s.status === "active" || s.status === "trialing"
+  );
+  if (!live.length) return null;
+  // Prefer the subscription that carries the plan metadata (active before
+  // trialing); fall back to the first live one (machine items can ride on
+  // any live subscription).
+  const rank = (s: Stripe.Subscription) =>
+    (s.metadata?.plan ? 0 : 2) + (s.status === "active" ? 0 : 1);
+  return [...live].sort((a, b) => rank(a) - rank(b))[0];
 }
 
 /**
