@@ -1145,6 +1145,10 @@ model Agent {
   // - acpSessionId: returned by session/new — identifies the agent session.
   acpTransportSessionId String?
   acpSessionId          String?
+  // ACP only — el env con el que se arrancó el runtime, cifrado con la master de
+  // secretos (lleva llaves de proveedor). Es lo que permite VOLVER A LEVANTAR la caja
+  // sobre esta misma fila (ensureAgentBox) cuando el host ya no la tiene.
+  spawnEnv              String?
 
   // URL pública del escritorio noVNC (templates desktop-*). Se popula al
   // exponer :6080 en createAgent; null para el resto.

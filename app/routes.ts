@@ -222,6 +222,7 @@ export default [
     route("agents/:id", "routes/api/v2/agent.ts"),
     route("agents/:id/message", "routes/api/v2/agent-message.ts"),
     route("agents/:id/lost", "routes/api/v2/agent-lost.ts"),
+    route("agents/:id/revive", "routes/api/v2/agent-revive.ts"),
     route("agents/:id/extend", "routes/api/v2/agent-extend.ts"),
     route("agents/:id/suspend", "routes/api/v2/agent-suspend.ts"),
     route("agents/:id/resume", "routes/api/v2/agent-resume.ts"),

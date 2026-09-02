@@ -5,6 +5,7 @@ import { db } from "../db";
 import type { AuthContext } from "../apiAuth";
 import { requireScope } from "../apiAuth";
 import { getSecretValue, createSecret } from "./secretOperations";
+import { encryptSecret, decryptSecret } from "../crypto";
 import { createApiKey } from "../iam";
 import { can, delegatedAccountIds, SCOPES } from "../delegation";
 import { mintComputeKey, revokeSandboxKeys, COMPUTE_BASE_URL } from "../compute/gateway";
@@ -2556,6 +2557,158 @@ async function injectEasybitsAccess(
   env.EASYBITS_API_KEY = minted.raw;
 }
 
+
+// ─────────────── ACP agents: stable identity ───────────────
+//
+// Un agente `protocol: "acp"` (goose / ghosty-lite) se habla por WebSocket DESDE FUERA
+// (Ghosty Teams, un editor). La URL de `expose()` lleva el sandboxId dentro, así que
+// recrear la caja invalidaba todo lo que la había guardado: el agente quedaba `lost`
+// para siempre y el cliente veía un 404. Ahora la identidad es el AGENTE, no la caja:
+//   - dominio fijo `acp-<agentId>.<dominio>` (el router del host lo sigue de caja en caja)
+//   - `persistent + suspendOnIdle`: duerme en vez de morir al vencer el TTL
+//   - `spawnEnv` cifrado en la fila, para poder VOLVER A LEVANTARLA con el mismo env
+//   - `ensureAgentBox()`: recrea sobre la MISMA fila cuando el host ya no la tiene
+const ACP_PUBLIC_DOMAIN = process.env.SANDBOX_PUBLIC_DOMAIN || "sandboxes.easybits.cloud";
+const ACP_IDLE_SECONDS = 900;
+const ACP_HARD_TTL_SECONDS = 30 * 24 * 3600;
+
+export function acpHostFor(agentId: string): string {
+  return `acp-${agentId}.${ACP_PUBLIC_DOMAIN}`;
+}
+
+export function acpWsUrlFor(agentId: string, messagePath = "/acp"): string {
+  return `wss://${acpHostFor(agentId)}${messagePath}`;
+}
+
+// Fija el dominio estable de un agente ACP sobre su caja actual. Idempotente: el host
+// mueve el dominio si ya apuntaba a otra caja (es justo lo que hace posible el revive).
+async function bindAcpDomain(ctx: AuthContext, agentId: string, sandboxId: string, port: number): Promise<void> {
+  await exposeSandboxPort(ctx, sandboxId, port);
+  await callHost<{ ok: true }>(
+    "POST",
+    `/v1/sandbox/${sandboxId}/domain`,
+    { domain: acpHostFor(agentId), port },
+    ctx.user.id
+  );
+}
+
+// Bring-up de un runtime de agente sobre una caja YA creada: espera la VM, arranca el
+// unit con el env, siembra archivos, hace el handshake ACP y publica puertos. Devuelve
+// los campos que van a la fila. Lo comparten `createAgent` (caja nueva) y
+// `ensureAgentBox` (caja recreada sobre una fila existente).
+async function bringUpAgentRuntime(
+  ctx: AuthContext,
+  args: {
+    agentId: string;
+    sandboxId: string;
+    template: SandboxTemplate;
+    tpl: Awaited<ReturnType<typeof resolveTemplate>>;
+    env: Record<string, string>;
+    embedToken: string;
+    protocol: string;
+    port: number;
+    messagePath: string;
+    seedFiles?: Array<{ name: string; contentBase64: string }>;
+  }
+): Promise<{
+  agentUrl: string;
+  acpSessionId: string | null;
+  acpTransportSessionId: string | null;
+  desktopUrl: string | null;
+  terminalUrl: string | null;
+}> {
+  const { sandboxId, template, tpl, env, protocol, port, messagePath } = args;
+  await waitUntilRunning(ctx, sandboxId, { timeoutMs: 30_000 });
+  // eb.compute: inyecta una ComputeKey como OPENAI_API_KEY para que el
+  // código del agente llame al LLM managed sin traer su propia key.
+  // Acotado a harnesses de EJECUCIÓN DE CÓDIGO — los chat runtimes
+  // (chat-openai/ghostyclaw/openclaw) tienen su propia auth de LLM y no
+  // deben ser redirigidos al gateway. BYOK gana (skip si ya hay key).
+  if (COMPUTE_AUTOINJECT_TEMPLATES.has(template) && !env.OPENAI_API_KEY) {
+    try {
+      env.OPENAI_API_KEY = await mintComputeKey(ctx.user.id, sandboxId);
+      if (!env.OPENAI_BASE_URL) env.OPENAI_BASE_URL = COMPUTE_BASE_URL;
+    } catch (e) {
+      console.error(`eb.compute key mint failed for ${sandboxId}:`, e);
+    }
+  }
+  const ep = await startAgent(ctx, sandboxId, {
+    env,
+    port: tpl.agent?.port,
+    healthPath: tpl.agent?.health_path,
+    unit: tpl.agent?.unit,
+    envFile: tpl.agent?.env_file,
+  });
+  // Sembrar archivos de conocimiento en el workspace (drop del form). La VM ya está
+  // running y el runtime creó /data/workspace. Best-effort: un archivo que falle no
+  // aborta el spawn. El agente (CodeWhale) los consulta con sus tools.
+  if (args.seedFiles?.length) {
+    for (const f of args.seedFiles) {
+      const safe =
+        (f.name || "archivo").replace(/[/\\]/g, "_").replace(/^\.+/, "").slice(0, 120) ||
+        "archivo";
+      try {
+        await writeFile(ctx, sandboxId, {
+          path: `/data/workspace/${safe}`,
+          content: f.contentBase64,
+          encoding: "base64",
+        });
+      } catch (e) {
+        console.error(`seed file "${safe}" failed for agent ${args.agentId}:`, e);
+      }
+    }
+  }
+  let acpSessionId: string | null = null;
+  let acpTransportSessionId: string | null = null;
+  let agentUrl = ep.agentUrl;
+  if (protocol === "acp") {
+    const handshake = await runAcpHandshake(sandboxId, ctx.user.id, port, messagePath);
+    acpSessionId = handshake.acpSessionId;
+    acpTransportSessionId = handshake.acpTransportSessionId;
+    // La URL que se enseña y se guarda es la ESTABLE. Si el dominio falla, el agente
+    // sigue running pero con la URL de la caja: se dice en el log, no se tumba el spawn.
+    try {
+      await bindAcpDomain(ctx, args.agentId, sandboxId, port);
+      agentUrl = acpWsUrlFor(args.agentId, messagePath);
+    } catch (e) {
+      console.error(`acp domain bind failed for agent ${args.agentId}:`, e);
+    }
+  }
+  // Ghostyclaw-specific readiness: poll /chat/ready until docker+agent
+  // image are both up (up to 10 min, covers worst-case first-boot agent
+  // image build). UI input stays disabled while status=="building".
+  if (template === "ghostyclaw") {
+    const ready = await pollGhostyclawReady(ctx, sandboxId, args.embedToken);
+    if (!ready) {
+      throw new Error("ghostyclaw not ready after 10min (agent image build likely failed)");
+    }
+  }
+  // Desktop templates: expón :6080 (websockify/noVNC) y guarda la URL
+  // pública. Best-effort — si falla, el agente sigue running sin desktop.
+  let desktopUrl: string | null = null;
+  if (DESKTOP_TEMPLATES.has(template)) {
+    try {
+      const exposed = await exposeSandboxPort(ctx, sandboxId, 6080);
+      desktopUrl = `${exposed.url}/vnc.html?autoconnect=true&resize=remote`;
+    } catch (e) {
+      console.error(`expose 6080 (desktop) failed for ${sandboxId}:`, e);
+    }
+  }
+  // Terminal web (ttyd→tmux en :7681). ttyd corre sin basic-auth (el iframe no
+  // puede pasar credenciales en la URL → 401); el subdominio capability es la
+  // auth, igual que el noVNC del escritorio.
+  let terminalUrl: string | null = null;
+  if (TERMINAL_TEMPLATES.has(template)) {
+    try {
+      const exposed = await exposeSandboxPort(ctx, sandboxId, 7681);
+      terminalUrl = exposed.url;
+    } catch (e) {
+      console.error(`expose 7681 (terminal) failed for ${sandboxId}:`, e);
+    }
+  }
+  return { agentUrl, acpSessionId, acpTransportSessionId, desktopUrl, terminalUrl };
+}
+
 export async function createAgent(
   ctx: AuthContext,
   params: {
@@ -2739,13 +2892,18 @@ export async function createAgent(
   // 2. Spawn microVM (returns immediately with status="starting"; boot is async
   //    inside sandbox-host). We only block on this call because we need the
   //    sandboxId to insert the Agent row.
+  // 1b. Un agente ACP tiene identidad propia (ver acpHostFor): su caja DUERME al ocio en
+  //     vez de morir al TTL, y vive hasta ACP_HARD_TTL_SECONDS. Sin `suspendOnIdle` el
+  //     reaper del host la DESTRUYE al vencer `timeoutSeconds`, que es como se perdían.
+  const isAcp = (tpl.agent?.protocol ?? "sse") === "acp";
   const sb = await createSandbox(ctx, {
     template: params.template,
-    timeoutSeconds: params.timeoutSeconds,
+    timeoutSeconds: isAcp ? ACP_IDLE_SECONDS : params.timeoutSeconds,
     name: params.name,
     memoryMb: params.memoryMb,
     vcpus: params.vcpus,
-    suspendOnIdle: params.suspendOnIdle,
+    suspendOnIdle: isAcp ? true : params.suspendOnIdle,
+    ...(isAcp ? { persistent: true, hardTtlSeconds: ACP_HARD_TTL_SECONDS } : {}),
     // Telemetría: toda caja con runtime de agente entra como "embed". spawnVm la
     // re-etiqueta a "worker" con su back-fill cuando es una VM de flota — no se
     // puede decidir aquí porque el mismo template (claude-worker) sirve a los dos.
@@ -2775,6 +2933,9 @@ export async function createAgent(
       port,
       unit: tpl.agent?.unit ?? "chat-runtime",
       messagePath,
+      // Con esto la caja se puede VOLVER A LEVANTAR con el mismo env (ensureAgentBox).
+      // Cifrado con la master de secretos: lleva llaves de proveedor.
+      spawnEnv: isAcp ? encryptSecret(JSON.stringify(env)) : null,
     },
   });
 
@@ -2786,96 +2947,19 @@ export async function createAgent(
   //    for other templates we trust startAgent's exit code.
   void (async () => {
     try {
-      await waitUntilRunning(ctx, sb.sandboxId, { timeoutMs: 30_000 });
-      // eb.compute: inyecta una ComputeKey como OPENAI_API_KEY para que el
-      // código del agente llame al LLM managed sin traer su propia key.
-      // Acotado a harnesses de EJECUCIÓN DE CÓDIGO — los chat runtimes
-      // (chat-openai/ghostyclaw/openclaw) tienen su propia auth de LLM y no
-      // deben ser redirigidos al gateway. BYOK gana (skip si ya hay key).
-      if (COMPUTE_AUTOINJECT_TEMPLATES.has(params.template) && !env.OPENAI_API_KEY) {
-        try {
-          env.OPENAI_API_KEY = await mintComputeKey(ctx.user.id, sb.sandboxId);
-          if (!env.OPENAI_BASE_URL) env.OPENAI_BASE_URL = COMPUTE_BASE_URL;
-        } catch (e) {
-          console.error(`eb.compute key mint failed for ${sb.sandboxId}:`, e);
-        }
-      }
-      const ep = await startAgent(ctx, sb.sandboxId, {
+      const up = await bringUpAgentRuntime(ctx, {
+        agentId: row.id,
+        sandboxId: sb.sandboxId,
+        template: params.template,
+        tpl,
         env,
-        port: tpl.agent?.port,
-        healthPath: tpl.agent?.health_path,
-        unit: tpl.agent?.unit,
-        envFile: tpl.agent?.env_file,
+        embedToken,
+        protocol,
+        port,
+        messagePath,
+        seedFiles: params.seedFiles,
       });
-      // Sembrar archivos de conocimiento en el workspace (drop del form). La VM ya está
-      // running y el runtime creó /data/workspace. Best-effort: un archivo que falle no
-      // aborta el spawn. El agente (CodeWhale) los consulta con sus tools.
-      if (params.seedFiles?.length) {
-        for (const f of params.seedFiles) {
-          const safe =
-            (f.name || "archivo").replace(/[/\\]/g, "_").replace(/^\.+/, "").slice(0, 120) ||
-            "archivo";
-          try {
-            await writeFile(ctx, sb.sandboxId, {
-              path: `/data/workspace/${safe}`,
-              content: f.contentBase64,
-              encoding: "base64",
-            });
-          } catch (e) {
-            console.error(`seed file "${safe}" failed for agent ${row.id}:`, e);
-          }
-        }
-      }
-      let acpSessionId: string | null = null;
-      let acpTransportSessionId: string | null = null;
-      if (protocol === "acp") {
-        const handshake = await runAcpHandshake(sb.sandboxId, ctx.user.id, port, messagePath);
-        acpSessionId = handshake.acpSessionId;
-        acpTransportSessionId = handshake.acpTransportSessionId;
-      }
-      // Ghostyclaw-specific readiness: poll /chat/ready until docker+agent
-      // image are both up (up to 10 min, covers worst-case first-boot agent
-      // image build). UI input stays disabled while status=="building".
-      if (params.template === "ghostyclaw") {
-        const ready = await pollGhostyclawReady(ctx, sb.sandboxId, embedToken);
-        if (!ready) {
-          throw new Error("ghostyclaw not ready after 10min (agent image build likely failed)");
-        }
-      }
-      // Desktop templates: expón :6080 (websockify/noVNC) y guarda la URL
-      // pública. Best-effort — si falla, el agente sigue running sin desktop.
-      let desktopUrl: string | null = null;
-      if (DESKTOP_TEMPLATES.has(params.template)) {
-        try {
-          const exposed = await exposeSandboxPort(ctx, sb.sandboxId, 6080);
-          desktopUrl = `${exposed.url}/vnc.html?autoconnect=true&resize=remote`;
-        } catch (e) {
-          console.error(`expose 6080 (desktop) failed for ${sb.sandboxId}:`, e);
-        }
-      }
-      // Terminal web (ttyd→tmux en :7681). ttyd corre sin basic-auth (el iframe no
-      // puede pasar credenciales en la URL → 401); el subdominio capability es la
-      // auth, igual que el noVNC del escritorio.
-      let terminalUrl: string | null = null;
-      if (TERMINAL_TEMPLATES.has(params.template)) {
-        try {
-          const exposed = await exposeSandboxPort(ctx, sb.sandboxId, 7681);
-          terminalUrl = exposed.url;
-        } catch (e) {
-          console.error(`expose 7681 (terminal) failed for ${sb.sandboxId}:`, e);
-        }
-      }
-      await db.agent.update({
-        where: { id: row.id },
-        data: {
-          status: "running",
-          agentUrl: ep.agentUrl,
-          acpSessionId,
-          acpTransportSessionId,
-          desktopUrl,
-          terminalUrl,
-        },
-      });
+      await db.agent.update({ where: { id: row.id }, data: { status: "running", ...up } });
     } catch (e) {
       console.error(`async bringup failed for agent ${row.id}:`, e);
       await db.agent.update({
@@ -3483,6 +3567,13 @@ export async function wakeAgentForMessage(agentId: string): Promise<void> {
     return;
   }
 
+  // Caja desaparecida (o bring-up fallido): un agente ACP se vuelve a levantar sobre la
+  // misma fila. Para el resto sigue siendo terminal.
+  if ((row.status === "lost" || row.status === "error") && row.protocol === "acp") {
+    await ensureAgentBox(agentId);
+    return;
+  }
+
   if (row.status !== "suspended") {
     throw new Error(`agent is ${row.status}; cannot wake for message`);
   }
@@ -3530,6 +3621,99 @@ export async function wakeAgentForMessage(agentId: string): Promise<void> {
     where: { id: agentId },
     data: { status: "running", lastMessageAt: new Date() },
   });
+}
+
+// ensureAgentBox: la caja de un agente ACP desapareció del host (janitor, rebake,
+// restart) y hay que levantarla otra vez SOBRE LA MISMA FILA: mismo agentId, mismo
+// embedToken, mismo dominio `acp-<id>`. Se pierde /data (memoria de goose); se acepta.
+//
+// Idempotente y serializado por agentId: dos turnos concurrentes contra un agente
+// muerto deben esperar a la MISMA recreación, no crear dos cajas. Si la caja existe
+// (running/suspended/building) no toca nada: dormida la despierta el proxy del host.
+// Lo llama `POST /api/v2/agents/:id/revive` (Ghosty Teams ante «caja no existe») y
+// `wakeAgentForMessage` (el widget/embed de EasyBits, mismo trato).
+const reviveInFlight = new Map<string, Promise<AgentRecord>>();
+
+export async function ensureAgentBox(agentId: string): Promise<AgentRecord> {
+  const pending = reviveInFlight.get(agentId);
+  if (pending) return pending;
+  const run = reviveAgentBox(agentId).finally(() => reviveInFlight.delete(agentId));
+  reviveInFlight.set(agentId, run);
+  return run;
+}
+
+async function reviveAgentBox(agentId: string): Promise<AgentRecord> {
+  const row = await db.agent.findUnique({ where: { id: agentId } });
+  if (!row) throw new Error("agent not found");
+  const owner = await db.user.findUnique({ where: { id: row.ownerId } });
+  if (!owner) throw new Error("agent owner not found");
+  const ctx: AuthContext = { user: owner, scopes: ["WRITE"] };
+
+  // ¿De verdad no existe? El status cacheado puede mentir en las dos direcciones.
+  if (row.status !== "lost") {
+    const real = await probeRealStatus(ctx, row).catch(() => null);
+    if (real !== "lost") {
+      if (real && real !== row.status) {
+        await db.agent.update({ where: { id: agentId }, data: { status: real } }).catch(() => {});
+        return toAgentRecord({ ...row, status: real });
+      }
+      return toAgentRecord(row);
+    }
+  }
+  if ((row.protocol ?? "sse") !== "acp") {
+    throw new Error("only ACP agents can be revived; recreate this agent");
+  }
+  if (!row.spawnEnv) {
+    throw new Error("this agent predates revive support (no spawn env recorded); recreate it");
+  }
+  const env = JSON.parse(decryptSecret(row.spawnEnv)) as Record<string, string>;
+  const template = row.template as SandboxTemplate;
+  const tpl = await resolveTemplate(ctx, template);
+  const port = row.port ?? tpl.agent?.port ?? 3000;
+  const messagePath = row.messagePath ?? tpl.agent?.message_path ?? "/acp";
+
+  console.log(`[agent-revive] ${agentId}: box ${row.sandboxId} is gone, recreating`);
+  const sb = await createSandbox(ctx, {
+    template,
+    timeoutSeconds: ACP_IDLE_SECONDS,
+    name: row.name ?? undefined,
+    suspendOnIdle: true,
+    persistent: true,
+    hardTtlSeconds: ACP_HARD_TTL_SECONDS,
+    kind: "embed",
+  });
+  await db.agent.update({
+    where: { id: agentId },
+    data: {
+      sandboxId: sb.sandboxId,
+      status: "building",
+      acpSessionId: null,
+      acpTransportSessionId: null,
+      expiresAt: sb.expiresAt ? new Date(sb.expiresAt) : null,
+    },
+  });
+  try {
+    const up = await bringUpAgentRuntime(ctx, {
+      agentId,
+      sandboxId: sb.sandboxId,
+      template,
+      tpl,
+      env,
+      embedToken: row.embedToken,
+      protocol: "acp",
+      port,
+      messagePath,
+    });
+    const updated = await db.agent.update({
+      where: { id: agentId },
+      data: { status: "running", lastMessageAt: new Date(), ...up },
+    });
+    console.log(`[agent-revive] ${agentId}: up on ${sb.sandboxId} at ${up.agentUrl}`);
+    return toAgentRecord(updated);
+  } catch (e) {
+    await db.agent.update({ where: { id: agentId }, data: { status: "error" } }).catch(() => {});
+    throw e;
+  }
 }
 
 // markAgentLost: caller (UI loader) ya detectó que el sandbox subyacente
