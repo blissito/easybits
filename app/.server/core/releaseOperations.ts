@@ -1132,8 +1132,12 @@ export async function launchApp(
           // mismo patrón que usa unpackInto.
           `mkdir -p ${shQuote(spec.appDir)}`,
           `find ${shQuote(spec.appDir)} -mindepth 1 -maxdepth 1 ! -name 'lost+found' -exec rm -rf {} +`,
-          // git clone exige un directorio vacío, que es justo como quedó.
-          `git clone --depth 1 ${branch}${shQuote(params.repo)} ${shQuote(spec.appDir)}`,
+          // git clone exige un directorio 100% vacío y `lost+found` sobrevive al
+          // find (es de la partición). Se clona aparte y se copia el contenido.
+          `CLONE_TMP=$(mktemp -d ${shQuote(`${TMPDIR}/eb-clone.XXXXXX`)})`,
+          `git clone --depth 1 ${branch}${shQuote(params.repo)} "$CLONE_TMP"`,
+          `cp -a "$CLONE_TMP"/. ${shQuote(spec.appDir)}/`,
+          `rm -rf "$CLONE_TMP"`,
           "echo CLONE_OK",
         ].join("\n"),
         300
