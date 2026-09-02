@@ -1,0 +1,143 @@
+---
+title: "Ghosty Lite: un agente en su propia microVM, punta a punta"
+description: "Cuatro llamadas a la API de Easybits: crear el agente, esperar a que esté listo, mandarle un mensaje y comprobar en su disco lo que hizo. Con los tiempos reales de hoy, qué llave va en cada sitio y qué devuelve cada paso."
+date: "2026-09-02"
+author: "Equipo Easybits"
+tags: ["agentes", "ghosty-lite", "ACP", "microVM", "API"]
+featuredImage: "/blog/assets/sandbox-ghosty.jpg"
+published: true
+---
+
+# Ghosty Lite: un agente en su propia microVM, punta a punta
+
+Ghosty Lite es nuestro agente ligero: un binario en Rust, derivado de goose, que habla [ACP](https://agentclientprotocol.com) y vive en una microVM propia con su disco, su shell y su proveedor de modelo. Este post es el recorrido completo por la API, tal como lo corrimos hoy, con los tiempos que medimos y sin omitir el paso que suele fallar.
+
+![Ghosty dentro de una caja](/blog/assets/sandbox-ghosty.jpg)
+
+## 0. Las dos llaves
+
+Antes de la primera llamada conviene tener claro qué llave va dónde, porque son cosas distintas:
+
+- **Tu llave de Easybits** (`eb_sk_…`). Va en el header `Authorization` de cada request. Es la que te identifica como dueño del agente.
+- **La llave del modelo** (`DEEPSEEK_API_KEY`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`…). Va en el `env` del agente al crearlo. Easybits la escribe dentro de la microVM, en el archivo de entorno del servicio, y el binario la lee por nombre. Nunca vuelve a salir por la API.
+
+Hay una tercera que no ves: el token interno con el que el frontal de la caja habla con el proceso del agente. Se genera al arrancar la VM y no existe fuera de ella. Si alguien llega al puerto del agente sin él, recibe un 401.
+
+## 1. Crear el agente
+
+```bash
+curl -s -X POST https://www.easybits.cloud/api/v2/agents \
+  -H "Authorization: Bearer $EASYBITS_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "template": "ghosty-lite",
+    "name": "mi-lite",
+    "timeoutSeconds": 600,
+    "env": {
+      "GHOSTY_PROVIDER": "custom_deepseek",
+      "GHOSTY_MODEL": "deepseek-v4-flash",
+      "DEEPSEEK_API_KEY": "sk-…"
+    }
+  }'
+```
+
+Respuesta, en 1.3 segundos:
+
+```json
+{
+  "agentId": "6a984243792c55be0687489f",
+  "sandboxId": "sb_629c75fb-f171-4279-91a7-c4c8096fadff",
+  "template": "ghosty-lite",
+  "agentUrl": "sandbox://sb_629c75fb-…:3000",
+  "embedToken": "agt_…"
+}
+```
+
+Lo que pasó en ese segundo: se reservó la microVM, se creó la fila del agente en estado `building` y se disparó el arranque en segundo plano. La respuesta no espera a que el agente esté listo, y eso es a propósito: tu UI puede pintar la tarjeta ya.
+
+`GHOSTY_PROVIDER` acepta cualquier proveedor de goose: `anthropic`, `openai`, `custom_deepseek`, `ollama`… Si mandas sólo `DEEPSEEK_API_KEY` sin proveedor, la caja elige DeepSeek sola.
+
+## 2. Esperar a que esté listo
+
+```bash
+curl -s https://www.easybits.cloud/api/v2/agents/$AGENT_ID \
+  -H "Authorization: Bearer $EASYBITS_API_KEY" | jq .status
+```
+
+Hoy pasó de `building` a `running` en unos 6 segundos. En ese lapso ocurrieron cuatro cosas dentro de la caja:
+
+1. La VM arrancó y montó su volumen en `/data`.
+2. systemd levantó el servicio del agente con el `env` que mandaste.
+3. El frontal de la caja respondió `/health` sólo cuando el proceso del agente ya contestaba, no antes.
+4. Easybits hizo el handshake ACP (`initialize` y `session/new`) y guardó el id de sesión en la fila del agente.
+
+El punto 4 es el que importa: **`running` significa que ya hay una sesión ACP abierta**, no sólo que la VM enciende. Hasta hoy el estado se adelantaba un par de segundos y el primer mensaje podía llegar antes del handshake; ya no.
+
+## 3. Mandarle un mensaje
+
+```bash
+curl -N -X POST https://www.easybits.cloud/api/v2/agents/$AGENT_ID/message \
+  -H "Authorization: Bearer $EASYBITS_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"content":"Crea /data/work/hola.txt con la fecha de hoy usando el shell y dime qué quedó escrito. Sé breve."}'
+```
+
+La respuesta es un stream SSE con el texto en trozos y un `done` al final:
+
+```text
+data: {"type":"chunk","value":"List"}
+data: {"type":"chunk","value":"o"}
+…
+data: {"type":"done"}
+```
+
+Pegado, el agente contestó en 3 segundos:
+
+> Listo. Creé `/data/work/hola.txt` y quedó escrito: `2026-09-02` (fecha de hoy).
+
+Por debajo, Easybits tradujo tu `content` a un `session/prompt` de ACP con el `sessionId` que guardó en el paso 2, y convirtió las notificaciones `agent_message_chunk` del agente al formato simple que ya consume el widget de embed. Tú no ves JSON-RPC; el agente no ve HTTP tuyo. El mismo endpoint funciona con el `embedToken` desde un navegador, así que sirve tanto para tu backend como para un chat público.
+
+## 4. Comprobar en su disco
+
+La microVM es tuya mientras exista. Puedes ejecutar comandos en ella con la misma llave:
+
+```bash
+curl -s -X POST https://www.easybits.cloud/api/v2/sandboxes/$SANDBOX_ID/exec \
+  -H "Authorization: Bearer $EASYBITS_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"command":"cat /data/work/hola.txt"}'
+```
+
+```json
+{"stdout":"2026-09-02\n","exitCode":0}
+```
+
+Esto es lo que distingue a un agente con máquina de uno sin ella: el archivo existe, lo escribió un shell real, y lo puedes leer por fuera del modelo. `/data` sobrevive a que la caja se duerma y despierte.
+
+## 5. Borrarlo
+
+```bash
+curl -s -X DELETE https://www.easybits.cloud/api/v2/agents/$AGENT_ID \
+  -H "Authorization: Bearer $EASYBITS_API_KEY"
+```
+
+```json
+{"ok":true}
+```
+
+Se destruye la VM con su disco. Si no lo borras, tampoco pasa nada: cuando lleva un rato sin mensajes la caja se duerme sola, y el siguiente mensaje la despierta con su disco intacto.
+
+## Lo que se cobra y cómo se sabe
+
+Cada `session/prompt` devuelve del agente un bloque `usage` con `inputTokens`, `outputTokens` y `totalTokens`, y una notificación `usage_update` con el costo estimado. Es el mismo formato que emite goose, así que el consumo por turno se registra igual con Ghosty Lite que con cualquier agente ACP de la plataforma. Si traes tu propia llave del modelo, ese consumo no descuenta de tu plan: el proveedor te lo cobra a ti directamente.
+
+## Resumen de tiempos de hoy
+
+| Paso | Tiempo |
+|---|---|
+| Crear el agente | 1.3 s |
+| `building` a `running` (VM + handshake ACP) | ~6 s |
+| Mensaje con una acción de shell | 3 s |
+| Leer el archivo por `exec` | 0.6 s |
+
+Cuatro llamadas, dos llaves, una máquina que es sólo tuya.
