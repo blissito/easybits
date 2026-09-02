@@ -578,7 +578,7 @@ Si prefieres el control paso a paso (o ya tienes la caja armada), el camino larg
 MicroVMs Firecracker para correr agentes y código aislado. 22 herramientas MCP en el grupo \`sandbox\`.
 
 ### Templates
-\`code-interpreter\` (Python + kernel Jupyter persistente), \`python\` / \`node\` / \`bun\` (runtimes base), \`ubuntu\` (Linux completo), \`rust-ghosty\` (Ghosty DeepSeek-first + WhatsApp), \`claude-code\` (Claude Agent SDK loop), \`computer-ghosty\` (computer-use con escritorio), \`livekit-svc\` (sala de videollamada + grabación HD → ver sección Studio), \`ghostyclaw\` / \`openclaw\` (daemons always-on).
+\`code-interpreter\` (Python + kernel Jupyter persistente), \`python\` / \`node\` / \`bun\` (runtimes base), \`ubuntu\` (Linux completo), \`rust-ghosty\` (Ghosty DeepSeek-first + WhatsApp), \`claude-code\` (Claude Agent SDK loop), \`ghosty-lite\` (agente ACP ligero en Rust, multi-provider; ver Agentes) y \`goose\` (goose de la AAIF, ACP nativo), \`computer-ghosty\` (computer-use con escritorio), \`livekit-svc\` (sala de videollamada + grabación HD → ver sección Studio), \`ghostyclaw\` / \`openclaw\` (daemons always-on).
 
 ### Crear sandbox
 \`POST /sandboxes\`
@@ -742,11 +742,27 @@ Flujo: \`domain-add\` → crea el registro DNS que indica \`dns\` → \`domain-v
 
 ### Agentes persistentes (agent_create)
 \`POST /agents\`
-Body: \`{ template, name?, timeoutSeconds? }\`
+Body: \`{ template, env, name?, timeoutSeconds?, seedFiles? }\` — \`env\` es obligatorio (\`{}\` si el template no pide nada): llaves del modelo y config del agente; se escriben dentro de la VM y no vuelven a salir por la API.
+Responde de inmediato con \`status: building\`; consulta \`GET /agents/:id\` hasta \`running\` antes del primer mensaje.
 MCP: \`agent_create({ template })\` — crea agente con endpoint HTTP público
 MCP: \`agent_list()\` — listar agentes
 MCP: \`agent_message({ agentId, content })\` — enviar mensaje
 MCP: \`agent_destroy({ agentId })\` — destruir agente
+
+### 🆕 Agentes ACP: \`ghosty-lite\` y \`goose\`
+Agentes que hablan [ACP](https://agentclientprotocol.com) (Agent Client Protocol) en su propia microVM: \`ghosty-lite\` (Rust, ligero, nuestro) y \`goose\` (AAIF / Linux Foundation). Mismo flujo con \`POST /agents\`; lo que cambia es el \`env\` y lo que significa \`running\`.
+
+**1. Crear** — \`env\` lleva proveedor, modelo y llave:
+\`{ GHOSTY_PROVIDER: "anthropic", GHOSTY_MODEL: "claude-haiku-4-5", ANTHROPIC_API_KEY: "..." }\` (ghosty-lite) · goose usa \`GOOSE_PROVIDER\` / \`GOOSE_MODEL\`.
+Proveedores: \`anthropic\`, \`openai\`, \`custom_deepseek\` (+ \`DEEPSEEK_API_KEY\`), \`ollama\`… Si sólo mandas \`DEEPSEEK_API_KEY\`, la caja elige DeepSeek sola.
+
+**2. Esperar \`running\`** — para ACP significa que Easybits ya hizo \`initialize\` + \`session/new\` y guardó la sesión (~6 s desde crear). Antes de eso \`/message\` no tiene sesión.
+
+**3. \`POST /agents/:id/message\`** \`{ content }\` → SSE \`{type:"chunk",value:"…"}\` … \`{type:"done"}\`. Cada turno reutiliza la sesión; el agente conserva contexto y disco (\`/data\`). Funciona con la \`eb_sk\` del dueño o con el \`embedToken\` desde navegador.
+
+**4. La máquina es tuya** — \`POST /sandboxes/:sandboxId/exec\` para leer lo que el agente escribió; \`DELETE /agents/:id\` la destruye. Sin borrar, se duerme al idlear y despierta con el siguiente mensaje.
+
+Consumo: cada turno devuelve \`usage {inputTokens, outputTokens, totalTokens}\`; se registra igual para ghosty-lite y goose. Tools propias por ACP (\`mcpServers\` stdio/http en \`session/new\`): hoy sólo por WebSocket (Ghosty Teams, editores); por esta API REST aún no.
 
 ### Agent Run (one-shot)
 MCP: \`agent_run({ prompt, model?, maxTurns? })\` — agente Claude asíncrono
