@@ -244,14 +244,24 @@ const ACP_HEADERS = { Accept: "application/json, text/event-stream" };
 
 function parseSSEDataLines(chunk: string): unknown[] {
   // Returns array of parsed JSON values from "data: ..." lines in chunk.
+  //
+  // También acepta una línea que sea JSON a secas. El front de goose/ghosty-lite contesta
+  // `initialize` (y cualquier RPC que no sea prompt) como `application/json` plano —
+  // Streamable HTTP lo permite— y sólo abre SSE para el resto. Leer únicamente `data:`
+  // dejaba el handshake en "stream closed without matching result" y el agente en error
+  // (visto el 2026-09-02 con ghosty-lite: la caja contestaba bien, EasyBits no la leía).
   const out: unknown[] = [];
   for (const line of chunk.split("\n")) {
-    if (line.startsWith("data: ")) {
-      try {
-        out.push(JSON.parse(line.slice(6)));
-      } catch {
-        // ignore non-JSON
-      }
+    const raw = line.startsWith("data: ")
+      ? line.slice(6)
+      : line.trimStart().startsWith("{")
+        ? line
+        : null;
+    if (raw === null) continue;
+    try {
+      out.push(JSON.parse(raw));
+    } catch {
+      // ignore non-JSON
     }
   }
   return out;
@@ -285,6 +295,17 @@ async function readAcpRpcResult(
           return { result: evt.result, error: evt.error };
         }
       }
+    }
+  }
+  // Cuerpo `application/json` plano (initialize por el front de goose/ghosty-lite): no
+  // trae el "\n\n" que separa eventos SSE, así que llega entero aquí al cerrarse.
+  for (const evt of parseSSEDataLines(buffer) as Array<{
+    id?: number;
+    result?: unknown;
+    error?: { code: number; message: string };
+  }>) {
+    if (evt.id === id && (evt.result !== undefined || evt.error !== undefined)) {
+      return { result: evt.result, error: evt.error };
     }
   }
   return { error: { code: -1, message: "stream closed without matching result" } };
