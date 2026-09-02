@@ -2191,7 +2191,8 @@ POST /api/v2/machines/:id/releases   { "message": "v1" }
 GET  /api/v2/machines/:id/releases
 
 # Rollback (misma caja)
-POST /api/v2/machines/:id/rollback   { "releaseId": "rel_..." }
+POST /api/v2/machines/:id/rollback   { "releaseId": "rel_..." }   # sin rebuild: el release lleva su build
+GET  /api/v2/machines/:id/logs?lines=200&grep=   # el log de LA APP (unit o startCommand)
 
 # Recrear en una caja nueva (recuperación o cambio de tier).
 # Colección aparte a propósito: funciona aunque la máquina original ya no exista.

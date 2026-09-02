@@ -32,6 +32,7 @@ import {
   execSandboxRaw,
   exposeSandboxPort,
   getSandbox,
+  readLogs,
   runtimeControl,
   shQuote,
   waitUntilRunning,
@@ -63,6 +64,9 @@ export const SECRETS_FILE = ".easybits.env";
 
 /** Dónde se anota el pid de la app, para poder pararla en el siguiente deploy. */
 export const PID_FILE = ".easybits-app.pid";
+
+/** Adónde va la salida de una app arrancada por `startCommand` (sin unit). */
+export const APP_LOG_FILE = "/var/log/easybits-app.log";
 
 const DEFAULT_EXCLUDES = [
   "node_modules",
@@ -359,11 +363,17 @@ async function preflight(owner: string, sandboxId: string): Promise<void> {
 export async function publishRelease(
   ctx: AuthContext,
   sandboxId: string,
-  params: { message?: string } = {}
+  params: { message?: string; prebuilt?: boolean } = {}
 ): Promise<ReleaseRecord> {
   requireScope(ctx, "WRITE");
   const { row, owner } = await requireMachine(ctx, sandboxId);
-  const spec = (row.runspec as Runspec) ?? null;
+  const machineSpec = (row.runspec as Runspec) ?? null;
+  // `prebuilt` aquí es POR RELEASE: el tarball lleva el build y el runspec
+  // guardado en la fila lo dice, así que rollback/redeploy no reconstruyen.
+  // El runspec de la MÁQUINA no cambia: un launch posterior desde repo
+  // sigue buildeando tras el clone.
+  const spec: Runspec | null =
+    machineSpec && params.prebuilt ? { ...machineSpec, prebuilt: true } : machineSpec;
   if (!spec) {
     const e: any = new Error(
       "This machine has no runspec — call set_machine_runspec first (at minimum appDir, plus buildCommand/startCommand or unit)."
@@ -750,12 +760,37 @@ export function buildStartScript(spec: Runspec, hasSecrets: boolean): string {
     `for i in 1 2 3; do ss -ltn 2>/dev/null | grep -q ":${port} " || break; sleep 1; done`,
     // `exec` dentro del sh: el pid anotado ES el del proceso de la app, no el
     // de un shell padre que al morir dejaría al hijo huérfano y escuchando.
-    `nohup sh -c ${command} >/var/log/easybits-app.log 2>&1 &`,
+    `nohup sh -c ${command} >${APP_LOG_FILE} 2>&1 &`,
     `echo $! > ${pid}`,
     `sleep 3`,
     // Que el proceso siga vivo Y escuchando; si no, el log dice por qué.
-    `if kill -0 "$(cat ${pid})" 2>/dev/null; then echo STARTED; else echo "NO_ARRANCO"; tail -30 /var/log/easybits-app.log; exit 1; fi`,
+    `if kill -0 "$(cat ${pid})" 2>/dev/null; then echo STARTED; else echo "NO_ARRANCO"; tail -30 ${APP_LOG_FILE}; exit 1; fi`,
   ].join("\n");
+}
+
+/**
+ * El log de LA APP, no del sistema. Con unit systemd es el journal de esa
+ * unit; sin unit es el archivo al que `buildStartScript` redirige la salida.
+ * `readLogs` a secas (journalctl) no ve ese archivo, y por eso la pestaña
+ * Registro salía vacía para todo lo que arrancaba por `startCommand`.
+ */
+export async function readMachineLogs(
+  ctx: AuthContext,
+  sandboxId: string,
+  params: { lines?: number; grep?: string } = {}
+): Promise<{ source: "unit" | "file"; command: string; output: string; exitCode: number }> {
+  requireScope(ctx, "READ");
+  const { row, owner } = await requireMachine(ctx, sandboxId);
+  const spec = (row.runspec as Runspec | null) ?? null;
+  const lines = Math.min(Math.max(params.lines ?? 200, 1), 5000);
+  if (spec?.unit) {
+    const r = await readLogs(ctx, sandboxId, { unit: spec.unit, lines, grep: params.grep });
+    return { source: "unit", command: r.command, output: r.output, exitCode: r.exitCode };
+  }
+  let command = `tail -n ${lines} ${shQuote(APP_LOG_FILE)} 2>/dev/null || true`;
+  if (params.grep) command += ` | grep -- ${shQuote(params.grep)}`;
+  const res = await execSandboxRaw(owner, sandboxId, command, 30);
+  return { source: "file", command, output: res.stdout || res.stderr || "", exitCode: res.exitCode };
 }
 
 async function buildAndStart(
@@ -1239,6 +1274,10 @@ export async function launchApp(
       message:
         params.message ??
         (params.repo ? `launch ${params.repo}` : params.archiveUrl ? "launch (upload)" : "launch"),
+      // El build corrió DENTRO de la caja (Linux): el artefacto ya sirve tal
+      // cual en cualquier caja del mismo template. Publicarlo con el build
+      // hace que rollback y redeploy sean bajar + extraer + arrancar.
+      prebuilt: !!spec.buildCommand && !spec.prebuilt,
     });
 
     let domain: LaunchResult["domain"];

@@ -54,6 +54,17 @@ describe("release publish transport", () => {
     expect(script).toContain("--exclude='node_modules'");
     expect(script).toContain("--exclude='.git'");
   });
+
+  it("keeps node_modules and the build output when the release is prebuilt", () => {
+    const pre = buildPublishScript({
+      spec: { ...spec, prebuilt: true },
+      tarball: "/tmp/r.tar.gz",
+      urlFile: "/tmp/r.url",
+    });
+    expect(pre).not.toContain("--exclude='node_modules'");
+    expect(pre).not.toContain("--exclude='dist'");
+    expect(pre).toContain("--exclude='.git'");
+  });
 });
 
 describe("runspec validation", () => {

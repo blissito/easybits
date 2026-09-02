@@ -479,6 +479,7 @@ export const HOSTING_ALLOWLIST = new Set<string>([
   // máquina pero no darle su DATABASE_URL — media app en producción.
   "set_machine_secrets",
   "list_machine_secrets",
+  "get_machine_logs",
   "unset_machine_secret",
   // Backups: the app data, off-host, included in the price.
   "list_backups",

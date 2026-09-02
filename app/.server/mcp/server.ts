@@ -166,6 +166,7 @@ import {
   listMachineSecrets,
   setMachineSecrets,
   unsetMachineSecret,
+  readMachineLogs,
 } from "../core/releaseOperations";
 import {
   listBackups,
@@ -1842,8 +1843,23 @@ How to embed safely (the only reliable rule):
   );
 
   server.tool(
+    "get_machine_logs",
+    "The app's own log, last N lines: the systemd unit's journal when the runspec has a unit, otherwise the file the startCommand writes to. First stop when a deploy says it started but the site does not answer.",
+    {
+      sandboxId: z.string().describe("Sandbox ID of the machine"),
+      lines: z.number().int().min(1).max(5000).optional().describe("Default 200"),
+      grep: z.string().optional().describe("Only lines containing this text"),
+    },
+    { readOnlyHint: true, openWorldHint: false },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      return ok(await readMachineLogs(ctx, params.sandboxId, params));
+    })
+  );
+
+  server.tool(
     "rollback_machine",
-    "Put a previous release back on the SAME machine: unpack it (atomically), rebuild and restart. Use after a bad deploy. Data is untouched.",
+    "Put a previous release back on the SAME machine: download, extract and restart. No build: a release published by launch_app ships its build. Use after a bad deploy. Data is untouched.",
     {
       sandboxId: z.string().describe("Sandbox ID of the machine"),
       releaseId: z.string().describe("Release to apply (from list_machine_releases)"),

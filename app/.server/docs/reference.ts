@@ -528,6 +528,7 @@ Configure via MCP tool \`set_ai_key\` or dashboard. Supports ANTHROPIC and OPENA
 |--------|-------------|
 | \`machines.tiers()\` | Catálogo de tiers + precio del disco add-on |
 | \`machines.list()\` | Tus máquinas permanentes |
+| \`machines.logs(id, { lines?, grep? })\` | El log de la app (unit o archivo del startCommand) |
 | \`machines.launch({ repo \\| archiveUrl \\| sandboxId, domain? })\` | **Una app en producción en UNA llamada** (el \`fly launch\` de EasyBits). Empieza por aquí. |
 | \`machines.create({ tier })\` | Provisiona una máquina always-on (caja vacía). Lanza \`MachinePaymentRequired\` con \`.checkoutUrl\` si la cuenta no tiene plan |
 | \`machines.buy({ tier })\` | Igual pero sin lanzar: devuelve la máquina **o** \`{ checkoutUrl }\` para que el cliente pague |
@@ -1000,10 +1001,11 @@ Fly/Vercel tratan el disco como desechable porque el deploy lo reconstruye desde
 
 1. \`set_machine_runspec({ sandboxId, appDir, buildCommand?, startCommand?, unit?, port?, dataPaths? })\` — obligatorio antes del primer deploy. \`dataPaths\` es lo que respalda el backup diario: sin eso la máquina NO tiene nada respaldado. No metas secretos en \`env\` (se guarda y viaja dentro de cada tarball).
 2. \`deploy_machine({ sandboxId, message? })\` → publica release. SDK: \`eb.machines.deploy(id)\`
-3. \`list_machine_releases({ sandboxId })\` · \`rollback_machine({ sandboxId, releaseId })\` — vuelve a una versión anterior en la MISMA caja.
+3. \`list_machine_releases({ sandboxId })\` · \`rollback_machine({ sandboxId, releaseId })\` — vuelve a una versión anterior en la MISMA caja. **Sin rebuild**: un release publicado por \`launch_app\` lleva su build (\`prebuilt\`), así que rollback y redeploy son bajar + extraer + arrancar. A cambio el tarball pesa más (lleva \`node_modules\`).
+5. \`get_machine_logs({ sandboxId, lines?, grep? })\` — el log de LA APP (últimas N líneas): el journal de la unit si el runspec tiene una, o el archivo al que escribe el \`startCommand\`. Primer lugar a mirar cuando el deploy dijo que arrancó y el sitio no contesta. SDK: \`eb.machines.logs(id, { lines })\`.
 4. \`redeploy_machine({ releaseId, tier?, replaceSandboxId? })\` — construye una caja NUEVA. Sirve para dos cosas: recuperar una máquina muerta y **cambiar de tier** (no hay resize en caliente — se recrea). \`replaceSandboxId\` libera la vieja al confirmar que la nueva quedó corriendo; sin él pagas las dos.
 
-REST: \`PUT /machines/:id/runspec\` · \`POST|GET /machines/:id/releases\` · \`POST /machines/:id/rollback\` · \`POST /machine-releases/:releaseId/redeploy\` (colección aparte: funciona aunque la máquina original ya no exista).
+REST: \`PUT /machines/:id/runspec\` · \`POST|GET /machines/:id/releases\` · \`POST /machines/:id/rollback\` · \`POST /machine-releases/:releaseId/redeploy\` (colección aparte: funciona aunque la máquina original ya no exista) · \`GET /machines/:id/logs?lines=200&grep=\`.
 
 ### Backups — incluidos, 7 días
 Cada noche se copian los \`dataPaths\` del runspec a almacenamiento durable **fuera del host**, 7 días de retención, **sin costo extra** (mismo trato que Fly da en volúmenes). No se respalda el sistema operativo: se reconstruye del template.

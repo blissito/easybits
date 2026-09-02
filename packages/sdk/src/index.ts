@@ -1876,11 +1876,12 @@ export class EasybitsClient {
    */
   get machines() {
     const req = <T>(path: string, opts?: RequestInit) => this.request<T>(path, opts);
-    const qs = (p?: { limit?: number; cursor?: string }) => {
+    const qs = (p?: Record<string, string | number | undefined>) => {
       if (!p) return "";
       const s = new URLSearchParams();
-      if (p.limit != null) s.set("limit", String(p.limit));
-      if (p.cursor) s.set("cursor", p.cursor);
+      for (const [k, v] of Object.entries(p)) {
+        if (v != null && v !== "") s.set(k, String(v));
+      }
       const out = s.toString();
       return out ? `?${out}` : "";
     };
@@ -1974,7 +1975,16 @@ export class EasybitsClient {
         params?: { limit?: number; cursor?: string }
       ): Promise<{ items: MachineRelease[]; nextCursor?: string }> =>
         req(`/machines/${sandboxId}/releases${qs(params)}`),
-      /** Put a previous release back on the SAME machine. Data is untouched. */
+      /**
+       * The app's own log (last N lines): the systemd unit's journal when the
+       * runspec has one, otherwise the file the startCommand writes to.
+       */
+      logs: (
+        sandboxId: string,
+        params?: { lines?: number; grep?: string }
+      ): Promise<{ source: "unit" | "file"; command: string; output: string; exitCode: number }> =>
+        req(`/machines/${sandboxId}/logs${qs(params)}`),
+      /** Put a previous release back on the SAME machine (no rebuild: the release ships its build). Data is untouched. */
       rollback: (sandboxId: string, releaseId: string): Promise<{ sandboxId: string; releaseId: string; version: number; exitCode: number }> =>
         req(`/machines/${sandboxId}/rollback`, {
           method: "POST",

@@ -9,12 +9,11 @@ import {
   listSandboxDomains,
   addSandboxDomain,
   removeSandboxDomain,
-  readLogs,
   suspendSandbox,
   resumeSandbox,
   verifySandboxDomain,
 } from "~/.server/core/sandboxOperations";
-import { listReleases, applyRelease } from "~/.server/core/releaseOperations";
+import { listReleases, applyRelease, readMachineLogs } from "~/.server/core/releaseOperations";
 import {
   listMachineSecrets,
   setMachineSecrets,
@@ -118,7 +117,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
           )
           .catch(() => []),
         listMachineSecrets(ctx, id).catch(() => ({ secretNames: [], inVault: [] })),
-        readLogs(ctx, id, { lines: 40 }).catch(() => ({ output: "" })),
+        readMachineLogs(ctx, id, { lines: 40 }).catch(() => ({ output: "" })),
       ]);
       return data({ detail: { releases, domains, secrets, logs } });
     }
