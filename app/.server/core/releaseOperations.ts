@@ -106,6 +106,10 @@ export const runspecSchema = z.object({
     .record(z.string())
     .optional()
     .refine(
+      (env) => !env || Object.keys(env).every((k) => /^[A-Za-z_][A-Za-z0-9_]*$/.test(k)),
+      { message: "runspec.env keys must be shell identifiers (letters, digits, _; not starting with a digit)." }
+    )
+    .refine(
       (env) => !env || !Object.keys(env).some((k) => SECRETISH.test(k)),
       {
         message:
@@ -698,8 +702,16 @@ function withSecrets(
   opts: { exec?: boolean } = {}
 ) {
   const final = opts.exec ? `exec ${command}` : command;
-  if (!hasSecrets) return final;
-  return `set -a; . ${shQuote(`${spec.appDir}/${SECRETS_FILE}`)}; set +a; ${final}`;
+  // runspec.env se guardaba pero nunca llegaba al proceso: la app arrancaba
+  // con sus defaults de código (PORT, URLs) aunque el runspec dijera otra
+  // cosa. Van primero; los secretos del vault, después, ganan por nombre.
+  const exports = Object.entries(spec.env ?? {})
+    .map(([k, v]) => `export ${k}=${shQuote(String(v))};`)
+    .join(" ");
+  const secrets = hasSecrets
+    ? `set -a; . ${shQuote(`${spec.appDir}/${SECRETS_FILE}`)}; set +a;`
+    : "";
+  return [exports, secrets, final].filter(Boolean).join(" ");
 }
 
 /**
