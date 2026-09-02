@@ -870,7 +870,7 @@ export async function recreateFromRelease(
 
   const bought = await buyMachine(ctx, {
     tier: params.tier ?? rel.tier ?? "micro",
-    template: (rel.template as any) ?? undefined,
+    template: (rel.template as any) ?? "node",
     name: params.name ?? `${rel.sandboxId}-r${rel.version}`,
     cpuMode: params.cpuMode,
     diskAddonsGB: params.diskAddonsGB,
@@ -1068,7 +1068,9 @@ export async function launchApp(
   if (needsNewBox) {
     const bought = await buyMachine(ctx, {
       tier: params.tier ?? "micro",
-      template: (params.template as any) ?? undefined,
+      // El default de build/start es npm: sin Node en la caja (ubuntu) la
+      // configuración por defecto no podía funcionar nunca.
+      template: (params.template as any) ?? "node",
       name: params.name,
       env: spec.env,
     });

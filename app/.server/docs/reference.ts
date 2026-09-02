@@ -963,7 +963,16 @@ Fuente: exactamente UNA de las tres.
 MCP: \`launch_app({ repo | archiveUrl | sandboxId, tier?, port?, dataPaths?, domain? })\`
 REST: \`POST /machines/launch\` · SDK: \`eb.machines.launch({ … })\`
 
-Defaults: \`tier: "micro"\` (nano son 256MB — NO aguanta un build de Node), \`appDir: "/app"\`, \`buildCommand: "(npm ci || npm install) && npm run build"\`, \`startCommand: "npm start"\`, \`port: 3000\`.
+Defaults: \`tier: "micro"\` (nano son 256MB — NO aguanta un build de Node), \`template: "node"\` (Node 22 + npm; \`ubuntu\` NO trae Node), \`appDir: "/app"\`, \`buildCommand: "(npm ci || npm install) && npm run build"\`, \`startCommand: "npm start"\`, \`port: 3000\`.
+
+**Variables de la app (no secretas)** van en \`env\`: \`{ PORT: "4000", API_URL: "…" }\`. Se exportan antes del build y del arranque; los secretos de la bóveda ganan por nombre. Las llaves deben ser identificadores de shell (\`A-Z_0-9\`).
+
+**Lo que aprendimos con una app real (React Router v7 + Express 5)**:
+- \`npm start\` con \`node --env-file=.env server.js\` **muere en la caja**: no hay \`.env\`. Arranca con \`startCommand: "node server.js"\` y pasa la config por \`env\` + secretos.
+- Express 5 rechaza \`app.all("*", …)\` (path-to-regexp 8). Usa \`app.use(handler)\`.
+- Repos públicos de GitHub clonan sin token. Uno privado: \`https://x-access-token:GH_TOKEN@github.com/usuario/repo.git\`.
+
+**Redesplegar la misma máquina desde el repo** (el flujo directo, sin workflow): primero los secretos, luego \`launch_app({ sandboxId, repo, … })\`. Publica un release nuevo (v2, v3…) y reinicia la app en ~18 s. \`sandboxId\` es el DESTINO; \`repo\` la fuente.
 
 **Tiempos medidos** con una app React Router v7 real (204 MB de \`node_modules\`, release de 49.5 MB), en tier \`micro\`:
 

@@ -2065,6 +2065,34 @@ await eb.machines.launch({ archiveUrl: up.url, domain: "tienda.com" });` },
               <strong>Tiempos medidos</strong> con una app React Router v7 real (204 MB de <code className="bg-gray-100 px-1 rounded">node_modules</code>, release de 49.5 MB) en tier <code className="bg-gray-100 px-1 rounded">micro</code>: provisionar la caja <strong>3.7 s</strong> · <code className="bg-gray-100 px-1 rounded">npm ci</code> + build en la caja <strong>6.9 s</strong> · publicar el release <strong>11.3 s</strong> · <strong>redeploy a una caja limpia 12.0 s</strong>. Con <code className="bg-gray-100 px-1 rounded">prebuilt: true</code> el deploy no ejecuta build: baja, extrae y arranca. ⚠️ Buildea <em>dentro</em> de la caja, no en tu Mac: un <code className="bg-gray-100 px-1 rounded">node_modules</code> con módulos nativos compilado en macOS revienta en Linux.
             </p>
 
+            <h3 className="text-lg font-bold mb-3 mt-8">Configurar la app: variables y arranque</h3>
+            <p className="text-gray-600 text-sm mb-3">
+              Defaults: <code className="bg-gray-100 px-1 rounded">template: "node"</code> (Node 22 + npm; <code className="bg-gray-100 px-1 rounded">ubuntu</code> <strong>no</strong> trae Node), <code className="bg-gray-100 px-1 rounded">appDir: "/app"</code>, <code className="bg-gray-100 px-1 rounded">port: 3000</code>, build <code className="bg-gray-100 px-1 rounded">npm ci && npm run build</code>, arranque <code className="bg-gray-100 px-1 rounded">npm start</code>. Las variables <strong>no secretas</strong> (PORT, URLs, ids) van en <code className="bg-gray-100 px-1 rounded">env</code>: se exportan antes del build y del arranque, y los secretos de la bóveda ganan por nombre.
+            </p>
+            <TabbedCode
+              tabs={[
+                { label: "REST", code: `# 1. Secretos a la bóveda de la máquina (una vez)
+PUT /api/v2/machines/:sandboxId/secrets
+{ "ACP_SECRET": "...", "EASYBITS_API_KEY": "eb_sk_..." }
+
+# 2. Redesplegar la MISMA máquina desde el repo (release nuevo, ~18 s)
+POST /api/v2/machines/launch
+{ "sandboxId": "sb_...",
+  "repo": "https://github.com/usuario/mi-app",
+  "buildCommand": "npm ci && npm run build",
+  "startCommand": "node server.js",
+  "port": 4000,
+  "env": { "PORT": "4000", "ACP_WS_URL": "wss://..." } }` },
+                { label: "MCP", code: `set_machine_secrets({ sandboxId, secrets: { ACP_SECRET: "..." } })
+launch_app({ sandboxId, repo: "https://github.com/usuario/mi-app",
+             startCommand: "node server.js", port: 4000,
+             env: { PORT: "4000" } })` },
+              ]}
+            />
+            <div className="bg-amber-50 border-2 border-amber-300 rounded-xl p-4 text-sm mt-3 mb-6">
+              Aprendido con una app real (React Router v7 + Express 5): <code className="bg-gray-100 px-1 rounded">npm start</code> con <code className="bg-gray-100 px-1 rounded">node --env-file=.env</code> <strong>muere en la caja</strong> porque no hay <code className="bg-gray-100 px-1 rounded">.env</code> — arranca con <code className="bg-gray-100 px-1 rounded">node server.js</code> y pasa la config por <code className="bg-gray-100 px-1 rounded">env</code> + secretos. Express 5 rechaza <code className="bg-gray-100 px-1 rounded">app.all("*")</code>: usa <code className="bg-gray-100 px-1 rounded">app.use(handler)</code>. Los repos públicos de GitHub clonan sin token.
+            </div>
+
             <h3 className="text-lg font-bold mb-3 mt-8">Hosting sin plan: la máquina se paga sola</h3>
             <p className="text-gray-600 text-sm mb-3">
               <strong>No necesitas plan de pago para hostear.</strong> Una máquina se factura con su propia suscripción, así que desde una cuenta Free pagas tu caja y nada más. El plan sigue siendo el gate de IA, storage y flota — dejó de serlo para hosting.
