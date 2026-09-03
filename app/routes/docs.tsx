@@ -1918,7 +1918,8 @@ console.log(status.result);  // resultado final del agente`} />
             <h3 className="text-lg font-bold mb-3">1. Crear</h3>
             <p className="text-gray-600 text-sm mb-4">
               Con <code className="bg-gray-100 px-1 rounded">env: {}</code> basta. El proveedor, el modelo y la llave se resuelven solos desde la cuenta que hace la llamada.
-              Si quieres conectarte desde un editor, añade tu propio <code className="bg-gray-100 px-1 rounded">ACP_AGENT_TOKEN</code>.
+              El agente nace <strong>cerrado</strong>: si no pasas <code className="bg-gray-100 px-1 rounded">ACP_AGENT_TOKEN</code>, su token es el{" "}
+              <code className="bg-gray-100 px-1 rounded">embedToken</code> que viene en la respuesta — úsalo para conectarte desde tu editor.
             </p>
             <CodeExample
               title="curl"
@@ -1937,7 +1938,9 @@ console.log(status.result);  // resultado final del agente`} />
             <h3 className="text-lg font-bold mb-3 mt-8">2. Esperar <code className="text-base">running</code></h3>
             <p className="text-gray-600 text-sm mb-4">
               Para un agente ACP, <code className="bg-gray-100 px-1 rounded">running</code> significa que EasyBits ya hizo el <code className="bg-gray-100 px-1 rounded">initialize</code> +{" "}
-              <code className="bg-gray-100 px-1 rounded">session/new</code> y guardó la sesión (~6 s). Antes de eso no hay a quién mandarle el mensaje.
+              <code className="bg-gray-100 px-1 rounded">session/new</code> y guardó la sesión (~6 s). Antes de eso no hay a quién mandarle el mensaje.{" "}
+              <strong>La URL <code className="bg-gray-100 px-1 rounded">wss://</code> sale de aquí, no de la respuesta de crear</strong>: ahí todavía viene una provisional{" "}
+              (<code className="bg-gray-100 px-1 rounded">sandbox://…</code>) porque el dominio se ata al terminar el arranque.
             </p>
             <Endpoint
               method="GET"
@@ -2016,7 +2019,7 @@ ghosty-tui --agent <agentId> --token <embedToken>`}
                   <tr className="border-t border-gray-200">
                     <td className="px-4 py-2 font-mono text-xs font-bold">anthropic</td>
                     <td className="px-4 py-2 font-mono text-xs">GHOSTY_PROVIDER, GHOSTY_MODEL, ANTHROPIC_API_KEY</td>
-                    <td className="px-4 py-2 text-xs">Tu cuenta de Anthropic</td>
+                    <td className="px-4 py-2 text-xs">Tu cuenta de Anthropic. API key normal — un token OAuth (<code className="bg-gray-100 px-1 rounded">sk-ant-oat…</code>) no sirve: este proveedor autentica con <code className="bg-gray-100 px-1 rounded">x-api-key</code>.</td>
                   </tr>
                   <tr className="border-t border-gray-200">
                     <td className="px-4 py-2 font-mono text-xs font-bold">custom_deepseek</td>
