@@ -1932,7 +1932,8 @@ console.log(status.result);  // resultado final del agente`} />
               code={`curl -X POST https://www.easybits.cloud/api/v2/agents \\
   -H "Authorization: Bearer $EASYBITS_API_KEY" \\
   -H 'Content-Type: application/json' \\
-  -d '{ "template": "ghosty-lite", "name": "mi-agente", "env": {} }'`}
+  -d '{ "template": "ghosty-lite", "name": "mi-agente", "env": {} }' \\
+  | python3 -m json.tool`}
             />
             <ResponseExample
               code={`{
@@ -1957,7 +1958,8 @@ export AGENT_TOKEN="agt_…"`}
             <CodeExample
               title="bash"
               code={`curl https://www.easybits.cloud/api/v2/agents/$AGENT_ID \\
-  -H "Authorization: Bearer $EASYBITS_API_KEY"`}
+  -H "Authorization: Bearer $EASYBITS_API_KEY" \\
+  | python3 -m json.tool`}
             />
             <ResponseExample
               code={`{
@@ -1981,7 +1983,8 @@ export AGENT_TOKEN="agt_…"`}
             <CodeExample
               title="curl"
               code={`curl https://www.easybits.cloud/api/v2/llm/balance \\
-  -H "Authorization: Bearer $EASYBITS_API_KEY"`}
+  -H "Authorization: Bearer $EASYBITS_API_KEY" \\
+  | python3 -m json.tool`}
             />
             <ResponseExample
               code={`{
@@ -2008,7 +2011,8 @@ export AGENT_TOKEN="agt_…"`}
               code={`curl -X POST https://www.easybits.cloud/api/v2/agents \\
   -H "Authorization: Bearer $EASYBITS_API_KEY" \\
   -H 'Content-Type: application/json' \\
-  -d '{ "template": "ghosty-lite", "name": "mi-agente", "env": {} }'`}
+  -d '{ "template": "ghosty-lite", "name": "mi-agente", "env": {} }' \\
+  | python3 -m json.tool`}
             />
             <p className="text-gray-600 text-sm mb-6">
               <code className="bg-gray-100 px-1 rounded">env</code> vacío es lo normal. Sólo lo llenas para cambiar de cerebro (ver{" "}
@@ -2026,7 +2030,8 @@ export AGENT_TOKEN="agt_…"`}
             <CodeExample
               title="curl"
               code={`curl https://www.easybits.cloud/api/v2/agents/$AGENT_ID \\
-  -H "Authorization: Bearer $EASYBITS_API_KEY"`}
+  -H "Authorization: Bearer $EASYBITS_API_KEY" \\
+  | python3 -m json.tool`}
             />
             <Endpoint
               method="GET"
