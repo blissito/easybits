@@ -2059,18 +2059,23 @@ data: {"type":"done","stopReason":"end_turn"}`}
 
             <h3 className="text-lg font-bold mb-3 mt-8">4. Desde tu editor o cliente ACP</h3>
             <p className="text-gray-600 text-sm mb-4">
-              Zed, JetBrains, VS Code, Ghosty Teams o cualquier cliente ACP se conectan por WebSocket a la <strong>URL estable del agente</strong>. Lleva el{" "}
+              Zed, JetBrains, VS Code, Ghosty Teams o cualquier cliente ACP se conectan a la <strong>URL estable del agente</strong>. Lleva el{" "}
               <code className="bg-gray-100 px-1 rounded">agentId</code>, no la máquina: si el host recicla la caja, la URL sigue siendo la misma.
+              El token <strong>siempre va en la URL</strong> (<code className="bg-gray-100 px-1 rounded">?token=</code>) porque es lo único que todo cliente sabe pasar — un WebSocket
+              de navegador no puede poner cabeceras. Si el tuyo puede, <code className="bg-gray-100 px-1 rounded">Authorization: Bearer</code> también vale.
             </p>
             <CodeExample
               title="bash"
-              code={`# La URL sale de agentUrl; el token es el embedToken (o el ACP_AGENT_TOKEN que pusiste tú).
+              code={`# A) Tu cliente habla WebSocket: pásale la URL con el token dentro.
 echo "wss://acp-$AGENT_ID.sandboxes.easybits.cloud/acp?token=$AGENT_TOKEN"
 
-# Cliente que no habla ACP directo:
-npx ghosty-acp "wss://acp-$AGENT_ID.sandboxes.easybits.cloud/acp?token=$AGENT_TOKEN"
+# B) Tu editor habla ACP por stdio (Zed, JetBrains, neovim): usa el puente.
+#    OJO: el token va en GHOSTY_ACP_TOKEN, NO en la URL — la línea de comandos de un
+#    proceso la puede leer cualquiera en la máquina; el entorno no.
+GHOSTY_ACP_TOKEN=$AGENT_TOKEN \\
+  npx ghosty-acp "wss://acp-$AGENT_ID.sandboxes.easybits.cloud/acp"
 
-# Chat por terminal (viene en tuiCommand al crear):
+# C) Chat por terminal (el comando viene hecho en tuiCommand al crear):
 ghosty-tui --agent $AGENT_ID --token $AGENT_TOKEN`}
             />
             <p className="text-gray-600 text-sm mb-6">
