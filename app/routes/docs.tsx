@@ -2141,9 +2141,11 @@ ghosty-tui --agent $AGENT_ID --token $AGENT_TOKEN`}
                 [
                   "¿De dónde sale el token de la URL wss?",
                   <>
-                    Es el <code className="bg-gray-100 px-1 rounded">embedToken</code> que te devuelve el paso 1, salvo que tú hayas pasado tu propio{" "}
-                    <code className="bg-gray-100 px-1 rounded">ACP_AGENT_TOKEN</code> en el <code className="bg-gray-100 px-1 rounded">env</code> al crear — entonces es ése.
-                    No se genera en la caja ni cambia con el tiempo: vive con el agente.
+                    Es el <code className="bg-gray-100 px-1 rounded">embedToken</code> que te devuelve el paso 1. No se genera en la caja ni cambia con el tiempo: vive con el agente.
+                    <br />
+                    <strong>La trampa:</strong> si al crear pasaste tu propio{" "}
+                    <code className="bg-gray-100 px-1 rounded">ACP_AGENT_TOKEN</code> en el <code className="bg-gray-100 px-1 rounded">env</code>, el token es <em>ése</em> y el{" "}
+                    <code className="bg-gray-100 px-1 rounded">embedToken</code> <strong>deja de servir</strong> — aunque siga apareciendo en la respuesta. Es uno o el otro, nunca los dos.
                   </>,
                 ],
                 [
