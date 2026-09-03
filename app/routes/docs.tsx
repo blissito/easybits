@@ -1915,6 +1915,38 @@ console.log(status.result);  // resultado final del agente`} />
               <strong>WRITE</strong> y saldo de tokens: míralo en <code className="bg-gray-100 px-1 rounded">GET /api/v2/llm/balance</code>.
             </div>
 
+            <h3 className="text-lg font-bold mb-3">De cero a conectado</h3>
+            <p className="text-gray-600 text-sm mb-4">
+              El flujo completo. Cada quien con su propia llave: el agente es suyo y su consumo se descuenta de su cuenta.
+            </p>
+            <CodeExample
+              title="bash"
+              code={`# 1. crear — con env vacío basta
+curl -X POST https://www.easybits.cloud/api/v2/agents \\
+  -H "Authorization: Bearer $EASYBITS_API_KEY" \\
+  -H 'Content-Type: application/json' \\
+  -d '{"template":"ghosty-lite","name":"mi-agente","env":{}}'
+# → guarda agentId y embedToken (ese embedToken ES el token del agente)
+
+# 2. esperar running y TOMAR LA URL DE AQUÍ (la de crear es provisional)
+curl https://www.easybits.cloud/api/v2/agents/<agentId> \\
+  -H "Authorization: Bearer $EASYBITS_API_KEY"
+# → agentUrl: wss://acp-<agentId>.sandboxes.easybits.cloud/acp
+
+# 3. conectar tu cliente
+wss://acp-<agentId>.sandboxes.easybits.cloud/acp?token=<embedToken>
+
+# 4. tu saldo de tokens
+curl https://www.easybits.cloud/api/v2/llm/balance \\
+  -H "Authorization: Bearer $EASYBITS_API_KEY"`}
+            />
+            <div className="mb-8 bg-yellow-50 border-2 border-yellow-300 rounded-xl p-4 text-sm">
+              <strong>Dos cosas que parecen "no funciona" y no lo son:</strong> la URL{" "}
+              <code className="bg-gray-100 px-1 rounded">wss</code> sale del paso 2, no del 1 — en el 1 todavía viene una provisional{" "}
+              <code className="bg-gray-100 px-1 rounded">sandbox://…</code>. Y tu llave necesita scope <strong>WRITE</strong> y saldo de tokens:
+              sin saldo el agente responde <code className="bg-gray-100 px-1 rounded">402 insufficient_quota</code> y parece mudo.
+            </div>
+
             <h3 className="text-lg font-bold mb-3">1. Crear</h3>
             <p className="text-gray-600 text-sm mb-4">
               Con <code className="bg-gray-100 px-1 rounded">env: {}</code> basta. El proveedor, el modelo y la llave se resuelven solos desde la cuenta que hace la llamada.
