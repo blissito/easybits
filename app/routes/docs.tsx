@@ -2000,38 +2000,25 @@ export AGENT_TOKEN="agt_…"`}
               sin saldo el agente responde <code className="bg-gray-100 px-1 rounded">402 insufficient_quota</code> y parece mudo.
             </div>
 
-            <h3 className="text-lg font-bold mb-3">1. Crear</h3>
+            <h3 className="text-lg font-bold mb-3">La API en detalle</h3>
             <p className="text-gray-600 text-sm mb-4">
-              Con <code className="bg-gray-100 px-1 rounded">env: {}</code> basta. El proveedor, el modelo y la llave se resuelven solos desde la cuenta que hace la llamada.
-              El agente nace <strong>cerrado</strong>: si no pasas <code className="bg-gray-100 px-1 rounded">ACP_AGENT_TOKEN</code>, su token es el{" "}
-              <code className="bg-gray-100 px-1 rounded">embedToken</code> que viene en la respuesta — úsalo para conectarte desde tu editor.
+              Lo de arriba es todo lo que hace falta. Esto es la referencia de los mismos endpoints, y dos cosas que conviene entender:{" "}
+              <code className="bg-gray-100 px-1 rounded">running</code> significa que EasyBits ya hizo el{" "}
+              <code className="bg-gray-100 px-1 rounded">initialize</code> + <code className="bg-gray-100 px-1 rounded">session/new</code> y guardó la sesión (~6 s) — antes de eso no hay
+              a quién mandarle el mensaje. Y el <code className="bg-gray-100 px-1 rounded">env</code> vacío es lo normal: sólo lo llenas para{" "}
+              <a href="#ghosty-lite" className="underline">cambiar de cerebro</a> o para elegir tú el token{" "}
+              (<code className="bg-gray-100 px-1 rounded">{'{ "ACP_AGENT_TOKEN": "el-tuyo" }'}</code>, y entonces el{" "}
+              <code className="bg-gray-100 px-1 rounded">embedToken</code> deja de servir).
             </p>
-            <CodeExample
-              title="curl"
-              code={`curl -X POST https://www.easybits.cloud/api/v2/agents \\
-  -H "Authorization: Bearer $EASYBITS_API_KEY" \\
-  -H 'Content-Type: application/json' \\
-  -d '{ "template": "ghosty-lite", "name": "mi-agente", "env": {} }' \\
-  | python3 -m json.tool`}
-            />
-            <p className="text-gray-600 text-sm mb-6">
-              <code className="bg-gray-100 px-1 rounded">env</code> vacío es lo normal. Sólo lo llenas para cambiar de cerebro (ver{" "}
-              <a href="#ghosty-lite" className="underline">Otro cerebro</a>) o para elegir tú el token en vez de usar el{" "}
-              <code className="bg-gray-100 px-1 rounded">embedToken</code>: <code className="bg-gray-100 px-1 rounded">{'{ "ACP_AGENT_TOKEN": "el-tuyo" }'}</code>.
-            </p>
-
-            <h3 className="text-lg font-bold mb-3 mt-8">2. Esperar <code className="text-base">running</code></h3>
-            <p className="text-gray-600 text-sm mb-4">
-              Para un agente ACP, <code className="bg-gray-100 px-1 rounded">running</code> significa que EasyBits ya hizo el <code className="bg-gray-100 px-1 rounded">initialize</code> +{" "}
-              <code className="bg-gray-100 px-1 rounded">session/new</code> y guardó la sesión (~6 s). Antes de eso no hay a quién mandarle el mensaje.{" "}
-              <strong>La URL <code className="bg-gray-100 px-1 rounded">wss://</code> sale de aquí, no de la respuesta de crear</strong>: ahí todavía viene una provisional{" "}
-              (<code className="bg-gray-100 px-1 rounded">sandbox://…</code>) porque el dominio se ata al terminar el arranque.
-            </p>
-            <CodeExample
-              title="curl"
-              code={`curl https://www.easybits.cloud/api/v2/agents/$AGENT_ID \\
-  -H "Authorization: Bearer $EASYBITS_API_KEY" \\
-  | python3 -m json.tool`}
+            <Endpoint
+              method="POST"
+              path="/api/v2/agents"
+              description="Crea el agente. Devuelve agentId y embedToken; su agentUrl es provisional todavía."
+              body={[
+                { name: "template", type: "string", desc: '"ghosty-lite" (requerido)' },
+                { name: "name", type: "string", desc: "Cómo lo verás en tu lista de agentes" },
+                { name: "env", type: "object", desc: "Vacío para el cerebro medido con tu llave. Ver Otro cerebro." },
+              ]}
             />
             <Endpoint
               method="GET"
@@ -2046,7 +2033,7 @@ export AGENT_TOKEN="agt_…"`}
 }`}
             />
 
-            <h3 className="text-lg font-bold mb-3 mt-8">3. Hablarle</h3>
+            <h3 className="text-lg font-bold mb-3 mt-8">Hablarle por HTTP</h3>
             <CodeExample
               title="curl"
               code={`curl -N -X POST https://www.easybits.cloud/api/v2/agents/$AGENT_ID/message \\
@@ -2069,7 +2056,7 @@ data: {"type":"done","stopReason":"end_turn"}`}
               note="Eso de arriba es lo que RECIBES, no lo que mandas. El evento usage llega justo antes del done, cuando el agente lo reporta, y son totales de la SESIÓN, no del turno."
             />
 
-            <h3 className="text-lg font-bold mb-3 mt-8">4. Desde tu editor o cliente ACP</h3>
+            <h3 className="text-lg font-bold mb-3 mt-8">Desde tu editor o cliente ACP</h3>
             <p className="text-gray-600 text-sm mb-4">
               Zed, JetBrains, VS Code, Ghosty Teams o cualquier cliente ACP se conectan a la <strong>URL estable del agente</strong>. Lleva el{" "}
               <code className="bg-gray-100 px-1 rounded">agentId</code>, no la máquina: si el host recicla la caja, la URL sigue siendo la misma.
@@ -2097,7 +2084,7 @@ ghosty-tui --agent $AGENT_ID --token $AGENT_TOKEN`}
               <code className="bg-gray-100 px-1 rounded">/data/work</code> — si tu cliente manda otro que no exista en la caja, se degrada a ése.
             </p>
 
-            <h3 className="text-lg font-bold mb-3 mt-8">5. Duerme, despierta y revive</h3>
+            <h3 className="text-lg font-bold mb-3 mt-8">Duerme, despierta y revive</h3>
             <p className="text-gray-600 text-sm mb-4">
               Tras <strong>2 h sin actividad</strong> se duerme (no muere: vive hasta 30 días). El siguiente mensaje la despierta en ~1 s con su disco y su conversación intactos,
               y la URL nunca cambia. Ojo si estás conectado por WebSocket: al dormirse se te cae el socket y hay que reconectar.{" "}
