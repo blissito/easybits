@@ -35,6 +35,7 @@ const SECTIONS = [
   { id: "documents", label: "Documentos" },
   { id: "video-projects", label: "Video" },
   { id: "agents", label: "Agentes & Sandboxes" },
+  { id: "ghosty-lite", label: "Ghosty Lite" },
   { id: "flota", label: "Flota" },
   { id: "hosting", label: "Sandboxes permanentes" },
   { id: "databases", label: "Bases de datos" },
@@ -47,7 +48,7 @@ const SECTIONS = [
 ] as const;
 
 // Sections that show the "Nuevo" badge in the nav (recently shipped).
-const NEW_SECTIONS = new Set<string>(["flota", "video-projects", "calls", "secrets", "images"]);
+const NEW_SECTIONS = new Set<string>(["ghosty-lite", "flota", "video-projects", "calls", "secrets", "images"]);
 
 export default function DocsPage() {
   const location = useLocation();
@@ -1896,6 +1897,157 @@ console.log(status.result);  // resultado final del agente`} />
 
             <div className="bg-blue-50 border-2 border-blue-300 rounded-xl p-4 text-sm">
               <strong>Rate limits:</strong> 10 spawns/min (sandbox_create, agent_create, agent_run). 120 operaciones/min para el resto. Sandboxes se auto-destruyen al TTL (default 5 min; máx según plan: Byte 1h · Mega 4h · Tera 24h).
+            </div>
+          </section>
+
+          {/* Ghosty Lite — agente ACP en su propia microVM, cerebro medido con TU llave */}
+          <section id="ghosty-lite" className="mb-16">
+            <h2 className="text-2xl font-bold mb-4">Ghosty Lite</h2>
+            <p className="text-gray-600 mb-4 text-sm">
+              Un agente de verdad en su propia microVM: fork ligero de <a href="https://block.github.io/goose/" className="underline" target="_blank" rel="noreferrer">goose</a> escrito en Rust, que habla{" "}
+              <a href="https://agentclientprotocol.com" className="underline" target="_blank" rel="noreferrer">ACP</a> nativo. Tiene shell, edita archivos, y su disco (<code className="bg-gray-100 px-1 rounded">/data</code>) sobrevive a que se duerma.
+              Lo que lo distingue: <strong>corre con TU llave de EasyBits como cerebro</strong> — no traes llave de OpenAI ni de Anthropic, y el consumo se descuenta de tus tokens.
+            </p>
+
+            <div className="mb-6 bg-green-50 border-2 border-green-300 rounded-xl p-4 text-sm">
+              <strong>Una sola llave.</strong> Tu <code className="bg-gray-100 px-1 rounded">eb_sk_live_…</code> es la credencial del modelo (vía el{" "}
+              <a href="#llm" className="underline">proxy LLM</a>, modelo <code className="bg-gray-100 px-1 rounded">deepseek-v4-pro</code>). Necesita scope{" "}
+              <strong>WRITE</strong> y saldo de tokens: míralo en <code className="bg-gray-100 px-1 rounded">GET /api/v2/llm/balance</code>.
+            </div>
+
+            <h3 className="text-lg font-bold mb-3">1. Crear</h3>
+            <p className="text-gray-600 text-sm mb-4">
+              Con <code className="bg-gray-100 px-1 rounded">env: {}</code> basta. El proveedor, el modelo y la llave se resuelven solos desde la cuenta que hace la llamada.
+              Si quieres conectarte desde un editor, añade tu propio <code className="bg-gray-100 px-1 rounded">ACP_AGENT_TOKEN</code>.
+            </p>
+            <CodeExample
+              title="curl"
+              code={`curl -X POST https://www.easybits.cloud/api/v2/agents \\
+  -H "Authorization: Bearer $EASYBITS_API_KEY" \\
+  -H 'Content-Type: application/json' \\
+  -d '{
+    "template": "ghosty-lite",
+    "name": "mi-agente",
+    "env": { "ACP_AGENT_TOKEN": "un-secreto-que-elijas" }
+  }'
+
+# → { "agentId": "6a99…", "embedToken": "agt_…", "sandboxId": "sb_…", "expiresAt": "…" }`}
+            />
+
+            <h3 className="text-lg font-bold mb-3 mt-8">2. Esperar <code className="text-base">running</code></h3>
+            <p className="text-gray-600 text-sm mb-4">
+              Para un agente ACP, <code className="bg-gray-100 px-1 rounded">running</code> significa que EasyBits ya hizo el <code className="bg-gray-100 px-1 rounded">initialize</code> +{" "}
+              <code className="bg-gray-100 px-1 rounded">session/new</code> y guardó la sesión (~6 s). Antes de eso no hay a quién mandarle el mensaje.
+            </p>
+            <Endpoint
+              method="GET"
+              path="/api/v2/agents/:agentId"
+              description="Estado del agente. Cuando status es running, agentUrl trae la URL WebSocket estable."
+              response={`{
+  "agentId": "6a99a0e17b00aaaff1c58280",
+  "status": "running",
+  "agentUrl": "wss://acp-6a99a0e17b00aaaff1c58280.sandboxes.easybits.cloud/acp",
+  "template": "ghosty-lite"
+}`}
+            />
+
+            <h3 className="text-lg font-bold mb-3 mt-8">3. Hablarle</h3>
+            <Endpoint
+              method="POST"
+              path="/api/v2/agents/:agentId/message"
+              description="Un turno de conversación. Devuelve SSE. Sirve la eb_sk del dueño o el embedToken desde el navegador."
+              body={[
+                { name: "content", type: "string", desc: "El mensaje del usuario (requerido)" },
+                { name: "sessionId", type: "string", desc: "Hilo de conversación (default 'default'). Un id por visitante en embeds multi-usuario." },
+              ]}
+              response={`data: {"type":"chunk","value":"Hola"}
+data: {"type":"chunk","value":", ¿en qué te ayudo?"}
+data: {"type":"usage","inputTokens":8421,"outputTokens":112,"totalTokens":8533}
+data: {"type":"done","stopReason":"end_turn"}`}
+              note="El evento usage llega justo antes del done, cuando el agente lo reporta. Son totales de la SESIÓN, no del turno."
+            />
+
+            <h3 className="text-lg font-bold mb-3 mt-8">4. Desde tu editor o cliente ACP</h3>
+            <p className="text-gray-600 text-sm mb-4">
+              Zed, JetBrains, VS Code, Ghosty Teams o cualquier cliente ACP se conectan por WebSocket a la <strong>URL estable del agente</strong>. Lleva el{" "}
+              <code className="bg-gray-100 px-1 rounded">agentId</code>, no la máquina: si el host recicla la caja, la URL sigue siendo la misma.
+            </p>
+            <CodeExample
+              title="bash"
+              code={`# La URL sale de agentUrl; el token es el ACP_AGENT_TOKEN que pusiste al crear.
+wss://acp-<agentId>.sandboxes.easybits.cloud/acp?token=<ACP_AGENT_TOKEN>
+
+# Cliente que no habla ACP directo:
+npx ghosty-acp "wss://acp-<agentId>.sandboxes.easybits.cloud/acp?token=<ACP_AGENT_TOKEN>"
+
+# Chat por terminal (viene en tuiCommand al crear):
+ghosty-tui --agent <agentId> --token <embedToken>`}
+            />
+            <p className="text-gray-600 text-sm mb-6">
+              El puerto ya está expuesto; no hace falta <code className="bg-gray-100 px-1 rounded">/expose</code>. El <code className="bg-gray-100 px-1 rounded">cwd</code> de la sesión es{" "}
+              <code className="bg-gray-100 px-1 rounded">/data/work</code> — si tu cliente manda otro que no exista en la caja, se degrada a ése.
+            </p>
+
+            <h3 className="text-lg font-bold mb-3 mt-8">5. Duerme, despierta y revive</h3>
+            <p className="text-gray-600 text-sm mb-4">
+              Al idlear se suspende en vez de morir, y el siguiente mensaje la despierta (~1 s) sin que cambie nada. Si el host recicló la caja tras días sin uso,{" "}
+              <code className="bg-gray-100 px-1 rounded">POST /api/v2/agents/:id/revive</code> la vuelve a levantar sobre el mismo agente — tarda lo que tarda un boot (~10-60 s), así que espera la respuesta en vez de reintentar. Se pierde el disco de la caja anterior.
+            </p>
+
+            <h3 className="text-lg font-bold mb-3 mt-8">Otro cerebro (BYOK)</h3>
+            <p className="text-gray-600 text-sm mb-4">
+              El default es el cerebro medido, pero el <code className="bg-gray-100 px-1 rounded">env</code> manda. Si traes tu propia llave, el gasto va contra ese proveedor y EasyBits no lo cuenta.
+            </p>
+            <div className="overflow-x-auto mb-6">
+              <table className="w-full text-sm border-2 border-black rounded-xl overflow-hidden">
+                <thead className="bg-black text-white">
+                  <tr>
+                    <th className="text-left px-4 py-2 text-xs uppercase">Cerebro</th>
+                    <th className="text-left px-4 py-2 text-xs uppercase">env</th>
+                    <th className="text-left px-4 py-2 text-xs uppercase">Consumo</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr className="border-t border-gray-200">
+                    <td className="px-4 py-2 font-mono text-xs font-bold">easybits</td>
+                    <td className="px-4 py-2 font-mono text-xs">{"{}"} (default)</td>
+                    <td className="px-4 py-2 text-xs">Tus tokens de EasyBits</td>
+                  </tr>
+                  <tr className="border-t border-gray-200">
+                    <td className="px-4 py-2 font-mono text-xs font-bold">anthropic</td>
+                    <td className="px-4 py-2 font-mono text-xs">GHOSTY_PROVIDER, GHOSTY_MODEL, ANTHROPIC_API_KEY</td>
+                    <td className="px-4 py-2 text-xs">Tu cuenta de Anthropic</td>
+                  </tr>
+                  <tr className="border-t border-gray-200">
+                    <td className="px-4 py-2 font-mono text-xs font-bold">custom_deepseek</td>
+                    <td className="px-4 py-2 font-mono text-xs">DEEPSEEK_API_KEY</td>
+                    <td className="px-4 py-2 text-xs">Tu cuenta de DeepSeek</td>
+                  </tr>
+                  <tr className="border-t border-gray-200">
+                    <td className="px-4 py-2 font-mono text-xs font-bold">openai · openrouter · google · ollama</td>
+                    <td className="px-4 py-2 font-mono text-xs">GHOSTY_PROVIDER + su *_API_KEY</td>
+                    <td className="px-4 py-2 text-xs">Tu proveedor</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div className="bg-yellow-50 border-2 border-yellow-300 rounded-xl p-4 text-sm mb-6">
+              <strong>Todavía no:</strong> las herramientas de EasyBits (archivos, documentos) aún no llegan al modelo en este template — el agente trae sus propias
+              herramientas locales (shell, editar archivos, analizar código) y el cerebro medido. Si tu caso necesita que el agente toque tu cuenta de EasyBits, usa por ahora el template{" "}
+              <code className="bg-gray-100 px-1 rounded">ghosty-gc</code>.
+            </div>
+
+            <h3 className="text-lg font-bold mb-3">Herramientas MCP</h3>
+            <div className="mb-6">
+              {[
+                ["agent_create", "template: \"ghosty-lite\", env", "Crear el agente (mismo flujo que el POST)"],
+                ["agent_message", "agentId, content", "Un turno; devuelve { content, tokens, usage? }"],
+                ["agent_list", "—", "Listar tus agentes"],
+                ["agent_destroy", "agentId", "Destruir la caja"],
+              ].map(([name, params, desc]) => (
+                <McpTool key={name} name={name} params={params} description={desc} />
+              ))}
             </div>
           </section>
 
