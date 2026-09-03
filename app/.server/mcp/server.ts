@@ -2728,7 +2728,7 @@ How to embed safely (the only reliable rule):
 
   server.tool(
     "agent_message",
-    "Send a chat message to a persistent agent created via `agent_create` / `ghosty_spawn` (chat-* templates) and return the assembled response. Internally proxies through sandbox-host (the microVM's IP isn't routable from outside) and consumes the SSE stream into a single string. For real-time token streaming from a browser, use the public /api/v2/agents/:id/message endpoint with the embedToken instead. Returns { content, tokens }.",
+    "Send a chat message to a persistent agent created via `agent_create` / `ghosty_spawn` (chat-* templates) and return the assembled response. Internally proxies through sandbox-host (the microVM's IP isn't routable from outside) and consumes the SSE stream into a single string. For real-time token streaming from a browser, use the public /api/v2/agents/:id/message endpoint with the embedToken instead. Returns { content, tokens, usage? } — `usage` {inputTokens, outputTokens, totalTokens} llega cuando el agente lo reporta (ACP: ghosty-lite / goose) y son totales de la SESIÓN, no del turno; `tokens` cae al conteo de chunks si no hay usage.",
     {
       agentId: z.string().describe("agentId returned by agent_create / ghosty_spawn"),
       content: z.string().min(1).describe("User message content"),

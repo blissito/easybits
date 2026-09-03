@@ -368,6 +368,43 @@ async function runAcpHandshake(
   return { acpTransportSessionId, acpSessionId };
 }
 
+/** `usage` del PromptResponse de ACP (camelCase, feature unstable_end_turn_token_usage). */
+type AcpUsage = {
+  totalTokens?: number;
+  inputTokens?: number;
+  outputTokens?: number;
+  cachedReadTokens?: number | null;
+  cachedWriteTokens?: number | null;
+};
+
+export interface AgentTurnUsage {
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  cachedReadTokens?: number;
+  cachedWriteTokens?: number;
+}
+
+/**
+ * El agente SÍ reporta el consumo del turno; antes lo tirábamos aquí (sólo se miraba
+ * `agent_message_chunk` y el `done` ignoraba `result`). Ojo: son totales de la SESIÓN,
+ * no del turno — el nombre del campo en ACP engaña.
+ */
+function normalizeAcpUsage(u: AcpUsage | undefined): AgentTurnUsage | null {
+  if (!u) return null;
+  const input = Number(u.inputTokens ?? 0);
+  const output = Number(u.outputTokens ?? 0);
+  const total = Number(u.totalTokens ?? input + output);
+  if (!Number.isFinite(total) || total <= 0) return null;
+  return {
+    inputTokens: Number.isFinite(input) ? input : 0,
+    outputTokens: Number.isFinite(output) ? output : 0,
+    totalTokens: total,
+    ...(u.cachedReadTokens ? { cachedReadTokens: Number(u.cachedReadTokens) } : {}),
+    ...(u.cachedWriteTokens ? { cachedWriteTokens: Number(u.cachedWriteTokens) } : {}),
+  };
+}
+
 // transformAcpStream: takes an ACP SSE stream of JSON-RPC notifications
 // and emits the simple {type:"chunk"|"done"|"error"} SSE format that the
 // embed widget already understands. The widget stays protocol-agnostic.
@@ -392,7 +429,7 @@ function transformAcpStream(
       method?: string;
       params?: { update?: { sessionUpdate?: string; content?: AcpContent } };
       id?: number;
-      result?: unknown;
+      result?: { stopReason?: string; usage?: AcpUsage };
       error?: { message: string };
     }>) {
       // ACP notification with content chunks. Goose emits `content` as a
@@ -412,7 +449,12 @@ function transformAcpStream(
         if (evt.error) {
           emit(controller, { type: "error", message: evt.error.message });
         } else {
-          emit(controller, { type: "done" });
+          // El PromptResponse trae el consumo del turno (feature ACP
+          // `unstable_end_turn_token_usage`; camelCase). Se emite ANTES del done, como
+          // evento propio, para no cambiar la forma de `done` que ya lee el widget.
+          const usage = normalizeAcpUsage(evt.result?.usage);
+          if (usage) emit(controller, { type: "usage", ...usage });
+          emit(controller, { type: "done", stopReason: evt.result?.stopReason });
         }
       }
     }
@@ -4079,7 +4121,7 @@ function mapSSETokenToChunk(
 export async function messageAgent(
   ctx: AuthContext,
   params: { agentId: string; content: string; sessionId?: string }
-): Promise<{ content: string; tokens: number }> {
+): Promise<{ content: string; tokens: number; usage?: AgentTurnUsage }> {
   requireScope(ctx, "WRITE");
   const row = await db.agent.findUnique({ where: { id: params.agentId } });
   if (!row || !(await agentAccess(ctx, row.ownerId))) {
@@ -4093,7 +4135,8 @@ export async function messageAgent(
   const decoder = new TextDecoder();
   let buffer = "";
   let assembled = "";
-  let tokens = 0;
+  let chunks = 0;
+  let usage: AgentTurnUsage | undefined;
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
@@ -4102,19 +4145,31 @@ export async function messageAgent(
     while ((nl = buffer.indexOf("\n\n")) !== -1) {
       const event = buffer.slice(0, nl);
       buffer = buffer.slice(nl + 2);
-      for (const evt of parseSSEDataLines(event) as Array<{
-        type?: string;
-        value?: string;
-        message?: string;
-      }>) {
+      for (const evt of parseSSEDataLines(event) as Array<
+        {
+          type?: string;
+          value?: string;
+          message?: string;
+        } & Partial<AgentTurnUsage>
+      >) {
         if (evt.type === "chunk" && typeof evt.value === "string") {
           assembled += evt.value;
-          tokens++;
+          chunks++;
+        } else if (evt.type === "usage" && typeof evt.totalTokens === "number") {
+          usage = {
+            inputTokens: evt.inputTokens ?? 0,
+            outputTokens: evt.outputTokens ?? 0,
+            totalTokens: evt.totalTokens,
+            ...(evt.cachedReadTokens ? { cachedReadTokens: evt.cachedReadTokens } : {}),
+            ...(evt.cachedWriteTokens ? { cachedWriteTokens: evt.cachedWriteTokens } : {}),
+          };
         } else if (evt.type === "error") {
           throw new Error(`agent stream error: ${evt.message}`);
         }
       }
     }
   }
-  return { content: assembled, tokens };
+  // `tokens` era el CONTEO DE CHUNKS SSE con nombre de tokens, y hay callers que ya lo
+  // leen: se conserva el campo, pero si el agente reportó consumo real, ése manda.
+  return { content: assembled, tokens: usage?.totalTokens ?? chunks, usage };
 }
