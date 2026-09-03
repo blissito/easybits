@@ -20,15 +20,29 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 // Los valores van cifrados al vault del dueño y sólo se materializan dentro de
 // la máquina al construir y al arrancar. Nunca entran al runspec ni al tarball
 // del release.
+//
+// Surten efecto AL ESCRIBIRLOS: se reinicia el proceso (segundos, sin build).
+// Con `?restart=false` se difiere — cargar varios y cerrar con
+// POST /api/v2/machines/:id/restart. La respuesta lo dice en `pendingRestart`.
 export async function action({ request, params }: Route.ActionArgs) {
   const ctx = requireAuth(await authenticateRequest(request));
+
+  const restart = new URL(request.url).searchParams.get("restart") !== "false";
 
   if (request.method === "DELETE") {
     const name = new URL(request.url).searchParams.get("name");
     if (!name) {
       return Response.json({ error: "Falta ?name=NOMBRE" }, { status: 400 });
     }
-    return Response.json(await unsetMachineSecret(ctx, params.id!, name));
+    try {
+      return Response.json(await unsetMachineSecret(ctx, params.id!, name, { restart }));
+    } catch (e: any) {
+      if (e instanceof Response) return e;
+      return Response.json(
+        { error: e?.code ?? "SecretsFailed", message: String(e?.message ?? e) },
+        { status: e?.status ?? 400 }
+      );
+    }
   }
 
   if (request.method !== "PUT" && request.method !== "POST") {
@@ -58,7 +72,7 @@ export async function action({ request, params }: Route.ActionArgs) {
   }
 
   try {
-    return Response.json(await setMachineSecrets(ctx, params.id!, secrets));
+    return Response.json(await setMachineSecrets(ctx, params.id!, secrets, { restart }));
   } catch (e: any) {
     if (e instanceof Response) return e;
     return Response.json(

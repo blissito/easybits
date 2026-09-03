@@ -457,6 +457,11 @@ export const SANDBOX_ALLOWLIST = new Set<string>([
  * There is no `resize_machine`: `redeploy_machine` IS the resize, by recreating
  * the box at another tier from a release — which is also how a dead machine
  * comes back. `add_machine_disk` still waits on the host contract.
+ *
+ * Three ways to put new code or config on a machine, cheapest first:
+ * `restart_machine` (seconds, nothing downloaded — applies secrets/runspec),
+ * `rollback_machine` (fetches a release tarball onto the SAME box) and
+ * `redeploy_machine` (a whole new box).
  */
 export const HOSTING_ALLOWLIST = new Set<string>([
   "list_machine_tiers",
@@ -473,6 +478,7 @@ export const HOSTING_ALLOWLIST = new Set<string>([
   "deploy_machine",
   "list_machine_releases",
   "rollback_machine",
+  "restart_machine",
   "redeploy_machine",
   "delete_machine_release",
   // Las variables de entorno de la app. Sin esto, un agente puede montar la

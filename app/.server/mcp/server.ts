@@ -161,6 +161,7 @@ import {
   publishRelease,
   listReleases,
   applyRelease,
+  restartMachine,
   recreateFromRelease,
   deleteRelease,
   listMachineSecrets,
@@ -1805,15 +1806,16 @@ How to embed safely (the only reliable rule):
   // reciba hay que ADEMÁS enlazarlo a su runspec, que es lo que hacen estas.
   server.tool(
     "set_machine_secrets",
-    "Give an app its environment variables: stores each value encrypted in the account vault AND wires the name into the machine's runspec so the app receives it as an env var when it builds and starts. This is what `secret_set` alone does NOT do — that one only stores the value. Accumulative: passing a new name does not unset the ones already in use. Values never enter the runspec or the release tarball, and can never be read back. Takes effect on the next deploy/restart.",
+    "Give an app its environment variables: stores each value encrypted in the account vault AND wires the name into the machine's runspec so the app receives it as an env var when it builds and starts. This is what `secret_set` alone does NOT do — that one only stores the value. Accumulative: passing a new name does not unset the ones already in use. Values never enter the runspec or the release tarball, and can never be read back. TAKES EFFECT IMMEDIATELY: the app process is restarted (seconds, no build). The reply says so in `restarted` / `pendingRestart`.",
     {
       sandboxId: z.string().describe("Sandbox ID of the machine"),
       secrets: z.record(z.string()).describe("Flat object { NAME: value }. Names must be UPPER_SNAKE, e.g. { DATABASE_URL: 'postgres://…' }"),
+      restart: z.boolean().optional().describe("Default true. Pass false to load several secrets without restarting each time, then close the batch with restart_machine."),
     },
     { destructiveHint: false, idempotentHint: true, openWorldHint: false },
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
-      return ok(await setMachineSecrets(ctx, params.sandboxId, params.secrets));
+      return ok(await setMachineSecrets(ctx, params.sandboxId, params.secrets, { restart: params.restart }));
     })
   );
 
@@ -1830,15 +1832,16 @@ How to embed safely (the only reliable rule):
 
   server.tool(
     "unset_machine_secret",
-    "Stop injecting an env var into this machine. The app loses it on the next deploy/restart — if it needs it to boot, it will not come up. The value stays in the account vault, so it can be wired back with set_machine_secrets.",
+    "Stop injecting an env var into this machine. Restarts the app right away, so it loses the var NOW — if it needs it to boot, it will not come up. The value stays in the account vault, so it can be wired back with set_machine_secrets.",
     {
       sandboxId: z.string().describe("Sandbox ID of the machine"),
       name: z.string().describe("Env var name to stop injecting"),
+      restart: z.boolean().optional().describe("Default true. False leaves the running process untouched until the next restart_machine or deploy."),
     },
     { destructiveHint: true, idempotentHint: true, openWorldHint: false },
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
-      return ok(await unsetMachineSecret(ctx, params.sandboxId, params.name));
+      return ok(await unsetMachineSecret(ctx, params.sandboxId, params.name, { restart: params.restart }));
     })
   );
 
@@ -1854,6 +1857,17 @@ How to embed safely (the only reliable rule):
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       return ok(await readMachineLogs(ctx, params.sandboxId, params));
+    })
+  );
+
+  server.tool(
+    "restart_machine",
+    "Restart the app process with the CURRENT secrets and runspec. Seconds: it downloads nothing and builds nothing — unlike rollback_machine (fetches a release tarball) or redeploy_machine (provisions a whole new box). Use it to close a batch of set_machine_secrets({restart:false}), or when the app is wedged but its code is fine.",
+    { sandboxId: z.string().describe("Sandbox ID of the machine") },
+    { destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      return ok(await restartMachine(ctx, params.sandboxId));
     })
   );
 

@@ -267,6 +267,42 @@ export async function setRunspec(
 
 // --- secretos de la app ----------------------------------------------------
 
+export interface SecretsResult {
+  ok: true;
+  secretNames: string[];
+  restarted: boolean;
+  /** Los valores están guardados pero el proceso sigue con el env viejo. */
+  pendingRestart: boolean;
+  restartError?: string;
+}
+
+/**
+ * Aplica el cambio al proceso vivo, salvo que quien llama pida diferirlo.
+ *
+ * Un fallo del reinicio NO se propaga: los secretos ya quedaron guardados y
+ * perder eso sería peor que arrancar tarde. Se devuelve `restartError` para
+ * que quien llama lo vea. La excepción es `SecretsMissing` (422), que sí sube:
+ * ahí el arranque es inválido y callarlo dejaría a la app rota sin decirlo.
+ */
+async function applyNow(
+  ctx: AuthContext,
+  sandboxId: string,
+  restart: boolean | undefined
+): Promise<{ restarted: boolean; pendingRestart: boolean; restartError?: string }> {
+  if (restart === false) return { restarted: false, pendingRestart: true };
+  try {
+    const r = await restartMachine(ctx, sandboxId);
+    return {
+      restarted: r.restarted,
+      pendingRestart: !r.restarted,
+      ...(r.restarted ? {} : { restartError: r.startOutput || `exitCode ${r.exitCode}` }),
+    };
+  } catch (e: any) {
+    if (e?.code === "SecretsMissing") throw e;
+    return { restarted: false, pendingRestart: true, restartError: String(e?.message ?? e) };
+  }
+}
+
 /**
  * Guarda secretos para la app de una máquina.
  *
@@ -275,14 +311,18 @@ export async function setRunspec(
  * siguen sin llevar nada sensible, y aun así una máquina reconstruida sabe
  * qué tiene que volver a pedirle al vault.
  *
- * Surten efecto en el siguiente build o arranque, no al vuelo: cambiar un
- * secreto es cambiarlo aquí y redesplegar.
+ * Surten efecto AL ESCRIBIRLOS: por default se reinicia el proceso (segundos,
+ * sin build) para que lo reciba. Un secreto guardado que no llega al proceso
+ * es el peor fallo posible — silencioso, y el síntoma aparece lejos de la
+ * causa. Con `restart: false` se difiere: cargar varios y cerrar con
+ * `restartMachine`.
  */
 export async function setMachineSecrets(
   ctx: AuthContext,
   sandboxId: string,
-  secrets: Record<string, string>
-): Promise<{ ok: true; secretNames: string[] }> {
+  secrets: Record<string, string>,
+  opts: { restart?: boolean } = {}
+): Promise<SecretsResult> {
   requireScope(ctx, "WRITE");
   await requireMachine(ctx, sandboxId);
 
@@ -305,7 +345,7 @@ export async function setMachineSecrets(
   const secretNames = [...new Set([...current, ...names])].sort();
   await setRunspec(ctx, sandboxId, { secretNames });
 
-  return { ok: true, secretNames };
+  return { ok: true, secretNames, ...(await applyNow(ctx, sandboxId, opts.restart)) };
 }
 
 /** Qué secretos usa esta app. Devuelve nombres, nunca valores. */
@@ -320,18 +360,26 @@ export async function listMachineSecrets(
   return { secretNames, inVault: vault.map((s) => s.name) };
 }
 
-/** Deja de inyectar un secreto en esta app (no lo borra del vault). */
+/**
+ * Deja de inyectar un secreto en esta app (no lo borra del vault).
+ *
+ * Reinicia por default, igual que `setMachineSecrets`: quitar una variable
+ * tampoco debería requerir un deploy. Si la app la necesitaba para arrancar,
+ * NO volverá — que es exactamente lo que se pidió, y mejor verlo ahora que en
+ * el siguiente release.
+ */
 export async function unsetMachineSecret(
   ctx: AuthContext,
   sandboxId: string,
-  name: string
-): Promise<{ ok: true; secretNames: string[] }> {
+  name: string,
+  opts: { restart?: boolean } = {}
+): Promise<SecretsResult> {
   requireScope(ctx, "WRITE");
   const { row } = await requireMachine(ctx, sandboxId);
   const current = ((row.runspec as Runspec)?.secretNames ?? []) as string[];
   const secretNames = current.filter((n) => n !== name);
   await setRunspec(ctx, sandboxId, { secretNames });
-  return { ok: true, secretNames };
+  return { ok: true, secretNames, ...(await applyNow(ctx, sandboxId, opts.restart)) };
 }
 
 // --- publish ---------------------------------------------------------------
@@ -842,6 +890,39 @@ async function buildAndStart(
     return { buildOutput, startOutput: output, exitCode: res.exitCode };
   }
   return { buildOutput, exitCode: 0 };
+}
+
+/**
+ * Reinicia el proceso de la app con los secretos y el runspec ACTUALES.
+ *
+ * Es el paso corto que faltaba: `materializeSecrets` reescribe
+ * `.easybits.env` dentro de la caja y el arranque lo vuelve a leer, así que
+ * cambiar una variable ya no obliga a un release entero. No descarga ni
+ * construye nada — no es `applyRelease` (baja un tarball) ni
+ * `recreateFromRelease` (crea otra caja).
+ *
+ * Reusa `buildAndStart` a propósito, con el spec forzado a no construir: un
+ * segundo camino de arranque acabaría desincronizándose del real.
+ */
+export async function restartMachine(
+  ctx: AuthContext,
+  sandboxId: string
+): Promise<{ ok: boolean; restarted: boolean; startOutput?: string; exitCode: number }> {
+  requireScope(ctx, "WRITE");
+  const { row, owner } = await requireMachine(ctx, sandboxId);
+  const spec = runspecSchema.parse((row.runspec as Runspec) ?? {});
+  const started = await buildAndStart(ctx, sandboxId, owner, {
+    ...spec,
+    prebuilt: true,
+    buildCommand: undefined,
+  });
+  const restarted = started.exitCode === 0;
+  return {
+    ok: restarted,
+    restarted,
+    startOutput: started.startOutput,
+    exitCode: started.exitCode,
+  };
 }
 
 /** Roll the SAME box back (or forward) to a given release, in place. */

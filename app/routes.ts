@@ -291,6 +291,8 @@ export default [
     route("machines/:id/runspec", "routes/api/v2/machine-runspec.ts"),
     route("machines/:id/releases", "routes/api/v2/machine-releases.ts"),
     route("machines/:id/rollback", "routes/api/v2/machine-rollback.ts"),
+    // Reinicio en caliente: aplica secretos/runspec sin bajar ni construir nada.
+    route("machines/:id/restart", "routes/api/v2/machine-restart.ts"),
     route("machines/:id/backups", "routes/api/v2/machine-backups.ts"),
     // Secretos de la app: valores al vault, sólo sus nombres al runspec.
     route("machines/:id/secrets", "routes/api/v2/machine-secrets.ts"),
