@@ -2880,6 +2880,22 @@ export async function createAgent(
     const k = await getSecretValue(ctx.user.id, "OPENAI_API_KEY").catch(() => null);
     if (k) env.OPENAI_API_KEY = k;
   }
+  // ghosty-lite por la ruta GENÉRICA (POST /api/v2/agents con `env` a pelo, sin pasar por
+  // spawnAutonomous y su envBuilder): el template declara GHOSTY_PROVIDER como requerido,
+  // así que un `env: {}` moría en validateRequiredEnv antes de llegar al launcher. Default
+  // = el cerebro medido con la llave del dueño, que es lo que queremos para todos.
+  // Si el caller trae su propio proveedor o una llave de proveedor, no se toca nada (BYOK).
+  if (
+    params.template === "ghosty-lite" &&
+    !env.GHOSTY_PROVIDER &&
+    !env.GOOSE_PROVIDER &&
+    !env.DEEPSEEK_API_KEY &&
+    !env.ANTHROPIC_API_KEY &&
+    !env.OPENAI_API_KEY
+  ) {
+    env.GHOSTY_PROVIDER = "easybits";
+    if (!env.GHOSTY_MODEL) env.GHOSTY_MODEL = "deepseek-v4-pro";
+  }
   // Acceso a las tools de EasyBits — UNA sola vez, para todos los templates que las
   // consumen. Va después de las ramas por template para que el env que ellas fijen
   // (o el del caller) siga ganando.
