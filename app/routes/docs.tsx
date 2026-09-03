@@ -37,6 +37,7 @@ const SECTIONS = [
   { id: "agents", label: "Agentes & Sandboxes" },
   { id: "ghosty-lite", label: "Ghosty Lite" },
   { id: "flota", label: "Flota" },
+  { id: "agentes-en-tu-app", label: "Agentes en tu app" },
   { id: "hosting", label: "Sandboxes permanentes" },
   { id: "databases", label: "Bases de datos" },
   { id: "secrets", label: "Secretos" },
@@ -48,7 +49,7 @@ const SECTIONS = [
 ] as const;
 
 // Sections that show the "Nuevo" badge in the nav (recently shipped).
-const NEW_SECTIONS = new Set<string>(["ghosty-lite", "flota", "video-projects", "calls", "secrets", "images"]);
+const NEW_SECTIONS = new Set<string>(["agentes-en-tu-app", "ghosty-lite", "flota", "video-projects", "calls", "secrets", "images"]);
 
 export default function DocsPage() {
   const location = useLocation();
@@ -2288,6 +2289,158 @@ ghosty-tui --agent $AGENT_ID --token $AGENT_TOKEN`}
             <div className="mb-6 bg-blue-50 border-2 border-blue-300 rounded-xl p-4 text-sm">
               Compra cajas para tu flota en{" "}
               <a href="/dash/packs" className="underline font-medium">/dash/packs</a> — elige cuántas cajas necesitas y se suman a tu capacidad al instante.
+            </div>
+          </section>
+
+          {/* Agentes en tu app — canal web (HTTP) + configuración por código */}
+          <section id="agentes-en-tu-app" className="mb-16">
+            <h2 className="text-2xl font-bold mb-4">Agentes en tu app</h2>
+            <p className="text-gray-600 mb-4 text-sm">
+              La <a href="#flota" className="underline font-medium">Flota</a> no es sólo WhatsApp. El mismo agente atiende <strong>tu aplicación</strong> por HTTP: le mandas un mensaje, te devuelve la respuesta. No hay nada que registrar — ni grupo, ni número, ni alta previa. Y lo que configuras aquí (prompt, tools, tus propios MCP) es lo mismo que ve el agente en cualquier otro canal.
+            </p>
+
+            <div className="mb-6 bg-yellow-50 border-2 border-yellow-300 rounded-xl p-4 text-sm">
+              <strong>El token del agente es de servidor.</strong> Autoriza TODO lo de esta página, incluido reconfigurarlo. Llama a estos endpoints desde tu backend y proxea la respuesta a tu front — nunca lo pongas en el browser.
+            </div>
+
+            <h3 className="text-lg font-bold mb-3">1. Hablarle</h3>
+            <p className="text-gray-600 mb-3 text-sm">
+              Dos formas, mismo motor: <code className="bg-gray-100 px-1 rounded">/message</code> devuelve la respuesta completa en JSON; <code className="bg-gray-100 px-1 rounded">/message-stream</code> la manda por SSE (<code className="bg-gray-100 px-1 rounded">chunk</code> conforme se escribe, y un <code className="bg-gray-100 px-1 rounded">done</code> final cuyo <code className="bg-gray-100 px-1 rounded">value</code> es la respuesta autoritativa).
+            </p>
+            <p className="text-gray-600 mb-3 text-sm">
+              El <code className="bg-gray-100 px-1 rounded">groupId</code> es <strong>opaco</strong>: identifica una conversación y lo eliges tú. Un <code className="bg-gray-100 px-1 rounded">web-&lt;uuid&gt;</code> por usuario, o el id de tu propia tabla de chats. Mismo <code className="bg-gray-100 px-1 rounded">groupId</code> = misma memoria; uno nuevo = conversación nueva.
+            </p>
+            <div className="mb-4">
+              <CodeExample
+                title="cURL"
+                code={`# Respuesta completa
+curl -X POST https://www.easybits.cloud/api/v2/fleet-agents/$AGENT_ID/message \\
+  -H "Authorization: Bearer $AGENT_TOKEN" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "groupId": "web-8f2c1a",
+    "configGroupId": "mi-app",
+    "text": "¿Cuánto cuesta el plan Pro?"
+  }'
+# → { "reply": "El plan Pro cuesta…" }`}
+              />
+            </div>
+            <div className="mb-6">
+              <CodeExample
+                title="Node (streaming)"
+                code={`const res = await fetch(
+  \`https://www.easybits.cloud/api/v2/fleet-agents/\${AGENT_ID}/message-stream\`,
+  {
+    method: "POST",
+    headers: {
+      Authorization: \`Bearer \${AGENT_TOKEN}\`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      groupId,              // tu id de conversación
+      configGroupId: "mi-app", // la unidad de CONFIG (ver abajo)
+      text,
+      timezone: "America/Mexico_City",
+      // Contexto de ESTE turno, sin tocar la config del agente:
+      appendSystemPrompt: \`El usuario es \${user.name}, plan \${user.plan}.\`,
+    }),
+  }
+);
+
+// SSE: chunk* → done
+for await (const evt of readSse(res.body)) {
+  if (evt.event === "chunk") process.stdout.write(evt.data);
+  if (evt.event === "done") return JSON.parse(evt.data).value;
+}`}
+              />
+            </div>
+
+            <div className="mb-6 bg-red-50 border-2 border-red-300 rounded-xl p-4 text-sm">
+              <strong>Manda siempre <code className="bg-white px-1 rounded">configGroupId</code>.</strong> Es la unidad de <strong>configuración</strong> (prompt, tools, MCPs); el <code className="bg-white px-1 rounded">groupId</code> sólo identifica la conversación. Si lo omites, cada conversación busca una config con su propio id, no la encuentra, y el agente arranca <strong>sin tus conectores</strong> — se ve idéntico a un MCP roto ("no tengo esa herramienta"). Usa un valor estable para toda tu app (<code className="bg-white px-1 rounded">"mi-app"</code>) y configura ESE.
+              <br /><br />
+              Los MCP se montan al <strong>crear la sesión</strong>, no en cada turno: para comprobar un cambio de configuración, prueba con un <code className="bg-white px-1 rounded">groupId</code> nuevo.
+            </div>
+
+            <h3 className="text-lg font-bold mb-3">2. Configurarlo</h3>
+            <p className="text-gray-600 mb-3 text-sm">
+              Todo pasa por <code className="bg-gray-100 px-1 rounded">/api/v2/fleet-agents/:id/capabilities</code>. El dashboard de EasyBits es sólo un cliente de este endpoint: lo que puedes hacer con la UI, lo puedes hacer por API. <code className="bg-gray-100 px-1 rounded">GET</code> devuelve el catálogo y el estado actual; <code className="bg-gray-100 px-1 rounded">POST</code> aplica <strong>una</strong> mutación con <code className="bg-gray-100 px-1 rounded">action</code>.
+            </p>
+
+            <div className="mb-4 overflow-x-auto">
+              <table className="w-full text-sm border-2 border-black rounded-xl overflow-hidden">
+                <thead className="bg-gray-100">
+                  <tr>
+                    <th className="text-left px-3 py-2 border-b-2 border-black">action</th>
+                    <th className="text-left px-3 py-2 border-b-2 border-black">Qué hace</th>
+                    <th className="text-left px-3 py-2 border-b-2 border-black">Alcance</th>
+                  </tr>
+                </thead>
+                <tbody className="align-top">
+                  <tr className="border-b border-gray-200"><td className="px-3 py-2 font-mono text-xs">set-agent-prompt</td><td className="px-3 py-2">El prompt base: quién es el agente.</td><td className="px-3 py-2">Todo el agente</td></tr>
+                  <tr className="border-b border-gray-200"><td className="px-3 py-2 font-mono text-xs">set-model</td><td className="px-3 py-2">Modelo del motor.</td><td className="px-3 py-2">Todo el agente</td></tr>
+                  <tr className="border-b border-gray-200"><td className="px-3 py-2 font-mono text-xs">set-effort</td><td className="px-3 py-2">Cuánto piensa: <code>low</code> · <code>medium</code> · <code>high</code> · <code>xhigh</code>.</td><td className="px-3 py-2">Todo el agente</td></tr>
+                  <tr className="border-b border-gray-200"><td className="px-3 py-2 font-mono text-xs">add-mcp</td><td className="px-3 py-2">Conecta <strong>tu</strong> API como MCP: <code>url</code> (http) o <code>pkg</code> (npm), con <code>requiredSecret</code>.</td><td className="px-3 py-2">Todo el agente</td></tr>
+                  <tr className="border-b border-gray-200"><td className="px-3 py-2 font-mono text-xs">remove-mcp</td><td className="px-3 py-2">Lo quita del catálogo.</td><td className="px-3 py-2">Todo el agente</td></tr>
+                  <tr className="border-b border-gray-200"><td className="px-3 py-2 font-mono text-xs">set-secret</td><td className="px-3 py-2">Guarda la credencial que usa un MCP (cifrada, no se vuelve a leer).</td><td className="px-3 py-2">Todo el agente</td></tr>
+                  <tr className="border-b border-gray-200"><td className="px-3 py-2 font-mono text-xs">set-prompt</td><td className="px-3 py-2">Prompt que se <strong>suma</strong> al base, sólo en este canal.</td><td className="px-3 py-2">Por canal</td></tr>
+                  <tr className="border-b border-gray-200"><td className="px-3 py-2 font-mono text-xs">set-toolgroup</td><td className="px-3 py-2">Qué tools de EasyBits ve: <code>buckets</code> (imágenes, documentos, investigación…).</td><td className="px-3 py-2">Por canal</td></tr>
+                  <tr className="border-b border-gray-200"><td className="px-3 py-2 font-mono text-xs">set-cap-level</td><td className="px-3 py-2">Nivel de una capacidad: <code>off</code> · <code>read</code> · <code>write</code>.</td><td className="px-3 py-2">Por canal</td></tr>
+                  <tr className="border-b border-gray-200"><td className="px-3 py-2 font-mono text-xs">set-tool-deny</td><td className="px-3 py-2">Prohíbe una tool concreta.</td><td className="px-3 py-2">Por canal</td></tr>
+                  <tr><td className="px-3 py-2 font-mono text-xs">toggle-builtin</td><td className="px-3 py-2">Prende/apaga un conector incluido.</td><td className="px-3 py-2">Por canal</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p className="text-gray-500 mb-4 text-xs">
+              Las acciones "por canal" llevan <code className="bg-gray-100 px-1 rounded">groupId</code> — y ahí va tu <code className="bg-gray-100 px-1 rounded">configGroupId</code>, el mismo que mandas al hablarle.
+            </p>
+
+            <div className="mb-6">
+              <CodeExample
+                title="Configurar el agente de tu app"
+                code={`const cfg = async (body) =>
+  fetch(\`https://www.easybits.cloud/api/v2/fleet-agents/\${AGENT_ID}/capabilities\`, {
+    method: "POST",
+    headers: {
+      Authorization: \`Bearer \${AGENT_TOKEN}\`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
+  }).then((r) => r.json());
+
+// Quién es (todos los canales)
+await cfg({ action: "set-agent-prompt", systemPrompt: "Eres el asistente de Acme…" });
+
+// Tu API como herramienta del agente
+await cfg({ action: "set-secret", name: "ACME_API_KEY", value: process.env.ACME_API_KEY });
+await cfg({
+  action: "add-mcp",
+  name: "acme",
+  label: "Acme",
+  url: "https://api.acme.com/mcp",
+  requiredSecret: "ACME_API_KEY",   // se inyecta como env var, cifrada
+});
+
+// Qué puede hacer EN TU APP (canal "mi-app")
+await cfg({ action: "set-toolgroup", groupId: "mi-app", buckets: ["imagenes", "documentos"] });
+await cfg({ action: "set-prompt", groupId: "mi-app", systemPrompt: "Aquí hablas con clientes finales: no menciones precios internos." });`}
+              />
+            </div>
+
+            <h3 className="text-lg font-bold mb-3">Tres capas de prompt</h3>
+            <p className="text-gray-600 mb-3 text-sm">
+              Se <strong>suman</strong>, nunca se pisan. De más estable a más volátil:
+            </p>
+            <ol className="list-decimal list-inside text-sm text-gray-600 mb-6 space-y-1">
+              <li><strong>Base del agente</strong> — <code className="bg-gray-100 px-1 rounded">set-agent-prompt</code>. Quién es, en todos los canales.</li>
+              <li><strong>Del canal</strong> — <code className="bg-gray-100 px-1 rounded">set-prompt</code> con <code className="bg-gray-100 px-1 rounded">groupId</code>. Cómo se comporta en tu app.</li>
+              <li><strong>Del turno</strong> — <code className="bg-gray-100 px-1 rounded">appendSystemPrompt</code> en el propio mensaje. Quién pregunta, qué plan tiene, qué está viendo. Sin escribir nada en la config.</li>
+            </ol>
+            <div className="mb-6 bg-gray-50 border-2 border-gray-300 rounded-xl p-4 text-sm text-gray-600">
+              La capa 1 se hornea al <strong>arrancar la caja</strong> del agente: cambiarla aplica a conversaciones nuevas, no a una que ya está viva. Las capas 2 y 3 son inmediatas. Para contexto que cambia por usuario o por pantalla, usa la 3.
+            </div>
+
+            <div className="bg-purple-50 border-2 border-purple-300 rounded-xl p-4 text-sm">
+              ¿Prefieres SDK? <code className="bg-white px-1 rounded">eb.fleet.create(&#123; engine, name, systemPrompt &#125;)</code>, <code className="bg-white px-1 rounded">setAgentPrompt</code>, <code className="bg-white px-1 rounded">setToolGroup</code>, <code className="bg-white px-1 rounded">setModel</code> — ver <a href="#sdk" className="underline font-medium">SDK</a>. Y para crear el agente y sacar su token, <a href="#flota" className="underline font-medium">Flota</a>.
             </div>
           </section>
 
