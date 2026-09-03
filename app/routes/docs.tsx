@@ -1926,19 +1926,29 @@ curl -X POST https://www.easybits.cloud/api/v2/agents \\
   -H "Authorization: Bearer $EASYBITS_API_KEY" \\
   -H 'Content-Type: application/json' \\
   -d '{"template":"ghosty-lite","name":"mi-agente","env":{}}'
-# → guarda agentId y embedToken (ese embedToken ES el token del agente)
+# {
+#   "agentId":    "6a99…",          ← lo necesitas en el paso 2
+#   "embedToken": "agt_…",          ← ES el token del agente: va en la URL wss
+#   "sandboxId":  "sb_…",
+#   "agentUrl":   "sandbox://…"     ← provisional, NO la uses
+# }
 
 # 2. esperar running y TOMAR LA URL DE AQUÍ (la de crear es provisional)
 curl https://www.easybits.cloud/api/v2/agents/<agentId> \\
   -H "Authorization: Bearer $EASYBITS_API_KEY"
-# → agentUrl: wss://acp-<agentId>.sandboxes.easybits.cloud/acp
+# {
+#   "status": "running",
+#   "agentUrl": "wss://acp-<agentId>.sandboxes.easybits.cloud/acp"   ← ÉSTA
+# }
 
-# 3. conectar tu cliente
+# 3. conectar tu cliente: la URL del paso 2 + el token del paso 1
 wss://acp-<agentId>.sandboxes.easybits.cloud/acp?token=<embedToken>
+# sin token o con uno equivocado → 401
 
-# 4. tu saldo de tokens
+# 4. tu saldo de tokens (el turno se descuenta de AQUÍ)
 curl https://www.easybits.cloud/api/v2/llm/balance \\
-  -H "Authorization: Bearer $EASYBITS_API_KEY"`}
+  -H "Authorization: Bearer $EASYBITS_API_KEY"
+# { "plan": "Mega", "balance_infos": [{ "remaining_human": "37.3M", ... }] }`}
             />
             <div className="mb-8 bg-yellow-50 border-2 border-yellow-300 rounded-xl p-4 text-sm">
               <strong>Dos cosas que parecen "no funciona" y no lo son:</strong> la URL{" "}
@@ -2071,6 +2081,79 @@ ghosty-tui --agent <agentId> --token <embedToken>`}
               <strong>Todavía no:</strong> las herramientas de EasyBits (archivos, documentos) aún no llegan al modelo en este template — el agente trae sus propias
               herramientas locales (shell, editar archivos, analizar código) y el cerebro medido. Si tu caso necesita que el agente toque tu cuenta de EasyBits, usa por ahora el template{" "}
               <code className="bg-gray-100 px-1 rounded">ghosty-gc</code>.
+            </div>
+
+            <h3 className="text-lg font-bold mb-3 mt-8">Preguntas que siempre salen</h3>
+            <div className="mb-8 border-2 border-black rounded-xl overflow-hidden divide-y divide-gray-200">
+              {[
+                [
+                  "¿De dónde sale el token de la URL wss?",
+                  <>
+                    Es el <code className="bg-gray-100 px-1 rounded">embedToken</code> que te devuelve el paso 1, salvo que tú hayas pasado tu propio{" "}
+                    <code className="bg-gray-100 px-1 rounded">ACP_AGENT_TOKEN</code> en el <code className="bg-gray-100 px-1 rounded">env</code> al crear — entonces es ése.
+                    No se genera en la caja ni cambia con el tiempo: vive con el agente.
+                  </>,
+                ],
+                [
+                  "¿Hace falta el ?token= o puedo omitirlo?",
+                  <>
+                    Hace falta. Sin él (o con uno equivocado) el agente responde{" "}
+                    <code className="bg-gray-100 px-1 rounded">401</code>, tanto en el WebSocket como por HTTP. Si tu cliente no puede poner query params, vale igual como{" "}
+                    <code className="bg-gray-100 px-1 rounded">Authorization: Bearer &lt;token&gt;</code>.
+                  </>,
+                ],
+                [
+                  "Mi cliente pide un ACP_SECRET, ¿qué pongo?",
+                  <>
+                    El mismo token del agente. Hay un secreto interno distinto que la caja genera en cada arranque para hablar consigo misma, pero{" "}
+                    <strong>nunca sale de la microVM</strong> y desde fuera no sirve para nada.
+                  </>,
+                ],
+                [
+                  "¿Y el cwd?",
+                  <>
+                    <code className="bg-gray-100 px-1 rounded">/data/work</code>. Es el único directorio que sobrevive a que la caja se duerma. Si tu cliente manda otro que no exista
+                    dentro (típico: <code className="bg-gray-100 px-1 rounded">/root</code> o la ruta de tu Mac), el agente lo degrada a{" "}
+                    <code className="bg-gray-100 px-1 rounded">/data/work</code> sin avisar.
+                  </>,
+                ],
+                [
+                  "¿Puedo usar mi llave de DeepSeek en vez del cerebro medido?",
+                  <>
+                    Sí: <code className="bg-gray-100 px-1 rounded">{'env: { "DEEPSEEK_API_KEY": "sk-..." }'}</code> al crear. Gana sobre el medido y el gasto va contra tu cuenta de
+                    DeepSeek, no contra tus tokens de EasyBits.
+                  </>,
+                ],
+                [
+                  "¿Y el OAuth de Claude (mi suscripción Max)?",
+                  <>
+                    Hoy no. El proveedor <code className="bg-gray-100 px-1 rounded">anthropic</code> autentica con{" "}
+                    <code className="bg-gray-100 px-1 rounded">x-api-key</code>, así que un <code className="bg-gray-100 px-1 rounded">sk-ant-oat…</code> no entra; una API key normal de
+                    Anthropic sí. Estamos preparando "trae tu suscripción" como opción aparte.
+                  </>,
+                ],
+                [
+                  "Creé el agente y mi cliente no conecta",
+                  <>
+                    Casi siempre es una de tres: estás usando la URL del paso 1 (provisional) en vez de la del paso 2; tu llave no tiene scope{" "}
+                    <strong>WRITE</strong>; o no te quedan tokens (el agente responde{" "}
+                    <code className="bg-gray-100 px-1 rounded">402</code> y parece mudo). Revisa el saldo con{" "}
+                    <code className="bg-gray-100 px-1 rounded">GET /api/v2/llm/balance</code>.
+                  </>,
+                ],
+                [
+                  "¿Se me borra si no lo uso?",
+                  <>
+                    No. Se duerme al rato sin actividad y el siguiente mensaje lo despierta, con su disco y su conversación intactos. La URL nunca cambia. Si pasan días y el host
+                    recicló la caja, <code className="bg-gray-100 px-1 rounded">POST /api/v2/agents/:id/revive</code> lo levanta en la misma URL (eso sí pierde el disco).
+                  </>,
+                ],
+              ].map(([q, a], i) => (
+                <div key={i} className="p-4">
+                  <p className="font-bold text-sm mb-1">{q}</p>
+                  <p className="text-gray-600 text-sm">{a}</p>
+                </div>
+              ))}
             </div>
 
             <h3 className="text-lg font-bold mb-3">Herramientas MCP</h3>
