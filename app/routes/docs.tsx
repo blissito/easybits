@@ -1968,14 +1968,13 @@ curl https://www.easybits.cloud/api/v2/llm/balance \\
               code={`curl -X POST https://www.easybits.cloud/api/v2/agents \\
   -H "Authorization: Bearer $EASYBITS_API_KEY" \\
   -H 'Content-Type: application/json' \\
-  -d '{
-    "template": "ghosty-lite",
-    "name": "mi-agente",
-    "env": { "ACP_AGENT_TOKEN": "un-secreto-que-elijas" }
-  }'
-
-# → { "agentId": "6a99…", "embedToken": "agt_…", "sandboxId": "sb_…", "expiresAt": "…" }`}
+  -d '{ "template": "ghosty-lite", "name": "mi-agente", "env": {} }'`}
             />
+            <p className="text-gray-600 text-sm mb-6">
+              <code className="bg-gray-100 px-1 rounded">env</code> vacío es lo normal. Sólo lo llenas para cambiar de cerebro (ver{" "}
+              <a href="#ghosty-lite" className="underline">Otro cerebro</a>) o para elegir tú el token en vez de usar el{" "}
+              <code className="bg-gray-100 px-1 rounded">embedToken</code>: <code className="bg-gray-100 px-1 rounded">{'{ "ACP_AGENT_TOKEN": "el-tuyo" }'}</code>.
+            </p>
 
             <h3 className="text-lg font-bold mb-3 mt-8">2. Esperar <code className="text-base">running</code></h3>
             <p className="text-gray-600 text-sm mb-4">
@@ -2035,8 +2034,10 @@ ghosty-tui --agent <agentId> --token <embedToken>`}
 
             <h3 className="text-lg font-bold mb-3 mt-8">5. Duerme, despierta y revive</h3>
             <p className="text-gray-600 text-sm mb-4">
-              Al idlear se suspende en vez de morir, y el siguiente mensaje la despierta (~1 s) sin que cambie nada. Si el host recicló la caja tras días sin uso,{" "}
-              <code className="bg-gray-100 px-1 rounded">POST /api/v2/agents/:id/revive</code> la vuelve a levantar sobre el mismo agente — tarda lo que tarda un boot (~10-60 s), así que espera la respuesta en vez de reintentar. Se pierde el disco de la caja anterior.
+              Tras <strong>2 h sin actividad</strong> se duerme (no muere: vive hasta 30 días). El siguiente mensaje la despierta en ~1 s con su disco y su conversación intactos,
+              y la URL nunca cambia. Ojo si estás conectado por WebSocket: al dormirse se te cae el socket y hay que reconectar.{" "}
+              <code className="bg-gray-100 px-1 rounded">POST /api/v2/agents/:id/revive</code> es sólo para cuando el host recicló la caja tras días sin uso — tarda un boot
+              (~10-60 s) y pierde el disco.
             </p>
 
             <h3 className="text-lg font-bold mb-3 mt-8">Otro cerebro (BYOK)</h3>
@@ -2144,7 +2145,7 @@ ghosty-tui --agent <agentId> --token <embedToken>`}
                 [
                   "¿Se me borra si no lo uso?",
                   <>
-                    No. Se duerme al rato sin actividad y el siguiente mensaje lo despierta, con su disco y su conversación intactos. La URL nunca cambia. Si pasan días y el host
+                    No. Tras 2 h sin actividad se duerme, y el siguiente mensaje lo despierta con su disco y su conversación intactos. La URL nunca cambia. Si pasan días y el host
                     recicló la caja, <code className="bg-gray-100 px-1 rounded">POST /api/v2/agents/:id/revive</code> lo levanta en la misma URL (eso sí pierde el disco).
                   </>,
                 ],

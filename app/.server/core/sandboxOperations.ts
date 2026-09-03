@@ -2661,7 +2661,14 @@ async function injectEasybitsAccess(
 //   - `spawnEnv` cifrado en la fila, para poder VOLVER A LEVANTARLA con el mismo env
 //   - `ensureAgentBox()`: recrea sobre la MISMA fila cuando el host ya no la tiene
 const ACP_PUBLIC_DOMAIN = process.env.SANDBOX_PUBLIC_DOMAIN || "sandboxes.easybits.cloud";
-const ACP_IDLE_SECONDS = 900;
+// Cuánto ocio aguanta antes de DORMIRSE (no de morir: con `suspendOnIdle` se suspende y el
+// siguiente mensaje la despierta en ~1s; morir es cosa del hard TTL, 30 días).
+//
+// 2h y no 15min porque un cliente ACP se conecta por WEBSOCKET: al suspenderse se le cae el
+// socket, y reconectar a media sesión es fricción que el usuario ve. Con 15 minutos, una
+// clase o una sesión de trabajo con pausas se cortaba sola. El coste es RAM retenida más
+// tiempo — no cupo: una caja dormida ya cuenta en el budget igual que una viva.
+const ACP_IDLE_SECONDS = 2 * 3600;
 const ACP_HARD_TTL_SECONDS = 30 * 24 * 3600;
 
 export function acpHostFor(agentId: string): string {
