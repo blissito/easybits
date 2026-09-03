@@ -243,6 +243,46 @@ export async function openAgentMessageStream(
 
 const ACP_HEADERS = { Accept: "application/json, text/event-stream" };
 
+/**
+ * EasyBits se identifica ante la caja con el token del agente, igual que ya hacen las ramas
+ * ghostyclaw/openclaw con el embedToken. Hasta ahora la rama ACP no mandaba NADA y sólo
+ * entraba porque el gate de la caja está exento para el gateway del bridge — o sea, por
+ * POSICIÓN DE RED. Esa exención pasa a ser defensa en profundidad; la puerta es esto.
+ * Sin token (cajas viejas, cuyo gate está abierto por no tener credencial) no se manda nada.
+ */
+function acpAuthHeaders(token?: string | null): Record<string, string> {
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+/**
+ * El token de una caja ACP ya creada. Normalmente ES el embedToken (createAgent lo iguala
+ * cuando el caller no trae uno), así que sólo se descifra el `spawnEnv` para el caso en que
+ * el dueño puso el suyo. Devuelve null en cajas viejas sin credencial: su gate está abierto
+ * y mandar un Bearer que no espera nadie no aporta nada.
+ */
+async function acpTokenForAgent(agent: {
+  agentId: string;
+  embedToken: string;
+}): Promise<string | null> {
+  try {
+    const row = await db.agent.findUnique({
+      where: { id: agent.agentId },
+      select: { spawnEnv: true },
+    });
+    if (row?.spawnEnv) {
+      const env = JSON.parse(decryptSecret(row.spawnEnv)) as Record<string, string>;
+      if (env.ACP_AGENT_TOKEN) return env.ACP_AGENT_TOKEN;
+      // spawnEnv SIN token = caja nacida antes de que se garantizara: gate abierto, no
+      // mandamos nada. Devolver el embedToken aquí sería inventarle una credencial que la
+      // caja no conoce.
+      return null;
+    }
+  } catch (e) {
+    console.error(`acp token lookup failed for agent ${agent.agentId}:`, e);
+  }
+  return null;
+}
+
 function parseSSEDataLines(chunk: string): unknown[] {
   // Returns array of parsed JSON values from "data: ..." lines in chunk.
   //
@@ -322,13 +362,16 @@ async function runAcpHandshake(
   sandboxId: string,
   ownerId: string,
   port: number,
-  messagePath: string
+  messagePath: string,
+  /** Credencial con la que EasyBits se identifica ante la caja (ver acpAuthHeaders). */
+  authToken?: string
 ): Promise<{ acpTransportSessionId: string; acpSessionId: string }> {
+  const auth = acpAuthHeaders(authToken);
   // 1. initialize
   const init = await openAgentMessageStream(sandboxId, ownerId, {
     port,
     path: messagePath,
-    headers: ACP_HEADERS,
+    headers: { ...ACP_HEADERS, ...auth },
     rawBody: {
       jsonrpc: "2.0",
       id: 1,
@@ -349,7 +392,7 @@ async function runAcpHandshake(
   const sess = await openAgentMessageStream(sandboxId, ownerId, {
     port,
     path: messagePath,
-    headers: { ...ACP_HEADERS, "Acp-Session-Id": acpTransportSessionId },
+    headers: { ...ACP_HEADERS, ...auth, "Acp-Session-Id": acpTransportSessionId },
     rawBody: {
       jsonrpc: "2.0",
       id: 2,
@@ -408,7 +451,9 @@ function normalizeAcpUsage(u: AcpUsage | undefined): AgentTurnUsage | null {
 // transformAcpStream: takes an ACP SSE stream of JSON-RPC notifications
 // and emits the simple {type:"chunk"|"done"|"error"} SSE format that the
 // embed widget already understands. The widget stays protocol-agnostic.
-function transformAcpStream(
+// Exportada SÓLO para test/acpStream.test.ts: es puro transformador de strings y es donde
+// se perdía el `usage` que el agente sí reporta.
+export function transformAcpStream(
   upstream: ReadableStream<Uint8Array>,
   promptId: number
 ): ReadableStream<Uint8Array> {
@@ -2709,7 +2754,15 @@ async function bringUpAgentRuntime(
   let acpTransportSessionId: string | null = null;
   let agentUrl = ep.agentUrl;
   if (protocol === "acp") {
-    const handshake = await runAcpHandshake(sandboxId, ctx.user.id, port, messagePath);
+    // El env del bring-up trae el token (createAgent lo garantiza para ACP; reviveAgentBox
+    // lo trae del spawnEnv descifrado), así que aquí no hace falta volver a leer la fila.
+    const handshake = await runAcpHandshake(
+      sandboxId,
+      ctx.user.id,
+      port,
+      messagePath,
+      args.env.ACP_AGENT_TOKEN
+    );
     acpSessionId = handshake.acpSessionId;
     acpTransportSessionId = handshake.acpTransportSessionId;
     // La URL que se enseña y se guarda es la ESTABLE. Si el dominio falla, el agente
@@ -2959,6 +3012,14 @@ export async function createAgent(
   //     vez de morir al TTL, y vive hasta ACP_HARD_TTL_SECONDS. Sin `suspendOnIdle` el
   //     reaper del host la DESTRUYE al vencer `timeoutSeconds`, que es como se perdían.
   const isAcp = (tpl.agent?.protocol ?? "sse") === "acp";
+  // Una caja ACP SIEMPRE nace con credencial. Su gate sólo se abre cuando no hay NINGUNA
+  // (compat con las cajas viejas ya desplegadas), así que un `env: {}` —el flujo que
+  // documentamos, y el que usa un taller— dejaba el agente ABIERTO al mundo: con sólo el
+  // hostname, cualquiera le mandaba turnos y gastaba los tokens del dueño. Medido en prod
+  // antes de esto: `POST /acp` sin token → 200.
+  // Se reusa el embedToken, que el dueño ya recibe en la respuesta, para no inventarle otro
+  // secreto que copiar. Si el caller trae el suyo, gana el suyo.
+  if (isAcp && !env.ACP_AGENT_TOKEN) env.ACP_AGENT_TOKEN = embedToken;
   const sb = await createSandbox(ctx, {
     template: params.template,
     timeoutSeconds: isAcp ? ACP_IDLE_SECONDS : params.timeoutSeconds,
@@ -3904,10 +3965,15 @@ export async function openAgentChunkStream(
       throw new Error("ACP agent missing transport session id");
     }
     const promptId = Date.now() & 0x7fffffff;
+    const acpToken = await acpTokenForAgent(agent);
     const upstream = await openAgentMessageStream(agent.sandboxId, agent.ownerId, {
       port: agent.port ?? 3284,
       path: agent.messagePath ?? "/acp",
-      headers: { ...ACP_HEADERS, "Acp-Session-Id": agent.acpTransportSessionId },
+      headers: {
+        ...ACP_HEADERS,
+        ...acpAuthHeaders(acpToken),
+        "Acp-Session-Id": agent.acpTransportSessionId,
+      },
       rawBody: {
         jsonrpc: "2.0",
         id: promptId,
