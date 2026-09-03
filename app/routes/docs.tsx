@@ -1917,39 +1917,63 @@ console.log(status.result);  // resultado final del agente`} />
 
             <h3 className="text-lg font-bold mb-3">De cero a conectado</h3>
             <p className="text-gray-600 text-sm mb-4">
-              El flujo completo. Cada quien con su propia llave: el agente es suyo y su consumo se descuenta de su cuenta.
+              Cuatro llamadas. Cada quien con su propia llave: el agente es suyo y su consumo se descuenta de su cuenta.
             </p>
+
+            <p className="text-sm font-bold mb-2">1. Crear el agente</p>
             <CodeExample
-              title="bash"
-              code={`# 1. crear — con env vacío basta
-curl -X POST https://www.easybits.cloud/api/v2/agents \\
+              title="curl"
+              code={`curl -X POST https://www.easybits.cloud/api/v2/agents \\
   -H "Authorization: Bearer $EASYBITS_API_KEY" \\
   -H 'Content-Type: application/json' \\
-  -d '{"template":"ghosty-lite","name":"mi-agente","env":{}}'
-# {
-#   "agentId":    "6a99…",          ← lo necesitas en el paso 2
-#   "embedToken": "agt_…",          ← ES el token del agente: va en la URL wss
-#   "sandboxId":  "sb_…",
-#   "agentUrl":   "sandbox://…"     ← provisional, NO la uses
-# }
-
-# 2. esperar running y TOMAR LA URL DE AQUÍ (la de crear es provisional)
-curl https://www.easybits.cloud/api/v2/agents/<agentId> \\
-  -H "Authorization: Bearer $EASYBITS_API_KEY"
-# {
-#   "status": "running",
-#   "agentUrl": "wss://acp-<agentId>.sandboxes.easybits.cloud/acp"   ← ÉSTA
-# }
-
-# 3. conectar tu cliente: la URL del paso 2 + el token del paso 1
-wss://acp-<agentId>.sandboxes.easybits.cloud/acp?token=<embedToken>
-# sin token o con uno equivocado → 401
-
-# 4. tu saldo de tokens (el turno se descuenta de AQUÍ)
-curl https://www.easybits.cloud/api/v2/llm/balance \\
-  -H "Authorization: Bearer $EASYBITS_API_KEY"
-# { "plan": "Mega", "balance_infos": [{ "remaining_human": "37.3M", ... }] }`}
+  -d '{ "template": "ghosty-lite", "name": "mi-agente", "env": {} }'`}
             />
+            <ResponseExample
+              code={`{
+  "agentId":    "6a99…",        // lo necesitas en el paso 2
+  "embedToken": "agt_…",        // ES el token del agente: va en la URL wss
+  "sandboxId":  "sb_…",
+  "agentUrl":   "sandbox://…"   // provisional, NO la uses
+}`}
+            />
+
+            <p className="text-sm font-bold mb-2">2. Esperar a que esté listo y tomar la URL</p>
+            <CodeExample
+              title="curl"
+              code={`curl https://www.easybits.cloud/api/v2/agents/<agentId> \\
+  -H "Authorization: Bearer $EASYBITS_API_KEY"`}
+            />
+            <ResponseExample
+              code={`{
+  "status":   "running",
+  "agentUrl":
+    "wss://acp-<agentId>.sandboxes.easybits.cloud/acp"   // ÉSTA
+}`}
+            />
+
+            <p className="text-sm font-bold mb-2">3. Conectar tu cliente</p>
+            <CodeExample
+              title="bash"
+              code={`wss://acp-<agentId>.sandboxes.easybits.cloud/acp?token=<embedToken>`}
+            />
+            <p className="text-gray-600 text-sm mb-6">
+              La URL del paso 2 más el token del paso 1. Sin token, o con uno equivocado, responde{" "}
+              <code className="bg-gray-100 px-1 rounded">401</code>.
+            </p>
+
+            <p className="text-sm font-bold mb-2">4. Ver tu saldo</p>
+            <CodeExample
+              title="curl"
+              code={`curl https://www.easybits.cloud/api/v2/llm/balance \\
+  -H "Authorization: Bearer $EASYBITS_API_KEY"`}
+            />
+            <ResponseExample
+              code={`{
+  "plan": "Mega",
+  "balance_infos": [{ "remaining_human": "37.3M" }]
+}`}
+            />
+
             <div className="mb-8 bg-yellow-50 border-2 border-yellow-300 rounded-xl p-4 text-sm">
               <strong>Dos cosas que parecen "no funciona" y no lo son:</strong> la URL{" "}
               <code className="bg-gray-100 px-1 rounded">wss</code> sale del paso 2, no del 1 — en el 1 todavía viene una provisional{" "}
@@ -1983,19 +2007,32 @@ curl https://www.easybits.cloud/api/v2/llm/balance \\
               <strong>La URL <code className="bg-gray-100 px-1 rounded">wss://</code> sale de aquí, no de la respuesta de crear</strong>: ahí todavía viene una provisional{" "}
               (<code className="bg-gray-100 px-1 rounded">sandbox://…</code>) porque el dominio se ata al terminar el arranque.
             </p>
+            <CodeExample
+              title="curl"
+              code={`curl https://www.easybits.cloud/api/v2/agents/<agentId> \\
+  -H "Authorization: Bearer $EASYBITS_API_KEY"`}
+            />
             <Endpoint
               method="GET"
               path="/api/v2/agents/:agentId"
               description="Estado del agente. Cuando status es running, agentUrl trae la URL WebSocket estable."
               response={`{
-  "agentId": "6a99a0e17b00aaaff1c58280",
-  "status": "running",
-  "agentUrl": "wss://acp-6a99a0e17b00aaaff1c58280.sandboxes.easybits.cloud/acp",
-  "template": "ghosty-lite"
+  "agentId":  "6a99a0e17b00aaaff1c58280",
+  "status":   "running",
+  "template": "ghosty-lite",
+  "agentUrl":
+    "wss://acp-6a99a0e17b00aaaff1c58280.sandboxes.easybits.cloud/acp"
 }`}
             />
 
             <h3 className="text-lg font-bold mb-3 mt-8">3. Hablarle</h3>
+            <CodeExample
+              title="curl"
+              code={`curl -N -X POST https://www.easybits.cloud/api/v2/agents/<agentId>/message \\
+  -H "Authorization: Bearer $EASYBITS_API_KEY" \\
+  -H 'Content-Type: application/json' \\
+  -d '{"content":"hola, ¿qué puedes hacer?"}'`}
+            />
             <Endpoint
               method="POST"
               path="/api/v2/agents/:agentId/message"
@@ -2008,7 +2045,7 @@ curl https://www.easybits.cloud/api/v2/llm/balance \\
 data: {"type":"chunk","value":", ¿en qué te ayudo?"}
 data: {"type":"usage","inputTokens":8421,"outputTokens":112,"totalTokens":8533}
 data: {"type":"done","stopReason":"end_turn"}`}
-              note="El evento usage llega justo antes del done, cuando el agente lo reporta. Son totales de la SESIÓN, no del turno."
+              note="Eso de arriba es lo que RECIBES, no lo que mandas. El evento usage llega justo antes del done, cuando el agente lo reporta, y son totales de la SESIÓN, no del turno."
             />
 
             <h3 className="text-lg font-bold mb-3 mt-8">4. Desde tu editor o cliente ACP</h3>
@@ -3085,13 +3122,50 @@ function TabbedCode({ tabs }: { tabs: { label: string; code: string }[] }) {
 
 function CodeExample({ title, code }: { title: string; code: string }) {
   const lang = LANG_MAP[title.toLowerCase()] || "typescript";
+  const [copied, setCopied] = useState(false);
+  // CodeBlock trae botón de copiar, pero sólo en su modo con header propio; aquí se usa
+  // `bare` porque el header lo pone esta tarjeta, así que el botón hay que ponerlo también.
+  // Sin él, un doc lleno de comandos obliga a seleccionar a mano y a copiar de más.
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(code.trim());
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      /* sin portapapeles (http, permisos): el texto sigue siendo seleccionable */
+    }
+  };
   return (
     <div className="border-2 border-black rounded-xl overflow-hidden">
       <div className="flex items-center justify-between bg-gray-800 px-4 py-2">
-        <span className="text-white font-medium text-sm">{title}</span>
-        <span className="text-gray-400 text-xs uppercase font-mono">{lang}</span>
+        <div className="flex items-center gap-2">
+          <span className="text-white font-medium text-sm">{title}</span>
+          <span className="text-gray-400 text-xs uppercase font-mono">{lang}</span>
+        </div>
+        <button
+          onClick={copy}
+          title="Copiar"
+          className="px-2 py-1 text-xs bg-gray-700 hover:bg-gray-600 text-white rounded border border-gray-600 transition-colors"
+        >
+          {copied ? "¡Copiado!" : "Copiar"}
+        </button>
       </div>
       <CodeBlock bare language={lang}>
+        {code}
+      </CodeBlock>
+    </div>
+  );
+}
+
+/** Respuesta de una llamada. Va en su propia tarjeta y SIN botón: nadie copia una respuesta,
+ *  y mezclarla con la petición hace que quien copia se lleve el JSON pegado al comando. */
+function ResponseExample({ code }: { code: string }) {
+  return (
+    <div className="border-2 border-gray-300 rounded-xl overflow-hidden mb-6">
+      <div className="bg-gray-100 px-4 py-2 text-xs uppercase font-mono text-gray-500 tracking-wide">
+        Respuesta
+      </div>
+      <CodeBlock bare language="json">
         {code}
       </CodeBlock>
     </div>
