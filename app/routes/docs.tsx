@@ -1922,8 +1922,10 @@ console.log(status.result);  // resultado final del agente`} />
 
             <p className="text-sm font-bold mb-2">1. Crear el agente</p>
             <CodeExample
-              title="curl"
-              code={`curl -X POST https://www.easybits.cloud/api/v2/agents \\
+              title="bash"
+              code={`export EASYBITS_API_KEY="eb_sk_live_…"   # la tuya, de /dash/developer
+
+curl -X POST https://www.easybits.cloud/api/v2/agents \\
   -H "Authorization: Bearer $EASYBITS_API_KEY" \\
   -H 'Content-Type: application/json' \\
   -d '{ "template": "ghosty-lite", "name": "mi-agente", "env": {} }'`}
@@ -1938,23 +1940,30 @@ console.log(status.result);  // resultado final del agente`} />
             />
 
             <p className="text-sm font-bold mb-2">2. Esperar a que esté listo y tomar la URL</p>
+            <p className="text-gray-600 text-sm mb-3">
+              Copia de la respuesta anterior el <code className="bg-gray-100 px-1 rounded">agentId</code> y el{" "}
+              <code className="bg-gray-100 px-1 rounded">embedToken</code>, y guárdalos en variables:
+            </p>
             <CodeExample
-              title="curl"
-              code={`curl https://www.easybits.cloud/api/v2/agents/<agentId> \\
+              title="bash"
+              code={`export AGENT_ID="6a99…"          # el agentId de la respuesta
+export AGENT_TOKEN="agt_…"       # el embedToken de la respuesta
+
+curl https://www.easybits.cloud/api/v2/agents/$AGENT_ID \\
   -H "Authorization: Bearer $EASYBITS_API_KEY"`}
             />
             <ResponseExample
               code={`{
   "status":   "running",
   "agentUrl":
-    "wss://acp-<agentId>.sandboxes.easybits.cloud/acp"   // ÉSTA
+    "wss://acp-6a99….sandboxes.easybits.cloud/acp"   // ÉSTA
 }`}
             />
 
             <p className="text-sm font-bold mb-2">3. Conectar tu cliente</p>
             <CodeExample
               title="bash"
-              code={`wss://acp-<agentId>.sandboxes.easybits.cloud/acp?token=<embedToken>`}
+              code={`echo "wss://acp-$AGENT_ID.sandboxes.easybits.cloud/acp?token=$AGENT_TOKEN"`}
             />
             <p className="text-gray-600 text-sm mb-6">
               La URL del paso 2 más el token del paso 1. Sin token, o con uno equivocado, responde{" "}
@@ -2009,7 +2018,7 @@ console.log(status.result);  // resultado final del agente`} />
             </p>
             <CodeExample
               title="curl"
-              code={`curl https://www.easybits.cloud/api/v2/agents/<agentId> \\
+              code={`curl https://www.easybits.cloud/api/v2/agents/$AGENT_ID \\
   -H "Authorization: Bearer $EASYBITS_API_KEY"`}
             />
             <Endpoint
@@ -2028,7 +2037,7 @@ console.log(status.result);  // resultado final del agente`} />
             <h3 className="text-lg font-bold mb-3 mt-8">3. Hablarle</h3>
             <CodeExample
               title="curl"
-              code={`curl -N -X POST https://www.easybits.cloud/api/v2/agents/<agentId>/message \\
+              code={`curl -N -X POST https://www.easybits.cloud/api/v2/agents/$AGENT_ID/message \\
   -H "Authorization: Bearer $EASYBITS_API_KEY" \\
   -H 'Content-Type: application/json' \\
   -d '{"content":"hola, ¿qué puedes hacer?"}'`}
@@ -2055,14 +2064,14 @@ data: {"type":"done","stopReason":"end_turn"}`}
             </p>
             <CodeExample
               title="bash"
-              code={`# La URL sale de agentUrl; el token es el ACP_AGENT_TOKEN que pusiste al crear.
-wss://acp-<agentId>.sandboxes.easybits.cloud/acp?token=<ACP_AGENT_TOKEN>
+              code={`# La URL sale de agentUrl; el token es el embedToken (o el ACP_AGENT_TOKEN que pusiste tú).
+echo "wss://acp-$AGENT_ID.sandboxes.easybits.cloud/acp?token=$AGENT_TOKEN"
 
 # Cliente que no habla ACP directo:
-npx ghosty-acp "wss://acp-<agentId>.sandboxes.easybits.cloud/acp?token=<ACP_AGENT_TOKEN>"
+npx ghosty-acp "wss://acp-$AGENT_ID.sandboxes.easybits.cloud/acp?token=$AGENT_TOKEN"
 
 # Chat por terminal (viene en tuiCommand al crear):
-ghosty-tui --agent <agentId> --token <embedToken>`}
+ghosty-tui --agent $AGENT_ID --token $AGENT_TOKEN`}
             />
             <p className="text-gray-600 text-sm mb-6">
               El puerto ya está expuesto; no hace falta <code className="bg-gray-100 px-1 rounded">/expose</code>. El <code className="bg-gray-100 px-1 rounded">cwd</code> de la sesión es{" "}
