@@ -2082,7 +2082,9 @@ echo "wss://acp-$AGENT_ID.sandboxes.easybits.cloud/acp?token=$AGENT_TOKEN"
 GHOSTY_ACP_TOKEN=$AGENT_TOKEN \\
   npx ghosty-acp "wss://acp-$AGENT_ID.sandboxes.easybits.cloud/acp"
 
-# C) Chat por terminal (el comando viene hecho en tuiCommand al crear):
+# C) Chat por terminal. El comando viene hecho en el campo tuiCommand al crear, pero el
+#    binario hay que instalarlo antes (es Rust, NO está en npm):
+#      cargo install --git https://github.com/blissito/ghosty-tui
 ghosty-tui --agent $AGENT_ID --token $AGENT_TOKEN`}
             />
             <p className="text-gray-600 text-sm mb-6">
