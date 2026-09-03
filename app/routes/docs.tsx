@@ -1921,11 +1921,15 @@ console.log(status.result);  // resultado final del agente`} />
             </p>
 
             <p className="text-sm font-bold mb-2">1. Crear el agente</p>
+            <p className="text-gray-600 text-sm mb-2">
+              Primero tu llave (ésta la editas: pega la tuya, de{" "}
+              <a href="/dash/developer" className="underline">Dashboard → Developer</a>):
+            </p>
+            <CodeExample title="bash" code={`export EASYBITS_API_KEY="eb_sk_live_…"`} />
+            <p className="text-gray-600 text-sm mb-2 mt-4">Y ahora sí, el comando tal cual:</p>
             <CodeExample
               title="bash"
-              code={`export EASYBITS_API_KEY="eb_sk_live_…"   # la tuya, de /dash/developer
-
-curl -X POST https://www.easybits.cloud/api/v2/agents \\
+              code={`curl -X POST https://www.easybits.cloud/api/v2/agents \\
   -H "Authorization: Bearer $EASYBITS_API_KEY" \\
   -H 'Content-Type: application/json' \\
   -d '{ "template": "ghosty-lite", "name": "mi-agente", "env": {} }'`}
@@ -1946,10 +1950,13 @@ curl -X POST https://www.easybits.cloud/api/v2/agents \\
             </p>
             <CodeExample
               title="bash"
-              code={`export AGENT_ID="6a99…"          # el agentId de la respuesta
-export AGENT_TOKEN="agt_…"       # el embedToken de la respuesta
-
-curl https://www.easybits.cloud/api/v2/agents/$AGENT_ID \\
+              code={`export AGENT_ID="6a99…"
+export AGENT_TOKEN="agt_…"`}
+            />
+            <p className="text-gray-600 text-sm mb-2 mt-4">Y consultas su estado:</p>
+            <CodeExample
+              title="bash"
+              code={`curl https://www.easybits.cloud/api/v2/agents/$AGENT_ID \\
   -H "Authorization: Bearer $EASYBITS_API_KEY"`}
             />
             <ResponseExample
@@ -3077,6 +3084,11 @@ https://www.easybits.cloud/api/mcp/all` },
 
 const LANG_MAP: Record<string, string> = {
   curl: "bash",
+  // Sin estas tres, un bloque titulado "bash" caía al default `typescript` y la etiqueta de la
+  // tarjeta decía TYPESCRIPT encima de un comando de shell.
+  bash: "bash",
+  sh: "bash",
+  shell: "bash",
   sdk: "typescript",
   header: "http",
   "node.js": "javascript",
