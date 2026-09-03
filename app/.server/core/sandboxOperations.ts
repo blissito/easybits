@@ -2507,6 +2507,7 @@ const EASYBITS_TOOLED_TEMPLATES = new Set<string>([
   "claude-worker",
   "codex-worker",
   "ghosty-gc",
+  "ghosty-lite",
   "open-ghosty",
   "lang-ghosty",
   "rust-ghosty",
@@ -2521,6 +2522,10 @@ const EASYBITS_MINTING_TEMPLATES = new Set<string>([
   "claude-worker",
   "codex-worker",
   "ghosty-gc",
+  // ghosty-lite: la EASYBITS_API_KEY es a la vez su cerebro (provider `easybits` →
+  // proxy medido) y su acceso al MCP. Sin ella arranca mudo Y sin LLM, así que se
+  // mintea igual que un worker de flota.
+  "ghosty-lite",
 ]);
 
 async function injectEasybitsAccess(
@@ -2997,6 +3002,13 @@ type BrandConfig = {
   template: SandboxTemplate;
   name: string;
   prompt: string;
+  /**
+   * "provider/model" por default de la marca, cuando el caller no pide uno.
+   * Sin esto todo caía en `anthropic/MANAGED_MODEL` — que para una marca cuyo
+   * cerebro es el proxy medido de EasyBits significaba exigir una llave de
+   * Anthropic que no usa.
+   */
+  defaultModel?: string;
   envBuilder: (hostKey: string, isOAuth: boolean) => Record<string, string>;
 };
 
@@ -3085,16 +3097,25 @@ const BRAND_DEFAULTS: Record<string, BrandConfig> = {
   },
   "ghosty-lite": {
     // Desde 2026-09-02: el fork Rust de goose (ACP nativo), NO el Node con WhatsApp.
-    // Mismo trato que goose-managed: el binario lee GHOSTY_PROVIDER / GHOSTY_MODEL y la
-    // llave por nombre; el prompt del sistema no entra por env (usa .goosehints horneado).
-    // Sin canal WhatsApp: se habla por /message (ACP) o por WebSocket desde un editor.
+    // El binario lee GHOSTY_PROVIDER / GHOSTY_MODEL y la llave por nombre; el prompt del
+    // sistema no entra por env (usa .goosehints horneado). Sin canal WhatsApp: se habla
+    // por /message (ACP) o por WebSocket desde un editor.
+    //
+    // Cerebro = provider declarativo `easybits` horneado en el fork
+    // (crates/goose-providers/src/declarative/definitions/easybits.json): OpenAI-compatible
+    // contra el proxy MEDIDO /api/v2/llm/v1, con api_key_env = EASYBITS_API_KEY. Esa es la
+    // gracia: UNA llave —la del DUEÑO, no la de la casa— es a la vez su LLM (se descuenta de
+    // SUS tokens) y su MCP. Antes iba con GHOSTY_PROVIDER=anthropic + la llave de Fly
+    // (SANDBOX_HOST_ANTHROPIC_KEY): consumo de la casa, sin techo y sin medir.
+    // La llave la resuelve/mintea injectEasybitsAccess (ghosty-lite está en los dos sets).
+    // BYOK sigue disponible: model "deepseek/…" + providerKey → off-meter.
     template: "ghosty-lite",
     name: "Ghosty Lite",
     prompt: "",
-    envBuilder: (hostKey) => ({
-      GHOSTY_PROVIDER: "anthropic",
-      GHOSTY_MODEL: MANAGED_MODEL,
-      ANTHROPIC_API_KEY: hostKey,
+    defaultModel: "easybits/deepseek-v4-pro",
+    envBuilder: () => ({
+      GHOSTY_PROVIDER: "easybits",
+      GHOSTY_MODEL: "deepseek-v4-pro",
     }),
   },
   "goose-managed": {
@@ -3159,7 +3180,9 @@ export async function spawnAutonomous(
 
   // Resolve provider + model. openclaw expects "provider/model"; chat-anthropic
   // pre-supposes anthropic.
-  const [reqProvider, reqModel] = (params.model ?? `anthropic/${MANAGED_MODEL}`).split("/", 2);
+  const [reqProvider, reqModel] = (
+    params.model ?? cfg.defaultModel ?? `anthropic/${MANAGED_MODEL}`
+  ).split("/", 2);
   const provider = reqProvider || "anthropic";
   const model = reqModel || MANAGED_MODEL;
 
@@ -3167,7 +3190,11 @@ export async function spawnAutonomous(
   // (only anthropic supported today). Throw clear error otherwise.
   let providerKey = params.providerKey?.trim();
   let isOAuth = params.providerKeyKind === "oauth";
-  if (!providerKey) {
+  // `easybits` no es un proveedor con llave propia: el cerebro pega al proxy medido con
+  // la EASYBITS_API_KEY del dueño, que resuelve/mintea injectEasybitsAccess más abajo.
+  // Sin este corto-circuito caería en el throw de "requires the user to save their API key".
+  const providerIsEasybits = provider === "easybits";
+  if (!providerKey && !providerIsEasybits) {
     if (provider !== "anthropic") {
       throw new Error(
         `Provider "${provider}" requires the user to save their API key in /app/settings/credentials. Only anthropic has a host-managed fallback.`
@@ -3180,34 +3207,37 @@ export async function spawnAutonomous(
       );
     }
     isOAuth = providerKey.startsWith("sk-ant-oat");
-  } else if (params.providerKeyKind === undefined && provider === "anthropic") {
+  } else if (providerKey && params.providerKeyKind === undefined && provider === "anthropic") {
     // Backward-compat: si el caller no pasó kind explícito y el key tiene
     // prefix sk-ant-oat, lo tratamos como oauth.
     isOAuth = providerKey.startsWith("sk-ant-oat");
   }
+  // A esta altura la llave está resuelta o ya se lanzó — salvo en `easybits`, que no
+  // tiene llave de proveedor (usa la EASYBITS_API_KEY del dueño) y deja esto vacío.
+  const resolvedKey = providerKey ?? "";
 
   // Build env: provider-specific *_API_KEY/*_AUTH_TOKEN + brand-shared envs.
   // The runtime wrapper (start-runtime.sh) reads these and writes the right
   // auth-profiles.json entry: AUTH_TOKEN env → type:"token", API_KEY → "api_key".
-  const env: Record<string, string> = cfg.envBuilder(providerKey, isOAuth);
+  const env: Record<string, string> = cfg.envBuilder(resolvedKey, isOAuth);
   if (provider === "anthropic") {
     if (isOAuth) {
-      env.ANTHROPIC_AUTH_TOKEN = providerKey;
-      env.ANTHROPIC_API_KEY = providerKey; // some openclaw paths still read API_KEY
+      env.ANTHROPIC_AUTH_TOKEN = resolvedKey;
+      env.ANTHROPIC_API_KEY = resolvedKey; // some openclaw paths still read API_KEY
     } else {
-      env.ANTHROPIC_API_KEY = providerKey;
+      env.ANTHROPIC_API_KEY = resolvedKey;
     }
   }
   if (provider === "openai") {
     if (isOAuth) {
-      env.OPENAI_AUTH_TOKEN = providerKey;
+      env.OPENAI_AUTH_TOKEN = resolvedKey;
     } else {
-      env.OPENAI_API_KEY = providerKey;
+      env.OPENAI_API_KEY = resolvedKey;
     }
   }
-  if (provider === "google") env.GEMINI_API_KEY = providerKey;
-  if (provider === "deepseek") env.DEEPSEEK_API_KEY = providerKey;
-  if (provider === "openrouter") env.OPENROUTER_API_KEY = providerKey;
+  if (provider === "google") env.GEMINI_API_KEY = resolvedKey;
+  if (provider === "deepseek") env.DEEPSEEK_API_KEY = resolvedKey;
+  if (provider === "openrouter") env.OPENROUTER_API_KEY = resolvedKey;
 
   if (cfg.template === "openclaw" || cfg.template === "ghostyclaw") {
     env.SYSTEM_PROMPT = params.systemPrompt ?? cfg.prompt;
@@ -3215,6 +3245,8 @@ export async function spawnAutonomous(
   if (cfg.template === "ghosty-lite") {
     // El proveedor del "provider/model" pedido, en el nombre que entiende el binario.
     const GHOSTY_PROVIDERS: Record<string, string> = {
+      // `easybits` = provider declarativo horneado en el fork → proxy medido.
+      easybits: "easybits",
       anthropic: "anthropic",
       openai: "openai",
       deepseek: "custom_deepseek",

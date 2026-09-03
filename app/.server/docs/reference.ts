@@ -753,9 +753,9 @@ MCP: \`agent_destroy({ agentId })\` — destruir agente
 ### 🆕 Agentes ACP: \`ghosty-lite\` y \`goose\`
 Agentes que hablan [ACP](https://agentclientprotocol.com) (Agent Client Protocol) en su propia microVM: \`ghosty-lite\` (Rust, ligero, nuestro) y \`goose\` (AAIF / Linux Foundation). Mismo flujo con \`POST /agents\`; lo que cambia es el \`env\` y lo que significa \`running\`.
 
-**1. Crear** — \`env\` lleva proveedor, modelo y llave:
-\`{ GHOSTY_PROVIDER: "anthropic", GHOSTY_MODEL: "claude-haiku-4-5", ANTHROPIC_API_KEY: "..." }\` (ghosty-lite) · goose usa \`GOOSE_PROVIDER\` / \`GOOSE_MODEL\`.
-Proveedores: \`anthropic\`, \`openai\`, \`custom_deepseek\` (+ \`DEEPSEEK_API_KEY\`), \`ollama\`… Si sólo mandas \`DEEPSEEK_API_KEY\`, la caja elige DeepSeek sola.
+**1. Crear** — con \`env: {}\` basta: \`ghosty-lite\` arranca con **tu propia llave EasyBits** como cerebro (proveedor \`easybits\`, modelo \`deepseek-v4-pro\`) y con el MCP de EasyBits ya conectado. Es la misma llave para las dos cosas: los turnos se descuentan de **tus** tokens LLM (\`GET /llm/balance\`) y el agente opera sobre **tu** cuenta. Si no tienes una guardada, se mintea una con los scopes de la llave que hizo la llamada.
+Para otro cerebro, el \`env\` manda: \`{ GHOSTY_PROVIDER: "anthropic", GHOSTY_MODEL: "claude-haiku-4-5", ANTHROPIC_API_KEY: "..." }\` · goose usa \`GOOSE_PROVIDER\` / \`GOOSE_MODEL\`.
+Proveedores: \`easybits\` (medido, default), \`anthropic\`, \`openai\`, \`custom_deepseek\` (+ \`DEEPSEEK_API_KEY\`, off-meter), \`ollama\`… Si sólo mandas \`DEEPSEEK_API_KEY\`, la caja elige DeepSeek sola.
 
 **2. Esperar \`running\`** — para ACP significa que Easybits ya hizo \`initialize\` + \`session/new\` y guardó la sesión (~6 s desde crear). Antes de eso \`/message\` no tiene sesión.
 
@@ -767,7 +767,7 @@ Proveedores: \`anthropic\`, \`openai\`, \`custom_deepseek\` (+ \`DEEPSEEK_API_KE
 
 **5. Identidad estable y revive** — la URL lleva el \`agentId\`, no la máquina: si el host recicla la caja (días sin uso), la URL sigue siendo la misma. \`POST /agents/:id/revive\` (Bearer \`eb_sk\` del dueño **o** el \`embedToken\` / \`ACP_AGENT_TOKEN\` del agente) la vuelve a levantar sobre el mismo agente y devuelve \`{ agentId, sandboxId, status, wsUrl }\`; si la caja existe no hace nada. Tarda lo que tarda el boot (~10-60 s): espera la respuesta, no reintentes. Se pierde el disco (\`/data\`) de la caja anterior. \`/message\` lo hace solo cuando encuentra el agente en \`lost\`. Un cliente WebSocket lo reconoce por un \`404\` con \`preview host not found\` en la URL del agente.
 
-Consumo: cada turno devuelve \`usage {inputTokens, outputTokens, totalTokens}\`; se registra igual para ghosty-lite y goose. Tools propias por ACP (\`mcpServers\` stdio/http en \`session/new\`): hoy sólo por WebSocket (Ghosty Teams, editores); por esta API REST aún no.
+Consumo: con el cerebro \`easybits\` (el default) lo mide el proxy y se ve en \`GET /llm/balance\`; con un proveedor propio (BYOK) el gasto es contra ese proveedor y EasyBits no lo cuenta. Ojo: el SSE de \`/message\` **no** trae hoy el \`usage\` por turno — el agente lo emite por ACP, pero la traducción a \`{type:"chunk"}\` lo descarta. Tools propias por ACP (\`mcpServers\` stdio/http en \`session/new\`): hoy sólo por WebSocket (Ghosty Teams, editores); por esta API REST aún no.
 
 ### Agent Run (one-shot)
 MCP: \`agent_run({ prompt, model?, maxTurns? })\` — agente Claude asíncrono
