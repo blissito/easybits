@@ -61,12 +61,62 @@ export default function DocsPage() {
   // useEffect([location.hash]) de abajo, ya en cliente.
   const [activeSection, setActiveSection] = useState("quickstart");
 
+  // Entrar por #ancla NO es un scroll y ya: el resaltado de código (CodeBlock
+  // es async), las fuentes y las imágenes cambian la altura de lo que queda
+  // ARRIBA del destino DESPUÉS de haber saltado, así que un scrollIntoView
+  // único aterriza en una sección anterior — el link se ve roto aunque la
+  // sección exista. Se re-ancla cada frame hasta que la posición se estabiliza
+  // (o hasta el tope de tiempo), y se abandona en cuanto el usuario toma el
+  // control del scroll.
   useEffect(() => {
     const hash = location.hash.replace("#", "");
-    if (hash && SECTIONS.some((s) => s.id === hash)) {
-      setActiveSection(hash);
-      document.getElementById(hash)?.scrollIntoView({ behavior: "smooth" });
+    if (!hash || !SECTIONS.some((s) => s.id === hash)) return;
+    setActiveSection(hash);
+
+    const TOP = 80; // hueco sobre el título, igual que la línea del scrollspy
+    // Tope generoso a propósito: esta página mide ~70.000px y el resaltado de
+    // código sigue creciendo varios segundos. Con 2.5s el ancla se soltaba a
+    // media persecución y el lector aterrizaba 40.000px arriba de su sección.
+    const DEADLINE = 10_000;
+    const started = performance.now();
+    let raf = 0, stable = 0, done = false, lastH = 0;
+
+    const stop = () => {
+      done = true;
+      cancelAnimationFrame(raf);
+      for (const ev of ["wheel", "touchstart", "keydown"]) {
+        window.removeEventListener(ev, stop);
+      }
+    };
+    for (const ev of ["wheel", "touchstart", "keydown"]) {
+      window.addEventListener(ev, stop, { passive: true, once: true });
     }
+
+    const tick = () => {
+      if (done) return;
+      const el = document.getElementById(hash);
+      if (el) {
+        const delta = el.getBoundingClientRect().top - TOP;
+        // La altura del documento es el testigo de que el layout dejó de
+        // moverse: mientras cambie, algo sigue cargando ARRIBA del destino y
+        // hay que volver a anclarse aunque este frame ya estuviera en su sitio.
+        const h = document.documentElement.scrollHeight;
+        const settled = h === lastH;
+        lastH = h;
+        // Salto instantáneo, no `smooth`: una animación en curso pelea con la
+        // corrección del siguiente frame y el destino nunca se alcanza.
+        if (Math.abs(delta) > 2) {
+          window.scrollBy({ top: delta, behavior: "auto" });
+          stable = 0;
+        } else if (settled && ++stable >= 10) {
+          return stop(); // en su sitio y con el layout quieto: soltamos el ancla
+        }
+      }
+      if (performance.now() - started > DEADLINE) return stop();
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return stop;
   }, [location.hash]);
 
   // Scrollspy a prueba de contenedor: un loop requestAnimationFrame que SONDEA
