@@ -254,6 +254,7 @@ import { createFormConfig, generateFormHtml, escapeHtml } from "../core/formOper
 import { db } from "../db";
 import type { AuthContext } from "../apiAuth";
 import { requireScope } from "../apiAuth";
+import { buildCapabilitiesView, applyCapabilityAction, CAPABILITY_ACTIONS } from "../core/fleetCapabilityActions";
 import { checkSandboxRateLimit } from "../rateLimiter";
 
 type AutoDeployInfo =
@@ -283,6 +284,13 @@ async function autoDeployIfPublished(ctx: AuthContext, documentId: string): Prom
 // `server.tool` (abajo) envuelve sus handlers con un rate limit keyed por API
 // key/usuario, compartido con el path REST (mismo bucket `sb:create`/`sb:op`).
 // "create" = spawn de microVM/agente (caro); "op" = todo lo demás que carga el host.
+// FleetAgent del caller: mismo error para "no existe" y "no es tuyo" (no filtra existencia).
+async function ownedFleetAgent(ctx: AuthContext, fleetAgentId: string) {
+  const fa = await db.fleetAgent.findUnique({ where: { id: fleetAgentId } });
+  if (!fa || fa.ownerId !== ctx.user.id) throw new Error("fleet agent not found");
+  return fa;
+}
+
 const SANDBOX_TOOL_KIND: Record<string, "create" | "op"> = {
   // Spawns (comparten el presupuesto de 10/min)
   sandbox_create: "create",
@@ -345,6 +353,9 @@ const SANDBOX_TOOL_KIND: Record<string, "create" | "op"> = {
   agent_run_destroy: "op",
   agent_message: "op",
   agent_list: "op",
+  fleet_agent_list: "op",
+  fleet_agent_capabilities: "op",
+  fleet_agent_configure: "op",
   agent_install_skill: "op",
   agent_record: "op",
   agent_recording_start: "op",
@@ -2772,6 +2783,59 @@ How to embed safely (the only reliable rule):
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await listAgents(ctx);
       return ok(paginate(result, { total: result.length }));
+    })
+  );
+
+  // ── Flota: configurar un FleetAgent por MCP (espejo agent-native de /capabilities) ──
+  server.tool(
+    "fleet_agent_list",
+    "Lista los agentes de la FLOTA (FleetAgent: WhatsApp/WABA/web/Teams) de la cuenta. Distinto de `agent_list` (cajas persistentes). Devuelve { items:[{ id, name, assistantName, workerTemplate, hasOwnNumber, createdAt }], total }. Nunca expone el token del agente. Usa el `id` en `fleet_agent_capabilities` / `fleet_agent_configure`.",
+    {},
+    wrapHandler(async (_params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      requireScope(ctx, "READ");
+      const rows = await db.fleetAgent.findMany({
+        where: { ownerId: ctx.user.id },
+        orderBy: { createdAt: "desc" },
+        select: { id: true, name: true, assistantName: true, workerTemplate: true, hasOwnNumber: true, createdAt: true },
+      });
+      return ok(paginate(rows, { total: rows.length }));
+    })
+  );
+
+  server.tool(
+    "fleet_agent_capabilities",
+    "Estado de configuración de un FleetAgent (lo mismo que GET /api/v2/fleet-agents/:id/capabilities): conectores (`capabilities` con `secretsPresent`), builtins, `groups` (config por canal; \"*\" = default del agente), `agent` (prompt/modelo/effort/buckets), `engines`, `models`, `buckets`, `skills`, `customMcps`. Úsalo antes de `fleet_agent_configure` para ver qué hay y verificar después.",
+    {
+      fleetAgentId: z.string().describe("id del FleetAgent (de fleet_agent_list)"),
+      q: z.string().optional().describe("filtro del picker de archivos del owner (ownerFiles)"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      requireScope(ctx, "READ");
+      const fa = await ownedFleetAgent(ctx, params.fleetAgentId);
+      return ok(await buildCapabilitiesView(fa, params.q ?? null));
+    })
+  );
+
+  server.tool(
+    "fleet_agent_configure",
+    "Aplica UNA mutación de configuración a un FleetAgent — el mismo contrato que POST /api/v2/fleet-agents/:id/capabilities. `action` + `params` con los campos de esa acción. Por agente: set-agent-prompt{systemPrompt} · set-name{name} · set-model{model} · set-effort{effort} · set-engine{engine} · set-secret{name,value} (vault del owner) · add-mcp{name,url|pkg,requiredSecret?} (http → Authorization: Bearer <secret>) · remove-mcp{name} · add-skill{files[],name?,description?} · toggle-skill{skillId,on} · delete-skill{skillId} · toggle-own-number{on} · connect-teams · recycle-box. Por canal (params.groupId; \"*\" = todos): set-cap-level{cap,level:off|read|write} (ENCIENDE un MCP añadido con add-mcp — add-mcp solo lo registra) · toggle-builtin{builtin,on} · set-prompt{systemPrompt} · set-toolgroup{buckets[],inherit?} · set-tool-deny{tool,on} · toggle-asset{fileId,on} · set-db-allow{dbAllow[]}. Devuelve { ok:true, ... } o error.",
+    {
+      fleetAgentId: z.string().describe("id del FleetAgent (de fleet_agent_list)"),
+      action: z.enum(CAPABILITY_ACTIONS).describe("acción a aplicar"),
+      params: z.record(z.unknown()).optional().describe("campos de la acción (groupId incluido para las de canal)"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      requireScope(ctx, "WRITE");
+      const fa = await ownedFleetAgent(ctx, params.fleetAgentId);
+      const { status, body } = await applyCapabilityAction(fa, { ...(params.params ?? {}), action: params.action });
+      if (status >= 400) {
+        const err = (body as { error?: string } | null)?.error ?? "capability action failed";
+        return fail(err, { status, action: params.action });
+      }
+      return ok(body);
     })
   );
 

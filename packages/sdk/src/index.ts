@@ -1951,6 +1951,12 @@ export class EasybitsClient {
       /** Recicla las cajas vivas y dormidas del agente (respalda conversaciones antes). El
        *  siguiente turno arranca una caja nueva con env fresco: motor, modelo, llave del motor. */
       recycleBox: (id: string, token: string) => post(id, token, { action: "recycle-box" }) as Promise<{ ok: boolean; recycled: number }>,
+      /** Cambia el motor (claude/deepseek/codex…). Recicla las cajas del agente solo. */
+      setEngine: (id: string, token: string, engine: string) => post(id, token, { action: "set-engine", engine }),
+      /** Crea una skill desde fileIds ya subidos a Files (files[0] = SKILL.md). */
+      addSkill: (id: string, token: string, s: { files: string[]; name?: string; description?: string }) =>
+        post(id, token, { action: "add-skill", ...s }) as Promise<{ ok: boolean; skillId: string }>,
+      connectTeams: (id: string, token: string) => post(id, token, { action: "connect-teams" }),
 
       // ── Config: per-channel mutations (groupId; "*" = agent default) ──
       setGroupPrompt: (id: string, token: string, groupId: string, systemPrompt: string) =>
@@ -1963,6 +1969,12 @@ export class EasybitsClient {
         post(id, token, { action: "set-toolgroup", groupId, ...p }),
       toggleAsset: (id: string, token: string, groupId: string, p: { fileId: string; on: boolean }) =>
         post(id, token, { action: "toggle-asset", groupId, ...p }),
+      /** Namespaces de DB que el agente puede tocar en ese canal ([] = todas). */
+      setDbAllow: (id: string, token: string, groupId: string, dbAllow: string[]) =>
+        post(id, token, { action: "set-db-allow", groupId, dbAllow }),
+      /** on:false = vetar esa tool en el canal; on:true = volver a permitirla. */
+      setToolDeny: (id: string, token: string, groupId: string, p: { tool: string; on: boolean }) =>
+        post(id, token, { action: "set-tool-deny", groupId, ...p }),
 
       // ── WABA (auth = fleetAgent.token) ──
       waba: {

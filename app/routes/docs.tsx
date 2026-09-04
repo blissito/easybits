@@ -2139,6 +2139,9 @@ console.log(status.result);  // resultado final del agente`} />
                 ["agent_create", "template", "Crear agente persistente (endpoint HTTP)"],
                 ["agent_list", "—", "Listar agentes persistentes"],
                 ["agent_message", "agentId, content", "Enviar mensaje a un agente"],
+                ["fleet_agent_list", "—", "Listar los agentes de la flota (WhatsApp/web/Teams)"],
+                ["fleet_agent_capabilities", "fleetAgentId", "Config actual de un agente de la flota (= GET /capabilities)"],
+                ["fleet_agent_configure", "fleetAgentId, action, params?", "Aplicar una acción de /capabilities por MCP"],
                 ["agent_run", "prompt, model?", "Agente Claude one-shot (async)"],
                 ["agent_run_status", "jobId", "Consultar estado de agent_run"],
                 ["templates_list", "tier?", "Listar templates disponibles"],
@@ -2644,11 +2647,18 @@ for await (const evt of readSse(res.body)) {
                   <tr className="border-b border-gray-200"><td className="px-3 py-2 font-mono text-xs">add-mcp</td><td className="px-3 py-2 font-mono text-xs text-gray-500">addMcp</td><td className="px-3 py-2">Conecta <strong>tu</strong> API como MCP: <code>url</code> (Streamable-HTTP, el secret viaja como <code>Authorization: Bearer</code>) o <code>pkg</code> (npm, stdio, como env var). Sólo lo registra: enciéndelo con <code>set-cap-level</code>.</td><td className="px-3 py-2">Todo el agente</td></tr>
                   <tr className="border-b border-gray-200"><td className="px-3 py-2 font-mono text-xs">remove-mcp</td><td className="px-3 py-2 font-mono text-xs text-gray-500">removeMcp</td><td className="px-3 py-2">Lo quita del catálogo.</td><td className="px-3 py-2">Todo el agente</td></tr>
                   <tr className="border-b border-gray-200"><td className="px-3 py-2 font-mono text-xs">recycle-box</td><td className="px-3 py-2 font-mono text-xs text-gray-500">recycleBox</td><td className="px-3 py-2">Recicla las cajas del agente: el siguiente turno arranca una nueva con env fresco (motor, modelo, llave del motor). Respalda las conversaciones antes; no corta turnos en vuelo.</td><td className="px-3 py-2">Todo el agente</td></tr>
+                  <tr className="border-b border-gray-200"><td className="px-3 py-2 font-mono text-xs">set-engine</td><td className="px-3 py-2 font-mono text-xs text-gray-500">setEngine</td><td className="px-3 py-2">Cambia el motor (Claude, DeepSeek, Codex…). Recicla las cajas solo.</td><td className="px-3 py-2">Todo el agente</td></tr>
+                  <tr className="border-b border-gray-200"><td className="px-3 py-2 font-mono text-xs">set-name</td><td className="px-3 py-2 font-mono text-xs text-gray-500">setName</td><td className="px-3 py-2">Nombre del agente.</td><td className="px-3 py-2">Todo el agente</td></tr>
+                  <tr className="border-b border-gray-200"><td className="px-3 py-2 font-mono text-xs">toggle-own-number</td><td className="px-3 py-2 font-mono text-xs text-gray-500">toggleOwnNumber</td><td className="px-3 py-2">Número dedicado: sin prefijo <code>Nombre:</code> en WhatsApp.</td><td className="px-3 py-2">Todo el agente</td></tr>
+                  <tr className="border-b border-gray-200"><td className="px-3 py-2 font-mono text-xs">add-skill · toggle-skill · delete-skill</td><td className="px-3 py-2 font-mono text-xs text-gray-500">addSkill · toggleSkill · deleteSkill</td><td className="px-3 py-2">Skills (SKILL.md + scripts subidos a Files como <code>fileIds</code>).</td><td className="px-3 py-2">Todo el agente</td></tr>
+                  <tr className="border-b border-gray-200"><td className="px-3 py-2 font-mono text-xs">connect-teams</td><td className="px-3 py-2 font-mono text-xs text-gray-500">connectTeams</td><td className="px-3 py-2">Marca el canal Teams como conectado.</td><td className="px-3 py-2">Todo el agente</td></tr>
+                  <tr className="border-b border-gray-200"><td className="px-3 py-2 font-mono text-xs">toggle-asset</td><td className="px-3 py-2 font-mono text-xs text-gray-500">toggleAsset</td><td className="px-3 py-2">Archivo del owner adjunto como contexto del canal.</td><td className="px-3 py-2">Por canal</td></tr>
+                  <tr className="border-b border-gray-200"><td className="px-3 py-2 font-mono text-xs">set-db-allow</td><td className="px-3 py-2 font-mono text-xs text-gray-500">setDbAllow</td><td className="px-3 py-2">Namespaces de DB que el agente puede tocar (<code>[]</code> = todas).</td><td className="px-3 py-2">Por canal</td></tr>
                   <tr className="border-b border-gray-200"><td className="px-3 py-2 font-mono text-xs">set-secret</td><td className="px-3 py-2 font-mono text-xs text-gray-500">setSecret</td><td className="px-3 py-2">Guarda la credencial que usa un MCP (cifrada, no se vuelve a leer).</td><td className="px-3 py-2">Todo el agente</td></tr>
                   <tr className="border-b border-gray-200"><td className="px-3 py-2 font-mono text-xs">set-prompt</td><td className="px-3 py-2 font-mono text-xs text-gray-500">setGroupPrompt</td><td className="px-3 py-2">Prompt que se <strong>suma</strong> al base, sólo en este canal.</td><td className="px-3 py-2">Por canal</td></tr>
                   <tr className="border-b border-gray-200"><td className="px-3 py-2 font-mono text-xs">set-toolgroup</td><td className="px-3 py-2 font-mono text-xs text-gray-500">setToolGroup</td><td className="px-3 py-2">Qué tools de EasyBits ve: <code>buckets</code> (imágenes, documentos, investigación…).</td><td className="px-3 py-2">Por canal</td></tr>
                   <tr className="border-b border-gray-200"><td className="px-3 py-2 font-mono text-xs">set-cap-level</td><td className="px-3 py-2 font-mono text-xs text-gray-500">setCapLevel</td><td className="px-3 py-2">Nivel de una capacidad: <code>off</code> · <code>read</code> · <code>write</code>.</td><td className="px-3 py-2">Por canal</td></tr>
-                  <tr className="border-b border-gray-200"><td className="px-3 py-2 font-mono text-xs">set-tool-deny</td><td className="px-3 py-2 text-xs text-gray-400">sólo REST</td><td className="px-3 py-2">Prohíbe una tool concreta.</td><td className="px-3 py-2">Por canal</td></tr>
+                  <tr className="border-b border-gray-200"><td className="px-3 py-2 font-mono text-xs">set-tool-deny</td><td className="px-3 py-2 font-mono text-xs text-gray-500">setToolDeny</td><td className="px-3 py-2">Prohíbe una tool concreta.</td><td className="px-3 py-2">Por canal</td></tr>
                   <tr><td className="px-3 py-2 font-mono text-xs">toggle-builtin</td><td className="px-3 py-2 font-mono text-xs text-gray-500">toggleBuiltin</td><td className="px-3 py-2">Prende/apaga un conector incluido.</td><td className="px-3 py-2">Por canal</td></tr>
                 </tbody>
               </table>
@@ -2715,7 +2725,9 @@ await cfg({ action: "set-prompt", groupId: "mi-app", systemPrompt: "Aquí hablas
                 },
               ]}
             />
-            <div className="mb-6" />
+            <p className="text-gray-600 mb-6 text-sm">
+              Las mismas acciones existen por MCP: <code className="bg-gray-100 px-1 rounded">fleet_agent_list</code> → <code className="bg-gray-100 px-1 rounded">fleet_agent_capabilities</code> → <code className="bg-gray-100 px-1 rounded">fleet_agent_configure {`{ fleetAgentId, action, params }`}</code>, autenticadas con tu API key (no con el token del agente). Para borrar un agente: <code className="bg-gray-100 px-1 rounded">POST /api/v2/fleet-agents/:id/delete</code>.
+            </p>
 
             <h3 className="text-lg font-bold mb-3">Tres capas de prompt</h3>
             <p className="text-gray-600 mb-3 text-sm">
