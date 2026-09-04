@@ -168,7 +168,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
           Conecta Claude Code, Claude.ai, Cursor o tu propio SDK. Tu agente
           investiga, ejecuta, guarda y publica con un único conector.
         </p>
-        <ItemList title="Más de 150 tools en un solo endpoint" />
+        <ItemList title="Más de 200 tools en un solo endpoint" />
         <ItemList title="Toolsets por caso: web, design, sandbox, hosting…" />
         <ItemList title="Claude Code, Claude.ai, Cursor, tu SDK" />
         <ItemList title="API key u OAuth — sin código" />

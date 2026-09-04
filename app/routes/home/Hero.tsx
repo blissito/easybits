@@ -37,7 +37,7 @@ export const Hero = () => {
         </div>
         {/* Prueba social: números verificables (server.ts, catálogo web, resume de microVM). */}
         <p className="text-iron text-sm md:text-base mt-6 md:mt-8 font-mono">
-          +150 tools MCP · 1,000+ fuentes web · microVMs en &lt;1 s · precios en MXN
+          +200 tools MCP · 1,000+ fuentes web · microVMs en &lt;1 s · precios en MXN
         </p>
       </div>
       <div className="w-full md:w-[40%] relative min-h-[285px] ">
