@@ -1150,9 +1150,42 @@ function adminMcpServer(fleetAgent: { id: string; token: string }): Record<strin
 // y que use las tools mcp__admin__* para gestionar la flota.
 const ADMIN_NOTE =
   "MODO ADMINISTRACIÓN: el dueño te escribe en privado desde la conversación de administración. Tienes herramientas `mcp__admin__*`:\n" +
-  "• `set_agent_prompt({ systemPrompt, append })` — REESCRIBE (pasando el texto completo) o AÑADE (`append: true`) a tus PROPIAS instrucciones base: identidad, políticas, tono, reglas de venta/atención. Es tu \"CLAUDE.md\". Los cambios aplican en tu PRÓXIMO turno (no en el actual). OJO: los DATOS estructurados (catálogo, precios, clientes, inventario) NO van aquí — si tienes tools de base de datos u otra herramienta para eso, edítalos AHÍ (p.ej. `db_exec` sobre tu catálogo); el prompt es solo para instrucciones y conocimiento que no viva ya en una herramienta.\n" +
+  "• `set_agent_prompt({ systemPrompt, append })` — REESCRIBE (pasando el texto completo) o AÑADE (`append: true`) a tus PROPIAS instrucciones base: identidad, políticas, tono, reglas de venta/atención. Es tu \"CLAUDE.md\". Los cambios aplican desde tu PRÓXIMO turno (el actual sigue con las instrucciones con las que abriste). OJO: los DATOS estructurados (catálogo, precios, clientes, inventario) NO van aquí — si tienes tools de base de datos u otra herramienta para eso, edítalos AHÍ (p.ej. `db_exec` sobre tu catálogo); el prompt es solo para instrucciones y conocimiento que no viva ya en una herramienta.\n" +
   "• Números WhatsApp Business (WABA): listar, editar identidad (nombre/instrucciones) y ajustar capacidades por número.\n" +
   "REGLA CRÍTICA anti-invención: NUNCA afirmes que guardaste, agregaste o actualizaste algo (p.ej. \"ya quedó\", \"lo guardé en mi entrenamiento\") a menos que HAYAS llamado la tool correspondiente en ESTE turno y haya devuelto éxito. Si no la llamaste o falló, dilo con claridad en vez de inventar que quedó.";
+
+/**
+ * Instrucciones base recién editadas → entregadas EN VIVO, sin reciclar la caja.
+ *
+ * `persona.env.SYSTEM_PROMPT` se hornea en el env del microVM al spawn, así que un
+ * `set_agent_prompt` no lo veía la caja viva: el dueño entrenaba al agente, el agente
+ * confirmaba que había guardado, y seguía comportándose igual hasta que el reaper
+ * reciclara la VM (horas). Se veía idéntico a "la tool no funciona".
+ *
+ * Aquí se compara el sello `SYSTEM_PROMPT_AT` (lo escribe `set_agent_prompt`) contra
+ * `createdAt` de la caja: si el prompt es más nuevo que el env horneado, el prompt
+ * VIGENTE se reinyecta como capa 3 del turno. Al ir en `appendSystemPrompt`, cambia la
+ * huella `append-sig` del worker → se entrega DENTRO del turno como `<system-update>`,
+ * que es la única ruta que sobrevive al resume de sesión (ver worker.ts). Cuando la caja
+ * se recicla, su `createdAt` pasa a ser posterior al sello y esto deja de mandarse solo.
+ */
+function livePromptUpdate(
+  fleetAgent: PoolRow,
+  worker: { createdAt: Date }
+): string | null {
+  const env = (fleetAgent.persona as Persona | null)?.env;
+  const stamp = env?.SYSTEM_PROMPT_AT;
+  const prompt = env?.SYSTEM_PROMPT;
+  if (!stamp || !prompt) return null;
+  const at = Date.parse(stamp);
+  if (!Number.isFinite(at) || at <= worker.createdAt.getTime()) return null;
+  return [
+    "ACTUALIZACIÓN DE TUS INSTRUCCIONES BASE: el dueño las editó después de que abriste esta sesión.",
+    "Lo que sigue REEMPLAZA cualquier versión anterior de tus instrucciones base que traigas en contexto; síguelo desde ahora.",
+    "",
+    prompt,
+  ].join("\n");
+}
 
 // Build a background AuthContext for a fleetAgent's owner. FleetAgent dispatch runs outside
 // any HTTP request (reaper, autoscale), so we mint a ctx with full owner scopes.
@@ -2140,6 +2173,10 @@ export async function routeMessage(
             // el guard del script no ve — el precio que el agente dice en el chat.
             hasQuotingSkill(fleetAgent) ? PRICE_FRESHNESS_GUARDRAIL : null,
             msg.admin ? ADMIN_NOTE : null,
+            // Instrucciones base editadas después del spawn de ESTA caja (el env está
+            // horneado): se reinyectan vigentes para que el entrenamiento del dueño
+            // aplique al turno siguiente y no cuando el reaper recicle la VM.
+            livePromptUpdate(fleetAgent, worker),
             // Per-canal: system prompt del dueño (editable por número/grupo) + docs
             // de las capacidades code-mode habilitadas (cómo pegarle a su API).
             groupCfg.systemPrompt || null,

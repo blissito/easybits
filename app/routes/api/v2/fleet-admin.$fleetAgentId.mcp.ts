@@ -107,7 +107,7 @@ function buildAdminServer(fleetAgentId: string): McpServer {
 
   tool(
     "set_agent_prompt",
-    "Edita tus INSTRUCCIONES BASE (tu CLAUDE.md / persona — aplica a TODOS tus canales). Úsalo cuando el dueño te pida cambiar tu forma de trabajar, agregar/quitar una regla, o ajustar tu tono. append=true agrega al final; sin append REEMPLAZA todo (pasa el texto completo). El cambio aplica en tu PRÓXIMA conversación (esta sesión sigue con las instrucciones actuales) — avísale al dueño. Máx 120k caracteres.",
+    "Edita tus INSTRUCCIONES BASE (tu CLAUDE.md / persona — aplica a TODOS tus canales). Úsalo cuando el dueño te pida cambiar tu forma de trabajar, agregar/quitar una regla, o ajustar tu tono. append=true agrega al final; sin append REEMPLAZA todo (pasa el texto completo). El cambio aplica desde tu PRÓXIMO turno, también en esta conversación (el turno actual sigue con las instrucciones con las que abriste) — avísale al dueño. Máx 120k caracteres.",
     {
       systemPrompt: z.string().describe("las nuevas instrucciones completas (o el texto a agregar si append=true)"),
       append: z.boolean().optional().describe("true = agrega al final de tus instrucciones actuales; false/omitido = reemplaza todo"),
@@ -122,8 +122,12 @@ function buildAdminServer(fleetAgentId: string): McpServer {
       const current = env.SYSTEM_PROMPT ?? "";
       const next = (p.append && current ? `${current}\n\n${incoming}` : incoming).slice(0, 120000);
       env.SYSTEM_PROMPT = next;
+      // Sello de edición: `livePromptUpdate` lo compara contra el createdAt de la caja
+      // para reinyectar el prompt vigente en el turno siguiente. Sin él, el cambio no se
+      // vería hasta que el reaper reciclara la VM (el env se hornea al spawn).
+      env.SYSTEM_PROMPT_AT = new Date().toISOString();
       await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { persona: { ...persona, env } as object } });
-      return ok({ updated: true, mode: p.append ? "append" : "replace", length: next.length, appliesOn: "next conversation/spawn" });
+      return ok({ updated: true, mode: p.append ? "append" : "replace", length: next.length, appliesOn: "next turn" });
     }
   );
 
