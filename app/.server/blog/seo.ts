@@ -258,6 +258,7 @@ export class BlogSEOService {
       { path: "/developers", priority: "0.8", changefreq: "monthly" },
       { path: "/funcionalidades", priority: "0.8", changefreq: "monthly" },
       { path: "/docs", priority: "0.7", changefreq: "monthly" },
+      { path: "/calculadora", priority: "0.9", changefreq: "monthly" },
       { path: "/cuanto-cuesta-mi-agente", priority: "0.8", changefreq: "monthly" },
       { path: "/mcp", priority: "0.7", changefreq: "monthly" },
       { path: "/login", priority: "0.5", changefreq: "yearly" },

@@ -27,6 +27,7 @@ export default [
   route("/planes", "routes/planes.tsx"),
   route("/funcionalidades", "routes/funcionalidades.tsx"),
   route("/cuanto-cuesta-mi-agente", "routes/cuanto-cuesta-mi-agente.tsx"),
+  route("/calculadora", "routes/calculadora.tsx"),
   route("/developers", "routes/developers.tsx"),
   route("/brand", "routes/brand.tsx"),
   route("/mcp", "routes/mcp-page.tsx"),

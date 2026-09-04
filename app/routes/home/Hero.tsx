@@ -28,11 +28,11 @@ export const Hero = () => {
             <BrutalButton id="EmpezarGratisHome">Empezar gratis →</BrutalButton>
           </Link>
           <Link
-            to="/cuanto-cuesta-mi-agente"
+            to="/calculadora"
             id="CotizarMiAgenteHome"
             className="text-lg font-medium underline decoration-2 underline-offset-4 hover:decoration-brand-500"
           >
-            Cotizar mi agente
+            Calcula tu costo
           </Link>
         </div>
         {/* Prueba social: números verificables (server.ts, catálogo web, resume de microVM). */}

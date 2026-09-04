@@ -3,23 +3,17 @@ import {
   CUSTOM_INTEGRATIONS_DISCOVERY_MXN,
   CUSTOM_INTEGRATIONS_FROM_MXN,
   DEFAULT_TIER_ID,
-  ORCHESTRATION_FEE_MXN,
-  SETUP_TIERS_MXN,
   type Capability,
   type CapabilityCap,
   type Tier,
 } from "./capabilities";
+import { effectivePrice, type PlanKey } from "../plans";
 
-// Setup escala según cuántas capacidades se seleccionan.
-// Usar tu propia función para mapear count → MXN. Esto se llama desde
-// computeQuote y desde Stripe checkout para validar que el monto cobrado
-// coincida con la cotización del cliente.
-export const computeSetupMxn = (selectionsCount: number): number => {
-  if (selectionsCount <= 2) return SETUP_TIERS_MXN.minimal;
-  if (selectionsCount <= 5) return SETUP_TIERS_MXN.basic;
-  if (selectionsCount <= 8) return SETUP_TIERS_MXN.pro;
-  return SETUP_TIERS_MXN.full;
-};
+// Una sola regla para pantalla, email, PDF y Stripe:
+//   setup único   = SETUP_BASE_MXN + Σ basePriceMxn de las capacidades (+ bump integraciones)
+//   mensualidad   = precio plano del plan (effectivePrice) — lo que cobra quiz-checkout
+// `basePriceMxn` es ÚNICO (al setup). Antes también se sumaba a la mensualidad
+// y el email/PDF cotizaban el doble de lo que Stripe cobraba.
 
 // Conversión MXN → USD aproximada para mostrar referencia. ~17 MXN/USD.
 const MXN_TO_USD_RATE = 17;
@@ -43,8 +37,9 @@ export type QuoteLine = {
 export type Quote = {
   setupOneTimeMxn: number;
   setupOneTimeUsd: number;
+  /** Mensualidad = plan plano. */
   monthlyTotalMxn: number;
-  orchestrationFeeMxn: number;
+  plan: PlanKey;
   capsTotalMxn: number;
   customIntegrationsFromMxn: number;
   customIntegrationsDiscoveryMxn: number;
@@ -64,7 +59,8 @@ const resolveTier = (
 
 export const computeQuote = (
   selections: Selections,
-  hasCustomIntegrations = false
+  hasCustomIntegrations = false,
+  plan: PlanKey = "Mega"
 ): Quote => {
   const breakdown: QuoteLine[] = [];
 
@@ -97,20 +93,20 @@ export const computeQuote = (
   }
 
   const capsTotalMxn = breakdown.reduce((acc, b) => acc + b.priceMxn, 0);
-  const monthlyTotalMxn = ORCHESTRATION_FEE_MXN + capsTotalMxn;
+  const monthlyTotalMxn = effectivePrice(plan);
   // Add-ons (babysit, etc.) NO cuentan como "capacidades del agente": son
   // servicios paralelos. Excluirlos de selectionsCount mantiene correcta la
-  // copy ("X capacidades"), el tier de setup y la elegibilidad anual.
+  // copy ("X capacidades").
   const capabilitiesCount = breakdown.filter(
     (b) => !b.capability.isAddon
   ).length;
-  const setupOneTimeMxn = computeSetupMxn(capabilitiesCount);
+  const setupOneTimeMxn = computeSetupEffective(capsTotalMxn, hasCustomIntegrations);
 
   return {
     setupOneTimeMxn,
     setupOneTimeUsd: setupUsdFromMxn(setupOneTimeMxn),
     monthlyTotalMxn,
-    orchestrationFeeMxn: ORCHESTRATION_FEE_MXN,
+    plan,
     capsTotalMxn,
     customIntegrationsFromMxn: hasCustomIntegrations
       ? CUSTOM_INTEGRATIONS_FROM_MXN
@@ -215,46 +211,4 @@ export const ANNUAL_DISCOUNT_PCT = 17;
 export const computeAnnualFromMonthly = (monthlyMxn: number): number =>
   Math.round(monthlyMxn * 12 * (1 - ANNUAL_DISCOUNT_PCT / 100));
 
-// LEGACY — se mantienen exports para no romper imports existentes (PDF,
-// emails, scripts) hasta que el modelo de "renta + 20% off" desaparezca
-// del todo. La nueva pantalla NO debería usarlos.
-export const QUOTE_DISCOUNT_PCT = 20;
-
-export const computeDiscountedMonthly = (monthlyTotalMxn: number): number =>
-  Math.round(monthlyTotalMxn * (1 - QUOTE_DISCOUNT_PCT / 100));
-
-// Plan anual: paga 12 meses upfront → setup gratis. Solo elegible desde tier
-// basic (3+ capacidades) — en minimal (1-2 caps) los 12 meses apenas pagan
-// el setup que regalamos. La mensualidad mantiene el 20% off (sin descuento
-// adicional por anual — el premio es el setup gratis).
-export const ANNUAL_PLAN_MIN_SELECTIONS = 3;
-
-export const isAnnualPlanEligible = (selectionsCount: number): boolean =>
-  selectionsCount >= ANNUAL_PLAN_MIN_SELECTIONS;
-
 export type BillingMode = "monthly" | "annual";
-
-export type AnnualPlan = {
-  eligible: boolean;
-  // Mensualidad equivalente (igual que la mensual con descuento — sin descuento
-  // extra por anual). Útil para mostrar "$X/mes pagados anualmente".
-  monthlyEquivMxn: number;
-  // Total que cobramos en una sola charge anual.
-  totalAnnualMxn: number;
-  // Lo que el usuario AHORRA al elegir anual: el setup que ya no paga.
-  setupSavingsMxn: number;
-};
-
-export const computeAnnualPlan = (
-  monthlyTotalMxn: number,
-  setupOneTimeMxn: number,
-  selectionsCount: number
-): AnnualPlan => {
-  const monthlyEquivMxn = computeDiscountedMonthly(monthlyTotalMxn);
-  return {
-    eligible: isAnnualPlanEligible(selectionsCount),
-    monthlyEquivMxn,
-    totalAnnualMxn: monthlyEquivMxn * 12,
-    setupSavingsMxn: setupOneTimeMxn,
-  };
-};

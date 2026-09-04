@@ -71,7 +71,7 @@ export const AuthNav = ({ user, noCTA }: { user?: User; noCTA?: boolean }) => {
               >
                 Iniciar Sesión
               </Link>
-              <Link to="/cuanto-cuesta-mi-agente" className="h-full border-x border-white/30">
+              <Link to="/calculadora" className="h-full border-x border-white/30">
                 <motion.button
                   initial={{ borderRadius: "0px" }}
                   whileHover={{ borderRadius: "199px" }}
@@ -79,7 +79,7 @@ export const AuthNav = ({ user, noCTA }: { user?: User; noCTA?: boolean }) => {
                   transition={{ type: "tween" }}
                   className="bg-brand-500 w-48 h-full font-medium text-black px-3"
                 >
-                  Cotiza tu agente
+                  Calcula tu costo
                 </motion.button>
               </Link>
             </div>
@@ -137,9 +137,9 @@ export const AuthNav = ({ user, noCTA }: { user?: User; noCTA?: boolean }) => {
                   Iniciar sesión
                 </p>
               </Link>
-              <Link to="/cuanto-cuesta-mi-agente">
+              <Link to="/calculadora">
                 <BrutalButton className="mx-auto">
-                  Cotiza tu agente
+                  Calcula tu costo
                 </BrutalButton>{" "}
               </Link>
             </>

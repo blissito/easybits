@@ -64,11 +64,8 @@ export const action = async ({ request }: Route.ActionArgs) => {
   const hasCustomIntegrations = !!customIntegrations;
   const integrationsDesc = customIntegrations?.description?.slice(0, 280) || "";
 
-  // Solo lo usamos para enriquecer metadata (capabilities seleccionadas).
-  // Setup ya no escala con el quote.
-  const quote = computeQuote(selectionsMap, hasCustomIntegrations);
-
   const planKey: PlanKey = isPlanKey(payload.plan) ? payload.plan : "Mega";
+  const quote = computeQuote(selectionsMap, hasCustomIntegrations, planKey);
   const plan = PLANS[planKey];
   // Byte (gratis) no soporta anual — se cae a monthly siempre.
   const planBilling: PlanBilling =

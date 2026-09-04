@@ -61,11 +61,10 @@ export const buildQuizPdfHtml = (
   const { lead, customIntegrations } = payload;
   const selectionsMap = parseSelections(payload.selections || "");
   const hasCustomIntegrations = !!customIntegrations;
-  const quote = computeQuote(selectionsMap, hasCustomIntegrations);
-
   // Plan de créditos — el modelo nuevo. El plan es la suscripción mensual,
   // las capabilities ya están armadas en el setup.
   const planKey: PlanKey = (payload.plan as PlanKey) || "Mega";
+  const quote = computeQuote(selectionsMap, hasCustomIntegrations, planKey);
   const plan = PLANS[planKey];
   const planSupportsAnnual = planKey !== "Byte" && plan.price > 0;
   const billingMode = payload.planBilling ?? payload.billingMode;

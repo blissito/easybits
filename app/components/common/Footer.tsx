@@ -14,7 +14,7 @@ export const Footer = () => {
         <div className="h-full max-w-7xl border-x-[1px] border-x-white/20 mx-auto"></div>
       </div>
       <div className="border-y-[1px] border-y-white/20 h-20 md:h-40 w-full  ">
-        <Link to="/cuanto-cuesta-mi-agente">
+        <Link to="/calculadora">
           <div className="h-full max-w-7xl border-x-[1px] border-x-white/20 mx-auto px-4 md:px-[5%] xl:px-0">
             <motion.button
               initial={{ borderRadius: "0px" }}
@@ -24,7 +24,7 @@ export const Footer = () => {
               className="bg-brand-500 w-full h-full  text-3xl md:text-5xl lg:text-[80px] font-medium "
               id="CotizaTuAgenteHome"
             >
-              Cotiza tu agente
+              Calcula tu costo
             </motion.button>
           </div>
         </Link>
@@ -69,9 +69,9 @@ export const Footer = () => {
                 alt="capacidades"
               />
               <div className="text-left flex flex-col gap-0">
-                <p className="mb-0 text-lg md:text-2xl">Cotiza tu agente</p>
+                <p className="mb-0 text-lg md:text-2xl">¿Prefieres que lo hagamos?</p>
                 <span className="text-white/60  text-sm font-light underline">
-                  14 capacidades en 2 minutos
+                  Cotiza el servicio en 2 minutos
                 </span>
               </div>
             </motion.div>

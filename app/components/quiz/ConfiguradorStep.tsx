@@ -1,6 +1,6 @@
 import { motion } from "motion/react";
 import { BrutalButton } from "~/components/common/BrutalButton";
-import { GENERATION_PACKS } from "~/lib/plans";
+import { effectivePrice, GENERATION_PACKS, WEB_PACKS } from "~/lib/plans";
 import {
   computePlanFromCredits,
   COST_DOC,
@@ -8,13 +8,12 @@ import {
   COST_REEL_AVATAR_30S,
   COST_REEL_HTML,
   COST_REEL_KLING,
-  COST_SCRAPE_5_PAGES,
-  COST_SEARCH,
   COST_VOICE_MINUTE,
   formatCredits,
   PLAN_CREDITS,
 } from "~/lib/credits";
 import { formatMxn } from "~/lib/quiz/pricing";
+import { cheapestPacks, WEB_FREE_QUERIES } from "~/lib/calculadora";
 import type { PlanKey } from "~/lib/plans";
 
 // Color de fondo del card-resumen según la banda activa (mismo mapa que
@@ -45,10 +44,9 @@ export type ConsumptionConfig = {
   reelsAvatar: number;
   /** Minutos de voz clonada por mes. */
   voiceMinutes: number;
-  /** Búsquedas web inteligentes (Brightdata SERP) por mes. */
-  searches: number;
-  /** Páginas web scrapeadas por mes. */
-  scrapePages: number;
+  /** Consultas web al mes (buscar, leer, extraer). NO son créditos: van por
+   *  packs Web (`WEB_PACKS`) y se suman aparte del plan. */
+  webQueries: number;
 };
 
 // Defaults pensados para que el usuario aterrice en "Plan Byte · Gratis"
@@ -60,9 +58,32 @@ export const DEFAULT_CONSUMPTION: ConsumptionConfig = {
   reelsKling: 0,
   reelsAvatar: 0,
   voiceMinutes: 0,
-  searches: 0,
-  scrapePages: 0,
+  webQueries: 0,
 };
+
+// URL: sólo las llaves que difieren del default, "docs:40,webQueries:3000".
+export const serializeConsumption = (c: ConsumptionConfig): string =>
+  (Object.keys(DEFAULT_CONSUMPTION) as (keyof ConsumptionConfig)[])
+    .filter((k) => (c[k] ?? 0) !== DEFAULT_CONSUMPTION[k])
+    .map((k) => `${k}:${c[k]}`)
+    .join(",");
+
+export const parseConsumption = (str: string): ConsumptionConfig => {
+  const out = { ...DEFAULT_CONSUMPTION };
+  for (const part of str.split(",")) {
+    const [k, v] = part.split(":");
+    const n = Number(v);
+    if (k in DEFAULT_CONSUMPTION && Number.isFinite(n) && n >= 0) out[k as keyof ConsumptionConfig] = n;
+  }
+  return out;
+};
+
+/** Costo mensual en packs Web para N consultas (las primeras 50 son gratis). */
+export const webMonthlyMxn = (queries: number): number =>
+  cheapestPacks(
+    Math.max(0, queries - WEB_FREE_QUERIES),
+    WEB_PACKS.map((p) => ({ id: p.id, units: p.queries, price: p.price })),
+  ).mxn;
 
 type SliderConfig = {
   key: keyof ConsumptionConfig;
@@ -88,8 +109,7 @@ type SliderConfig = {
 //   1 reel Kling    = 400 cr  →  Tera solo-Kling   =   125/mes  (text-to-video)
 //   1 reel avatar   = 600 cr  →  Tera solo-avatar  =    83/mes  (talking head 30s)
 //   1 min voz       = 800 cr  →  Tera solo-voz     =    62/mes  (ElevenLabs)
-//   1 búsqueda web  = 200 cr  →  Tera solo-search  =   250/mes  (Brightdata SERP)
-//   5 pág scrape    = 100 cr  →  Tera solo-scrape  = 2,500/mes  (= 20 cr/pág)
+// Las consultas web NO son créditos: tienen su slider aparte (packs Web).
 const SLIDERS: SliderConfig[] = [
   {
     key: "docs",
@@ -151,33 +171,15 @@ const SLIDERS: SliderConfig[] = [
     step: 1,
     toCredits: (n) => n * COST_VOICE_MINUTE,
   },
-  {
-    key: "searches",
-    emoji: "🔍",
-    label: "Búsquedas web",
-    unit: "búsquedas/mes",
-    min: 0,
-    max: 250,
-    step: 1,
-    toCredits: (n) => n * COST_SEARCH,
-  },
-  {
-    key: "scrapePages",
-    emoji: "🔎",
-    label: "Páginas web scrape",
-    unit: "páginas/mes",
-    min: 0,
-    max: 2500,
-    step: 5,
-    // 1 cr = 5 páginas → COST_SCRAPE_5_PAGES por cada 5
-    toCredits: (n) => Math.ceil(n / 5) * COST_SCRAPE_5_PAGES,
-  },
 ];
 
 export const computeTotalCredits = (c: ConsumptionConfig): number =>
   // Fallback `?? 0` defensivo: si el state arrastra llaves viejas (HMR en
   // dev tras renombrar el tipo) algunas keys pueden venir undefined → NaN.
   SLIDERS.reduce((acc, s) => acc + s.toCredits(c[s.key] ?? 0), 0);
+
+const WEB_MAX = 50_000;
+const WEB_STEP = 50;
 
 // ──────────────────────────────────────────────────────────────────
 // Escala no-lineal por slider (Byte / Mega / Tera = 33% / 33% / 34%
@@ -245,6 +247,11 @@ export const ConfiguradorStep = ({
 }: ConfiguradorStepProps) => {
   const totalCredits = computeTotalCredits(consumption);
   const quote = computePlanFromCredits(totalCredits);
+  // Precio PLANO del plan sugerido — es lo que cobra el checkout. Las bandas
+  // interpoladas de computePlanFromCredits sólo eligen el plan.
+  const planMonthly = effectivePrice(quote.plan);
+  const web = consumption.webQueries ?? 0;
+  const webMxn = webMonthlyMxn(web);
   const teraCap = PLAN_CREDITS.Tera;
   const overflowAtPercent = Math.min(100, (totalCredits / teraCap) * 100);
 
@@ -267,9 +274,9 @@ export const ConfiguradorStep = ({
           ¿Cuánto va a usar tu agente al mes?
         </h2>
         <p className="text-base text-black/70 mb-6 leading-snug">
-          Mueve los sliders al volumen que esperas y el plan se ajusta solo.
-          No te encierras: si te quedas corto, recargas créditos desde{" "}
-          {formatMxn(cheapestPackPrice)} MXN.
+          Mueve los sliders al volumen que esperas y el plan se elige solo.
+          No te encierras: si te quedas corto, recargas con packs desde{" "}
+          {formatMxn(cheapestPackPrice)} MXN, y no caducan.
         </p>
 
         {/* Sliders */}
@@ -344,6 +351,34 @@ export const ConfiguradorStep = ({
           })}
         </div>
 
+        {/* Consultas web — aparte de los créditos, se compran por pack */}
+        <div className="mb-6">
+          <div className="flex items-baseline justify-between gap-3 mb-1.5">
+            <label htmlFor="slider-web" className="text-sm font-black text-black flex items-center gap-2">
+              <span aria-hidden>🌐</span>
+              <span>Consultas web (buscar, leer, extraer)</span>
+            </label>
+            <span className="text-[11px] font-mono text-black/55 tabular-nums">
+              {webMxn === 0 ? `${WEB_FREE_QUERIES} gratis` : `${formatMxn(webMxn)}/mes en packs`}
+            </span>
+          </div>
+          <div className="flex items-center gap-3">
+            <input
+              id="slider-web"
+              type="range"
+              min={0}
+              max={WEB_MAX}
+              step={WEB_STEP}
+              value={web}
+              onChange={(e) => onChange({ ...consumption, webQueries: Number(e.target.value) })}
+              className="w-full h-2 accent-black cursor-pointer"
+            />
+            <span className="text-sm font-mono text-black tabular-nums min-w-[80px] text-right">
+              {web.toLocaleString("es-MX")} /mes
+            </span>
+          </div>
+        </div>
+
         {/* Resumen del plan derivado */}
         <div
           className={`rounded-2xl border-[3px] border-black p-4 shadow-[3px_3px_0_0_rgba(0,0,0,1)] transition-colors duration-300 ${PLAN_BG[quote.plan]}`}
@@ -361,7 +396,7 @@ export const ConfiguradorStep = ({
               Plan {quote.plan}
             </span>
             <span className="text-2xl md:text-3xl font-black text-black tabular-nums">
-              {quote.isFree ? "Gratis" : `${formatMxn(quote.priceMxn)}/mes`}
+              {planMonthly === 0 ? "Gratis" : `${formatMxn(planMonthly)}/mes`}
             </span>
           </div>
           {/* Barra de progreso visual hacia el tope Tera */}
@@ -371,6 +406,11 @@ export const ConfiguradorStep = ({
               style={{ width: `${overflowAtPercent}%` }}
             />
           </div>
+          {webMxn > 0 && (
+            <p className="text-[11px] text-black/70 mt-2 font-mono leading-snug">
+              + {formatMxn(webMxn)}/mes en packs Web ({web.toLocaleString("es-MX")} consultas).
+            </p>
+          )}
           {quote.overageCredits > 0 && (
             <p className="text-[11px] text-black/70 mt-2 font-mono leading-snug">
               ⚠ Excedes la banda Tera por{" "}
@@ -382,8 +422,8 @@ export const ConfiguradorStep = ({
         </div>
 
         <p className="text-xs text-black/50 mt-4">
-          El precio se ajusta en vivo conforme mueves los sliders. Decides
-          mensual vs anual al final, antes de pagar.
+          El plan se elige en vivo conforme mueves los sliders; el precio es el
+          de lista del plan. Decides mensual vs anual al final, antes de pagar.
         </p>
       </motion.div>
 

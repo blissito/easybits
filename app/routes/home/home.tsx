@@ -221,7 +221,10 @@ export default function Home({ loaderData }: Route.ComponentProps) {
         <ItemList title="Voz, imágenes y PDFs" />
         <ItemList title="Prompt y conectores por cliente" />
         <p className="text-iron text-xl lg:text-2xl mt-4 ">
-          Lo que una agencia cobra $50K al mes, con tu propio agente.
+          Lo que una agencia cobra $50K al mes, con tu propio agente.{" "}
+          <a href="/cuanto-cuesta-mi-agente" className="underline decoration-2 underline-offset-4 hover:decoration-brand-500">
+            ¿Prefieres que lo armemos por ti?
+          </a>
         </p>
       </Bento>
       <Bento

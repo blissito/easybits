@@ -49,6 +49,9 @@ type PriceSummaryProps = {
   planCreditsPerMonth: number;
   /** Créditos overflow (cuando excede la banda Tera). 0 si no aplica. */
   planOverageCredits?: number;
+  /** Packs Web al mes para las consultas configuradas (aparte del plan). */
+  webMonthlyMxn?: number;
+  webQueries?: number;
   planBilling: PlanBilling;
   onPlanBillingChange: (mode: PlanBilling) => void;
   /** Trigger para volver al configurador (sliders). */
@@ -69,6 +72,8 @@ export const PriceSummary = ({
   planMonthlyMxn,
   planCreditsPerMonth,
   planOverageCredits = 0,
+  webMonthlyMxn = 0,
+  webQueries = 0,
   planBilling,
   onPlanBillingChange,
   onChangePlan,
@@ -149,9 +154,9 @@ export const PriceSummary = ({
         );
       })()}
 
-      {/* Bloque 2 — Plan derivado del configurador. El precio es continuo
-          (no fijo por plan), depende de los sliders del paso anterior.
-          "ajustar consumo" regresa al configurador. */}
+      {/* Bloque 2 — Plan derivado del configurador. Precio PLANO del plan
+          (el mismo que cobra el checkout). "ajustar consumo" regresa al
+          configurador. */}
       {(() => {
         const plan = PLANS[selectedPlan];
         const isFree = planMonthlyMxn === 0;
@@ -279,6 +284,11 @@ export const PriceSummary = ({
           packs adentro; el feedback fue que distraía del flow de cotización.
           Ahora es una sola línea sutil. Tu plan ya cubre el consumo
           configurado; las recargas son escape hatch si te quedas corto. */}
+      {webMonthlyMxn > 0 && (
+        <p className="text-center text-[12px] text-black/70 leading-snug mb-2 font-mono">
+          + {formatMxn(webMonthlyMxn)}/mes en packs Web para {webQueries.toLocaleString("es-MX")} consultas (se compran aparte, no caducan).
+        </p>
+      )}
       <p className="text-center text-[11px] text-black/55 leading-snug mb-5">
         ¿Te quedas corto un mes? Recargas créditos desde{" "}
         <strong className="text-black/80">{formatMxn(CHEAPEST_PACK_MXN)} MXN</strong>{" "}

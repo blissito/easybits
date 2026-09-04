@@ -16,6 +16,9 @@ import {
   ConfiguradorStep,
   computeTotalCredits,
   DEFAULT_CONSUMPTION,
+  parseConsumption,
+  serializeConsumption,
+  webMonthlyMxn,
   type ConsumptionConfig,
 } from "~/components/quiz/ConfiguradorStep";
 import { computePlanFromCredits } from "~/lib/credits";
@@ -30,7 +33,7 @@ import {
   serializeSelections,
   type Selections,
 } from "~/lib/quiz/pricing";
-import { PLANS } from "~/lib/plans";
+import { PLANS, effectivePrice } from "~/lib/plans";
 import { playReveal } from "~/lib/quiz/sounds";
 import { useBrutalToast } from "~/hooks/useBrutalToast";
 import getBasicMetaTags from "~/utils/getBasicMetaTags";
@@ -105,16 +108,18 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
     [totalCredits]
   );
   const selectedPlan = planQuote.plan;
+  // Precio PLANO del plan: lo que cobra quiz-checkout. Los sliders sólo
+  // eligen el plan; las consultas web van aparte, en packs.
+  const planMonthly = effectivePrice(selectedPlan);
+  const webMxn = webMonthlyMxn(consumption.webQueries ?? 0);
 
   const quote = useMemo(
-    () => computeQuote(selections, integrations.hasIntegrations),
-    [selections, integrations.hasIntegrations]
+    () => computeQuote(selections, integrations.hasIntegrations, selectedPlan),
+    [selections, integrations.hasIntegrations, selectedPlan]
   );
 
   // Billing efectivo: forzar monthly si el plan es gratis (no aplica anual).
-  // Antes el switch era por nombre del plan (Byte=gratis), ahora Byte puede
-  // ser pago si el slider lo empuja cerca de Mega — chequeamos el quote.
-  const effectivePlanBilling: PlanBilling = planQuote.isFree
+  const effectivePlanBilling: PlanBilling = planMonthly === 0
     ? "monthly"
     : planBilling;
 
@@ -151,7 +156,7 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
           integrations: integrations.hasIntegrations
             ? integrations.description || "yes (sin descripción)"
             : "no",
-          monthly_mxn: String(planQuote.priceMxn),
+          monthly_mxn: String(planMonthly + webMxn),
           setup_mxn: String(
             computeSetupEffective(
               quote.capsTotalMxn,
@@ -232,11 +237,11 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
       integrations.hasIntegrations
     );
     const setupLine = `Setup único: ${formatMxn(setupEff)} MXN`;
-    const planLine = `Plan créditos: ${selectedPlan} (${totalCredits.toLocaleString("es-MX")} cr/mes configurados${
-      planQuote.priceMxn > 0
-        ? ` · ${formatMxn(planQuote.priceMxn)} MXN/mes${effectivePlanBilling === "annual" ? " · facturado anual" : ""}`
+    const planLine = `Plan: ${selectedPlan} (${totalCredits.toLocaleString("es-MX")} cr/mes configurados${
+      planMonthly > 0
+        ? ` · ${formatMxn(planMonthly)} MXN/mes${effectivePlanBilling === "annual" ? " · facturado anual" : ""}`
         : " · gratis"
-    })`;
+    })${webMxn > 0 ? `\nConsultas web: ${consumption.webQueries.toLocaleString("es-MX")}/mes · ${formatMxn(webMxn)} MXN/mes en packs` : ""}`;
     // Babysit ahora vive como capability en el summary, no necesita línea aparte.
     const msg = `${greeting} Vi tu cotizador y quiero agendar discovery para mi agente IA.\n\n${setupLine}\n${planLine}\n\nCapacidades:\n${summary}${integrationsLine}${siteLine}`;
     window.open(
@@ -356,10 +361,11 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
             description: items.join(" · "),
           });
         }
-        // Plan ya no es seleccionable directo — se deriva de los sliders
-        // del ConfiguradorStep. El param `p=` queda como compat de links
-        // viejos: lo ignoramos para no forzar un plan que no coincida con
-        // el consumo actual del usuario.
+        // El plan se deriva de los sliders (`c=`), por eso el consumo viaja
+        // en la URL: sin él, un link compartido rehidrataba con el default y
+        // daba otro precio.
+        const cParam = searchParams.get("c");
+        if (cParam) setConsumption(parseConsumption(cParam));
         if (searchParams.get("pb") === "annual") {
           setPlanBilling("annual");
         }
@@ -385,7 +391,8 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
         );
       }
     }
-    next.set("p", selectedPlan);
+    const c = serializeConsumption(consumption);
+    if (c) next.set("c", c);
     if (effectivePlanBilling === "annual") {
       next.set("pb", "annual");
     }
@@ -399,7 +406,7 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
     selections,
     integrations.hasIntegrations,
     integrations.items,
-    selectedPlan,
+    consumption,
     effectivePlanBilling,
   ]);
 
@@ -567,7 +574,7 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
                       transition={{ duration: 0.6 }}
                       className="text-xs md:text-sm uppercase tracking-[0.2em] font-bold text-black/70 mb-4"
                     >
-                      Guía interactiva de agentes IA
+                      Servicio · lo armamos por ti
                     </motion.p>
                     <motion.h1
                       initial={{ opacity: 0, y: 24, filter: "blur(8px)" }}
@@ -575,7 +582,7 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
                       transition={{ duration: 0.6, delay: 0.1 }}
                       className="text-4xl md:text-5xl lg:text-6xl font-black text-black leading-[0.95] mb-6"
                     >
-                      Arma tu agente tú mism@
+                      ¿Prefieres que armemos tu agente?
                     </motion.h1>
                     <motion.p
                       initial={{ opacity: 0, y: 16 }}
@@ -583,9 +590,9 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
                       transition={{ duration: 0.6, delay: 0.15 }}
                       className="text-lg md:text-xl text-black/80 mb-8"
                     >
-                      Entérate en 2 minutos. Sabrás en cuánto queda tu pago de
-                      personalización y tu mensualidad. Tú decides lo que tu
-                      agente podrá hacer. 🫟
+                      Dos expertos lo configuran, lo conectan y lo acompañan 30
+                      días. En 2 minutos sabes tu setup único y tu plan mensual.
+                      Tú decides qué podrá hacer. 🫟
                     </motion.p>
                     <motion.div
                       initial={{ opacity: 0, y: 12 }}
@@ -606,9 +613,10 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
                       transition={{ delay: 0.6 }}
                       className="text-sm text-black/85 mt-6 font-mono font-bold"
                     >
-                      Setup único desde $39,000 MXN (~$2,300 USD)
+                      Setup único desde $39,000 MXN (~$2,300 USD) + tu plan
                       <br />
-                      planes accesibles · te armamos todo
+                      ¿Eres experto y lo vas a correr tú?{" "}
+                      <a href="/calculadora" className="underline">Calcula tu costo →</a>
                     </motion.p>
                   </div>
                   <div className="order-1 md:order-2 max-w-[260px] md:max-w-none mx-auto w-full">
@@ -666,7 +674,9 @@ export default function QuizAgenteRoute({ loaderData }: Route.ComponentProps) {
                 <PriceSummary
                   quote={quote}
                   selectedPlan={selectedPlan}
-                  planMonthlyMxn={planQuote.priceMxn}
+                  planMonthlyMxn={planMonthly}
+                  webMonthlyMxn={webMxn}
+                  webQueries={consumption.webQueries ?? 0}
                   planCreditsPerMonth={totalCredits}
                   planOverageCredits={planQuote.overageCredits}
                   planBilling={effectivePlanBilling}
