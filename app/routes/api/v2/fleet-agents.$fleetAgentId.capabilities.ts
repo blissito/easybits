@@ -36,6 +36,7 @@ import { getEngineForAgent, FLEET_ENGINES } from "~/lib/fleetEngines";
 //     remove-mcp       { name }
 //     toggle-skill     { skillId, on }
 //     delete-skill     { skillId }
+//     recycle-box      {}                     (destruye cajas vivas/dormidas; próximo turno cold-spawn con env fresco)
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",

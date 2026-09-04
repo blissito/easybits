@@ -1948,6 +1948,9 @@ export class EasybitsClient {
       toggleSkill: (id: string, token: string, s: { skillId: string; on: boolean }) =>
         post(id, token, { action: "toggle-skill", ...s }),
       deleteSkill: (id: string, token: string, skillId: string) => post(id, token, { action: "delete-skill", skillId }),
+      /** Recicla las cajas vivas y dormidas del agente (respalda conversaciones antes). El
+       *  siguiente turno arranca una caja nueva con env fresco: motor, modelo, llave del motor. */
+      recycleBox: (id: string, token: string) => post(id, token, { action: "recycle-box" }) as Promise<{ ok: boolean; recycled: number }>,
 
       // ── Config: per-channel mutations (groupId; "*" = agent default) ──
       setGroupPrompt: (id: string, token: string, groupId: string, systemPrompt: string) =>
