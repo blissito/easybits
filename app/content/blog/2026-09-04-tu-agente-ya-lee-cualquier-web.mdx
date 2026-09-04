@@ -1,0 +1,134 @@
+---
+title: "Tu agente ya lee cualquier web: buscar, leer y extraer registros"
+description: "Cinco herramientas nuevas en el toolset web: buscar en Google, leer una página aunque bloquee bots, rastrear un sitio completo y extraer registros con esquema de Google Maps, Mercado Libre, Amazon, Instagram y más. Se cobra por consulta, con 50 gratis al alta."
+date: "2026-09-04"
+author: "Equipo Easybits"
+tags: ["agentes", "MCP", "SDK", "web", "investigación", "flota"]
+featuredImage: "/blog/assets/blog-agente-lee-la-web-cover.jpg"
+published: true
+---
+
+# Tu agente ya lee cualquier web: buscar, leer y extraer registros
+
+Hasta hoy un agente de Easybits podía generar documentos, imágenes, sitios y hablar por WhatsApp, pero para saber qué pasa fuera dependía de lo que le contaras. Desde hoy tiene internet: busca en Google, lee páginas que bloquean bots, rastrea sitios completos y extrae registros limpios de fuentes que normalmente no se dejan leer.
+
+Es el toolset `web`. Cinco herramientas, disponibles por MCP, REST y SDK, y en la flota como el bucket **Web**.
+
+## Las cinco herramientas
+
+| Tool | Qué hace | Cuesta |
+|---|---|---|
+| `web_search` | Busca en Google y devuelve resultados estructurados. Acepta `country` para ver los resultados de ese país. | 1 consulta |
+| `web_fetch` | Lee una página, aunque tenga protección anti-bots. Devuelve markdown limpio si lo pides. | 1 consulta |
+| `web_crawl` | Rastrea un sitio siguiendo sus links internos, hasta `maxPages`. | 1 consulta por página |
+| `web_extract` | Extrae registros con esquema de una fuente curada. Asíncrono: devuelve un `jobId`. | 1 consulta por registro |
+| `web_extract_status` | Estado y registros de un extract. | Gratis mientras corre |
+
+La unidad es la **consulta**: una página leída, una búsqueda, un registro extraído, una página rastreada. No se mezcla con los créditos de generación. Cada cuenta nueva trae 50 consultas que no caducan. Los packs están en `/dash/packs?tab=web`:
+
+| Pack | Consultas | Precio |
+|---|---|---|
+| web_400 | 400 | $99 MXN |
+| web_10000 | 10,000 | $999 MXN |
+
+## Buscar y leer
+
+El flujo básico es buscar, elegir un resultado y leerlo. Con `country` el agente ve el sitio como un usuario de ese país: precios en pesos, stock local, resultados de Google localizados.
+
+```ts
+import { EasybitsClient } from "@easybits.cloud/sdk";
+const eb = new EasybitsClient({ apiKey: process.env.EASYBITS_API_KEY });
+
+const search = await eb.webSearch({ query: "ubiquiti u6 mesh precio", country: "mx" });
+const organic = (search.results as { organic: { link: string; title: string }[] }).organic;
+const amazon = organic.find((r) => r.link.includes("amazon.com.mx"));
+
+const page = await eb.webFetch({ url: amazon.link, country: "mx", asMarkdown: true, onlyMainContent: true });
+console.log(page.body); // markdown sin nav, footer ni iconos
+```
+
+`onlyMainContent` quita menús, pies de página y decoración. El agente recibe el artículo o la ficha, no la plantilla del sitio. Menos tokens y menos ruido.
+
+Por MCP es lo mismo con menos ceremonia:
+
+```
+web_search({ query: "ubiquiti u6 mesh precio", country: "mx" })
+web_fetch({ url: "https://www.amazon.com.mx/dp/B09YRZYB29", country: "mx", asMarkdown: true })
+```
+
+## Rastrear un sitio completo
+
+Para documentación, catálogos o blogs, `web_crawl` sigue los links internos y devuelve cada página. Útil cuando el agente necesita el sitio entero como contexto, por ejemplo para responder preguntas sobre un producto a partir de sus docs.
+
+```
+web_crawl({ url: "https://docs.ejemplo.com", maxPages: 20, onlyMainContent: true })
+```
+
+Cada página del rastreo cuenta como una consulta. `maxPages` es el tope de gasto.
+
+## Extraer registros con esquema
+
+Aquí está la parte que más cuesta hacer a mano. `web_extract` no devuelve HTML: devuelve filas con campos, de fuentes que normalmente bloquean o que exigen scroll infinito.
+
+Fuentes disponibles hoy:
+
+- **Google Maps** y reseñas de Maps
+- **Mercado Libre** (parser propio, con el sitio de México)
+- **Amazon** producto y reseñas
+- **Instagram** perfiles y posts, **TikTok** perfiles y posts, **YouTube** canales y videos
+- **Facebook** posts de página y Marketplace
+- **LinkedIn** empresa, persona y vacantes, **Indeed** vacantes
+- **Google Shopping**, **Trustpilot**, **Reddit**
+
+El caso que más nos piden es prospección local. Un solo extract de Maps devuelve negocios con nombre, dirección, teléfono, sitio, rating y horario:
+
+```
+web_extract({
+  source: "google_maps",
+  input: [{ keyword: "dentista Polanco CDMX", country: "MX" }],
+  limit: 20
+})
+→ { jobId: "..." }
+
+web_extract_status({ jobId })
+→ { status: "done", records: [ { name, address, phone, website, rating, ... } ] }
+```
+
+Es asíncrono porque un extract de Maps tarda alrededor de 90 segundos. Con el SDK hay una versión que espera sola:
+
+```ts
+const job = await eb.webExtractAndWait({
+  source: "google_maps",
+  input: [{ keyword: "dentista Polanco CDMX", country: "MX" }],
+  limit: 20,
+});
+console.log(job.records.length); // 20
+```
+
+Se cobra por registro devuelto, no por intento. Un extract que devuelve 20 negocios cuesta 20 consultas.
+
+## En la flota
+
+Para un agente de la flota no hay que configurar nada nuevo: el bucket **Web** (`investigacion` en la API) es este mismo set. Se enciende por canal desde `/dash/flota` o con `set-toolgroup { buckets: ["investigacion"] }` en la API de capacidades, y el agente empieza a buscar y leer en el siguiente turno. Las consultas se descuentan de la cuenta del dueño del agente.
+
+Un agente de atención a clientes en WhatsApp puede así verificar el precio actual de un producto en la tienda de un competidor, leer la ficha técnica de un proveedor o encontrar la dirección y el teléfono de un negocio que el cliente menciona, sin que nadie le cargue esa información antes.
+
+## REST
+
+Para quien no usa el SDK:
+
+```
+POST /api/v2/web/search    { query, engine?, country? }
+POST /api/v2/web/fetch     { url, country?, asMarkdown?, onlyMainContent? }
+POST /api/v2/web/crawl     { url, maxPages?, country?, onlyMainContent? }
+POST /api/v2/web/extract   { source, input, limit? }  → { jobId }
+GET  /api/v2/web/extract/:jobId
+```
+
+Autenticación con tu API key como en el resto de la API v2. Referencia completa con ejemplos en cURL, Node y MCP en [la sección Web de los docs](/docs#web).
+
+## Qué no es
+
+No es un scraper genérico para descargar internet. Buscar y leer se han vuelto baratos en todas partes. Lo que vale aquí es lo que cuesta hacer bien: registros limpios de Maps para prospectar, y lectura de sitios que bloquean a un navegador normal. Ahí es donde un agente se atora, y ahí es donde estas herramientas entran.
+
+Foto de Suzy Hazelwood en [Pexels](https://www.pexels.com/photo/stack-of-newspapers-3866816/).
