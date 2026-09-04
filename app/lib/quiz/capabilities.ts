@@ -151,7 +151,7 @@ export const CAPABILITIES: Capability[] = [
     includes: [
       "Buscar, leer y rastrear sitios (toolset web)",
       "Extraer registros: Maps, Mercado Libre, Amazon MX, Instagram…",
-      "Pack Web de 400 consultas incluido; recargas en MXN, no caducan",
+      "1,000 consultas web al mes incluidas; recargas por pack en MXN, no caducan",
     ],
   },
   {
