@@ -1,22 +1,14 @@
-import {
-  MdKeyboardDoubleArrowLeft,
-  MdKeyboardDoubleArrowRight,
-} from "react-icons/md";
-import { Link, useSearchParams } from "react-router";
+import { useMemo, useState } from "react";
+import { Link } from "react-router";
 import { cn } from "~/utils/cn";
 import type { BlogPost } from "~/types/blog";
 
 interface BlogContentProps {
+  /** Todos los posts publicados (sin cuerpo). El filtrado es en cliente: la
+   *  ruta está prerenderizada y un snapshot estático no ve la query. */
   posts: BlogPost[];
   tags: string[];
-  /** Portada (sin filtros): destacado + filas por pista editorial. */
   featured?: BlogPost | null;
-  /** Label de la pista activa (?kind=) para el encabezado del listado filtrado. */
-  kindLabel?: string | null;
-  totalPages: number;
-  currentPage: number;
-  hasNextPage: boolean;
-  hasPrevPage: boolean;
 }
 
 // Barra de tags curada: pocos tags relevantes en vez de los 15+ del blog.
@@ -34,46 +26,41 @@ const CURATED_TAGS = [
   { tag: "agentes", label: "Agentes" },
 ];
 
-export const BlogContent = ({
-  posts,
-  tags,
-  featured = null,
-  kindLabel = null,
-  totalPages,
-  currentPage,
-  hasNextPage,
-  hasPrevPage,
-}: BlogContentProps) => {
-  const [searchParams, setSearchParams] = useSearchParams();
-  const currentTag = searchParams.get("tag");
-  const currentKind = searchParams.get("kind");
-  const currentSearch = searchParams.get("search") || "";
-  const isFront = !currentTag && !currentKind && !currentSearch && !searchParams.get("page");
+export const BlogContent = ({ posts, tags, featured = null }: BlogContentProps) => {
+  const [currentTag, setCurrentTag] = useState<string | null>(null);
+  const [currentKind, setCurrentKind] = useState<string | null>(null);
+  const [currentSearch, setCurrentSearch] = useState("");
+  const isFront = !currentTag && !currentKind && !currentSearch;
+
+  const visible = useMemo(() => {
+    let list = posts;
+    if (currentKind) list = list.filter((p) => p.kind === currentKind);
+    if (currentTag) list = list.filter((p) => p.tags.some((t) => t.toLowerCase() === currentTag.toLowerCase()));
+    if (currentSearch) {
+      const q = currentSearch.toLowerCase();
+      list = list.filter(
+        (p) =>
+          p.title.toLowerCase().includes(q) ||
+          p.description.toLowerCase().includes(q) ||
+          p.excerpt.toLowerCase().includes(q) ||
+          p.tags.some((t) => t.toLowerCase().includes(q))
+      );
+    }
+    if (isFront && featured) list = list.filter((p) => p.slug !== featured.slug);
+    return list;
+  }, [posts, currentKind, currentTag, currentSearch, isFront, featured]);
+
+  const kindLabel = currentKind ? KIND_CHIPS.find((k) => k.kind === currentKind)?.label ?? null : null;
 
   const handleTagClick = (tag: string) => {
-    const newParams = new URLSearchParams(searchParams);
-    newParams.delete("kind");
-    if (tag === "Todos") {
-      newParams.delete("tag");
-    } else {
-      newParams.set("tag", tag);
-    }
-    newParams.delete("page"); // Reset to first page when filtering
-    setSearchParams(newParams);
+    setCurrentKind(null);
+    setCurrentTag(tag === "Todos" ? null : tag);
   };
 
   const handleSearchSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const formData = new FormData(e.currentTarget);
-    const search = formData.get("search") as string;
-    const newParams = new URLSearchParams(searchParams);
-    if (search.trim()) {
-      newParams.set("search", search.trim());
-    } else {
-      newParams.delete("search");
-    }
-    newParams.delete("page"); // Reset to first page when searching
-    setSearchParams(newParams);
+    const search = (new FormData(e.currentTarget).get("search") as string) ?? "";
+    setCurrentSearch(search.trim());
   };
 
   return (
@@ -93,9 +80,8 @@ export const BlogContent = ({
                 category={k.label}
                 active={currentKind === k.kind}
                 onClick={() => {
-                  const n = new URLSearchParams(searchParams);
-                  n.delete("tag"); n.delete("page"); n.set("kind", k.kind);
-                  setSearchParams(n);
+                  setCurrentTag(null);
+                  setCurrentKind(k.kind);
                 }}
               />
             ))}
@@ -141,17 +127,19 @@ export const BlogContent = ({
                   </p>
                 </div>
               </div>
-              <Link
-                to="/blog"
+              <button
+                type="button"
+                onClick={() => handleTagClick("Todos")}
                 className="min-w-max rounded-full border-[2px] border-black px-4 h-10 grid place-content-center font-bold hover:bg-black hover:text-white transition-colors"
               >
                 ← Ver todos los posts
-              </Link>
+              </button>
             </div>
           ) : (
-            <Link
-              to="/blog?tag=ejemplos"
-              className="group flex flex-wrap md:flex-nowrap items-center gap-4 justify-between rounded-2xl border-[2px] border-black p-5 md:p-6 bg-grayLight transition-all hover:-translate-y-0.5 hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]"
+            <button
+              type="button"
+              onClick={() => handleTagClick("ejemplos")}
+              className="w-full text-left group flex flex-wrap md:flex-nowrap items-center gap-4 justify-between rounded-2xl border-[2px] border-black p-5 md:p-6 bg-grayLight transition-all hover:-translate-y-0.5 hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]"
             >
               <div className="flex items-center gap-4">
                 <span className="text-3xl md:text-4xl">📓</span>
@@ -165,7 +153,7 @@ export const BlogContent = ({
               <span className="min-w-max rounded-full border-[2px] border-black px-4 h-10 grid place-content-center font-bold group-hover:bg-black group-hover:text-white transition-colors">
                 Ver ejemplos →
               </span>
-            </Link>
+            </button>
           )}
         </div>
       </div>
@@ -178,9 +166,9 @@ export const BlogContent = ({
             </h2>
           </div>
         )}
-        {posts.length > 0 ? (
+        {visible.length > 0 ? (
           <div className={cn("grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 pb-12", isFront && featured ? "mt-5" : "")}>
-            {posts.map((post) => <GridCard key={post.slug} post={post} />)}
+            {visible.map((post) => <GridCard key={post.slug} post={post} />)}
           </div>
         ) : (
           <div className="text-center py-20">
@@ -190,88 +178,10 @@ export const BlogContent = ({
           </div>
         )}
       </div>
-      <Pagination
-        totalPages={totalPages}
-        currentPage={currentPage}
-        hasNextPage={hasNextPage}
-        hasPrevPage={hasPrevPage}
-      />
       <div className=" w-full h-12 lg:h-20 px-4 md:px-[5%] xl:px-0">
         <div className="border-x-[2px] border-black   h-full max-w-7xl mx-auto flex justify-between gap-4 items-center pl-4"></div>
       </div>
     </section>
-  );
-};
-
-export const Pagination = ({
-  totalPages,
-  currentPage,
-  hasNextPage,
-  hasPrevPage,
-}: {
-  totalPages: number;
-  currentPage: number;
-  hasNextPage: boolean;
-  hasPrevPage: boolean;
-}) => {
-  const [searchParams, setSearchParams] = useSearchParams();
-
-  const handlePageChange = (page: number) => {
-    const newParams = new URLSearchParams(searchParams);
-    newParams.set("page", page.toString());
-    setSearchParams(newParams);
-  };
-
-  const handlePrevPage = () => {
-    if (hasPrevPage) {
-      handlePageChange(currentPage - 1);
-    }
-  };
-
-  const handleNextPage = () => {
-    if (hasNextPage) {
-      handlePageChange(currentPage + 1);
-    }
-  };
-
-  if (totalPages <= 1) {
-    return null; // Don't show pagination if there's only one page
-  }
-
-  return (
-    <div className="border-y-[2px] border-black w-full h-10 px-4 md:px-[5%] xl:px-0">
-      <div className="border-x-[2px] border-black  h-full max-w-7xl mx-auto flex justify-end  items-center pl-4">
-        <div className="px-3 border-l-[2px] h-full grid place-content-center border-black">
-          <p>
-            {currentPage} de {totalPages}
-          </p>
-        </div>
-        <button
-          onClick={handlePrevPage}
-          disabled={!hasPrevPage}
-          className={cn(
-            "w-10 text-2xl text-white h-full grid place-content-center transition-colors",
-            hasPrevPage
-              ? "hover:bg-black/80 cursor-pointer bg-black"
-              : "bg-gray-400 cursor-not-allowed"
-          )}
-        >
-          <MdKeyboardDoubleArrowLeft />
-        </button>
-        <button
-          onClick={handleNextPage}
-          disabled={!hasNextPage}
-          className={cn(
-            "w-10 text-2xl text-white h-full grid place-content-center border-l-[2px] border-white/20 transition-colors",
-            hasNextPage
-              ? "hover:bg-black/80 cursor-pointer bg-black"
-              : "bg-gray-400 cursor-not-allowed"
-          )}
-        >
-          <MdKeyboardDoubleArrowRight />
-        </button>
-      </div>
-    </div>
   );
 };
 

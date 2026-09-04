@@ -3,76 +3,18 @@ import { Footer } from "~/components/common/Footer";
 import { BlogContent, BlogHeader } from "./blog/BlogList";
 import type { Route } from "./+types/blog";
 import { FloatingChat } from "~/components/ai/FloatingChat";
-import path from "path";
-import matter from "gray-matter";
-import { listPublishedPosts, POST_KINDS } from "~/.server/blogPosts";
-// import readingTime from "reading-time"; // REMOVE this import
+import { listPublishedPosts } from "~/.server/blogPosts";
 
-export const loader = async ({ request }: Route.LoaderArgs) => {
-  const url = new URL(request.url);
-  const page = parseInt(url.searchParams.get("page") || "1");
-  const tag = url.searchParams.get("tag") || undefined;
-  const search = url.searchParams.get("search") || undefined;
-  const kind = url.searchParams.get("kind") || undefined;
-  const limit = 12;
-
-  // El índice sale del directorio de posts, no de una lista a mano.
-  const allPosts = await listPublishedPosts();
-  let filteredPosts = allPosts;
-
-  if (tag) {
-    filteredPosts = filteredPosts.filter((post) =>
-      post.tags.some((postTag) => postTag.toLowerCase() === tag.toLowerCase())
-    );
-  }
-
-  if (kind) {
-    filteredPosts = filteredPosts.filter((post) => post.kind === kind);
-  }
-
-  if (search) {
-    const searchLower = search.toLowerCase();
-    filteredPosts = filteredPosts.filter(
-      (post) =>
-        post.title.toLowerCase().includes(searchLower) ||
-        post.description.toLowerCase().includes(searchLower) ||
-        post.excerpt.toLowerCase().includes(searchLower) ||
-        post.tags.some((tag) => tag.toLowerCase().includes(searchLower))
-    );
-  }
-
-  // Sort by date (newest first)
-  filteredPosts.sort(
-    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-  );
-
-  // Pagination
-  const totalPosts = filteredPosts.length;
-  const totalPages = Math.ceil(totalPosts / limit);
-  const startIndex = (page - 1) * limit;
-  const endIndex = startIndex + limit;
-  const paginatedPosts = filteredPosts.slice(startIndex, endIndex);
-
-  // Get all unique tags
+export const loader = async () => {
+  // La ruta está PRERENDERIZADA (react-router.config.ts): este loader corre una vez
+  // en el build. Por eso devuelve TODOS los posts (sin cuerpo) y el filtrado por
+  // pista/tag/búsqueda es en cliente — una query en la URL no llega a un snapshot.
+  const allPosts = (await listPublishedPosts())
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    .map(({ content: _content, ...meta }) => meta);
   const allTags = [...new Set(allPosts.flatMap((post) => post.tags))].sort();
-
-  // Portada (sin filtros, página 1): un destacado; el resto va a la grilla sin repetirlo.
-  const isFront = !tag && !search && !kind && page === 1;
-  const featured = isFront ? (filteredPosts.find((p) => p.featured) ?? filteredPosts[0] ?? null) : null;
-  const gridPosts = featured ? paginatedPosts.filter((p) => p.slug !== featured.slug) : paginatedPosts;
-
-  return {
-    posts: gridPosts,
-    totalPosts,
-    totalPages,
-    currentPage: page,
-    hasNextPage: page < totalPages,
-    hasPrevPage: page > 1,
-    tags: allTags,
-    featured,
-    kindLabel: kind ? POST_KINDS.find((k) => k.key === kind)?.label ?? null : null,
-    user: null, // Will be handled on client side
-  };
+  const featured = allPosts.find((p) => p.featured) ?? allPosts[0] ?? null;
+  return { posts: allPosts, tags: allTags, featured, user: null };
 };
 
 export const meta = () => {
@@ -118,32 +60,13 @@ export const meta = () => {
 
 export default function Blog({ loaderData }: Route.ComponentProps) {
   const serverData = loaderData as any; // Type assertion for now
-  const {
-    user,
-    posts = [],
-    tags = [],
-    featured = null,
-    kindLabel = null,
-    totalPages,
-    currentPage,
-    hasNextPage,
-    hasPrevPage,
-  } = serverData;
+  const { user, posts = [], tags = [], featured = null } = serverData;
 
   return (
     <section className="overflow-hidden">
       <AuthNav user={user} />
       <BlogHeader />
-      <BlogContent
-        posts={posts}
-        tags={tags}
-        featured={featured}
-        kindLabel={kindLabel}
-        totalPages={totalPages}
-        currentPage={currentPage}
-        hasNextPage={hasNextPage}
-        hasPrevPage={hasPrevPage}
-      />
+      <BlogContent posts={posts} tags={tags} featured={featured} />
       <Footer />
       <FloatingChat />
 
