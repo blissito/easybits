@@ -11,14 +11,12 @@ export const Invite = () => {
           </span>
           <span> Tus agentes&nbsp;</span> <span> ya tienen&nbsp;</span>
           <span> nube.&nbsp;</span>
-          <span> Empieza gratis&nbsp;</span> <span> y ahorra más de </span>
+          <span> Cajas, web,&nbsp;</span> <span> archivos y datos&nbsp;</span>
+          <span> desde un solo&nbsp;</span>
           <span className="inline-block bg-black text-white rounded-xl px-1 md:px-3 mx-1 md:mx-3">
-            $50 USD
+            MCP
           </span>{" "}
-          <span>al mes en&nbsp;</span> <span> cinco proveedores&nbsp;</span>
-          <span> en dólares.&nbsp;</span>
-          <span> Todo en MXN,&nbsp;</span>
-          <span> sin mensualidad obligatoria.</span>
+          <span>— en MXN,&nbsp;</span> <span> y empiezas gratis.</span>
         </h1>
       </div>
     </section>

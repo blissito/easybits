@@ -68,10 +68,10 @@ export const Assets = () => {
         />
         <Card
           img="/home/foco.svg"
-          title="Proxy LLM"
-          description="Un gateway OpenAI-compatible con tu misma llave. Tokens en MXN, sin cuenta con el proveedor."
+          title="Modelos LLM"
+          description="Claude, DeepSeek y más con tu misma llave de EasyBits. Cualquier cliente OpenAI funciona sin cambiar código; pagas tokens en MXN."
           className="bg-[#FADB6F]"
-          tags={["OpenAI-compat", "Sonnet", "DeepSeek"]}
+          tags={["Claude", "DeepSeek", "Sin cuenta aparte"]}
         />
       </div>
     </section>
