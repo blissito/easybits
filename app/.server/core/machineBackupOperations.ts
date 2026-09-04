@@ -34,8 +34,17 @@ import { nanoid } from "nanoid";
 
 const TMPDIR = process.env.RELEASE_TMPDIR || "/tmp";
 const RETENTION_DAYS = Number(process.env.MACHINE_BACKUP_RETENTION_DAYS || 7);
-/** Retention kept past a machine's hard-delete, so "I deleted it by mistake" on day 9 is survivable. */
-const POST_DELETE_RETENTION_DAYS = 30;
+/**
+ * Retención de la última copia después de destruir la máquina.
+ *
+ * Misma ventana que la retención normal a propósito: guardar un mes de
+ * respaldos de máquinas que ya no existen sólo engorda el bucket para siempre,
+ * y quien se arrepiente de un borrado lo hace el mismo día, no el día 23. Aquí
+ * la ventana cuenta desde el BORRADO (no desde que se tomó la copia), así que
+ * el dueño siempre tiene una semana completa aunque su último respaldo fuera
+ * de anteayer.
+ */
+const POST_DELETE_RETENTION_DAYS = 7;
 const MAX_BYTES = Number(process.env.BACKUP_MAX_BYTES || 4 * 1024 * 1024 * 1024);
 /** A machine with no fresh backup for this long is a problem worth surfacing. */
 const STALE_ALERT_HOURS = 48;
@@ -349,7 +358,7 @@ export async function pruneExpiredBackups(): Promise<{ deleted: number; kept: nu
  * máquina destruida no le llega ninguno. Sin esto, cada máquina que un cliente
  * dio de baja deja residuo permanente en el bucket, y eso sólo crece.
  *
- * La ventana (30 días desde el borrado duro) es a propósito la misma que
+ * La ventana (7 días desde el borrado duro) es a propósito la misma que
  * `extendBackupsForDeletedMachine`: primero se conserva por si el cliente
  * vuelve, y después se limpia de verdad.
  */

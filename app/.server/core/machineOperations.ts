@@ -688,12 +688,12 @@ export async function releasePermanent(
       deletionScheduledAt: null,
     },
   });
-  // La VM ya no existe; el backup pasa a retención post-borrado (30 días). En el
+  // La VM ya no existe; el backup pasa a retención post-borrado (7 días). En el
   // cron esto va con .catch silencioso, aquí NO: si falla, la única copia del
-  // cliente expira en 7 días y nadie se entera hasta que la pide.
+  // cliente expira con la copia vieja y nadie se entera hasta que la pide.
   await extendBackupsForDeletedMachine(sandboxId).catch((e) => {
     console.error(
-      `[hosting] CRITICAL: no se pudo extender la retención del backup de ${sandboxId} tras destruirla — expira con la ventana normal (7d) en vez de 30d:`,
+      `[hosting] CRITICAL: no se pudo extender la retención del backup de ${sandboxId} tras destruirla — no queda garantizada una semana completa desde el borrado:`,
       e
     );
   });

@@ -696,7 +696,7 @@ function Danger({ machine, fetcher, confirm }: any) {
           confirm({
             title: "¿Borrar la máquina?",
             message:
-              "Se destruye de inmediato y deja de cobrarse. No hay deshacer: lo único que queda es su último respaldo, guardado 30 días, con el que puedes reconstruirla en una máquina nueva. Los datos que vivan fuera (tu base de datos) no se tocan.",
+              "Se destruye de inmediato y deja de cobrarse. No hay deshacer: lo único que queda es su último respaldo, guardado 7 días, con el que puedes reconstruirla en una máquina nueva. Los datos que vivan fuera (tu base de datos) no se tocan.",
             label: "Borrar para siempre",
             confirmPhrase: machine.name || machine.sandboxId,
             run: () =>

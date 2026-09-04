@@ -1676,7 +1676,7 @@ How to embed safely (the only reliable rule):
 
   server.tool(
     "release_machine",
-    "Delete an always-on machine. DESTRUCTIVE AND IMMEDIATE: stops billing, takes a last backup and destroys the VM — there is no grace period and no undo. The backup is kept 30 days and is the only way back: list_backups, then restore_machine_from_backup onto a new machine. Requires confirm:true. Owner-only.",
+    "Delete an always-on machine. DESTRUCTIVE AND IMMEDIATE: stops billing, takes a last backup and destroys the VM — there is no grace period and no undo. The backup is kept 7 days and is the only way back: list_backups, then restore_machine_from_backup onto a new machine. Requires confirm:true. Owner-only.",
     {
       sandboxId: z.string().describe("Sandbox ID of the machine to delete"),
       confirm: z
