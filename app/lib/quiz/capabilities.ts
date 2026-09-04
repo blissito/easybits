@@ -137,6 +137,24 @@ export const CAPABILITIES: Capability[] = [
     ],
   },
   {
+    id: "web",
+    label: "Investiga en la web",
+    shortLabel: "Lee la web",
+    emoji: "🌐",
+    question: "¿Tu agente busca, lee y extrae datos de la web?",
+    description:
+      "Busca en Google, lee cualquier página aunque bloquee bots y extrae registros con esquema: negocios de Google Maps con teléfono y WhatsApp, precios de Mercado Libre y Amazon MX, perfiles y reseñas. Sin scrapers que mantener.",
+    vendor: "EasyBits Web",
+    basePriceMxn: 900,
+    bgClass: "bg-lime",
+    isAddon: true,
+    includes: [
+      "Buscar, leer y rastrear sitios (toolset web)",
+      "Extraer registros: Maps, Mercado Libre, Amazon MX, Instagram…",
+      "Pack Web de 400 consultas incluido; recargas en MXN, no caducan",
+    ],
+  },
+  {
     id: "quotes",
     label: "Cotizaciones automáticas",
     shortLabel: "Cotiza",
@@ -317,10 +335,10 @@ export const CAPABILITIES: Capability[] = [
       "Captura de leads conectada al CRM",
     ],
   },
-  // Capabilities `video` (Runway) y `research` (Brightdata) eliminadas del
-  // cotizador. Se mueven al modelo de créditos: video.fal.avatar y
-  // research.brightdata.{scrape,search} en app/.server/services/registry.ts.
-  // Consumibles via packs o créditos del plan mensual.
+  // Capability `video` (Runway) eliminada del cotizador: se mueve al modelo de
+  // créditos (video.fal.avatar en app/.server/services/registry.ts). La de web
+  // volvió como `web` arriba: el toolset se vende por consultas (packs Web),
+  // y aquí el setup cubre conectarlo y dejarle el primer pack.
   //
   // Babysit del agente NO es una capability. Viene incluido en cualquier
   // setup pagado — no es opcional, no se cotiza aparte. La constante

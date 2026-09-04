@@ -918,4 +918,5 @@ export const ILLUSTRATION_BY_ID: Record<
   payments: PaymentsIllustration,
   video: VideoIllustration,
   research: ResearchIllustration,
+  web: ResearchIllustration,
 };
