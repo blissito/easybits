@@ -888,6 +888,10 @@ console.log(result.savings); // "75%"`}
               <strong>Se mide en consultas, no en créditos.</strong> 1 consulta = 1 página leída, 1 búsqueda, 1 registro extraído — y en un rastreo, cada página que lee (máx. 20 por llamada).
               Tienes 50 al registrarte; los packs Web ($99 → 400, $999 → 10,000) están en <a href="/dash/packs?tab=web" className="underline font-bold">/dash/packs?tab=web</a>, valen para cualquier plan y <b>no caducan</b>. Sin saldo → <code className="bg-gray-100 px-1 rounded">402</code>.
             </div>
+            <div className="mb-6 bg-gray-50 border-2 border-gray-300 rounded-xl p-4 text-sm">
+              <strong><code className="bg-white px-1 rounded">country</code> es opcional</strong> y son 2 letras (ISO 3166-1): <code className="bg-white px-1 rounded">mx</code> México · <code className="bg-white px-1 rounded">us</code> Estados Unidos · <code className="bg-white px-1 rounded">es</code> España · <code className="bg-white px-1 rounded">ar</code> Argentina · <code className="bg-white px-1 rounded">co</code> Colombia · <code className="bg-white px-1 rounded">cl</code> Chile · <code className="bg-white px-1 rounded">pe</code> Perú · <code className="bg-white px-1 rounded">br</code> Brasil.
+              Sirve para ver el sitio como un usuario de ese país (precios en MXN, stock local, resultados de Google localizados). Si lo omites, el proveedor elige. Lista completa: <a href="https://es.wikipedia.org/wiki/ISO_3166-1#C%C3%B3digos_oficialmente_asignados" target="_blank" rel="noreferrer" className="underline">ISO 3166-1</a>. En <code className="bg-white px-1 rounded">web_extract</code> con google_maps va en MAYÚSCULAS dentro del input (<code className="bg-white px-1 rounded">country: "MX"</code>).
+            </div>
 
             <Endpoint
               method="POST"
@@ -896,12 +900,29 @@ console.log(result.savings); // "75%"`}
               body={[
                 { name: "query", type: "string", desc: "Texto plano (requerido)" },
                 { name: "engine", type: "string", desc: "google (default) | bing | yandex | duckduckgo" },
-                { name: "country", type: "string", desc: "ISO 3166-1 (mx, us…) para resultados localizados" },
+                { name: "country", type: "string", desc: "País en 2 letras: mx (México), us, es, ar, co, cl, pe, br. Ver lista completa abajo" },
               ]}
               response={`{ "query": "…", "engine": "google", "results": { "organic": [ { "title", "link", "description" } ], … } }`}
               note="1 consulta. Úsalo para encontrar la URL correcta y luego léela con /web/fetch."
-              sdk={`const r = await eb.webSearch({ query: "ubiquiti u6 mesh precio", country: "mx" });`}
             />
+            <TabbedCode
+              tabs={[
+                { label: "SDK", code: `const r = await eb.webSearch({ query: "ubiquiti u6 mesh precio", country: "mx" });
+console.log(r.results.organic[0].link);` },
+                { label: "cURL", code: `curl -X POST https://www.easybits.cloud/api/v2/web/search \\
+  -H "Authorization: Bearer $EASYBITS_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{"query":"ubiquiti u6 mesh precio","country":"mx"}'` },
+                { label: "Node.js", code: `const res = await fetch("https://www.easybits.cloud/api/v2/web/search", {
+  method: "POST",
+  headers: { Authorization: \`Bearer \${process.env.EASYBITS_API_KEY}\`, "Content-Type": "application/json" },
+  body: JSON.stringify({ query: "ubiquiti u6 mesh precio", country: "mx" }),
+});
+const data = await res.json();` },
+                { label: "MCP", code: `web_search({ query: "ubiquiti u6 mesh precio", country: "mx" })` },
+              ]}
+            />
+            <div className="mb-8" />
 
             <Endpoint
               method="POST"
@@ -909,17 +930,34 @@ console.log(result.savings); // "75%"`}
               description="Lee una página aunque bloquee bots. Devuelve HTML o markdown"
               body={[
                 { name: "url", type: "string", desc: "https://… (requerido)" },
-                { name: "country", type: "string", desc: "Ver la versión local del sitio (precios en MXN, stock local)" },
+                { name: "country", type: "string", desc: "País en 2 letras: mx (México), us, es, ar, co, cl, pe, br. Ver lista completa abajo" },
                 { name: "asMarkdown", type: "boolean", desc: "true → markdown limpio, ideal para resumir" },
               ]}
               response={`{ "url": "…", "statusCode": 200, "format": "markdown", "body": "# …" }`}
               note="1 consulta. El cuerpo se recorta a 200 KB."
-              sdk={`const page = await eb.webFetch({
+            />
+            <TabbedCode
+              tabs={[
+                { label: "SDK", code: `const page = await eb.webFetch({
   url: "https://www.amazon.com.mx/dp/B09YRZYB29",
   country: "mx",
   asMarkdown: true,
-});`}
+});
+console.log(page.body);` },
+                { label: "cURL", code: `curl -X POST https://www.easybits.cloud/api/v2/web/fetch \\
+  -H "Authorization: Bearer $EASYBITS_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{"url":"https://www.amazon.com.mx/dp/B09YRZYB29","country":"mx","asMarkdown":true}'` },
+                { label: "Node.js", code: `const res = await fetch("https://www.easybits.cloud/api/v2/web/fetch", {
+  method: "POST",
+  headers: { Authorization: \`Bearer \${process.env.EASYBITS_API_KEY}\`, "Content-Type": "application/json" },
+  body: JSON.stringify({ url: "https://www.amazon.com.mx/dp/B09YRZYB29", country: "mx", asMarkdown: true }),
+});
+const data = await res.json();` },
+                { label: "MCP", code: `web_fetch({ url: "https://www.amazon.com.mx/dp/B09YRZYB29", country: "mx", asMarkdown: true })` },
+              ]}
             />
+            <div className="mb-8" />
 
             <Endpoint
               method="POST"
@@ -928,20 +966,59 @@ console.log(result.savings); // "75%"`}
               body={[
                 { name: "source", type: "string", desc: "google_maps | mercadolibre | amazon_product | amazon_reviews | google_shopping | instagram_profiles | instagram_posts | tiktok_profiles | tiktok_posts | facebook_page_posts | facebook_marketplace | youtube_channels | youtube_videos | linkedin_company | linkedin_person | linkedin_jobs | indeed_jobs | trustpilot | inmuebles24 | reddit_posts" },
                 { name: "datasetId", type: "string", desc: "Para fuentes fuera de la lista (catálogo de +1,000)" },
-                { name: "input", type: "object | object[]", desc: "google_maps → [{ keyword, country }] · mercadolibre → { query, page? } · resto → [{ url }]" },
+                { name: "input", type: "object | object[]", desc: "google_maps → [{ keyword, country: 'MX' }] · mercadolibre → { query, page? } · resto → [{ url }]" },
                 { name: "limit", type: "number", desc: "Registros máximos por input (default 20, máx 200)" },
               ]}
               response={`202 { "jobId": "…", "status": "running", "source": "google_maps" }
 // mercadolibre responde al instante:
 200 { "jobId": "…", "status": "done", "records": [ { "title", "price", "url", "seller", … } ], "total": 48 }`}
               note="Cobra 1 consulta POR REGISTRO devuelto, una sola vez, al recogerlos. Disparar el job no cuesta; un job que falla no cobra."
-              sdk={`const job = await eb.webExtractAndWait({
+            />
+            <TabbedCode
+              tabs={[
+                { label: "SDK", code: `// Espera y devuelve los registros (poll cada 15 s)
+const job = await eb.webExtractAndWait({
   source: "google_maps",
   input: [{ keyword: "dentista Polanco CDMX", country: "MX" }],
   limit: 20,
 });
-// job.records → nombre, teléfono, WhatsApp, sitio, rating, horarios…`}
+// job.records → nombre, teléfono, WhatsApp, sitio, rating, horarios…
+
+// Mercado Libre responde al instante
+const meli = await eb.webExtract({ source: "mercadolibre", input: { query: "iphone 15" } });
+console.log(meli.records[0].price);` },
+                { label: "cURL", code: `curl -X POST https://www.easybits.cloud/api/v2/web/extract \\
+  -H "Authorization: Bearer $EASYBITS_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{"source":"google_maps","input":[{"keyword":"dentista Polanco CDMX","country":"MX"}],"limit":20}'
+# → 202 { "jobId": "…", "status": "running" }
+
+curl https://www.easybits.cloud/api/v2/web/extract/$JOB_ID \\
+  -H "Authorization: Bearer $EASYBITS_API_KEY"
+# → { "status": "done", "records": [ … ], "total": 20 }` },
+                { label: "Node.js", code: `const res = await fetch("https://www.easybits.cloud/api/v2/web/extract", {
+  method: "POST",
+  headers: { Authorization: \`Bearer \${process.env.EASYBITS_API_KEY}\`, "Content-Type": "application/json" },
+  body: JSON.stringify({ source: "google_maps", input: [{ keyword: "dentista Polanco CDMX", country: "MX" }], limit: 20 }),
+});
+const data = await res.json();
+
+// poll hasta que termine
+let st;
+do {
+  await new Promise((r) => setTimeout(r, 15_000));
+  st = await fetch(\`https://www.easybits.cloud/api/v2/web/extract/\${data.jobId}\`, {
+    headers: { Authorization: \`Bearer \${process.env.EASYBITS_API_KEY}\` },
+  }).then((r) => r.json());
+} while (st.status === "running");
+console.log(st.records);` },
+                { label: "MCP", code: `web_extract({ source: "google_maps", input: [{ keyword: "dentista Polanco CDMX", country: "MX" }], limit: 20 })
+// → { jobId, status: "running" }
+web_extract_status({ jobId })
+// → { status: "done", items: [ … ], total: 20 }` },
+              ]}
             />
+            <div className="mb-8" />
 
             <Endpoint
               method="GET"
@@ -949,8 +1026,8 @@ console.log(result.savings); // "75%"`}
               description="Estado de un job de extract; cuando termina trae los registros"
               response={`{ "jobId": "…", "status": "running" | "done" | "error", "records"?: [...], "total"?: 20 }`}
               note="Gratis mientras corre. Volver a pedir un job ya cobrado no cobra de nuevo. Los jobs con esquema tardan 30-120 s: haz poll cada ~15 s."
-              sdk={`const st = await eb.webExtractStatus(job.jobId);`}
             />
+            <div className="mb-8" />
 
             <Endpoint
               method="POST"
@@ -958,15 +1035,33 @@ console.log(result.savings); // "75%"`}
               description="Lee una página y sigue sus links internos (mismo dominio) hasta maxPages"
               body={[
                 { name: "url", type: "string", desc: "URL de inicio (requerido)" },
-                { name: "maxPages", type: "number", desc: "1-20, default 10" },
-                { name: "country", type: "string", desc: "ISO country" },
+                { name: "maxPages", type: "number", desc: "1-20, default 10. Cada página leída cuesta 1 consulta" },
+                { name: "country", type: "string", desc: "País en 2 letras: mx (México), us, es, ar, co, cl, pe, br. Ver lista completa abajo" },
               ]}
               response={`{ "startUrl": "…", "pages": [ { "url", "markdown" } ], "pending": [ "…" ] }`}
               note="1 consulta por página realmente leída. `pending` son los links vistos y no visitados: pásale uno a otra llamada para continuar."
-              sdk={`const site = await eb.webCrawl({ url: "https://docs.ejemplo.com", maxPages: 20 });`}
             />
+            <TabbedCode
+              tabs={[
+                { label: "SDK", code: `const site = await eb.webCrawl({ url: "https://docs.ejemplo.com", maxPages: 20 });
+for (const p of site.pages) console.log(p.url, p.markdown.length);` },
+                { label: "cURL", code: `curl -X POST https://www.easybits.cloud/api/v2/web/crawl \\
+  -H "Authorization: Bearer $EASYBITS_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{"url":"https://docs.ejemplo.com","maxPages":20}'` },
+                { label: "Node.js", code: `const res = await fetch("https://www.easybits.cloud/api/v2/web/crawl", {
+  method: "POST",
+  headers: { Authorization: \`Bearer \${process.env.EASYBITS_API_KEY}\`, "Content-Type": "application/json" },
+  body: JSON.stringify({ url: "https://docs.ejemplo.com", maxPages: 20 }),
+});
+const data = await res.json();` },
+                { label: "MCP", code: `web_crawl({ url: "https://docs.ejemplo.com", maxPages: 20 })` },
+              ]}
+            />
+            <div className="mb-8" />
 
-            <h3 className="text-lg font-bold mb-3 mt-8">Tools MCP</h3>
+            <h3 className="text-lg font-bold mb-3">Tools MCP</h3>
+            <p className="text-sm text-gray-600 mb-3">Conecta <code className="bg-gray-100 px-1 rounded">https://www.easybits.cloud/api/mcp/web</code> con tu API key como Bearer.</p>
             <div className="space-y-2">
               <McpTool name="web_search" params="query, engine?, country?" description="Busca en Google y devuelve resultados estructurados. 1 consulta." />
               <McpTool name="web_fetch" params="url, country?, asMarkdown?" description="Lee una página aunque bloquee bots. 1 consulta." />
