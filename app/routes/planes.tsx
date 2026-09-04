@@ -18,9 +18,9 @@ export const clientLoader = async () => {
 
 export const meta = () =>
   getBasicMetaTags({
-    title: "Planes flexibles para tu agente IA",
+    title: "Planes — La nube para expertos IA | EasyBits",
     description:
-      "Elige el plan de sandboxes, storage y MCP que necesita tu agente — sin comisiones abusivas.",
+      "Planes en MXN para sandboxes, web, archivos, datos y agentes. Empieza gratis; los packs valen para cualquier plan y no caducan.",
   });
 
 export default function Planes({ loaderData }: Route.ComponentProps) {
@@ -42,30 +42,30 @@ export default function Planes({ loaderData }: Route.ComponentProps) {
         items={[
           {
             src: "/client.png",
-            text: "Conecté mi agente de IA a EasyBits con el MCP y en minutos ya estaba subiendo y organizando archivos automáticamente. Es el storage que siempre quise para mis workflows de AI.",
-            name: "Daniel R. — AI Developer",
+            text: "Nuestro agente cotiza desde el catálogo y mueve los pedidos en el tablero solo. Antes eso era una persona todo el día en WhatsApp.",
+            name: "Dirección comercial, distribuidor industrial · CDMX",
           },
           {
             src: "/client.png",
-            text: "Usamos EasyBits como backend de archivos para nuestra app. El SDK es limpio, los webhooks nos notifican al instante, y el streaming HLS resolvió nuestro problema de video sin complicaciones.",
-            name: "Mariana L. — CTO, Startup SaaS",
+            text: "Cada consultorio tiene su agente en su propia caja. Si nadie escribe, duerme y no me cuesta; si escriben cincuenta, despiertan cincuenta.",
+            name: "Fundador, agenda para consultorios · MX",
           },
           {
             src: "/client.png",
-            text: "Antes usaba Cloudinary y pagaba de más por features que no necesitaba. Con EasyBits subo archivos, genero links de descarga y tengo preview inline, todo desde la API. Simple y funcional.",
-            name: "Carlos V. — Fullstack Engineer",
+            text: "En el taller conecté el MCP en Claude Code y en la misma tarde mi agente ya tenía sandbox, base de datos y leía sitios que me bloqueaban.",
+            name: "Alumno del taller de agentes",
           },
         ]}
       />
       <Benefits />
       <Banners rotation={0}>
         <>
-          Crea una cuenta gratis <Robot /> Vende tu primer asset <Robot />{" "}
-          Almacena tus archivos <Robot /> Crea una cuenta gratis <Robot /> Vende
-          tu primer asset <Robot /> Almacena tus archivos <Robot /> Crea una
-          cuenta gratis <Robot /> Vende tu primer asset <Robot /> Almacena tus
-          archivos <Robot /> Crea una cuenta gratis <Robot /> Vende tu primer
-          asset <Robot /> Almacena tus archivos <Robot />
+          Sandboxes <Robot /> Web <Robot /> Archivos <Robot /> Bases de datos{" "}
+          <Robot /> Agentes en WhatsApp <Robot /> Un solo MCP <Robot />{" "}
+          Sandboxes <Robot /> Web <Robot /> Archivos <Robot /> Bases de datos{" "}
+          <Robot /> Agentes en WhatsApp <Robot /> Un solo MCP <Robot />{" "}
+          Sandboxes <Robot /> Web <Robot /> Archivos <Robot /> Bases de datos{" "}
+          <Robot /> Agentes en WhatsApp <Robot /> Un solo MCP <Robot />
         </>
       </Banners>
       <Faq />

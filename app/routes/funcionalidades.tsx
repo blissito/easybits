@@ -36,9 +36,9 @@ export const clientLoader = async () => {
 
 export const meta = () =>
   getBasicMetaTags({
-    title: "Todo lo que puede hacer tu agente con EasyBits",
+    title: "Funcionalidades — La nube para expertos IA | EasyBits",
     description:
-      "MicroVMs, storage, archivos y automatizaciones para tu agente IA, todo desde un solo MCP.",
+      "Sandboxes, web (buscar, leer, extraer), archivos, bases de datos, documentos, hosting y agentes en WhatsApp: todo lo que tu agente puede hacer desde un solo MCP, en MXN.",
   });
 
 export default function Blog({ loaderData }: Route.ComponentProps) {
@@ -50,12 +50,12 @@ export default function Blog({ loaderData }: Route.ComponentProps) {
         <FeaturesHeader />
         <Banners rotation={0}>
           <>
-            Crea una cuenta gratis <Robot /> Vende tu primer asset <Robot />{" "}
-            Almacena tus archivos <Robot /> Crea una cuenta gratis <Robot />{" "}
-            Vende tu primer asset <Robot /> Almacena tus archivos <Robot /> Crea
-            una cuenta gratis <Robot /> Vende tu primer asset <Robot /> Almacena
-            tus archivos <Robot /> Crea una cuenta gratis <Robot /> Vende tu
-            primer asset <Robot /> Almacena tus archivos <Robot />
+            Sandboxes <Robot /> Web <Robot /> Archivos <Robot /> Bases de datos{" "}
+            <Robot /> Agentes en WhatsApp <Robot /> Un solo MCP <Robot />{" "}
+            Sandboxes <Robot /> Web <Robot /> Archivos <Robot /> Bases de datos{" "}
+            <Robot /> Agentes en WhatsApp <Robot /> Un solo MCP <Robot />{" "}
+            Sandboxes <Robot /> Web <Robot /> Archivos <Robot /> Bases de datos{" "}
+            <Robot /> Agentes en WhatsApp <Robot /> Un solo MCP <Robot />
           </>
         </Banners>
       </div>
@@ -109,8 +109,8 @@ const FeaturesScroll = () => {
             src="/home/logo-glasses.svg"
           />
           <h2 className="text-5xl xl:text-9xl font-bold leading-snug mb-6 md:mb-12 text-center w-full text-black ">
-            ¿Qué puedes hacer
-            <br /> en EasyBits?
+            ¿Qué puede hacer
+            <br /> tu agente?
           </h2>{" "}
         </div>
       </div>
@@ -118,234 +118,156 @@ const FeaturesScroll = () => {
       <div className=" mx-auto px-4 md:px-[5%] xl:px-[0] w-full pb-0 md:pb-40 max-w-7xl  overflow-hidden ">
         <div className="w-full grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6  ">
           <Card
-            icon={<MdVideogameAsset />}
-            className="bg-sky"
-            bgColor="bg-[#EBBBE9]"
-            title="Vender assets digitales de todo tipo"
-            description={
-              <p>
-                {" "}
-                ¿Eres un creativo o profesional que tiene algo que compartir? No
-                importa si eres diseñador, arquitecto, escritor o maestro. Vende
-                todo tipo de assets digitales:{" "}
-                <span className="text-[#457D7B]  font-bold">
-                  {" "}
-                  libros electrónicos, videos, audio y música, o cualquier otro
-                  archivo como PSD o AI.
-                </span>
-              </p>
-            }
-          />
-
-          <Card
-            bgColor="bg-berry"
-            icon={<PiPaintBrushBroad />}
-            title="Personalizar tus landing pages"
-            description={
-              <p>
-                Crea y personaliza landig pages para cada uno de tus assets,{" "}
-                <span className="text-[#DF7CB0]  font-bold">
-                  agrega su propia galería de fotos y una descripción completa
-                  para atraer a más clientes.
-                </span>{" "}
-                Comparte el link de tu asset directamente en redes sociales, por
-                correo o whats app.
-              </p>
-            }
-          />
-
-          <Card
-            className="bg-[#ECD66E]"
-            icon={<CgWebsite />}
-            bgColor="bg-[#B9A8F3]"
-            title="Crear tu propio website de ventas"
-            description={
-              <p>
-                Con un par de clics ten listo tu website completamente
-                optimizado para todos los dispositivos.&nbsp;
-                <span className="text-[#9D771D]  font-bold">
-                  Añade tu logotipo, foto de portada, cambia los colores y
-                  personaliza la tipografía,
-                </span>{" "}
-                selecciona el tema y agrega tus redes sociales.
-              </p>
-            }
-          />
-          <Card
-            bgColor="bg-lime"
-            icon={<RiDiscountPercentLine />}
-            title="Administrar descuentos (proximamente)"
-            description={
-              <p>
-                Crea{" "}
-                <span className="text-[#61AA46]  font-bold">
-                  descuentos para ocasiones especiales, para todos tus productos
-                  o para productos específicos{" "}
-                </span>{" "}
-                y adminístralos de forma fácil y rápida desde tu dashboard.
-                Utiliza los descuentos para consentir a tus clientes y aumentar
-                tus ventas.
-              </p>
-            }
-          />
-          <Card image="/images/kit.png" variant="fullImage" />
-          <Card
-            bgColor="bg-sea"
-            icon={<TbWorldWww />}
-            title="Configurar tu dominio"
-            description={
-              <p>
-                Además del subdominio gratuito que EasyBits te ofrece, puedes
-                &nbsp;
-                <span className="text-[#76A5C0]  font-bold">
-                  agregar tu propio dominio
-                </span>{" "}
-                y fortalecer tu marca.
-                <br />
-                Pronto podrás comprar tu dominio directamente desde EasyBits.
-              </p>
-            }
-          />
-          <Card
-            className="bg-[#B9A8F3]"
-            bgColor="bg-[#ECD66E]"
-            icon={<RiRobot2Fill className="text-[28px]" />}
-            title="Usar AI para llenar la información de tus assets"
-            description={
-              <p>
-                Con nuestro agente,
-                <span className="text-[#5B567C]  font-bold">
-                  {" "}
-                  presenta tus assets de forma clara, creativa y con un toque de
-                  personalidad
-                </span>{" "}
-                que atrape a tus futuros clientes desde el primer vistazo.
-              </p>
-            }
-          />
-          <Card
-            icon={<SiGoogleanalytics className="text-[24px]" />}
-            bgColor="bg-[#BFD0B3]"
-            title="Integrar Google Analytics"
-            description={
-              <p>
-                ¿Quieres medir conversiones específicas? Solo{" "}
-                <span className="text-[#537C44]  font-bold">
-                  pega tu ID de Google Analytics y comienza a recopilar datos
-                  clave de inmediato.
-                </span>
-              </p>
-            }
-          />
-          <Card
-            className="bg-[#E8A787]"
-            bgColor="bg-sky"
-            icon={<GrAnalytics />}
-            title="Descargar reportes de ventas"
-            description={
-              <p>
-                Toda la información de tus ventas está disponible en tu
-                dashboard.{" "}
-                <span className="text-[#703524]  font-bold">
-                  Descárgala cuando la necesites
-                </span>
-                .
-              </p>
-            }
-          />
-          <Card
-            bgColor="bg-sky"
-            icon={<FaUsers />}
-            title="Tener acceso completo a la información de tus clientes"
-            description={
-              <p>
-                ¿Quieres descargar los mails de tus clientes para enviar un mail
-                o crear una campaña de ADS? Descárgalos cuando quieras.{" "}
-                <span className="text-[#628FA9]  font-bold">
-                  {" "}
-                  ¡Tus clientes! ¡Tu información!
-                </span>
-              </p>
-            }
-          />
-          <Card
-            className="bg-[#B5E8A2]"
-            icon={<MdStorefront />}
-            bgColor="bg-[#E8A787]"
-            title="Acceder a la comunidad EasyBits para aumentar tus ventas (proximamente)"
-            description={
-              <p>
-                Aumenta tus ventas siendo parte de la comunidad EasyBits en
-                donde cientos de usuarios exploran y compran assets digitales.{" "}
-                <span className="text-[#537C44]  font-bold">
-                  La comunidad es un escaparte más para tus assets sin ningún
-                  costo o comisión adicional.
-                </span>
-              </p>
-            }
-          />
-          <Card
-            bgColor="bg-rose"
             icon={<SiGooglecontaineroptimizedos />}
-            title="Optimizar tus archivos"
+            bgColor="bg-[#93E6EB]"
+            title="Sandboxes: una microVM por agente"
             description={
               <p>
-                Puedes optimizar todo tu contenido en video bajo el{" "}
-                <span className="text-[#C6478A]  font-bold">
-                  protocolo HLS (HTTP Live Streaming),{" "}
-                </span>{" "}
-                el cuál permite adaptar la calidad del video a las condiciones
-                de la red.
+                Tu agente crea su caja, ejecuta código con root e internet y la deja dormida. Despierta en menos de un segundo; cold boot en ~12 s.{" "}
+                <span className="text-[#457D7B] font-bold">Firecracker, releases, backups y hosting de la misma caja.</span>
               </p>
             }
           />
           <Card
-            className="bg-[#EFD7BC]"
+            icon={<TbWorldWww />}
+            bgColor="bg-[#D4EB93]"
+            title="Leer y rastrear cualquier web"
+            description={
+              <p>
+                Una página o un sitio completo, aunque bloquee bots. HTML o markdown limpio con onlyMainContent.{" "}
+                <span className="text-[#457D7B] font-bold">1 consulta por página. Sin proxies que mantener.</span>
+              </p>
+            }
+          />
+          <Card
+            icon={<GrAnalytics />}
+            bgColor="bg-[#CDB8F9]"
+            title="Buscar desde 195 países"
+            description={
+              <p>
+                Google, Bing, Yandex y DuckDuckGo en JSON estructurado: orgánicos, negocios locales, knowledge panel.{" "}
+                <span className="text-[#457D7B] font-bold">Geo por país. 1 consulta por búsqueda.</span>
+              </p>
+            }
+          />
+          <Card
+            icon={<MdStorefront />}
+            bgColor="bg-[#FADB6F]"
+            title="Extraer registros con esquema"
+            description={
+              <p>
+                Google Maps con teléfono y WhatsApp, Mercado Libre, Amazon MX, Instagram, TikTok, LinkedIn y más de 1,000 fuentes.{" "}
+                <span className="text-[#457D7B] font-bold">Se cobra por registro entregado, no por intento.</span>
+              </p>
+            }
+          />
+          <Card
             icon={<MdOutlineStorage />}
-            title="Almacenar archivos"
-            bgColor="bg-[#B9A8F3]"
+            bgColor="bg-[#DCE2F0]"
+            title="Archivos con CDN"
             description={
               <p>
-                En la misma plataforma puedes{" "}
-                <span className="text-[#635C53]  font-bold">
-                  almacenar tus archivos
-                </span>
-                , establecerlos como públicos o privados, consumirlos desde otra
-                plataforma e incluso puedes compartirlos y definir tokens de
-                acceso limitado por 1 minto, 1 hora o 1 día.
+                Sube, versiona, comparte con links y recibe webhooks. Lo que tu agente produce ya tiene dónde vivir.{" "}
+                <span className="text-[#457D7B] font-bold">upload_file, share links, optimización de imágenes.</span>
               </p>
             }
           />
           <Card
-            bgColor="bg-munsell"
-            icon={<AiOutlineApi />}
-            title="Usar la API para archivos"
+            icon={<SiGoogleanalytics />}
+            bgColor="bg-[#B2DAD8]"
+            title="Una base de datos por cliente"
             description={
               <p>
-                Conecta EasyBits a tu propia plataforma y{" "}
-                <span className="text-[#B78E47]  font-bold">
-                  {" "}
-                  usa la API para agregar, editar o eliminar archivos de forma
-                  fácil
-                </span>
-                , y además, administra la privacidad de cada uno (públicos o
-                privados). EasyBits será tu mejor hosting de archivos.
+                SQL (libSQL) por cliente o por caja, sin pooling que administrar. Backup y restore entre cuentas.{" "}
+                <span className="text-[#457D7B] font-bold">db_create, db_query, db_exec.</span>
               </p>
             }
           />
           <Card
-            className="bg-[#EBBBE9]"
+            icon={<PiPaintBrushBroad />}
+            bgColor="bg-[#E0AC6E]"
+            title="Documentos, landings y presentaciones"
+            description={
+              <p>
+                Cotizaciones y reportes en PDF, landings y slides en HTML, con tu brand kit. Se publican en tu subdominio.{" "}
+                <span className="text-[#457D7B] font-bold">create_document, structured_doc, deploy_document.</span>
+              </p>
+            }
+          />
+          <Card
+            icon={<BiCommentDetail />}
+            bgColor="bg-[#FCCCBD]"
+            title="Voz y video"
+            description={
+              <p>
+                Transcribe audio, sintetiza voz, genera subtítulos y arma reels con avatar desde el mismo conector.{" "}
+                <span className="text-[#457D7B] font-bold">voice_tts_create, video_create, generate_captions.</span>
+              </p>
+            }
+          />
+          <Card
+            icon={<RiRobot2Fill />}
+            bgColor="bg-[#F7E1FD]"
+            title="Hosting de apps en una llamada"
+            description={
+              <p>
+                Del repo a una URL pública: caja, build, release y dominio. Se reconstruye sola si algo se pierde.{" "}
+                <span className="text-[#457D7B] font-bold">launch_app en 12 s; rollback y backups diarios.</span>
+              </p>
+            }
+          />
+          <Card
             icon={<BiSupport />}
-            bgColor="bg-[#B5E8A2]"
-            title="Recibir soporte en español"
+            bgColor="bg-[#EBBBE9]"
+            title="Agentes en WhatsApp con flota elástica"
             description={
               <p>
-                ¿Dudas o preguntas?{" "}
-                <span className="text-[#91466D]  font-bold">
-                  {" "}
-                  Nuestro equipo estará listo para ayudarte
-                </span>{" "}
-                a través de nuestras redes sociales o contacto directo.
+                Tu número o el del cliente. Cada conversación en su microVM: duerme si nadie escribe, despierta cuando hablan.{" "}
+                <span className="text-[#457D7B] font-bold">Prompt, conectores y voz por cliente.</span>
+              </p>
+            }
+          />
+          <Card
+            icon={<AiOutlineApi />}
+            bgColor="bg-[#93E6EB]"
+            title="Un solo MCP, REST y SDK"
+            description={
+              <p>
+                Más de 200 tools en un endpoint, toolsets por caso (web, design, sandbox, hosting) y el mismo contrato en REST v2 y @easybits.cloud/sdk.{" "}
+                <span className="text-[#457D7B] font-bold">Claude Code, Claude.ai, Cursor o tu propio agente.</span>
+              </p>
+            }
+          />
+          <Card
+            icon={<TbPigMoney />}
+            bgColor="bg-[#D4EB93]"
+            title="Modelos LLM con tu llave"
+            description={
+              <p>
+                Claude, DeepSeek y más por un gateway OpenAI-compatible. Cualquier cliente funciona sin cambiar código.{" "}
+                <span className="text-[#457D7B] font-bold">Tokens en MXN, sin cuenta con el proveedor.</span>
+              </p>
+            }
+          />
+          <Card
+            icon={<MdVideogameAsset />}
+            bgColor="bg-[#CDB8F9]"
+            title="Packs sin caducidad, en MXN"
+            description={
+              <p>
+                Consultas web, créditos y tokens se compran por pack para cualquier plan, incluido el gratuito, y no caducan.{" "}
+                <span className="text-[#457D7B] font-bold">Empiezas gratis: 1 caja, 50 consultas web, 100 MB.</span>
+              </p>
+            }
+          />
+          <Card
+            icon={<BiHappy />}
+            bgColor="bg-[#FADB6F]"
+            title="Soporte en español"
+            description={
+              <p>
+                Docs completas, llms.txt para tu agente y un humano que responde en tu idioma cuando hace falta.{" "}
+                <span className="text-[#457D7B] font-bold">Agenda 15 minutos desde la home.</span>
               </p>
             }
           />
@@ -445,12 +367,12 @@ const FeaturesHeader = () => {
         <div className="md:text-left w-full md:w-[55%] text-center">
           <TextBlurEffect>
             <h2 className="text-4xl lg:text-6xl font-bold leading-tight">
-              EasyBits: La herramienta para creadores digitales
+              Todo lo que tu agente puede hacer en EasyBits
             </h2>
             <p className="text-xl lg:text-2xl mt-4">
-              Dedica más tiempo a crear y menos tiempo a administrar, crea tu
-              asset y nosotros nos encargamos del resto: cobros, correos,
-              entrega de archivos, seguridad y más.{" "}
+              Cajas para ejecutar, web para investigar, archivos y datos para
+              guardar, documentos y WhatsApp para entregar. Desde un solo MCP,
+              en MXN.{" "}
             </p>
           </TextBlurEffect>
         </div>
