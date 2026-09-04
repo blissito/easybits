@@ -261,7 +261,7 @@ export default function DocsPage() {
 
       <div className="max-w-7xl mx-auto flex">
         {/* Sidebar */}
-        <aside className="hidden md:block w-56 shrink-0 border-r-2 border-black sticky top-[57px] self-start p-4">
+        <aside className="hidden md:block w-56 shrink-0 border-r-2 border-black sticky top-[57px] self-start p-4 max-h-[calc(100vh-57px)] overflow-y-auto">
           <h2 className="font-bold text-xs uppercase text-gray-500 mb-3">
             API Reference
           </h2>
