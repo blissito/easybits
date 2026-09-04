@@ -1,0 +1,99 @@
+---
+title: "Móntale las herramientas de tu app a un agente de la flota"
+description: "La app es dueña de sus tools; el agente sólo ve un servidor MCP. Las tres llamadas que lo encienden, el paso que casi todos se saltan, y el hueco que cerramos hoy para que un MCP por HTTP con secret funcione sin hornear nada."
+date: "2026-09-04"
+author: "Equipo Easybits"
+tags: ["agentes", "flota", "mcp", "agent native", "build in public"]
+featuredImage: "/blog/assets/blog-monta-tus-tools-cover.jpg"
+published: true
+---
+
+# Móntale las herramientas de tu app a un agente de la flota
+
+Un desarrollador nos escribió esta semana: su app ya hablaba con un agente de la flota, ya soportaba ACP, pero no lograba que el agente **usara las acciones de su app**. Sentía que se estaba saltando un paso.
+
+Se estaba saltando uno. Y del lado nuestro había un hueco. Este post cubre los dos.
+
+## La idea en una frase
+
+**La app es dueña de sus tools. El agente no sabe nada de la app.** Al inicio de cada turno se le conecta un servidor MCP que expone las tools; ese servidor le pega a la API de tu app con una llave; tu app decide qué tool existe, quién puede llamarla y cuáles esperan aprobación humana. El modelo nunca arma llamadas HTTP a mano.
+
+Es exactamente como Deník monta su agenda sobre la flota. La diferencia es que Deník lleva su MCP pre-instalado en la imagen del worker, y un tercero no puede hornear nada. Para un tercero el camino es **un MCP por HTTP, hospedado en su propia app**.
+
+## Qué tiene que servir tu app
+
+Un endpoint Streamable-HTTP, por ejemplo `https://miapp.com/api/mcp`, que:
+
+- Acepte `Authorization: Bearer <llave>` y con esa llave resuelva tenant y permisos.
+- Responda `tools/list` y `tools/call`.
+- Arranque aunque la llave falte (que devuelva "sin acceso", no que muera).
+
+Es lo mismo que EasyBits sirve en `/api/mcp`. Cualquier SDK de MCP lo da en una tarde. La alternativa es un paquete npm por stdio, pero eso obliga a `npx -y` en cada turno dentro de la microVM: lento y con timeouts. HTTP es el transporte remoto estándar del protocolo, y es el que recomendamos.
+
+## Las tres llamadas
+
+Todo va contra un solo endpoint, con el token del agente:
+
+```
+POST https://www.easybits.cloud/api/v2/fleet-agents/$AGENT/capabilities
+Authorization: Bearer $TOKEN
+```
+
+```bash
+# 1. La llave de tu app al vault del dueño (se resuelve por turno, nunca queda cruda)
+curl -X POST $EB/api/v2/fleet-agents/$AGENT/capabilities \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{"action":"set-secret","name":"MIAPP_API_KEY","value":"mk_..."}'
+
+# 2. Tu MCP al catálogo del agente (por URL)
+curl -X POST ... -d '{"action":"add-mcp","name":"miapp","label":"Mi App",
+  "url":"https://miapp.com/api/mcp","requiredSecret":"MIAPP_API_KEY"}'
+
+# 3. ENCENDERLO. groupId "*" = para toda conversación del agente
+curl -X POST ... -d '{"action":"set-cap-level","groupId":"*","cap":"miapp","level":"write"}'
+```
+
+Con el SDK son `setSecret`, `addMcp` y `setCapLevel`. En el siguiente turno el agente ya trae `mcp__miapp__*`.
+
+## El paso que casi todos se saltan
+
+El tercero. **Registrar el MCP no lo enciende.** `add-mcp` lo mete al menú del agente y nada más. Lo que el worker recibe es lo que está habilitado para ese grupo, y si tu nombre no está ahí el turno corre sin tus tools y **sin ningún error**. El agente responde como si la tool no existiera.
+
+Nuestra propia documentación tenía el ejemplo sin ese paso. Ya está corregido.
+
+Cómo verificarlo sin adivinar:
+
+1. `GET /capabilities`: tu MCP debe salir en `capabilities[]` con `secretsPresent: true` y en `groups["*"].mcpServers`.
+2. Manda un turno por `/message` con un `groupId` **nuevo** y pregunta "¿qué herramientas tienes?". Si no las nombra, vuelve al punto 1.
+
+Si falta el secret, la entrada se omite en silencio. Mismo síntoma que el paso tres olvidado.
+
+## El hueco que cerramos hoy
+
+Hasta hoy el transporte HTTP con secret **no funcionaba**. El resolvedor de la flota metía el secret como variable de entorno, que es lo correcto para un proceso stdio, y en HTTP el SDK sólo manda cabeceras. El token nunca llegaba al servidor remoto. En la práctica, sólo servía stdio, y stdio exige hornear o descargar por turno.
+
+El fix son unas líneas: para `transport: "http"` el secret sale como `Authorization: Bearer <secret>`. El worker no cambió, ya hacía passthrough. Un agente en producción tenía un MCP http registrado con secret desde hace días; hoy fue el primero al que le llegó el token.
+
+## El contrato del MCP, en cuatro reglas
+
+Lo aprendimos con las 74 tools de Deník:
+
+- **Lista corta, ejecución completa.** `tools/list` devuelve las 20 de uso diario más `discover_tools` y `run_tool`; `tools/call` acepta todas. Con 70 planas el modelo negaba capacidades que sí tenía.
+- **Ocultar no es permiso.** El scope lo aplica tu servidor por la llave. La lista corta sólo ayuda al modelo a elegir.
+- **Un `needs_confirmation` no es error.** Devuélvelo sin `isError`. Marcado como error, el modelo reintenta, justo lo que no debe hacer con una acción que ya espera aprobación.
+- **Mismo mensaje para "no existe" y "no es de tu scope".** Si no, una llave pública enumera el set admin probando nombres.
+
+## Multi-tenant, hoy
+
+Un FleetAgent por tenant, cada uno con su vault y su llave. Escala en número de agentes, pero el aislamiento es estructural y funciona sin pedir nada. Lo siguiente en la lista es una llave por grupo dentro del mismo agente.
+
+Lo que no hay que hacer nunca: resolver el tenant desde el texto del prompt. Un `tenantId` que el MCP "confía" porque venía en `appendSystemPrompt` es inyección de prompt desde el navegador del cliente.
+
+## Checklist
+
+1. Expón `/api/mcp` Streamable-HTTP con Bearer en tu app.
+2. `set-secret` → `add-mcp { url }` → `set-cap-level { groupId: "*" }`.
+3. Confirma en `GET /capabilities`.
+4. Turno con `groupId` nuevo: "¿qué herramientas tienes?".
+
+Foto de Magda Ehlers en [Pexels](https://www.pexels.com/photo/charging-station-for-electric-cars-15158968/).

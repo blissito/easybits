@@ -880,13 +880,19 @@ export async function resolveGroupMcpServers(
     if (e.mode === "code") continue; // code-mode = no MCP server (see resolveGroupCodeCaps)
     const rawEnv = { ...(e.env ?? {}), ...(cfgEnv ?? {}) };
     const env: Record<string, string> = {};
+    // http: el primer secret resuelto va como `Authorization: Bearer <secret>` (el
+    // transporte remoto estándar de MCP). El SDK sólo manda `headers` en http — un
+    // `env` ahí NO llega al servidor remoto, y por eso un MCP HTTP de un tercero con
+    // secret estaba mudo hasta el 2026-09-04.
+    const headers: Record<string, string> = {};
     let missing = false;
     for (const [k, v] of Object.entries(rawEnv)) {
       const m = SECRET_REF_RE.exec(v);
       if (!m) { env[k] = v; continue; }
       const val = await getSecretValue(ownerId, m[1]).catch(() => null);
       if (val == null) { missing = true; break; }
-      env[k] = val;
+      if (e.transport === "http" && !headers.Authorization) headers.Authorization = `Bearer ${val}`;
+      else env[k] = val;
     }
     if (missing) continue;
     // Chosen level → <SERVER>_TOOLSETS (+ per-conversation scope env when the level
@@ -902,7 +908,12 @@ export async function resolveGroupMcpServers(
     }
     out[e.name] =
       e.transport === "http"
-        ? { type: "http", url: e.url, ...(Object.keys(env).length ? { env } : {}) }
+        ? {
+            type: "http",
+            url: e.url,
+            // Pares no-secret (p.ej. <X>_TOOLSETS) viajan como headers literales.
+            ...(Object.keys(headers).length || Object.keys(env).length ? { headers: { ...env, ...headers } } : {}),
+          }
         : { type: "stdio", command: e.command, args: e.args ?? [], env };
   }
   return Object.keys(out).length ? out : undefined;

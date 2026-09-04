@@ -2641,7 +2641,7 @@ for await (const evt of readSse(res.body)) {
                   <tr className="border-b border-gray-200"><td className="px-3 py-2 font-mono text-xs">set-agent-prompt</td><td className="px-3 py-2 font-mono text-xs text-gray-500">setAgentPrompt</td><td className="px-3 py-2">El prompt base: quién es el agente.</td><td className="px-3 py-2">Todo el agente</td></tr>
                   <tr className="border-b border-gray-200"><td className="px-3 py-2 font-mono text-xs">set-model</td><td className="px-3 py-2 font-mono text-xs text-gray-500">setModel</td><td className="px-3 py-2">Modelo del motor.</td><td className="px-3 py-2">Todo el agente</td></tr>
                   <tr className="border-b border-gray-200"><td className="px-3 py-2 font-mono text-xs">set-effort</td><td className="px-3 py-2 font-mono text-xs text-gray-500">setEffort</td><td className="px-3 py-2">Cuánto piensa: <code>low</code> · <code>medium</code> · <code>high</code> · <code>xhigh</code>.</td><td className="px-3 py-2">Todo el agente</td></tr>
-                  <tr className="border-b border-gray-200"><td className="px-3 py-2 font-mono text-xs">add-mcp</td><td className="px-3 py-2 font-mono text-xs text-gray-500">addMcp</td><td className="px-3 py-2">Conecta <strong>tu</strong> API como MCP: <code>url</code> (http) o <code>pkg</code> (npm), con <code>requiredSecret</code>.</td><td className="px-3 py-2">Todo el agente</td></tr>
+                  <tr className="border-b border-gray-200"><td className="px-3 py-2 font-mono text-xs">add-mcp</td><td className="px-3 py-2 font-mono text-xs text-gray-500">addMcp</td><td className="px-3 py-2">Conecta <strong>tu</strong> API como MCP: <code>url</code> (Streamable-HTTP, el secret viaja como <code>Authorization: Bearer</code>) o <code>pkg</code> (npm, stdio, como env var). Sólo lo registra: enciéndelo con <code>set-cap-level</code>.</td><td className="px-3 py-2">Todo el agente</td></tr>
                   <tr className="border-b border-gray-200"><td className="px-3 py-2 font-mono text-xs">remove-mcp</td><td className="px-3 py-2 font-mono text-xs text-gray-500">removeMcp</td><td className="px-3 py-2">Lo quita del catálogo.</td><td className="px-3 py-2">Todo el agente</td></tr>
                   <tr className="border-b border-gray-200"><td className="px-3 py-2 font-mono text-xs">set-secret</td><td className="px-3 py-2 font-mono text-xs text-gray-500">setSecret</td><td className="px-3 py-2">Guarda la credencial que usa un MCP (cifrada, no se vuelve a leer).</td><td className="px-3 py-2">Todo el agente</td></tr>
                   <tr className="border-b border-gray-200"><td className="px-3 py-2 font-mono text-xs">set-prompt</td><td className="px-3 py-2 font-mono text-xs text-gray-500">setGroupPrompt</td><td className="px-3 py-2">Prompt que se <strong>suma</strong> al base, sólo en este canal.</td><td className="px-3 py-2">Por canal</td></tr>
@@ -2672,8 +2672,10 @@ await eb.fleet.addMcp(...a, {
   name: "acme",
   label: "Acme",
   url: "https://api.acme.com/mcp",
-  requiredSecret: "ACME_API_KEY",   // se inyecta como env var, cifrada
+  requiredSecret: "ACME_API_KEY",   // http → Authorization: Bearer <secret>, resuelto por turno
 });
+// add-mcp sólo lo registra: ENCIÉNDELO ("*" = todos los canales)
+await eb.fleet.setCapLevel(...a, "*", { cap: "acme", level: "write" });
 
 // Qué puede hacer EN TU APP (canal "mi-app")
 await eb.fleet.setToolGroup(...a, "mi-app", { buckets: ["imagenes", "documentos"] });
@@ -2701,8 +2703,10 @@ await cfg({
   name: "acme",
   label: "Acme",
   url: "https://api.acme.com/mcp",
-  requiredSecret: "ACME_API_KEY",
+  requiredSecret: "ACME_API_KEY", // http → Authorization: Bearer <secret>
 });
+// add-mcp sólo lo registra: ENCIÉNDELO ("*" = todos los canales)
+await cfg({ action: "set-cap-level", groupId: "*", cap: "acme", level: "write" });
 
 // Qué puede hacer EN TU APP (canal "mi-app")
 await cfg({ action: "set-toolgroup", groupId: "mi-app", buckets: ["imagenes", "documentos"] });

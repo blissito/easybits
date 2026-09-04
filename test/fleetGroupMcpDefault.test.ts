@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { resolveGroupMcpServers } from "~/.server/core/fleetAgentOperations";
 
 // El drawer de perfil guarda los conectores ON del agente bajo la clave reservada
@@ -29,6 +29,32 @@ describe("resolveGroupMcpServers — default del agente (clave '*')", () => {
 
   it("sin default ni override → undefined", async () => {
     const out = await resolveGroupMcpServers({ mcpCatalog: fleetAgent.mcpCatalog, groupConfigs: {} }, "g", "owner1");
+    expect(out).toBeUndefined();
+  });
+});
+
+// HTTP + secret: el SDK sólo manda `headers` en transporte http, así que el secret
+// resuelto DEBE salir como `Authorization: Bearer` y NUNCA como `env` (ahí no llega).
+vi.mock("~/.server/core/secretOperations", async (orig) => ({
+  ...(await orig<typeof import("~/.server/core/secretOperations")>()),
+  getSecretValue: async (_owner: string, name: string) => (name === "ACME_KEY" ? "sk-acme" : null),
+}));
+
+describe("resolveGroupMcpServers — http con secret → Authorization: Bearer", () => {
+  const fa = (secret: string) => ({
+    mcpCatalog: [
+      { name: "acme", transport: "http", url: "https://acme.test/mcp", env: { ACME_KEY: `$secret:${secret}` }, requiredSecrets: [secret] },
+    ],
+    groupConfigs: { "*": { mcpServers: ["acme"] } },
+  });
+
+  it("emite headers.Authorization y NO env", async () => {
+    const out = await resolveGroupMcpServers(fa("ACME_KEY"), "g", "owner1");
+    expect(out!.acme).toEqual({ type: "http", url: "https://acme.test/mcp", headers: { Authorization: "Bearer sk-acme" } });
+  });
+
+  it("secret ausente → la entrada se omite", async () => {
+    const out = await resolveGroupMcpServers(fa("MISSING"), "g", "owner1");
     expect(out).toBeUndefined();
   });
 });

@@ -32,7 +32,7 @@ import { getEngineForAgent, FLEET_ENGINES } from "~/lib/fleetEngines";
 //     set-model        { model }
 //     set-effort       { effort: low|medium|high|xhigh }
 //     toggle-own-number{ on }
-//     add-mcp          { name, label?, pkg?|url?, requiredSecret?, envVar? }
+//     add-mcp          { name, label?, pkg?|url?, requiredSecret?, envVar? }  (http → Authorization: Bearer <secret>; stdio → env var)
 //     remove-mcp       { name }
 //     toggle-skill     { skillId, on }
 //     delete-skill     { skillId }
