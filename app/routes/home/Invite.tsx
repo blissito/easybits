@@ -2,7 +2,7 @@ export const Invite = () => {
   return (
     <section className="border-t-[2px] border-t-black py-20 md:py-40 px-4 md:px-[5%] xl:px-0">
       <div className="bg-[#96B894]  max-w-7xl rounded-3xl text-3xl md:text-4xl lg:text-5xl font-bold mx-auto p-6 md:p-16 !leading-[1.5]">
-        <h1 className="flex flex-wrap items-center">
+        <h2 className="flex flex-wrap items-center">
           <span> ¿Eres experto&nbsp;</span>
           <span> en IA?</span>
           <span>
@@ -17,7 +17,7 @@ export const Invite = () => {
             MCP
           </span>{" "}
           <span>— en MXN,&nbsp;</span> <span> y empiezas gratis.</span>
-        </h1>
+        </h2>
       </div>
     </section>
   );

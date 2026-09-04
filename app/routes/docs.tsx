@@ -11,8 +11,8 @@ const fmtPrice = (n: number | null) => (n == null ? "—" : `$${n.toLocaleString
 
 export const meta = () => [
   ...getBasicMetaTags({
-    title: "EasyBits API Docs — Agentic-First File Storage",
-    description: "Complete API reference for the EasyBits REST API v2. 100+ endpoints for AI agents to manage files, webhooks, and storage.",
+    title: "EasyBits API Docs — La nube para expertos IA",
+    description: "Referencia completa de EasyBits: REST API v2, SDK y MCP con más de 200 tools para agentes — sandboxes, web, archivos, bases de datos, documentos, hosting y WhatsApp.",
   }),
   { tagName: "link", rel: "canonical", href: "https://www.easybits.cloud/docs" },
 ];
@@ -177,7 +177,7 @@ export default function DocsPage() {
               {
                 "@type": "WebAPI",
                 name: "EasyBits API",
-                description: "Agentic-first file storage REST API. 100+ endpoints for AI agents to manage, share, and transform files.",
+                description: "REST API v2 de EasyBits, la nube para expertos IA: sandboxes, web (buscar, leer, extraer), archivos, bases de datos, documentos, hosting y agentes en WhatsApp.",
                 url: "https://www.easybits.cloud/docs",
                 documentation: "https://www.easybits.cloud/docs",
                 provider: {
@@ -206,7 +206,7 @@ export default function DocsPage() {
                 "@type": "SoftwareApplication",
                 name: "@easybits.cloud/mcp",
                 applicationCategory: "DeveloperApplication",
-                description: "MCP server with 100+ tools for AI agents (12 core by default) to store, manage, and consume files. Works with Claude, ChatGPT, and any MCP-compatible client.",
+                description: "MCP server with 200+ tools for AI agents: sandboxes, web search/fetch/extract, files, databases, documents, hosting and WhatsApp agents. Works with Claude, Cursor and any MCP-compatible client.",
                 url: "https://www.npmjs.com/package/@easybits.cloud/mcp",
                 offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
                 provider: {

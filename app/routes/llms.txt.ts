@@ -2,9 +2,9 @@ import { getDocsMarkdown } from "~/.server/docs/reference";
 
 // GET /llms.txt — LLM-readable API documentation (public, no auth)
 export async function loader() {
-  const markdown = `# EasyBits — Agentic-First File Storage
+  const markdown = `# EasyBits — La nube para expertos IA
 
-> AI agents store, manage, and consume files via SDK, MCP, and REST API.
+> Cloud for AI agents: sandboxes (Firecracker microVMs), web (search, fetch, extract records), files, SQL databases, documents, app hosting and WhatsApp agents — all via one MCP (200+ tools), REST API v2 and a typed SDK. Priced in MXN, free tier available.
 > Website: https://www.easybits.cloud
 > Docs: https://www.easybits.cloud/docs
 > SDK: npm install @easybits.cloud/sdk

@@ -13,6 +13,7 @@ import type { User } from "@prisma/client";
 import getBasicMetaTags from "~/utils/getBasicMetaTags";
 import { Steps } from "./Steps";
 import { getUserOrNull } from "~/.server/getters";
+import { PLANS } from "~/lib/plans";
 
 export const loader = async ({ request }: Route.LoaderArgs) => {
   // Tolera prerender (sin JWT_SECRET / sin cookies) y cualquier fallo de
@@ -34,17 +35,80 @@ export const clientLoader = async ({ serverLoader }: Route.ClientLoaderArgs) => 
   }
 };
 
-export const meta = () =>
-  getBasicMetaTags({
+export const meta = () => [
+  ...getBasicMetaTags({
     title: "EasyBits — La nube para expertos IA",
     description:
-      "Sandboxes, web, archivos, datos y WhatsApp para tus agentes, desde un solo MCP y en MXN.",
-  });
+      "Sandboxes, web, archivos, datos y WhatsApp para tus agentes, desde un solo MCP y en MXN. Empieza gratis.",
+    url: "https://www.easybits.cloud",
+  }),
+  { tagName: "link", rel: "canonical", href: "https://www.easybits.cloud" },
+];
+
+// JSON-LD de la home: quién somos, qué es el producto y qué cuesta. Los
+// precios salen de PLANS para que no se desfasen del pricing real.
+const HOME_JSON_LD = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      "@id": "https://www.easybits.cloud/#org",
+      name: "EasyBits",
+      url: "https://www.easybits.cloud",
+      logo: "https://www.easybits.cloud/logo-purple.svg",
+      slogan: "La nube para expertos IA",
+      areaServed: "MX",
+      sameAs: [
+        "https://www.npmjs.com/package/@easybits.cloud/sdk",
+        "https://www.npmjs.com/package/@easybits.cloud/mcp",
+      ],
+    },
+    {
+      "@type": "WebSite",
+      "@id": "https://www.easybits.cloud/#site",
+      url: "https://www.easybits.cloud",
+      name: "EasyBits",
+      inLanguage: "es-MX",
+      publisher: { "@id": "https://www.easybits.cloud/#org" },
+    },
+    {
+      "@type": "SoftwareApplication",
+      "@id": "https://www.easybits.cloud/#app",
+      name: "EasyBits",
+      applicationCategory: "DeveloperApplication",
+      operatingSystem: "Web, MCP, REST API, Node.js SDK",
+      description:
+        "Nube para agentes de IA: sandboxes (microVMs), web (buscar, leer, extraer registros), archivos, bases de datos, documentos, hosting y agentes en WhatsApp, desde un solo MCP con más de 200 tools.",
+      url: "https://www.easybits.cloud",
+      featureList: [
+        "Sandboxes: microVMs Firecracker por agente",
+        "Web: búsqueda, lectura y extracción de registros",
+        "Archivos con CDN y bases de datos SQL por cliente",
+        "Documentos, presentaciones, voz y video",
+        "Hosting de apps con releases y backups",
+        "Agentes en WhatsApp con flota elástica",
+        "MCP con más de 200 tools; REST API v2; SDK",
+      ],
+      offers: Object.entries(PLANS).map(([key, p]) => ({
+        "@type": "Offer",
+        name: `Plan ${key}`,
+        price: String(p.promoPrice ?? p.price),
+        priceCurrency: "MXN",
+        url: "https://www.easybits.cloud/planes",
+      })),
+      provider: { "@id": "https://www.easybits.cloud/#org" },
+    },
+  ],
+};
 
 export default function Home({ loaderData }: Route.ComponentProps) {
   const { user } = loaderData;
   return (
     <section className="overflow-hidden w-full">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(HOME_JSON_LD) }}
+      />
       <AuthNav user={user ?? undefined} />
 
       {/* Barra de novedad (estilo runpod): una línea, debajo del nav fijo. */}
