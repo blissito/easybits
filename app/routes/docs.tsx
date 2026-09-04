@@ -2713,7 +2713,7 @@ DELETE /api/v2/machines/:sandboxId` },
                 { label: "MCP", code: `list_machine_tiers()                 // catálogo + precios
 create_machine({ tier: "focus" })   // crea always-on, cobra flat/mes
 list_machines()                     // tus sandboxes + monthlyMxn
-release_machine({ sandboxId })      // quita cobro + destruye VM` },
+release_machine({ sandboxId, confirm: true })  // quita cobro + destruye la VM YA` },
               ]}
             />
 
@@ -2773,7 +2773,7 @@ redeploy_machine({ releaseId, tier: "mini", replaceSandboxId })  // caja nueva /
 
             <h3 className="text-lg font-bold mb-3 mt-8">Backups: incluidos, 7 días</h3>
             <p className="text-gray-600 text-sm mb-3">
-              Cada noche copiamos los <code className="bg-gray-100 px-1 rounded">dataPaths</code> de tu runspec a almacenamiento durable <strong>fuera del host</strong>, con 7 días de retención y <strong>sin costo extra</strong>. No respaldamos el sistema operativo: eso se reconstruye del template, igual que Fly respalda volúmenes y no el rootfs.
+              Cada noche copiamos los <code className="bg-gray-100 px-1 rounded">dataPaths</code> de tu runspec a almacenamiento durable <strong>fuera del host</strong>, con 7 días de retención y <strong>sin costo extra</strong>. No respaldamos el sistema operativo: eso se reconstruye del template, igual que Fly respalda volúmenes y no el rootfs. Al borrar una máquina tomamos una copia final y la guardamos <strong>30 días</strong>: borrar destruye la VM en el acto, así que ese respaldo es la única vuelta atrás.
             </p>
             <p className="text-gray-600 text-sm mb-3">
               Dos cosas dichas de frente: el RPO es de <strong>24 horas</strong>, y el backup se toma del filesystem en caliente, así que una base de datos escribiendo durante la copia puede quedar inconsistente — cada backup reporta su nivel en el campo <code className="bg-gray-100 px-1 rounded">consistency</code>. Si tu app tiene una DB, tenla fuera de la caja (libSQL de EasyBits, Atlas) o toma un <code className="bg-gray-100 px-1 rounded">create_backup</code> tras detenerla.

@@ -57,11 +57,11 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
   const ctx = { user, scopes: ["READ"] } as AuthContext;
   const all = await listPermanent(ctx).catch(() => []);
 
-  // Las dadas de baja siguen en la lista de la API durante su gracia de 7
-  // días, para poder restaurarlas. Mezclarlas con las vivas hace que la
-  // página mienta: una cuenta con un sitio parecía tener ocho.
-  const machines = all.filter((m: any) => m.status !== "pending_deletion");
-  const retired = all.length - machines.length;
+  // Borrar una máquina la destruye en el acto, así que ya no hay "en baja"
+  // que esconder: listPermanent sólo devuelve las vivas. Lo único que queda
+  // dormido es lo que suspendió la cancelación de una suscripción, y eso SÍ
+  // debe verse para poder restaurarlo.
+  const machines = all;
 
   // listPermanent no trae ni la versión publicada ni dónde se ve el sitio, que
   // es justamente lo que se viene a mirar.
@@ -86,7 +86,7 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
     })
   );
 
-  return data({ machines: enriched, retired });
+  return data({ machines: enriched });
 };
 
 export const action = async ({ request }: Route.ActionArgs) => {
@@ -214,7 +214,7 @@ const input =
   "placeholder:text-metal/50 focus:outline-none focus:ring-2 focus:ring-brand-500/40";
 
 export default function Hosting({ loaderData }: Route.ComponentProps) {
-  const { machines, retired } = loaderData;
+  const { machines } = loaderData;
   const [openId, setOpenId] = useState<string | null>(null);
 
   return (
@@ -229,12 +229,6 @@ export default function Hosting({ loaderData }: Route.ComponentProps) {
           {machines.length === 0
             ? "Todavía no tienes sitios publicados."
             : `${machines.length} ${machines.length === 1 ? "sitio" : "sitios"}`}
-          {retired > 0 && (
-            <span className="text-metal/70">
-              {" · "}
-              {retired} en baja, se {retired === 1 ? "borra" : "borran"} en 7 días
-            </span>
-          )}
         </p>
       </header>
 
@@ -260,7 +254,7 @@ const TABS = [
   { key: "registro", label: "Registro", icon: LuScrollText },
 ] as const;
 
-type Pending = { title: string; message: string; label: string; run: () => void };
+type Pending = { title: string; message: string; label: string; run: () => void; confirmPhrase?: string };
 
 function MachineCard({
   machine,
@@ -390,6 +384,7 @@ function MachineCard({
         title={pending?.title ?? ""}
         message={pending?.message}
         confirmLabel={pending?.label ?? "Confirmar"}
+        confirmPhrase={pending?.confirmPhrase}
         destructive
         onCancel={() => setPending(null)}
         onConfirm={() => {
@@ -699,10 +694,11 @@ function Danger({ machine, fetcher, confirm }: any) {
         tone="danger"
         onClick={() =>
           confirm({
-            title: "¿Dar de baja el sitio?",
+            title: "¿Borrar la máquina?",
             message:
-              "Se apaga y deja de responder en todos sus dominios. Se puede recuperar durante 7 días; pasados, se borra la máquina. Los datos que vivan fuera (tu base de datos) no se tocan.",
-            label: "Dar de baja el sitio",
+              "Se destruye de inmediato y deja de cobrarse. No hay deshacer: lo único que queda es su último respaldo, guardado 30 días, con el que puedes reconstruirla en una máquina nueva. Los datos que vivan fuera (tu base de datos) no se tocan.",
+            label: "Borrar para siempre",
+            confirmPhrase: machine.name || machine.sandboxId,
             run: () =>
               fetcher.submit({ intent: "release", sandboxId: machine.sandboxId }, { method: "post" }),
           })
@@ -710,7 +706,7 @@ function Danger({ machine, fetcher, confirm }: any) {
       >
         <span className="flex items-center gap-1.5">
           <LuTrash2 className="w-4 h-4" />
-          Dar de baja
+          Borrar
         </span>
       </Btn>
     </div>

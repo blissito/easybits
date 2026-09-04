@@ -336,9 +336,11 @@ export async function releaseMachineBySubscription(subscriptionId: string): Prom
   const row = await db.sandbox.findFirst({ where: { stripeSubscriptionId: subscriptionId } });
   if (!row || row.status === "destroyed" || row.status === "pending_deletion") return;
   const ctx = { user: { id: row.ownerId }, scopes: ["DELETE"] } as AuthContext;
-  // Same soft-delete as a manual release: data survives the 7-day grace, and a
-  // final backup is taken. Cancelling a subscription must not shred data on the
-  // spot — people re-subscribe.
+  // SOFT-delete, a diferencia de releasePermanent (que destruye en el acto).
+  // Aquí nadie pidió borrar: se acabó el trial, falló una tarjeta, Stripe canceló.
+  // Triturar los datos de alguien que puede re-suscribirse mañana sería absurdo,
+  // así que la caja duerme 7 días y restoreMachine la revive intacta. El purge
+  // del cron (purgeExpiredMachines) es quien la destruye si nadie vuelve.
   await backupMachine(row.sandboxId, { force: true }).catch(() => undefined);
   await suspendSandboxRaw(row.ownerId, row.sandboxId).catch(() => undefined);
   await db.sandbox.update({
@@ -594,7 +596,12 @@ export async function listPermanent(ctx: AuthContext): Promise<PermanentSandbox[
   const delegatedOwners = await delegatedAccountIds(ctx, SCOPES.MACHINES);
   const rows = await db.sandbox.findMany({
     where: {
-      status: { not: "destroyed" },
+      // `pending_deletion` fuera: una máquina que el dueño ya soltó no debe
+      // seguir apareciendo aquí. El dashboard la filtraba de su lado pero
+      // `list_machines` (MCP) no — el agente veía cajas "borradas" durante días
+      // y reportaba que el borrado no funcionaba. getPermanent SÍ la resuelve,
+      // para que restore_machine siga sirviendo en la vía Stripe.
+      status: { notIn: ["destroyed", "pending_deletion"] },
       ownerId: { in: [ctx.user.id, ...delegatedOwners] },
     },
     orderBy: { createdAt: "desc" },
@@ -620,11 +627,19 @@ export async function getPermanent(ctx: AuthContext, sandboxId: string): Promise
   return toPermanent(healed, host, row.ownerId !== ctx.user.id);
 }
 
-// SOFT-DELETE. Owner-only. Releasing a permanent machine does NOT destroy it —
-// it stops billing + suspends (snapshot to disk, data 100% intact) and schedules
-// hard-deletion 7 days out. Fully restorable within the window via restoreMachine.
-// The actual destroy happens in purgeExpiredMachines (cron) after the grace period.
-export async function releasePermanent(ctx: AuthContext, sandboxId: string): Promise<{ ok: true; deletionScheduledAt: Date }> {
+// HARD-DELETE. Owner-only. Borrar una máquina la DESTRUYE en el acto: para el
+// cobro, toma un último backup y elimina la VM. Es lo que hace todo el mundo
+// (Fly, DigitalOcean, Hetzner, Railway, Render): la red de seguridad no es una
+// caja dormida que sigue apareciendo en `list_machines` durante una semana, es
+// el backup — que queda 30 días y se restaura con list_backups +
+// restore_machine_from_backup.
+//
+// La gracia de 7 días sobrevive SOLO en releaseMachineBySubscription (Stripe
+// canceló, nadie pidió borrar nada). Ver ahí el porqué de la divergencia.
+export async function releasePermanent(
+  ctx: AuthContext,
+  sandboxId: string
+): Promise<{ ok: true; destroyed: true; backupId?: string }> {
   requireScope(ctx, "DELETE");
   const row = await db.sandbox.findUnique({ where: { sandboxId } });
   if (!row || row.ownerId !== ctx.user.id || row.status === "destroyed") {
@@ -641,23 +656,48 @@ export async function releasePermanent(ctx: AuthContext, sandboxId: string): Pro
       console.error(`[hosting] could not cancel subscription ${row.stripeSubscriptionId}:`, e);
     });
   }
-  // Last-chance backup BEFORE the box goes to sleep: the 7-day grace protects
-  // the VM, this protects the data if the grace lapses (or the host dies during
-  // it). Best-effort — a machine with no dataPaths simply has nothing to copy.
-  await backupMachine(sandboxId, { force: true }).catch((e) => {
-    console.warn(`releasePermanent: final backup of ${sandboxId} failed:`, e?.message ?? e);
-  });
-  // Suspend (snapshot + free CPU/RAM) instead of destroy → data survives for the
-  // 7-day grace. NOT best-effort: billing was already cancelled above, so a
-  // suspend that silently fails leaves a machine running for free with nobody
-  // watching — six of them did exactly that for a week (Aug 2026).
-  await suspendReleasedBox(ctx, sandboxId);
-  const deletionScheduledAt = new Date();
+  // Último backup ANTES de destruir: ahora es la ÚNICA copia que queda, así que
+  // vale más que cuando había 7 días de gracia detrás. Sigue siendo best-effort
+  // (una máquina sin dataPaths no tiene nada que copiar) pero el fallo se grita.
+  const backupId = await backupMachine(sandboxId, { force: true })
+    .then((b) => b.id as string | undefined)
+    .catch((e) => {
+      console.error(
+        `[hosting] final backup of ${sandboxId} failed before destroy — la máquina se borra SIN copia:`,
+        e?.message ?? e
+      );
+      return undefined;
+    });
+  // Destruir de verdad. asOperator: la caja está Protected (lockBox la blindó al
+  // cobrarla) y el host rechaza el destroy sin el token de operador.
+  // NO best-effort: si el host no la borró, la fila NO puede decir "destroyed" —
+  // eso deja una VM viva, sin cobro y sin dashboard que la vea (justo el
+  // incidente de agosto 2026: seis cajas gratis una semana).
+  try {
+    await destroySandbox(ctx, sandboxId, { asOperator: true });
+  } catch (e) {
+    fail(502, "MachineDestroyFailed",
+      `No pudimos destruir la máquina en el host: ${e instanceof Error ? e.message : String(e)}. El cobro ya se detuvo; reintenta el borrado.`);
+  }
   await db.sandbox.update({
     where: { sandboxId },
-    data: { status: "pending_deletion", stripeSubItemId: null, stripeSubscriptionId: null, deletionScheduledAt },
+    data: {
+      status: "destroyed",
+      stripeSubItemId: null,
+      stripeSubscriptionId: null,
+      deletionScheduledAt: null,
+    },
   });
-  return { ok: true, deletionScheduledAt };
+  // La VM ya no existe; el backup pasa a retención post-borrado (30 días). En el
+  // cron esto va con .catch silencioso, aquí NO: si falla, la única copia del
+  // cliente expira en 7 días y nadie se entera hasta que la pide.
+  await extendBackupsForDeletedMachine(sandboxId).catch((e) => {
+    console.error(
+      `[hosting] CRITICAL: no se pudo extender la retención del backup de ${sandboxId} tras destruirla — expira con la ventana normal (7d) en vez de 30d:`,
+      e
+    );
+  });
+  return { ok: true, destroyed: true, backupId };
 }
 
 // Restore a soft-deleted machine within the 7-day grace: resume the VM + re-bill.

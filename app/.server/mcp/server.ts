@@ -1676,13 +1676,22 @@ How to embed safely (the only reliable rule):
 
   server.tool(
     "release_machine",
-    "Release an always-on machine (SOFT-DELETE): stops billing + suspends it (data kept) and schedules hard-deletion in 7 days. Fully restorable within the grace window via restore_machine. Owner-only. Idempotent.",
+    "Delete an always-on machine. DESTRUCTIVE AND IMMEDIATE: stops billing, takes a last backup and destroys the VM — there is no grace period and no undo. The backup is kept 30 days and is the only way back: list_backups, then restore_machine_from_backup onto a new machine. Requires confirm:true. Owner-only.",
     {
-      sandboxId: z.string().describe("Sandbox ID of the machine to release"),
+      sandboxId: z.string().describe("Sandbox ID of the machine to delete"),
+      confirm: z
+        .boolean()
+        .describe("Must be true. The machine is destroyed immediately; only the 30-day backup survives."),
     },
     { destructiveHint: true, idempotentHint: true, openWorldHint: false },
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
+      if (params.confirm !== true) {
+        return fail(
+          "release_machine destruye la máquina de inmediato (sin gracia, sin deshacer). Confirma con el usuario y vuelve a llamar con confirm:true.",
+          { error: "DestructiveOperationRequiresConfirm", sandboxId: params.sandboxId }
+        );
+      }
       const result = await releasePermanent(ctx, params.sandboxId);
       return ok(result);
     })
@@ -1690,7 +1699,7 @@ How to embed safely (the only reliable rule):
 
   server.tool(
     "restore_machine",
-    "Restore a machine that was released (soft-deleted) within its 7-day grace: resumes the VM (data intact) and re-attaches billing. Owner-only. Fails if the grace window already elapsed (hard-purged).",
+    "Revive a machine that was suspended because its SUBSCRIPTION was cancelled (trial ended, card failed) — it sleeps for 7 days before being purged. Resumes the VM (data intact) and re-attaches billing. Owner-only. Does NOT apply to release_machine, which destroys immediately: for that, restore_machine_from_backup onto a new machine.",
     {
       sandboxId: z.string().describe("Sandbox ID of the machine to restore"),
     },
