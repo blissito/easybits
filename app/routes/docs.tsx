@@ -931,7 +931,8 @@ const data = await res.json();` },
               body={[
                 { name: "url", type: "string", desc: "https://… (requerido)" },
                 { name: "country", type: "string", desc: "País en 2 letras: mx (México), us, es, ar, co, cl, pe, br. Ver lista completa abajo" },
-                { name: "asMarkdown", type: "boolean", desc: "true → markdown limpio, ideal para resumir" },
+                { name: "asMarkdown", type: "boolean", desc: "true → markdown en vez de HTML" },
+                { name: "onlyMainContent", type: "boolean", desc: "Con asMarkdown: quita nav, footer, iconos y 'skip to content'. Lo normal cuando vas a leer la página" },
               ]}
               response={`{ "url": "…", "statusCode": 200, "format": "markdown", "body": "# …" }`}
               note="1 consulta. El cuerpo se recorta a 200 KB."
@@ -942,6 +943,7 @@ const data = await res.json();` },
   url: "https://www.amazon.com.mx/dp/B09YRZYB29",
   country: "mx",
   asMarkdown: true,
+  onlyMainContent: true,
 });
 console.log(page.body);` },
                 { label: "cURL", code: `curl -X POST https://www.easybits.cloud/api/v2/web/fetch \\
@@ -1036,6 +1038,7 @@ web_extract_status({ jobId })
               body={[
                 { name: "url", type: "string", desc: "URL de inicio (requerido)" },
                 { name: "maxPages", type: "number", desc: "1-20, default 10. Cada página leída cuesta 1 consulta" },
+                { name: "onlyMainContent", type: "boolean", desc: "Quita nav, footer e iconos de cada página (recomendado para RAG)" },
                 { name: "country", type: "string", desc: "País en 2 letras: mx (México), us, es, ar, co, cl, pe, br. Ver lista completa abajo" },
               ]}
               response={`{ "startUrl": "…", "pages": [ { "url", "markdown" } ], "pending": [ "…" ] }`}
@@ -1043,7 +1046,7 @@ web_extract_status({ jobId })
             />
             <TabbedCode
               tabs={[
-                { label: "SDK", code: `const site = await eb.webCrawl({ url: "https://docs.ejemplo.com", maxPages: 20 });
+                { label: "SDK", code: `const site = await eb.webCrawl({ url: "https://docs.ejemplo.com", maxPages: 20, onlyMainContent: true });
 for (const p of site.pages) console.log(p.url, p.markdown.length);` },
                 { label: "cURL", code: `curl -X POST https://www.easybits.cloud/api/v2/web/crawl \\
   -H "Authorization: Bearer $EASYBITS_API_KEY" \\
@@ -1064,10 +1067,10 @@ const data = await res.json();` },
             <p className="text-sm text-gray-600 mb-3">Conecta <code className="bg-gray-100 px-1 rounded">https://www.easybits.cloud/api/mcp/web</code> con tu API key como Bearer.</p>
             <div className="space-y-2">
               <McpTool name="web_search" params="query, engine?, country?" description="Busca en Google y devuelve resultados estructurados. 1 consulta." />
-              <McpTool name="web_fetch" params="url, country?, asMarkdown?" description="Lee una página aunque bloquee bots. 1 consulta." />
+              <McpTool name="web_fetch" params="url, country?, asMarkdown?, onlyMainContent?" description="Lee una página aunque bloquee bots. 1 consulta." />
               <McpTool name="web_extract" params="source | datasetId, input, limit?" description="Extrae registros con esquema (Maps, Mercado Libre, Amazon, Instagram…). Async con jobId; 1 consulta por registro." />
               <McpTool name="web_extract_status" params="jobId" description="Estado/registros de un extract. Gratis mientras corre." />
-              <McpTool name="web_crawl" params="url, maxPages?, country?" description="Rastrea un sitio siguiendo links internos. 1 consulta por página." />
+              <McpTool name="web_crawl" params="url, maxPages?, country?, onlyMainContent?" description="Rastrea un sitio siguiendo links internos. 1 consulta por página." />
             </div>
             <p className="text-sm text-gray-600 mt-4">
               Ejemplo de flujo: <code className="bg-gray-100 px-1 rounded">web_search("ubiquiti u6 mesh precio", country: "mx")</code> → tomar el link de Amazon MX →{" "}

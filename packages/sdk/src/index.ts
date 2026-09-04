@@ -91,6 +91,8 @@ export interface WebFetchParams {
   country?: string;
   /** true → markdown limpio; default HTML crudo. */
   asMarkdown?: boolean;
+  /** Con asMarkdown: quita nav, footer e iconos. */
+  onlyMainContent?: boolean;
 }
 export interface WebFetchResult {
   url: string;
@@ -122,6 +124,8 @@ export interface WebCrawlParams {
   /** 1-20, default 10. */
   maxPages?: number;
   country?: string;
+  /** Quita nav, footer e iconos de cada página (recomendado para RAG). */
+  onlyMainContent?: boolean;
 }
 export interface WebCrawlResult {
   startUrl: string;

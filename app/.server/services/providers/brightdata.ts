@@ -89,6 +89,8 @@ export interface BrightdataScrapeInput {
   country?: string;
   /** If true, returns markdown instead of raw HTML. Default false (raw HTML). */
   asMarkdown?: boolean;
+  /** Con asMarkdown: quita nav, footer, iconos y "skip to content". Default false. */
+  onlyMainContent?: boolean;
   /** Override Unlocker zone. Default from env BRIGHTDATA_UNLOCKER_ZONE. */
   zone?: string;
 }
@@ -130,12 +132,16 @@ export const brightdataScrapeService: ServiceDef<BrightdataScrapeInput, Brightda
         data_format: "markdown",
         serviceId: "research.brightdata.scrape",
       })) as BrightdataResponse;
-      const body = (resp.body ?? "").slice(0, SCRAPE_BODY_MAX_LEN);
+      let body = resp.body ?? "";
+      if (input.onlyMainContent) {
+        const { extractMainContent } = await import("./parsers/mainContent");
+        body = extractMainContent(body);
+      }
       return {
         data: {
           url,
           statusCode: resp.status_code ?? 200,
-          body,
+          body: body.slice(0, SCRAPE_BODY_MAX_LEN),
           format: "markdown",
         },
       };
@@ -476,6 +482,8 @@ export interface BrightdataCrawlInput {
   /** Máximo de páginas a leer (1-20). Default 10. */
   maxPages?: number;
   country?: string;
+  /** Quita nav, footer e iconos de cada página. Default false. */
+  onlyMainContent?: boolean;
 }
 
 export interface BrightdataCrawlOutput extends ServiceResult {
@@ -528,6 +536,7 @@ export const brightdataCrawlService: ServiceDef<BrightdataCrawlInput, Brightdata
     const seen = new Set<string>(queue);
     const pages: { url: string; markdown: string }[] = [];
     let bytes = 0;
+    const { extractMainContent } = await import("./parsers/mainContent");
 
     while (queue.length && pages.length < maxPages && bytes < CRAWL_MAX_TOTAL_BYTES) {
       const url = queue.shift()!;
@@ -545,8 +554,11 @@ export const brightdataCrawlService: ServiceDef<BrightdataCrawlInput, Brightdata
       } catch {
         continue; // una página caída no tumba el crawl ni se cobra
       }
-      pages.push({ url, markdown: md });
-      bytes += md.length;
+      // Los links se sacan del markdown COMPLETO (el nav es donde están);
+      // lo que se guarda es la versión limpia si la pidieron.
+      const kept = input.onlyMainContent ? extractMainContent(md) : md;
+      pages.push({ url, markdown: kept });
+      bytes += kept.length;
       for (const link of sameHostLinks(md, base)) {
         if (!seen.has(link)) {
           seen.add(link);

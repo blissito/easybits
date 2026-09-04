@@ -6139,16 +6139,17 @@ function registerVideoTools(server: McpServer) {
   };
 
   const WEB_FETCH_DESC =
-    "Lee UNA página web y devuelve su contenido, aunque el sitio bloquee bots (IPs residenciales, JS resuelto). Cuesta 1 consulta.\n\nHow to use:\n- Required: `url` (https://… completa).\n- Optional: `country` (ISO 'mx', 'us'…) para ver la versión local del sitio (precios en MXN, stock local).\n- Optional: `asMarkdown=true` devuelve markdown limpio en vez de HTML — úsalo para resumir o alimentar documentos.\n\nUse for: leer una ficha de producto (Amazon MX, Mercado Libre), una noticia, docs de terceros, precios de competencia. Para buscar en Google usa `web_search`; para muchos registros de un sitio conocido usa `web_extract`.";
+    "Lee UNA página web y devuelve su contenido, aunque el sitio bloquee bots (IPs residenciales, JS resuelto). Cuesta 1 consulta.\n\nHow to use:\n- Required: `url` (https://… completa).\n- Optional: `country` (ISO 'mx', 'us'…) para ver la versión local del sitio (precios en MXN, stock local).\n- Optional: `asMarkdown=true` devuelve markdown en vez de HTML; añade `onlyMainContent=true` para quitar nav, footer e iconos (lo normal cuando vas a LEER la página).\n\nUse for: leer una ficha de producto (Amazon MX, Mercado Libre), una noticia, docs de terceros, precios de competencia. Para buscar en Google usa `web_search`; para muchos registros de un sitio conocido usa `web_extract`.";
   const WEB_FETCH_SHAPE = {
     url: z.string().url().describe("Full https:// URL of the target page."),
     country: z.string().length(2).optional().describe("ISO 3166-1 country code (mx, us, gb…) for geo-localized fetch."),
     asMarkdown: z.boolean().optional().describe("If true, returns clean markdown. Default false (raw HTML)."),
+    onlyMainContent: z.boolean().optional().describe("Con asMarkdown: quita nav, footer, iconos y 'skip to content'. Úsalo para leer o para RAG."),
   };
-  const webFetchHandler = wrapHandler(async (params: { url: string; country?: string; asMarkdown?: boolean }, extra) =>
+  const webFetchHandler = wrapHandler(async (params: { url: string; country?: string; asMarkdown?: boolean; onlyMainContent?: boolean }, extra) =>
     runWeb<import("../services/providers/brightdata").BrightdataScrapeOutput>(
       "research.brightdata.scrape",
-      { url: params.url, country: params.country, asMarkdown: params.asMarkdown },
+      { url: params.url, country: params.country, asMarkdown: params.asMarkdown, onlyMainContent: params.onlyMainContent },
       extra,
       (r) => ({ url: r.data.url, statusCode: r.data.statusCode, format: r.data.format, body: r.data.body }),
     ),
@@ -6213,11 +6214,12 @@ function registerVideoTools(server: McpServer) {
 
   server.tool(
     "web_crawl",
-    "Lee una página y SIGUE sus links internos (mismo dominio) hasta `maxPages`, devolviendo markdown por página. Cobra 1 consulta por página realmente leída.\n\nHow to use:\n- Required: `url` de inicio.\n- Optional: `maxPages` (1-20, default 10), `country`.\n- Devuelve `pages[]` y `pending[]` (links vistos y no visitados): para seguir, llama otra vez con una URL de `pending`.\n\nUse for: aprenderse la documentación de un producto, bajar un blog o catálogo chico para RAG. Para una sola página usa `web_fetch`.",
+    "Lee una página y SIGUE sus links internos (mismo dominio) hasta `maxPages`, devolviendo markdown por página. Cobra 1 consulta por página realmente leída.\n\nHow to use:\n- Required: `url` de inicio.\n- Optional: `maxPages` (1-20, default 10), `country`, `onlyMainContent` (quita nav/footer/iconos — recomendado para RAG).\n- Devuelve `pages[]` y `pending[]` (links vistos y no visitados): para seguir, llama otra vez con una URL de `pending`.\n\nUse for: aprenderse la documentación de un producto, bajar un blog o catálogo chico para RAG. Para una sola página usa `web_fetch`.",
     {
       url: z.string().url().describe("URL de inicio (https://…)."),
       maxPages: z.number().int().min(1).max(20).optional().describe("Páginas máximas. Default 10."),
       country: z.string().length(2).optional().describe("ISO country code."),
+      onlyMainContent: z.boolean().optional().describe("Quita nav, footer e iconos de cada página (recomendado para RAG)."),
     },
     wrapHandler(async (params, extra) =>
       runWeb<import("../services/providers/brightdata").BrightdataCrawlOutput>(

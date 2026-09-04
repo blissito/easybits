@@ -80,3 +80,24 @@ describe("consumeService (web)", () => {
     expect(new QuotaExceededError("s", 1, 0).unit).toBe("credits");
   });
 });
+
+// ── onlyMainContent (fixture real: runpod.io/kimi-k3 vía web_crawl) ────────
+import { extractMainContent } from "../app/.server/services/providers/parsers/mainContent";
+
+describe("extractMainContent", () => {
+  const md = fs.readFileSync(path.join(__dirname, "fixtures/runpod-kimi-k3.md"), "utf8");
+  it("quita nav y footer y arranca en el H1", () => {
+    const c = extractMainContent(md);
+    expect(c.startsWith("# Kimi K3 on Runpod")).toBe(true);
+    expect(c).not.toContain("Skip to main content");
+    expect(c).not.toContain("Terms of Service");
+    expect(c).not.toContain("© 2026");
+    expect(c).toContain("### Model details");
+    expect(c.length).toBeLessThan(md.length * 0.6);
+  });
+  it("conserva imágenes de contenido y tira iconos/svg", () => {
+    const c = extractMainContent("# T\n\n![Runpod hero](https://x/hero.webp)\n\n![News icon](https://x/news-icon.svg)\n\ntexto.");
+    expect(c).toContain("hero.webp");
+    expect(c).not.toContain("news-icon.svg");
+  });
+});
