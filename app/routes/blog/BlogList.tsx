@@ -6,9 +6,16 @@ import { Link, useSearchParams } from "react-router";
 import { cn } from "~/utils/cn";
 import type { BlogPost } from "~/types/blog";
 
+type Section = { key: string; label: string; description: string; posts: BlogPost[] };
+
 interface BlogContentProps {
   posts: BlogPost[];
   tags: string[];
+  /** Portada (sin filtros): destacado + filas por pista editorial. */
+  featured?: BlogPost | null;
+  sections?: Section[];
+  /** Label de la pista activa (?kind=) para el encabezado del listado filtrado. */
+  kindLabel?: string | null;
   totalPages: number;
   currentPage: number;
   hasNextPage: boolean;
@@ -17,6 +24,11 @@ interface BlogContentProps {
 
 // Barra de tags curada: pocos tags relevantes en vez de los 15+ del blog.
 // Solo se muestran los que existan en los posts publicados.
+const KIND_CHIPS = [
+  { kind: "lanzamiento", label: "Lanzamientos" },
+  { kind: "tutorial", label: "Tutoriales" },
+  { kind: "build-in-public", label: "Build in public" },
+];
 const CURATED_TAGS = [
   { tag: "ejemplos", label: "Ejemplos" },
   { tag: "sandboxes", label: "Sandboxes" },
@@ -28,6 +40,9 @@ const CURATED_TAGS = [
 export const BlogContent = ({
   posts,
   tags,
+  featured = null,
+  sections = [],
+  kindLabel = null,
   totalPages,
   currentPage,
   hasNextPage,
@@ -35,10 +50,13 @@ export const BlogContent = ({
 }: BlogContentProps) => {
   const [searchParams, setSearchParams] = useSearchParams();
   const currentTag = searchParams.get("tag");
+  const currentKind = searchParams.get("kind");
   const currentSearch = searchParams.get("search") || "";
+  const isFront = !currentTag && !currentKind && !currentSearch && !searchParams.get("page");
 
   const handleTagClick = (tag: string) => {
     const newParams = new URLSearchParams(searchParams);
+    newParams.delete("kind");
     if (tag === "Todos") {
       newParams.delete("tag");
     } else {
@@ -70,9 +88,21 @@ export const BlogContent = ({
           <div className="flex h-12 md:h-full items-center w-full lg:w-fit overflow-x-scroll md:overflow-hidden border-b-[2px] border-black lg:border-none">
             <Chip
               category="Todos"
-              active={!currentTag}
+              active={!currentTag && !currentKind}
               onClick={() => handleTagClick("Todos")}
             />
+            {KIND_CHIPS.map((k) => (
+              <Chip
+                key={k.kind}
+                category={k.label}
+                active={currentKind === k.kind}
+                onClick={() => {
+                  const n = new URLSearchParams(searchParams);
+                  n.delete("tag"); n.delete("page"); n.set("kind", k.kind);
+                  setSearchParams(n);
+                }}
+              />
+            ))}
             {CURATED_TAGS.filter((t) => tags.includes(t.tag)).map((t) => (
               <Chip
                 key={t.tag}
@@ -143,9 +173,37 @@ export const BlogContent = ({
           )}
         </div>
       </div>
-      <div className="border-x-[2px] border-black  min-h-screen max-w-7xl pt-12 lg:pt-20  mx-4 md:mx-[5%] xl:mx-auto">
+      <div className="border-x-[2px] border-black min-h-screen max-w-7xl pt-8 lg:pt-12 mx-4 md:mx-[5%] xl:mx-auto px-4 md:px-6">
+        {isFront && featured && <FeaturedCard post={featured} />}
+        {isFront &&
+          sections.map((sec) => (
+            <div key={sec.key} className="mt-12 lg:mt-16">
+              <div className="flex flex-wrap items-end justify-between gap-3 mb-5">
+                <div>
+                  <h2 className="text-2xl md:text-3xl font-bold">{sec.label}</h2>
+                  <p className="text-iron">{sec.description}</p>
+                </div>
+                <Link
+                  to={`/blog?kind=${sec.key}`}
+                  className="min-w-max rounded-full border-[2px] border-black px-4 h-10 grid place-content-center font-bold hover:bg-black hover:text-white transition-colors"
+                >
+                  Ver todos →
+                </Link>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                {sec.posts.map((post) => <GridCard key={post.slug} post={post} />)}
+              </div>
+            </div>
+          ))}
+        <div className={cn("mb-5", isFront ? "mt-12 lg:mt-16" : "")}>
+          <h2 className="text-2xl md:text-3xl font-bold">
+            {isFront ? "Todos los posts" : kindLabel ?? (currentTag ? currentTag : currentSearch ? `Resultados para "${currentSearch}"` : "Todos los posts")}
+          </h2>
+        </div>
         {posts.length > 0 ? (
-          posts.map((post) => <BlogCard key={post.slug} post={post} />)
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 pb-12">
+            {posts.map((post) => <GridCard key={post.slug} post={post} />)}
+          </div>
         ) : (
           <div className="text-center py-20">
             <p className="text-xl text-iron">
@@ -238,6 +296,70 @@ export const Pagination = ({
     </div>
   );
 };
+
+const formatMonth = (dateString: string) =>
+  new Date(dateString).toLocaleDateString("es-ES", { year: "numeric", month: "long" });
+
+const KIND_LABEL: Record<string, string> = {
+  lanzamiento: "Lanzamiento",
+  tutorial: "Tutorial",
+  "build-in-public": "Build in public",
+};
+
+/** Destacado de portada: imagen grande + texto, a lo ancho. */
+export const FeaturedCard = ({ post }: { post: BlogPost }) => (
+  <Link
+    to={`/blog/${post.slug}`}
+    className="group grid grid-cols-1 lg:grid-cols-5 gap-6 lg:gap-8 rounded-2xl border-[2px] border-black overflow-hidden bg-white transition-all hover:-translate-y-0.5 hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]"
+  >
+    <div className="lg:col-span-3 bg-gray-100">
+      {post.featuredImage ? (
+        <img src={post.featuredImage} alt={post.title} className="w-full h-64 lg:h-full object-cover" />
+      ) : (
+        <div className="w-full h-64 lg:h-full grid place-content-center text-gray-500">Sin imagen</div>
+      )}
+    </div>
+    <div className="lg:col-span-2 p-6 lg:p-8 flex flex-col justify-center">
+      <div className="flex items-center gap-2 text-sm text-brand-gray">
+        <span className="rounded-full border-[2px] border-black px-2 py-0.5 text-xs font-bold text-black">Lo último</span>
+        {post.kind && <span>{KIND_LABEL[post.kind]}</span>}
+        <span>·</span>
+        <span>{formatMonth(post.date)}</span>
+      </div>
+      <h2 className="text-2xl lg:text-4xl font-bold mt-3 group-hover:underline">{post.title}</h2>
+      <p className="text-iron mt-3 lg:text-lg">{post.description}</p>
+      <div className="flex text-sm mt-4 gap-2 items-center text-brand-gray">
+        <p>{post.author}</p>
+        <hr className="bg-brand-gray/50 w-[1px] h-3" />
+        <p>{post.readingTime} min de lectura</p>
+      </div>
+    </div>
+  </Link>
+);
+
+/** Tarjeta vertical para grillas de 2 o 3 columnas. */
+export const GridCard = ({ post }: { post: BlogPost }) => (
+  <Link
+    to={`/blog/${post.slug}`}
+    className="group flex flex-col rounded-2xl border-[2px] border-black overflow-hidden bg-white transition-all hover:-translate-y-0.5 hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]"
+  >
+    {post.featuredImage ? (
+      <img src={post.featuredImage} alt={post.title} className="aspect-video w-full object-cover border-b-[2px] border-black" />
+    ) : (
+      <div className="aspect-video w-full bg-gray-100 border-b-[2px] border-black grid place-content-center text-gray-500 text-sm">Sin imagen</div>
+    )}
+    <div className="p-4 md:p-5 flex flex-col gap-2 flex-1">
+      <div className="flex items-center gap-2 text-xs text-brand-gray">
+        {post.kind && <span className="font-bold text-black">{KIND_LABEL[post.kind]}</span>}
+        {post.kind && <span>·</span>}
+        <span>{formatMonth(post.date)}</span>
+      </div>
+      <h3 className="text-lg font-bold leading-snug group-hover:underline">{post.title}</h3>
+      <p className="text-iron text-sm line-clamp-3">{post.description || post.excerpt}</p>
+      <div className="mt-auto pt-2 text-xs text-brand-gray">{post.readingTime} min de lectura</div>
+    </div>
+  </Link>
+);
 
 export const BlogCard = ({
   post,

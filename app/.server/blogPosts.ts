@@ -18,6 +18,20 @@ import matter from "gray-matter";
 const BLOG_DIR = "app/content/blog";
 
 export type PostLang = "es" | "en";
+/** Pista editorial del post. Explícita en el frontmatter (`kind:`) o inferida de los tags. */
+export type PostKind = "lanzamiento" | "tutorial" | "build-in-public";
+export const POST_KINDS: { key: PostKind; label: string; description: string }[] = [
+  { key: "lanzamiento", label: "Lanzamientos", description: "Qué hay nuevo en Easybits y cómo usarlo desde el primer día." },
+  { key: "tutorial", label: "Tutoriales", description: "Recetas paso a paso: SDK, MCP, API y flota." },
+  { key: "build-in-public", label: "Build in public", description: "Lo que aprendimos construyendo: incidentes, decisiones y números reales." },
+];
+function inferKind(kind: unknown, tags: string[]): PostKind | null {
+  if (kind === "lanzamiento" || kind === "tutorial" || kind === "build-in-public") return kind;
+  const t = tags.map((x) => x.toLowerCase());
+  if (t.includes("build in public")) return "build-in-public";
+  if (t.includes("tutorial") || t.includes("ejemplos")) return "tutorial";
+  return null;
+}
 
 export interface BlogPost {
   slug: string;
@@ -29,6 +43,10 @@ export interface BlogPost {
   date: string;
   author: string;
   tags: string[];
+  /** null = sólo aparece en "Todos". */
+  kind: PostKind | null;
+  /** `featured: true` en el frontmatter fija el destacado del índice. */
+  featured: boolean;
   featuredImage: string | null;
   published: boolean;
   /** Cuerpo del post en markdown. */
@@ -91,6 +109,8 @@ async function readAll(): Promise<BlogPost[]> {
         date: data.date ?? fileName.slice(0, 10),
         author: data.author ?? "Equipo Easybits",
         tags: data.tags ?? [],
+        kind: inferKind(data.kind, data.tags ?? []),
+        featured: data.featured === true,
         featuredImage: data.featuredImage ?? null,
         published: data.published !== false,
         content,

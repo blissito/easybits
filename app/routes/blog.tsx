@@ -5,7 +5,7 @@ import type { Route } from "./+types/blog";
 import { FloatingChat } from "~/components/ai/FloatingChat";
 import path from "path";
 import matter from "gray-matter";
-import { listPublishedPosts } from "~/.server/blogPosts";
+import { listPublishedPosts, POST_KINDS } from "~/.server/blogPosts";
 // import readingTime from "reading-time"; // REMOVE this import
 
 export const loader = async ({ request }: Route.LoaderArgs) => {
@@ -13,7 +13,8 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
   const page = parseInt(url.searchParams.get("page") || "1");
   const tag = url.searchParams.get("tag") || undefined;
   const search = url.searchParams.get("search") || undefined;
-  const limit = 10;
+  const kind = url.searchParams.get("kind") || undefined;
+  const limit = 12;
 
   // El índice sale del directorio de posts, no de una lista a mano.
   const allPosts = await listPublishedPosts();
@@ -23,6 +24,10 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
     filteredPosts = filteredPosts.filter((post) =>
       post.tags.some((postTag) => postTag.toLowerCase() === tag.toLowerCase())
     );
+  }
+
+  if (kind) {
+    filteredPosts = filteredPosts.filter((post) => post.kind === kind);
   }
 
   if (search) {
@@ -51,6 +56,17 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
   // Get all unique tags
   const allTags = [...new Set(allPosts.flatMap((post) => post.tags))].sort();
 
+  // Portada (sin filtros, página 1): un destacado + una fila por pista editorial.
+  const byDate = [...allPosts].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  const isFront = !tag && !search && !kind && page === 1;
+  const featured = isFront ? (byDate.find((p) => p.featured) ?? byDate[0] ?? null) : null;
+  const sections = isFront
+    ? POST_KINDS.map((k) => ({
+        ...k,
+        posts: byDate.filter((p) => p.kind === k.key && p.slug !== featured?.slug).slice(0, 3),
+      })).filter((s) => s.posts.length > 0)
+    : [];
+
   return {
     posts: paginatedPosts,
     totalPosts,
@@ -59,6 +75,9 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
     hasNextPage: page < totalPages,
     hasPrevPage: page > 1,
     tags: allTags,
+    featured,
+    sections,
+    kindLabel: kind ? POST_KINDS.find((k) => k.key === kind)?.label ?? null : null,
     user: null, // Will be handled on client side
   };
 };
@@ -110,6 +129,9 @@ export default function Blog({ loaderData }: Route.ComponentProps) {
     user,
     posts = [],
     tags = [],
+    featured = null,
+    sections = [],
+    kindLabel = null,
     totalPages,
     currentPage,
     hasNextPage,
@@ -123,6 +145,9 @@ export default function Blog({ loaderData }: Route.ComponentProps) {
       <BlogContent
         posts={posts}
         tags={tags}
+        featured={featured}
+        sections={sections}
+        kindLabel={kindLabel}
         totalPages={totalPages}
         currentPage={currentPage}
         hasNextPage={hasNextPage}

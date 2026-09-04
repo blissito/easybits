@@ -5,6 +5,8 @@ export interface BlogPost {
   date: string;
   author: string;
   tags: string[];
+  kind?: "lanzamiento" | "tutorial" | "build-in-public" | null;
+  featured?: boolean;
   featuredImage?: string;
   readingTime: number;
   content: string;
