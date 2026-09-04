@@ -117,7 +117,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
         className="block mt-14 md:mt-20 bg-brand-500 text-white text-center text-sm md:text-base font-medium py-2 px-4 border-b-2 border-black hover:bg-black transition-colors"
       >
         <span className="font-bold uppercase tracking-wider mr-2">Nuevo</span>
-        Tu agente ya lee cualquier web — buscar, leer y extraer registros →
+        Tu agente ya tiene internet: busca, lee y extrae registros →
       </a>
 
       <Hero />
