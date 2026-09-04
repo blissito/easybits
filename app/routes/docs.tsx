@@ -2139,9 +2139,9 @@ console.log(status.result);  // resultado final del agente`} />
                 ["agent_create", "template", "Crear agente persistente (endpoint HTTP)"],
                 ["agent_list", "—", "Listar agentes persistentes"],
                 ["agent_message", "agentId, content", "Enviar mensaje a un agente"],
-                ["fleet_agent_list", "—", "Listar los agentes de la flota (WhatsApp/web/Teams)"],
-                ["fleet_agent_capabilities", "fleetAgentId", "Config actual de un agente de la flota (= GET /capabilities)"],
-                ["fleet_agent_configure", "fleetAgentId, action, params?", "Aplicar una acción de /capabilities por MCP"],
+                ["fleet_agent_list", "—", "Grupo fleet · listar los agentes de la flota (WhatsApp/web/Teams)"],
+                ["fleet_agent_capabilities", "fleetAgentId", "Grupo fleet · config actual de un agente (= GET /capabilities)"],
+                ["fleet_agent_configure", "fleetAgentId, action, params?", "Grupo fleet · aplicar una acción de /capabilities"],
                 ["agent_run", "prompt, model?", "Agente Claude one-shot (async)"],
                 ["agent_run_status", "jobId", "Consultar estado de agent_run"],
                 ["templates_list", "tier?", "Listar templates disponibles"],
@@ -2726,7 +2726,7 @@ await cfg({ action: "set-prompt", groupId: "mi-app", systemPrompt: "Aquí hablas
               ]}
             />
             <p className="text-gray-600 mb-6 text-sm">
-              Las mismas acciones existen por MCP: <code className="bg-gray-100 px-1 rounded">fleet_agent_list</code> → <code className="bg-gray-100 px-1 rounded">fleet_agent_capabilities</code> → <code className="bg-gray-100 px-1 rounded">fleet_agent_configure {`{ fleetAgentId, action, params }`}</code>, autenticadas con tu API key (no con el token del agente). Para borrar un agente: <code className="bg-gray-100 px-1 rounded">POST /api/v2/fleet-agents/:id/delete</code>.
+              Las mismas acciones existen por MCP: <code className="bg-gray-100 px-1 rounded">fleet_agent_list</code> → <code className="bg-gray-100 px-1 rounded">fleet_agent_capabilities</code> → <code className="bg-gray-100 px-1 rounded">fleet_agent_configure {`{ fleetAgentId, action, params }`}</code>, autenticadas con tu API key (no con el token del agente), en el grupo <code className="bg-gray-100 px-1 rounded">fleet</code> del conector (<code className="bg-gray-100 px-1 rounded">?tools=fleet</code>). Para borrar un agente: <code className="bg-gray-100 px-1 rounded">POST /api/v2/fleet-agents/:id/delete</code>.
             </p>
 
             <h3 className="text-lg font-bold mb-3">Tres capas de prompt</h3>
@@ -3489,6 +3489,7 @@ console.log(\`\${stats.storage.usedGB}/\${stats.storage.maxGB} GB\`);`}
                   {[
                     ["core", "12", "Archivos, DB, documentos, cotizaciones, estadísticas (default)"],
                     ["sandbox", "22", "MicroVMs Firecracker: crear, ejecutar, exponer puertos, agentes persistentes y one-shot"],
+                    ["fleet", "3", "Agentes de la flota: listar, leer config y aplicar acciones de /capabilities"],
                     ["files", "~37", "Todas las ops de archivos: bulk, sharing, permisos, webhooks, imágenes, AI keys"],
                     ["docs", "~33", "Documentos: generación AI, refine, screenshots, structured docs"],
                     ["sites", "~8", "Sitios web: CRUD, upload, deploy"],

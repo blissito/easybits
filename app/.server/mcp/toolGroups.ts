@@ -20,6 +20,7 @@ export type ToolGroupKey =
   | "magnet"
   | "video"
   | "sandbox"
+  | "fleet"
   | "hosting"
   | "payments"
   | "email"
@@ -113,6 +114,12 @@ export const TOOL_GROUPS: ToolGroup[] = [
     label: "Sandbox",
     description: "MicroVMs Firecracker para correr agentes y código aislado. Ciclo de vida (spawn/extend/suspend/resume/destroy), snapshot + fork (clonar una caja viva en N hijos copy-on-write para explorar variantes en paralelo), exec (sync + background), run-code, kernel Jupyter persistente (run_cell con estado + charts), archivos (write/read/list/delete/move/mkdir), expose_port (URL pública), sandbox_admin (passthrough admin :8787) + agent_run (Claude managed con billing por token). Ideal para harness de agentes (Claude Code, Codex) y ejecución segura.",
     toolCount: 27,
+  },
+  {
+    key: "fleet",
+    label: "Flota",
+    description: "Agentes de la flota (WhatsApp, WABA, web, Teams): listar, leer su configuración y aplicar cualquier acción de /capabilities por MCP — prompt, motor, modelo, secrets, conectores (add-mcp + set-cap-level), skills, buckets por canal, reciclar caja. Lo que hace el dashboard de /dash/flota, hecho por un agente.",
+    toolCount: 3,
   },
   {
     key: "hosting",
@@ -430,9 +437,6 @@ export const SANDBOX_ALLOWLIST = new Set<string>([
   "agent_create",
   "agent_message",
   "agent_list",
-  "fleet_agent_list",
-  "fleet_agent_capabilities",
-  "fleet_agent_configure",
   "agent_install_skill",
   "agent_record",
   "agent_recording_start",
@@ -466,6 +470,12 @@ export const SANDBOX_ALLOWLIST = new Set<string>([
  * `rollback_machine` (fetches a release tarball onto the SAME box) and
  * `redeploy_machine` (a whole new box).
  */
+export const FLEET_ALLOWLIST = new Set<string>([
+  "fleet_agent_list",
+  "fleet_agent_capabilities",
+  "fleet_agent_configure",
+]);
+
 export const HOSTING_ALLOWLIST = new Set<string>([
   "list_machine_tiers",
   "create_machine",
@@ -676,6 +686,7 @@ export const GROUP_ALLOWLISTS: Partial<Record<ToolGroupKey, Set<string>>> = {
   magnet: MAGNET_ALLOWLIST,
   video: VIDEO_ALLOWLIST,
   sandbox: SANDBOX_ALLOWLIST,
+  fleet: FLEET_ALLOWLIST,
   hosting: HOSTING_ALLOWLIST,
   payments: PAYMENTS_ALLOWLIST,
   email: EMAIL_ALLOWLIST,
