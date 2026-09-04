@@ -23,6 +23,12 @@ export interface ServiceResult {
   modelId?: string;
   inputTokens?: number;
   outputTokens?: number;
+  /**
+   * Costo REAL de la operación, si difiere del estimado (crawl cobra las páginas
+   * que de verdad leyó, extract los registros que devolvió). El orquestador
+   * cobra esto cuando viene; si no, cobra `estimateCost`.
+   */
+  cost?: number;
   /** Operation-specific payload returned to the caller. */
   data: unknown;
 }

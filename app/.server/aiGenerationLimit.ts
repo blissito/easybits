@@ -108,7 +108,7 @@ export interface GenerationLogData {
   resourceId?: string;
   pageCount?: number;
   durationMs?: number;
-  source?: "monthly" | "bonus" | "split";
+  source?: "monthly" | "bonus" | "split" | "web";
 }
 
 /**

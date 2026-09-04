@@ -30,6 +30,9 @@ import { elevenLabsTtsService } from "./providers/elevenlabs";
 import {
   brightdataScrapeService,
   brightdataSearchService,
+  brightdataExtractService,
+  brightdataExtractStatusService,
+  brightdataCrawlService,
 } from "./providers/brightdata";
 import { stockPhotoSearchService } from "./providers/stockPhotos";
 import { auditService, screenshotService } from "./providers/render";
@@ -40,6 +43,9 @@ export const SERVICES = {
   "voice.elevenlabs.tts": elevenLabsTtsService,
   "research.brightdata.scrape": brightdataScrapeService,
   "research.brightdata.search": brightdataSearchService,
+  "research.brightdata.extract": brightdataExtractService,
+  "research.brightdata.extractStatus": brightdataExtractStatusService,
+  "research.brightdata.crawl": brightdataCrawlService,
   "image.fal.generate": falImageService,
   "image.gemini.edit": geminiEditImageService,
   "image.gemini.describe": describeImageService,

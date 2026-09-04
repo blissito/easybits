@@ -13,9 +13,11 @@ export class QuotaExceededError extends Error {
     public readonly serviceId: string,
     public readonly requiredCost: number,
     public readonly available: number,
+    /** "credits" (generación) | "web" (consultas del toolset web). */
+    public readonly unit: "credits" | "web" = "credits",
   ) {
     super(
-      `Quota exceeded for ${serviceId}: needed ${requiredCost} créditos, only ${available} available.`,
+      `Quota exceeded for ${serviceId}: needed ${requiredCost} ${unit === "web" ? "consultas" : "créditos"}, only ${available} available.`,
     );
     this.name = "QuotaExceededError";
   }

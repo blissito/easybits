@@ -69,6 +69,7 @@ export const createPackCheckout = async ({
   packId,
   generations,
   tokens,
+  queries,
   priceMxn,
   type = "generation_pack",
   autoTopup = false,
@@ -78,26 +79,34 @@ export const createPackCheckout = async ({
   packId: string;
   generations?: number;
   tokens?: number;
+  /** Consultas del toolset web (type "web_pack"). */
+  queries?: number;
   priceMxn: number;
-  /** "generation_pack" (default) | "llm_token_pack" */
-  type?: "generation_pack" | "llm_token_pack";
+  /** "generation_pack" (default) | "llm_token_pack" | "web_pack" */
+  type?: "generation_pack" | "llm_token_pack" | "web_pack";
   /** Si true: guarda la tarjeta off-session y activa auto-topup tras la compra. */
   autoTopup?: boolean;
 }) => {
   const isLlm = type === "llm_token_pack";
+  const isWeb = type === "web_pack";
   const tokenCount = tokens ?? 0;
   const creditCount = generations ?? 0;
+  const queryCount = queries ?? 0;
 
-  const productName = isLlm
-    ? `Pack de ${tokenCount.toLocaleString("es-MX")} tokens LLM`
-    : `Pack de ${creditCount} créditos AI`;
+  const productName = isWeb
+    ? `Pack Web de ${queryCount.toLocaleString("es-MX")} consultas`
+    : isLlm
+      ? `Pack de ${tokenCount.toLocaleString("es-MX")} tokens LLM`
+      : `Pack de ${creditCount} créditos AI`;
 
   const metadata: Record<string, string> = {
     type,
     userId,
     packId,
   };
-  if (isLlm) {
+  if (isWeb) {
+    metadata.queries = String(queryCount);
+  } else if (isLlm) {
     metadata.tokens = String(tokenCount);
   } else {
     metadata.generations = String(creditCount);

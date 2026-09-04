@@ -11,6 +11,8 @@ import { getReservedCapacity } from "~/.server/core/sandboxReservations";
 import {
   GENERATION_PACKS,
   LLM_TOKEN_PACKS,
+  WEB_PACKS,
+  type WebPack,
   NEXT_PLAN,
   PLANS,
   REFERRAL_SIGNUP_BONUS,
@@ -56,6 +58,8 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
   return {
     packs,
     llmPacks: LLM_TOKEN_PACKS,
+    webPacks: WEB_PACKS,
+    webQueries: user.webQueriesBonus ?? 0,
     plan,
     genLimit,
     llmLimit,
@@ -76,15 +80,15 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
 };
 
 export default function PacksPage({ loaderData }: Route.ComponentProps) {
-  const { packs, llmPacks, plan, genLimit, llmLimit, referralStats, referralLink, autoTopup, canBuyAddon, sandboxes } =
+  const { packs, llmPacks, webPacks, webQueries, plan, genLimit, llmLimit, referralStats, referralLink, autoTopup, canBuyAddon, sandboxes } =
     loaderData;
 
-  type Tab = "credits" | "tokens" | "sandboxes";
+  type Tab = "credits" | "tokens" | "web" | "sandboxes";
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const tabParam = searchParams.get("tab");
   const [tab, setTab] = useState<Tab>(
-    tabParam === "tokens" ? "tokens" : tabParam === "credits" ? "credits" : "sandboxes",
+    tabParam === "tokens" ? "tokens" : tabParam === "credits" ? "credits" : tabParam === "web" ? "web" : "sandboxes",
   );
 
   const switchTab = (t: Tab) => {
@@ -187,6 +191,16 @@ export default function PacksPage({ loaderData }: Route.ComponentProps) {
         >
           🧠 Tokens LLM
         </button>
+        <button
+          onClick={() => switchTab("web")}
+          className={`px-6 py-3 text-sm font-bold uppercase tracking-tight border-2 border-b-0 rounded-t-xl transition-colors ${
+            tab === "web"
+              ? "bg-black text-white border-black"
+              : "bg-gray-100 text-iron border-gray-300 hover:bg-gray-200"
+          }`}
+        >
+          🌐 Web
+        </button>
       </div>
 
       {/* Pack grid */}
@@ -201,6 +215,20 @@ export default function PacksPage({ loaderData }: Route.ComponentProps) {
           {llmPacks.map((pack) => (
             <LlmPackCard key={pack.id} pack={pack} />
           ))}
+        </div>
+      ) : tab === "web" ? (
+        <div className="mb-12">
+          <p className="text-sm text-iron mb-4 max-w-xl">
+            Internet para tus agentes: buscar en Google, leer cualquier página aunque bloquee bots,
+            extraer registros (Google Maps, Mercado Libre, Amazon, Instagram…) y rastrear sitios.
+            1 consulta = 1 página, 1 búsqueda o 1 registro. No caducan. Tienes{" "}
+            <b>{webQueries.toLocaleString("es-MX")} consultas</b>.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {webPacks.map((pack) => (
+              <WebPackCard key={pack.id} pack={pack} />
+            ))}
+          </div>
         </div>
       ) : (
         <div className="mb-12" id="sandbox-buy">
@@ -629,6 +657,65 @@ function SandboxBoxCard({ canBuy }: { canBuy: boolean }) {
             Mejora a Mega para comprar cajas ↗
           </a>
         )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Web Pack Card ──────────────────────────────────────────────────────────
+
+function WebPackCard({ pack }: { pack: WebPack }) {
+  const fetcher = useFetcher();
+  const isLoading = fetcher.state !== "idle";
+
+  const handleBuy = () => {
+    fetcher.submit(
+      { packId: pack.id, packType: "web" },
+      { method: "POST", action: "/api/v2/generation-packs", encType: "application/json" },
+    );
+  };
+
+  if (fetcher.data?.url) {
+    window.location.href = fetcher.data.url;
+  }
+
+  return (
+    <div
+      className={`border-2 rounded-xl bg-white hover:-translate-x-1 hover:-translate-y-1 transition-all flex flex-col relative h-full ${
+        pack.featured
+          ? "border-brand-500 ring-2 ring-brand-500 shadow-[4px_4px_0px_0px_#9870ED] hover:shadow-[6px_6px_0px_0px_#9870ED]"
+          : "border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]"
+      }`}
+    >
+      {pack.featured && (
+        <div className="absolute -top-3 left-1/2 -translate-x-1/2 min-w-max whitespace-nowrap bg-brand-500 text-white text-xs font-bold px-3 py-1 rounded-full">
+          Más popular
+        </div>
+      )}
+      <div className={`p-6 border-b-2 text-center ${pack.featured ? "border-brand-500 bg-brand-50" : "border-black"}`}>
+        <p className="text-xs uppercase tracking-widest font-black text-black/70 mb-1">🌐 Web</p>
+        <p className="text-5xl font-bold">{pack.queries.toLocaleString("es-MX")}</p>
+        <p className="text-iron mt-1">consultas</p>
+      </div>
+      <div className="p-6 flex flex-col flex-1 justify-between">
+        <div className="text-center mb-6">
+          <p className="text-3xl font-bold">
+            ${pack.price.toLocaleString("es-MX")} <span className="text-base text-iron font-normal">mxn</span>
+          </p>
+          <p className="text-xs text-iron mt-2">≈ ${(pack.price / pack.queries).toFixed(2)} MXN por consulta · no caducan</p>
+          {pack.description && <p className="text-xs text-iron mt-2">{pack.description}</p>}
+        </div>
+        <button
+          onClick={handleBuy}
+          disabled={isLoading}
+          className={`w-full py-3 font-bold rounded-lg border-2 transition-colors disabled:opacity-50 ${
+            pack.featured
+              ? "bg-brand-500 text-white border-brand-500 hover:bg-brand-600"
+              : "bg-black text-white border-black hover:bg-gray-800"
+          }`}
+        >
+          {isLoading ? "Redirigiendo…" : "Comprar"}
+        </button>
       </div>
     </div>
   );

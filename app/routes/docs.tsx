@@ -26,6 +26,7 @@ const SECTIONS = [
   { id: "files", label: "Archivos" },
   { id: "bulk", label: "Operaciones en lote" },
   { id: "images", label: "Imágenes" },
+  { id: "web", label: "Web" },
   { id: "sharing", label: "Compartir" },
   { id: "forms", label: "Formularios" },
   { id: "webhooks", label: "Webhooks" },
@@ -877,6 +878,108 @@ console.log(result.savings); // "75%"`}
           </section>
 
           {/* Sharing */}
+          <section id="web" className="mb-16">
+            <h2 className="text-2xl font-bold mb-4">Web</h2>
+            <p className="text-gray-600 mb-4 text-sm">
+              Internet para tus agentes: buscar en Google, leer cualquier página aunque bloquee bots (IPs residenciales, JS resuelto),
+              extraer registros con esquema de sitios conocidos y rastrear un sitio completo. Disponible por REST, SDK y MCP (toolset <code className="bg-gray-100 px-1 rounded">web</code>).
+            </p>
+            <div className="mb-6 bg-yellow-50 border-2 border-yellow-300 rounded-xl p-4 text-sm">
+              <strong>Se mide en consultas, no en créditos.</strong> 1 consulta = 1 página leída, 1 búsqueda, 1 registro extraído o 1 página rastreada.
+              Tienes 50 al registrarte; los packs Web ($99 → 400, $999 → 5,000) están en <code className="bg-gray-100 px-1 rounded">/dash/packs?tab=web</code>, valen para cualquier plan y <b>no caducan</b>. Sin saldo → <code className="bg-gray-100 px-1 rounded">402</code>.
+            </div>
+
+            <Endpoint
+              method="POST"
+              path="/web/search"
+              description="Busca en Google (o Bing/Yandex/DuckDuckGo) y devuelve resultados estructurados: orgánicos, negocios locales, knowledge panel"
+              body={[
+                { name: "query", type: "string", desc: "Texto plano (requerido)" },
+                { name: "engine", type: "string", desc: "google (default) | bing | yandex | duckduckgo" },
+                { name: "country", type: "string", desc: "ISO 3166-1 (mx, us…) para resultados localizados" },
+              ]}
+              response={`{ "query": "…", "engine": "google", "results": { "organic": [ { "title", "link", "description" } ], … } }`}
+              note="1 consulta. Úsalo para encontrar la URL correcta y luego léela con /web/fetch."
+              sdk={`const r = await eb.webSearch({ query: "ubiquiti u6 mesh precio", country: "mx" });`}
+            />
+
+            <Endpoint
+              method="POST"
+              path="/web/fetch"
+              description="Lee una página aunque bloquee bots. Devuelve HTML o markdown"
+              body={[
+                { name: "url", type: "string", desc: "https://… (requerido)" },
+                { name: "country", type: "string", desc: "Ver la versión local del sitio (precios en MXN, stock local)" },
+                { name: "asMarkdown", type: "boolean", desc: "true → markdown limpio, ideal para resumir" },
+              ]}
+              response={`{ "url": "…", "statusCode": 200, "format": "markdown", "body": "# …" }`}
+              note="1 consulta. El cuerpo se recorta a 200 KB."
+              sdk={`const page = await eb.webFetch({
+  url: "https://www.amazon.com.mx/dp/B09YRZYB29",
+  country: "mx",
+  asMarkdown: true,
+});`}
+            />
+
+            <Endpoint
+              method="POST"
+              path="/web/extract"
+              description="Extrae registros con esquema estable de una fuente conocida. Asíncrono: devuelve un job"
+              body={[
+                { name: "source", type: "string", desc: "google_maps | mercadolibre | amazon_product | amazon_reviews | google_shopping | instagram_profiles | instagram_posts | tiktok_profiles | tiktok_posts | facebook_page_posts | facebook_marketplace | youtube_channels | youtube_videos | linkedin_company | linkedin_person | linkedin_jobs | indeed_jobs | trustpilot | inmuebles24 | reddit_posts" },
+                { name: "datasetId", type: "string", desc: "Para fuentes fuera de la lista (catálogo de +1,000)" },
+                { name: "input", type: "object | object[]", desc: "google_maps → [{ keyword, country }] · mercadolibre → { query, page? } · resto → [{ url }]" },
+                { name: "limit", type: "number", desc: "Registros máximos por input (default 20, máx 200)" },
+              ]}
+              response={`202 { "jobId": "…", "status": "running", "source": "google_maps" }
+// mercadolibre responde al instante:
+200 { "jobId": "…", "status": "done", "records": [ { "title", "price", "url", "seller", … } ], "total": 48 }`}
+              note="Cobra 1 consulta POR REGISTRO devuelto, una sola vez, al recogerlos. Disparar el job no cuesta; un job que falla no cobra."
+              sdk={`const job = await eb.webExtractAndWait({
+  source: "google_maps",
+  input: [{ keyword: "dentista Polanco CDMX", country: "MX" }],
+  limit: 20,
+});
+// job.records → nombre, teléfono, WhatsApp, sitio, rating, horarios…`}
+            />
+
+            <Endpoint
+              method="GET"
+              path="/web/extract/:jobId"
+              description="Estado de un job de extract; cuando termina trae los registros"
+              response={`{ "jobId": "…", "status": "running" | "done" | "error", "records"?: [...], "total"?: 20 }`}
+              note="Gratis mientras corre. Volver a pedir un job ya cobrado no cobra de nuevo. Los jobs con esquema tardan 30-120 s: haz poll cada ~15 s."
+              sdk={`const st = await eb.webExtractStatus(job.jobId);`}
+            />
+
+            <Endpoint
+              method="POST"
+              path="/web/crawl"
+              description="Lee una página y sigue sus links internos (mismo dominio) hasta maxPages"
+              body={[
+                { name: "url", type: "string", desc: "URL de inicio (requerido)" },
+                { name: "maxPages", type: "number", desc: "1-20, default 10" },
+                { name: "country", type: "string", desc: "ISO country" },
+              ]}
+              response={`{ "startUrl": "…", "pages": [ { "url", "markdown" } ], "pending": [ "…" ] }`}
+              note="1 consulta por página realmente leída. `pending` son los links vistos y no visitados: pásale uno a otra llamada para continuar."
+              sdk={`const site = await eb.webCrawl({ url: "https://docs.ejemplo.com", maxPages: 20 });`}
+            />
+
+            <h3 className="text-lg font-bold mb-3 mt-8">Tools MCP</h3>
+            <div className="space-y-2">
+              <McpTool name="web_search" params="query, engine?, country?" description="Busca en Google y devuelve resultados estructurados. 1 consulta." />
+              <McpTool name="web_fetch" params="url, country?, asMarkdown?" description="Lee una página aunque bloquee bots. 1 consulta." />
+              <McpTool name="web_extract" params="source | datasetId, input, limit?" description="Extrae registros con esquema (Maps, Mercado Libre, Amazon, Instagram…). Async con jobId; 1 consulta por registro." />
+              <McpTool name="web_extract_status" params="jobId" description="Estado/registros de un extract. Gratis mientras corre." />
+              <McpTool name="web_crawl" params="url, maxPages?, country?" description="Rastrea un sitio siguiendo links internos. 1 consulta por página." />
+            </div>
+            <p className="text-sm text-gray-600 mt-4">
+              Ejemplo de flujo: <code className="bg-gray-100 px-1 rounded">web_search("ubiquiti u6 mesh precio", country: "mx")</code> → tomar el link de Amazon MX →{" "}
+              <code className="bg-gray-100 px-1 rounded">web_fetch(url, asMarkdown: true)</code> → el agente lee título y precio. Dos consultas.
+            </p>
+          </section>
+
           <section id="sharing" className="mb-16">
             <h2 className="text-2xl font-bold mb-6">Compartir</h2>
 

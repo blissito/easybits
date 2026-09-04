@@ -2,7 +2,7 @@ import { data } from "react-router";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 import { getUserOrRedirect } from "~/.server/getters";
 import { createPackCheckout } from "~/.server/stripe";
-import { GENERATION_PACKS, LLM_TOKEN_PACKS, getUserPlan } from "~/lib/plans";
+import { GENERATION_PACKS, LLM_TOKEN_PACKS, WEB_PACKS, getUserPlan } from "~/lib/plans";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const user = await getUserOrRedirect(request);
@@ -14,7 +14,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     price: pack.prices[plan],
   }));
 
-  return data({ packs, plan });
+  return data({ packs, plan, webPacks: WEB_PACKS });
 }
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -25,6 +25,22 @@ export async function action({ request }: ActionFunctionArgs) {
   const { packId, packType = "credits", autoTopup = false } = body;
 
   // Look up in the right pack array
+  if (packType === "web") {
+    const pack = WEB_PACKS.find((p) => p.id === packId);
+    if (!pack) {
+      return data({ error: "Pack web no encontrado" }, { status: 400 });
+    }
+    const url = await createPackCheckout({
+      userId: user.id,
+      email: user.email,
+      packId: pack.id,
+      queries: pack.queries,
+      priceMxn: pack.price,
+      type: "web_pack",
+    });
+    return data({ url });
+  }
+
   if (packType === "tokens") {
     const pack = LLM_TOKEN_PACKS.find((p) => p.id === packId);
     if (!pack) {

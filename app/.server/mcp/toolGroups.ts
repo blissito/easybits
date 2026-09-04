@@ -32,6 +32,7 @@ export type ToolGroupKey =
   | "documentos-write"
   | "documentos-del"
   | "investigacion"
+  | "web"
   | "db"
   | "db-write"
   | "db-del"
@@ -57,6 +58,13 @@ export const TOOL_GROUPS: ToolGroup[] = [
       "Canva-like: documentos como diseño universal (cualquier formato — letter, social, slide 16:9), brand kits e imágenes. Ideal para Claude.ai / Claude Design.",
     recommended: true,
     toolCount: 43,
+  },
+  {
+    key: "web",
+    label: "Web",
+    description:
+      "Internet para tu agente: buscar en Google, leer cualquier página aunque bloquee bots, extraer registros con esquema (Maps, Mercado Libre, Amazon, Instagram…) y rastrear sitios. Se mide en consultas (packs en /dash/packs).",
+    toolCount: 7,
   },
   {
     key: "core",
@@ -218,8 +226,8 @@ export const DESIGN_ALLOWLIST = new Set<string>([
   // Voice
   "voice_tts_create",
   "list_voices",
-  // Research
-  "research_scrape", "research_search",
+  // Web
+  "web_search", "web_fetch", "web_extract", "web_extract_status", "web_crawl", "research_scrape", "research_search",
   // Image
   // "image_generate", // DESACTIVADA hasta nuevo aviso (fal.ai sin saldo)
   // Brand
@@ -271,7 +279,7 @@ export const CORE_ALLOWLIST = new Set<string>([
   "generate_captions", "get_caption_status",
   "voice_tts_create",
   "list_voices",
-  "research_scrape", "research_search",
+  "web_search", "web_fetch", "web_extract", "web_extract_status", "web_crawl", "research_scrape", "research_search",
   // "image_generate", // DESACTIVADA hasta nuevo aviso (fal.ai sin saldo)
   "character_remember", "character_list", "character_delete",
   "get_default_brand_kit", "list_brand_kits", "extract_brand_kit_from_url",
@@ -344,14 +352,6 @@ export const VOICE_ALLOWLIST = new Set<string>([
   "voice_tts_create",
   "list_voices",
   "get_file",
-  "list_files",
-  "upload_file",
-]);
-
-/** Research toolset — Brightdata Web Unlocker + SERP API. */
-export const RESEARCH_ALLOWLIST = new Set<string>([
-  "research_scrape",
-  "research_search",
   "list_files",
   "upload_file",
 ]);
@@ -597,11 +597,15 @@ export const DOCUMENTOS_ALLOWLIST = new Set<string>([
   ...DOCUMENTOS_READ_ALLOWLIST, ...DOCUMENTOS_WRITE_ALLOWLIST, ...DOCUMENTOS_DEL_ALLOWLIST,
 ]);
 
-/** Investigación — Brightdata scrape + SERP. */
-export const INVESTIGACION_ALLOWLIST = new Set<string>([
-  "research_scrape", "research_search",
+/**
+ * Web — buscar, leer, extraer y rastrear. Medido en consultas (bucket propio).
+ * `investigacion` (bucket de la flota) es alias del mismo set.
+ */
+export const WEB_ALLOWLIST = new Set<string>([
+  "web_search", "web_fetch", "web_extract", "web_extract_status", "web_crawl", "research_scrape", "research_search",
   "list_files", "upload_file",
 ]);
+export const INVESTIGACION_ALLOWLIST = WEB_ALLOWLIST;
 
 /** Bases de datos — granular por nivel (cumulativo). Administrativo.
  * Lectura = listar/consultar; Escritura = + crear/exec/import; Borrado = + db_delete. */
@@ -678,6 +682,7 @@ export const GROUP_ALLOWLISTS: Partial<Record<ToolGroupKey, Set<string>>> = {
   documentos: DOCUMENTOS_READ_ALLOWLIST,
   "documentos-write": DOCUMENTOS_WRITE_ALLOWLIST,
   "documentos-del": DOCUMENTOS_DEL_ALLOWLIST,
+  web: WEB_ALLOWLIST,
   investigacion: INVESTIGACION_ALLOWLIST,
   db: DB_READ_ALLOWLIST,
   "db-write": DB_WRITE_ALLOWLIST,
@@ -746,7 +751,7 @@ export const FLEET_BUCKETS: Array<{
       { key: "del", label: "Borrado", buckets: ["documentos", "documentos-write", "documentos-del"] },
     ],
   },
-  { key: "investigacion", label: "Investigación", description: "Buscar y leer información de la web." },
+  { key: "investigacion", label: "Web", description: "Buscar, leer, extraer registros y rastrear sitios." },
   { key: "video", label: "Video", description: "Generar video y personajes." },
   { key: "email", label: "Email", description: "Enviar correos y newsletters." },
   // "Pagos" (bucket nativo EasyBits) se solapa con el conector MercadoPago code-mode

@@ -82,10 +82,11 @@ export function failService(
   label: string
 ): McpTextResponse | null {
   if (e instanceof QuotaExceededError) {
-    return fail(
-      `Faltan créditos: necesitas ${e.requiredCost}, tienes ${e.available}. Compra un pack para continuar.`,
-      { code: e.code, requiredCost: e.requiredCost, available: e.available }
-    );
+    const msg =
+      e.unit === "web"
+        ? `Sin consultas web: necesitas ${e.requiredCost}, tienes ${e.available}. Compra un pack Web en /dash/packs para continuar.`
+        : `Faltan créditos: necesitas ${e.requiredCost}, tienes ${e.available}. Compra un pack para continuar.`;
+    return fail(msg, { code: e.code, unit: e.unit, requiredCost: e.requiredCost, available: e.available });
   }
   if (e instanceof ServiceConfigError) {
     return fail(`Servicio no configurado (falta ${e.missing}).`, { code: e.code });

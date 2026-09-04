@@ -350,14 +350,33 @@ export interface LlmTokenPack {
 }
 
 /**
- * Resolved pack descriptor — unified view over GENERATION_PACKS / LLM_TOKEN_PACKS.
+ * Pack del toolset `web`. Unidad = consulta (1 página leída, 1 búsqueda,
+ * 1 registro extraído, 1 página rastreada). Add-on para cualquier plan, sin
+ * caducidad. Precio con ≥340% de profit sobre el costo peor caso ($0.045 MXN).
+ */
+export interface WebPack {
+  id: string;
+  queries: number;
+  /** Precio único en MXN */
+  price: number;
+  featured?: boolean;
+  description?: string;
+}
+
+export const WEB_PACKS: WebPack[] = [
+  { id: "web_400", queries: 400, price: 99, description: "Unas 20 investigaciones completas" },
+  { id: "web_5000", queries: 5000, price: 999, featured: true, description: "Para agentes que consultan la web a diario" },
+];
+
+/**
+ * Resolved pack descriptor — unified view over GENERATION_PACKS / LLM_TOKEN_PACKS / WEB_PACKS.
  * `bucket` is derived here so callers (auto-topup) never store it.
  */
 export interface ResolvedPack {
   id: string;
-  bucket: "credits" | "tokens";
+  bucket: "credits" | "tokens" | "web";
   /** Stripe metadata type */
-  type: "generation_pack" | "llm_token_pack";
+  type: "generation_pack" | "llm_token_pack" | "web_pack";
   /** Amount credited to the matching bonus bucket (créditos escalados o tokens). */
   amount: number;
   /** Precio plano en MXN (sin diferenciación por plan). */
@@ -385,6 +404,10 @@ export function findPackById(packId: string): ResolvedPack | null {
       amount: token.tokens,
       priceMxn: token.price,
     };
+  }
+  const web = WEB_PACKS.find((p) => p.id === packId);
+  if (web) {
+    return { id: web.id, bucket: "web", type: "web_pack", amount: web.queries, priceMxn: web.price };
   }
   return null;
 }

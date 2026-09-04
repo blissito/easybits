@@ -8,7 +8,7 @@ import { findPackById } from "~/lib/plans";
  * acreditación: la usan tanto el webhook de compra manual como el auto-topup
  * off-session, para que no diverjan.
  *
- * - Incrementa el bucket correcto (`aiGenerationsBonus` o `llmTokensBonus`)
+ * - Incrementa el bucket correcto (`aiGenerationsBonus`, `llmTokensBonus` o `webQueriesBonus`)
  *   derivado del pack.
  * - Registra `AiGenerationLog` (stats admin) + `Order` (ledger de ventas).
  *
@@ -32,7 +32,7 @@ export async function creditPack({
   currency?: string;
   /** "purchase" (checkout manual) | "auto_topup" (recarga off-session). */
   channel?: "purchase" | "auto_topup";
-}): Promise<{ amount: number; bucket: "credits" | "tokens" } | null> {
+}): Promise<{ amount: number; bucket: "credits" | "tokens" | "web" } | null> {
   const pack = findPackById(packId);
   if (!pack) {
     logger.error("creditPack: unknown packId", { userId, packId });
@@ -44,9 +44,11 @@ export async function creditPack({
   await db.user.update({
     where: { id: userId },
     data:
-      pack.bucket === "tokens"
-        ? { llmTokensBonus: { increment: pack.amount } }
-        : { aiGenerationsBonus: { increment: pack.amount } },
+      pack.bucket === "web"
+        ? { webQueriesBonus: { increment: pack.amount } }
+        : pack.bucket === "tokens"
+          ? { llmTokensBonus: { increment: pack.amount } }
+          : { aiGenerationsBonus: { increment: pack.amount } },
   });
 
   // Stats ledger (admin analytics).
@@ -64,9 +66,11 @@ export async function creditPack({
 
   // Sales ledger.
   const unitLabel =
-    pack.bucket === "tokens"
-      ? `${pack.amount.toLocaleString("es-MX")} tokens LLM`
-      : `${pack.amount} créditos`;
+    pack.bucket === "web"
+      ? `${pack.amount.toLocaleString("es-MX")} consultas web`
+      : pack.bucket === "tokens"
+        ? `${pack.amount.toLocaleString("es-MX")} tokens LLM`
+        : `${pack.amount} créditos`;
   createOrder({
     type: "credit_pack",
     customer_email: email,

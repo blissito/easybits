@@ -391,6 +391,7 @@ export default [
     route("video-projects/:id/render", "routes/api/v2/video-project-render.ts"),
     route("characters", "routes/api/v2/characters.ts"),
     route("characters/:id", "routes/api/v2/character.ts"),
+    route("web/:op/:jobId?", "routes/api/v2/web.ts"),
     route("webhooks", "routes/api/v2/webhooks.ts"),
     route("webhooks/:webhookId", "routes/api/v2/webhook.ts"),
     route("notifications", "routes/api/v2/notifications.ts"),

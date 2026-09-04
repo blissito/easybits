@@ -72,6 +72,64 @@ export interface Icon {
   trademark: boolean;
 }
 
+// ── Web (toolset `web`: buscar, leer, extraer, rastrear) ───────────────────
+
+export interface WebSearchParams {
+  query: string;
+  engine?: "google" | "bing" | "yandex" | "duckduckgo";
+  /** ISO 3166-1 (mx, us…) para resultados localizados. */
+  country?: string;
+}
+export interface WebSearchResult {
+  query: string;
+  engine: string;
+  /** Resultados estructurados: organic[], snack_pack, knowledge, etc. */
+  results: unknown;
+}
+export interface WebFetchParams {
+  url: string;
+  country?: string;
+  /** true → markdown limpio; default HTML crudo. */
+  asMarkdown?: boolean;
+}
+export interface WebFetchResult {
+  url: string;
+  statusCode: number;
+  format: "raw" | "markdown";
+  body: string;
+}
+export interface WebExtractParams {
+  /** google_maps | mercadolibre | amazon_product | instagram_profiles | linkedin_company | … */
+  source?: string;
+  /** Dataset del catálogo, para fuentes no curadas. */
+  datasetId?: string;
+  /** Según la fuente: [{ url }] | [{ keyword, country }] | { query, page? }. */
+  input: Record<string, unknown> | Record<string, unknown>[];
+  /** Registros máximos por input (default 20, máx 200). */
+  limit?: number;
+}
+export interface WebExtractJob {
+  jobId: string;
+  status: "running" | "done" | "error";
+  source: string;
+  /** Sólo cuando status === "done". */
+  records?: unknown[];
+  total?: number;
+  error?: string;
+}
+export interface WebCrawlParams {
+  url: string;
+  /** 1-20, default 10. */
+  maxPages?: number;
+  country?: string;
+}
+export interface WebCrawlResult {
+  startUrl: string;
+  pages: { url: string; markdown: string }[];
+  /** Links internos vistos y no visitados — pásalos a otra llamada para seguir. */
+  pending: string[];
+}
+
 export interface ScreenshotParams {
   /** HTML completo y auto-contenido. GANA sobre `url` — permite ver un borrador sin publicarlo. */
   html?: string;
@@ -1044,6 +1102,51 @@ export class EasybitsClient {
       method: "POST",
       body: JSON.stringify(params),
     });
+  }
+
+  // ── Web ─────────────────────────────────────────────────────
+  // Se mide en consultas (packs en /dash/packs?tab=web). Sin saldo → 402.
+
+  /** Busca en Google/Bing/Yandex/DuckDuckGo. Cuesta 1 consulta. */
+  async webSearch(params: WebSearchParams): Promise<WebSearchResult> {
+    return this.request<WebSearchResult>("/web/search", { method: "POST", body: JSON.stringify(params) });
+  }
+
+  /** Lee una página aunque bloquee bots. Cuesta 1 consulta. */
+  async webFetch(params: WebFetchParams): Promise<WebFetchResult> {
+    return this.request<WebFetchResult>("/web/fetch", { method: "POST", body: JSON.stringify(params) });
+  }
+
+  /**
+   * Extrae registros con esquema de una fuente conocida. Async: devuelve un job;
+   * `mercadolibre` responde al instante con status "done". Cobra 1 consulta por
+   * registro al recogerlos (`webExtractStatus`), una sola vez.
+   */
+  async webExtract(params: WebExtractParams): Promise<WebExtractJob> {
+    return this.request<WebExtractJob>("/web/extract", { method: "POST", body: JSON.stringify(params) });
+  }
+
+  async webExtractStatus(jobId: string): Promise<WebExtractJob> {
+    return this.request<WebExtractJob>(`/web/extract/${encodeURIComponent(jobId)}`);
+  }
+
+  /** Dispara un extract y espera hasta que termine (poll cada `intervalMs`). */
+  async webExtractAndWait(params: WebExtractParams, opts?: { intervalMs?: number; timeoutMs?: number }): Promise<WebExtractJob> {
+    const job = await this.webExtract(params);
+    if (job.status !== "running") return job;
+    const interval = opts?.intervalMs ?? 15_000;
+    const deadline = Date.now() + (opts?.timeoutMs ?? 5 * 60_000);
+    while (Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, interval));
+      const st = await this.webExtractStatus(job.jobId);
+      if (st.status !== "running") return st;
+    }
+    throw new EasybitsError(504, `web extract ${job.jobId} still running after timeout`);
+  }
+
+  /** Lee una página y sigue sus links internos hasta maxPages. 1 consulta por página. */
+  async webCrawl(params: WebCrawlParams): Promise<WebCrawlResult> {
+    return this.request<WebCrawlResult>("/web/crawl", { method: "POST", body: JSON.stringify(params) });
   }
 
   // ── Websites ────────────────────────────────────────────────

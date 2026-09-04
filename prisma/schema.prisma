@@ -239,6 +239,10 @@ model User {
   llmTokensUsed        Int        @default(0)
   llmTokensResetAt     DateTime?
   llmTokensBonus       Int        @default(0)
+  // Consultas web (toolset `web`): bucket propio, sólo bonus, no caduca.
+  // 50 de cortesía al alta; los packs Web incrementan aquí.
+  webQueriesBonus      Int        @default(50)
+  webJobs              WebJob[]
   autoTopup            AutoTopup?
   brandKits            BrandKit[]
   formConfigs          FormConfig[]
@@ -855,6 +859,25 @@ model AiGenerationLog {
   @@index([userId])
   @@index([userId, product])
   @@index([createdAt])
+}
+
+// Trabajo asíncrono del toolset `web` (extract con esquema, crawl). Existe
+// para (1) no cobrar dos veces el mismo snapshot y (2) que sólo el dueño lo lea.
+model WebJob {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId      String   @db.ObjectId
+  kind        String   // "extract" | "crawl"
+  source      String   // "google_maps" | "mercadolibre" | datasetId…
+  providerRef String?  // snapshot_id del proveedor
+  status      String   @default("running") // running | done | error
+  records     Int?
+  charged     Boolean  @default(false)
+  error       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  user        User     @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt])
 }
 
 model Book {

@@ -6114,79 +6114,119 @@ function registerVideoTools(server: McpServer) {
     })
   );
 
+  // ── Toolset `web` — datos web para agentes, medido en consultas ──────────
+  // Unidad = consulta: 1 página leída, 1 búsqueda, 1 registro extraído o 1
+  // página rastreada. Bucket propio (`webQueriesBonus`), packs en /dash/packs.
+  // Nombres de industria (web_search/web_fetch, como Anthropic/OpenAI/Tavily);
+  // research_scrape/research_search quedan como alias para clientes con
+  // tools/list cacheado. NUNCA nombrar al proveedor en texto de usuario.
+  const runWeb = async <O extends import("../services/types").ServiceResult>(
+    serviceId: string,
+    input: unknown,
+    extra: { authInfo?: unknown },
+    pick: (r: O) => Record<string, unknown>,
+  ) => {
+    const ctx = extra.authInfo as unknown as AuthContext;
+    const { consumeService } = await import("../services/consume");
+    try {
+      const result = await consumeService<O>(serviceId, input, { userId: ctx.user.id });
+      return ok(pick(result));
+    } catch (e) {
+      const f = failService(e, "web");
+      if (f) return f;
+      throw e;
+    }
+  };
+
+  const WEB_FETCH_DESC =
+    "Lee UNA página web y devuelve su contenido, aunque el sitio bloquee bots (IPs residenciales, JS resuelto). Cuesta 1 consulta.\n\nHow to use:\n- Required: `url` (https://… completa).\n- Optional: `country` (ISO 'mx', 'us'…) para ver la versión local del sitio (precios en MXN, stock local).\n- Optional: `asMarkdown=true` devuelve markdown limpio en vez de HTML — úsalo para resumir o alimentar documentos.\n\nUse for: leer una ficha de producto (Amazon MX, Mercado Libre), una noticia, docs de terceros, precios de competencia. Para buscar en Google usa `web_search`; para muchos registros de un sitio conocido usa `web_extract`.";
+  const WEB_FETCH_SHAPE = {
+    url: z.string().url().describe("Full https:// URL of the target page."),
+    country: z.string().length(2).optional().describe("ISO 3166-1 country code (mx, us, gb…) for geo-localized fetch."),
+    asMarkdown: z.boolean().optional().describe("If true, returns clean markdown. Default false (raw HTML)."),
+  };
+  const webFetchHandler = wrapHandler(async (params: { url: string; country?: string; asMarkdown?: boolean }, extra) =>
+    runWeb<import("../services/providers/brightdata").BrightdataScrapeOutput>(
+      "research.brightdata.scrape",
+      { url: params.url, country: params.country, asMarkdown: params.asMarkdown },
+      extra,
+      (r) => ({ url: r.data.url, statusCode: r.data.statusCode, format: r.data.format, body: r.data.body }),
+    ),
+  );
+  server.tool("web_fetch", WEB_FETCH_DESC, WEB_FETCH_SHAPE, webFetchHandler);
+  server.tool("research_scrape", `[deprecated → web_fetch] ${WEB_FETCH_DESC}`, WEB_FETCH_SHAPE, webFetchHandler);
+
+  const WEB_SEARCH_DESC =
+    "Busca en Google (o Bing/Yandex/DuckDuckGo) y devuelve resultados estructurados: orgánicos, snack pack (negocios locales), knowledge panel, FAQs. Cuesta 1 consulta.\n\nHow to use:\n- Required: `query` (texto plano, sin URL-encode).\n- Optional: `engine` (default 'google'), `country` (ISO) para resultados localizados.\n\nUse for: encontrar la URL de un producto/tienda/noticia, investigar competencia, validar precios públicos. Luego `web_fetch` la URL que te interese para leer el detalle.";
+  const WEB_SEARCH_SHAPE = {
+    query: z.string().min(1).max(500).describe("Search query in plain text."),
+    engine: z.enum(["google", "bing", "yandex", "duckduckgo"]).optional().describe("Search engine. Default google."),
+    country: z.string().length(2).optional().describe("ISO 3166-1 country code for localized results."),
+  };
+  const webSearchHandler = wrapHandler(async (params: { query: string; engine?: "google" | "bing" | "yandex" | "duckduckgo"; country?: string }, extra) =>
+    runWeb<import("../services/providers/brightdata").BrightdataSearchOutput>(
+      "research.brightdata.search",
+      { query: params.query, engine: params.engine, country: params.country },
+      extra,
+      (r) => ({ query: r.data.query, engine: r.data.engine, results: r.data.results }),
+    ),
+  );
+  server.tool("web_search", WEB_SEARCH_DESC, WEB_SEARCH_SHAPE, webSearchHandler);
+  server.tool("research_search", `[deprecated → web_search] ${WEB_SEARCH_DESC}`, WEB_SEARCH_SHAPE, webSearchHandler);
+
   server.tool(
-    "research_scrape",
-    "Fetch a single web page via Brightdata Web Unlocker (bypasses bot detection, residential IPs). Returns the page HTML or markdown.\n\nHow to use:\n- Required: `url` (target page, full https://...).\n- Optional: `country` (ISO code like 'us', 'mx' for geo-localized fetches).\n- Optional: `asMarkdown=true` returns clean markdown instead of raw HTML — useful when you want to feed into doc generation or summarization.\n- Cost: 1 crédito per page.\n\nUse for: monitorear precios competencia, scraping respetuoso, fetch de páginas que normalmente bloquean bots. Para queries de búsqueda en Google/Bing usa `research_search` en su lugar.",
+    "web_extract",
+    "Extrae REGISTROS estructurados (JSON con esquema estable) de una fuente conocida: Google Maps (negocios con teléfono/WhatsApp/web/rating), Mercado Libre, Amazon, Instagram, TikTok, LinkedIn, Facebook, YouTube, Indeed, Trustpilot, inmuebles24… Cobra 1 consulta POR REGISTRO devuelto (no por intento).\n\nHow to use:\n- `source`: una de google_maps | google_maps_reviews | google_shopping | mercadolibre | amazon_product | amazon_reviews | instagram_profiles | instagram_posts | tiktok_profiles | tiktok_posts | facebook_page_posts | facebook_marketplace | youtube_channels | youtube_videos | linkedin_company | linkedin_person | linkedin_jobs | indeed_jobs | trustpilot | inmuebles24 | reddit_posts. O pasa `datasetId` de cualquier otra fuente del catálogo.\n- `input`: según la fuente. google_maps → [{ keyword: 'dentista Polanco CDMX', country: 'MX' }]. mercadolibre → { query: 'iphone 15', page?: 1 }. El resto → [{ url }].\n- `limit`: registros máximos por input (default 20, máx 200).\n\nASYNC: casi todas las fuentes tardan 30-120 s → devuelve { jobId, status:'running' }; haz poll con `web_extract_status` cada ~15 s. `mercadolibre` responde al instante con status:'done' y los `records` (hasta 48 por página).\n\nUse for: listas de prospectos (Maps), comparar precios (MELI/Amazon), monitorear reseñas o perfiles.",
     {
-      url: z.string().url().describe("Full https:// URL of the target page."),
-      country: z.string().length(2).optional().describe("ISO 3166-1 country code (us, mx, gb...) for geo-localized fetch."),
-      asMarkdown: z.boolean().optional().describe("If true, returns clean markdown. Default false (raw HTML)."),
+      source: z.string().optional().describe("Fuente curada (ver descripción). Omitir si pasas datasetId."),
+      datasetId: z.string().optional().describe("Dataset del catálogo, para fuentes no curadas."),
+      input: z.union([z.record(z.unknown()), z.array(z.record(z.unknown()))]).describe("Inputs según la fuente: [{url}] | [{keyword,country}] | {query}."),
+      limit: z.number().int().min(1).max(200).optional().describe("Máximo de registros por input. Default 20."),
     },
-    wrapHandler(async (params, extra) => {
-      const ctx = extra.authInfo as unknown as AuthContext;
-      const { consumeService } = await import("../services/consume");
-      const { QuotaExceededError, ServiceConfigError, ServiceProviderError } = await import("../services/errors");
-      try {
-        const result = await consumeService<import("../services/providers/brightdata").BrightdataScrapeOutput>(
-          "research.brightdata.scrape",
-          { url: params.url, country: params.country, asMarkdown: params.asMarkdown },
-          { userId: ctx.user.id },
-        );
-        return {
-          content: [{
-            type: "text",
-            text: JSON.stringify({
-              ok: true,
-              url: result.data.url,
-              statusCode: result.data.statusCode,
-              format: result.data.format,
-              body: result.data.body,
-            }, null, 2),
-          }],
-        };
-      } catch (e) {
-        const f = failService(e, "Brightdata");
-        if (f) return f;
-        throw e;
-      }
-    })
+    wrapHandler(async (params, extra) =>
+      runWeb<import("../services/providers/brightdata").BrightdataExtractOutput>(
+        "research.brightdata.extract",
+        params,
+        extra,
+        (r) => r.data.status === "done"
+          ? { jobId: r.data.jobId, status: "done", source: r.data.source, ...paginate(r.data.records ?? [], { total: r.data.total }) }
+          : { jobId: r.data.jobId, status: "running", source: r.data.source, hint: "Poll web_extract_status({ jobId }) cada ~15 s." },
+      ),
+    ),
   );
 
   server.tool(
-    "research_search",
-    "Run a search query (Google by default; also Bing/Yandex/DuckDuckGo) via Brightdata SERP API. Returns structured results: organic listings, snack pack, knowledge panel, FAQs, paginated.\n\nHow to use:\n- Required: `query` (the search terms, plain text — no need to URL-encode).\n- Optional: `engine` (default 'google').\n- Optional: `country` (ISO code for localized SERP).\n- Cost: 2 créditos per search.\n\nUse for: investigación competencia, monitor de menciones, descubrir contenido fresco, validar pricing público. Para fetch de una URL específica usa `research_scrape`.",
+    "web_extract_status",
+    "Estado de un job de `web_extract`. Mientras corre: { status:'running' } (gratis). Cuando termina: { status:'done', items:[…], total } y se cobra 1 consulta por registro, una sola vez — volver a pedirlo no cobra de nuevo.",
+    { jobId: z.string().describe("jobId devuelto por web_extract.") },
+    wrapHandler(async (params, extra) =>
+      runWeb<import("../services/providers/brightdata").BrightdataExtractStatusOutput>(
+        "research.brightdata.extractStatus",
+        { jobId: params.jobId },
+        extra,
+        (r) => r.data.status === "done"
+          ? { jobId: r.data.jobId, status: "done", source: r.data.source, ...paginate(r.data.records ?? [], { total: r.data.total }) }
+          : { jobId: r.data.jobId, status: r.data.status, source: r.data.source, error: r.data.error },
+      ),
+    ),
+  );
+
+  server.tool(
+    "web_crawl",
+    "Lee una página y SIGUE sus links internos (mismo dominio) hasta `maxPages`, devolviendo markdown por página. Cobra 1 consulta por página realmente leída.\n\nHow to use:\n- Required: `url` de inicio.\n- Optional: `maxPages` (1-20, default 10), `country`.\n- Devuelve `pages[]` y `pending[]` (links vistos y no visitados): para seguir, llama otra vez con una URL de `pending`.\n\nUse for: aprenderse la documentación de un producto, bajar un blog o catálogo chico para RAG. Para una sola página usa `web_fetch`.",
     {
-      query: z.string().min(1).max(500).describe("Search query in plain text."),
-      engine: z.enum(["google", "bing", "yandex", "duckduckgo"]).optional().describe("Search engine. Default google."),
-      country: z.string().length(2).optional().describe("ISO 3166-1 country code for localized results."),
+      url: z.string().url().describe("URL de inicio (https://…)."),
+      maxPages: z.number().int().min(1).max(20).optional().describe("Páginas máximas. Default 10."),
+      country: z.string().length(2).optional().describe("ISO country code."),
     },
-    wrapHandler(async (params, extra) => {
-      const ctx = extra.authInfo as unknown as AuthContext;
-      const { consumeService } = await import("../services/consume");
-      const { QuotaExceededError, ServiceConfigError, ServiceProviderError } = await import("../services/errors");
-      try {
-        const result = await consumeService<import("../services/providers/brightdata").BrightdataSearchOutput>(
-          "research.brightdata.search",
-          { query: params.query, engine: params.engine, country: params.country },
-          { userId: ctx.user.id },
-        );
-        return {
-          content: [{
-            type: "text",
-            text: JSON.stringify({
-              ok: true,
-              query: result.data.query,
-              engine: result.data.engine,
-              results: result.data.results,
-            }, null, 2),
-          }],
-        };
-      } catch (e) {
-        const f = failService(e, "Brightdata");
-        if (f) return f;
-        throw e;
-      }
-    })
+    wrapHandler(async (params, extra) =>
+      runWeb<import("../services/providers/brightdata").BrightdataCrawlOutput>(
+        "research.brightdata.crawl",
+        params,
+        extra,
+        (r) => ({ startUrl: r.data.startUrl, pages: r.data.pages, pending: r.data.pending, total: r.data.pages.length }),
+      ),
+    ),
   );
 
   server.tool(

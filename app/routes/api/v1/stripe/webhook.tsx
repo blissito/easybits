@@ -250,10 +250,11 @@ export async function action({ request }: ActionFunctionArgs) {
       case "checkout.session.completed":
         const session = event.data.object as StripeSession;
 
-        // Handle pack purchase (generation OR llm token) — unified path.
+        // Handle pack purchase (generation, llm token o web) — unified path.
         if (
           session.metadata?.type === "generation_pack" ||
-          session.metadata?.type === "llm_token_pack"
+          session.metadata?.type === "llm_token_pack" ||
+          session.metadata?.type === "web_pack"
         ) {
           const packUserId = session.metadata.userId;
           const packId = session.metadata.packId;

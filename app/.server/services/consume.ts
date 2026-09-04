@@ -16,6 +16,7 @@ import {
   checkAiGenerationLimit,
   incrementAiGeneration,
 } from "../aiGenerationLimit";
+import { checkWebQuota, chargeWebQueries } from "../webQuota";
 import { getService } from "./registry";
 import { QuotaExceededError } from "./errors";
 import type { ServiceCtx, ServiceResult } from "./types";
@@ -31,6 +32,24 @@ export async function consumeService<O extends ServiceResult = ServiceResult>(
   }
 
   const cost = Math.max(1, Math.ceil(def.estimateCost(input)));
+
+  // Toolset `web`: bucket propio (consultas), cobra el costo real que reporte
+  // el provider (registros/páginas de verdad devueltos), nunca el estimado.
+  if (def.product === "research") {
+    const { available } = await checkWebQuota(ctx.userId);
+    if (available < cost) {
+      throw new QuotaExceededError(serviceId, cost, available, "web");
+    }
+    const start = Date.now();
+    const result = (await def.execute(input, ctx)) as O;
+    await chargeWebQueries(ctx.userId, {
+      cost: result.cost ?? cost,
+      type: serviceId,
+      durationMs: Date.now() - start,
+      resourceId: ctx.resourceId,
+    });
+    return result;
+  }
 
   // Pre-check: do we have enough créditos across both buckets?
   const limit = await checkAiGenerationLimit(ctx.userId, ctx.userPlan);
