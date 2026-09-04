@@ -12,8 +12,8 @@
  *
  * Env:
  *   BRIGHTDATA_API_TOKEN  (also accepts BRIGHTDATA_API_KEY)  — Bearer token
- *   BRIGHTDATA_UNLOCKER_ZONE  (default: "web_unlocker1")
- *   BRIGHTDATA_SERP_ZONE      (default: "serp_api1")
+ *   BRIGHTDATA_UNLOCKER_ZONE  (default: "mcp_unlocker")
+ *   BRIGHTDATA_SERP_ZONE      (default: "serp_api_for_maps")
  *
  * Docs: https://docs.brightdata.com/api-reference/rest-api/unlocker/unlock-website
  *       https://docs.brightdata.com/api-reference/rest-api/serp/serp-api
@@ -118,7 +118,7 @@ export const brightdataScrapeService: ServiceDef<BrightdataScrapeInput, Brightda
     if (!url) {
       throw new ServiceProviderError("research.brightdata.scrape", 400, "url is required");
     }
-    const zone = input.zone || process.env.BRIGHTDATA_UNLOCKER_ZONE || "web_unlocker1";
+    const zone = input.zone || process.env.BRIGHTDATA_UNLOCKER_ZONE || "mcp_unlocker";
     const wantMarkdown = !!input.asMarkdown;
 
     if (wantMarkdown) {
@@ -212,7 +212,7 @@ export const brightdataSearchService: ServiceDef<BrightdataSearchInput, Brightda
       throw new ServiceProviderError("research.brightdata.search", 400, "query is required");
     }
     const engine = input.engine ?? "google";
-    const zone = input.zone || process.env.BRIGHTDATA_SERP_ZONE || "serp_api1";
+    const zone = input.zone || process.env.BRIGHTDATA_SERP_ZONE || "serp_api_for_maps";
     const url = buildSearchUrl(query, engine);
 
     const resp = (await brightdataRequest({
