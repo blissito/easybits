@@ -8,33 +8,37 @@ import { TextBlurEffect } from "~/components/TextBlurEffect";
 
 export const Hero = () => {
   return (
-    <section className=" h-fit pt-24 pb-6 md:pb-0  md:min-h-[95vh] text-center md:text-left flex-wrap-reverse md:flex-nowrap flex justify-between items-center px-4 md:px-[5%] xl:px-0 w-full max-w-7xl mx-auto gap-0 lg:gap-10">
+    <section className=" h-fit pt-10 md:pt-6 pb-6 md:pb-0  md:min-h-[88vh] text-center md:text-left flex-wrap-reverse md:flex-nowrap flex justify-between items-center px-4 md:px-[5%] xl:px-0 w-full max-w-7xl mx-auto gap-0 lg:gap-10">
       <div className="w-full md:w-[50%] ">
         <TextBlurEffect>
           <h1 className="text-4xl  md:text-5xl lg:text-6xl xl:text-[72px] leading-tight font-bold">
-            Sandboxes y backend para{" "}
-            <a
-              href="https://formmy.app/ghosty"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="underline decoration-4 decoration-brand-500 underline-offset-4 hover:decoration-black"
-            >
-              tu agente IA
-            </a>{" "}
-            — ejecuta código, guarda archivos y publica
+            La nube para{" "}
+            <span className="underline decoration-4 decoration-brand-500 underline-offset-4">
+              expertos IA
+            </span>
           </h1>
 
-          <p className="text-iron text-xl lg:text-2xl xl:text-2xl font-extralight mb-6 md:mb-12 mt-2 md:mt-6">
-            MicroVMs aisladas, archivos, datos y acciones desde un solo MCP. Tu
-            agente ya tiene dónde correr y dónde guardar.
+          <p className="text-iron text-xl lg:text-2xl xl:text-2xl font-extralight mb-6 md:mb-10 mt-2 md:mt-6">
+            Sandboxes, web, archivos, datos y WhatsApp para tus agentes — desde
+            un solo MCP, en pesos.
           </p>
         </TextBlurEffect>
-        <Link to="/cuanto-cuesta-mi-agente">
-          {" "}
-          <BrutalButton id="CotizarMiAgenteHome">
-            Cotizar mi agente →
-          </BrutalButton>
-        </Link>
+        <div className="flex flex-wrap items-center gap-4 justify-center md:justify-start">
+          <Link to="/login">
+            <BrutalButton id="EmpezarGratisHome">Empezar gratis →</BrutalButton>
+          </Link>
+          <Link
+            to="/cuanto-cuesta-mi-agente"
+            id="CotizarMiAgenteHome"
+            className="text-lg font-medium underline decoration-2 underline-offset-4 hover:decoration-brand-500"
+          >
+            Cotizar mi agente
+          </Link>
+        </div>
+        {/* Prueba social: números verificables (server.ts, catálogo web, resume de microVM). */}
+        <p className="text-iron text-sm md:text-base mt-6 md:mt-8 font-mono">
+          +150 tools MCP · 1,000+ fuentes web · microVMs en &lt;1 s · precios en MXN
+        </p>
       </div>
       <div className="w-full md:w-[40%] relative min-h-[285px] ">
         <FloatingMotif

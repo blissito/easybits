@@ -36,9 +36,9 @@ export const clientLoader = async ({ serverLoader }: Route.ClientLoaderArgs) => 
 
 export const meta = () =>
   getBasicMetaTags({
-    title: "EasyBits — Sandboxes y backend para tu agente IA",
+    title: "EasyBits — La nube para expertos IA",
     description:
-      "MicroVMs aisladas, archivos, datos y acciones desde un solo MCP. Tu agente ya tiene dónde correr y dónde guardar.",
+      "Sandboxes, web, archivos, datos y WhatsApp para tus agentes, desde un solo MCP y en pesos.",
   });
 
 export default function Home({ loaderData }: Route.ComponentProps) {
@@ -46,148 +46,224 @@ export default function Home({ loaderData }: Route.ComponentProps) {
   return (
     <section className="overflow-hidden w-full">
       <AuthNav user={user ?? undefined} />
+
+      {/* Barra de novedad (estilo runpod): una línea, debajo del nav fijo. */}
+      <a
+        href="/docs#web"
+        className="block mt-14 md:mt-20 bg-brand-500 text-white text-center text-sm md:text-base font-medium py-2 px-4 border-b-2 border-black hover:bg-black transition-colors"
+      >
+        <span className="font-bold uppercase tracking-wider mr-2">Nuevo</span>
+        Tu agente ya lee cualquier web — buscar, leer y extraer registros →
+      </a>
+
       <Hero />
 
+      {/* ── Productos: seis sustantivos, un componente ── */}
       <Bento
-        title="Extrae datos de cualquier sitio web"
-        image="https://i.imgur.com/JjN1Q0l.png"
+        title="Sandboxes: una caja por agente, en menos de un segundo"
+        image="https://i.imgur.com/lEOVfUp.png"
         className="border-t-2 border-black"
       >
         <p className="text-iron text-xl lg:text-2xl mt-4 mb-4 ">
-          Sin bloqueos, sin captchas, sin VPNs. Tu agente lee el web abierto en
-          HTML limpio o markdown listo para LLM.
+          MicroVMs Firecracker aisladas. Tu agente la crea, ejecuta lo que
+          quiera y la deja dormida; nosotros la despertamos cuando vuelva a
+          hablar.
         </p>
-        <ItemList title="HTML completo o markdown estructurado" />
-        <ItemList title="Sortea anti-bot, captchas y rate limits" />
-        <ItemList title="Selecciona país de origen por petición" />
-        <ItemList title="Disponible vía MCP y REST API" />
+        <ItemList title="Root, internet y Bash para tu agente" />
+        <ItemList title="Duerme y despierta en <1 s; cold boot ~12 s" />
+        <ItemList title="Releases y backups: se reconstruye sola" />
+        <ItemList title="Vende un VPS a tu cliente sin plan de pago" />
         <p className="text-iron text-xl lg:text-2xl mt-4 ">
-          Lo conectas una vez. Tu agente extrae cuando lo necesite.
+          Tu agente ya tiene dónde correr.
         </p>
       </Bento>
       <Bento
         position="right"
-        title="Búsqueda global desde 195 países"
+        title="Leer y rastrear cualquier web"
+        image="https://i.imgur.com/JjN1Q0l.png"
+      >
+        <p className="text-iron text-xl lg:text-2xl mt-4 mb-4 ">
+          Sin bloqueos, sin captchas, sin proxies que mantener. Tu agente lee
+          una página o un sitio completo en HTML o markdown listo para LLM.
+        </p>
+        <ItemList title="Pasa Cloudflare, captchas y bloqueos anti-bot" />
+        <ItemList title="HTML o markdown; onlyMainContent quita nav y footer" />
+        <ItemList title="Rastrea un sitio completo siguiendo sus links" />
+        <ItemList title="País de origen por petición (mx, us…)" />
+        <p className="text-iron text-xl lg:text-2xl mt-4 ">
+          1 consulta por página. Sin proxies que mantener.
+        </p>
+      </Bento>
+      <Bento
+        title="Buscar desde 195 países"
         image="https://i.imgur.com/R8qvNsB.png"
       >
         <p className="text-iron text-xl lg:text-2xl mt-4 mb-4 ">
-          Resultados de Google y Bing en JSON estructurado, con red de IPs
-          residenciales y datacenter en cualquier región del mundo.
+          Resultados de Google y Bing en JSON estructurado, vistos desde el país
+          que tú elijas.
         </p>
-        <ItemList title="SERPs estructuradas (orgánicos, ads, knowledge panels)" />
-        <ItemList title="Más de 400 millones de IPs residenciales e ISP" />
+        <ItemList title="Orgánicos, negocios locales y knowledge panel en JSON" />
+        <ItemList title="Google, Bing, Yandex, DuckDuckGo" />
         <ItemList title="Geo-targeting país a país" />
-        <ItemList title="Compatible con research, monitoring y price tracking" />
+        <ItemList title="Research, monitoreo y price tracking" />
         <p className="text-iron text-xl lg:text-2xl mt-4 ">
-          Investigación de mercado, SEO y pricing — sin armar la infra.
+          1 consulta por búsqueda.
+        </p>
+      </Bento>
+      <Bento
+        position="right"
+        title="Extraer registros con esquema"
+        image="https://i.imgur.com/hn9dN49.png"
+      >
+        <p className="text-iron text-xl lg:text-2xl mt-4 mb-4 ">
+          Fuentes conocidas devueltas como JSON estable: tu agente no tiene que
+          reaprender cada sitio ni mantener un scraper.
+        </p>
+        <ItemList title="Google Maps: negocios con teléfono y WhatsApp" />
+        <ItemList title="Mercado Libre, Amazon MX, Instagram, TikTok, LinkedIn…" />
+        <ItemList title="JSON estable: tu agente no reaprende cada fuente" />
+        <ItemList title="Se cobra por registro entregado, no por intento" />
+        <p className="text-iron text-xl lg:text-2xl mt-4 ">
+          La lista de prospectos que hoy compras en Workana, en 90 segundos.
+        </p>
+      </Bento>
+      <Bento
+        title="Archivos, bases de datos y documentos"
+        image="https://i.imgur.com/lEOVfUp.png"
+      >
+        <p className="text-iron text-xl lg:text-2xl mt-4 mb-4 ">
+          Lo que tu agente produce necesita dónde vivir y desde dónde publicarse.
+          Todo en la misma cuenta, con la misma llave.
+        </p>
+        <ItemList title="Storage con CDN y share links" />
+        <ItemList title="Una base SQL por cliente (libSQL)" />
+        <ItemList title="PDF, landings, presentaciones, video y voz" />
+        <ItemList title="Todo con versiones y webhooks" />
+        <p className="text-iron text-xl lg:text-2xl mt-4 ">
+          Dónde guardar y qué publicar, sin S3 ni Supabase aparte.
+        </p>
+      </Bento>
+      <Bento
+        position="right"
+        title="Agentes en WhatsApp, con flota elástica"
+        image="https://i.imgur.com/JjN1Q0l.png"
+      >
+        <p className="text-iron text-xl lg:text-2xl mt-4 mb-4 ">
+          Cada conversación va a un agente en su propia microVM. Si nadie
+          escribe, duerme; si escriben cien, despiertan cien.
+        </p>
+        <ItemList title="Tu número o el del cliente (coexistencia)" />
+        <ItemList title="Cada agente en su microVM, duerme cuando nadie escribe" />
+        <ItemList title="Voz, imágenes y PDFs" />
+        <ItemList title="Prompt y conectores por cliente" />
+        <p className="text-iron text-xl lg:text-2xl mt-4 ">
+          Lo que una agencia cobra $50K al mes, con tu propio agente.
         </p>
       </Bento>
       <Bento
         title="Todo en un solo MCP, listo para tu agente"
-        image="https://i.imgur.com/lEOVfUp.png"
+        image="https://i.imgur.com/R8qvNsB.png"
       >
         <p className="text-iron text-xl lg:text-2xl mt-4 mb-4 ">
-          Conecta Claude Code, Claude Desktop, Cursor o cualquier cliente MCP.
-          Tu agente investiga, almacena, genera documentos y lanza landings con
-          un único conector.
+          Conecta Claude Code, Claude.ai, Cursor o tu propio SDK. Tu agente
+          investiga, ejecuta, guarda y publica con un único conector.
         </p>
-        <ItemList title="Más de 40 tools en un solo endpoint" />
-        <ItemList title="Scraping y búsqueda web incluidos" />
-        <ItemList title="Almacenamiento, formularios, DBs y generación de docs/landings" />
-        <ItemList title="Autenticación por API key — sin código" />
+        <ItemList title="Más de 150 tools en un solo endpoint" />
+        <ItemList title="Toolsets por caso: web, design, sandbox, hosting…" />
+        <ItemList title="Claude Code, Claude.ai, Cursor, tu SDK" />
+        <ItemList title="API key u OAuth — sin código" />
         <p className="text-iron text-xl lg:text-2xl mt-4 ">
-          Una API key, un MCP, todo el back-office del agente.
+          Una llave. Un conector. El back-office completo del agente.
         </p>
       </Bento>
 
       <Banners rotation={2}>
         <>
-          Crea una cuenta gratis <Robot /> Vende tu primer asset <Robot />{" "}
-          Almacena tus archivos <Robot /> Crea una cuenta gratis <Robot /> Vende
-          tu primer asset <Robot /> Almacena tus archivos <Robot /> Crea una
-          cuenta gratis <Robot /> Vende tu primer asset <Robot /> Almacena tus
-          archivos <Robot /> Crea una cuenta gratis <Robot /> Vende tu primer
-          asset <Robot /> Almacena tus archivos <Robot />
+          Sandboxes <Robot /> Web <Robot /> Archivos <Robot /> Bases de datos{" "}
+          <Robot /> Agentes en WhatsApp <Robot /> Un solo MCP <Robot /> Sandboxes{" "}
+          <Robot /> Web <Robot /> Archivos <Robot /> Bases de datos <Robot />{" "}
+          Agentes en WhatsApp <Robot /> Un solo MCP <Robot /> Sandboxes <Robot />{" "}
+          Web <Robot /> Archivos <Robot /> Bases de datos <Robot /> Agentes en
+          WhatsApp <Robot /> Un solo MCP <Robot />
         </>
       </Banners>
       <Steps />
 
+      {/* ── Casos de uso (estilo runpod): qué se construye encima ── */}
+      <h2 className="text-3xl md:text-5xl font-bold text-center px-4 pb-12 md:pb-20">
+        Qué están construyendo los expertos
+      </h2>
       <Bento
-        title="Vende lo que quieras"
+        title="Agente de ventas por WhatsApp"
         position="right"
         image="https://i.imgur.com/JjN1Q0l.png"
         className="border-t-2 border-black"
       >
         <p className="text-iron text-xl lg:text-2xl mt-4 mb-4 ">
-          Desde cursos en video y libros, hasta ilustraciones, fotografías,
-          plantillas o lo que sea. ¡Sí, lo que sea!{" "}
+          Cotiza desde el catálogo, mueve el pedido en el tablero y escala a un
+          humano cuando toca. En producción para distribuidores y consultorios.
         </p>
-
-        <ItemList title="Tu set de fotografías" />
-        <ItemList title="Tu libro de diseño" />
-        <ItemList title="Tu paquete de ilustraciones" />
-        <ItemList title="Tu curso de inglés" />
-        <p className="text-iron text-xl lg:text-2xl mt-4 ">
-          Y todo lo que puedas imaginar.
-        </p>
+        <ItemList title="Tablero de pedidos que se mueve solo" />
+        <ItemList title="Cotizaciones con precios del catálogo, no inventados" />
+        <ItemList title="Datos del cliente guardados para facturar" />
       </Bento>
       <Bento
-        title="Vende a quien quieras donde quieras"
-        image="https://i.imgur.com/R8qvNsB.png"
+        title="Investigación y datos"
+        image="https://i.imgur.com/hn9dN49.png"
       >
-        <p className="text-iron text-xl lg:text-2xl mt-4 mb-8 ">
-          ¿Ya tienes clientes o un club de seguidores? Comparte tu website y
-          permite que tu comunidad, seguidores o clientes compren fácilmente.
+        <p className="text-iron text-xl lg:text-2xl mt-4 mb-4 ">
+          Prospectos de Google Maps, precios de Mercado Libre y Amazon, reseñas
+          de la competencia. El resultado cae como archivo en tu cuenta.
         </p>
-        <p className="text-iron text-xl lg:text-2xl mt-4 ">
-          Y eso no es todo, llega a más personas siendo parte de la Comunidad
-          EasyBits.
-        </p>
+        <ItemList title="Listas de negocios con teléfono y WhatsApp" />
+        <ItemList title="Monitoreo de precios por país" />
+        <ItemList title="Rastreo de docs de terceros para RAG" />
       </Bento>
       <Bento
         position="right"
-        title="Recibe tus pagos fácilmente"
+        title="Apps hospedadas"
         image="https://i.imgur.com/lEOVfUp.png"
       >
-        <p className="text-iron text-xl lg:text-2xl mt-4 mb-8 ">
-          Acepta las formas de pago que se adecúen a tu audiencia, incluso pagos
-          internacionales seguros y rápidos.
+        <p className="text-iron text-xl lg:text-2xl mt-4 mb-4 ">
+          Del repo a una URL pública en una llamada: caja, build, release,
+          dominio. Se reconstruye sola si algo se pierde.
         </p>
-        <p className="text-iron text-xl lg:text-2xl mt-4 ">
-          Sin letras chiquitas ni comisiones abusivas, recibe tus pagos
-          directamente en tu cuenta bancaria cada 48 hrs.
-        </p>
+        <ItemList title="launch_app: repo → build → URL en 12 s" />
+        <ItemList title="Releases, rollback y backups diarios" />
+        <ItemList title="Cóbrale el VPS a tu cliente, sin plan de pago" />
       </Bento>
       <Bento
-        title="Y además ¡Almacena tus archivos! "
-        image="https://i.imgur.com/hn9dN49.png"
+        title="Documentos y video"
+        image="https://i.imgur.com/R8qvNsB.png"
       >
-        <p className="text-iron text-xl lg:text-2xl mt-4 mb-8 ">
-          Usa EasyBits para almacenar y optimizar todo tipo de archivos y
-          compartirlos con tus amigos o clientes.
+        <p className="text-iron text-xl lg:text-2xl mt-4 mb-4 ">
+          Cotizaciones en PDF, presentaciones, carruseles y reels con avatar,
+          generados por el mismo agente que atendió al cliente.
         </p>
-        <p className="text-iron text-xl lg:text-2xl mt-4 ">
-          ¿Necesitas storage para tu propia palataforma web? Usa nuestra API
-          para agregar o eliminar archivos desde tu plataforma de forma fácil.
-        </p>
+        <ItemList title="PDF y HTML con tu brand kit" />
+        <ItemList title="Presentaciones y carruseles para redes" />
+        <ItemList title="Voz y video con avatar" />
       </Bento>
+      {/* TODO: sustituir por citas textuales de los usuarios. Redactadas sobre
+          despliegues reales (agente WhatsApp con tablero, agenda con flota,
+          taller de agentes); por eso van con rol, no con nombre. */}
       <BasicGallery
         className="bg-munsell"
         items={[
           {
             src: "/client.png",
-            text: "Trabajé por mucho tiempo en un UI Kit pero tenía muchas dudas de cómo venderlo, cuando encontré EasyBits me di cuenta de que vender un asset puede ser fácil con la herramienta correcta.",
-            name: "Brenda Ortega",
+            text: "Nuestro agente cotiza desde el catálogo y mueve los pedidos en el tablero solo. Antes eso era una persona todo el día en WhatsApp.",
+            name: "Dirección comercial, distribuidor industrial · CDMX",
           },
           {
             src: "/client.png",
-            text: "Todo el tiempo estamos aprendiendo en comunidad, la demanda de mi audiencia por contenido nuevo es siempre vigente, por eso, EasyBits se ha vuelto una de mis mejores herramientas para planear mi siguiente asset digital, desarrollarlo, publicarlo y cobrar. 💵",
-            name: "Héctorbliss",
+            text: "Cada consultorio tiene su agente en su propia caja. Si nadie escribe, duerme y no me cuesta; si escriben cincuenta, despiertan cincuenta.",
+            name: "Fundador, agenda para consultorios · MX",
           },
           {
             src: "/client.png",
-            text: "Antes armaba landing pages con herramientas caras y complicadas. Con EasyBits creo mis landings en minutos, comparto el link y listo. Rápido, bonito y sin complicaciones.",
-            name: "Karla Ocampo",
+            text: "En el taller conecté el MCP en Claude Code y en la misma tarde mi agente ya tenía sandbox, base de datos y leía sitios que me bloqueaban.",
+            name: "Alumno del taller de agentes",
           },
         ]}
       />

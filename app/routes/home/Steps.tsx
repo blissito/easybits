@@ -2,23 +2,23 @@ export const Steps = () => {
   return (
     <section className=" max-w-7xl mx-auto py-20 md:py-40 px-4 md:px-[5%] xl:px-0">
       <h2 className="text-3xl md:text-5xl font-bold text-center mb-12 md:mb-20">
-        ¡Empieza hoy mismo!
+        Tu agente en producción en tres pasos
       </h2>
       <div className="w-full grid grid-col-1 md:grid-cols-3 gap-10 lg:gap-24">
         <StepCard
-          title="Crea tu primer asset"
-          text="Elige ese libro, cuento o ilustración en la que has trabajado tanto y conviételo en un asset. Agrega fotos y una descripción que enamore a tus clientes. "
+          title="Conecta el MCP"
+          text="Pega easybits.cloud/api/mcp en Claude Code, Cursor o tu SDK. Una API key y ya."
         />
         <StepCard
-          title="Personaliza tu website"
+          title="Dale una caja y la web"
           image="/home/step2.webp"
-          text="Que tu website combine contigo y con tu marca, completa tu información y personaliza la tipografía, los colores y el tema."
+          text="Tu agente ejecuta código en su microVM, lee cualquier sitio y guarda lo que produce."
         />
         <StepCard
-          title="Comparte y logra tu primera venta"
-          text="¡Tu website esta listo para su primera venta! compártelo en tus redes sociales con tus seguidores o clientes. "
+          title="Publica o cobra"
+          text="Lanza la app, el documento o el bot de WhatsApp. Al cliente le vendes tú; nosotros te cobramos en pesos."
           image="/home/step3.webp"
-        />{" "}
+        />
       </div>
     </section>
   );
