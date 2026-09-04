@@ -6,14 +6,11 @@ import { Link, useSearchParams } from "react-router";
 import { cn } from "~/utils/cn";
 import type { BlogPost } from "~/types/blog";
 
-type Section = { key: string; label: string; description: string; posts: BlogPost[] };
-
 interface BlogContentProps {
   posts: BlogPost[];
   tags: string[];
   /** Portada (sin filtros): destacado + filas por pista editorial. */
   featured?: BlogPost | null;
-  sections?: Section[];
   /** Label de la pista activa (?kind=) para el encabezado del listado filtrado. */
   kindLabel?: string | null;
   totalPages: number;
@@ -41,7 +38,6 @@ export const BlogContent = ({
   posts,
   tags,
   featured = null,
-  sections = [],
   kindLabel = null,
   totalPages,
   currentPage,
@@ -175,33 +171,15 @@ export const BlogContent = ({
       </div>
       <div className="border-x-[2px] border-black min-h-screen max-w-7xl pt-8 lg:pt-12 mx-4 md:mx-[5%] xl:mx-auto px-4 md:px-6">
         {isFront && featured && <FeaturedCard post={featured} />}
-        {isFront &&
-          sections.map((sec) => (
-            <div key={sec.key} className="mt-12 lg:mt-16">
-              <div className="flex flex-wrap items-end justify-between gap-3 mb-5">
-                <div>
-                  <h2 className="text-2xl md:text-3xl font-bold">{sec.label}</h2>
-                  <p className="text-iron">{sec.description}</p>
-                </div>
-                <Link
-                  to={`/blog?kind=${sec.key}`}
-                  className="min-w-max rounded-full border-[2px] border-black px-4 h-10 grid place-content-center font-bold hover:bg-black hover:text-white transition-colors"
-                >
-                  Ver todos →
-                </Link>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                {sec.posts.map((post) => <GridCard key={post.slug} post={post} />)}
-              </div>
-            </div>
-          ))}
-        <div className={cn("mb-5", isFront ? "mt-12 lg:mt-16" : "")}>
-          <h2 className="text-2xl md:text-3xl font-bold">
-            {isFront ? "Todos los posts" : kindLabel ?? (currentTag ? currentTag : currentSearch ? `Resultados para "${currentSearch}"` : "Todos los posts")}
-          </h2>
-        </div>
+        {!isFront && (
+          <div className="mb-5">
+            <h2 className="text-2xl md:text-3xl font-bold">
+              {kindLabel ?? (currentTag ? currentTag : currentSearch ? `Resultados para "${currentSearch}"` : "Todos los posts")}
+            </h2>
+          </div>
+        )}
         {posts.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 pb-12">
+          <div className={cn("grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5 pb-12", isFront && featured ? "mt-5" : "")}>
             {posts.map((post) => <GridCard key={post.slug} post={post} />)}
           </div>
         ) : (
@@ -306,33 +284,29 @@ const KIND_LABEL: Record<string, string> = {
   "build-in-public": "Build in public",
 };
 
-/** Destacado de portada: imagen grande + texto, a lo ancho. */
+/** Destacado de portada: horizontal desde md, misma altura que una fila de tarjetas. */
 export const FeaturedCard = ({ post }: { post: BlogPost }) => (
   <Link
     to={`/blog/${post.slug}`}
-    className="group grid grid-cols-1 lg:grid-cols-5 gap-6 lg:gap-8 rounded-2xl border-[2px] border-black overflow-hidden bg-white transition-all hover:-translate-y-0.5 hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)]"
+    className="group grid grid-cols-1 md:grid-cols-5 rounded-2xl border-[2px] border-black overflow-hidden bg-white transition-all hover:-translate-y-0.5 hover:shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]"
   >
-    <div className="lg:col-span-3 bg-gray-100">
+    <div className="md:col-span-2 bg-gray-100 border-b-[2px] md:border-b-0 md:border-r-[2px] border-black">
       {post.featuredImage ? (
-        <img src={post.featuredImage} alt={post.title} className="w-full h-64 lg:h-full object-cover" />
+        <img src={post.featuredImage} alt={post.title} className="w-full h-52 md:h-full md:max-h-[300px] object-cover" />
       ) : (
-        <div className="w-full h-64 lg:h-full grid place-content-center text-gray-500">Sin imagen</div>
+        <div className="w-full h-52 md:h-full grid place-content-center text-gray-500 text-sm">Sin imagen</div>
       )}
     </div>
-    <div className="lg:col-span-2 p-6 lg:p-8 flex flex-col justify-center">
-      <div className="flex items-center gap-2 text-sm text-brand-gray">
-        <span className="rounded-full border-[2px] border-black px-2 py-0.5 text-xs font-bold text-black">Lo último</span>
-        {post.kind && <span>{KIND_LABEL[post.kind]}</span>}
+    <div className="md:col-span-3 p-5 md:p-7 flex flex-col justify-center">
+      <div className="flex items-center gap-2 text-xs text-brand-gray">
+        <span className="rounded-full border-[2px] border-black px-2 py-0.5 font-bold text-black">Lo último</span>
+        {post.kind && <span className="font-bold text-black">{KIND_LABEL[post.kind]}</span>}
         <span>·</span>
         <span>{formatMonth(post.date)}</span>
       </div>
-      <h2 className="text-2xl lg:text-4xl font-bold mt-3 group-hover:underline">{post.title}</h2>
-      <p className="text-iron mt-3 lg:text-lg">{post.description}</p>
-      <div className="flex text-sm mt-4 gap-2 items-center text-brand-gray">
-        <p>{post.author}</p>
-        <hr className="bg-brand-gray/50 w-[1px] h-3" />
-        <p>{post.readingTime} min de lectura</p>
-      </div>
+      <h2 className="text-2xl md:text-3xl font-bold mt-3 leading-tight group-hover:underline">{post.title}</h2>
+      <p className="text-iron mt-2 line-clamp-3">{post.description}</p>
+      <div className="text-xs text-brand-gray mt-3">{post.author} · {post.readingTime} min de lectura</div>
     </div>
   </Link>
 );

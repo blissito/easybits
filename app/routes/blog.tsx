@@ -56,19 +56,13 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
   // Get all unique tags
   const allTags = [...new Set(allPosts.flatMap((post) => post.tags))].sort();
 
-  // Portada (sin filtros, página 1): un destacado + una fila por pista editorial.
-  const byDate = [...allPosts].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  // Portada (sin filtros, página 1): un destacado; el resto va a la grilla sin repetirlo.
   const isFront = !tag && !search && !kind && page === 1;
-  const featured = isFront ? (byDate.find((p) => p.featured) ?? byDate[0] ?? null) : null;
-  const sections = isFront
-    ? POST_KINDS.map((k) => ({
-        ...k,
-        posts: byDate.filter((p) => p.kind === k.key && p.slug !== featured?.slug).slice(0, 3),
-      })).filter((s) => s.posts.length > 0)
-    : [];
+  const featured = isFront ? (filteredPosts.find((p) => p.featured) ?? filteredPosts[0] ?? null) : null;
+  const gridPosts = featured ? paginatedPosts.filter((p) => p.slug !== featured.slug) : paginatedPosts;
 
   return {
-    posts: paginatedPosts,
+    posts: gridPosts,
     totalPosts,
     totalPages,
     currentPage: page,
@@ -76,7 +70,6 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
     hasPrevPage: page > 1,
     tags: allTags,
     featured,
-    sections,
     kindLabel: kind ? POST_KINDS.find((k) => k.key === kind)?.label ?? null : null,
     user: null, // Will be handled on client side
   };
@@ -130,7 +123,6 @@ export default function Blog({ loaderData }: Route.ComponentProps) {
     posts = [],
     tags = [],
     featured = null,
-    sections = [],
     kindLabel = null,
     totalPages,
     currentPage,
@@ -146,7 +138,6 @@ export default function Blog({ loaderData }: Route.ComponentProps) {
         posts={posts}
         tags={tags}
         featured={featured}
-        sections={sections}
         kindLabel={kindLabel}
         totalPages={totalPages}
         currentPage={currentPage}
