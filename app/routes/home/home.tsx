@@ -38,7 +38,7 @@ export const meta = () =>
   getBasicMetaTags({
     title: "EasyBits — La nube para expertos IA",
     description:
-      "Sandboxes, web, archivos, datos y WhatsApp para tus agentes, desde un solo MCP y en pesos.",
+      "Sandboxes, web, archivos, datos y WhatsApp para tus agentes, desde un solo MCP y en MXN.",
   });
 
 export default function Home({ loaderData }: Route.ComponentProps) {

@@ -17,7 +17,7 @@ export const Invite = () => {
           </span>{" "}
           <span>al mes en&nbsp;</span> <span> cinco proveedores&nbsp;</span>
           <span> en dólares.&nbsp;</span>
-          <span> Todo en pesos,&nbsp;</span>
+          <span> Todo en MXN,&nbsp;</span>
           <span> sin mensualidad obligatoria.</span>
         </h1>
       </div>

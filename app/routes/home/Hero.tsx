@@ -20,7 +20,7 @@ export const Hero = () => {
 
           <p className="text-iron text-xl lg:text-2xl xl:text-2xl font-extralight mb-6 md:mb-10 mt-2 md:mt-6">
             Sandboxes, web, archivos, datos y WhatsApp para tus agentes — desde
-            un solo MCP, en pesos.
+            un solo MCP, en MXN.
           </p>
         </TextBlurEffect>
         <div className="flex flex-wrap items-center gap-4 justify-center md:justify-start">

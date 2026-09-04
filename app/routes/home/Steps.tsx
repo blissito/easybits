@@ -16,7 +16,7 @@ export const Steps = () => {
         />
         <StepCard
           title="Publica o cobra"
-          text="Lanza la app, el documento o el bot de WhatsApp. Al cliente le vendes tú; nosotros te cobramos en pesos."
+          text="Lanza la app, el documento o el bot de WhatsApp. Al cliente le vendes tú; nosotros te cobramos en MXN."
           image="/home/step3.webp"
         />
       </div>
