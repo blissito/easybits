@@ -886,7 +886,7 @@ console.log(result.savings); // "75%"`}
             </p>
             <div className="mb-6 bg-yellow-50 border-2 border-yellow-300 rounded-xl p-4 text-sm">
               <strong>Se mide en consultas, no en créditos.</strong> 1 consulta = 1 página leída, 1 búsqueda, 1 registro extraído o 1 página rastreada.
-              Tienes 50 al registrarte; los packs Web ($99 → 400, $999 → 5,000) están en <code className="bg-gray-100 px-1 rounded">/dash/packs?tab=web</code>, valen para cualquier plan y <b>no caducan</b>. Sin saldo → <code className="bg-gray-100 px-1 rounded">402</code>.
+              Tienes 50 al registrarte; los packs Web ($99 → 400, $999 → 10,000) están en <code className="bg-gray-100 px-1 rounded">/dash/packs?tab=web</code>, valen para cualquier plan y <b>no caducan</b>. Sin saldo → <code className="bg-gray-100 px-1 rounded">402</code>.
             </div>
 
             <Endpoint

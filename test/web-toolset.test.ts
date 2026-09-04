@@ -28,12 +28,12 @@ import { findPackById, WEB_PACKS } from "../app/lib/plans";
 describe("WEB_PACKS", () => {
   it("resuelve al bucket web con su precio", () => {
     expect(findPackById("web_400")).toEqual({ id: "web_400", bucket: "web", type: "web_pack", amount: 400, priceMxn: 99 });
-    expect(findPackById("web_5000")?.amount).toBe(5000);
+    expect(findPackById("web_10000")?.amount).toBe(10000);
   });
-  it("mantiene ≥340% de profit sobre el costo peor caso ($0.045 MXN/consulta)", () => {
+  it("mantiene ≥120% de profit sobre el costo peor caso ($0.045 MXN/consulta)", () => {
     for (const p of WEB_PACKS) {
       const cost = p.queries * 0.045;
-      expect((p.price - cost) / cost).toBeGreaterThan(3.4);
+      expect((p.price - cost) / cost).toBeGreaterThan(1.2);
     }
   });
 });

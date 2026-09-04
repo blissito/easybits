@@ -365,7 +365,7 @@ export interface WebPack {
 
 export const WEB_PACKS: WebPack[] = [
   { id: "web_400", queries: 400, price: 99, description: "Unas 20 investigaciones completas" },
-  { id: "web_5000", queries: 5000, price: 999, featured: true, description: "Para agentes que consultan la web a diario" },
+  { id: "web_10000", queries: 10000, price: 999, featured: true, description: "Para agentes que consultan la web a diario" },
 ];
 
 /**
