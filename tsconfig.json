@@ -7,7 +7,13 @@
   ],
   "exclude": [
     "node_modules",
-    "services/captions/**/*"
+    "services/captions/**/*",
+    // Configs de build de los subpaquetes: cada uno es un paquete npm aparte,
+    // con su propio tsconfig y su propio `tsup` en su node_modules — que la
+    // raíz NO instala. Incluirlos hacía que `npm run typecheck` fallara en
+    // cualquier clon limpio con "Cannot find module 'tsup'", un error que no
+    // dice nada de la app.
+    "packages/*/tsup.config.ts"
   ],
   "compilerOptions": {
     "lib": ["DOM", "DOM.Iterable", "ES2022"],

@@ -4,6 +4,14 @@ on:
   push:
     tags:
       - 'packages-v*'
+  # Permite probar la credencial sin inventar un tag ni quemar una versión:
+  # con dry_run=true solo corre el chequeo de auth y termina.
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Solo verificar NPM_TOKEN, sin publicar"
+        type: boolean
+        default: true
 
 jobs:
   publish:
@@ -17,12 +25,34 @@ jobs:
           node-version: 20
           registry-url: https://registry.npmjs.org
 
+      # El token se verifica ANTES de construir nada. Sin esto, un token muerto
+      # se descubría a los 40 s, enterrado bajo el log de tsup, y con un 404 que
+      # parece "el paquete no existe" cuando en realidad significa "no tienes
+      # permiso de escritura" (npm devuelve 404 en vez de 401 a propósito).
+      - name: Verificar credencial de npm
+        run: |
+          if ! WHO=$(npm whoami 2>&1); then
+            echo "::error::NPM_TOKEN inválido o sin permiso. npm respondió: $WHO"
+            echo "Genera un Granular Access Token en npmjs.com con Read and write"
+            echo "sobre el scope @easybits.cloud y córrelo con:"
+            echo "  gh secret set NPM_TOKEN --repo blissito/easybits"
+            exit 1
+          fi
+          echo "Autenticado en npm como: $WHO"
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Fin del ensayo
+        if: inputs.dry_run
+        run: echo "dry_run activo: la credencial sirve y no se publicó nada."
+
       # Publica cada paquete SOLO si su versión aún no está en npm. Así un re-run
       # (versión sin cambios) salta limpio, pero un error REAL de publish — auth
       # (token muerto → npm devuelve 404), red o build — hace FALLAR el job en vez
       # de mentir "verde". `npm view` es lectura pública: funciona aunque el token
       # esté muerto, así que el skip por-versión es fiable.
       - name: Publish SDK
+        if: ${{ !inputs.dry_run }}
         working-directory: packages/sdk
         run: |
           npm ci
@@ -37,6 +67,7 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish MCP
+        if: ${{ !inputs.dry_run }}
         working-directory: packages/mcp
         run: |
           npm ci
@@ -51,6 +82,7 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish CLI
+        if: ${{ !inputs.dry_run }}
         working-directory: cli
         run: |
           npm ci
