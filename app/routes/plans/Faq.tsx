@@ -17,36 +17,36 @@ export const Faq = () => {
       </p>
       <div className="mt-12 lg:mt-20 flex flex-col border-[2px] border-black rounded-xl overflow-hidden">
         <Question
-          question="¿Qué es un asset digital?"
-          answer="En EasyBits un asset digital es un archivo que se transforma en un producto digital al tener una landing page de detalle, descripción, vista previa, reseñas, y que se vende de forma 100% digital. Este archivo puede ser un e-book sobre un tema que te apasiona, fotografías que has tomado en tus viajes, ilustraciones que realizas como hobby, conferencias profesionales, poemas que escribes en tu tiempo libre o profesionalmente, o cualquier tipo de contenido creativo digital."
+          question="¿Qué es EasyBits, en una frase?"
+          answer="La nube que tus agentes de IA saben usar sin que tú programes la integración. Un agente conectado puede ejecutar código en su propia máquina aislada, buscar y leer internet, guardar y servir archivos, consultar su base de datos SQL, generar documentos y desplegar aplicaciones. Todo desde un solo endpoint MCP, un SDK tipado o la REST API — y cobrado en pesos."
         />
         <Question
-          question="¿Cómo funciona EasyBits?"
-          answer="EasyBits es una plataforma donde cualquier creativo puede crear una cuenta de forma gratuita, crear su primer asset y empezar a venderlo. Mientras tú compartes el link de tu tienda con tus seguidores y clientes, nosotros promocionamos tus assets en Comunidad EasyBits para que llegué a más y más usuarios que amen tu trabajo. "
+          question="¿Qué es una caja o sandbox?"
+          answer="Una microVM Firecracker: una máquina virtual real y aislada, con root e internet, que tu agente crea para ejecutar lo que necesite. Cuando deja de usarla la dormimos, y despierta en menos de un segundo cuando vuelve a hacer falta. No es un contenedor compartido: cada agente tiene la suya."
         />
         <Question
-          question="¿Cómo creo una cuenta?"
-          answer="Da clic en el botón «Empezar», y elige como quieres crear la cuenta, con alguna red social o solo con correo electrónico. Y eso es todo, inmediatamente después de crear tu cuenta ya puedes crear tu primer asset. "
+          question="¿Puedo quedarme en el plan gratuito?"
+          answer="Sí. El plan Byte es gratis para siempre e incluye 100 MB de almacenamiento, una caja y tres bases de datos. Sirve para construir y probar de verdad, no solo para mirar."
         />
         <Question
-          question="¿Hay comisiones extra por venta?"
-          answer="No, EasyBits no cobrá comisiones extra por venta, el precio de tu plan es lo único que pagarás a EasyBits. Pero para tener cobros en línea, debes considerar la comisión del 3.6% + 3 pesos por transacción de Stripe, el desglose de las comisiones las puedes ver directamente en tu dashbaord de Stripe."
+          question="¿Tengo que usar sus modelos de IA?"
+          answer="No. Puedes traer tus propias llaves — de Anthropic, OpenAI o quien uses — y entonces nos pagas solo el software. Si prefieres no administrar llaves, también te revendemos tokens y los cobramos en pesos. Las dos formas conviven; eliges por agente."
         />
         <Question
-          question="¿Cómo puedo empezar a vender mis assets?"
-          answer="Despues de crear tu primer asset debes registrarte en Stripe por medio de nuestra plataforma para poder cobrar tus assets y recibir tu dinero. Recuerda que EasyBits usa Stripe para ofrecerte cobros internacionales seguros y rápidos. "
+          question="¿Los packs caducan?"
+          answer="No. Los packs de consultas web, créditos y tokens no tienen fecha de vencimiento: se consumen cuando los uses. Por eso la suscripción y el consumo se cobran por separado — no pagas de más un mes tranquilo."
         />
         <Question
-          question="¿Qué pasa si uso todo el almacenamiento incluido en el plan?"
-          answer="Puedes agregar almacenamiento extra a tu plan por tan solo $ 1 USD por GB."
+          question="¿Puedo hospedar mi aplicación aquí?"
+          answer="Sí. De un repositorio a una URL pública con TLS en una sola llamada, con dominio propio, respaldos diarios y rollback. Cada máquina se cobra aparte y no necesitas plan de pago para contratar una."
         />
         <Question
-          question="¿Puedo quedarme en el Plan Free para siempre?"
-          answer="Sí, el plan Free te permite tener 1 asset en venta, así que si no necesitas agregar más assets, puedes quedarte allí por siempre y para siempre."
+          question="¿Y si necesito más almacenamiento o más cajas?"
+          answer="Subes de plan: Mega da 10 GB y dos cajas concurrentes; Tera, 100 GB y cinco. Si tu caso pide más de eso, escríbenos y lo vemos — hay clientes corriendo configuraciones a la medida."
         />
         <Question
           question="¿Qué formas de pago aceptan?"
-          answer="Para suscribirte al Plan Creative o Expert puedes usar cualquier tarjeta de débito o crédito, Link de Stripe, ApplePay o GooglePay. Si requieres otra opción de pago, escríbenos, seguramente encontraremos una forma de pago adecuada para ti. "
+          answer="Tarjeta de débito o crédito, Link de Stripe, Apple Pay y Google Pay. Si necesitas otra opción — transferencia o factura — escríbenos y la resolvemos."
         />
       </div>
     </section>

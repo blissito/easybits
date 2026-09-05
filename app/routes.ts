@@ -25,9 +25,19 @@ export default [
   // usuario en su panel de developer, sin pasar por el onboarding.
   route("/trial-welcome", "routes/trial-welcome.ts"),
   route("/planes", "routes/planes.tsx"),
+  // /precios es el nombre que la gente teclea; la página es /planes.
+  route("/precios", "routes/precios.ts"),
   route("/funcionalidades", "routes/funcionalidades.tsx"),
+  // Una página por pilar vendible. /funcionalidades es el índice que las enlaza;
+  // estas son las que aterrizan una búsqueda o un anuncio. Comparten andamio en
+  // routes/product/ProductPage.tsx y sus precios salen del catálogo, no de prosa.
+  route("/sandboxes", "routes/sandboxes.tsx"),
+  route("/hosting", "routes/hosting.tsx"),
+  route("/web", "routes/web.tsx"),
+  route("/flota", "routes/flota.tsx"),
+  route("/bases-de-datos", "routes/bases-de-datos.tsx"),
   route("/cuanto-cuesta-mi-agente", "routes/cuanto-cuesta-mi-agente.tsx"),
-  route("/calculadora", "routes/calculadora.tsx"),
+  route("/calculadora", "routes/calculadora.ts"),
   route("/developers", "routes/developers.tsx"),
   route("/brand", "routes/brand.tsx"),
   route("/mcp", "routes/mcp-page.tsx"),
@@ -37,8 +47,8 @@ export default [
   route("/status", "routes/status.tsx"),
   route("/blog", "routes/blog.tsx"),
   route("/blog/:slug", "routes/blog.$slug.tsx"),
-  route("/sitemap.xml", "routes/sitemap.xml.tsx"),
-  route("/robots.txt", "routes/robots.txt.tsx"),
+  route("/sitemap.xml", "routes/sitemap.xml.ts"),
+  route("/robots.txt", "routes/robots.txt.ts"),
   route("/llms.txt", "routes/llms.txt.ts"),
   // Índice → secciones sueltas (1-12 KB) y volcado completo. Ver llms.txt.ts.
   route("/llms-full.txt", "routes/llms-full.txt.ts"),

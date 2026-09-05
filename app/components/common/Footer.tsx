@@ -104,7 +104,26 @@ export const Footer = () => {
               </div>{" "}
             </div> */}
           </div>
-          <div className="hidden md:block col-span-1"></div>
+          {/* Columna de producto: son los enlaces internos por los que un
+              crawler llega a las páginas de pilar. Sin esto, las landings solo
+              existen en el sitemap. */}
+          <div className="col-span-12 md:col-span-2 flex flex-col gap-2">
+            <h3 className="text-white mb-3">Producto</h3>
+            {[
+              ["Sandboxes", "/sandboxes"],
+              ["Hosting", "/hosting"],
+              ["Web", "/web"],
+              ["Flota", "/flota"],
+              ["Bases de datos", "/bases-de-datos"],
+              ["MCP", "/mcp"],
+            ].map(([label, path]) => (
+              <Link key={path} to={path}>
+                <p className="text-white/50 hover:text-brand-500 transition-all">
+                  {label}
+                </p>
+              </Link>
+            ))}
+          </div>
           <div className="col-span-12 md:col-span-2 flex flex-col gap-2">
             <h3 className="text-white mb-3">Sobre Easybits</h3>
             <Link to="/funcionalidades">

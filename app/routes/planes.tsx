@@ -1,9 +1,12 @@
+import { getUserOrNull } from "~/.server/getters";
+import type { User } from "@prisma/client";
 import { Banners, Robot } from "~/components/common/Banner";
 import { BasicGallery } from "~/components/galleries/BasicGallery";
 import { AuthNav } from "~/components/login/auth-nav";
 import { Pricing } from "./plans/Pricing";
 import { Benefits } from "./plans/Benefits";
 import { Faq } from "./plans/Faq";
+import { HostingAndUsage } from "./plans/HostingAndUsage";
 import { Footer } from "~/components/common/Footer";
 import type { Route } from "./+types/planes";
 import getBasicMetaTags from "~/utils/getBasicMetaTags";
@@ -11,9 +14,24 @@ import { FloatingChat } from "~/components/ai/FloatingChat";
 import { ThankYouModal } from "~/components/common/ThankYouModal";
 import { useSearchParams } from "react-router";
 
-export const clientLoader = async () => {
-  const user = await fetch("/api/v1/user?intent=self").then((r) => r.json());
-  return { user };
+// Loader de SERVIDOR, no solo clientLoader: sin él esta ruta se prerenderiza
+// como shell vacío y un crawler ve ~385 palabras en vez de la página. Mismo
+// patrón que home.tsx. Si la sesión falla no se tira la página: nav de invitado.
+export const loader = async ({ request }: Route.LoaderArgs) => {
+  try {
+    return { user: (await getUserOrNull(request)) as User | null };
+  } catch {
+    return { user: null as User | null };
+  }
+};
+
+export const clientLoader = async ({ serverLoader }: Route.ClientLoaderArgs) => {
+  try {
+    const user = await fetch("/api/v1/user?intent=self").then((r) => r.json());
+    return { user: user as User | null };
+  } catch {
+    return await serverLoader();
+  }
 };
 
 export const meta = () =>
@@ -35,8 +53,9 @@ export default function Planes({ loaderData }: Route.ComponentProps) {
   return (
     <section className="overflow-hidden">
       {justPaid && <ThankYouModal kind="plan" onClose={dismissThanks} />}
-      <AuthNav user={user} />
+      <AuthNav user={user ?? undefined} />
       <Pricing />
+      <HostingAndUsage />
       <BasicGallery
         className="bg-brand-grass border-[2px] border-black"
         items={[

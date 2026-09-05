@@ -1,8 +1,8 @@
 /**
- * @easybits.cloud/sdk — Agentic-first file storage SDK
+ * @easybits.cloud/sdk — the typed client for the EasyBits cloud for AI agents
  *
- * The typed HTTP client for AI agents to manage, share, and transform files
- * via the Easybits API v2. Includes webhooks, bulk operations, and more.
+ * Sandboxes, web, files, SQL databases, documents and app hosting via the
+ * EasyBits API v2. Includes webhooks, bulk operations, and more.
  *
  * @example
  * ```ts

@@ -1,7 +1,7 @@
 {
   "name": "@easybits.cloud/mcp",
-  "version": "0.3.1",
-  "description": "Agentic-first MCP server for Easybits — 30+ tools for AI agents to manage files, webhooks, and storage",
+  "version": "0.3.2",
+  "description": "MCP server for EasyBits \u2014 the cloud for AI agents: sandboxes, web, files, SQL databases, documents and app hosting",
   "type": "module",
   "bin": {
     "easybits-mcp": "./dist/index.js"

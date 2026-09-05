@@ -9,10 +9,23 @@ import { FLEET_BOX, HOSTING_CATALOG, SELLABLE_TIERS } from "~/lib/hostingCatalog
 const fmtRam = (mb: number) => (mb >= 1024 ? `${mb / 1024}GB` : `${mb}MB`);
 const fmtPrice = (n: number | null) => (n == null ? "—" : `$${n.toLocaleString("en-US")}`);
 
-export const meta = () => [
+// El conteo de tools NO se escribe a mano en ninguna parte: sale del servidor MCP
+// real vía getToolCatalog(). Ver la nota en CLAUDE.md — antes convivían cuatro
+// cifras distintas en la prosa y todas estaban mal.
+export const loader = async () => {
+  const { getToolCatalog } = await import("~/.server/docs/toolCatalog");
+  const catalog = getToolCatalog();
+  const groupCounts = catalog.reduce<Record<string, number>>((acc, t) => {
+    if (t.group) acc[t.group] = (acc[t.group] ?? 0) + 1;
+    return acc;
+  }, {});
+  return { toolCount: catalog.length, groupCounts };
+};
+
+export const meta = ({ data }: Route.MetaArgs) => [
   ...getBasicMetaTags({
     title: "EasyBits API Docs — La nube para expertos IA",
-    description: "Referencia completa de EasyBits: REST API v2, SDK y MCP con más de 200 tools para agentes — sandboxes, web, archivos, bases de datos, documentos, hosting y WhatsApp.",
+    description: `Referencia completa de EasyBits: REST API v2, SDK y MCP con ${data?.toolCount ?? 200} tools para agentes — sandboxes, web, archivos, bases de datos, documentos, hosting y WhatsApp.`,
   }),
   { tagName: "link", rel: "canonical", href: "https://www.easybits.cloud/docs" },
 ];
@@ -52,7 +65,8 @@ const SECTIONS = [
 // Sections that show the "Nuevo" badge in the nav (recently shipped).
 const NEW_SECTIONS = new Set<string>(["agentes-en-tu-app", "ghosty-lite", "flota", "video-projects", "calls", "secrets", "images", "web"]);
 
-export default function DocsPage() {
+export default function DocsPage({ loaderData }: Route.ComponentProps) {
+  const { toolCount, groupCounts } = loaderData;
   const location = useLocation();
 
   // Estado inicial DETERMINISTA (igual en server y cliente) para no causar un
@@ -186,7 +200,7 @@ export default function DocsPage() {
                   url: "https://www.easybits.cloud",
                 },
                 termsOfService: "https://www.easybits.cloud/terminos-y-condiciones",
-                category: ["File Storage", "AI Agent Tools", "MCP Server"],
+                category: ["AI Agent Infrastructure", "Cloud Sandboxes", "AI Agent Tools", "MCP Server"],
               },
               {
                 "@type": "SoftwareApplication",
@@ -206,7 +220,7 @@ export default function DocsPage() {
                 "@type": "SoftwareApplication",
                 name: "@easybits.cloud/mcp",
                 applicationCategory: "DeveloperApplication",
-                description: "MCP server with 200+ tools for AI agents: sandboxes, web search/fetch/extract, files, databases, documents, hosting and WhatsApp agents. Works with Claude, Cursor and any MCP-compatible client.",
+                description: "MCP server for AI agents: sandboxes, web search/fetch/extract, files, databases, documents, hosting and WhatsApp agents. Works with Claude, Cursor and any MCP-compatible client.",
                 url: "https://www.npmjs.com/package/@easybits.cloud/mcp",
                 offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
                 provider: {
@@ -222,7 +236,7 @@ export default function DocsPage() {
                 url: "https://www.easybits.cloud/docs",
                 author: { "@type": "Organization", name: "EasyBits" },
                 about: [
-                  { "@type": "Thing", name: "File Storage API" },
+                  { "@type": "Thing", name: "AI Agent Cloud Infrastructure" },
                   { "@type": "Thing", name: "MCP Server" },
                   { "@type": "Thing", name: "AI Agent Tools" },
                 ],
@@ -294,14 +308,14 @@ export default function DocsPage() {
           {/* Quick Start */}
           <section id="quickstart" className="mb-16">
             <h1 className="text-3xl font-bold mb-2">Documentación de la API</h1>
-            <p className="text-gray-500 mb-4 text-sm">Almacenamiento de archivos agentic-first para desarrolladores y agentes de IA</p>
+            <p className="text-gray-500 mb-4 text-sm">Sandboxes, web, archivos, bases de datos, documentos y hosting para agentes de IA</p>
             <p className="text-gray-600 mb-4">
               URL base: <code className="bg-gray-100 px-2 py-0.5 rounded font-mono text-sm">https://www.easybits.cloud/api/v2</code>
             </p>
             <div className="mb-6 bg-blue-50 border-2 border-blue-300 rounded-xl p-4 text-sm">
               <strong>3 formas de integrarte:</strong> REST API (abajo),{" "}
               <a href="#sdk" className="underline font-medium">SDK tipado</a> ({`npm i @easybits.cloud/sdk`}), o{" "}
-              <a href="https://www.npmjs.com/package/@easybits.cloud/mcp" className="underline font-medium" target="_blank" rel="noreferrer">servidor MCP</a> (100+ herramientas para agentes, 12 core por defecto).
+              <a href="https://www.npmjs.com/package/@easybits.cloud/mcp" className="underline font-medium" target="_blank" rel="noreferrer">servidor MCP</a> ({toolCount} herramientas para agentes; por defecto solo el grupo core).
             </div>
 
             <h2 className="text-xl font-bold mb-4">Inicio rápido</h2>
@@ -338,7 +352,7 @@ const { items } = await eb.listFiles();` },
             />
             <p className="text-gray-500 text-xs mt-3">
               <Link to="/dash/developer" className="underline font-medium">Obtén tu API key</Link>.{" "}
-              Por defecto cargan 12 herramientas core. Agrega <code className="bg-gray-100 px-1 rounded">--tools docs,slides,all</code> para más.{" "}
+              Por defecto cargan solo el grupo core, para no gastar contexto. Agrega <code className="bg-gray-100 px-1 rounded">--tools docs,slides,all</code> para más.{" "}
               <a href="#tool-groups" className="underline">Ver tool groups</a>.
             </p>
           </section>
@@ -460,7 +474,7 @@ ghosty --yolo` },
             <h3 className="text-lg font-bold mb-3">Qué incluye</h3>
             <div className="grid md:grid-cols-2 gap-3 mb-6">
               {[
-                ["⚡", "EasyBits MCP", "100+ herramientas para archivos, documentos, DBs, sandboxes y más"],
+                ["⚡", "EasyBits MCP", `${toolCount} herramientas: sandboxes, web, archivos, DBs, documentos y hosting`],
                 ["🧠", "DeepSeek V4", "Modelo principal con razonamiento profundo (thinking tokens)"],
                 ["🌐", "Búsqueda web", "BrightData integrado para búsquedas y scraping"],
                 ["🔌", "MCP dinámico", "Agrega y quita servidores MCP en runtime sin reiniciar"],
@@ -506,7 +520,7 @@ ghosty --yolo` },
             </ol>
 
             <div className="mb-6 bg-green-50 border-2 border-green-300 rounded-xl p-4 text-sm">
-              <strong>Tip:</strong> append <code className="bg-gray-100 px-1 rounded">?tools=all</code> to the URL to expose all 100+ tools instead of the 12-tool core group. See <a href="#tool-groups" className="underline">Tool Groups</a> for other options.
+              <strong>Tip:</strong> append <code className="bg-gray-100 px-1 rounded">?tools=all</code> to the URL to expose all {toolCount} tools instead of the core group. See <a href="#tool-groups" className="underline">Tool Groups</a> for other options.
             </div>
 
             <h3 className="text-lg font-bold mb-3">How it works</h3>
@@ -1700,7 +1714,7 @@ console.log(website.url); // https://my-docs.easybits.cloud`}
             </p>
 
             <div className="mb-6 bg-green-50 border-2 border-green-300 rounded-xl p-4 text-sm">
-              <strong>34 herramientas MCP</strong> en el grupo <code className="bg-gray-100 px-1 rounded">sandbox</code>.{" "}
+              <strong>{groupCounts.sandbox} herramientas MCP</strong> en el grupo <code className="bg-gray-100 px-1 rounded">sandbox</code>.{" "}
               Agrega <code className="bg-gray-100 px-1 rounded">--tools sandbox</code> para habilitarlas.{" "}
               <a href="#tool-groups" className="underline">Ver tool groups</a>.
             </div>
@@ -3605,7 +3619,7 @@ console.log(\`\${stats.storage.usedGB}/\${stats.storage.maxGB} GB\`);`}
           <section id="tool-groups" className="mb-16">
             <h2 className="text-2xl font-bold mb-4">Tool Groups</h2>
             <p className="text-gray-600 mb-4 text-sm">
-              Por defecto el servidor MCP carga <strong>12 herramientas core</strong> para minimizar el uso de tokens.
+              Por defecto el servidor MCP carga solo el grupo <strong>core</strong> para minimizar el uso de tokens.
               Habilita grupos adicionales para desbloquear más capacidades.
             </p>
             <div className="overflow-x-auto mb-6">

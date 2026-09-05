@@ -26,28 +26,28 @@ export const Benefits = () => {
   return (
     <section className="max-w-7xl mx-auto py-20 md:py-40 px-4 md:px-[5%] xl:px-0">
       <h2 className="text-3xl md:text-5xl font-bold text-center mb-12 md:mb-20">
-        Disfruta de los beneficios de EasyBits
+        Por qué construir aquí
       </h2>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-12">
         <BenefitCard
           image="/home/easy.svg"
-          title="Fácil de usar"
-          description="No necesitas ser un pro de la tecnología, agregar y vender tus productos es fácil y solo te tomará un par de minutos. Y si tienes preguntas, siempre estaremos para ayduarte."
+          title="Tu agente ya sabe usarlo"
+          description="Conectas un endpoint MCP y listo: no escribes wrappers ni enseñas a tu agente a llamar la API. Lo que puede hacer la interfaz, lo puede hacer el agente."
         />
         <BenefitCard
           image="/home/support.svg"
-          title="Servicio de soporte"
-          description="Nuestro equipo disponible para responder tus preguntas y ayudarte en lo que necesites. E incluso tomarán notas de lo que te gustaría agregar a EasyBits. "
+          title="Precios en pesos"
+          description="Sin conversión ni sorpresas por tipo de cambio. Cobramos en MXN y facturamos en México, que es justo lo que la infraestructura de agentes no ofrece."
         />
         <BenefitCard
           image="/home/custom.svg"
-          title="Personalización"
-          description="En EasyBits puedes personalizar cada landing page de tus assets, agregar tus colores, mostrar la información que tu quieres y agregar tu propio dominio."
+          title="Tus llaves o las nuestras"
+          description="Trae tus propias llaves de modelo y págananos solo el software, o usa las nuestras y te revendemos tokens en pesos. Se decide por agente, y se puede cambiar."
         />
         <BenefitCard
           image="/home/cancel.svg"
-          title="Cancelación "
-          description="Nada de plazos forzosos. Puedes cancelar en el momento que tu quieres, sin letras chiquitas y sin trabas, tú tienes control sobre tu suscripción. "
+          title="Cancelación"
+          description="Nada de plazos forzosos. Cancelas cuando quieras, sin letras chiquitas; y lo que ya compraste en packs no caduca."
         />
       </div>
     </section>

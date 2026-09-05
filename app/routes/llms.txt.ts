@@ -96,7 +96,7 @@ ${sections}
 
 En MXN. Plan gratuito (Byte) con 100 MB, 1 caja y 3 bases de datos. Mega $499/mes
 (promo $299) y Tera $2,490/mes amplían almacenamiento, cajas concurrentes y tokens LLM
-incluidos. Hosting desde $49/mes por máquina. Detalle en ${BASE}/precios.
+incluidos. Hosting desde $49/mes por máquina. Detalle en ${BASE}/planes.
 
 ## Contacto
 

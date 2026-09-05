@@ -10,7 +10,7 @@ La nube para agentes de IA: sandboxes (microVMs Firecracker), web (buscar, leer,
 npx -y @easybits.cloud/mcp
 ```
 
-30+ tools for uploading, transforming, optimizing and serving files — images, documents, websites, presentations, landing pages and more.
+Un solo endpoint con todo el catálogo: sandboxes, web (buscar, leer, extraer), archivos, bases de datos SQL, documentos, video y hosting. El conteo vive en [`/api/tools.json`](https://www.easybits.cloud/api/tools.json), derivado del servidor — nunca escrito a mano.
 
 ## SDK
 

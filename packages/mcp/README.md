@@ -1,6 +1,6 @@
 # EasyBits MCP Server
 
-Agentic-first file storage for AI agents. Connect your AI to [EasyBits](https://www.easybits.cloud) — upload files, manage webhooks, optimize images, deploy websites, and more — all through natural language.
+The cloud for AI agents. Connect your AI to [EasyBits](https://www.easybits.cloud) — run code in an isolated microVM, search and read the web, store files, query SQL databases, generate documents and deploy apps — all through natural language.
 
 ## Quick Start
 

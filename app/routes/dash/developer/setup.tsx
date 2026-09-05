@@ -232,11 +232,11 @@ ssh root@TU_IP "sqlite3 /home/nanoclaw/app/store/messages.db \\
       </Card>
 
       <Card
-        title="30+ herramientas MCP"
-        description={<>Archivos, bases de datos, documentos, landings, presentaciones y más. <Link to="/docs#mcp-tools" className="underline font-medium text-black hover:text-brand-500">Ver lista completa en docs</Link></>}
+        title="Las herramientas de tu agente"
+        description={<>Sandboxes, web, archivos, bases de datos, documentos, hosting y más. <Link to="/docs#mcp-tools" className="underline font-medium text-black hover:text-brand-500">Ver lista completa en docs</Link></>}
       >
         <p className="text-xs text-gray-500">
-          Una vez conectado, tu agente puede subir archivos, crear bases de datos, generar documentos con AI, publicar websites y más — todo desde el chat.
+          Una vez conectado, tu agente puede ejecutar código en su propia microVM, leer la web, subir archivos, crear bases de datos, generar documentos y publicar apps — todo desde el chat.
         </p>
       </Card>
     </>

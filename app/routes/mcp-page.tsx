@@ -8,7 +8,7 @@ export const meta = () =>
   getBasicMetaTags({
     title: "Conecta EasyBits a tu agente — MCP",
     description:
-      "Ghosty Code trae EasyBits preconfigurado. Claude, Cursor y cualquier cliente MCP en un comando. 100+ herramientas para gestionar archivos desde tu agente AI.",
+      "Ghosty Code trae EasyBits preconfigurado. Claude, Cursor y cualquier cliente MCP en un comando: microVMs, web, archivos, bases de datos y hosting desde tu agente.",
   });
 
 const MCP_COMMAND = 'ghosty auth set --provider easybits --api-key "TU_EASYBITS_API_KEY" && ghosty --yolo';
@@ -146,7 +146,7 @@ export default function McpPage() {
               Conecta EasyBits a tu agente
             </h1>
             <p className="text-gray-600 mb-6">
-              Ghosty Code ya lo trae. Claude, Cursor y cualquier cliente MCP en un comando. 100+ herramientas para gestionar archivos desde tu agente AI.
+              Ghosty Code ya lo trae. Claude, Cursor y cualquier cliente MCP en un comando: microVMs, web, archivos, bases de datos y hosting desde tu agente.
             </p>
 
             {/* Command block */}

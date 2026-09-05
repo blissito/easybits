@@ -8,9 +8,9 @@ import { useState, type ReactNode } from "react";
 
 export const meta = () =>
   getBasicMetaTags({
-    title: "EasyBits para Developers — Agentic-First File Storage",
+    title: "EasyBits para Developers — La nube para expertos IA",
     description:
-      "La infraestructura de archivos que tus agentes de IA ya saben usar. SDK tipado, 33+ herramientas MCP, REST API v2.",
+      "Sandboxes, web, archivos, bases de datos y hosting desde un SDK tipado, una REST API v2 y un solo endpoint MCP. Precios en MXN.",
   });
 
 const LANG_MAP: Record<string, string> = {
@@ -85,8 +85,9 @@ export default function DevelopersPage() {
             </span>
           </h1>
           <p className="text-xl md:text-2xl text-gray-600 mt-6 max-w-2xl">
-            SDK tipado, 33+ herramientas MCP y REST API v2. Tus agentes suben,
-            optimizan y comparten archivos sin necesitar prompting.
+            Un SDK tipado, una REST API v2 y un endpoint MCP. La misma
+            plataforma desde los tres: microVMs, web, archivos, bases de datos
+            y hosting — sin wrappers y sin prompting.
           </p>
           <div className="mt-8 flex flex-wrap gap-4">
             <Link
@@ -197,8 +198,8 @@ const url = await getSignedUrl(client, command);
               </p>
               <p className="text-base text-gray-500 mb-6">
                 ¿Claude, Cursor, ChatGPT o cualquier otro cliente MCP? Un comando y
-                listo. 100+ herramientas para que tu agente maneje archivos de forma
-                nativa — sin prompting, sin wrappers.
+                listo. Tu agente ejecuta código, lee la web, guarda archivos y
+                despliega apps de forma nativa — sin prompting, sin wrappers.
               </p>
               <div className="space-y-3 text-sm text-gray-700">
                 <div className="flex items-start gap-2">
@@ -284,7 +285,7 @@ ghosty mcp login easybits`}
           </p>
           <div className="grid md:grid-cols-3 gap-6">
             <FeatureCard
-              title="File Storage"
+              title="Archivos"
               description="Archivos de hasta 5 GB. URLs presignadas, acceso público o privado, metadata custom."
               badge="POST /v2/files"
             />

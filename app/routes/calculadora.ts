@@ -11,6 +11,7 @@ export async function loader() {
   });
 }
 
-export default function Calculadora() {
-  return null;
-}
+// Sin `export default`: un componente vuelve "renderizable" a esta ruta y React
+// Router sirve el shell de la SPA en vez del HTML de arriba — la página se veía
+// EN BLANCO en producción. Mismo bug que tenían robots.txt y sitemap.xml.
+

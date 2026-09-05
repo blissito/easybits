@@ -1,3 +1,5 @@
+import { getUserOrNull } from "~/.server/getters";
+import type { User } from "@prisma/client";
 import { AuthNav } from "~/components/login/auth-nav";
 import { Footer } from "~/components/common/Footer";
 import type { ReactNode } from "react";
@@ -29,9 +31,24 @@ import { cn } from "~/utils/cn";
 import { TextBlurEffect } from "~/components/TextBlurEffect";
 import { FloatingChat } from "~/components/ai/FloatingChat";
 
-export const clientLoader = async () => {
-  const user = await fetch("/api/v1/user?intent=self").then((r) => r.json());
-  return { user };
+// Loader de SERVIDOR, no solo clientLoader: sin él esta ruta se prerenderiza
+// como shell vacío y un crawler ve ~385 palabras en vez de la página. Mismo
+// patrón que home.tsx. Si la sesión falla no se tira la página: nav de invitado.
+export const loader = async ({ request }: Route.LoaderArgs) => {
+  try {
+    return { user: (await getUserOrNull(request)) as User | null };
+  } catch {
+    return { user: null as User | null };
+  }
+};
+
+export const clientLoader = async ({ serverLoader }: Route.ClientLoaderArgs) => {
+  try {
+    const user = await fetch("/api/v1/user?intent=self").then((r) => r.json());
+    return { user: user as User | null };
+  } catch {
+    return await serverLoader();
+  }
 };
 
 export const meta = () =>
@@ -45,7 +62,7 @@ export default function Blog({ loaderData }: Route.ComponentProps) {
   const { user } = loaderData;
   return (
     <section>
-      <AuthNav user={user} />
+      <AuthNav user={user ?? undefined} />
       <div className="overflow-hidden ">
         <FeaturesHeader />
         <Banners rotation={0}>
@@ -233,7 +250,7 @@ const FeaturesScroll = () => {
             title="Un solo MCP, REST y SDK"
             description={
               <p>
-                Más de 200 tools en un endpoint, toolsets por caso (web, design, sandbox, hosting) y el mismo contrato en REST v2 y @easybits.cloud/sdk.{" "}
+                Todo el catálogo en un endpoint, con toolsets por caso (web, design, sandbox, hosting) y el mismo contrato en REST v2 y @easybits.cloud/sdk.{" "}
                 <span className="text-[#457D7B] font-bold">Claude Code, Claude.ai, Cursor o tu propio agente.</span>
               </p>
             }

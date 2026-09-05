@@ -26,7 +26,7 @@ export const Pricing = () => {
       <TextBlurEffect>
         <h2 className="text-4xl lg:text-6xl font-bold">Elige tu plan</h2>
         <p className="text-iron text-xl md:text-2xl mt-4 md:mt-6">
-          Planes flexibles para cada etapa de tu negocio creativo
+          Precios en pesos. Empieza gratis y paga solo cuando tu agente crezca.
         </p>
       </TextBlurEffect>
       <div className="mx-auto mt-12 lg:mt-20 grid grid-cols-1 md:grid-cols-3 gap-3 lg:gap-6 items-stretch max-w-5xl">

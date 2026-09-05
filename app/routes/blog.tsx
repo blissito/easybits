@@ -4,6 +4,7 @@ import { BlogContent, BlogHeader } from "./blog/BlogList";
 import type { Route } from "./+types/blog";
 import { FloatingChat } from "~/components/ai/FloatingChat";
 import { listPublishedPosts } from "~/.server/blogPosts";
+import getBasicMetaTags from "~/utils/getBasicMetaTags";
 
 export const loader = async () => {
   // La ruta está PRERENDERIZADA (react-router.config.ts): este loader corre una vez
@@ -17,46 +18,13 @@ export const loader = async () => {
   return { posts: allPosts, tags: allTags, featured, user: null };
 };
 
-export const meta = () => {
-  return [
-    { title: "Blog | EasyBits" },
-    {
-      name: "description",
-      content: "Consejos de Marketing + Negocios para creadores",
-    },
-    {
-      name: "keywords",
-      content: "blog, marketing, creadores, negocios, estrategias",
-    },
-
-    // Open Graph
-    { property: "og:title", content: "Blog | EasyBits" },
-    {
-      property: "og:description",
-      content: "Consejos de Marketing + Negocios para creadores",
-    },
-    { property: "og:type", content: "website" },
-    { property: "og:url", content: "https://www.easybits.cloud/blog" },
-    {
-      property: "og:image",
-      content:
-        "https://brendiwebsite.t3.storage.dev/metaImage-easybits.webp",
-    },
-
-    // Twitter Card
-    { name: "twitter:card", content: "summary_large_image" },
-    { name: "twitter:title", content: "Blog | EasyBits" },
-    {
-      name: "twitter:description",
-      content: "Consejos de Marketing + Negocios para creadores",
-    },
-    {
-      name: "twitter:image",
-      content:
-        "https://brendiwebsite.t3.storage.dev/metaImage-easybits.webp",
-    },
-  ];
-};
+export const meta = () =>
+  getBasicMetaTags({
+    title: "Blog — La nube para expertos IA | EasyBits",
+    description:
+      "Cómo se construye infraestructura para agentes: microVMs, sandboxes, bases de datos por cliente, scraping y agentes en WhatsApp. Notas técnicas desde producción.",
+    url: "https://www.easybits.cloud/blog",
+  });
 
 export default function Blog({ loaderData }: Route.ComponentProps) {
   const serverData = loaderData as any; // Type assertion for now

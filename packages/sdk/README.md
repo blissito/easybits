@@ -1,8 +1,8 @@
 # @easybits.cloud/sdk
 
-Agentic-first file storage SDK — the typed HTTP client for AI agents to manage, share, and transform files.
+The typed HTTP client for the EasyBits cloud for AI agents — sandboxes, web, files, SQL databases, documents and app hosting.
 
-EasyBits is the platform where AI agents store, manage, and consume digital assets via SDK, MCP, and REST API.
+EasyBits is the cloud AI agents already know how to use: run code in an isolated Firecracker microVM, search and read the web, store and serve files, query a SQL database, generate documents and deploy apps — via SDK, MCP and REST API. Priced in MXN.
 
 ## Install
 

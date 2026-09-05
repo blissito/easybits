@@ -78,7 +78,7 @@ const HOME_JSON_LD = {
       applicationCategory: "DeveloperApplication",
       operatingSystem: "Web, MCP, REST API, Node.js SDK",
       description:
-        "Nube para agentes de IA: sandboxes (microVMs), web (buscar, leer, extraer registros), archivos, bases de datos, documentos, hosting y agentes en WhatsApp, desde un solo MCP con más de 200 tools.",
+        "Nube para agentes de IA: sandboxes (microVMs), web (buscar, leer, extraer registros), archivos, bases de datos, documentos, hosting y agentes en WhatsApp, desde un solo endpoint MCP.",
       url: "https://www.easybits.cloud",
       featureList: [
         "Sandboxes: microVMs Firecracker por agente",
@@ -87,7 +87,7 @@ const HOME_JSON_LD = {
         "Documentos, presentaciones, voz y video",
         "Hosting de apps con releases y backups",
         "Agentes en WhatsApp con flota elástica",
-        "MCP con más de 200 tools; REST API v2; SDK",
+        "Un endpoint MCP; REST API v2; SDK tipado",
       ],
       offers: Object.entries(PLANS).map(([key, p]) => ({
         "@type": "Offer",
@@ -235,7 +235,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
           Conecta Claude Code, Claude.ai, Cursor o tu propio SDK. Tu agente
           investiga, ejecuta, guarda y publica con un único conector.
         </p>
-        <ItemList title="Más de 200 tools en un solo endpoint" />
+        <ItemList title="Todo el catálogo en un solo endpoint" />
         <ItemList title="Toolsets por caso: web, design, sandbox, hosting…" />
         <ItemList title="Claude Code, Claude.ai, Cursor, tu SDK" />
         <ItemList title="API key u OAuth — sin código" />

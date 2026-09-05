@@ -46,10 +46,12 @@ export interface StructuredDataArticle {
 export class BlogSEOService {
   private static readonly SITE_NAME = "EasyBits";
   private static readonly SITE_URL = "https://www.easybits.cloud";
+  // Servidas desde nuestro propio dominio: las anteriores vivían en un bucket
+  // heredado de otro producto y arrastraban la marca vieja.
   private static readonly DEFAULT_OG_IMAGE =
-    "https://brendiwebsite.t3.storage.dev/metaImage-easybits.webp";
+    "https://www.easybits.cloud/og-expertos-ia.png";
   private static readonly PUBLISHER_LOGO =
-    "https://brendiwebsite.t3.storage.dev/logo-easybits.webp";
+    "https://www.easybits.cloud/logo-purple.svg";
 
   /**
    * Generate comprehensive meta tags for a blog post
@@ -121,7 +123,7 @@ export class BlogSEOService {
   ) {
     let title = `Blog | ${this.SITE_NAME}`;
     let description =
-      "Consejos de Marketing + Negocios para creadores. Ve por tu café, toma asiento y descubre como impulsar tu negocio creativo.";
+      "Cómo se construye infraestructura para agentes: microVMs, sandboxes, bases de datos por cliente, scraping y agentes en WhatsApp. Notas técnicas desde producción.";
 
     if (tag) {
       title = `Posts sobre ${tag} | Blog | ${this.SITE_NAME}`;
@@ -147,7 +149,7 @@ export class BlogSEOService {
       {
         name: "keywords",
         content:
-          "blog, marketing digital, negocios creativos, assets digitales, emprendimiento",
+          "agentes de IA, sandboxes, microVMs, MCP, infraestructura, bases de datos, scraping",
       },
 
       // Open Graph tags
@@ -220,7 +222,8 @@ export class BlogSEOService {
       "@context": "https://schema.org",
       "@type": "Blog",
       name: `Blog | ${this.SITE_NAME}`,
-      description: "Consejos de Marketing + Negocios para creadores",
+      description:
+        "Cómo se construye infraestructura para agentes: microVMs, sandboxes, bases de datos por cliente, scraping y agentes en WhatsApp.",
       url: `${this.SITE_URL}/blog`,
       publisher: {
         "@type": "Organization",
@@ -258,6 +261,17 @@ export class BlogSEOService {
       { path: "/developers", priority: "0.8", changefreq: "monthly" },
       { path: "/funcionalidades", priority: "0.8", changefreq: "monthly" },
       { path: "/docs", priority: "0.7", changefreq: "monthly" },
+      // Páginas de pilar: son las que deben aterrizar una búsqueda de producto.
+      { path: "/sandboxes", priority: "0.9", changefreq: "monthly" },
+      { path: "/hosting", priority: "0.9", changefreq: "monthly" },
+      { path: "/web", priority: "0.9", changefreq: "monthly" },
+      { path: "/flota", priority: "0.9", changefreq: "monthly" },
+      { path: "/bases-de-datos", priority: "0.8", changefreq: "monthly" },
+      { path: "/mcp/apps", priority: "0.6", changefreq: "monthly" },
+      { path: "/brand", priority: "0.4", changefreq: "yearly" },
+      { path: "/status", priority: "0.4", changefreq: "weekly" },
+      // Documentación en texto plano para agentes y LLMs.
+      { path: "/llms.txt", priority: "0.6", changefreq: "weekly" },
       { path: "/calculadora", priority: "0.9", changefreq: "monthly" },
       { path: "/cuanto-cuesta-mi-agente", priority: "0.8", changefreq: "monthly" },
       { path: "/mcp", priority: "0.7", changefreq: "monthly" },
@@ -308,6 +322,18 @@ ${sitemapEntries.join("\n")}
   static generateRobotsTxt(): string {
     return `User-agent: *
 Allow: /
+Disallow: /dash/
+Disallow: /api/
+Disallow: /oauth/
+Disallow: /preview
+Disallow: /onboarding
+
+# Documentación en texto plano, pensada para agentes y LLMs.
+# Índice ligero; el volcado completo está en /llms-full.txt y el catálogo
+# de tools, sin autenticación, en /api/tools.json.
+Allow: /llms.txt
+Allow: /llms-full.txt
+Allow: /api/tools.json
 
 # Sitemap
 Sitemap: ${this.SITE_URL}/sitemap.xml

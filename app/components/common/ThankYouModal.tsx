@@ -63,8 +63,9 @@ export function ThankYouModal({
                 : " Tu suscripción hace posible EasyBits."}
             </p>
             <p>
-              Llevamos años construyendo el mejor storage agentic-first: que tus agentes de IA guarden,
-              gestionen y publiquen archivos —y ahora corran VMs— por SDK, MCP y API. Nos honra tenerte en el equipo.
+              Llevamos años construyendo la nube que los agentes saben usar: que corran código en su
+              propia máquina, lean la web, guarden archivos, tengan su base de datos y publiquen —por
+              SDK, MCP y API. Nos honra tenerte en el equipo.
             </p>
             <p>
               Si alguna vez necesitas algo, escríbeme directo a{" "}
