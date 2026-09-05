@@ -2554,12 +2554,16 @@ ghosty-tui --agent $AGENT_ID --token $AGENT_TOKEN`}
             </p>
 
             <div className="mb-6 bg-yellow-50 border-2 border-yellow-300 rounded-xl p-4 text-sm">
-              <strong>El token del agente es de servidor.</strong> Autoriza TODO lo de esta página, incluido reconfigurarlo. Llama a estos endpoints desde tu backend y proxea la respuesta a tu front — nunca lo pongas en el browser.
+              <strong>El token del agente es de servidor.</strong> Autoriza TODO lo de esta página, incluido reconfigurarlo y borrarlo. Llama a estos endpoints desde tu backend y proxea la respuesta a tu front — nunca lo pongas en el browser.
+              <br /><br />
+              Si lo que quieres es un chat <strong>dentro de tu app</strong>, no uses este token: emite una{" "}
+              <a href="#credenciales-flota" className="underline font-medium">credencial con alcance</a>{" "}
+              y, para el navegador, un token de sesión. Así lo que viaja al cliente sólo puede mandar mensajes.
             </div>
 
             <h3 className="text-lg font-bold mb-3">1. Hablarle</h3>
             <p className="text-gray-600 mb-3 text-sm">
-              Dos formas, mismo motor: <code className="bg-gray-100 px-1 rounded">/message</code> devuelve la respuesta completa en JSON; <code className="bg-gray-100 px-1 rounded">/message-stream</code> la manda por SSE (<code className="bg-gray-100 px-1 rounded">chunk</code> conforme se escribe, y un <code className="bg-gray-100 px-1 rounded">done</code> final cuyo <code className="bg-gray-100 px-1 rounded">value</code> es la respuesta autoritativa).
+              Dos formas, mismo motor: <code className="bg-gray-100 px-1 rounded">/message</code> devuelve la respuesta completa en JSON; <code className="bg-gray-100 px-1 rounded">/message-stream</code> la manda por SSE (<code className="bg-gray-100 px-1 rounded">chunk</code> conforme se escribe, y un <code className="bg-gray-100 px-1 rounded">done</code> final cuyo <code className="bg-gray-100 px-1 rounded">value</code> es la respuesta autoritativa — arma el mensaje con ése, no concatenando los chunks). También puede llegar <code className="bg-gray-100 px-1 rounded">capacity</code>: tu flota está llena en ese instante. No es un fallo del turno — reintenta pasado su <code className="bg-gray-100 px-1 rounded">retryAfter</code>.
             </p>
             <p className="text-gray-600 mb-3 text-sm">
               El <code className="bg-gray-100 px-1 rounded">groupId</code> es <strong>opaco</strong>: identifica una conversación y lo eliges tú. Un <code className="bg-gray-100 px-1 rounded">web-&lt;uuid&gt;</code> por usuario, o el id de tu propia tabla de chats. Mismo <code className="bg-gray-100 px-1 rounded">groupId</code> = misma memoria; uno nuevo = conversación nueva.
@@ -2595,8 +2599,8 @@ const { reply } = await eb.fleet.message(AGENT_ID, AGENT_TOKEN, {
 # → { "reply": "El plan Pro cuesta…" }`,
                 },
                 {
-                  label: "Node.js",
-                  code: `// Streaming: el SDK todavía no lo cubre, va por fetch.
+                  label: "Streaming (fetch)",
+                  code: `// El SDK ya lo cubre con eb.fleet.messageStream(); esto es el equivalente crudo.
 const res = await fetch(
   \`https://www.easybits.cloud/api/v2/fleet-agents/\${AGENT_ID}/message-stream\`,
   {
@@ -2625,24 +2629,104 @@ for await (const evt of readSse(res.body)) {
               Los MCP se montan al <strong>crear la sesión</strong>, no en cada turno: para comprobar un cambio de configuración, prueba con un <code className="bg-white px-1 rounded">groupId</code> nuevo.
             </div>
 
-            <div className="mb-6 bg-amber-50 border-2 border-amber-300 rounded-xl p-4 text-sm">
-              <strong>Para embeberlo en tu app, no repartas el token del agente.</strong> Ese token
-              sirve para <em>todo</em>: mandar mensajes, cambiar el prompt, leer secretos y borrar el
-              agente. Emite credenciales con alcance en{" "}
-              <code className="bg-white px-1 rounded">/api/v2/fleet-agents/:id/tokens</code>:
-              <ul className="list-disc ml-5 mt-2 space-y-1">
-                <li><code className="bg-white px-1 rounded">MESSAGE</code> — sólo manda turnos. Es la que le das a tu backend.</li>
-                <li><code className="bg-white px-1 rounded">MANAGE</code> — configura (prompt, modelo, canales), pero no toca secretos ni borra.</li>
-                <li><code className="bg-white px-1 rounded">ADMIN</code> — todo. Guárdala como guardas una llave de producción.</li>
-              </ul>
-              <p className="mt-2">
-                Una llave <code className="bg-white px-1 rounded">flt_sk_</code> nunca va al navegador
-                (y se rechaza si la mandas por query string). Para el navegador, pide desde tu servidor
-                un token de sesión: devuelve un <code className="bg-white px-1 rounded">flt_pk_</code> de
-                15 minutos, y si le pasas <code className="bg-white px-1 rounded">cfgId</code> queda atado
-                a ese tenant aunque el cliente pida otro.
-              </p>
+            <h3 id="credenciales-flota" className="text-lg font-bold mb-3">2. Credenciales con alcance</h3>
+            <p className="text-gray-600 mb-3 text-sm">
+              El token del agente sirve para <em>todo</em>: mandar mensajes, cambiar el prompt, leer
+              secretos y borrar el agente. Eso está bien para tu backend, pero no para repartirlo entre
+              integraciones — y mucho menos para el navegador. Emite credenciales que hagan una sola cosa.
+            </p>
+
+            <div className="mb-4 overflow-x-auto">
+              <table className="w-full text-sm border-2 border-black rounded-xl overflow-hidden">
+                <thead className="bg-gray-100">
+                  <tr>
+                    <th className="text-left px-3 py-2 border-b-2 border-black">Scope</th>
+                    <th className="text-left px-3 py-2 border-b-2 border-black">Puede</th>
+                    <th className="text-left px-3 py-2 border-b-2 border-black">No puede</th>
+                  </tr>
+                </thead>
+                <tbody className="align-top">
+                  <tr className="border-b border-gray-200">
+                    <td className="px-3 py-2 font-mono text-xs">MESSAGE</td>
+                    <td className="px-3 py-2">Mandar turnos (<code className="text-xs">/message</code>, <code className="text-xs">/message-stream</code>).</td>
+                    <td className="px-3 py-2 text-gray-500">Nada de configuración.</td>
+                  </tr>
+                  <tr className="border-b border-gray-200">
+                    <td className="px-3 py-2 font-mono text-xs">MANAGE</td>
+                    <td className="px-3 py-2">Todo lo anterior + leer y ajustar config: prompt, modelo, effort, canales, capacidades.</td>
+                    <td className="px-3 py-2 text-gray-500">Secretos, MCPs, skills, motor, borrar.</td>
+                  </tr>
+                  <tr>
+                    <td className="px-3 py-2 font-mono text-xs">ADMIN</td>
+                    <td className="px-3 py-2">Todo, incluidos <code className="text-xs">set-secret</code>, <code className="text-xs">add-mcp</code>, <code className="text-xs">set-engine</code> y borrar el agente.</td>
+                    <td className="px-3 py-2 text-gray-500">—</td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
+
+            <div className="mb-4 bg-amber-50 border-2 border-amber-300 rounded-xl p-4 text-sm">
+              <strong>Dos prefijos, dos posturas.</strong>{" "}
+              <code className="bg-white px-1 rounded">flt_sk_</code> es secreta: cualquier scope, sólo
+              por header, y <strong>se rechaza si la mandas por query string</strong> (ahí acabaría en
+              logs de acceso y en el Referer).{" "}
+              <code className="bg-white px-1 rounded">flt_pk_</code> es publishable: sólo{" "}
+              <code className="bg-white px-1 rounded">MESSAGE</code>, admitida en el navegador y acotada
+              por <code className="bg-white px-1 rounded">allowedOrigins</code>.
+              <br /><br />
+              El valor completo se muestra <strong>una sola vez</strong>, al crearla. Después sólo verás
+              su prefijo. También puedes emitirlas y revocarlas desde{" "}
+              <a href="/dash/flota" className="underline font-medium">/dash/flota</a>.
+            </div>
+
+            <TabbedCode
+              tabs={[
+                {
+                  label: "Emitir",
+                  code: `# Con el token del agente (o una credencial ADMIN).
+curl -X POST https://www.easybits.cloud/api/v2/fleet-agents/$AGENT_ID/tokens \\
+  -H "Authorization: Bearer $AGENT_TOKEN" \\
+  -H "Content-Type: application/json" \\
+  -d '{ "name": "backend del CRM", "scopes": ["MESSAGE"] }'
+# → { "token": { "id": "...", "prefix": "flt_sk_a1b2c3d", "raw": "flt_sk_..." } }
+#   \`raw\` no se vuelve a mostrar: guárdalo ahora.
+
+# Listar (sin valores) y revocar:
+curl  https://www.easybits.cloud/api/v2/fleet-agents/$AGENT_ID/tokens -H "Authorization: Bearer $AGENT_TOKEN"
+curl -X DELETE https://www.easybits.cloud/api/v2/fleet-agents/$AGENT_ID/tokens \\
+  -H "Authorization: Bearer $AGENT_TOKEN" -H "Content-Type: application/json" \\
+  -d '{ "tokenId": "..." }'`,
+                },
+                {
+                  label: "Token de sesión",
+                  code: `// EN TU SERVIDOR. Nunca mandes un flt_sk_ al navegador.
+const r = await fetch(
+  \`https://www.easybits.cloud/api/v2/fleet-agents/\${AGENT_ID}/session-token\`,
+  {
+    method: "POST",
+    headers: { Authorization: \`Bearer \${MI_FLT_SK}\`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      cfgId: "crm:acme",                        // ata la sesión a ESTE cliente
+      ttlMin: 15,
+      allowedOrigins: ["https://app.micrm.com"],
+    }),
+  }
+);
+const { token, expiresAt } = await r.json();   // flt_pk_…, caduca solo
+// → mándale \`token\` al navegador.`,
+                },
+              ]}
+            />
+            <div className="mb-4" />
+
+            <div className="mb-6 bg-green-50 border-2 border-green-300 rounded-xl p-4 text-sm">
+              <strong>Por qué <code className="bg-white px-1 rounded">cfgId</code> importa en el token de sesión.</strong>{" "}
+              Un token que lo lleva <strong>ignora</strong> el <code className="bg-white px-1 rounded">configGroupId</code>{" "}
+              que mande el cliente. Sin eso, una sesión emitida para un cliente podría pedir la
+              configuración de otro simplemente cambiando un campo del body.
+            </div>
+
+            <h3 className="text-lg font-bold mb-3">3. Embeberlo</h3>
 
             <TabbedCode
               tabs={[
@@ -2670,7 +2754,7 @@ const reply = await eb.fleet.messageStream(agentId, token, {
             />
             <div className="mb-6" />
 
-            <h3 className="text-lg font-bold mb-3">2. Configurarlo</h3>
+            <h3 className="text-lg font-bold mb-3">4. Configurarlo</h3>
             <p className="text-gray-600 mb-3 text-sm">
               Todo pasa por <code className="bg-gray-100 px-1 rounded">/api/v2/fleet-agents/:id/capabilities</code>. El dashboard de EasyBits es sólo un cliente de este endpoint: lo que puedes hacer con la UI, lo puedes hacer por API. <code className="bg-gray-100 px-1 rounded">GET</code> devuelve el catálogo y el estado actual; <code className="bg-gray-100 px-1 rounded">POST</code> aplica <strong>una</strong> mutación con <code className="bg-gray-100 px-1 rounded">action</code>.
             </p>
@@ -2683,33 +2767,36 @@ const reply = await eb.fleet.messageStream(agentId, token, {
                     <th className="text-left px-3 py-2 border-b-2 border-black">SDK</th>
                     <th className="text-left px-3 py-2 border-b-2 border-black">Qué hace</th>
                     <th className="text-left px-3 py-2 border-b-2 border-black">Alcance</th>
+                    <th className="text-left px-3 py-2 border-b-2 border-black">Scope mín.</th>
                   </tr>
                 </thead>
                 <tbody className="align-top">
-                  <tr className="border-b border-gray-200"><td className="px-3 py-2 font-mono text-xs">set-agent-prompt</td><td className="px-3 py-2 font-mono text-xs text-gray-500">setAgentPrompt</td><td className="px-3 py-2">El prompt base: quién es el agente.</td><td className="px-3 py-2">Todo el agente</td></tr>
-                  <tr className="border-b border-gray-200"><td className="px-3 py-2 font-mono text-xs">set-model</td><td className="px-3 py-2 font-mono text-xs text-gray-500">setModel</td><td className="px-3 py-2">Modelo del motor.</td><td className="px-3 py-2">Todo el agente</td></tr>
-                  <tr className="border-b border-gray-200"><td className="px-3 py-2 font-mono text-xs">set-effort</td><td className="px-3 py-2 font-mono text-xs text-gray-500">setEffort</td><td className="px-3 py-2">Cuánto piensa: <code>low</code> · <code>medium</code> · <code>high</code> · <code>xhigh</code>.</td><td className="px-3 py-2">Todo el agente</td></tr>
-                  <tr className="border-b border-gray-200"><td className="px-3 py-2 font-mono text-xs">add-mcp</td><td className="px-3 py-2 font-mono text-xs text-gray-500">addMcp</td><td className="px-3 py-2">Conecta <strong>tu</strong> API como MCP: <code>url</code> (Streamable-HTTP, el secret viaja como <code>Authorization: Bearer</code>) o <code>pkg</code> (npm, stdio, como env var). Sólo lo registra: enciéndelo con <code>set-cap-level</code>.</td><td className="px-3 py-2">Todo el agente</td></tr>
-                  <tr className="border-b border-gray-200"><td className="px-3 py-2 font-mono text-xs">remove-mcp</td><td className="px-3 py-2 font-mono text-xs text-gray-500">removeMcp</td><td className="px-3 py-2">Lo quita del catálogo.</td><td className="px-3 py-2">Todo el agente</td></tr>
-                  <tr className="border-b border-gray-200"><td className="px-3 py-2 font-mono text-xs">recycle-box</td><td className="px-3 py-2 font-mono text-xs text-gray-500">recycleBox</td><td className="px-3 py-2">Recicla las cajas del agente: el siguiente turno arranca una nueva con env fresco (motor, modelo, llave del motor). Respalda las conversaciones antes; no corta turnos en vuelo.</td><td className="px-3 py-2">Todo el agente</td></tr>
-                  <tr className="border-b border-gray-200"><td className="px-3 py-2 font-mono text-xs">set-engine</td><td className="px-3 py-2 font-mono text-xs text-gray-500">setEngine</td><td className="px-3 py-2">Cambia el motor (Claude, DeepSeek, Codex…). Recicla las cajas solo.</td><td className="px-3 py-2">Todo el agente</td></tr>
-                  <tr className="border-b border-gray-200"><td className="px-3 py-2 font-mono text-xs">set-name</td><td className="px-3 py-2 font-mono text-xs text-gray-500">setName</td><td className="px-3 py-2">Nombre del agente.</td><td className="px-3 py-2">Todo el agente</td></tr>
-                  <tr className="border-b border-gray-200"><td className="px-3 py-2 font-mono text-xs">toggle-own-number</td><td className="px-3 py-2 font-mono text-xs text-gray-500">toggleOwnNumber</td><td className="px-3 py-2">Número dedicado: sin prefijo <code>Nombre:</code> en WhatsApp.</td><td className="px-3 py-2">Todo el agente</td></tr>
-                  <tr className="border-b border-gray-200"><td className="px-3 py-2 font-mono text-xs">add-skill · toggle-skill · delete-skill</td><td className="px-3 py-2 font-mono text-xs text-gray-500">addSkill · toggleSkill · deleteSkill</td><td className="px-3 py-2">Skills (SKILL.md + scripts subidos a Files como <code>fileIds</code>).</td><td className="px-3 py-2">Todo el agente</td></tr>
-                  <tr className="border-b border-gray-200"><td className="px-3 py-2 font-mono text-xs">connect-teams</td><td className="px-3 py-2 font-mono text-xs text-gray-500">connectTeams</td><td className="px-3 py-2">Marca el canal Teams como conectado.</td><td className="px-3 py-2">Todo el agente</td></tr>
-                  <tr className="border-b border-gray-200"><td className="px-3 py-2 font-mono text-xs">toggle-asset</td><td className="px-3 py-2 font-mono text-xs text-gray-500">toggleAsset</td><td className="px-3 py-2">Archivo del owner adjunto como contexto del canal.</td><td className="px-3 py-2">Por canal</td></tr>
-                  <tr className="border-b border-gray-200"><td className="px-3 py-2 font-mono text-xs">set-db-allow</td><td className="px-3 py-2 font-mono text-xs text-gray-500">setDbAllow</td><td className="px-3 py-2">Namespaces de DB que el agente puede tocar (<code>[]</code> = todas).</td><td className="px-3 py-2">Por canal</td></tr>
-                  <tr className="border-b border-gray-200"><td className="px-3 py-2 font-mono text-xs">set-secret</td><td className="px-3 py-2 font-mono text-xs text-gray-500">setSecret</td><td className="px-3 py-2">Guarda la credencial que usa un MCP (cifrada, no se vuelve a leer).</td><td className="px-3 py-2">Todo el agente</td></tr>
-                  <tr className="border-b border-gray-200"><td className="px-3 py-2 font-mono text-xs">set-prompt</td><td className="px-3 py-2 font-mono text-xs text-gray-500">setGroupPrompt</td><td className="px-3 py-2">Prompt que se <strong>suma</strong> al base, sólo en este canal.</td><td className="px-3 py-2">Por canal</td></tr>
-                  <tr className="border-b border-gray-200"><td className="px-3 py-2 font-mono text-xs">set-toolgroup</td><td className="px-3 py-2 font-mono text-xs text-gray-500">setToolGroup</td><td className="px-3 py-2">Qué tools de EasyBits ve: <code>buckets</code> (imágenes, documentos, investigación…).</td><td className="px-3 py-2">Por canal</td></tr>
-                  <tr className="border-b border-gray-200"><td className="px-3 py-2 font-mono text-xs">set-cap-level</td><td className="px-3 py-2 font-mono text-xs text-gray-500">setCapLevel</td><td className="px-3 py-2">Nivel de una capacidad: <code>off</code> · <code>read</code> · <code>write</code>.</td><td className="px-3 py-2">Por canal</td></tr>
-                  <tr className="border-b border-gray-200"><td className="px-3 py-2 font-mono text-xs">set-tool-deny</td><td className="px-3 py-2 font-mono text-xs text-gray-500">setToolDeny</td><td className="px-3 py-2">Prohíbe una tool concreta.</td><td className="px-3 py-2">Por canal</td></tr>
-                  <tr><td className="px-3 py-2 font-mono text-xs">toggle-builtin</td><td className="px-3 py-2 font-mono text-xs text-gray-500">toggleBuiltin</td><td className="px-3 py-2">Prende/apaga un conector incluido.</td><td className="px-3 py-2">Por canal</td></tr>
+                  <tr className="border-b border-gray-200"><td className="px-3 py-2 font-mono text-xs">set-agent-prompt</td><td className="px-3 py-2 font-mono text-xs text-gray-500">setAgentPrompt</td><td className="px-3 py-2">El prompt base: quién es el agente.</td><td className="px-3 py-2">Todo el agente</td><td className="px-3 py-2 font-mono text-xs">MANAGE</td></tr>
+                  <tr className="border-b border-gray-200"><td className="px-3 py-2 font-mono text-xs">set-model</td><td className="px-3 py-2 font-mono text-xs text-gray-500">setModel</td><td className="px-3 py-2">Modelo del motor.</td><td className="px-3 py-2">Todo el agente</td><td className="px-3 py-2 font-mono text-xs">MANAGE</td></tr>
+                  <tr className="border-b border-gray-200"><td className="px-3 py-2 font-mono text-xs">set-effort</td><td className="px-3 py-2 font-mono text-xs text-gray-500">setEffort</td><td className="px-3 py-2">Cuánto piensa: <code>low</code> · <code>medium</code> · <code>high</code> · <code>xhigh</code>.</td><td className="px-3 py-2">Todo el agente</td><td className="px-3 py-2 font-mono text-xs">MANAGE</td></tr>
+                  <tr className="border-b border-gray-200"><td className="px-3 py-2 font-mono text-xs">add-mcp</td><td className="px-3 py-2 font-mono text-xs text-gray-500">addMcp</td><td className="px-3 py-2">Conecta <strong>tu</strong> API como MCP: <code>url</code> (Streamable-HTTP, el secret viaja como <code>Authorization: Bearer</code>) o <code>pkg</code> (npm, stdio, como env var). Sólo lo registra: enciéndelo con <code>set-cap-level</code>.</td><td className="px-3 py-2">Todo el agente</td><td className="px-3 py-2 font-mono text-xs">ADMIN</td></tr>
+                  <tr className="border-b border-gray-200"><td className="px-3 py-2 font-mono text-xs">remove-mcp</td><td className="px-3 py-2 font-mono text-xs text-gray-500">removeMcp</td><td className="px-3 py-2">Lo quita del catálogo.</td><td className="px-3 py-2">Todo el agente</td><td className="px-3 py-2 font-mono text-xs">ADMIN</td></tr>
+                  <tr className="border-b border-gray-200"><td className="px-3 py-2 font-mono text-xs">recycle-box</td><td className="px-3 py-2 font-mono text-xs text-gray-500">recycleBox</td><td className="px-3 py-2">Recicla las cajas del agente: el siguiente turno arranca una nueva con env fresco (motor, modelo, llave del motor). Respalda las conversaciones antes; no corta turnos en vuelo.</td><td className="px-3 py-2">Todo el agente</td><td className="px-3 py-2 font-mono text-xs">ADMIN</td></tr>
+                  <tr className="border-b border-gray-200"><td className="px-3 py-2 font-mono text-xs">set-engine</td><td className="px-3 py-2 font-mono text-xs text-gray-500">setEngine</td><td className="px-3 py-2">Cambia el motor (Claude, DeepSeek, Codex…). Recicla las cajas solo.</td><td className="px-3 py-2">Todo el agente</td><td className="px-3 py-2 font-mono text-xs">ADMIN</td></tr>
+                  <tr className="border-b border-gray-200"><td className="px-3 py-2 font-mono text-xs">set-name</td><td className="px-3 py-2 font-mono text-xs text-gray-500">setName</td><td className="px-3 py-2">Nombre del agente.</td><td className="px-3 py-2">Todo el agente</td><td className="px-3 py-2 font-mono text-xs">MANAGE</td></tr>
+                  <tr className="border-b border-gray-200"><td className="px-3 py-2 font-mono text-xs">toggle-own-number</td><td className="px-3 py-2 font-mono text-xs text-gray-500">toggleOwnNumber</td><td className="px-3 py-2">Número dedicado: sin prefijo <code>Nombre:</code> en WhatsApp.</td><td className="px-3 py-2">Todo el agente</td><td className="px-3 py-2 font-mono text-xs">MANAGE</td></tr>
+                  <tr className="border-b border-gray-200"><td className="px-3 py-2 font-mono text-xs">add-skill · toggle-skill · delete-skill</td><td className="px-3 py-2 font-mono text-xs text-gray-500">addSkill · toggleSkill · deleteSkill</td><td className="px-3 py-2">Skills (SKILL.md + scripts subidos a Files como <code>fileIds</code>).</td><td className="px-3 py-2">Todo el agente</td><td className="px-3 py-2 font-mono text-xs">MANAGE<span className="text-gray-500"> · ADMIN para add-skill · delete-skill</span></td></tr>
+                  <tr className="border-b border-gray-200"><td className="px-3 py-2 font-mono text-xs">connect-teams</td><td className="px-3 py-2 font-mono text-xs text-gray-500">connectTeams</td><td className="px-3 py-2">Marca el canal Teams como conectado.</td><td className="px-3 py-2">Todo el agente</td><td className="px-3 py-2 font-mono text-xs">MANAGE</td></tr>
+                  <tr className="border-b border-gray-200"><td className="px-3 py-2 font-mono text-xs">toggle-asset</td><td className="px-3 py-2 font-mono text-xs text-gray-500">toggleAsset</td><td className="px-3 py-2">Archivo del owner adjunto como contexto del canal.</td><td className="px-3 py-2">Por canal</td><td className="px-3 py-2 font-mono text-xs">MANAGE</td></tr>
+                  <tr className="border-b border-gray-200"><td className="px-3 py-2 font-mono text-xs">set-db-allow</td><td className="px-3 py-2 font-mono text-xs text-gray-500">setDbAllow</td><td className="px-3 py-2">Namespaces de DB que el agente puede tocar (<code>[]</code> = todas).</td><td className="px-3 py-2">Por canal</td><td className="px-3 py-2 font-mono text-xs">MANAGE</td></tr>
+                  <tr className="border-b border-gray-200"><td className="px-3 py-2 font-mono text-xs">set-secret</td><td className="px-3 py-2 font-mono text-xs text-gray-500">setSecret</td><td className="px-3 py-2">Guarda la credencial que usa un MCP (cifrada, no se vuelve a leer).</td><td className="px-3 py-2">Todo el agente</td><td className="px-3 py-2 font-mono text-xs">ADMIN</td></tr>
+                  <tr className="border-b border-gray-200"><td className="px-3 py-2 font-mono text-xs">set-prompt</td><td className="px-3 py-2 font-mono text-xs text-gray-500">setGroupPrompt</td><td className="px-3 py-2">Prompt que se <strong>suma</strong> al base, sólo en este canal.</td><td className="px-3 py-2">Por canal</td><td className="px-3 py-2 font-mono text-xs">MANAGE</td></tr>
+                  <tr className="border-b border-gray-200"><td className="px-3 py-2 font-mono text-xs">set-toolgroup</td><td className="px-3 py-2 font-mono text-xs text-gray-500">setToolGroup</td><td className="px-3 py-2">Qué tools de EasyBits ve: <code>buckets</code> (imágenes, documentos, investigación…).</td><td className="px-3 py-2">Por canal</td><td className="px-3 py-2 font-mono text-xs">MANAGE</td></tr>
+                  <tr className="border-b border-gray-200"><td className="px-3 py-2 font-mono text-xs">set-cap-level</td><td className="px-3 py-2 font-mono text-xs text-gray-500">setCapLevel</td><td className="px-3 py-2">Nivel de una capacidad: <code>off</code> · <code>read</code> · <code>write</code>.</td><td className="px-3 py-2">Por canal</td><td className="px-3 py-2 font-mono text-xs">MANAGE</td></tr>
+                  <tr className="border-b border-gray-200"><td className="px-3 py-2 font-mono text-xs">set-tool-deny</td><td className="px-3 py-2 font-mono text-xs text-gray-500">setToolDeny</td><td className="px-3 py-2">Prohíbe una tool concreta.</td><td className="px-3 py-2">Por canal</td><td className="px-3 py-2 font-mono text-xs">MANAGE</td></tr>
+                  <tr><td className="px-3 py-2 font-mono text-xs">toggle-builtin</td><td className="px-3 py-2 font-mono text-xs text-gray-500">toggleBuiltin</td><td className="px-3 py-2">Prende/apaga un conector incluido.</td><td className="px-3 py-2">Por canal</td><td className="px-3 py-2 font-mono text-xs">MANAGE</td></tr>
                 </tbody>
               </table>
             </div>
             <p className="text-gray-500 mb-4 text-xs">
               Las acciones "por canal" llevan <code className="bg-gray-100 px-1 rounded">groupId</code> — y ahí va tu <code className="bg-gray-100 px-1 rounded">configGroupId</code>, el mismo que mandas al hablarle.
+              <br />
+              Las marcadas <code className="bg-gray-100 px-1 rounded">ADMIN</code> pueden sacar una credencial del vault, meter un servidor ajeno en el turno o destruir trabajo — por eso una credencial <code className="bg-gray-100 px-1 rounded">MANAGE</code> no las alcanza.
             </p>
 
             <TabbedCode
