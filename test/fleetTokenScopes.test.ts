@@ -62,3 +62,18 @@ describe("acciones de capabilities que exigen ADMIN", () => {
     }
   });
 });
+
+// Regresión: un token recién creado NO escribe `revokedAt`, así que en Mongo el campo
+// queda AUSENTE. Prisma no matchea un campo ausente con `null` ni con `{ not: ... }`
+// (sólo con `{ isSet: false }`), así que filtrar por `revokedAt: null` devolvía la
+// lista SIEMPRE vacía — el dueño no veía ninguna de sus credenciales.
+describe("filtro de tokens vivos (Prisma + Mongo)", () => {
+  it("el filtro contempla el campo ausente, no sólo null", async () => {
+    const src = await import("node:fs/promises").then((fs) =>
+      fs.readFile(new URL("../app/.server/core/fleetTokens.ts", import.meta.url), "utf8")
+    );
+    expect(src).toContain("isSet: false");
+    // Y nunca el filtro ingenuo, que es el que fallaba.
+    expect(src).not.toMatch(/where:\s*\{\s*fleetAgentId,\s*revokedAt:\s*null\s*\}/);
+  });
+});

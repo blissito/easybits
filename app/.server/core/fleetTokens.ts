@@ -110,9 +110,14 @@ export async function revokeFleetToken(tokenId: string, fleetAgentId: string) {
   return r;
 }
 
+// ⚠️ Un token vivo NO tiene `revokedAt: null`: nunca se escribe el campo, así que en
+// Mongo está AUSENTE — y un campo ausente no matchea `null` ni `{ not: ... }`, sólo
+// `{ isSet: false }`. Filtrar por `revokedAt: null` devolvía SIEMPRE la lista vacía.
+const NOT_REVOKED = { OR: [{ revokedAt: null }, { revokedAt: { isSet: false } }] };
+
 export async function listFleetTokens(fleetAgentId: string) {
   return db.fleetAgentToken.findMany({
-    where: { fleetAgentId, revokedAt: null },
+    where: { fleetAgentId, ...NOT_REVOKED },
     select: {
       id: true,
       name: true,

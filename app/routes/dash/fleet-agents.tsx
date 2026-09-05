@@ -275,7 +275,9 @@ export async function loader({ request }: Route.LoaderArgs) {
       // prefijo y para qué sirve). El `raw` sólo existe en la respuesta del alta.
       const fleetTokens = await db.fleetAgentToken
         .findMany({
-          where: { fleetAgentId: p.id, revokedAt: null },
+          // Un token vivo tiene el campo AUSENTE, no null (ver NOT_REVOKED en
+          // fleetTokens.ts): filtrar por `null` vaciaba la lista siempre.
+          where: { fleetAgentId: p.id, OR: [{ revokedAt: null }, { revokedAt: { isSet: false } }] },
           select: { id: true, name: true, prefix: true, scopes: true, cfgId: true, allowedOrigins: true, expiresAt: true, lastUsedAt: true },
           orderBy: { createdAt: "desc" },
         })
