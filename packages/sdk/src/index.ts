@@ -780,6 +780,33 @@ export interface FleetCapabilities {
   customMcps: Array<Record<string, unknown>>;
 }
 
+/**
+ * Body of a fleet turn.
+ *
+ * ⚠️ `configGroupId` is the field that breaks the most integrations and the easiest one
+ * to leave out. It is the CONFIG unit (system prompt, MCP servers, capabilities);
+ * `groupId` is only the conversation. Omit it and the config is looked up per
+ * conversation, finds nothing, and the agent starts WITHOUT its connectors — silently,
+ * indistinguishable from a broken MCP. Send a STABLE value per channel/tenant
+ * (e.g. "waba:<integrationId>", "crm:acme").
+ */
+export interface FleetMessageBody {
+  /** The conversation. Opaque: any stable id works (e.g. `web-<uuid>`). */
+  groupId: string;
+  text: string;
+  /** Config unit. See the warning above: omitting it leaves the agent connector-less. */
+  configGroupId?: string;
+  /** Who is writing (phone, user id). Surfaced in the turn context. */
+  sender?: string;
+  /** Tenant IANA timezone, so the agent dates the turn correctly. */
+  timezone?: string;
+  /** Layer-3 personalization: APPENDED to the agent persona for this turn. */
+  appendSystemPrompt?: string;
+  /** Engine provider key for this turn (per-tenant BYOK). */
+  engineApiKey?: string;
+  [k: string]: unknown;
+}
+
 /** Baileys (WhatsApp) connection state — poll via fleet.connectionState(id). */
 export interface BaileysState {
   status: "qr_pending" | "pairing" | "connecting" | "connected" | "failed" | "disconnected";
@@ -1986,9 +2013,102 @@ export class EasybitsClient {
           req<FleetOk>(`/fleet-agents/${id}/waba/connect`, asAgent(token, { method: "POST", body: JSON.stringify(body) })),
       },
 
-      // ── Messaging (auth = fleetAgent.token) ──
-      message: (id: string, token: string, body: { groupId: string; text: string; [k: string]: unknown }): Promise<{ reply: string }> =>
+      // ── Messaging (auth = an agent token with MESSAGE scope) ──
+      message: (id: string, token: string, body: FleetMessageBody): Promise<{ reply: string }> =>
         req(`/fleet-agents/${id}/message`, asAgent(token, { method: "POST", body: JSON.stringify(body) })),
+
+      /**
+       * Same as `message`, but streams the turn over SSE. This is what you want in an
+       * embedded chat: without it the user stares at a still screen until the whole
+       * turn finishes.
+       *
+       * Emits `chunk` (incremental text), `tool`, `usage`, `capacity` (transient
+       * saturation — retry, it is not a failure) and `done`, whose `value` is the
+       * authoritative reply. Build the final message from that, not by concatenating
+       * chunks.
+       */
+      messageStream: async (
+        id: string,
+        token: string,
+        body: FleetMessageBody,
+        handlers: {
+          onChunk?: (text: string) => void;
+          onTool?: (event: Record<string, unknown>) => void;
+          onUsage?: (usage: Record<string, unknown>) => void;
+          onCapacity?: (info: { message: string; retryAfter?: number }) => void;
+          signal?: AbortSignal;
+        } = {}
+      ): Promise<string> => {
+        const res = await fetch(`${this.baseUrl}/fleet-agents/${id}/message-stream`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify(body),
+          signal: handlers.signal,
+        });
+        if (!res.ok || !res.body) {
+          throw new Error(`fleet messageStream failed: ${res.status} ${await res.text()}`);
+        }
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        let reply = "";
+        for (;;) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          // SSE frames are separated by a blank line, and a network chunk can split
+          // one in half — only complete frames are processed.
+          const events = buffer.split("\n\n");
+          buffer = events.pop() ?? "";
+          for (const evt of events) {
+            const line = evt.split("\n").find((l) => l.startsWith("data:"));
+            if (!line) continue;
+            let payload: Record<string, unknown>;
+            try {
+              payload = JSON.parse(line.slice(5).trim());
+            } catch {
+              continue; // heartbeat or other noise: skip, never break the turn
+            }
+            switch (payload.type) {
+              case "chunk":
+                if (typeof payload.value === "string") handlers.onChunk?.(payload.value);
+                break;
+              case "tool":
+                handlers.onTool?.(payload);
+                break;
+              case "usage":
+                handlers.onUsage?.(payload);
+                break;
+              case "capacity":
+                handlers.onCapacity?.({
+                  message: String(payload.message ?? "at capacity"),
+                  retryAfter: typeof payload.retryAfter === "number" ? payload.retryAfter : undefined,
+                });
+                break;
+              case "done":
+                reply = typeof payload.value === "string" ? payload.value : reply;
+                break;
+              case "error":
+                throw new Error(String(payload.message ?? "fleet agent error"));
+            }
+          }
+        }
+        return reply;
+      },
+
+      /**
+       * Mint a SHORT-LIVED, message-only token for one browser session.
+       * Call this from YOUR server with a MANAGE-scoped token and hand the result to
+       * the client, so the browser never holds a durable credential.
+       * `cfgId` pins the session to a tenant — turns made with that token cannot switch
+       * channel even if the client asks.
+       */
+      sessionToken: (
+        id: string,
+        token: string,
+        body: { cfgId?: string; ttlMin?: number; allowedOrigins?: string[] } = {}
+      ): Promise<{ token: string; expiresAt: string; cfgId: string | null }> =>
+        req(`/fleet-agents/${id}/session-token`, asAgent(token, { method: "POST", body: JSON.stringify(body) })),
     };
   }
 

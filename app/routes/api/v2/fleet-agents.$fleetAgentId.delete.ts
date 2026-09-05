@@ -1,4 +1,5 @@
 import { db } from "~/.server/db";
+import { authFleetAgent } from "~/.server/apiAuth";
 import { deleteFleetAgent } from "~/.server/core/fleetAgentOperations";
 import type { AuthContext } from "~/.server/apiAuth";
 
@@ -35,13 +36,16 @@ export async function action({
   }
 
   const fleetAgentId = params.fleetAgentId ?? "";
-  const bearer = request.headers.get("Authorization")?.replace(/^Bearer\s+/i, "") ?? "";
   const fleetAgent = await db.fleetAgent.findUnique({ where: { id: fleetAgentId } });
   if (!fleetAgent) {
     // Ya no existe → borrado idempotente.
     return Response.json({ ok: true, alreadyGone: true }, { headers: CORS });
   }
-  if (!bearer || fleetAgent.token !== bearer) {
+  // Borrar es la acción más destructiva de la superficie: exige ADMIN. Un token de
+  // mensajería (el que vive dentro del worker y el que se embebe) no puede llegar aquí.
+  try {
+    await authFleetAgent(request, fleetAgentId, "ADMIN");
+  } catch {
     return Response.json({ error: "Unauthorized" }, { status: 401, headers: CORS });
   }
 

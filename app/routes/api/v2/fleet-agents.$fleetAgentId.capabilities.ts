@@ -1,6 +1,7 @@
 import type { Route } from "./+types/fleet-agents.$fleetAgentId.capabilities";
 import { db } from "~/.server/db";
-import { buildCapabilitiesView, applyCapabilityAction, cfgs } from "~/.server/core/fleetCapabilityActions";
+import { buildCapabilitiesView, applyCapabilityAction, cfgs, isAdminCapabilityAction } from "~/.server/core/fleetCapabilityActions";
+import { authFleetAgent } from "~/.server/apiAuth";
 
 // API-first capability config for a FleetAgent. Both the EasyBits dashboard AND
 // the external "Slack-type" app configure agents through THIS surface — the UI is
@@ -35,34 +36,34 @@ const CORS = {
 };
 const json = (b: unknown, status = 200) => Response.json(b, { status, headers: CORS });
 
-async function auth(request: Request, fleetAgentId: string) {
-  // Bearer del fleetAgent, por header (app externa) O `?token=` (el dashboard lo
-  // pasa así porque useFetcher.load no manda headers). Mismo patrón que fleet-render.
-  const bearer =
-    request.headers.get("Authorization")?.replace(/^Bearer\s+/i, "") ||
-    new URL(request.url).searchParams.get("token") ||
-    "";
-  const fleetAgent = await db.fleetAgent.findUnique({ where: { id: fleetAgentId } });
-  if (!fleetAgent || !bearer || fleetAgent.token !== bearer) return null;
-  return fleetAgent;
+// Auth centralizada (`authFleetAgent`). El scope depende de la ACCIÓN, no de la ruta:
+// leer y ajustar config es MANAGE, pero tocar secretos/MCPs/skills es ADMIN — si no,
+// un token de configuración podría exfiltrar credenciales del vault del dueño.
+async function auth(request: Request, fleetAgentId: string, required: "MANAGE" | "ADMIN") {
+  try {
+    const { fleetAgent } = await authFleetAgent(request, fleetAgentId, required);
+    return fleetAgent;
+  } catch {
+    return null;
+  }
 }
 
 
 export async function loader({ request, params }: Route.LoaderArgs) {
   if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
-  const fa = await auth(request, params.fleetAgentId!);
+  const fa = await auth(request, params.fleetAgentId!, "MANAGE");
   if (!fa) return json({ error: "Unauthorized" }, 401);
   return json(await buildCapabilitiesView(fa, new URL(request.url).searchParams.get("q")));
 }
 
 export async function action({ request, params }: Route.ActionArgs) {
   if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
-  const fa = await auth(request, params.fleetAgentId!);
-  if (!fa) return json({ error: "Unauthorized" }, 401);
 
   // Subida directa de un entregable (multipart): sube un archivo PÚBLICO del owner y
   // lo adjunta al set de assets del grupo. Espeja el intent `upload-asset` del dash.
   if ((request.headers.get("content-type") || "").includes("multipart/form-data")) {
+    const fa = await auth(request, params.fleetAgentId!, "MANAGE");
+    if (!fa) return json({ error: "Unauthorized" }, 401);
     const fd = await request.formData().catch(() => null);
     if (!fd || String(fd.get("action") || "") !== "upload-asset") return json({ error: "unknown action" }, 400);
     const file = fd.get("file");
@@ -86,7 +87,13 @@ export async function action({ request, params }: Route.ActionArgs) {
     return json({ ok: true, fileId: created.id, name: file.name });
   }
 
+  // El scope se decide por la acción: hay que LEER el body antes de autenticar.
   const b = await request.json().catch(() => ({}));
-  const { status, body } = await applyCapabilityAction(fa, b && typeof b === "object" ? b : {});
+  const payload = b && typeof b === "object" ? (b as Record<string, unknown>) : {};
+  const required = isAdminCapabilityAction(String(payload.action ?? "")) ? "ADMIN" : "MANAGE";
+  const fa = await auth(request, params.fleetAgentId!, required);
+  if (!fa) return json({ error: "Unauthorized", requiredScope: required }, 401);
+
+  const { status, body } = await applyCapabilityAction(fa, payload);
   return json(body, status);
 }

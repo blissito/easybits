@@ -318,11 +318,70 @@ async function exposeAll(ctx: AuthContext, sandboxId: string, ports: number[]): 
   return urls;
 }
 
+/**
+ * ¿Cabe otra caja en el presupuesto del dueño? Reusa la misma decisión que la flota
+ * (`admit`) para que no existan dos políticas de capacidad que puedan divergir.
+ *
+ * No intenta desalojar: una caja de servicio es una comodidad on-demand, y tumbar el
+ * worker de una conversación para hacerle sitio a un render sería el trueque equivocado.
+ * Falla suave si los conteos no se pueden obtener — quedarse sin voz por un fallo de
+ * Mongo es peor que pasarse una caja.
+ */
+async function assertServiceBoxBudget(ctx: AuthContext, kind: string): Promise<void> {
+  try {
+    const { admit } = await import("./fleetCapacity");
+    const { getReservedCapacity } = await import("./sandboxReservations");
+    const { getUserPlan, PLANS } = await import("~/lib/plans");
+
+    const plan = getUserPlan(ctx.user);
+    const reserved = await getReservedCapacity(ctx.user.id).catch(() => ({ machines: 0, agents: 0 }));
+    const hostVms = await listSandboxes(ctx).catch(() => null);
+    const [suspendedOwner, serviceBoxes] = await Promise.all([
+      db.agent.count({ where: { ownerId: ctx.user.id, status: "suspended" } }),
+      db.serviceBox.count({ where: { ownerId: ctx.user.id } }),
+    ]);
+    const liveOwner = hostVms
+      ? hostVms.filter((v) => v.status === "running" || v.status === "starting").length
+      : await db.agent.count({ where: { ownerId: ctx.user.id, status: { in: ["running", "building"] } } });
+
+    const decision = admit({
+      accountBudget: (PLANS[plan]?.concurrentSandboxes ?? 2) + reserved.machines,
+      liveOwner,
+      suspendedOwner,
+      serviceBoxes: hostVms ? 0 : serviceBoxes,
+      // Una caja de servicio no pertenece a ningún fleet: sólo aplica el techo de cuenta.
+      fleetVms: 0,
+      maxVms: Number.MAX_SAFE_INTEGER,
+      countsTrusted: !!hostVms,
+    });
+    if (!decision.ok) {
+      throw new ServiceBoxAtCapacity(`no hay presupuesto para una caja ${kind}: ${decision.detail}`);
+    }
+  } catch (e) {
+    if (e instanceof ServiceBoxAtCapacity) throw e;
+    console.error("assertServiceBoxBudget: no se pudo evaluar el presupuesto, se permite:", e);
+  }
+}
+
+/** El dueño está en su techo de cajas y no se puede crear una de servicio. */
+export class ServiceBoxAtCapacity extends Error {
+  constructor(msg: string) {
+    super(msg);
+    this.name = "ServiceBoxAtCapacity";
+  }
+}
+
 // spawnServiceBox — the full lifecycle (mirror of spawnStudio). Prefer
 // ensureServiceBox unless you explicitly want a fresh box.
 export async function spawnServiceBox(ctx: AuthContext, kind: string): Promise<ServiceBoxHandle> {
   requireScope(ctx, "WRITE");
   const spec = specFor(kind);
+
+  // Gate de presupuesto. Antes una caja de servicio se creaba SIN pedir permiso: sumaba
+  // al conteo del dueño (el gate de la flota la ve vía listSandboxes) pero nadie la
+  // frenaba, así que voice/render podían empujar la cuenta por encima de su plan y
+  // dejar a los workers sin sitio. Ahora pasa por la misma decisión que un worker.
+  await assertServiceBoxBudget(ctx, kind);
 
   // 1. Create the VM + wait until the host reports it running.
   const sb = await createSandbox(ctx, {

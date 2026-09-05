@@ -26,6 +26,30 @@ export const CAPABILITY_ACTIONS = [
 ] as const;
 export type CapabilityAction = (typeof CAPABILITY_ACTIONS)[number];
 
+/**
+ * Acciones que exigen scope ADMIN. El criterio es: ¿puede esta acción sacar una
+ * credencial del vault del dueño, meter código/servidor ajeno en el turno, o
+ * destruir trabajo?
+ *   - set-secret / add-mcp: escriben o leen credenciales (un MCP http lleva
+ *     `Authorization: Bearer <secret>`, así que añadir uno es exfiltración).
+ *   - remove-mcp / delete-skill: destructivas.
+ *   - set-engine: cambia con qué credencial corre el motor.
+ *   - recycle-box: destruye las cajas vivas del agente.
+ * Todo lo demás (prompt, modelo, effort, capacidades por canal) es MANAGE.
+ */
+export const ADMIN_CAPABILITY_ACTIONS = new Set<string>([
+  "set-secret",
+  "add-mcp",
+  "remove-mcp",
+  "add-skill",
+  "delete-skill",
+  "set-engine",
+  "recycle-box",
+]);
+
+export const isAdminCapabilityAction = (action: string): boolean =>
+  ADMIN_CAPABILITY_ACTIONS.has(action);
+
 const r = (body: unknown, status = 200): CapabilityActionResult => ({ status, body });
 
 export const cfgs = (fa: { groupConfigs?: unknown }) =>

@@ -1,5 +1,5 @@
 import type { Route } from "./+types/fleet-agents.$fleetAgentId.group";
-import { db } from "~/.server/db";
+import { authFleetAgent } from "~/.server/apiAuth";
 import { createFleetAgentGroup } from "~/.server/integrations/whatsapp/baileys.server";
 
 // POST /api/v2/fleet-agents/:fleetAgentId/group
@@ -21,9 +21,11 @@ export async function loader({ request }: Route.LoaderArgs) {
 
 export async function action({ request, params }: Route.ActionArgs) {
   const fleetAgentId = params.fleetAgentId!;
-  const bearer = request.headers.get("Authorization")?.replace(/^Bearer\s+/i, "") ?? "";
-  const fleetAgent = await db.fleetAgent.findUnique({ where: { id: fleetAgentId } });
-  if (!fleetAgent || !bearer || fleetAgent.token !== bearer) {
+  // Crear un grupo es configuración del agente, no mensajería → MANAGE.
+  let fleetAgent;
+  try {
+    ({ fleetAgent } = await authFleetAgent(request, fleetAgentId, "MANAGE"));
+  } catch {
     return Response.json({ error: "Unauthorized" }, { status: 401, headers: CORS });
   }
 

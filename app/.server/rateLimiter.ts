@@ -240,6 +240,22 @@ export async function checkFleetAgentWebIp(request: Request): Promise<boolean> {
   }
 }
 
+// Tope por TOKEN, complementario al de IP. Un `flt_pk_` de sesión vive en el
+// navegador del usuario final: si se filtra, el atacante lo usará desde MUCHAS IPs y
+// el guard anterior no lo nota. Limitar también por credencial acota el daño de una
+// llave concreta y permite revocarla viendo cuál se disparó. Ventana 60s, fail-open.
+const fleetTokenLimiter = new RateLimiter({ windowMs: 60_000, maxRequests: 60 });
+
+export async function checkFleetTokenRate(tokenId: string): Promise<boolean> {
+  try {
+    const rl = await fleetTokenLimiter.checkRateLimit(`fleettoken:${tokenId}`);
+    return rl.allowed;
+  } catch (error) {
+    console.error("FleetAgent token rate limiting error:", error);
+    return true;
+  }
+}
+
 // Adaptador REST: devuelve un 429 Response si excede, o null para continuar.
 export async function applySandboxRateLimit(
   identifier: string,

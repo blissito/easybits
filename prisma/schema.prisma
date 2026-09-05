@@ -332,6 +332,18 @@ enum ApiKeyScope {
   ADMIN
 }
 
+// Scopes de un FleetAgentToken. Deliberadamente SEPARADO de ApiKeyScope: no es
+// permiso sobre la cuenta de EasyBits, es permiso sobre UN FleetAgent.
+//   MESSAGE = mandar turnos y nada más (lo que un widget embebido necesita).
+//   MANAGE  = leer/ajustar config del agente (prompt, modelo, grupos), pero NO
+//             tocar secretos, MCPs ni borrar.
+//   ADMIN   = todo, incluido set-secret / add-mcp / delete.
+enum FleetTokenScope {
+  MESSAGE
+  MANAGE
+  ADMIN
+}
+
 enum ApiKeyStatus {
   ACTIVE
   REVOKED
@@ -856,7 +868,18 @@ model AiGenerationLog {
   createdAt    DateTime @default(now())
   user         User     @relation(fields: [userId], references: [id])
 
+  // Atribución de turnos de flota: qué agente y qué conversación consumieron. Sin
+  // esto no se puede responder "cuánto me gasta cada cliente", que es justo lo que
+  // pregunta un integrador que revende el agente.
+  fleetAgentId       String?
+  groupId            String?
+  // El input cacheado se cobra completo, pero el costo REAL difiere mucho; guardarlo
+  // aparte permite medir margen en vez de estimarlo.
+  cacheCreationInputTokens Int?
+  realCostUsd        Float?
+
   @@index([userId])
+  @@index([userId, type, createdAt])
   @@index([userId, product])
   @@index([createdAt])
 }
@@ -1325,9 +1348,55 @@ model FleetAgent {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
+  // Política del token legacy (`token`, omnipotente e implícitamente ADMIN).
+  //   "allow" = se acepta (agentes existentes; cero regresión).
+  //   "warn"  = se acepta y se registra para poder migrar la integración.
+  //   "deny"  = sólo se aceptan FleetAgentToken con scope. Agentes NUEVOS nacen aquí.
+  legacyTokenMode String @default("allow")
+  // Quién paga los tokens de ESTE agente, por encima de lo que diga su motor.
+  //   "byok"    = el dueño trae su llave (default; es el modelo preferido).
+  //   "managed" = EasyBits provee el motor y descuenta cuota → así se vende flota
+  //               gestionada con margen sin refactor.
+  billingMode String @default("byok")
+
   routes        FleetAgentRoute[]
+  fleetTokens   FleetAgentToken[]
 
   @@index([ownerId])
+}
+
+// Credencial CON SCOPE sobre un FleetAgent. Existe porque `FleetAgent.token` es
+// omnipotente (mensajear == administrar == borrar), lo que hace imposible embeber
+// un agente en la app de un tercero sin entregarle el control total.
+// Hasheada como ApiKey (nunca se guarda en claro; se muestra una sola vez).
+//
+// Dos prefijos, dos posturas:
+//   flt_pk_  publishable — sólo MESSAGE. Permitida en `?token=` y sujeta a
+//            allowedOrigins (CORS). Es la que puede tocar un navegador.
+//   flt_sk_  secreta — cualquier scope. PROHIBIDA en query string.
+model FleetAgentToken {
+  id            String     @id @default(auto()) @map("_id") @db.ObjectId
+  fleetAgentId  String     @db.ObjectId
+  fleetAgent    FleetAgent @relation(fields: [fleetAgentId], references: [id], onDelete: Cascade)
+  name          String
+  hashedKey     String     @unique
+  prefix        String
+  scopes        FleetTokenScope[]
+  // Ata el token a UNA unidad de config (un tenant/conversación). Cuando está
+  // presente, el turno IGNORA el configGroupId que mande el cliente y usa éste —
+  // así un token de sesión no puede saltar de tenant. null = sin restricción.
+  cfgId         String?
+  // Orígenes permitidos para un flt_pk_ usado desde el navegador. Vacío = sin
+  // restricción de origen (sólo razonable para flt_sk_ server-to-server).
+  allowedOrigins String[]  @default([])
+  expiresAt     DateTime?
+  revokedAt     DateTime?
+  lastUsedAt    DateTime?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  @@index([fleetAgentId])
+  @@index([expiresAt])
 }
 
 // Sticky mapping: a conversation (WhatsApp group/jid) → the worker Agent that

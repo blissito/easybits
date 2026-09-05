@@ -271,8 +271,17 @@ export async function loader({ request }: Route.LoaderArgs) {
         ? await db.file.findMany({ where: { id: { in: skillFileIds } }, select: { id: true, name: true, contentType: true, url: true } }).catch(() => [])
         : [];
       const skillFileById = new Map(skillFiles.map((f) => [f.id, f]));
+      // Credenciales con scope emitidas para este agente (nunca el valor, sólo el
+      // prefijo y para qué sirve). El `raw` sólo existe en la respuesta del alta.
+      const fleetTokens = await db.fleetAgentToken
+        .findMany({
+          where: { fleetAgentId: p.id, revokedAt: null },
+          select: { id: true, name: true, prefix: true, scopes: true, cfgId: true, allowedOrigins: true, expiresAt: true, lastUsedAt: true },
+          orderBy: { createdAt: "desc" },
+        })
+        .catch(() => []);
       return {
-        id: p.id, name: p.name, token: p.token, mascotColor, status, live, qrDataUrl, pairingCode, groups,
+        id: p.id, name: p.name, token: p.token, fleetTokens, mascotColor, status, live, qrDataUrl, pairingCode, groups,
         wabaNumbers, teamsChannel, webChannel,
         // Canales ocultados EXPLÍCITAMENTE por el dueño para este agente (Nik Admin
         // oculta Web; Nik público oculta Baileys). Vive en persona.hiddenChannels
@@ -653,6 +662,36 @@ export async function action({ request }: Route.ActionArgs) {
     await disconnectFleetAgent(fleetAgentId).catch(() => {});
     await deleteFleetAgent(ctx, fleetAgentId);
     return data({ ok: true, deleted: true });
+  }
+  // Credenciales CON SCOPE. Existen porque el token del agente es omnipotente
+  // (mensajear == administrar == borrar): sin esto, embeber el agente en la app de
+  // un tercero obliga a entregarle el control total.
+  if (intent === "token-create") {
+    const { createFleetToken } = await import("~/.server/core/fleetTokens");
+    const scope = String(fd.get("scope") || "MESSAGE") as "MESSAGE" | "MANAGE" | "ADMIN";
+    const publishable = scope === "MESSAGE" && String(fd.get("publishable") || "") === "on";
+    const origins = String(fd.get("allowedOrigins") || "")
+      .split(",")
+      .map((o) => o.trim())
+      .filter(Boolean);
+    try {
+      const token = await createFleetToken(fleetAgentId, {
+        name: String(fd.get("name") || "").trim() || "sin nombre",
+        scopes: [scope],
+        publishable,
+        cfgId: String(fd.get("cfgId") || "").trim() || null,
+        allowedOrigins: origins,
+      });
+      // `raw` viaja UNA vez al cliente: no vuelve a ser recuperable del hash.
+      return data({ ok: true, createdToken: token.raw, createdTokenName: token.name });
+    } catch (e) {
+      return data({ ok: false, error: e instanceof Error ? e.message : "no se pudo crear" }, { status: 400 });
+    }
+  }
+  if (intent === "token-revoke") {
+    const { revokeFleetToken } = await import("~/.server/core/fleetTokens");
+    await revokeFleetToken(String(fd.get("tokenId") || ""), fleetAgentId);
+    return data({ ok: true });
   }
   if (intent === "rename") {
     const name = String(fd.get("name") || "").trim();
@@ -4091,6 +4130,81 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                       placeholder="Solo para este número/grupo. Se suma a las instrucciones del agente."
                       className="w-full border-2 border-gray-200 rounded-lg px-2 py-1.5 text-sm resize-y" />
                     <button type="submit" className="mt-1 border-2 border-gray-300 rounded-lg px-3 py-1 text-xs font-semibold">Guardar override</button>
+                  </fetcher.Form>
+                </details>
+              </div>
+
+              {/* Credenciales con scope — la receta para embeber el agente en otra app.
+                  El token del agente sirve para TODO (mensajear, configurar, borrar), así
+                  que entregarlo a un integrador es entregarle el control. Aquí se emiten
+                  llaves que sólo hacen una cosa. */}
+              <div className="border-t border-gray-100 pt-3">
+                <details>
+                  <summary className="text-xs font-semibold text-brand-500 cursor-pointer hover:underline">
+                    Credenciales de integración ({cp.fleetTokens?.length ?? 0})
+                  </summary>
+                  <p className="mt-2 text-xs text-gray-500">
+                    Para embeber el agente en otra app, emite una llave <b>Mensajería</b> y
+                    úsala desde el servidor del integrador. Nunca pongas una llave{" "}
+                    <code className="font-mono">flt_sk_</code> en el navegador: para eso está{" "}
+                    <code className="font-mono">POST /session-token</code>, que devuelve una{" "}
+                    <code className="font-mono">flt_pk_</code> de 15 minutos.
+                  </p>
+
+                  {fetcher.data?.createdToken && (
+                    <div className="mt-2 rounded-lg border-2 border-amber-300 bg-amber-50 p-2">
+                      <p className="text-xs font-semibold text-amber-900">
+                        Copia esta llave ahora — no vuelve a mostrarse.
+                      </p>
+                      <code className="mt-1 block break-all font-mono text-xs text-amber-950">
+                        {fetcher.data.createdToken}
+                      </code>
+                    </div>
+                  )}
+
+                  <ul className="mt-2 flex flex-col gap-1">
+                    {(cp.fleetTokens ?? []).map((t) => (
+                      <li key={t.id} className="flex items-center justify-between gap-2 rounded-lg border border-gray-200 px-2 py-1.5">
+                        <span className="min-w-0">
+                          <span className="block truncate text-xs font-semibold">{t.name}</span>
+                          <span className="block font-mono text-[10px] text-gray-500">
+                            {t.prefix}… · {t.scopes.join(", ")}
+                            {t.cfgId ? ` · ${t.cfgId}` : ""}
+                            {t.expiresAt ? " · expira" : ""}
+                          </span>
+                        </span>
+                        <fetcher.Form method="post">
+                          <input type="hidden" name="intent" value="token-revoke" />
+                          <input type="hidden" name="fleetAgentId" value={cp.id} />
+                          <input type="hidden" name="tokenId" value={t.id} />
+                          <button className="text-xs text-red-600 hover:underline">Revocar</button>
+                        </fetcher.Form>
+                      </li>
+                    ))}
+                  </ul>
+
+                  <fetcher.Form method="post" className="mt-2 flex flex-col gap-2"
+                    onSubmit={(e) => { const f = e.currentTarget; requestAnimationFrame(() => f.reset()); }}>
+                    <input type="hidden" name="intent" value="token-create" />
+                    <input type="hidden" name="fleetAgentId" value={cp.id} />
+                    <input name="name" placeholder="para qué es (ej. widget del CRM)" required
+                      className="border-2 border-gray-300 rounded-lg px-2 py-1.5 text-sm" />
+                    <select name="scope" className="border-2 border-gray-300 rounded-lg px-2 py-1.5 text-sm">
+                      <option value="MESSAGE">Mensajería — sólo mandar turnos</option>
+                      <option value="MANAGE">Configuración — prompt, modelo, canales</option>
+                      <option value="ADMIN">Administración — todo, incluidos secretos</option>
+                    </select>
+                    <input name="cfgId" placeholder="atar a un canal/tenant (opcional)"
+                      className="border-2 border-gray-300 rounded-lg px-2 py-1.5 text-sm font-mono" />
+                    <input name="allowedOrigins" placeholder="orígenes permitidos, separados por coma (opcional)"
+                      className="border-2 border-gray-300 rounded-lg px-2 py-1.5 text-sm font-mono" />
+                    <label className="flex items-center gap-2 text-xs text-gray-600">
+                      <input type="checkbox" name="publishable" />
+                      Publishable (flt_pk_) — admitida en el navegador, sólo Mensajería
+                    </label>
+                    <button className="self-start rounded-lg border-2 border-black px-3 py-1.5 text-sm font-semibold">
+                      Emitir llave
+                    </button>
                   </fetcher.Form>
                 </details>
               </div>

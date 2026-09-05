@@ -33,9 +33,33 @@ export async function action({ request }: Route.ActionArgs) {
     return Response.json({ ok: false, error: "sessionId and action required" }, { status: 400, headers: CORS });
   }
 
-  // Resolve the conversation: token must own the route, route gives the group.
+  // Resolver el AGENTE desde el bearer. El worker presenta hoy un FleetAgentToken con
+  // scope MESSAGE (`FLEET_TOKEN`); el token legacy se sigue aceptando mientras el
+  // agente no esté en `legacyTokenMode: "deny"`. Sin esto, endurecer el token del
+  // worker dejaría mudo al MCP `wa` (mandar archivos, encuestas, reacciones).
+  const { validateFleetToken, isFleetToken } = await import("~/.server/core/fleetTokens");
+  let ownerFleetAgentId: string | null = null;
+  if (isFleetToken(bearer)) {
+    const row = await validateFleetToken(bearer);
+    ownerFleetAgentId = row?.fleetAgentId ?? null;
+  } else {
+    // ⚠️ NO filtrar `legacyTokenMode` en la query: es un campo nuevo, y en Mongo un
+    // documento donde el campo está AUSENTE no matchea `{ not: "deny" }` — todos los
+    // agentes anteriores a esta migración quedarían fuera y el MCP `wa` se volvería
+    // mudo. Prisma sí aplica el default al LEER, así que se comprueba en código.
+    const legacy = await db.fleetAgent.findFirst({
+      where: { token: bearer },
+      select: { id: true, legacyTokenMode: true },
+    });
+    ownerFleetAgentId = legacy && legacy.legacyTokenMode !== "deny" ? legacy.id : null;
+  }
+  if (!ownerFleetAgentId) {
+    return Response.json({ ok: false, error: "Unauthorized" }, { status: 401, headers: CORS });
+  }
+
+  // Resolve the conversation: el token debe ser DEL agente dueño de la ruta.
   const route = await db.fleetAgentRoute.findFirst({
-    where: { sessionUuid: sessionId, fleetAgent: { token: bearer } },
+    where: { sessionUuid: sessionId, fleetAgentId: ownerFleetAgentId },
     select: {
       groupId: true,
       fleetAgent: {

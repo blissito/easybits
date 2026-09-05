@@ -59,6 +59,16 @@ export type FleetEngine = {
   /** null = motor sin credencial (proxy medido de EasyBits). */
   secret?: FleetEngineSecret | null;
   /**
+   * Quién paga los tokens de este motor. Explícito a propósito: antes se INFERÍA de
+   * `secret === null`, un acoplamiento silencioso entre "no pide credencial" y "lo
+   * facturamos nosotros" que se rompe en cuanto un motor gestionado necesite una
+   * credencial nuestra.
+   *   "byok"    = paga el dueño con su llave (tarifa plana o su propia factura).
+   *               Medimos para atribuir y detectar abuso, pero NO descontamos cuota.
+   *   "metered" = pasa por el proxy de EasyBits, que ya descuenta `llmTokensUsed`.
+   */
+  billing?: "byok" | "metered";
+  /**
    * ¿El motor VE imágenes de forma nativa? true = multimodal (Claude) → el arnés
    * dropea la imagen a disco y le dice "ábrela con Read". Ausente/false = text-only
    * (DeepSeek/GLM/Codex-worker) → el arnés le apunta a la tool `see_image` (Gemini
@@ -85,6 +95,7 @@ export const FLEET_ENGINES: FleetEngine[] = [
     ],
     defaultModel: "claude-sonnet-5",
     secret: { name: "CLAUDE_CODE_OAUTH_TOKEN", kind: "oauth", placeholder: "sk-ant-oat..." },
+    billing: "byok", // suscripción Max del dueño: tarifa plana, no pay-per-token
     vision: true, // Claude es multimodal → ve la imagen con Read; no necesita see_image.
   },
   {
@@ -103,6 +114,7 @@ export const FLEET_ENGINES: FleetEngine[] = [
     ],
     defaultModel: "deepseek-v4-pro",
     secret: { name: "DEEPSEEK_API_KEY", kind: "apiKey", placeholder: "sk-..." },
+    billing: "byok", // la llave es del dueño; para revender, usar el motor `easybits`
   },
   {
     id: "easybits",
@@ -113,6 +125,7 @@ export const FLEET_ENGINES: FleetEngine[] = [
     env: { GHOSTY_LLM: "easybits" },
     models: [{ id: "proxy", label: "proxy medido (fijo)" }],
     secret: null,
+    billing: "metered",
   },
   {
     id: "glm",
@@ -125,6 +138,7 @@ export const FLEET_ENGINES: FleetEngine[] = [
     // no está actualizado + falta la rama de inyección de key → Fase 2 (modelo not ready).
     models: [{ id: "glm-5.2", label: "GLM 5.2", ready: false }],
     secret: { name: "GLM_API_KEY", kind: "apiKey", placeholder: "..." },
+    billing: "byok",
   },
   {
     id: "codex",
@@ -143,8 +157,16 @@ export const FLEET_ENGINES: FleetEngine[] = [
     defaultModel: "gpt-5.6-sol",
     // Codex headless usa OPENAI_API_KEY (doc oficial); el spawn la inyecta como tal.
     secret: { name: "OPENAI_API_KEY", kind: "apiKey", placeholder: "sk-..." },
+    billing: "byok",
   },
 ];
+
+/**
+ * ¿EasyBits factura los tokens de este motor? Default `byok`: no cobrar es el fallo
+ * seguro — un motor nuevo mal etiquetado no debe empezar a descontar cuota sin querer.
+ */
+export const engineIsMetered = (engine?: { billing?: "byok" | "metered" } | null): boolean =>
+  engine?.billing === "metered";
 
 export const DEFAULT_ENGINE_ID = "claude";
 

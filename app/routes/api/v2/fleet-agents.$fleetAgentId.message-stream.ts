@@ -1,8 +1,10 @@
 import type { Route } from "./+types/fleet-agents.$fleetAgentId.message-stream";
+import { authFleetAgent, type FleetAuthResult } from "~/.server/apiAuth";
+import { corsForFleetAuth } from "~/.server/core/fleetCors";
+import { withAdmitRetry } from "~/.server/core/fleetAdmitHold";
 import { db } from "~/.server/db";
 import { routeMessage, FleetAgentAtCapacity, FleetAgentRateLimited } from "~/.server/core/fleetAgentOperations";
-import { checkFleetAgentWebIp } from "~/.server/rateLimiter";
-import type { WabaConfig } from "~/.server/integrations/whatsapp/waba.server";
+import { checkFleetAgentWebIp, checkFleetTokenRate } from "~/.server/rateLimiter";
 import { getUserOrNull } from "~/.server/getters";
 
 // POST /api/v2/fleet-agents/:fleetAgentId/message-stream
@@ -31,11 +33,11 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   const groupId = url.searchParams.get("groupId") ?? "";
   if (!groupId) return Response.json({ error: "Method not allowed" }, { status: 405, headers: CORS });
   const fleetAgentId = params.fleetAgentId!;
-  const bearer = request.headers.get("Authorization")?.replace(/^Bearer\s+/i, "") ?? "";
-  const fleetAgent = await db.fleetAgent.findUnique({ where: { id: fleetAgentId } });
-  const formmySecret = (fleetAgent?.wabaConfig as WabaConfig | null)?.formmySecret ?? "";
-  const authed = !!fleetAgent && !!bearer && (bearer === fleetAgent.token || (!!formmySecret && bearer === formmySecret));
-  if (!authed) return Response.json({ error: "Unauthorized" }, { status: 401, headers: CORS });
+  try {
+    await authFleetAgent(request, fleetAgentId, "MESSAGE", { allowFormmySecret: true });
+  } catch {
+    return Response.json({ error: "Unauthorized" }, { status: 401, headers: CORS });
+  }
   const rows = await db.fleetAgentMessage.findMany({
     where: { fleetAgentId, groupId },
     orderBy: { createdAt: "asc" },
@@ -47,24 +49,30 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 
 export async function action({ request, params }: Route.ActionArgs) {
   const fleetAgentId = params.fleetAgentId!;
-  const bearer = request.headers.get("Authorization")?.replace(/^Bearer\s+/i, "") ?? "";
-  const fleetAgent = await db.fleetAgent.findUnique({ where: { id: fleetAgentId } });
-  // Two owner-level bearers authorize this route:
-  //  - fleetAgent.token: the Baileys/web surface (denik widget, admin assistant).
-  //  - wabaConfig.formmySecret: the secret Formmy already holds from the WABA
-  //    connect. Ghosty reuses it to drive ADMIN turns — no new credential.
-  const formmySecret = (fleetAgent?.wabaConfig as WabaConfig | null)?.formmySecret ?? "";
-  const byToken = !!fleetAgent && !!bearer && bearer === fleetAgent.token;
-  const byFormmy = !!fleetAgent && !!bearer && !!formmySecret && bearer === formmySecret;
-  if (!byToken && !byFormmy) {
-    return Response.json({ error: "Unauthorized" }, { status: 401, headers: CORS });
+  // Mandar un turno exige sólo MESSAGE (ver fleet-agents.$fleetAgentId.message.ts).
+  let auth: FleetAuthResult;
+  try {
+    auth = await authFleetAgent(request, fleetAgentId, "MESSAGE", { allowFormmySecret: true });
+  } catch (e) {
+    const status = e instanceof Response ? e.status : 401;
+    return Response.json({ error: status === 403 ? "Forbidden" : "Unauthorized" }, { status, headers: CORS });
   }
+  const byFormmy = auth.kind === "formmySecret";
+  const cors = corsForFleetAuth(request, auth, CORS);
 
+  // Guard por-TOKEN: una llave filtrada se usa desde muchas IPs, así que el tope por
+  // IP no la frena. Va antes del de IP para que el 429 identifique a la credencial.
+  if (auth.tokenId && !(await checkFleetTokenRate(auth.tokenId))) {
+    return Response.json(
+      { error: "rate_limited", message: "Too many requests for this token." },
+      { status: 429, headers: { ...cors, "Retry-After": "30" } }
+    );
+  }
   // Guard por-IP: el groupId lo controla el cliente, rotarlo no debe saltar el cupo.
   if (!(await checkFleetAgentWebIp(request))) {
     return Response.json(
       { error: "rate_limited", message: "Too many requests, please slow down." },
-      { status: 429, headers: { ...CORS, "Retry-After": "30" } }
+      { status: 429, headers: { ...cors, "Retry-After": "30" } }
     );
   }
 
@@ -97,7 +105,7 @@ export async function action({ request, params }: Route.ActionArgs) {
       : undefined;
   const mediaUrl = typeof body?.mediaUrl === "string" ? body.mediaUrl : undefined;
   if (!groupId || (!text.trim() && !image && !audio && !mediaUrl && files.length === 0)) {
-    return Response.json({ error: "groupId and (text or media) required" }, { status: 400, headers: CORS });
+    return Response.json({ error: "groupId and (text or media) required" }, { status: 400, headers: cors });
   }
   // ADMIN turn: inject the admin MCP + note so the agent self-administers (numbers,
   // identity, capabilities, set_agent_prompt). Honored ONLY cuando el caller probó
@@ -105,7 +113,7 @@ export async function action({ request, params }: Route.ActionArgs) {
   // del agente (el drawer de prueba en /dash/flota). El token del widget público NUNCA
   // escala a admin — sin sesión + sin formmySecret = admin false.
   const sessionUser = body?.admin === true ? await getUserOrNull(request).catch(() => null) : null;
-  const byOwnerSession = !!sessionUser && !!fleetAgent && sessionUser.id === fleetAgent.ownerId;
+  const byOwnerSession = !!sessionUser && sessionUser.id === auth.fleetAgent.ownerId;
   const admin = body?.admin === true && (byFormmy || byOwnerSession);
 
   const encoder = new TextEncoder();
@@ -125,11 +133,14 @@ export async function action({ request, params }: Route.ActionArgs) {
         }
       }, 15_000);
       try {
-        const reply = await routeMessage(fleetAgentId, {
+        const reply = await withAdmitRetry(() =>
+          routeMessage(fleetAgentId, {
           groupId,
           // Config unit key estable por canal (Teams manda "teams", WABA "waba:<id>");
           // sin él cae al groupId (por conversación → solo el default `*`). Ver cfgId.
-          configGroupId: typeof body?.configGroupId === "string" ? body.configGroupId : undefined,
+          // Un token atado a un tenant (`cfgId`) GANA sobre lo que mande el cliente.
+          configGroupId:
+            auth.cfgId ?? (typeof body?.configGroupId === "string" ? body.configGroupId : undefined),
           sender: typeof body?.sender === "string" ? body.sender : undefined,
           text,
           image,
@@ -174,18 +185,26 @@ export async function action({ request, params }: Route.ActionArgs) {
           // Cierre contable del turno, ANTES de `done`: tokens, modelo, duración y
           // número de tools. Nombres alineados con las convenciones GenAI de OTel.
           onUsage: (u) => controller.enqueue(sse({ type: "usage", ...u })),
-        });
+          })
+        );
         controller.enqueue(sse({ type: "done", value: reply }));
       } catch (e) {
-        const message =
-          e instanceof FleetAgentRateLimited
-            ? e.message
-            : e instanceof FleetAgentAtCapacity
+        // La saturación NO es un error del turno: es "vuelve a intentar". Emitirla como
+        // `error` hacía que un cliente la tratara como fallo definitivo y perdiera el
+        // mensaje; con `capacity` + retryAfter puede reintentar como hace Baileys.
+        if (e instanceof FleetAgentAtCapacity) {
+          controller.enqueue(
+            sse({ type: "capacity", message: e.message, reason: e.reason, retryAfter: 10 })
+          );
+        } else {
+          const message =
+            e instanceof FleetAgentRateLimited
               ? e.message
               : e instanceof Error
                 ? e.message
                 : "fleetAgent error";
-        controller.enqueue(sse({ type: "error", message }));
+          controller.enqueue(sse({ type: "error", message }));
+        }
       } finally {
         clearInterval(heartbeat);
         controller.close();
@@ -196,7 +215,7 @@ export async function action({ request, params }: Route.ActionArgs) {
   return new Response(stream, {
     status: 200,
     headers: {
-      ...CORS,
+      ...cors,
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache, no-transform",
       Connection: "keep-alive",

@@ -2625,6 +2625,51 @@ for await (const evt of readSse(res.body)) {
               Los MCP se montan al <strong>crear la sesión</strong>, no en cada turno: para comprobar un cambio de configuración, prueba con un <code className="bg-white px-1 rounded">groupId</code> nuevo.
             </div>
 
+            <div className="mb-6 bg-amber-50 border-2 border-amber-300 rounded-xl p-4 text-sm">
+              <strong>Para embeberlo en tu app, no repartas el token del agente.</strong> Ese token
+              sirve para <em>todo</em>: mandar mensajes, cambiar el prompt, leer secretos y borrar el
+              agente. Emite credenciales con alcance en{" "}
+              <code className="bg-white px-1 rounded">/api/v2/fleet-agents/:id/tokens</code>:
+              <ul className="list-disc ml-5 mt-2 space-y-1">
+                <li><code className="bg-white px-1 rounded">MESSAGE</code> — sólo manda turnos. Es la que le das a tu backend.</li>
+                <li><code className="bg-white px-1 rounded">MANAGE</code> — configura (prompt, modelo, canales), pero no toca secretos ni borra.</li>
+                <li><code className="bg-white px-1 rounded">ADMIN</code> — todo. Guárdala como guardas una llave de producción.</li>
+              </ul>
+              <p className="mt-2">
+                Una llave <code className="bg-white px-1 rounded">flt_sk_</code> nunca va al navegador
+                (y se rechaza si la mandas por query string). Para el navegador, pide desde tu servidor
+                un token de sesión: devuelve un <code className="bg-white px-1 rounded">flt_pk_</code> de
+                15 minutos, y si le pasas <code className="bg-white px-1 rounded">cfgId</code> queda atado
+                a ese tenant aunque el cliente pida otro.
+              </p>
+            </div>
+
+            <TabbedCode
+              tabs={[
+                {
+                  label: "Widget embebido",
+                  code: `// EN TU SERVIDOR — el navegador nunca ve la llave durable.
+const { token } = await eb.fleet.sessionToken(agentId, MI_FLT_SK, {
+  cfgId: "crm:acme",           // ata la sesión a ESTE cliente
+  ttlMin: 15,
+  allowedOrigins: ["https://app.micrm.com"],
+});
+// → mándale \`token\` al cliente.
+
+// EN EL NAVEGADOR — con streaming, para que se vea escribir.
+const reply = await eb.fleet.messageStream(agentId, token, {
+  groupId: "web-" + crypto.randomUUID(),
+  configGroupId: "crm:acme",   // sin esto el agente arranca sin conectores
+  text: "¿Cuánto debe la cuenta 4471?",
+}, {
+  onChunk: (t) => render(t),
+  onCapacity: ({ retryAfter }) => avisar(\`saturado, reintento en \${retryAfter}s\`),
+});`,
+                },
+              ]}
+            />
+            <div className="mb-6" />
+
             <h3 className="text-lg font-bold mb-3">2. Configurarlo</h3>
             <p className="text-gray-600 mb-3 text-sm">
               Todo pasa por <code className="bg-gray-100 px-1 rounded">/api/v2/fleet-agents/:id/capabilities</code>. El dashboard de EasyBits es sólo un cliente de este endpoint: lo que puedes hacer con la UI, lo puedes hacer por API. <code className="bg-gray-100 px-1 rounded">GET</code> devuelve el catálogo y el estado actual; <code className="bg-gray-100 px-1 rounded">POST</code> aplica <strong>una</strong> mutación con <code className="bg-gray-100 px-1 rounded">action</code>.

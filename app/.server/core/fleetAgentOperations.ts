@@ -25,8 +25,17 @@ import {
   listSandboxes,
 } from "~/.server/core/sandboxOperations";
 import { getSecretValue } from "~/.server/core/secretOperations";
+import { ensureWorkerTokens } from "~/.server/core/fleetTokens";
+import { recordFleetTurnUsage } from "~/.server/core/fleetUsage";
 import { attributeSandboxSession } from "~/.server/core/sandboxSessions";
 import { getReservedCapacity } from "~/.server/core/sandboxReservations";
+import {
+  admit,
+  rankReclaimCandidates,
+  type AdmitReason,
+  type CapacitySnapshot,
+  type ReclaimCandidate,
+} from "~/.server/core/fleetCapacity";
 import { getUserPlan, PLANS } from "~/lib/plans";
 import { engineHasVision, getEngineForAgent, getEngine, resolveEngineSecret } from "~/lib/fleetEngines";
 import { profileToToolsParam, DEFAULT_PROFILE, GROUP_ALLOWLISTS, type ToolGroupKey } from "~/.server/mcp/toolGroups";
@@ -34,9 +43,16 @@ import { getPlatformDefaultClient, buildPublicAssetUrl } from "~/.server/storage
 import { checkSandboxRateLimit } from "~/.server/rateLimiter";
 
 export class FleetAgentAtCapacity extends Error {
-  constructor(msg: string) {
+  /**
+   * POR QUÉ se negó la admisión. Sin esto el desalojo no puede elegir ámbito: una
+   * saturación de CUENTA no se resuelve desalojando dentro del mismo fleet (era el
+   * bug que dejaba a un agente nuevo sin arrancar para siempre en una cuenta llena).
+   */
+  readonly reason: AdmitReason;
+  constructor(msg: string, reason: AdmitReason = "account") {
     super(msg);
     this.name = "FleetAgentAtCapacity";
+    this.reason = reason;
   }
 }
 
@@ -261,6 +277,12 @@ export async function recycleFleetAgentBoxes(fleetAgent: {
 // from DIFFERENT groups can't both grab the last slot (overcommit → OOM) or
 // exceed maxVms. Same Map<key, tail-of-chain> pattern the worker uses internally.
 const placeLocks = new Map<string, Promise<unknown>>();
+// ⚠️ Lock EN MEMORIA: sólo serializa dentro de este proceso. Es correcto mientras Fly
+// corra UNA instancia (`min_machines_running = 1`, auto_stop off) — la excepción es la
+// ventana de un rolling deploy, donde la instancia vieja y la nueva conviven unos
+// segundos. Si algún día se escala a >1 máquina hay que moverlo a una lease en Mongo
+// (unique(key) + expiresAt): sin eso, dos instancias pueden spawnear de más y, peor,
+// `reclaimAccountCapacity` puede destruir DOS cajas para un solo slot.
 function withLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
   const prev = placeLocks.get(key) ?? Promise.resolve();
   const next = prev.then(fn, fn);
@@ -1084,22 +1106,26 @@ export function resolveGroupToolsManifest(
 // box). Injected into EVERY turn for EVERY fleet agent, NOT subject to
 // disabledBuiltins/catalog — so the agent can render even with the EasyBits MCP
 // off in the group. Auth = the fleetAgent token (header + ?token= belt-and-braces).
-function renderMcpServer(fleetAgent: { id: string; token: string }): Record<string, unknown> {
+function renderMcpServer(fleetAgent: { id: string }, workerToken: string): Record<string, unknown> {
   const base = (process.env.BASE_URL || "https://www.easybits.cloud").replace(/\/$/, "");
-  const url = `${base}/api/v2/fleet-render/${fleetAgent.id}/mcp?token=${encodeURIComponent(fleetAgent.token)}`;
+  // Auth = token del worker (scope MESSAGE), sólo por header. El `?token=` se retiró: dejaba una credencial en los logs de acceso
+  // del host, en el Referer y en cualquier proxy intermedio.
+  const url = `${base}/api/v2/fleet-render/${fleetAgent.id}/mcp`;
   return {
-    render: { type: "http", url, headers: { Authorization: `Bearer ${fleetAgent.token}` } },
+    render: { type: "http", url, headers: { Authorization: `Bearer ${workerToken}` } },
   };
 }
 
 // Artifact MCP server — edit-in-place de artefactos vivos (doc). Mismo patrón que
 // renderMcpServer (HTTP, auth = fleetAgent token), inyectado INCONDICIONAL en todo
 // turno → el agente crea/actualiza documentos con identidad + versiones.
-function artifactMcpServer(fleetAgent: { id: string; token: string }): Record<string, unknown> {
+function artifactMcpServer(fleetAgent: { id: string }, workerToken: string): Record<string, unknown> {
   const base = (process.env.BASE_URL || "https://www.easybits.cloud").replace(/\/$/, "");
-  const url = `${base}/api/v2/fleet-artifact/${fleetAgent.id}/mcp?token=${encodeURIComponent(fleetAgent.token)}`;
+  // Auth = token del worker (scope MESSAGE), sólo por header. El `?token=` se retiró: dejaba una credencial en los logs de acceso
+  // del host, en el Referer y en cualquier proxy intermedio.
+  const url = `${base}/api/v2/fleet-artifact/${fleetAgent.id}/mcp`;
   return {
-    artifact: { type: "http", url, headers: { Authorization: `Bearer ${fleetAgent.token}` } },
+    artifact: { type: "http", url, headers: { Authorization: `Bearer ${workerToken}` } },
   };
 }
 
@@ -1108,11 +1134,13 @@ function artifactMcpServer(fleetAgent: { id: string; token: string }): Record<st
 // Mismo patrón que renderMcpServer (HTTP, auth = fleetAgent token), inyectado
 // INCONDICIONAL en todo turno → siempre ofrecida (un motor multimodal simplemente
 // no la llama). El note de imagen (más abajo) apunta a esta tool cuando el motor es ciego.
-function visionMcpServer(fleetAgent: { id: string; token: string }): Record<string, unknown> {
+function visionMcpServer(fleetAgent: { id: string }, workerToken: string): Record<string, unknown> {
   const base = (process.env.BASE_URL || "https://www.easybits.cloud").replace(/\/$/, "");
-  const url = `${base}/api/v2/fleet-vision/${fleetAgent.id}/mcp?token=${encodeURIComponent(fleetAgent.token)}`;
+  // Auth = token del worker (scope MESSAGE), sólo por header. El `?token=` se retiró: dejaba una credencial en los logs de acceso
+  // del host, en el Referer y en cualquier proxy intermedio.
+  const url = `${base}/api/v2/fleet-vision/${fleetAgent.id}/mcp`;
   return {
-    vision: { type: "http", url, headers: { Authorization: `Bearer ${fleetAgent.token}` } },
+    vision: { type: "http", url, headers: { Authorization: `Bearer ${workerToken}` } },
   };
 }
 
@@ -1148,11 +1176,13 @@ async function describeInboundImage(
 // SOLO en turnos admin (msg.admin) → el dueño administra el agente desde su
 // conversación admin de WABA. Auth del endpoint = token; las tools solo se ofrecen
 // cuando el surface marcó el turno como admin (is_from_me + número verificado).
-function adminMcpServer(fleetAgent: { id: string; token: string }): Record<string, unknown> {
+function adminMcpServer(fleetAgent: { id: string }, workerToken: string): Record<string, unknown> {
   const base = (process.env.BASE_URL || "https://www.easybits.cloud").replace(/\/$/, "");
-  const url = `${base}/api/v2/fleet-admin/${fleetAgent.id}/mcp?token=${encodeURIComponent(fleetAgent.token)}`;
+  // Auth = token ADMIN del worker, sólo por header y sólo en turnos admin. El `?token=` se retiró: dejaba una credencial en los logs de acceso
+  // del host, en el Referer y en cualquier proxy intermedio.
+  const url = `${base}/api/v2/fleet-admin/${fleetAgent.id}/mcp`;
   return {
-    admin: { type: "http", url, headers: { Authorization: `Bearer ${fleetAgent.token}` } },
+    admin: { type: "http", url, headers: { Authorization: `Bearer ${workerToken}` } },
   };
 }
 
@@ -1393,9 +1423,160 @@ export function selectHotSpares(vms: { id: string; routes: number }[], warmSpare
   return hot;
 }
 
+/**
+ * Reúne los conteos que decide `admit`. Separado de la decisión para que la política
+ * sea testeable sin DB ni host.
+ *
+ * `live` se cuenta contra TODO el host del owner (workers de cualquier canal, cajas
+ * permanentes, livekit…), no sólo contra este fleet: el "X/N sandboxes" del HUD es
+ * real, no decorativo.
+ */
+async function buildCapacitySnapshot(
+  ctx: AuthContext,
+  fleetAgent: { id: string; maxVms: number }
+): Promise<CapacitySnapshot> {
+  const plan = getUserPlan(ctx.user);
+  const reserved = await getReservedCapacity(ctx.user.id).catch(() => ({ machines: 0, agents: 0 }));
+  const hostVms = await listSandboxes(ctx).catch(() => null);
+  // El host OMITE las VMs suspendidas de su listing (las snapshotea y las saca).
+  // Un budget contado solo sobre running/starting REGALA capacidad: el tenant llena
+  // sus cajas, deja que el reaper las duerma (desaparecen del conteo) y vuelve a
+  // spawnear encima → duplica su cupo y es explotable. Una VM suspendida es capacidad
+  // reservada real (disco + snapshot resume <1s), así que se suma de vuelta desde DB.
+  const [suspendedOwner, fleetVms, serviceBoxes] = await Promise.all([
+    db.agent.count({ where: { ownerId: ctx.user.id, status: "suspended" } }),
+    db.agent.count({
+      where: { fleetAgentId: fleetAgent.id, status: { in: ["running", "building", "suspended"] } },
+    }),
+    db.serviceBox.count({ where: { ownerId: ctx.user.id } }).catch(() => 0),
+  ]);
+  // Cuando el host no responde, el conteo cae a la DB. Antes ese fallback pasaba de
+  // "todo el owner" a "sólo este fleet", lo que SOBRE-ADMITÍA justo durante un
+  // incidente del host. Ahora sigue siendo por owner y se marca como degradado.
+  const liveOwner = hostVms
+    ? hostVms.filter((v) => v.status === "running" || v.status === "starting").length
+    : await db.agent.count({
+        where: { ownerId: ctx.user.id, status: { in: ["running", "building"] } },
+      });
+  return {
+    accountBudget: (PLANS[plan]?.concurrentSandboxes ?? 2) + reserved.machines,
+    liveOwner,
+    suspendedOwner,
+    // Con el listado del host disponible, las cajas de servicio YA vienen contadas en
+    // `liveOwner` (son sandboxes del owner). Sólo se suman aparte en el fallback de DB,
+    // donde `db.agent` no las incluye.
+    serviceBoxes: hostVms ? 0 : serviceBoxes,
+    fleetVms,
+    maxVms: fleetAgent.maxVms,
+    countsTrusted: !!hostVms,
+  };
+}
+
+/**
+ * Libera UNA caja del dueño cuando la cuenta (no el fleet) está en su techo.
+ *
+ * El desalojo intra-fleet no sirve aquí: si la saturación la causan otras cajas del
+ * owner, no hay víctima elegible dentro del propio agente y el turno se rechazaba para
+ * siempre — un FleetAgent nuevo en una cuenta llena nunca arrancaba.
+ *
+ * A diferencia del desalojo intra-fleet, aquí se DESTRUYE: la caja ajena trae horneado
+ * el template y el env de su agente, así que no se puede adoptar. Se paga un cold boot
+ * (~12s) a cambio de que el agente arranque.
+ *
+ * Sólo toca cajas DORMIDAS y no ocupadas: nunca corta un turno en vuelo de otro tenant
+ * del mismo dueño, que es el peor resultado que este código podría producir.
+ * Se puede apagar en caliente con FLEET_CROSS_RECLAIM=off.
+ *
+ * Devuelve true si liberó algo.
+ */
+async function reclaimAccountCapacity(
+  ctx: AuthContext,
+  requestingFleetAgentId: string
+): Promise<boolean> {
+  if ((process.env.FLEET_CROSS_RECLAIM || "").toLowerCase() === "off") return false;
+
+  const ownerId = ctx.user.id;
+  const busy = [...busyVms];
+
+  // Candidatos: cajas de servicio (las más baratas — no tienen conversación que
+  // respaldar) y workers dormidos de CUALQUIER fleet del dueño.
+  const [serviceBoxes, sleepingWorkers] = await Promise.all([
+    db.serviceBox.findMany({ where: { ownerId } }).catch(() => []),
+    db.agent.findMany({ where: { ownerId, status: "suspended", id: { notIn: busy } } }),
+  ]);
+
+  const candidates: ReclaimCandidate[] = [
+    ...serviceBoxes.map((b) => ({
+      id: b.id,
+      kind: "service" as const,
+      lastActiveAt: b.lastActiveAt,
+      suspended: true, // una caja de servicio ociosa es reclamable por definición
+    })),
+    ...sleepingWorkers.map((w) => ({
+      id: w.id,
+      kind: "worker" as const,
+      fleetAgentId: w.fleetAgentId,
+      lastActiveAt: w.lastMessageAt,
+      suspended: true,
+      busy: busy.includes(w.id),
+    })),
+  ];
+
+  // Se excluye el fleet solicitante: sus propias cajas dormidas las recicla el camino
+  // intra-fleet (adoptando, sin cold boot), que es estrictamente mejor.
+  const ranked = rankReclaimCandidates(candidates, {
+    excludeFleetAgentId: requestingFleetAgentId,
+  });
+  const victim = ranked[0];
+  if (!victim) return false;
+
+  try {
+    if (victim.kind === "service") {
+      const box = serviceBoxes.find((b) => b.id === victim.id);
+      if (!box) return false;
+      await destroySandbox(ctx, box.sandboxId).catch((e) => {
+        if (!isBoxDeadError(e)) throw e;
+      });
+      await db.serviceBox.delete({ where: { id: box.id } }).catch(() => {});
+      auditLog("reclaim", { requestingFleetAgentId, victimKind: "service", kind: box.kind, sandboxId: box.sandboxId });
+      return true;
+    }
+
+    const w = sleepingWorkers.find((x) => x.id === victim.id);
+    if (!w) return false;
+    // Misma secuencia que el reaper: respaldar ANTES de destruir. Una suspendida ya se
+    // respaldó al suspender, pero repetirlo es barato comparado con perder un hilo.
+    const routes = await db.fleetAgentRoute.findMany({ where: { agentId: w.id } });
+    for (const r of routes) {
+      await backupConversation(ctx, w, w.fleetAgentId ?? "", r.sessionUuid).catch((e) =>
+        console.error(`fleet reclaim: backup ${r.sessionUuid} failed:`, e)
+      );
+    }
+    await db.fleetAgentRoute.updateMany({
+      where: { agentId: w.id },
+      data: { agentId: null, detachedAt: new Date() },
+    });
+    await destroySandbox(ctx, w.sandboxId).catch((e) => {
+      if (!isBoxDeadError(e)) throw e;
+    });
+    await db.agent.delete({ where: { id: w.id } }).catch(() => {});
+    auditLog("reclaim", {
+      requestingFleetAgentId,
+      victimKind: "worker",
+      victimFleetAgentId: w.fleetAgentId,
+      sandboxId: w.sandboxId,
+      routes: routes.length,
+    });
+    return true;
+  } catch (e) {
+    console.error("fleet reclaim failed:", e);
+    return false;
+  }
+}
+
 // Spawn a fresh VM for the fleetAgent, branded from persona, RAM-gated.
 
-async function spawnVm(ctx: AuthContext, fleetAgent: { id: string; name: string | null; workerTemplate: string; persona: unknown; vmMemMb: number; maxVms: number; oauthSecretName: string | null; engineSecretName?: string | null; token: string; idleSuspendMin: number }) {
+async function spawnVm(ctx: AuthContext, fleetAgent: { id: string; ownerId: string; name: string | null; workerTemplate: string; persona: unknown; vmMemMb: number; maxVms: number; oauthSecretName: string | null; engineSecretName?: string | null; token: string; idleSuspendMin: number }) {
   // ── Account sandbox budget (la fuente de verdad, consistente con el HUD) ──
   // El plan da `concurrentSandboxes` y las reservas (add-ons) suman. TODAS las
   // sandboxes del owner en el host consumen este budget — workers de CUALQUIER
@@ -1403,30 +1584,20 @@ async function spawnVm(ctx: AuthContext, fleetAgent: { id: string; name: string 
   // eso contamos vía listSandboxes (todo el host del owner), no db.agent. El fleetAgent
   // NO puede pasarse de aquí: el "X/N sandboxes" del HUD es real, no solo display.
   // (pickHost sigue como gate FÍSICO de RAM; este es el gate LÓGICO de plan.)
-  const plan = getUserPlan(ctx.user);
-  const reserved = await getReservedCapacity(ctx.user.id).catch(() => ({ machines: 0, agents: 0 }));
-  const budget = (PLANS[plan]?.concurrentSandboxes ?? 2) + reserved.machines;
-  const hostVms = await listSandboxes(ctx).catch(() => null);
-  // El host OMITE las VMs suspendidas de su listing (las snapshotea y las saca).
-  // Un budget contado solo sobre running/starting REGALA capacidad: el tenant
-  // llena sus cajas, deja que el reaper las duerma (desaparecen del conteo) y
-  // vuelve a spawnear encima → duplica su cupo y es explotable. Una VM suspendida
-  // es capacidad reservada real (disco + snapshot resume <1s), así que la sumamos
-  // de vuelta desde DB (el owner es dueño de sus workers de fleetAgent).
-  const suspended = await db.agent.count({ where: { ownerId: ctx.user.id, status: "suspended" } });
-  const live = hostVms
-    ? hostVms.filter((v) => v.status === "running" || v.status === "starting").length
-    : await db.agent.count({ where: { fleetAgentId: fleetAgent.id, status: { in: ["running", "building"] } } });
-  const inUse = live + suspended;
-  if (inUse >= Math.min(budget, fleetAgent.maxVms)) {
-    throw new FleetAgentAtCapacity(`account at sandbox budget (${inUse}/${budget})`);
+  const snapshot = await buildCapacitySnapshot(ctx, fleetAgent);
+  const decision = admit(snapshot);
+  if (!decision.ok) {
+    // La negación era invisible: no había forma de diagnosticar en producción por qué
+    // un agente no arrancaba.
+    auditLog("admit.deny", { fleetAgentId: fleetAgent.id, reason: decision.reason, snapshot });
+    throw new FleetAgentAtCapacity(decision.detail, decision.reason);
   }
   // RAM gate, multi-box aware: pick the box with the most free RAM that fits the
   // VM. null = no box has room → queue. (The host also rejects at create as a
   // backstop.) Single-box today: pickHost returns the only box.
   const target = await pickHost(fleetAgent.vmMemMb);
   if (!target) {
-    throw new FleetAgentAtCapacity(`no box has ${fleetAgent.vmMemMb}MB free`);
+    throw new FleetAgentAtCapacity(`no box has ${fleetAgent.vmMemMb}MB free`, "ram");
   }
   const persona = (fleetAgent.persona ?? {}) as Persona;
   const env = { ...(persona.env ?? {}) };
@@ -1453,7 +1624,12 @@ async function spawnVm(ctx: AuthContext, fleetAgent: { id: string; name: string 
   // reactions/locations/files into the chat via the shared Baileys socket. The
   // worker authenticates with the fleet-agent token; the endpoint resolves sessionId →
   // group and gates elevated actions by mainGroupJid.
-  env.FLEET_TOKEN = fleetAgent.token;
+  // Token del worker para el callback de WhatsApp: scope MESSAGE, no ADMIN. Vive
+  // dentro de la microVM, así que es exactamente la credencial que un prompt
+  // malicioso puede llegar a leer — no debe poder administrar ni borrar el agente.
+  // El vault es el del DUEÑO del agente, no el del ctx: con "operar como" el ctx puede
+  // ser un delegado, y el secreto acabaría en la cuenta equivocada.
+  env.FLEET_TOKEN = (await ensureWorkerTokens(fleetAgent)).message;
   env.FLEET_WA_ACTION_URL = `${appBaseUrl()}/api/v2/fleet-agents/wa-action`;
   // Modelo del worker — persona.env gana (override por-agente), si no el default
   // de flota. El CLI del worker lo lee de su env (ver FLEET_DEFAULT_MODEL).
@@ -1626,7 +1802,16 @@ async function reserveVm(ctx: AuthContext, fleetAgent: PoolRow, groupId: string)
       where: { fleetAgentId: fleetAgent.id, status: { in: ["running", "building", "suspended"] } },
     });
     let target: AgentRow | null = null;
-    if (fresh?.agentId) target = vms.find((v) => v.id === fresh.agentId) ?? null;
+    if (fresh?.agentId) {
+      const sticky = vms.find((v) => v.id === fresh.agentId) ?? null;
+      // La preferencia sticky (quedarse en la VM de siempre, sin churn) NO revalidaba
+      // el cupo: una ruta pegada podía empujar la VM por encima de maxWorkersPerVm y
+      // meter más conversaciones de las que caben en su RAM. Se conserva la
+      // preferencia, pero sólo si el slot sigue existiendo.
+      if (sticky && (await workersOnVm(sticky.id)) <= fleetAgent.maxWorkersPerVm) {
+        target = sticky;
+      }
+    }
     if (!target) {
       for (const vm of vms) {
         if ((await workersOnVm(vm.id)) >= fleetAgent.maxWorkersPerVm) continue;
@@ -1639,25 +1824,44 @@ async function reserveVm(ctx: AuthContext, fleetAgent: PoolRow, groupId: string)
         target = await spawnVm(ctx, fleetAgent); // building row; throws FleetAgentAtCapacity if no room
       } catch (e) {
         if (!(e instanceof FleetAgentAtCapacity)) throw e;
-        // En el techo de flota: en vez de pasarnos (la "generosidad" explotable),
-        // RECICLAMOS un slot. Desalojamos la conversación dormida menos-reciente
-        // (LRU) de una VM SUSPENDIDA — su memoria ya está en S3 (backup al
-        // suspender), así que volverá a montarse fría (~12s) la próxima vez que
-        // hable. Sólo suspendidas: están ociosas por definición y respaldadas, así
-        // no cortamos un turno en vuelo. Si NO hay ninguna dormida, todo está vivo
-        // de verdad → back-pressure legítima: relanzamos FleetAgentAtCapacity.
-        const napping = await db.agent.findMany({ where: { fleetAgentId: fleetAgent.id, status: "suspended" }, select: { id: true } });
-        const victim = napping.length
-          ? await db.fleetAgentRoute.findFirst({
-              where: { fleetAgentId: fleetAgent.id, groupId: { not: groupId }, agentId: { in: napping.map((v) => v.id) } },
-              orderBy: { lastMessageAt: "asc" },
-            })
-          : null;
-        if (!victim?.agentId) throw e;
-        await db.fleetAgentRoute.update({ where: { id: victim.id }, data: { agentId: null, detachedAt: new Date() } });
-        auditLog("evict", { fleetAgent: fleetAgent.id, victim: victim.groupId, freedVm: victim.agentId });
-        // El slot liberado vive en una VM suspendida → ensureRunning la resume.
-        target = vms.find((v) => v.id === victim.agentId) ?? (await db.agent.findUniqueOrThrow({ where: { id: victim.agentId } }));
+        // Dos saturaciones distintas que exigen remedios distintos.
+        if (e.reason === "fleet") {
+          // Techo del PROPIO fleet: reciclamos un slot dentro de casa. Desalojamos la
+          // conversación dormida menos-reciente (LRU) de una VM SUSPENDIDA — su memoria
+          // ya está en S3 (backup al suspender), así que volverá a montarse fría (~12s)
+          // la próxima vez que hable. Sólo suspendidas: están ociosas por definición y
+          // respaldadas, así no cortamos un turno en vuelo. Aquí SÍ se puede adoptar la
+          // VM de la víctima: es del mismo agente, así que trae el template y el env
+          // correctos. Si NO hay ninguna dormida, todo está vivo de verdad →
+          // back-pressure legítima.
+          const napping = await db.agent.findMany({ where: { fleetAgentId: fleetAgent.id, status: "suspended" }, select: { id: true } });
+          const victim = napping.length
+            ? await db.fleetAgentRoute.findFirst({
+                where: { fleetAgentId: fleetAgent.id, groupId: { not: groupId }, agentId: { in: napping.map((v) => v.id) } },
+                orderBy: { lastMessageAt: "asc" },
+              })
+            : null;
+          if (!victim?.agentId) throw e;
+          await db.fleetAgentRoute.update({ where: { id: victim.id }, data: { agentId: null, detachedAt: new Date() } });
+          auditLog("evict", { fleetAgent: fleetAgent.id, victim: victim.groupId, freedVm: victim.agentId });
+          // El slot liberado vive en una VM suspendida → ensureRunning la resume.
+          target = vms.find((v) => v.id === victim.agentId) ?? (await db.agent.findUniqueOrThrow({ where: { id: victim.agentId } }));
+        } else if (e.reason === "account") {
+          // Techo de la CUENTA: la saturación puede venir de OTRO agente del dueño o de
+          // una caja de servicio, y ahí el desalojo intra-fleet no encuentra víctima —
+          // era el bug que dejaba a un agente nuevo sin arrancar para siempre.
+          //
+          // Aquí NO se puede adoptar la caja ajena: una VM trae horneado su
+          // `workerTemplate` y el env de SU motor (persona, prompt, credencial), así que
+          // una caja `claude-worker` no sirve para un `codex-worker`. Hay que DESTRUIRLA
+          // y spawnear la propia (~12s en frío), que es justo lo que compra el reintento.
+          const reclaimed = await reclaimAccountCapacity(ctx, fleetAgent.id);
+          if (!reclaimed) throw e;
+          // Un solo reintento: si vuelve a fallar es back-pressure real, no un bug.
+          target = await spawnVm(ctx, fleetAgent);
+        } else {
+          throw e; // "ram": ningún fierro tiene sitio; desalojar aquí no ayuda.
+        }
       }
     }
 
@@ -2093,6 +2297,11 @@ export async function routeMessage(
         process.env.FLEET_DEFAULT_TIMEZONE ||
         "America/Mexico_City";
       const codeCaps = await resolveGroupCodeCaps(fleetAgent, cfgId, fleetAgent.ownerId);
+      // Credenciales ACOTADAS que el worker presenta a los MCP internos. Antes iba
+      // `fleetAgent.token` (omnipotente): una inyección de prompt en el turno de
+      // cualquier tenant podía borrar el agente con la credencial que él mismo lleva.
+      const workerTokens = await ensureWorkerTokens(fleetAgent);
+      const turnDisabledBuiltins = resolveDisabledBuiltins(fleetAgent, cfgId);
       // Skills encendidos: name/description al prompt (progressive disclosure) + sus
       // files al manifiesto (para que el agente lea el SKILL.md y baje el script).
       const skillsRes = await resolveSkillsPrompt(fleetAgent);
@@ -2208,17 +2417,22 @@ export async function routeMessage(
           // disponibles aunque el grupo apague el MCP de easybits. El resto es per-grupo.
           mcpServers: {
             ...(await resolveGroupMcpServers(fleetAgent, cfgId, fleetAgent.ownerId, msg.groupId)),
-            ...renderMcpServer(fleetAgent),
-            ...artifactMcpServer(fleetAgent),
-            // vision = SIEMPRE inyectado (como render) → un motor ciego puede VER una
-            // imagen con see_image en vez de confabular. El multimodal no la llama.
-            ...visionMcpServer(fleetAgent),
+            // render/artifact/vision se inyectan por DEFECTO en todo turno (el agente
+            // debe poder renderizar aunque el grupo apague el MCP de easybits), pero un
+            // grupo que los apague EXPLÍCITAMENTE ahora es respetado: antes se mergeaban
+            // incondicionalmente y el interruptor de la UI no hacía nada.
+            ...(turnDisabledBuiltins.includes("render") ? {} : renderMcpServer(fleetAgent, workerTokens.message)),
+            ...(turnDisabledBuiltins.includes("artifact") ? {} : artifactMcpServer(fleetAgent, workerTokens.message)),
+            // vision → un motor ciego puede VER una imagen con see_image en vez de
+            // confabular. El multimodal simplemente no la llama.
+            ...(turnDisabledBuiltins.includes("vision") ? {} : visionMcpServer(fleetAgent, workerTokens.message)),
             // admin = SOLO en turnos admin (dueño en su conversación admin de WABA).
-            ...(msg.admin ? adminMcpServer(fleetAgent) : {}),
+            // Lleva el token ADMIN; los turnos normales nunca lo ven.
+            ...(msg.admin ? adminMcpServer(fleetAgent, workerTokens.admin) : {}),
           },
           // Per-grupo: builtins apagados (ej. ["easybits"]) → el worker los quita
           // del set MCP de ese turno (forzar uso de cajas de la flota).
-          disabledBuiltins: resolveDisabledBuiltins(fleetAgent, cfgId),
+          disabledBuiltins: turnDisabledBuiltins,
           // Per-NÚMERO/grupo: el tool group de EasyBits (?tools=) que el worker
           // aplica per-turno al server easybits, sobreescribiendo el default del
           // agente (persona.env.EASYBITS_TOOL_GROUP). Vacío → el worker usa su env.
@@ -2244,9 +2458,32 @@ export async function routeMessage(
             }
           : undefined,
         opts.onBlock && (async (t) => { earlyBlocks.push(t); await opts.onBlock!(t); }),
-        opts.onUsage ? (u) => { workerUsage = u; } : undefined
+        // SIEMPRE se captura, aunque el caller no pase `onUsage`: si no, el canal de
+        // más volumen (WhatsApp/WABA, que no pasa callback) no medía absolutamente nada.
+        (u) => { workerUsage = u; }
       );
-      opts.onUsage?.({ ...workerUsage, durationMs: Date.now() - turnStart, toolCalls });
+      const turnUsage: FleetTurnUsage = {
+        ...workerUsage,
+        durationMs: Date.now() - turnStart,
+        toolCalls,
+      };
+      opts.onUsage?.(turnUsage);
+      // Contabilidad dentro de routeMessage, no en las rutas: así queda cubierto todo
+      // canal (Baileys, WABA, HTTP, SSE) de una vez y no depende de que cada superficie
+      // se acuerde de registrar.
+      recordFleetTurnUsage(
+        {
+          ownerId: fleetAgent.ownerId,
+          fleetAgentId: fleetAgent.id,
+          groupId: msg.groupId,
+          engine: getEngineForAgent(
+            fleetAgent.workerTemplate,
+            (fleetAgent.persona as { env?: Record<string, string> } | null)?.env
+          ),
+          billingMode: fleetAgent.billingMode,
+        },
+        turnUsage
+      );
       auditLog("turn.ok", {
         groupId: msg.groupId,
         agentId: worker.id,

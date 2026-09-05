@@ -1,4 +1,4 @@
-import type { ApiKey, ApiKeyScope, User } from "@prisma/client";
+import type { ApiKey, ApiKeyScope, FleetAgent, FleetTokenScope, User } from "@prisma/client";
 import { getUserOrNull } from "./getters";
 import { validateApiKey, hasScope } from "./iam";
 import { db } from "./db";
@@ -108,22 +108,124 @@ export function requireAuth(ctx: AuthContext | null): AuthContext {
  * Devuelve el FleetAgent o lanza 401/404. NO reasigna ownership.
  */
 export async function authFleetAgentManage(request: Request, fleetAgentId: string) {
+  const { fleetAgent } = await authFleetAgent(request, fleetAgentId, "MANAGE");
+  return fleetAgent;
+}
+
+/**
+ * Auth ÚNICA para toda la superficie de un FleetAgent.
+ *
+ * Reemplaza el patrón disperso `bearer === fleetAgent.token` que estaba copiado en 12
+ * rutas y que hacía que UNA credencial sirviera para mandar mensajes, cambiar secretos
+ * y borrar el agente. Aquí cada ruta declara el scope que necesita.
+ *
+ * Credenciales aceptadas, en orden:
+ *   1. `FleetAgentToken` (flt_sk_ / flt_pk_) — con scope real.
+ *   2. `fleetAgent.token` LEGACY — ADMIN implícito, sujeto a `legacyTokenMode`.
+ *      Se conserva para no romper Formmy / denik / GTeams / Baileys.
+ *   3. `wabaConfig.formmySecret` — ADMIN implícito, sólo si la ruta lo permite.
+ *   4. Sesión del DUEÑO o de un delegado con scope `agents` — ADMIN.
+ *
+ * Regla dura de transporte: un `flt_sk_` NUNCA se acepta por query string (queda en
+ * logs de acceso, Referer y proxies). Un `flt_pk_` sí, porque es de sólo-mensajería y
+ * está acotado por `allowedOrigins`.
+ */
+export type FleetAuthKind = "fleetToken" | "legacyToken" | "formmySecret" | "session";
+
+export type FleetAuthResult = {
+  fleetAgent: FleetAgent;
+  kind: FleetAuthKind;
+  scopes: FleetTokenScope[];
+  /** Presente sólo con fleetToken: id de la credencial (rate limit + revocación). */
+  tokenId?: string;
+  /** Presente sólo con fleetToken: ata el turno a una unidad de config (tenant). */
+  cfgId?: string | null;
+  /** Presente sólo con fleetToken: orígenes permitidos para CORS. */
+  allowedOrigins?: string[];
+  /** Presente cuando la credencial fue una sesión/API key de la cuenta. */
+  ctx?: AuthContext;
+};
+
+const fleetForbidden = (required: FleetTokenScope) =>
+  new Response(JSON.stringify({ error: "Forbidden", requiredScope: required }), {
+    status: 403,
+    headers: { "Content-Type": "application/json" },
+  });
+
+const fleetNotFound = () =>
+  new Response(JSON.stringify({ error: "Not found" }), {
+    status: 404,
+    headers: { "Content-Type": "application/json" },
+  });
+
+export async function authFleetAgent(
+  request: Request,
+  fleetAgentId: string,
+  required: FleetTokenScope,
+  opts?: {
+    /** Rutas WABA donde el secreto que ya tiene Formmy es credencial válida. */
+    allowFormmySecret?: boolean;
+  }
+): Promise<FleetAuthResult> {
   const fleetAgent = await db.fleetAgent.findUnique({ where: { id: fleetAgentId } });
-  const notFound = () =>
-    new Response(JSON.stringify({ error: "Not found" }), { status: 404, headers: { "Content-Type": "application/json" } });
-  if (!fleetAgent) throw notFound();
-  // (1) fleetToken per-agente.
-  const bearer =
-    request.headers.get("Authorization")?.replace(/^Bearer\s+/i, "") ||
-    new URL(request.url).searchParams.get("token") ||
-    "";
-  if (bearer && bearer === fleetAgent.token) return fleetAgent;
-  // (2)/(3) dueño o delegado con scope `agents`.
+  if (!fleetAgent) throw fleetNotFound();
+
+  const headerBearer =
+    request.headers.get("Authorization")?.replace(/^Bearer\s+/i, "") || "";
+  const queryToken = new URL(request.url).searchParams.get("token") || "";
+
+  const {
+    validateFleetToken,
+    hasFleetScope,
+    touchFleetToken,
+    isPublishable,
+    isFleetToken,
+  } = await import("./core/fleetTokens");
+
+  // (1) FleetAgentToken con scope.
+  const candidate = headerBearer || queryToken;
+  if (candidate && isFleetToken(candidate)) {
+    // Un secreto por query string es un error de integración, no una credencial.
+    if (!headerBearer && !isPublishable(candidate)) throw fleetForbidden(required);
+    const row = await validateFleetToken(candidate);
+    if (!row || row.fleetAgentId !== fleetAgent.id) throw fleetNotFound();
+    if (!hasFleetScope(row.scopes, required)) throw fleetForbidden(required);
+    touchFleetToken(row);
+    return {
+      fleetAgent,
+      kind: "fleetToken",
+      scopes: row.scopes,
+      tokenId: row.id,
+      cfgId: row.cfgId,
+      allowedOrigins: row.allowedOrigins,
+    };
+  }
+
+  // (2) Token legacy: ADMIN implícito. `deny` lo apaga por agente.
+  if (candidate && candidate === fleetAgent.token) {
+    if (fleetAgent.legacyTokenMode === "deny") throw fleetForbidden(required);
+    if (fleetAgent.legacyTokenMode === "warn") {
+      console.warn(
+        `[fleet-auth] token legacy usado en ${fleetAgent.id} (${new URL(request.url).pathname}) — migrar a flt_sk_`
+      );
+    }
+    return { fleetAgent, kind: "legacyToken", scopes: ["ADMIN"] };
+  }
+
+  // (3) formmySecret, sólo donde la ruta lo declara.
+  if (opts?.allowFormmySecret && headerBearer) {
+    const secret = (fleetAgent.wabaConfig as { formmySecret?: string } | null)?.formmySecret;
+    if (secret && headerBearer === secret) {
+      return { fleetAgent, kind: "formmySecret", scopes: ["ADMIN"] };
+    }
+  }
+
+  // (4) Dueño o delegado con scope `agents`.
   const ctx = requireAuth(await authenticateRequest(request));
   if (fleetAgent.ownerId === ctx.user.id || (await can(ctx, fleetAgent.ownerId, SCOPES.AGENTS))) {
-    return fleetAgent;
+    return { fleetAgent, kind: "session", scopes: ["ADMIN"], ctx };
   }
-  throw notFound();
+  throw fleetNotFound();
 }
 
 export type AgentAuthResult =

@@ -1,4 +1,5 @@
 import type { Route } from "./+types/fleet-admin.$fleetAgentId.mcp";
+import { authFleetAgent } from "~/.server/apiAuth";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { z } from "zod";
@@ -228,13 +229,14 @@ function buildAdminServer(fleetAgentId: string): McpServer {
 
 async function handle(request: Request, fleetAgentId: string): Promise<Response> {
   const url = new URL(request.url);
-  const bearer =
-    request.headers.get("Authorization")?.replace(/^Bearer\s+/i, "") ||
-    url.searchParams.get("token") ||
-    "";
-  const fleetAgent = await db.fleetAgent.findUnique({ where: { id: fleetAgentId } });
-  if (!fleetAgent || !bearer || fleetAgent.token !== bearer) {
-    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  // Auth centralizada. El worker presenta un `flt_sk_` con scope; el token legacy
+  // sigue valiendo mientras `legacyTokenMode` lo permita.
+  let fleetAgent;
+  try {
+    ({ fleetAgent } = await authFleetAgent(request, fleetAgentId, "ADMIN"));
+  } catch (e) {
+    const status = e instanceof Response ? e.status : 401;
+    return Response.json({ error: status === 403 ? "Forbidden" : "Unauthorized" }, { status });
   }
   const ctx = await ctxForOwner(fleetAgent.ownerId);
   if (!ctx) return Response.json({ error: "owner not found" }, { status: 401 });
