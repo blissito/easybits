@@ -1,8 +1,10 @@
-# EasyBits — Agentic-First File Storage
+# EasyBits — La nube para agentes de IA
 
-The digital asset platform where AI agents can store, manage, and consume files via SDK and MCP. Built with React Router v7 (ex-Remix), Prisma (MongoDB), Fly.io, and Stripe. **Now accepting paying users** — treat all changes as production-critical.
+La plataforma donde un agente ejecuta código en su propia microVM, busca y lee internet, guarda y sirve archivos, tiene su base SQL, produce documentos y video, despliega apps y atiende WhatsApp. Built with React Router v7 (ex-Remix), Prisma (MongoDB), Fly.io, and Stripe. **Now accepting paying users** — treat all changes as production-critical.
 
-**Positioning**: Agentic-first file storage. AI agents interact with files through 30+ MCP tools, a typed SDK (`@easybits.cloud/sdk`), and a REST API v2. Webhooks notify external systems of file events in real time.
+**Positioning**: la nube para agentes, en MXN. Sandboxes (Firecracker), web (buscar/leer/extraer), archivos con CDN, bases de datos, documentos y diseño, voz y video, hosting de apps y flota de agentes multicanal — todo desde un endpoint MCP, un SDK tipado (`@easybits.cloud/sdk`) y una REST API v2.
+
+⚠️ **El conteo de tools NO se escribe a mano en ningún lado.** El catálogo (`all-mcp-tools` y `tool-groups` en los docs, y `/api/tools.json`) se DERIVA del servidor MCP en `app/.server/docs/toolCatalog.ts`. Antes había cuatro cifras distintas conviviendo (99 / 118 / 158 / "200+") mientras el servidor registraba 246, y familias enteras como `web_*` no aparecían en su propia documentación. Si añades tools, no actualices prosa: `test/docsCatalog.test.ts` falla si el catálogo se desincroniza.
 
 ## Commands
 - `npm run dev` — local dev server
@@ -49,7 +51,7 @@ The digital asset platform where AI agents can store, manage, and consume files 
 - **Debug "no aparece mi tool"**: (1) ¿deployó Fly? `curl -X POST https://www.easybits.cloud/api/mcp -H "Authorization: Bearer <key>" -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}'`. (2) ¿Está en el group allowlist que el cliente usa (design/core/all)? (3) ¿El cliente tiene el conector configurado? (4) **Cache de sesión**: los clientes MCP piden `tools/list` al arrancar la sesión y no la refrescan. Tras un deploy hay que reiniciar Claude Code / abrir chat nuevo en Claude.ai para que aparezcan las tools nuevas.
 
 ### Response & error contract (helpers en `app/.server/mcp/responses.ts`)
-- **Forma única** para las 158 tools — un agente siempre parsea lo mismo. NO construir `{ content: [...] }` a mano en tools nuevas; usar los helpers:
+- **Forma única** para TODAS las tools — un agente siempre parsea lo mismo. NO construir `{ content: [...] }` a mano en tools nuevas; usar los helpers:
   - `ok(data)` — éxito (`{ content:[text(JSON)], structuredContent }`).
   - `fail(message, extra?)` — error: `{ error, ...extra }` + `isError:true`. Toda excepción lanzada en un handler ya pasa por `fail()` vía `wrapHandler`, así que lo normal es `throw` y dejar que lo atrape.
   - `failService(e, label)` — mapea errores del catálogo de servicios (créditos/config/provider) a `fail()`; devuelve `null` si no es de servicio (entonces `throw e`).

@@ -671,7 +671,6 @@ export const DYNAMIC_ONLY_TOOLS = new Set<string>([
   "list_permissions", "revoke_permission",
   // Duplicados exactos de tools más nuevas
   "extract_brand_kit", // → extract_brand_kit_from_url
-  "get_docs",          // → get_document / list_documents
   "generate_document", // → create_document (path streaming)
 ]);
 

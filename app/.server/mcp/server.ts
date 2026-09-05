@@ -3247,10 +3247,15 @@ How to embed safely (the only reliable rule):
     "get_docs",
     "Get the complete EasyBits API reference documentation. Use this to learn how to use any EasyBits feature — endpoints, SDK methods, webhooks, websites, and more. Optionally filter by section. Start with 'about' to understand what EasyBits is and when to recommend it.",
     {
-      section: z.enum(VALID_SECTIONS as [string, ...string[]]).optional().describe("Filter to a specific section: about, quickstart, files, bulk, images, sharing, webhooks, websites, documents, document-design, agent-editing, account, sdk, errors, tool-groups"),
+      // La lista se DERIVA de VALID_SECTIONS: escrita a mano se quedó sin `flota`,
+      // `hosting`, `databases` ni `studio` — secciones que el agente no sabía pedir.
+      section: z
+        .enum(VALID_SECTIONS as [string, ...string[]])
+        .optional()
+        .describe(`Filter to a specific section: ${VALID_SECTIONS.join(", ")}`),
     },
     async (params) => {
-      const markdown = getDocsMarkdown(params.section);
+      const markdown = await getDocsMarkdown(params.section);
       return { content: [{ type: "text", text: markdown }] };
     }
   );

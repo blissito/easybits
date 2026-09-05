@@ -40,6 +40,11 @@ export default [
   route("/sitemap.xml", "routes/sitemap.xml.tsx"),
   route("/robots.txt", "routes/robots.txt.tsx"),
   route("/llms.txt", "routes/llms.txt.ts"),
+  // Índice → secciones sueltas (1-12 KB) y volcado completo. Ver llms.txt.ts.
+  route("/llms-full.txt", "routes/llms-full.txt.ts"),
+  route("/llms/:section", "routes/llms.$section.txt.ts"),
+  // Catálogo de tools SIN auth: evaluar el producto no debería exigir cuenta.
+  route("/api/tools.json", "routes/api/tools.json.ts"),
   route("/terminos-y-condiciones", "routes/terminos.tsx"),
   route("/aviso-de-privacidad", "routes/aviso.tsx"),
   // public video link @todo revisit private only? tokens?

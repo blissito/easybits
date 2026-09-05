@@ -1,6 +1,6 @@
 # EasyBits
 
-Agentic-first file storage — AI agents store, manage, and consume files via SDK, MCP, and REST API.
+La nube para agentes de IA: sandboxes (microVMs Firecracker), web (buscar, leer, extraer), archivos, bases de datos SQL, documentos, hosting de apps y agentes en WhatsApp — desde un solo MCP, una REST API v2 y un SDK tipado. Precios en MXN, con plan gratuito.
 
 [easybits.cloud](https://www.easybits.cloud)
 
