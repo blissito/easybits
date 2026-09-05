@@ -124,6 +124,30 @@ Vendible desde 2026-08-10. **No requiere plan de pago**: una máquina es su PROP
 - Responder no-2xx hace que Stripe **reintente 3 días**: un evento inaccionable (usuario desconocido, otra app) se responde 200 + log.
 - Precios **al vuelo** (`price_data`) mientras el producto itere. `EB_HOSTING_PRODUCT_ID` fijado: sin él, `ensureHostingProduct` memoiza por PROCESO y crea un producto nuevo por deploy.
 
+### 🚨 Una ruta de RECURSO no puede tener `export default`
+
+Si un loader devuelve `new Response(texto)` y el archivo **además** exporta un
+componente, React Router trata la ruta como documento y sirve el **shell de la SPA**
+con status 200. Silencioso: no hay error, solo contenido equivocado.
+
+Con `prerender` encima es peor: hornea `build/client/robots.txt/index.html` —una
+**carpeta**— y el servidor estático redirige `/robots.txt` → `/robots.txt/`. El texto
+real queda secuestrado en `robots.txt.data`.
+
+Vivió meses en producción en tres rutas: `robots.txt`, `sitemap.xml` (ningún crawler
+leyó nunca el sitemap) y **`/calculadora`, que servía una página en blanco**. La
+prueba de que el patrón correcto es solo-loader es `llms.txt.ts`, que siempre
+funcionó. `test/publicSurfaces.test.ts` barre todas las rutas para que no vuelva.
+
+### ⚠️ Una página prerenderizada con solo `clientLoader` sale VACÍA para un crawler
+
+`/planes` y `/funcionalidades` se horneaban con ~385 palabras —puro shell— porque no
+tenían loader de servidor: el prerender no puede correr un `clientLoader`. La página
+de precios era invisible para buscadores. Con loader de servidor pasan a 1,101 y 950.
+Si prerenderizas una ruta, **necesita `loader`**, no solo `clientLoader`; el
+`clientLoader` cae de vuelta a `serverLoader()` si falla su fetch. Patrón en
+`home.tsx`.
+
 ### ⚠️ `npm run build` antes de pushear cambios que toquen rutas
 Cuatro deploys fallaron en silencio el 2026-08-10: typecheck y tests pasaban, pero un import de `~/.server` sin usar en una ruta rompe el bundle del cliente ("Server-only module referenced by client"). Sólo `npm run build` lo detecta.
 
