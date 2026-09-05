@@ -44,7 +44,8 @@ jobs:
 
       - name: Fin del ensayo
         if: inputs.dry_run
-        run: echo "dry_run activo: la credencial sirve y no se publicó nada."
+        run: |
+          echo "dry_run activo — la credencial sirve y no se publicó nada."
 
       # Publica cada paquete SOLO si su versión aún no está en npm. Así un re-run
       # (versión sin cambios) salta limpio, pero un error REAL de publish — auth
