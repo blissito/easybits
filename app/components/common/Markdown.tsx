@@ -19,15 +19,20 @@ const components = {
   Callout,
   CodeBlock,
 
-  // Enhanced code highlighting
-  code({ node, inline, className, children, ...props }: CodeProps) {
-    const match = /language-(\w+)/.exec(className || "");
-
-    return !inline && match ? (
-      <CodeBlock className={className} language={match[1]}>
-        {String(children).replace(/\n$/, "")}
+  // Bloques: react-markdown envuelve todo fence en <pre>, con o sin lenguaje.
+  pre({ children }: { children?: React.ReactNode }) {
+    const child = Array.isArray(children) ? children[0] : children;
+    const cp = (child as any)?.props ?? {};
+    const lang = /language-(\w+)/.exec(cp.className || "")?.[1] ?? "text";
+    return (
+      <CodeBlock className={cp.className} language={lang}>
+        {String(cp.children ?? "").replace(/\n$/, "")}
       </CodeBlock>
-    ) : (
+    );
+  },
+  // Inline (los bloques ya se interceptaron en `pre`)
+  code({ className, children, ...props }: CodeProps) {
+    return (
       <code
         className="bg-gray-100 text-gray-800 px-2 py-1 rounded text-sm font-mono border border-gray-300"
         {...props}

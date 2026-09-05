@@ -192,33 +192,24 @@ export const PostContent = ({ post }: PostContentProps) => {
                 components={{
                   // Remove H1 titles to avoid duplication with post header
                   h1: () => null,
-                  code: ({ node, className, children, ...props }) => {
-                    const match = /language-(\w+)/.exec(className || "");
-                    const language = match ? match[1] : "";
-
-                    if (language) {
-                      return (
-                        <CodeBlock
-                          language={language}
-                          className={className}
-                          {...props}
-                        >
-                          {String(children).replace(/\n$/, "")}
-                        </CodeBlock>
-                      );
-                    }
-
-                    // For inline code, use the existing CSS styles
+                  // Un fence SIN lenguaje (```) también es bloque: react-markdown lo
+                  // envuelve en <pre>, así que el bloque se decide aquí y no por
+                  // `language-*`. Antes caía al <code> inline y perdía los saltos de línea.
+                  pre: ({ children }) => {
+                    const child = Array.isArray(children) ? children[0] : children;
+                    const cp = (child as any)?.props ?? {};
+                    const lang = /language-(\w+)/.exec(cp.className || "")?.[1] ?? "text";
                     return (
-                      <code className={className} {...props}>
-                        {children}
-                      </code>
+                      <CodeBlock language={lang} className={cp.className}>
+                        {String(cp.children ?? "").replace(/\n$/, "")}
+                      </CodeBlock>
                     );
                   },
-                  pre: ({ children }) => {
-                    // Don't wrap CodeBlock in pre, it handles its own styling
-                    return <>{children}</>;
-                  },
+                  code: ({ className, children, ...props }) => (
+                    <code className={className} {...props}>
+                      {children}
+                    </code>
+                  ),
                 }}
               >
                 {part.content}
