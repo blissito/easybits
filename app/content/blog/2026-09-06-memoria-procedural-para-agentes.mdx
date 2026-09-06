@@ -35,6 +35,33 @@ Tres decisiones que te ahorran rehacer esto en un mes:
 
 **Cada caja tiene su propio disco.** Tres cajas del mismo agente son tres `/data` aislados — un ext4 no se monta en dos VMs a la vez sin corromperse. Lo compartido va en el repo, en Files o en una DB.
 
+## Paso 0: el token, con el alcance mínimo
+
+Antes de nada necesitas una credencial de git en tu vault. No uses tu token personal clásico:
+un *fine-grained PAT* de GitHub limitado a un repo hace exactamente lo que necesitas y nada
+más — si se filtra, no abre el resto de tu cuenta.
+
+En GitHub: **Settings → Developer settings → Personal access tokens → Fine-grained tokens →
+Generate new token**. Tres campos importan:
+
+- **Repository access**: *Only select repositories* → el repo del proyecto. No "All".
+- **Permissions → Repository permissions → Contents: Read and write.** Ese solo permiso basta
+  para `clone`, `pull` y `push`. Si el agente solo va a leer, déjalo en *Read-only*.
+- **Expiration**: ponle fecha. 90 días es un buen default; rotarlo es un `secret_set` más.
+
+El token sale una sola vez (`github_pat_...`). Cárgalo al vault por cualquiera de las dos
+puertas:
+
+- **UI**: `/dash/developer/secrets` → *Nuevo secreto*, nombre `GITHUB_TOKEN`, pega el valor.
+- **Agente**: la tool MCP `secret_set` — *"guarda este token como GITHUB_TOKEN"*. Es la misma
+  operación; lo que puede la UI, puede el agente.
+
+Después solo verás el nombre y la fecha de último uso: el valor no se devuelve nunca (`secret_list`
+lo confirma).
+
+El nombre debe ir en `MAYUSCULAS_CON_GUION_BAJO`; es la forma que después referencias como
+`$secret:GITHUB_TOKEN`.
+
 ## Paso 1: la memoria entra por git
 
 ```js
@@ -58,8 +85,6 @@ git -C /data/work config --get remote.origin.url   # sin credenciales
 git -C /data/work config --get-regexp credential   # vacío
 ls -A /dev/shm                                     # vacío
 ```
-
-Usa un token de alcance mínimo. Un *fine-grained PAT* limitado a ese repo con permiso de contenidos hace exactamente lo que necesitas y nada más.
 
 ## Paso 2: declara el bootstrap
 
