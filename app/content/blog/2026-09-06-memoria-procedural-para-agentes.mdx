@@ -1,0 +1,138 @@
+---
+title: "Tutorial: memoria procedural — que tu agente despierte sabiendo cómo trabajas"
+description: "Una caja que duerme revive sin boot: sin systemd, sin entrypoint, sin .bashrc. Cómo hacer que las convenciones de tu proyecto se recarguen solas en cada despertar, con git, bootstrap y skills. Las llamadas exactas y cómo verificar."
+date: "2026-09-06"
+author: "Equipo Easybits"
+tags: ["agentes", "sandboxes", "memoria", "git", "bootstrap", "tutorial"]
+featuredImage: "/blog/assets/blog-memoria-procedural-cover.jpg"
+kind: "tutorial"
+published: true
+---
+
+# Tutorial: memoria procedural — que tu agente despierte sabiendo cómo trabajas
+
+Tu agente vive en una microVM que duerme cuando nadie le habla y despierta en menos de un segundo cuando llega un mensaje. El problema aparece la tercera vez que despierta: **una caja restaurada de un snapshot revive sin boot.** No vuelve a correr `systemd`, ni el entrypoint, ni `.bashrc` — todo eso pasó cuando se horneó la imagen. Así que una caja que durmió tres días despierta con el mundo de hace tres días, y nada lo señala. Responde igual, solo que trabajando con supuestos viejos.
+
+Este tutorial cubre cómo cerrar ese hueco.
+
+## Los dos tipos de memoria, y por qué se guardan distinto
+
+| | Semántica | Procedural |
+|---|---|---|
+| Qué es | Datos: archivos, tablas, historial | Cómo se hacen las cosas: convenciones, criterios, procedimientos |
+| Cuándo se usa | Se **consulta** cuando hace falta | Se **carga siempre**, antes de trabajar |
+| Dónde vive | Files, DB, embeddings | `AGENTS.md`, skills |
+
+La diferencia práctica importa más de lo que parece. Una tool MCP se llama bajo demanda, y el agente **puede no llamarla**. Si escondes "en esta empresa las cotizaciones llevan IVA desglosado" detrás de una tool, hay turnos enteros en los que el agente trabaja mal sin enterarse. La memoria procedural tiene que estar delante de sus ojos desde el primer token.
+
+## La regla: el repo la guarda, el bootstrap la reactiva
+
+Tres decisiones que te ahorran rehacer esto en un mes:
+
+**La procedural vive en el repo, no en la caja.** Versionada, con historial, una sola verdad. Si la pones en el disco de la caja y mañana abres tres cajas, tienes tres copias divergiendo.
+
+**El disco de la caja guarda solo lo suyo.** Los templates de agente traen `/data` persistente que sobrevive al sueño: cachés, trabajo a medias, estado local. Nada que otro deba leer.
+
+**Cada caja tiene su propio disco.** Tres cajas del mismo agente son tres `/data` aislados — un ext4 no se monta en dos VMs a la vez sin corromperse. Lo compartido va en el repo, en Files o en una DB.
+
+## Paso 1: la memoria entra por git
+
+```js
+const sbx = await eb.sandboxes.create({
+  template: "node",
+  suspendOnIdle: true,        // sin esto la caja se DESTRUYE al idlear, no duerme
+  timeoutSeconds: 3600,
+});
+
+await sbx.git.clone({
+  repo: "https://github.com/tu-org/proyecto.git",
+  dir: "/data/work",
+  token: "$secret:GITHUB_TOKEN",   // del vault; se usa y se tira
+});
+```
+
+El `$secret:` resuelve contra tu vault en el servidor. El token viaja a la caja solo para esa operación y desaparece: no queda en `.git/config`, no aparece en un `ps`. Puedes comprobarlo tú mismo, y vale la pena hacerlo una vez:
+
+```bash
+git -C /data/work config --get remote.origin.url   # sin credenciales
+git -C /data/work config --get-regexp credential   # vacío
+ls -A /dev/shm                                     # vacío
+```
+
+Usa un token de alcance mínimo. Un *fine-grained PAT* limitado a ese repo con permiso de contenidos hace exactamente lo que necesitas y nada más.
+
+## Paso 2: declara el bootstrap
+
+Es el script que **el host** corre cada vez que la caja despierta, antes de que el agente reciba su primer mensaje:
+
+```js
+await sbx.setBootstrap({
+  script: [
+    // Rama propia de esta sesión. -B, no -b: corre en CADA despertar.
+    'git -C /data/work checkout -B "sesion/${EB_SANDBOX_ID}"',
+    // Las convenciones, al alcance del agente
+    'ln -sfn /data/work/AGENTS.md /root/AGENTS.md',
+    'mkdir -p /root/.claude && ln -sfn /skills /root/.claude/skills',
+  ].join("\n"),
+  mode: "blocking",
+});
+```
+
+Por REST es lo mismo:
+
+```bash
+curl -X POST https://www.easybits.cloud/api/v2/sandboxes/$SB/bootstrap \
+  -H "Authorization: Bearer $EB_KEY" -H 'Content-Type: application/json' \
+  -d '{"script":"git -C /data/work checkout -B main","mode":"async"}'
+```
+
+Cuatro cosas que conviene saber:
+
+- **Hazlo idempotente.** Corre en cada despertar: `checkout -B`, no `-b`; `ln -sfn`, no `ln -s`. Un script que falla la segunda vez es peor que ninguno.
+- **`async` (default) no frena el primer mensaje**; `blocking` espera hasta `timeoutSeconds` antes de servir. Un `sleep 25` en async cuesta 1s al que escribe; en blocking, los 25.
+- **Un bootstrap roto nunca deja la caja inalcanzable.** El resultado queda anotado en `eb_boot_exit` y `eb_boot_err`, legibles desde fuera.
+- **Nunca metas una credencial en el script.** La receta viaja en el metadata de la caja y aparece en los listados.
+
+Variables disponibles: `EB_RESUME=1` y `EB_SANDBOX_ID`. El cwd es `/data/work`.
+
+## Paso 3: dónde encaja lo que sí necesita credencial
+
+Esta frontera es el detalle que más se malinterpreta, así que conviene tenerla clara:
+
+**El bootstrap hace el trabajo local** — ramas, enlaces, convenciones. No lleva secretos, así que **no puede hacer `fetch` de un repo privado**. Tu caja despierta con las convenciones aplicadas pero con el código del último `pull`.
+
+**Lo que necesita credencial pasa por la tool:**
+
+```js
+await sbx.git.pull({ dir: "/data/work", rebase: true, token: "$secret:GITHUB_TOKEN" });
+```
+
+En la práctica: pon "empieza haciendo pull" como primera línea de tu `AGENTS.md`. Como el bootstrap lo enlaza en cada despertar, el agente lo lee siempre y lo hace él mismo. La memoria procedural se encarga de mantener al día la semántica.
+
+## Paso 4: verifica que funciona
+
+La prueba que importa no es reanudar a mano, sino **despertar la caja con tráfico normal** — que es como despierta de verdad:
+
+```js
+await sbx.suspend();
+// ...alguien le escribe al agente, o llega una petición a su puerto expuesto
+const r = await sbx.exec({ command: "git -C /data/work branch --show-current" });
+// → sesion/sb_ad532a83-...
+```
+
+Si sale la rama de sesión, el bootstrap corrió. Repítelo cinco veces: la rama debe seguir siendo una sola, sin errores de "branch already exists". Ahí sabes que es idempotente de verdad.
+
+## Y el trabajo, de vuelta
+
+El ciclo cierra donde empezó:
+
+```js
+await sbx.git.commit({ dir: "/data/work", message: "cambios del agente" });
+await sbx.git.push({ dir: "/data/work", setUpstream: true, token: "$secret:GITHUB_TOKEN" });
+```
+
+Cada sesión deja su rama. Revisas como revisarías la de un compañero.
+
+---
+
+Lo que queda montado es sencillo de describir: **el repo guarda cómo se trabaja, el bootstrap lo reactiva en cada despertar, `/data` guarda lo de esa caja, y lo que necesita llave pasa por una tool que la usa y la tira.** Un agente que duerme meses y despierta al día.
