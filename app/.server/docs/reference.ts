@@ -621,6 +621,40 @@ Y **acuérdate de \`sandbox_exec_kill\`**: sin él un proceso colgado se queda c
 Body: \`{ code, lang?, timeoutSeconds? }\`
 MCP: \`sandbox_run_code({ sandboxId, code, lang? })\`
 
+### Bootstrap al reanudar
+
+Una caja restaurada de un snapshot revive **sin boot**: no vuelve a correr systemd, ni el
+entrypoint, ni \`.bashrc\` — todo eso pasó cuando se horneó la imagen. Así que una caja que
+durmió tres días despierta con el mundo de hace tres días, y nada lo señala.
+
+\`sandbox_set_bootstrap({ sandboxId, script, mode?, timeoutSeconds? })\`
+\`PATCH /sandboxes/:id/bootstrap\`
+
+El script lo corre **el host**, en cada despertar, venga de donde venga: una petición al proxy
+de un puerto, un mensaje al agente, el dominio público. No sólo cuando llamas a \`resume\`.
+
+\`\`\`bash
+git -C /data/work fetch --all --prune \\
+  && git -C /data/work checkout -B "sesion/\${EB_SANDBOX_ID}" origin/main \\
+  && ln -sfn /skills /data/work/.claude/skills
+\`\`\`
+
+- **Hazlo idempotente.** Corre en CADA despertar: \`checkout -B\`, no \`-b\`; \`ln -sfn\`, no \`ln -s\`.
+- Variables disponibles: \`EB_RESUME=1\` y \`EB_SANDBOX_ID\`. El cwd es \`/data/work\`.
+- \`mode: "async"\` (default) — la caja responde de inmediato mientras el script corre, así que
+  el primer mensaje no lo paga. \`"blocking"\` espera hasta \`timeoutSeconds\` antes de servir,
+  para cuando el trabajo TIENE que estar hecho antes.
+- Un script que falla **nunca** deja la caja inalcanzable. El resultado queda anotado
+  (\`eb_boot_exit\`, \`eb_boot_err\`) para que sea diagnosticable en vez de invisible.
+- Script vacío = apagarlo, sin destruir la caja.
+
+⚠️ **Nunca metas una credencial en el script.** La receta viaja en el metadata de la caja y
+aparece en los listados. Referencia variables que ya vivan dentro de la VM, o resuelve el
+secreto con \`$secret:\` desde una tool de git.
+
+Es la pieza que convierte a las skills en memoria de verdad: en un template sin recarga en
+caliente, una skill instalada entra en vigor en el siguiente despertar, sola.
+
 ### Git: que el trabajo del agente sobreviva a la caja
 
 Una caja que duerme tres días despierta con el código de hace tres días, y sin una forma de

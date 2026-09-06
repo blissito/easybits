@@ -1195,6 +1195,12 @@ model Agent {
   // secretos (lleva llaves de proveedor). Es lo que permite VOLVER A LEVANTAR la caja
   // sobre esta misma fila (ensureAgentBox) cuando el host ya no la tiene.
   spawnEnv              String?
+  // Bootstrap al reanudar: el script que el HOST corre cada vez que la caja
+  // despierta. Vive aquí y no sólo en el metadata del host porque una caja
+  // perdida se re-crea desde esta fila (ensureAgentBox) y la nueva tendría que
+  // nacer sabiendo lo mismo. A diferencia de spawnEnv NO va cifrado: es una
+  // receta, no una credencial — y el host la publica en sus listados.
+  bootstrap             String?
 
   // URL pública del escritorio noVNC (templates desktop-*). Se popula al
   // exponer :6080 en createAgent; null para el resto.

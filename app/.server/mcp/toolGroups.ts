@@ -429,6 +429,7 @@ export const SANDBOX_ALLOWLIST = new Set<string>([
   "sandbox_exec_status",
   "sandbox_exec_kill",
   // Git: sin esto el trabajo del agente muere con la caja.
+  "sandbox_set_bootstrap",
   "sandbox_git_clone",
   "sandbox_git_status",
   "sandbox_git_commit",

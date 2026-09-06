@@ -1079,6 +1079,46 @@ export async function suspendSandbox(
 // Restore a suspended sandbox from its snapshot (same TAP/IP/MAC/rootfs/volumes).
 // The host restores the lifetime that remained at suspend time and re-arms the
 // auto-destroy timer, returning the record with the refreshed expiresAt.
+/**
+ * Declara el BOOTSTRAP de una caja: el script que corre cada vez que despierta.
+ *
+ * El hueco que cierra: una caja restaurada de un snapshot revive SIN boot — no
+ * corre systemd otra vez, ni el entrypoint, ni .bashrc. Una caja dormida tres
+ * días despierta con el repo de hace tres días y las convenciones del proyecto
+ * sin releer, y nada lo señala.
+ *
+ * Lo EJECUTA el host, no este código, y es a propósito: el camino caliente de
+ * resume no pasa por aquí. El daemon despierta la caja ante cualquier petición
+ * —el proxy de un puerto, un mensaje al agente, el hairpin del dominio público—
+ * y sólo una minoría de los despertares reales llega por `resumeSandbox`.
+ * Ejecutarlo aquí significaría que el agente recibe su primer mensaje con el
+ * trabajo previo sin hacer, que es justo lo que esto promete evitar.
+ *
+ * ⚠️ La receta viaja en `metadata`, que se devuelve en los listados: NUNCA metas
+ * una credencial en el script. Referencia lo que ya vive dentro de la VM.
+ */
+export async function setSandboxBootstrap(
+  ctx: AuthContext,
+  sandboxId: string,
+  params: { script?: string; mode?: "async" | "blocking"; timeoutSeconds?: number }
+): Promise<{ ok: true; metadata: Record<string, string> }> {
+  requireScope(ctx, "WRITE");
+  const metadata: Record<string, string> = {};
+  // Cadena vacía = borrar la clave en el host. Es la forma de APAGAR el
+  // bootstrap sin tener que destruir la caja.
+  if (params.script !== undefined) metadata.eb_boot = params.script;
+  if (params.mode !== undefined) metadata.eb_boot_mode = params.mode;
+  if (params.timeoutSeconds !== undefined) {
+    metadata.eb_boot_timeout = String(params.timeoutSeconds);
+  }
+  return callHost(
+    "PATCH",
+    `/v1/sandbox/${sandboxId}/metadata`,
+    { metadata },
+    await effectiveOwnerId(ctx, sandboxId)
+  );
+}
+
 export async function resumeSandbox(
   ctx: AuthContext,
   sandboxId: string
@@ -3850,6 +3890,10 @@ async function reviveAgentBox(agentId: string): Promise<AgentRecord> {
     persistent: true,
     hardTtlSeconds: ACP_HARD_TTL_SECONDS,
     kind: "embed",
+    // La caja nace ya sabiendo su bootstrap. Sin esto, un agente al que se le
+    // perdió la caja volvería sin la parte que lo mantenía al día — y el fallo
+    // sería invisible: responde, sólo que con el mundo de hace días.
+    ...(row.bootstrap ? { metadata: { eb_boot: row.bootstrap } } : {}),
   });
   await db.agent.update({
     where: { id: agentId },

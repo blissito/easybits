@@ -154,6 +154,7 @@ import {
   listAgents,
   destroyAgent,
   sandboxAdmin,
+  setSandboxBootstrap,
 } from "../core/sandboxOperations";
 import {
   buyMachine,
@@ -358,6 +359,7 @@ const SANDBOX_TOOL_KIND: Record<string, "create" | "op"> = {
   sandbox_exec_list: "op",
   sandbox_exec_status: "op",
   sandbox_exec_kill: "op",
+  sandbox_set_bootstrap: "op",
   sandbox_git_status: "op",
   sandbox_git_log: "op",
   agent_run_status: "op",
@@ -2613,6 +2615,37 @@ How to embed safely (the only reliable rule):
     })
   );
 
+
+
+  server.tool(
+    "sandbox_set_bootstrap",
+    "Declare the BOOTSTRAP of a sandbox: a script the host runs EVERY TIME the box wakes up, before the agent gets its first message. This closes a gap nobody else covers — a box restored from a snapshot revives with NO boot (no systemd, no entrypoint, no .bashrc), so one that slept three days wakes up with three-day-old code and nothing says so. Typical use: `git fetch && git checkout -B sesion/$EB_SANDBOX_ID origin/main`, or linking skills/AGENTS.md into the workdir. Make it idempotent (use `checkout -B`, not `-b`) — it runs on every wake. Env available: EB_RESUME=1, EB_SANDBOX_ID. Runs in /data/work. ⚠️ NEVER put a credential in the script: the recipe travels in metadata and shows up in listings. Pass an empty script to turn it off.",
+    {
+      sandboxId: z.string().describe("Sandbox ID"),
+      script: z
+        .string()
+        .max(8192)
+        .describe("Bash script to run on every wake-up. Empty string disables it."),
+      mode: z
+        .enum(["async", "blocking"])
+        .optional()
+        .describe(
+          "async (default): the box answers immediately while the script runs — the first message doesn't pay for it. blocking: wait for it (up to timeoutSeconds) before serving, for when the work MUST be done first. A failing script never makes the box unreachable either way."
+        ),
+      timeoutSeconds: z
+        .number()
+        .int()
+        .min(1)
+        .max(120)
+        .optional()
+        .describe("How long the script may run (default 20, max 120)"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { sandboxId, ...rest } = params;
+      return ok(await setSandboxBootstrap(ctx, sandboxId, rest));
+    })
+  );
 
   // ── Git ────────────────────────────────────────────────────────────────────
   // Sin esto, el trabajo de un agente muere con la caja. La credencial va POR

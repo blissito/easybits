@@ -1,23 +1,22 @@
 import { db } from "../db";
 import type { AuthContext } from "../apiAuth";
 import { requireScope } from "../apiAuth";
-import { writeFile as sandboxWriteFile, readFile as sandboxReadFile, openAgentMessageStream } from "./sandboxOperations";
+import { writeFile as sandboxWriteFile, readFile as sandboxReadFile, listFiles as sandboxListFiles, openAgentMessageStream } from "./sandboxOperations";
 
 // Cap per-file size at 10 MB so a malicious or careless upload can't OOM
 // the EasyBits process while we base64 the buffer in memory.
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
 const MAX_TOTAL_BYTES = 25 * 1024 * 1024;
 const SKILL_NAME_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
-const SKILL_TEMPLATES = new Set(["openclaw", "ghostyclaw", "open-ghosty"]);
 
 // Per-template wire details for the hot-load notification. The Bearer is
 // agent.embedToken in both cases — for ghostyclaw that token is also injected
 // into the VM as NANOCLAW_ADMIN_TOKEN (see sandboxOperations.ts:707), so the
 // admin-api auth() check passes with the same secret.
-function resolveRuntimeTarget(template: string, agent: AgentRow): {
-  port: number;
-  path: string;
-} {
+function resolveRuntimeTarget(
+  template: string,
+  agent: AgentRow
+): { port: number; path: string } | null {
   if (template === "ghostyclaw") {
     return { port: 8787, path: "/admin/skills/install" };
   }
@@ -25,8 +24,12 @@ function resolveRuntimeTarget(template: string, agent: AgentRow): {
     // server.js escucha en :3000; rutas admin con Bearer ADMIN_TOKEN (= embedToken).
     return { port: 3000, path: "/admin/skills/install" };
   }
-  // openclaw + any future template that wires its own /skills/install
-  return { port: agent.port ?? 18789, path: "/skills/install" };
+  if (template === "openclaw") {
+    return { port: agent.port ?? 18789, path: "/skills/install" };
+  }
+  // Cualquier otro template: los archivos se escriben igual, pero no hay a quién
+  // avisar. Ver installSkill — se degrada a hotLoaded:false en vez de rechazar.
+  return null;
 }
 
 export interface InstallSkillResult {
@@ -35,6 +38,13 @@ export interface InstallSkillResult {
   path: string;
   files: string[];
   bytes: number;
+  /**
+   * `false` = la skill quedó escrita pero el runtime no la recogió en caliente
+   * (ese template no expone endpoint de instalación). No es un fallo: entra en
+   * vigor en el siguiente arranque de la caja, o ya mismo si el bootstrap la
+   * enlaza al workdir.
+   */
+  hotLoaded: boolean;
 }
 
 interface AgentRow {
@@ -51,11 +61,6 @@ async function loadAgentRow(ctx: AuthContext, agentId: string): Promise<AgentRow
   const row = await db.agent.findUnique({ where: { id: agentId } });
   if (!row || row.ownerId !== ctx.user.id) {
     throw new Error("agent not found");
-  }
-  if (!SKILL_TEMPLATES.has(row.template)) {
-    throw new Error(
-      `Skills install unavailable for template "${row.template}" — supported: ${[...SKILL_TEMPLATES].join(", ")}`
-    );
   }
   if (row.status !== "running") {
     throw new Error(`agent is ${row.status}; cannot install skill`);
@@ -84,11 +89,19 @@ function safeAssetName(raw: string): string {
   return base;
 }
 
+/**
+ * Avisa al runtime para que recoja la skill sin reiniciar.
+ *
+ * Devuelve si hubo a quién avisar. Un template sin endpoint de instalación no es
+ * un error: los archivos ya están escritos y el bootstrap-al-reanudar los pondrá
+ * en juego en el próximo despertar.
+ */
 async function notifyRuntime(
   agent: AgentRow,
   body: unknown
-): Promise<void> {
+): Promise<boolean> {
   const target = resolveRuntimeTarget(agent.template, agent);
+  if (!target) return false;
   const { stream } = await openAgentMessageStream(agent.sandboxId, agent.ownerId, {
     port: target.port,
     path: target.path,
@@ -107,6 +120,7 @@ async function notifyRuntime(
     const { done } = await reader.read();
     if (done) break;
   }
+  return true;
 }
 
 export interface InstalledSkillEntry {
@@ -121,6 +135,44 @@ export interface InstalledSkillEntry {
   dir?: string;
 }
 
+/**
+ * Listado leído del filesystem de la caja, para templates que no exponen un
+ * endpoint de skills. La descripción sale del frontmatter del SKILL.md, igual
+ * que hacen los runtimes que sí lo exponen.
+ */
+async function listSkillsFromDisk(
+  ctx: AuthContext,
+  agent: AgentRow
+): Promise<InstalledSkillEntry[]> {
+  const ls = async (path: string) =>
+    (await sandboxListFiles(ctx, agent.sandboxId, { path }).catch(() => null))?.entries ?? [];
+
+  const out: InstalledSkillEntry[] = [];
+  for (const d of await ls("/skills")) {
+    if (!d.isDir) continue;
+    const dir = `/skills/${d.name}`;
+    const files = await ls(dir);
+    if (!files.some((f) => f.name === "SKILL.md")) continue;
+    let description = "";
+    const head = await sandboxReadFile(ctx, agent.sandboxId, {
+      path: `${dir}/SKILL.md`,
+    }).catch(() => null);
+    if (head?.content) {
+      const m = head.content.match(/^description:\s*(.+)$/m);
+      if (m) description = m[1].trim();
+    }
+    out.push({
+      name: d.name,
+      description,
+      files: files.map((f) => f.name),
+      sizeBytes: files.reduce((n, f) => n + (f.size ?? 0), 0),
+      uploadedAt: d.modifiedAt ?? "",
+      dir,
+    });
+  }
+  return out;
+}
+
 // Lee la lista de skills directamente desde la VM (filesystem real). Es la
 // fuente de verdad para la UI: refleja cualquier skill que vivió ahí, sin
 // importar si pasó por la UI o por API/MCP directa.
@@ -130,6 +182,9 @@ export async function listInstalledSkills(
 ): Promise<InstalledSkillEntry[]> {
   const agent = await loadAgentRow(ctx, agentId);
   const target = resolveRuntimeTarget(agent.template, agent);
+  // Sin runtime al que preguntar, la fuente de verdad es el disco de la caja.
+  // Es igual de real: el listado del runtime también sale de ahí.
+  if (!target) return listSkillsFromDisk(ctx, agent);
   // El handler GET vive en /admin/skills (ghostyclaw) o /skills (openclaw),
   // siempre el install path sin el /install final.
   const listPath = target.path.replace(/\/install$/, "");
@@ -233,10 +288,12 @@ export async function installSkill(
     written.push(safeName);
   }
 
-  // 3. Notify the runtime so it picks up the skill without a restart.
-  await notifyRuntime(agent, { name, path: skillDir, files: written });
+  // 3. Notify the runtime so it picks up the skill without a restart. Cuando el
+  //    template no expone endpoint de instalación esto es un no-op: la skill ya
+  //    está en el disco de la caja y entra en vigor al siguiente arranque.
+  const hotLoaded = await notifyRuntime(agent, { name, path: skillDir, files: written });
 
-  return { ok: true, name, path: skillDir, files: written, bytes: total };
+  return { ok: true, name, path: skillDir, files: written, bytes: total, hotLoaded };
 }
 
 // Copia una skill de un agente ORIGEN a uno DESTINO (agente-a-agente). Reusa
