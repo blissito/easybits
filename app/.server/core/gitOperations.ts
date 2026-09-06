@@ -70,9 +70,11 @@ export function redactGit(s: string): string {
  * El `trap` es la primera línea ejecutable a propósito: si se pusiera después
  * del `git`, un timeout que mata el shell dejaría el token en tmpfs.
  */
-function credentialPrologue(dir: string): string {
+function credentialPrologue(): string {
+  // Nada de re-asignar EB_CRED_DIR aquí: la elige el probe de arriba y volver a
+  // escribirla con shQuote la dejaría entre comillas SIMPLES, sin expandir — el
+  // askpass acabaría siendo la ruta literal "$EB_CRED_DIR/askpass.sh".
   return [
-    `EB_CRED_DIR=${shQuote(dir)}`,
     `trap 'rm -rf "$EB_CRED_DIR"' EXIT INT TERM`,
     `chmod 700 "$EB_CRED_DIR" 2>/dev/null || true`,
     `chmod 600 "$EB_CRED_DIR"/.u "$EB_CRED_DIR"/.p 2>/dev/null || true`,
@@ -121,7 +123,7 @@ export function buildGitScript(opts: {
         (base) =>
           `[ "$EB_CRED_DIR" = ${shQuote(dirFor(base))} ] || rm -rf ${shQuote(dirFor(base))} 2>/dev/null || true`
       ),
-      credentialPrologue("$EB_CRED_DIR"),
+      credentialPrologue(),
       `export GIT_ASKPASS="$EB_CRED_DIR"/askpass.sh`,
     ].join("\n");
   }
