@@ -345,6 +345,30 @@ Webhooks auto-pause after 5 consecutive delivery failures (non-2xx response or t
 \`deploy_website_file\` uploads content directly (max 1MB, text or base64). No presigned URL or status update needed.
 For large binary files (>1MB), use \`upload_website_file\` → PUT to presigned URL → \`update_file(status: "DONE")\`.
 
+### A site is a folder, not a single page
+\`fileName\` accepts a **path**, so deploy every file at its real path and the site keeps its structure:
+
+\`\`\`ts
+await eb.deployWebsiteFile(websiteId, { fileName: "index.html",      content: html });
+await eb.deployWebsiteFile(websiteId, { fileName: "producto.html",   content: producto });
+await eb.deployWebsiteFile(websiteId, { fileName: "css/estilos.css", content: css, contentType: "text/css" });
+await eb.deployWebsiteFile(websiteId, { fileName: "js/main.js",      content: js,  contentType: "application/javascript" });
+\`\`\`
+
+\`/s/<slug>/\` resolves **relative links between the site's own files**, so the HTML goes as-is:
+
+\`\`\`html
+<link rel="stylesheet" href="css/estilos.css">
+<script src="js/main.js"></script>
+<a href="producto.html">Ver producto</a>
+\`\`\`
+
+Do **not** rewrite a site's own pages/CSS/JS to absolute storage URLs — the deployed copies end up orphaned while the page loads a duplicate from a random key. Absolute public URLs are only for **binary assets** you uploaded (\`upload_website_file\`), and for those you must embed the \`url\` returned verbatim.
+
+Routing details: \`/s/<slug>/\` serves \`index.html\`; a path with no extension falls back to \`<path>/index.html\`.
+
+Images: download third-party images and upload them (\`upload_website_file\`, or \`deploy_website_file\` with \`encoding: "base64"\` if <1MB). Never hotlink Flickr/Unsplash from a published site.
+
 ### List websites
 \`GET /websites\`
 Returns: \`{ items: Website[] }\`
@@ -597,6 +621,9 @@ Es la diferencia entre "mi agente sigue ahí mañana" y un 404 sin explicación.
   que lleve 72 h suspendido.
 - \`persistent: true\` — la caja salta el reaper por antigüedad (para always-on).
 
+El body no lleva más campos que esos. Lo que una caja hace **al despertar** no se declara aquí:
+es una llamada aparte sobre la caja ya creada — ver *Bootstrap al reanudar*.
+
 Para cualquier caja que aloje un agente al que le vas a escribir MÁS TARDE —un agente ACP, un
 bot— \`suspendOnIdle\` no es opcional: sin él la pierdes y su URL deja de servir, porque el
 sandboxId de la nueva es otro.
@@ -628,7 +655,11 @@ entrypoint, ni \`.bashrc\` — todo eso pasó cuando se horneó la imagen. Así 
 durmió tres días despierta con el mundo de hace tres días, y nada lo señala.
 
 \`sandbox_set_bootstrap({ sandboxId, script, mode?, timeoutSeconds? })\`
-\`PATCH /sandboxes/:id/bootstrap\`
+\`POST /sandboxes/:id/bootstrap\`
+Body: \`{ script, mode?, timeoutSeconds? }\`
+
+⚠️ **No es un campo de \`POST /sandboxes\`.** El create no lo acepta: es una segunda llamada
+sobre la caja ya creada. Crea, y luego declara el bootstrap sobre su \`sandboxId\`.
 
 El script lo corre **el host**, en cada despertar, venga de donde venga: una petición al proxy
 de un puerto, un mensaje al agente, el dominio público. No sólo cuando llamas a \`resume\`.
