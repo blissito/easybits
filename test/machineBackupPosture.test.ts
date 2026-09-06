@@ -65,3 +65,51 @@ describe("clasificación de backup de una máquina", () => {
     expect(classifyBackupTarget(spec, null).kind).toBe("protected");
   });
 });
+
+// La segunda mitad del problema, encontrada en producción el 2026-09-06: el
+// cron reportaba `attempted: 2, succeeded: 0, unprotected: 2` cada noche, y una
+// de esas dos máquinas tenía SIETE puntos de restauración en el host, con copia
+// fuera del sitio y un ensayo de restauración semanal que pasa.
+//
+// classifyBackupTarget no está mal — solo sabe de ESTE sistema (el tarball de
+// dataPaths). Lo que estaba mal era tratar su "unprotected" como la respuesta
+// final. Hay tres estados, no dos, y solo uno es una alarma:
+//
+//   protected  → tarball de datos al día
+//   disk-only  → sin tarball, pero el host guarda el disco entero
+//   unprotected→ nada, en ningún sitio
+//
+// Un informe que grita por una máquina respaldada enseña a ignorar el informe.
+describe("tres estados, no dos", () => {
+  it("sigue distinguiendo lo que este sistema sí puede saber", () => {
+    // Sin dataPaths, ESTE sistema no puede copiar nada. Eso no cambia: lo que
+    // cambia es quién decide si es una alarma, y ahora esa decisión necesita
+    // preguntarle al host (staleBackupMachines lo hace; aquí no llega).
+    const spec = runspecSchema.parse({ appDir: "/app", startCommand: "npm start" });
+    expect(classifyBackupTarget(spec, null).kind).toBe("unprotected");
+  });
+
+  it("una máquina que optó por salirse nunca es alarma", () => {
+    // Precede a todo lo demás: si el dueño dijo que no, no hay nada que discutir
+    // ni que preguntarle al host.
+    const spec = runspecSchema.parse({
+      appDir: "/app",
+      startCommand: "npm start",
+      dataPaths: ["/data"],
+    });
+    expect(classifyBackupTarget(spec, "none")).toEqual({ kind: "opted-out" });
+  });
+
+  it("un backupScope nulo NO es optar por salirse", () => {
+    // En Mongo un campo ausente no casa con {not:"none"}, y esa asimetría ya
+    // vació una query de 13 de 15 filas una vez. El clasificador tiene que
+    // tratar null igual que lo trata la query, o el informe y la corrida real
+    // discreparían sobre qué máquinas cuentan.
+    const spec = runspecSchema.parse({
+      appDir: "/app",
+      startCommand: "npm start",
+      dataPaths: ["/data"],
+    });
+    expect(classifyBackupTarget(spec, null).kind).toBe("protected");
+  });
+});

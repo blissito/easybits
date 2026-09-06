@@ -21,7 +21,7 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
   }
 
   const result = await backupPermanentMachines();
-  const { stale, unprotected } = await staleBackupMachines();
+  const { stale, unprotected, diskOnly } = await staleBackupMachines();
   const label = (m: { sandboxId: string; name: string | null }) =>
     m.name ? `${m.sandboxId} (${m.name})` : m.sandboxId;
   if (stale.length) {
@@ -30,15 +30,26 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
       stale.map(label).join(", ")
     );
   }
-  // Same severity as stale on purpose: these are not being backed up at all.
-  // Either the box is genuinely stateless (fine) or someone forgot to declare
-  // runspec.dataPaths and its data is one lost host away from gone — and from
-  // here the two are indistinguishable, so a human has to look.
+  // Same severity as stale on purpose: these have NO copy anywhere — not a data
+  // tarball here, and not a disk image on the host either. Either the box is
+  // genuinely stateless (fine) or someone forgot to declare runspec.dataPaths
+  // and its data is one lost host away from gone. From here the two are
+  // indistinguishable, so a human has to look.
   if (unprotected.length) {
     console.error(
-      `[backup-machines] ${unprotected.length} machine(s) with no backup configured (no runspec.dataPaths):`,
+      `[backup-machines] ${unprotected.length} machine(s) with NO backup at all (no runspec.dataPaths and no host restore points):`,
       unprotected.map(label).join(", ")
     );
   }
-  return data({ ...result, stale, unprotected });
+  // Info, NOT an alarm. The host backs up these boxes' whole disk on its own
+  // (offsite, weekly restore drill), they just don't declare dataPaths so this
+  // system can't add a data-only tarball on top. Reporting them as failures is
+  // how a report teaches people to ignore it — which is worse than no report.
+  if (diskOnly.length) {
+    console.log(
+      `[backup-machines] ${diskOnly.length} machine(s) covered by host disk backups only (no runspec.dataPaths):`,
+      diskOnly.map((m) => `${label(m)} ×${m.hostRestorePoints}`).join(", ")
+    );
+  }
+  return data({ ...result, stale, unprotected, diskOnly });
 };

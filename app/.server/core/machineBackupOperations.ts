@@ -27,7 +27,7 @@
 import type { AuthContext } from "../apiAuth";
 import { requireScope } from "../apiAuth";
 import { db } from "../db";
-import { effectiveOwnerId, execSandboxRaw, shQuote, writeFile } from "./sandboxOperations";
+import { effectiveOwnerId, execSandboxRaw, listHostBackups, shQuote, writeFile } from "./sandboxOperations";
 import { getPlatformDefaultClient } from "../storage";
 import type { Runspec } from "./releaseOperations";
 import { nanoid } from "nanoid";
@@ -101,6 +101,24 @@ export type BackupPosture =
   | { kind: "protected"; paths: string[] }
   | { kind: "unprotected"; reason: "no-datapaths" }
   | { kind: "opted-out" };
+
+/**
+ * La postura DESPUÉS de preguntarle al host.
+ *
+ * `classifyBackupTarget` solo sabe de este sistema — el tarball de `dataPaths` a
+ * Tigris — y por eso llamaba "desprotegida" a una máquina que el daemon lleva
+ * respaldando entera desde hace semanas. Las dos máquinas vendidas que hay en
+ * producción salían así cada noche: `attempted: 2, succeeded: 0, unprotected: 2`,
+ * mientras una de ellas tenía SIETE puntos de restauración con copia fuera del
+ * sitio y un ensayo semanal que pasa.
+ *
+ * Un informe que grita por una máquina respaldada enseña a ignorar el informe,
+ * que es peor que no tenerlo. Así que "sin respaldo de datos" y "sin ningún
+ * respaldo" pasan a ser dos cosas distintas, y solo la segunda es una alarma.
+ */
+export type BackupPostureResolved =
+  | BackupPosture
+  | { kind: "disk-only"; hostRestorePoints: number; newest: string | null };
 
 /**
  * Pure classifier behind the nightly report. Mirrors the `NOT: {backupScope:
@@ -397,21 +415,39 @@ export async function purgeDeletedMachineArtifacts(): Promise<{
 /** Machines whose newest available backup is older than the alert threshold. */
 export async function staleBackupMachines(): Promise<{
   stale: { sandboxId: string; name: string | null; lastBackupAt: Date | null }[];
+  /** Ni tarball de datos ni respaldo del host: la alarma de verdad. */
   unprotected: { sandboxId: string; name: string | null }[];
+  /** Sin tarball de datos, pero el host sí guarda el disco entero. No es alarma. */
+  diskOnly: { sandboxId: string; name: string | null; hostRestorePoints: number }[];
 }> {
   const machines = await db.sandbox.findMany({
     where: { persistent: true, status: "running", ...NOT_OPTED_OUT },
-    select: { sandboxId: true, name: true, runspec: true, backupScope: true },
+    select: { sandboxId: true, name: true, runspec: true, backupScope: true, ownerId: true },
   });
   const cutoff = new Date(Date.now() - STALE_ALERT_HOURS * 3600_000);
   const stale: { sandboxId: string; name: string | null; lastBackupAt: Date | null }[] = [];
   const unprotected: { sandboxId: string; name: string | null }[] = [];
+  const diskOnly: { sandboxId: string; name: string | null; hostRestorePoints: number }[] = [];
   for (const m of machines) {
     const posture = classifyBackupTarget(m.runspec as Runspec, m.backupScope);
     // Reported, not skipped: a machine that CANNOT be backed up is the failure
     // mode this alert exists for, and it used to be the one case it dropped.
     if (posture.kind !== "protected") {
-      if (posture.kind === "unprotected") unprotected.push({ sandboxId: m.sandboxId, name: m.name });
+      if (posture.kind === "unprotected") {
+        // Antes de gritar, preguntarle al host. El daemon respalda el disco
+        // ENTERO de las cajas vendidas por su cuenta, y una máquina con siete
+        // puntos de restauración no es una alarma aunque no declare dataPaths.
+        const hostBackups = await listHostBackups(m.ownerId, m.sandboxId).catch(() => []);
+        if (hostBackups.length) {
+          diskOnly.push({
+            sandboxId: m.sandboxId,
+            name: m.name,
+            hostRestorePoints: hostBackups.length,
+          });
+        } else {
+          unprotected.push({ sandboxId: m.sandboxId, name: m.name });
+        }
+      }
       continue;
     }
     const last = await db.sandboxBackup.findFirst({
@@ -423,7 +459,7 @@ export async function staleBackupMachines(): Promise<{
       stale.push({ sandboxId: m.sandboxId, name: m.name, lastBackupAt: last?.createdAt ?? null });
     }
   }
-  return { stale, unprotected };
+  return { stale, unprotected, diskOnly };
 }
 
 // --- owner-facing --------------------------------------------------------

@@ -1097,6 +1097,36 @@ export async function suspendSandbox(
  * ⚠️ La receta viaja en `metadata`, que se devuelve en los listados: NUNCA metas
  * una credencial en el script. Referencia lo que ya vive dentro de la VM.
  */
+/**
+ * Puntos de restauración que el HOST tiene de una caja.
+ *
+ * Son otro producto que los snapshots de usuario: los crea el daemon solo
+ * (`auto-backup:`), viven en el fierro, se copian fuera del sitio con restic y
+ * los gobierna su propia retención. EasyBits no los registra en Mongo, así que
+ * la única forma de saber si una máquina está respaldada es PREGUNTARLE al host.
+ *
+ * Sin esto, el informe nocturno llamaba "desprotegida" a una máquina con siete
+ * puntos de restauración, sólo porque no declaraba `runspec.dataPaths`.
+ */
+export async function listHostBackups(
+  ownerId: string,
+  sandboxId: string
+): Promise<Array<{ snapshotId: string; createdAt: string; sizeBytes: number }>> {
+  const res = await callHost<{ backups?: unknown[] } | unknown[]>(
+    "GET",
+    `/v1/sandbox/${sandboxId}/backups`,
+    undefined,
+    ownerId
+  ).catch(() => null);
+  if (!res) return [];
+  const arr = Array.isArray(res)
+    ? res
+    : Array.isArray((res as { backups?: unknown[] }).backups)
+      ? (res as { backups: unknown[] }).backups
+      : [];
+  return arr as Array<{ snapshotId: string; createdAt: string; sizeBytes: number }>;
+}
+
 export async function setSandboxBootstrap(
   ctx: AuthContext,
   sandboxId: string,

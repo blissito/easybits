@@ -124,14 +124,26 @@ Si sale la rama de sesión, el bootstrap corrió. Repítelo cinco veces: la rama
 
 ## Y el trabajo, de vuelta
 
-El ciclo cierra donde empezó:
-
 ```js
 await sbx.git.commit({ dir: "/data/work", message: "cambios del agente" });
 await sbx.git.push({ dir: "/data/work", setUpstream: true, token: "$secret:GITHUB_TOKEN" });
 ```
 
-Cada sesión deja su rama. Revisas como revisarías la de un compañero.
+**¿Quién corre eso?** Nadie automáticamente — y conviene tenerlo claro porque **no hay hook de
+apagado**. El push lo dispara una de dos cosas:
+
+- **El propio agente**, durante su turno, si tiene las tools montadas. Pones "cuando termines
+  una tarea, haz commit y push" en tu `AGENTS.md` y lo hace como usaría cualquier otra
+  herramienta. Es la opción coherente con todo lo anterior: el bootstrap enlaza el `AGENTS.md`
+  en cada despertar, así que la instrucción está siempre delante de sus ojos.
+- **Tu orquestador**, desde tu código, cuando el agente termina de responder.
+
+Y la consecuencia que hay que decir en voz alta: **si la caja se destruye sin que nadie haya
+empujado, ese trabajo se pierde.** Dormir no lo pierde — `/data` sobrevive al sueño. Destruir la
+caja, sí. Por eso el push no es el final decorativo del ciclo: es el único momento en que el
+trabajo deja de depender de que la caja siga viva.
+
+Hecho eso, cada sesión deja su rama y la revisas como revisarías la de un compañero.
 
 ---
 
