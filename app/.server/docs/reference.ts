@@ -576,7 +576,7 @@ Si prefieres el control paso a paso (o ya tienes la caja armada), el camino larg
 
   agents: `## Agentes & Sandboxes
 
-MicroVMs Firecracker para correr agentes y código aislado. 22 herramientas MCP en el grupo \`sandbox\`.
+MicroVMs Firecracker para correr agentes y código aislado. Las herramientas viven en el grupo MCP \`sandbox\` (el catálogo completo está en /api/tools.json).
 
 ### Templates
 \`code-interpreter\` (Python + kernel Jupyter persistente), \`python\` / \`node\` / \`bun\` (runtimes base), \`ubuntu\` (Linux completo), \`rust-ghosty\` (Ghosty DeepSeek-first + WhatsApp), \`claude-code\` (Claude Agent SDK loop), \`ghosty-lite\` (agente ACP ligero en Rust, multi-provider; ver Agentes) y \`goose\` (goose de la AAIF, ACP nativo), \`computer-ghosty\` (computer-use con escritorio), \`livekit-svc\` (sala de videollamada + grabación HD → ver sección Studio), \`ghostyclaw\` / \`openclaw\` (daemons always-on).
@@ -620,6 +620,53 @@ Y **acuérdate de \`sandbox_exec_kill\`**: sin él un proceso colgado se queda c
 \`POST /sandboxes/:id/run-code\`
 Body: \`{ code, lang?, timeoutSeconds? }\`
 MCP: \`sandbox_run_code({ sandboxId, code, lang? })\`
+
+### Git: que el trabajo del agente sobreviva a la caja
+
+Una caja que duerme tres días despierta con el código de hace tres días, y sin una forma de
+publicar, lo que el agente escribió muere con ella. Estas siete herramientas cierran el ciclo
+completo: clonar, trabajar, publicar.
+
+\`\`\`
+sandbox_git_clone({ sandboxId, repo, dir, branch?, depth?, commit?, token? })
+sandbox_git_status({ sandboxId, dir })
+sandbox_git_commit({ sandboxId, dir, message, addAll?, paths? })
+sandbox_git_push({ sandboxId, dir, branch?, setUpstream?, token? })
+sandbox_git_pull({ sandboxId, dir, rebase?, token? })
+sandbox_git_checkout({ sandboxId, dir, branch, create?, from? })
+sandbox_git_log({ sandboxId, dir, limit?, cursor? })
+\`\`\`
+
+**La credencial es POR LLAMADA y no se queda en la caja.** \`token\` acepta el valor literal o
+—mejor— una referencia a tu vault:
+
+\`\`\`js
+await eb.secrets.set({ name: "GITHUB_TOKEN", value: "ghp_…" });   // una vez
+await sb.git.clone({ repo, dir: "/data/work", token: "$secret:GITHUB_TOKEN" });
+\`\`\`
+
+El token viaja a la caja para esa operación y se borra al terminar. **Nunca** se escribe en el
+\`.git/config\` del repo ni aparece en la línea de comando, así que un \`ps\` desde dentro de la
+caja no lo ve. Por eso no hay un paso de "limpiar credenciales después": no hay nada que
+limpiar. Un URL con credenciales embebidas (\`https://user:token@…\`) se rechaza con 422 en vez
+de aceptarse en silencio, precisamente porque git SÍ lo persistiría.
+
+Detalles que importan cuando el que llama es un agente y no una persona:
+
+- \`sandbox_git_status\` devuelve datos, no texto: \`{ branch, upstream, ahead, behind, clean,
+  staged[], modified[], untracked[], conflicted[] }\`. Sale de \`porcelain=v2\`, así que no cambia
+  entre versiones de git ni con el idioma del sistema.
+- \`sandbox_git_commit\` sin cambios devuelve \`{ nothingToCommit: true }\` como ÉXITO. Un error
+  ahí invita al agente a reintentar, y reintentar no cambia nada: es un bucle.
+- \`sandbox_git_checkout\` con \`create: true\` usa \`-B\`, que es idempotente — pensado para
+  correrse en cada arranque sin fallar con "branch already exists".
+- \`sandbox_git_push\` con \`force\` usa \`--force-with-lease\`: si alguien más empujó a esa rama,
+  falla en vez de borrarle el trabajo.
+- La identidad del commit va por llamada (\`authorName\` / \`authorEmail\`, default
+  \`EasyBits Agent\`), sin dejar un \`git config\` escrito en el repo del cliente.
+
+Para repos privados en \`launch_app\`, el mismo mecanismo: \`launch_app({ repo, repoToken:
+"$secret:GITHUB_TOKEN" })\`. El token no entra al runspec ni al tarball del release.
 
 ### Kernel persistente (code-interpreter)
 MCP: \`sandbox_run_cell({ sandboxId, code })\` — estado sobrevive entre celdas. Gráficas matplotlib se devuelven como imágenes.

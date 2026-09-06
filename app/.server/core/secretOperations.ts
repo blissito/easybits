@@ -107,3 +107,45 @@ export async function getSecretValue(
     .catch(() => {});
   return decryptSecret(row.value);
 }
+
+/**
+ * Un valor que puede ser un literal o una referencia al vault: `$secret:NOMBRE`.
+ *
+ * Nació en `agent_run` para que el caller pudiera cablear un secreto a un MCP
+ * hijo bajo el nombre que ese MCP espera, sin que el texto plano saliera nunca
+ * del servidor. Vive aquí porque git y cualquier otra superficie que reciba una
+ * credencial necesitan la MISMA forma: una segunda sintaxis para lo mismo sería
+ * una trampa para el que aprende una y usa la otra.
+ */
+export const SECRET_REF_RE = /^\$secret:([A-Z_][A-Z0-9_]*)$/;
+
+/** ¿Este valor es una referencia al vault, en vez de un literal? */
+export function isSecretRef(value: string): boolean {
+  return SECRET_REF_RE.test(value);
+}
+
+/**
+ * Resuelve `$secret:NOMBRE` contra el vault del usuario. Un valor que no casa el
+ * patrón se devuelve tal cual — así el mismo parámetro acepta un token literal
+ * o una referencia, sin un flag aparte.
+ */
+export async function resolveSecretRef(
+  userId: string,
+  value: string,
+  opts: { hint?: string } = {}
+): Promise<string> {
+  const m = value.match(SECRET_REF_RE);
+  if (!m) return value;
+  const name = m[1];
+  const resolved = await getSecretValue(userId, name).catch(() => null);
+  if (resolved == null) {
+    const e: any = new Error(
+      `$secret:${name} no existe en el vault. ${opts.hint ?? "Cárgalo con `secret_set` o en /dash/developer/secrets."}`
+    );
+    e.code = "SecretsMissing";
+    e.status = 422;
+    e.missing = [name];
+    throw e;
+  }
+  return resolved;
+}

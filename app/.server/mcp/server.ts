@@ -33,6 +33,15 @@ import { offloadOversizedRead } from "./offloadOversizedRead";
 import { installDynamicTools } from "./dynamicTools";
 import { resolveFormat as resolveSocialFormat, SOCIAL_PRESET_KEYS } from "../core/socialPresets";
 import { ok, fail, paginate, failService } from "./responses";
+import {
+  gitCheckout,
+  gitClone,
+  gitCommit,
+  gitLog,
+  gitPull,
+  gitPush,
+  gitStatus,
+} from "../core/gitOperations";
 
 // Legacy quotation/fast-pdf tools are hidden by default so the agent does not
 // get confused during the structured_doc experiment. Document v4 tools
@@ -349,6 +358,8 @@ const SANDBOX_TOOL_KIND: Record<string, "create" | "op"> = {
   sandbox_exec_list: "op",
   sandbox_exec_status: "op",
   sandbox_exec_kill: "op",
+  sandbox_git_status: "op",
+  sandbox_git_log: "op",
   agent_run_status: "op",
   agent_run_destroy: "op",
   agent_message: "op",
@@ -1731,8 +1742,10 @@ How to embed safely (the only reliable rule):
     "launch_app",
     "Put an app in production in ONE call — the `fly launch` of EasyBits: provisions the machine, gets the code in, builds, starts it, exposes a public HTTPS URL, publishes a recovery release and (optionally) attaches the customer's domain. Returns { url, releaseId, domain.dns }. PREFER THIS over wiring create_machine + deploy_machine + expose + domain by hand: doing it manually, the step that gets skipped is the release, and a machine without a release cannot be rebuilt if it dies. NO platform plan needed: if the account has none, this returns { checkoutUrl } instead — give it to the customer, and once they pay the machine is created automatically (find it with list_machines, then launch again with its sandboxId). Pass exactly ONE source.",
     {
-      repo: z.string().optional().describe("Git URL to clone (the reproducible path)"),
+      repo: z.string().optional().describe("Git URL to clone (the reproducible path). No embedded credentials — use repoToken."),
       branch: z.string().optional(),
+      repoToken: z.string().optional().describe("Token for a PRIVATE repo. Accepts '$secret:NAME' from the vault. Used only during the clone: it never lands in .git/config, in the runspec, or in the release tarball."),
+      repoUsername: z.string().optional().describe("Username for repoToken (default 'x-access-token')"),
       archiveUrl: z.string().optional().describe("URL of a .tar.gz/.zip of the app — e.g. uploaded from the customer's computer"),
       sandboxId: z.string().optional().describe("Existing machine where the app was ALREADY written; launch what is in it"),
       tier: z.enum(TIER_ORDER as unknown as [string, ...string[]]).optional().describe("Tier for the new machine (default micro; nano's 256MB will not survive a Node build)"),
@@ -2597,6 +2610,147 @@ How to embed safely (the only reliable rule):
         graceSeconds: params.graceSeconds,
       });
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+
+  // ── Git ────────────────────────────────────────────────────────────────────
+  // Sin esto, el trabajo de un agente muere con la caja. La credencial va POR
+  // LLAMADA y acepta `$secret:NOMBRE` del vault: nunca queda en `.git/config`
+  // ni es visible en `ps`.
+  const gitAuthShape = {
+    token: z
+      .string()
+      .optional()
+      .describe(
+        "Token para repos privados. Acepta el valor literal o una referencia al vault: '$secret:GITHUB_TOKEN' (recomendado). Se usa SOLO en esta llamada — no queda guardado en la caja ni en .git/config."
+      ),
+    username: z
+      .string()
+      .optional()
+      .describe("Usuario para el token (default 'x-access-token', que es lo que espera un PAT de GitHub)"),
+  };
+
+  server.tool(
+    "sandbox_git_clone",
+    "Clone a git repo into a sandbox. For private repos pass `token` (ideally as '$secret:NAME' from the vault) — credentials are used for this call only and are NEVER written to .git/config or visible in `ps`. Use `commit` to check out a specific sha (detached HEAD); otherwise the clone is shallow by default.",
+    {
+      sandboxId: z.string().describe("Sandbox ID"),
+      repo: z.string().describe("Repo URL, e.g. https://github.com/user/repo.git (no embedded credentials)"),
+      dir: z.string().describe("Absolute path to clone into, e.g. /data/work"),
+      branch: z.string().optional().describe("Branch to check out"),
+      depth: z.number().int().min(1).optional().describe("Shallow clone depth (default 1). Ignored when `commit` is set."),
+      commit: z.string().optional().describe("Specific commit sha — clones full history and detaches HEAD there"),
+      ...gitAuthShape,
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { sandboxId, token, username, ...rest } = params;
+      return ok(
+        await gitClone(ctx, sandboxId, { ...rest, auth: { token, username } })
+      );
+    })
+  );
+
+  server.tool(
+    "sandbox_git_status",
+    "Structured git status for a repo in a sandbox: branch, upstream, ahead/behind counts, and the staged/modified/untracked/conflicted file lists. Parsed from porcelain=v2, so it is stable across git versions and locales.",
+    {
+      sandboxId: z.string().describe("Sandbox ID"),
+      dir: z.string().describe("Absolute path of the repo"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      return ok(await gitStatus(ctx, params.sandboxId, { dir: params.dir }));
+    })
+  );
+
+  server.tool(
+    "sandbox_git_commit",
+    "Stage and commit in a sandbox repo. Stages everything by default; pass `paths` to stage a subset. If there is nothing to commit this returns { nothingToCommit: true } as a SUCCESS — it is not an error, so don't retry. Author identity is per-call and leaves no `git config` behind.",
+    {
+      sandboxId: z.string().describe("Sandbox ID"),
+      dir: z.string().describe("Absolute path of the repo"),
+      message: z.string().describe("Commit message"),
+      addAll: z.boolean().optional().describe("Stage all changes first (default true)"),
+      paths: z.array(z.string()).optional().describe("Stage only these paths instead of everything"),
+      authorName: z.string().optional().describe("Commit author name (default 'EasyBits Agent')"),
+      authorEmail: z.string().optional().describe("Commit author email (default agent@easybits.cloud)"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { sandboxId, ...rest } = params;
+      return ok(await gitCommit(ctx, sandboxId, rest));
+    })
+  );
+
+  server.tool(
+    "sandbox_git_push",
+    "Push a sandbox repo to its remote. Pass `token` (or '$secret:NAME') for private repos. `force` uses --force-with-lease, so a push that would discard someone else's commits fails instead of silently winning.",
+    {
+      sandboxId: z.string().describe("Sandbox ID"),
+      dir: z.string().describe("Absolute path of the repo"),
+      remote: z.string().optional().describe("Remote name (default origin)"),
+      branch: z.string().optional().describe("Branch to push (default: the current one)"),
+      setUpstream: z.boolean().optional().describe("Set the upstream tracking branch (-u)"),
+      force: z.boolean().optional().describe("Force push with lease — refuses if the remote moved"),
+      ...gitAuthShape,
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { sandboxId, token, username, ...rest } = params;
+      return ok(await gitPush(ctx, sandboxId, { ...rest, auth: { token, username } }));
+    })
+  );
+
+  server.tool(
+    "sandbox_git_pull",
+    "Pull into a sandbox repo. Fast-forward only by default (pass rebase:true to rebase). Returns any conflicted paths so the agent can act on them instead of guessing.",
+    {
+      sandboxId: z.string().describe("Sandbox ID"),
+      dir: z.string().describe("Absolute path of the repo"),
+      rebase: z.boolean().optional().describe("Rebase local commits on top instead of fast-forward only"),
+      ...gitAuthShape,
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { sandboxId, token, username, ...rest } = params;
+      return ok(await gitPull(ctx, sandboxId, { ...rest, auth: { token, username } }));
+    })
+  );
+
+  server.tool(
+    "sandbox_git_checkout",
+    "Switch branches in a sandbox repo. With create:true it uses `checkout -B`, which is idempotent — safe to run on every wake-up without failing on 'branch already exists'.",
+    {
+      sandboxId: z.string().describe("Sandbox ID"),
+      dir: z.string().describe("Absolute path of the repo"),
+      branch: z.string().describe("Branch name"),
+      create: z.boolean().optional().describe("Create or reset the branch (-B). Idempotent."),
+      from: z.string().optional().describe("Start point when creating, e.g. origin/main"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { sandboxId, ...rest } = params;
+      return ok(await gitCheckout(ctx, sandboxId, rest));
+    })
+  );
+
+  server.tool(
+    "sandbox_git_log",
+    "Commit history of a sandbox repo, paginated. Returns { items, nextCursor, hasMore } — pass nextCursor back as `cursor` for the next page.",
+    {
+      sandboxId: z.string().describe("Sandbox ID"),
+      dir: z.string().describe("Absolute path of the repo"),
+      limit: z.number().int().min(1).max(200).optional().describe("Commits per page (default 20)"),
+      cursor: z.string().optional().describe("nextCursor from a previous call"),
+      path: z.string().optional().describe("Only commits touching this path"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { sandboxId, ...rest } = params;
+      const { items, nextCursor } = await gitLog(ctx, sandboxId, rest);
+      return ok(paginate(items, { nextCursor }));
     })
   );
 

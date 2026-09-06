@@ -12,7 +12,7 @@ import {
   waitUntilRunning,
   writeFile as sandboxWriteFile,
 } from "./sandboxOperations";
-import { getSecretValue } from "./secretOperations";
+import { getSecretValue, SECRET_REF_RE } from "./secretOperations";
 import { createApiKey } from "../iam";
 
 const EASYBITS_BASE_URL =
@@ -274,7 +274,9 @@ const writeResult = () => {
 // the plaintext ever leaving the EasyBits server. Example: brightdata's
 // MCP reads `API_TOKEN`, but the user's secret is registered as
 // `BRIGHTDATA_API_TOKEN` — they pass `env: { API_TOKEN: "$secret:BRIGHTDATA_API_TOKEN" }`.
-const SECRET_REF_RE = /^\$secret:([A-Z_][A-Z0-9_]*)$/;
+// La forma canónica vive en secretOperations — git y cualquier otra superficie
+// que acepte una credencial usan la MISMA. Aquí sólo se reusa.
+
 
 function expandMcpServerSecrets(
   mcpServers: Record<string, unknown> | undefined,

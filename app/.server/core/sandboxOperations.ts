@@ -1329,7 +1329,17 @@ async function pollGhostyclawReady(
 export async function execCommand(
   ctx: AuthContext,
   sandboxId: string,
-  params: { command: string; cwd?: string; timeoutSeconds?: number; env?: Record<string, string> }
+  // `stdin` es la vía limpia para una credencial: no aparece en la línea de
+  // comando (`ps`) ni en `/proc/<pid>/environ`. El host ya lo aceptaba de punta
+  // a punta (handlers.go → fc.ExecReq.Stdin → sandbox-agent), sólo que EasyBits
+  // no lo exponía.
+  params: {
+    command: string;
+    cwd?: string;
+    timeoutSeconds?: number;
+    env?: Record<string, string>;
+    stdin?: string;
+  }
 ): Promise<ExecResult> {
   requireScope(ctx, "WRITE");
   const timeoutSeconds = Math.min(params.timeoutSeconds ?? 60, 600);
@@ -1341,6 +1351,7 @@ export async function execCommand(
       cwd: params.cwd,
       timeoutSeconds,
       env: params.env,
+      stdin: params.stdin,
     },
     await effectiveOwnerId(ctx, sandboxId),
     // El host puede tardar hasta timeoutSeconds — dar margen al fetch.

@@ -39,7 +39,7 @@ import {
   writeFile,
 } from "./sandboxOperations";
 import { buyMachine, releasePermanent } from "./machineOperations";
-import { createSecret, getSecretValue, listSecrets } from "./secretOperations";
+import { createSecret, listSecrets } from "./secretOperations";
 import { getPlatformDefaultClient } from "../storage";
 import { nanoid } from "nanoid";
 
@@ -59,8 +59,14 @@ const PREBUILT_KEEP = new Set(["node_modules", "dist", "build", ".next"]);
  * Dónde se materializan los secretos de la app dentro de la máquina. Vive en
  * el appDir para que el build y el arranque lo tengan a mano, con permisos
  * 0600, y está en los excludes: nunca viaja dentro de un release.
+ *
+ * La definición vive en `secretsFile.ts` — el lado de agentes usa la misma. Se
+ * re-exporta aquí porque `DEFAULT_EXCLUDES` y media docena de imports la
+ * esperan en este módulo.
  */
-export const SECRETS_FILE = ".easybits.env";
+export { SECRETS_FILE } from "./secretsFile";
+import { SECRETS_FILE, sourceSecrets, writeSecretsFile } from "./secretsFile";
+import { assertNoInlineCredentials, gitFailure, runGit } from "./gitOperations";
 
 /** Dónde se anota el pid de la app, para poder pararla en el siguiente deploy. */
 export const PID_FILE = ".easybits-app.pid";
@@ -712,38 +718,12 @@ async function materializeSecrets(
   sandboxId: string,
   spec: Runspec
 ): Promise<boolean> {
-  const names = spec.secretNames ?? [];
-  if (!names.length) return false;
-
-  const lines: string[] = [];
-  const missing: string[] = [];
-  for (const name of names) {
-    const value = await getSecretValue(ctx.user.id, name).catch(() => null);
-    if (value == null) {
-      missing.push(name);
-      continue;
-    }
-    // Comillas simples con el escape de shell habitual: un valor puede traer
-    // espacios, `$`, comillas — una URL de Mongo con contraseña las trae.
-    lines.push(`${name}='${value.replace(/'/g, `'\\''`)}'`);
-  }
-
-  // Arrancar sin un secreto que la app declaró da un fallo mucho más oscuro
-  // (la app revienta al conectar) que decirlo aquí.
-  if (missing.length) {
-    const e: any = new Error(
-      `Estos secretos están declarados en el runspec pero no existen en el vault: ${missing.join(", ")}. Cárgalos con PUT /api/v2/machines/${sandboxId}/secrets.`
-    );
-    e.code = "SecretsMissing";
-    e.status = 422;
-    throw e;
-  }
-
-  const filePath = `${spec.appDir}/${SECRETS_FILE}`;
-  await writeFile(ctx, sandboxId, { path: filePath, content: lines.join("\n") + "\n" });
-  // El contenido es lo más sensible de la máquina; que no lo lea nadie más.
-  await execSandboxRaw(ctx.user.id, sandboxId, `chmod 600 ${shQuote(filePath)}`, 30).catch(() => {});
-  return true;
+  const { written } = await writeSecretsFile(ctx, sandboxId, {
+    dir: spec.appDir,
+    names: spec.secretNames ?? [],
+    hint: `Cárgalos con PUT /api/v2/machines/${sandboxId}/secrets.`,
+  });
+  return written;
 }
 
 /**
@@ -759,17 +739,16 @@ function withSecrets(
   hasSecrets: boolean,
   opts: { exec?: boolean } = {}
 ) {
-  const final = opts.exec ? `exec ${command}` : command;
   // runspec.env se guardaba pero nunca llegaba al proceso: la app arrancaba
   // con sus defaults de código (PORT, URLs) aunque el runspec dijera otra
   // cosa. Van primero; los secretos del vault, después, ganan por nombre.
   const exports = Object.entries(spec.env ?? {})
     .map(([k, v]) => `export ${k}=${shQuote(String(v))};`)
     .join(" ");
-  const secrets = hasSecrets
-    ? `set -a; . ${shQuote(`${spec.appDir}/${SECRETS_FILE}`)}; set +a;`
-    : "";
-  return [exports, secrets, final].filter(Boolean).join(" ");
+  return sourceSecrets(hasSecrets ? `${spec.appDir}/${SECRETS_FILE}` : "", command, {
+    exec: opts.exec,
+    exports,
+  });
 }
 
 /**
@@ -1119,6 +1098,13 @@ export async function launchApp(
   params: {
     repo?: string;
     branch?: string;
+    /**
+     * Token para un repo PRIVADO. Acepta `$secret:NOMBRE`. Se usa sólo durante
+     * el clone y no se guarda: ni en el runspec (que viaja en Mongo y se hornea
+     * en cada tarball) ni en el `.git/config` de la caja.
+     */
+    repoToken?: string;
+    repoUsername?: string;
     archiveUrl?: string;
     sandboxId?: string;
     tier?: string;
@@ -1249,37 +1235,33 @@ export async function launchApp(
     }
 
     if (params.repo) {
-      const branch = params.branch ? `-b ${shQuote(params.branch)} ` : "";
-      const res = await execSandboxRaw(
-        owner,
-        sandboxId,
-        [
-          "set -e",
-          "command -v git >/dev/null || (apt-get update -qq && apt-get install -y -qq git)",
-// Se vacía el CONTENIDO, no el directorio: si appDir es un punto de
+      // El clone va por gitOperations: es el único sitio que sabe entregar una
+      // credencial sin que acabe en `ps` ni en `.git/config`. Antes esto era un
+      // `git clone` inline y un repo privado sencillamente no funcionaba.
+      assertNoInlineCredentials(params.repo);
+      const dest = shQuote(spec.appDir);
+      const tmp = `${TMPDIR}/eb-clone-${nanoid(8)}`;
+      const res = await runGit(ctx, sandboxId, {
+        auth: { token: params.repoToken, username: params.repoUsername },
+        timeoutSeconds: 300,
+        pre: [
+          // Se vacía el CONTENIDO, no el directorio: si appDir es un punto de
           // montaje —/app lo es en varios templates— `rm -rf` sobre él falla con
-          // "Device or resource busy" y el deploy muere antes de empezar. Es el
-          // mismo patrón que usa unpackInto.
-          `mkdir -p ${shQuote(spec.appDir)}`,
-          `find ${shQuote(spec.appDir)} -mindepth 1 -maxdepth 1 ! -name 'lost+found' -exec rm -rf {} +`,
-          // git clone exige un directorio 100% vacío y `lost+found` sobrevive al
-          // find (es de la partición). Se clona aparte y se copia el contenido.
-          `CLONE_TMP=$(mktemp -d ${shQuote(`${TMPDIR}/eb-clone.XXXXXX`)})`,
-          // git 2.43 (Ubuntu 24.04) + protocolo v2 sobre HTTP/2 revienta contra
-          // GitHub con "expected flush after ref listing" y pide usuario en un
-          // repo PÚBLICO. Con HTTP/1.1 funciona. Sin prompt de terminal para
-          // que un repo privado falle rápido en vez de colgarse.
-          `GIT_TERMINAL_PROMPT=0 git -c http.version=HTTP/1.1 clone --depth 1 ${branch}${shQuote(params.repo)} "$CLONE_TMP"`,
-          `cp -a "$CLONE_TMP"/. ${shQuote(spec.appDir)}/`,
-          `rm -rf "$CLONE_TMP"`,
+          // "Device or resource busy" y el deploy muere antes de empezar.
+          `mkdir -p ${dest}`,
+          `find ${dest} -mindepth 1 -maxdepth 1 ! -name 'lost+found' -exec rm -rf {} +`,
+        ],
+        // git clone exige un directorio 100% vacío y `lost+found` sobrevive al
+        // find (es de la partición). Se clona aparte y se copia el contenido.
+        args: `clone --depth 1 ${params.branch ? `-b ${shQuote(params.branch)} ` : ""}${shQuote(params.repo)} ${shQuote(tmp)}`,
+        post: [
+          `cp -a ${shQuote(tmp)}/. ${dest}/`,
+          `rm -rf ${shQuote(tmp)}`,
           "echo CLONE_OK",
-        ].join("\n"),
-        300
-      );
+        ],
+      });
       if (!(res.stdout || "").includes("CLONE_OK")) {
-        throw new Error(
-          `git clone failed (exit ${res.exitCode}): ${(res.stderr || res.stdout || "").slice(-600)}`
-        );
+        throw gitFailure(res, "git clone");
       }
     }
 
