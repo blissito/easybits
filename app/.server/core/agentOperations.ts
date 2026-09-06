@@ -13,6 +13,7 @@ import {
   writeFile as sandboxWriteFile,
 } from "./sandboxOperations";
 import { getSecretValue, SECRET_REF_RE } from "./secretOperations";
+import { writeSecretValues } from "./secretsFile";
 import { createApiKey } from "../iam";
 
 const EASYBITS_BASE_URL =
@@ -33,7 +34,21 @@ const RESERVED_ENV_NAMES = new Set([
   "MAX_TURNS",
   "ALLOWED_TOOLS_B64",
   "MCP_SERVERS_B64",
+  "SECRETS_PATH",
 ]);
+
+/**
+ * Dónde aterrizan los secretos del run, en tmpfs.
+ *
+ * No van por `env` del exec: ahí quedarían en `/proc/<pid>/environ`, legibles
+ * por cualquier proceso de la caja durante todo el run. El script los lee al
+ * arrancar y BORRA el archivo — y como mutar `process.env` en caliente no
+ * modifica el `environ` (que queda congelado en el `execve`), tras el arranque
+ * no están ni en el entorno, ni en la línea de comando, ni en disco.
+ */
+const SECRETS_DIR = "/dev/shm";
+const SECRETS_FILE_NAME = "agent_secrets.env";
+const SECRETS_PATH = `${SECRETS_DIR}/${SECRETS_FILE_NAME}`;
 
 // Marker file written when the run uses a user-supplied ANTHROPIC_API_KEY.
 // Presence of this flag makes getAgentRunStatus skip Claude-token billing.
@@ -141,6 +156,31 @@ interface AgentScriptResult {
 // stdout/stderr.
 const AGENT_SCRIPT = `
 const fs = require("fs");
+
+// Los secretos llegan por ARCHIVO (JSON), no por el entorno, y lo primero que
+// hace el script es cargarlos y borrarlo.
+//
+// Por qué esto es más fuerte que un \`set -a; . file\`: el \`/proc/<pid>/environ\`
+// de un proceso se congela en el execve. Asignar a process.env DESPUÉS de
+// arrancar cambia lo que ven este proceso y sus hijos, pero NO cambia el environ
+// que cualquiera puede leer desde dentro de la caja. Tras estas líneas la
+// credencial no está en el entorno visible, ni en la línea de comando, ni en
+// disco.
+//
+// Va ANTES del require del SDK a propósito: el SDK lee su credencial del
+// entorno al importarse.
+(() => {
+  const p = process.env.SECRETS_PATH;
+  if (!p) return;
+  let raw = "";
+  try { raw = fs.readFileSync(p, "utf8"); } catch { return; }
+  finally { try { fs.unlinkSync(p); } catch {} }
+  try {
+    const values = JSON.parse(raw);
+    for (const k of Object.keys(values)) process.env[k] = values[k];
+  } catch {}
+})();
+
 const { query } = require("@anthropic-ai/claude-agent-sdk");
 
 const decode = (b64) => Buffer.from(b64 || "", "base64").toString("utf8");
@@ -225,6 +265,9 @@ const writeResult = () => {
   }));
   // Release the pool busy-flag (no-op when this VM isn't pooled).
   try { fs.rmdirSync("${POOL_FLAG_PATH}"); } catch {}
+  // Red de seguridad: si el arranque falló antes de cargarlos, el archivo de
+  // secretos seguiría ahí. Una VM del pool sobrevive al run.
+  try { if (process.env.SECRETS_PATH) fs.unlinkSync(process.env.SECRETS_PATH); } catch {}
 };
 
 (async () => {
@@ -319,17 +362,17 @@ function expandMcpServerSecrets(
   return out;
 }
 
-function buildEnv(
-  params: AgentRunParams,
+/**
+ * Resuelve qué credencial de Anthropic usa el run.
+ *
+ * OAuth de usuario gana a API key de usuario (OAuth va contra el plan Max, sin
+ * facturación por token), y lo mismo a nivel host. Se emite SÓLO UNA de las dos
+ * variables: con ambas puestas el SDK prefiere ANTHROPIC_API_KEY y se elegiría
+ * la equivocada.
+ */
+export function buildSecretEnv(
   resolvedSecrets: Record<string, string>
 ): Record<string, string> {
-  const model = params.model || DEFAULT_MODEL;
-  // Auth selection: a user-supplied OAuth token wins over a user-supplied
-  // API key (OAuth uses the Max plan, no per-token billing); host-level
-  // OAuth wins over host-level API key for the same reason. We deliberately
-  // emit ONLY ONE of the two env vars to avoid the SDK preferring the
-  // wrong one (it picks ANTHROPIC_API_KEY ahead of ANTHROPIC_AUTH_TOKEN
-  // when both are set).
   const userOAuth =
     resolvedSecrets.CLAUDE_CODE_OAUTH_TOKEN ||
     resolvedSecrets.ANTHROPIC_AUTH_TOKEN ||
@@ -338,19 +381,30 @@ function buildEnv(
   const oauthToken = userOAuth || HOST_OAUTH_TOKEN;
   const apiKey = userApiKey || HOST_ANTHROPIC_KEY;
   const useOAuth = !!oauthToken;
-  // Strip auth secrets from the spread — we re-emit them explicitly under
-  // the names the SDK expects, avoiding double-set conflicts.
+  // Se quitan del spread las de auth — se re-emiten explícitamente bajo el
+  // nombre que el SDK espera, evitando el conflicto de tener las dos.
   const restSecrets: Record<string, string> = { ...resolvedSecrets };
   delete restSecrets.CLAUDE_CODE_OAUTH_TOKEN;
   delete restSecrets.ANTHROPIC_AUTH_TOKEN;
   delete restSecrets.ANTHROPIC_API_KEY;
   return {
     ...restSecrets,
-    NODE_PATH: "/usr/local/lib/node_modules",
     ...(useOAuth
       ? { ANTHROPIC_AUTH_TOKEN: oauthToken }
       : { ANTHROPIC_API_KEY: apiKey }),
+  };
+}
+
+/**
+ * Variables de CONTROL del run: ninguna es secreta, y el script las necesita
+ * para arrancar, así que siguen viajando por el env del exec.
+ */
+export function buildRunEnv(params: AgentRunParams): Record<string, string> {
+  const model = params.model || DEFAULT_MODEL;
+  return {
+    NODE_PATH: "/usr/local/lib/node_modules",
     RESULT_PATH,
+    SECRETS_PATH,
     PROMPT_B64: Buffer.from(params.prompt, "utf8").toString("base64"),
     SYSTEM_B64: params.system
       ? Buffer.from(params.system, "utf8").toString("base64")
@@ -462,7 +516,7 @@ export async function enqueueAgentRun(
           // Reset prior-run state on the warm VM so the new run's status
           // and billing flags start clean. The script and pool flag stay.
           await execCommand(ctx, jobId, {
-            command: `rm -f ${RESULT_PATH} ${LOG_PATH} ${BYOK_FLAG_PATH} ${BILLED_FLAG_PATH}`,
+            command: `rm -f ${RESULT_PATH} ${LOG_PATH} ${BYOK_FLAG_PATH} ${BILLED_FLAG_PATH} ${SECRETS_PATH}`,
             timeoutSeconds: 5,
           }).catch(() => {});
           break;
@@ -517,19 +571,39 @@ export async function enqueueAgentRun(
         content: "1",
       });
     }
+    // Los secretos van a un archivo 0600 en tmpfs, NO por el env del exec: ahí
+    // acabarían en /proc/<pid>/environ y cualquier proceso de la caja podría
+    // leerlos durante todo el run. El script los carga y borra el archivo al
+    // arrancar.
+    const secretEnv = buildSecretEnv(resolvedSecrets);
+    await writeSecretValues(ctx, jobId, {
+      dir: SECRETS_DIR,
+      values: secretEnv,
+      fileName: SECRETS_FILE_NAME,
+      format: "json",
+    });
+
     // Detach so /exec returns immediately while the agent loop runs in
     // background. nohup + redirected stdio + disown survives the parent
     // shell exit.
     await execCommand(ctx, jobId, {
       command: `nohup node ${SCRIPT_PATH} > ${LOG_PATH} 2>&1 < /dev/null & disown`,
       timeoutSeconds: LAUNCHER_EXEC_TIMEOUT_S,
-      env: buildEnv(expandedParams, resolvedSecrets),
+      env: buildRunEnv(expandedParams),
     });
   } catch (err) {
     // Only destroy on failure if we created this VM. A reused pooled VM
     // stays alive (its busy-flag remains set so it won't be re-acquired
     // in a broken state; TTL cleans it up if nothing else does).
+    //
+    // Una VM que sobrevive NO puede quedarse con el archivo de secretos: si el
+    // lanzamiento falló, nadie lo va a leer ni a borrar.
     if (createdNew) destroySandbox(ctx, jobId).catch(() => {});
+    else
+      execCommand(ctx, jobId, {
+        command: `rm -f ${SECRETS_PATH}`,
+        timeoutSeconds: 10,
+      }).catch(() => {});
     throw err;
   }
 

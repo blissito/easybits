@@ -93,7 +93,18 @@ export async function writeSecretsFile(
 export async function writeSecretValues(
   ctx: AuthContext,
   sandboxId: string,
-  opts: { dir: string; values: Record<string, string>; fileName?: string }
+  opts: {
+    dir: string;
+    values: Record<string, string>;
+    fileName?: string;
+    /**
+     * `shell` (default) para que un `. archivo` lo cargue — es lo que necesita
+     * una app de cliente arbitraria. `json` cuando el que lee es código nuestro:
+     * se ahorra el quoting de shell, que es justo donde un valor con comillas
+     * se corrompe en silencio.
+     */
+    format?: "shell" | "json";
+  }
 ): Promise<{ path: string; written: boolean }> {
   const fileName = opts.fileName ?? SECRETS_FILE;
   const path = `${opts.dir}/${fileName}`;
@@ -102,7 +113,10 @@ export async function writeSecretValues(
 
   await writeFile(ctx, sandboxId, {
     path,
-    content: formatSecretsFile(opts.values),
+    content:
+      opts.format === "json"
+        ? JSON.stringify(opts.values)
+        : formatSecretsFile(opts.values),
   });
   // El contenido es lo más sensible de la caja; que no lo lea nadie más.
   // El chmod va DESPUÉS del write, así que hay una ventana de milisegundos con
