@@ -652,6 +652,18 @@ git -C /data/work fetch --all --prune \\
 aparece en los listados. Referencia variables que ya vivan dentro de la VM, o resuelve el
 secreto con \`$secret:\` desde una tool de git.
 
+\`\`\`js
+await sbx.setBootstrap({
+  script: 'git -C /data/work checkout -B "sesion/\${EB_SANDBOX_ID}"',
+  mode: "blocking",
+});
+\`\`\`
+\`\`\`bash
+curl -X POST https://www.easybits.cloud/api/v2/sandboxes/$SB/bootstrap \\
+  -H "Authorization: Bearer $EB_KEY" -H 'Content-Type: application/json' \\
+  -d '{"script":"git -C /data/work fetch --all","mode":"async"}'
+\`\`\`
+
 Es la pieza que convierte a las skills en memoria de verdad: en un template sin recarga en
 caliente, una skill instalada entra en vigor en el siguiente despertar, sola.
 
@@ -701,6 +713,28 @@ Detalles que importan cuando el que llama es un agente y no una persona:
 
 Para repos privados en \`launch_app\`, el mismo mecanismo: \`launch_app({ repo, repoToken:
 "$secret:GITHUB_TOKEN" })\`. El token no entra al runspec ni al tarball del release.
+
+Las mismas siete operaciones por REST y por SDK:
+
+\`\`\`bash
+# REST — POST para clone|commit|push|pull|checkout, GET para status|log
+curl -X POST https://www.easybits.cloud/api/v2/sandboxes/$SB/git/clone \\
+  -H "Authorization: Bearer $EB_KEY" -H 'Content-Type: application/json' \\
+  -d '{"repo":"https://github.com/tu/repo.git","dir":"/data/work","token":"$secret:GITHUB_TOKEN"}'
+
+curl "https://www.easybits.cloud/api/v2/sandboxes/$SB/git/status?dir=/data/work" \\
+  -H "Authorization: Bearer $EB_KEY"
+\`\`\`
+
+\`\`\`js
+const sbx = await eb.sandboxes.create({ template: "node" });
+await sbx.git.clone({ repo, dir: "/data/work", token: "$secret:GITHUB_TOKEN" });
+await sbx.git.checkout({ dir: "/data/work", branch: "feature/x", create: true });
+await sbx.git.commit({ dir: "/data/work", message: "cambios del agente" });
+await sbx.git.push({ dir: "/data/work", setUpstream: true, token: "$secret:GITHUB_TOKEN" });
+
+const st = await sbx.git.status("/data/work");   // { branch, ahead, behind, clean, ... }
+\`\`\`
 
 ### Kernel persistente (code-interpreter)
 MCP: \`sandbox_run_cell({ sandboxId, code })\` — estado sobrevive entre celdas. Gráficas matplotlib se devuelven como imágenes.

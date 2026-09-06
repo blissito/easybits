@@ -1,6 +1,6 @@
 import type { Route } from "./+types/sandbox-action";
 import { authenticateRequest, requireAuth } from "~/.server/apiAuth";
-import { hostErrorResponse } from "~/.server/core/sandboxOperations";
+import { hostErrorResponse, setSandboxBootstrap } from "~/.server/core/sandboxOperations";
 import { applySandboxRateLimit } from "~/.server/rateLimiter";
 import {
   SandboxExecBody,
@@ -77,6 +77,17 @@ async function dispatch(
       return Response.json(await suspendSandbox(ctx, id));
     case "resume":
       return Response.json(await resumeSandbox(ctx, id));
+    // El script que el HOST corre cada vez que la caja despierta. `script: ""`
+    // lo apaga. Nunca metas una credencial aquí: la receta viaja en el metadata
+    // de la caja, que se publica en los listados.
+    case "bootstrap":
+      return Response.json(
+        await setSandboxBootstrap(ctx, id, {
+          script: body.script,
+          mode: body.mode,
+          timeoutSeconds: body.timeoutSeconds,
+        })
+      );
     case "snapshot":
       return Response.json(await snapshotSandbox(ctx, id, { name: body.name }));
     case "fork":

@@ -2486,6 +2486,8 @@ export class Sandbox {
   private req: SandboxReq;
   /** Filesystem operations inside the sandbox. */
   readonly files: SandboxFiles;
+  /** git dentro de la caja, con la credencial por llamada. */
+  readonly git: SandboxGit;
 
   constructor(record: SandboxRecord, req: SandboxReq) {
     this.sandboxId = record.sandboxId;
@@ -2501,6 +2503,7 @@ export class Sandbox {
     this.monthlyMxn = record.monthlyMxn;
     this.req = req;
     this.files = new SandboxFiles(record.sandboxId, req);
+    this.git = new SandboxGit(record.sandboxId, req);
   }
 
   private applyMachine(rec: SandboxRecord): this {
@@ -2555,6 +2558,31 @@ export class Sandbox {
    *  auto-destroy timer re-armed (no extend needed). */
   resume(): Promise<SandboxRecord> {
     return this.post("/resume");
+  }
+  /**
+   * Declara el script que corre CADA VEZ que la caja despierta, antes de que el
+   * agente reciba su primer mensaje.
+   *
+   * Una caja restaurada de un snapshot revive sin boot: no vuelve a correr
+   * systemd, ni el entrypoint, ni `.bashrc`. Sin esto, una caja que durmió tres
+   * días despierta con el mundo de hace tres días y nada lo señala.
+   *
+   * Hazlo idempotente — corre en cada despertar: `checkout -B`, no `-b`.
+   * Variables disponibles: `EB_RESUME=1`, `EB_SANDBOX_ID`. El cwd es /data/work.
+   *
+   * ⚠️ Nunca pongas una credencial en el script: la receta viaja en el metadata
+   * de la caja y aparece en los listados. Lo que necesite credencial va por
+   * `sbx.git.*` con `$secret:`.
+   *
+   * `script: ""` lo apaga.
+   */
+  setBootstrap(opts: {
+    script: string;
+    /** `async` (default) no frena el primer mensaje; `blocking` espera. */
+    mode?: "async" | "blocking";
+    timeoutSeconds?: number;
+  }): Promise<{ ok: true; metadata: Record<string, string> }> {
+    return this.post("/bootstrap", opts);
   }
   /** Destroy the microVM. */
   destroy(): Promise<{ ok: true }> {
@@ -2820,6 +2848,143 @@ export class Sandbox {
 }
 
 /** Filesystem sub-API for a Sandbox (sbx.files.*). */
+
+/**
+ * Operaciones de git dentro de una caja.
+ *
+ * La credencial va POR LLAMADA: se usa para esa operación y no queda en la
+ * caja — ni en `.git/config`, ni visible en `ps`. `token` acepta el valor
+ * literal o, mejor, una referencia a tu vault:
+ *
+ *   await sbx.git.clone({ repo, dir: "/data/work", token: "$secret:GITHUB_TOKEN" })
+ */
+export class SandboxGit {
+  constructor(private sandboxId: string, private req: SandboxReq) {}
+  private base() {
+    return `/sandboxes/${this.sandboxId}/git`;
+  }
+  private post<T>(op: string, body: unknown): Promise<T> {
+    return this.req<T>(`${this.base()}/${op}`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  }
+
+  clone(opts: {
+    repo: string;
+    dir: string;
+    branch?: string;
+    /** Profundidad del clone superficial (default 1). Se ignora con `commit`. */
+    depth?: number;
+    /** Sha concreto: clona completo y deja HEAD desprendido ahí. */
+    commit?: string;
+    /** Token o `$secret:NOMBRE`. Sólo para repos privados. */
+    token?: string;
+    username?: string;
+  }): Promise<GitCloneResult> {
+    return this.post("clone", opts);
+  }
+
+  /** Estado estructurado (de `porcelain=v2`), no texto para humanos. */
+  status(dir: string): Promise<GitStatus> {
+    const qs = new URLSearchParams({ dir });
+    return this.req(`${this.base()}/status?${qs.toString()}`);
+  }
+
+  /**
+   * Sin cambios devuelve `{ nothingToCommit: true }` como ÉXITO, no como error:
+   * un fallo ahí invita a reintentar, y reintentar no cambia nada.
+   */
+  commit(opts: {
+    dir: string;
+    message: string;
+    addAll?: boolean;
+    paths?: string[];
+    authorName?: string;
+    authorEmail?: string;
+  }): Promise<GitCommitResult> {
+    return this.post("commit", opts);
+  }
+
+  push(opts: {
+    dir: string;
+    remote?: string;
+    branch?: string;
+    setUpstream?: boolean;
+    /** Usa `--force-with-lease`: falla si el remoto se movió. */
+    force?: boolean;
+    token?: string;
+    username?: string;
+  }): Promise<{ pushed: boolean; remote: string; branch: string; output: string }> {
+    return this.post("push", opts);
+  }
+
+  pull(opts: {
+    dir: string;
+    rebase?: boolean;
+    token?: string;
+    username?: string;
+  }): Promise<{ updated: boolean; head: string; conflicts: string[]; output: string }> {
+    return this.post("pull", opts);
+  }
+
+  /** Con `create` usa `-B`: idempotente, seguro de correr en cada arranque. */
+  checkout(opts: {
+    dir: string;
+    branch: string;
+    create?: boolean;
+    from?: string;
+  }): Promise<{ branch: string; created: boolean; head: string }> {
+    return this.post("checkout", opts);
+  }
+
+  log(opts: {
+    dir: string;
+    limit?: number;
+    cursor?: string;
+    path?: string;
+  }): Promise<{ items: GitLogEntry[]; nextCursor: string | null; hasMore: boolean }> {
+    const qs = new URLSearchParams({ dir: opts.dir });
+    if (opts.limit) qs.set("limit", String(opts.limit));
+    if (opts.cursor) qs.set("cursor", opts.cursor);
+    if (opts.path) qs.set("path", opts.path);
+    return this.req(`${this.base()}/log?${qs.toString()}`);
+  }
+}
+
+export interface GitCloneResult {
+  dir: string;
+  branch: string;
+  head: string;
+  remote: string;
+  detached: boolean;
+}
+
+export interface GitStatus {
+  branch: string;
+  upstream: string | null;
+  ahead: number;
+  behind: number;
+  clean: boolean;
+  staged: string[];
+  modified: string[];
+  untracked: string[];
+  conflicted: string[];
+}
+
+export interface GitCommitResult {
+  sha: string | null;
+  nothingToCommit: boolean;
+  output: string;
+}
+
+export interface GitLogEntry {
+  sha: string;
+  author: string;
+  date: string;
+  message: string;
+}
+
 export class SandboxFiles {
   constructor(private sandboxId: string, private req: SandboxReq) {}
   private base() {
