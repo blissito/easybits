@@ -22,6 +22,7 @@ import {
   destroySandbox,
   getSandbox,
   persistSandbox,
+  setSandboxTierMetadata,
   provisionRuntime,
   suspendSandbox,
   resumeSandbox,
@@ -551,6 +552,19 @@ export async function makePermanent(
       status: "running",
       stripeSubItemId: null,
     },
+  });
+
+  // Marcar la caja en el HOST. createPermanent lo hace al crear; promover una
+  // caja existente no lo hacía, así que toda máquina nacida de este camino
+  // quedaba sin `eb_tier` — invisible para liveSet en cuanto cayera en `lost`, y
+  // por tanto a un barrido de distancia de perder el disco del cliente.
+  // Best-effort: no vale tumbar una promoción que ya cobró por esto, pero
+  // tampoco puede pasar en silencio — el silencio es lo que dejó el agujero.
+  await setSandboxTierMetadata(ctx, sandboxId, { tier: tier.key, cpuMode: mode }).catch((e) => {
+    console.error(
+      `[hosting] CRITICAL: ${sandboxId} se promovió a ${tier.key} pero el host NO quedó marcado con eb_tier — si cae en 'lost' el barrido de huérfanas puede borrarle el disco:`,
+      e instanceof Error ? e.message : e
+    );
   });
 
   const result = await attachBilling(ctx, row as SandboxRow, tier, mode, diskAddonsGB, host, async () => {

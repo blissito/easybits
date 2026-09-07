@@ -1149,6 +1149,40 @@ export async function setSandboxBootstrap(
   );
 }
 
+// Marca en el HOST qué es esta caja: vendida, de qué tier y con qué modo de CPU.
+//
+// No es cosmética. El host decide con `eb_tier` la colocación en el box de
+// hosting, la exención de los barridos y la inclusión en su respaldo — y, sobre
+// todo, `liveSet()` sólo cuenta como viva una caja `lost` si la lleva. Una caja
+// sin marca está a un reconcile fallido de que el barrido de huérfanas le borre
+// el disco.
+//
+// Hasta ahora la marca sólo se escribía en el create, así que una caja PROMOVIDA
+// con makePermanent nacía sin ella para siempre. Va con `asOperator` porque el
+// host reserva estas claves al operador: un cliente que pudiera escribirlas
+// fingiría ser una máquina vendida para esquivar los barridos.
+export async function setSandboxTierMetadata(
+  ctx: AuthContext,
+  sandboxId: string,
+  params: { tier: string; cpuMode?: string }
+): Promise<{ ok: true; metadata: Record<string, string> }> {
+  requireScope(ctx, "WRITE");
+  return callHost(
+    "PATCH",
+    `/v1/sandbox/${sandboxId}/metadata`,
+    {
+      metadata: {
+        eb_tier: params.tier,
+        eb_persistent: "1",
+        ...(params.cpuMode ? { eb_cpu_mode: params.cpuMode } : {}),
+      },
+    },
+    await effectiveOwnerId(ctx, sandboxId),
+    120_000,
+    true
+  );
+}
+
 export async function resumeSandbox(
   ctx: AuthContext,
   sandboxId: string
