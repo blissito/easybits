@@ -126,6 +126,43 @@ function Skeleton({ lines = 6 }: { lines?: number }) {
   );
 }
 
+// Iconos de línea, no emoji: el emoji cambia de forma y de color según el sistema
+// (y en Windows algunos ni existen), así que una lista de doce capacidades se veía
+// como doce estilos distintos. Trazo simple, hereda el color del texto.
+const ICON_PATHS: Record<string, string> = {
+  caja: "M21 8v13H3V8M1 3h22v5H1zM10 12h4",
+  chat: "M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z",
+  impresora: "M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v8H6z",
+  imagen: "M3 3h18v18H3zM8.5 10a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3zM21 15l-5-5L5 21",
+  documento: "M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M9 13h6M9 17h6",
+  lupa: "M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM21 21l-4.35-4.35",
+  video: "M23 7l-7 5 7 5zM1 5h15v14H1z",
+  correo: "M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zM22 6l-10 7L2 6",
+  base: "M12 8c4.4 0 8-1.3 8-3s-3.6-3-8-3-8 1.3-8 3 3.6 3 8 3zM20 5v14c0 1.7-3.6 3-8 3s-8-1.3-8-3V5M20 12c0 1.7-3.6 3-8 3s-8-1.3-8-3",
+  globo: "M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM2 12h20M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20z",
+  tarjeta: "M2 6h20v12H2zM2 10h20",
+  calendario: "M3 5h18v16H3zM3 9h18M8 3v4M16 3v4",
+  tablero: "M9 3h6v3H9zM5 6h14v15H5zM9 12h6M9 16h4",
+  contactos: "M4 3h16v18H4zM9 10a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM7 16c.6-1.8 2.2-3 4-3s3.4 1.2 4 3",
+  camion: "M1 6h13v10H1zM14 9h4l3 3v4h-7zM6 19a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM18 19a2 2 0 1 0 0-4 2 2 0 0 0 0 4z",
+  altavoz: "M11 5L6 9H2v6h4l5 4zM16 8a5 5 0 0 1 0 8M19 5a9 9 0 0 1 0 14",
+  lapiz: "M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z",
+  rayo: "M13 2L3 14h8l-1 8 10-12h-8z",
+  clip: "M21 12.8l-9.2 9.2a5.7 5.7 0 0 1-8-8l9.2-9.2a3.8 3.8 0 1 1 5.4 5.4l-9.2 9.2a1.9 1.9 0 1 1-2.7-2.7l8.5-8.5",
+  enchufe: "M9 2v6M15 2v6M6 8h12v4a6 6 0 0 1-12 0zM12 18v4",
+  punto: "M12 10a2 2 0 1 0 0 4 2 2 0 0 0 0-4z",
+};
+
+function Icon({ name, className = "w-4 h-4" }: { name: string; className?: string }) {
+  const d = ICON_PATHS[name] ?? ICON_PATHS.punto;
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d={d} />
+    </svg>
+  );
+}
+
 function CopyButton({ value, label = "Copiar", className = "" }: { value: string; label?: string; className?: string }) {
   const [done, setDone] = useState(false);
   return (
@@ -936,7 +973,7 @@ export default function Flota2() {
     <li>
       <button type="button" onClick={onClick}
         className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-grayLight transition-colors">
-        <span className="w-7 h-7 shrink-0 rounded-lg border-2 border-black grid place-items-center text-sm bg-white">{icon}</span>
+        <span className="w-7 h-7 shrink-0 rounded-lg border-2 border-black grid place-items-center bg-white"><Icon name={icon} /></span>
         <span className="min-w-0 flex-1">
           <span className="block text-sm font-bold">{label}</span>
           <span className="block text-[11px] text-tale truncate">{summary}</span>
@@ -955,18 +992,18 @@ export default function Flota2() {
       + (ch.toolBuckets ?? sel.activeBuckets ?? []).length;
     return (
       <ul className="mt-2 border-2 border-gray-200 rounded-xl divide-y-2 divide-gray-100 overflow-hidden">
-        <SettingRow icon="📝" label="Instrucciones"
+        <SettingRow icon="lapiz" label="Instrucciones"
           summary={ch.systemPrompt
             ? `Propias · ${ch.systemPrompt.length} caracteres, además de las del agente`
             : "Usa las del agente"}
           onClick={() => setChanPanel({ ch, kind: "prompt" })} />
-        <SettingRow icon="🔊" label="Voz"
+        <SettingRow icon="altavoz" label="Voz"
           summary={ch.voiceId ? (inh.voice ? `${ch.voiceId} (heredada)` : ch.voiceId) : "La del agente"}
           onClick={() => setChanPanel({ ch, kind: "voz" })} />
-        <SettingRow icon="⚡" label="Qué puede hacer"
+        <SettingRow icon="rayo" label="Qué puede hacer"
           summary={`${activas} activas · ${inh.mcps === false || inh.toolGroup === false ? "lista propia" : "sigue al agente"}`}
           onClick={() => setChanPanel({ ch, kind: "caps" })} />
-        <SettingRow icon="📎" label="Archivos que puede enviar"
+        <SettingRow icon="clip" label="Archivos que puede enviar"
           summary={(ch.assets?.length ?? 0) > 0 ? `${ch.assets.length} elegido${ch.assets.length !== 1 ? "s" : ""}` : "Ninguno"}
           onClick={() => setChanPanel({ ch, kind: "archivos" })} />
       </ul>
@@ -1060,14 +1097,14 @@ export default function Flota2() {
     const q = capQ.trim().toLowerCase();
     const vis = q ? items.filter((i: any) => `${i.label} ${i.desc}`.toLowerCase().includes(q)) : items;
     const TONE: Record<string, string> = { builtin: "#BAD9D8", family: "#C8F9AB", connector: "#F4B7EC" };
-    // Un icono por capacidad. Las iniciales no servían: "EasyBits" y "Email" daban
-    // las dos una "E", que es justo lo contrario de reconocer algo de un vistazo.
+    // Un icono por capacidad. Las iniciales no servían ("EasyBits" y "Email" daban
+    // las dos una "E") y los emoji tampoco: cambian de forma según el sistema.
     const ICON: Record<string, string> = {
-      easybits: "📦", wa: "💬", render: "🖨️",
-      imagenes: "🎨", documentos: "📄", investigacion: "🔎", video: "🎬",
-      email: "✉️", db: "🗄️", sitios: "🌐", pagos: "💳",
-      denik: "📅", formmy: "📋", kommo: "📇", skydropx: "🚚",
-      mercadopago: "💳", elevenlabs: "🔊", brightdata: "🔎",
+      easybits: "caja", wa: "chat", render: "impresora",
+      imagenes: "imagen", documentos: "documento", investigacion: "lupa", video: "video",
+      email: "correo", db: "base", sitios: "globo", pagos: "tarjeta",
+      denik: "calendario", formmy: "tablero", kommo: "contactos", skydropx: "camion",
+      mercadopago: "tarjeta", elevenlabs: "altavoz", brightdata: "lupa",
     };
     return (
       <div>
@@ -1118,9 +1155,9 @@ export default function Flota2() {
             <li key={`${it.kind}-${it.key}`}>
               <button type="button" onClick={() => setCapDetail({ ch, item: it })}
                 className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-grayLight transition-colors">
-                <span className="w-7 h-7 shrink-0 rounded-lg border-2 border-black grid place-items-center text-[11px] font-bold"
+                <span className="w-7 h-7 shrink-0 rounded-lg border-2 border-black grid place-items-center"
                   style={{ background: it.on ? TONE[it.kind] : "#fff" }}>
-                  {ICON[it.key] ?? (it.kind === "connector" ? "🔌" : "•")}
+                  <Icon name={ICON[it.key] ?? (it.kind === "connector" ? "enchufe" : "punto")} />
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className={`block text-sm truncate ${it.on ? "font-bold" : "font-semibold text-marengo"}`}>{it.label}</span>
