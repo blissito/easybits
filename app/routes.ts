@@ -263,6 +263,7 @@ export default [
     route("fleet-agents/:fleetAgentId/tokens", "routes/api/v2/fleet-agents.$fleetAgentId.tokens.ts"),
     route("fleet-agents/:fleetAgentId/session-token", "routes/api/v2/fleet-agents.$fleetAgentId.session-token.ts"),
     route("fleet-agents/:fleetAgentId/voices", "routes/api/v2/fleet-agents.$fleetAgentId.voices.ts"),
+    route("fleet-agents/:fleetAgentId/voice-preview", "routes/api/v2/fleet-agents.$fleetAgentId.voice-preview.ts"),
     route("fleet-agents/:fleetAgentId/connect", "routes/api/v2/fleet-agents.$fleetAgentId.connect.ts"),
     route("fleet-agents/:fleetAgentId/groups", "routes/api/v2/fleet-agents.$fleetAgentId.groups.ts"),
     // Always-on `render` MCP for fleet agents (PDF/screenshots/audit via the on-demand render-svc box)

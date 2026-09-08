@@ -841,8 +841,12 @@ export const CURATED_CAPABILITIES: McpCatalogEntry[] = [
     // skillDoc le dice al agente cómo pegarle a la API por Bash. Kokoro sigue
     // canal-side; esto es TTS premium que el agente invoca a voluntad.
     name: "elevenlabs",
-    label: "ElevenLabs — voz premium (TTS)",
-    description: "Texto a voz con las voces premium de ElevenLabs (usa tu llave).",
+    // OJO al nombre: esto NO es "con qué voz contesta las notas de voz" (eso es la fila
+    // «Voz» del canal, que sintetiza el canal, no el agente). Esto le da al agente la
+    // llave para GENERAR audios cuando él quiera. Se llamaba "voz premium (TTS)" y la
+    // gente lo encendía esperando lo otro.
+    label: "ElevenLabs — que el agente genere audios",
+    description: "Le da la llave para crear audios a voluntad y mandarlos. Con qué voz CONTESTA se elige en «Voz».",
     mode: "code",
     env: { ELEVENLABS_API_KEY: "$secret:ELEVENLABS_API_KEY" },
     requiredSecrets: ["ELEVENLABS_API_KEY"],

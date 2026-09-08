@@ -248,16 +248,24 @@ type Voice = { id: string; name: string; engine: string; hint?: string };
 // gris del SO encima de la UI. Además vivía declarado DENTRO del componente padre, así
 // que cada render lo remontaba y tiraba el catálogo recién bajado.
 //
-// Ahora es una lista propia, del mismo material que el resto del panel: carga al montar,
-// dice si está cargando, y muestra el acento/género en su renglón en vez de embutirlo en
-// una línea de 90 caracteres.
-function VoiceList({ agent, current, onPick }: {
+// Ahora es una lista propia, del mismo material que el resto del panel, con ▶ por
+// renglón: el encabezado de este archivo declara que el ensayo vive al lado de la
+// config, y elegir voz era el único sitio donde se elegía a ciegas.
+function VoiceList({ agent, groupId, current, elevenOn, onPick }: {
   agent: { id: string; token: string };
+  /** Canal del que se está eligiendo la voz. El motor se resuelve POR CANAL. */
+  groupId?: string;
   current: string;
+  /** ¿La capacidad ElevenLabs está encendida en este canal? Ver el aviso de abajo. */
+  elevenOn: boolean;
   onPick: (id: string) => void;
 }) {
   const [voices, setVoices] = useState<Voice[] | null>(null);
   const [failed, setFailed] = useState(false);
+  const [playing, setPlaying] = useState<string | null>(null);
+  const [playErr, setPlayErr] = useState<string | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
   useEffect(() => {
     let alive = true;
     fetch(`/api/v2/fleet-agents/${agent.id}/voices`, { headers: { Authorization: `Bearer ${agent.token}` } })
@@ -267,21 +275,60 @@ function VoiceList({ agent, current, onPick }: {
     return () => { alive = false; };
   }, [agent.id]);
 
+  // Al desmontar hay que callar el audio: si no, el modal se cierra y la muestra
+  // sigue sonando sin nada en pantalla que la pare.
+  useEffect(() => () => { audioRef.current?.pause(); audioRef.current = null; }, []);
+
+  const play = async (id: string) => {
+    audioRef.current?.pause();
+    setPlayErr(null);
+    setPlaying(id);
+    try {
+      const r = await fetch(`/api/v2/fleet-agents/${agent.id}/voice-preview`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ voiceId: id, groupId }),
+      });
+      if (!r.ok) throw new Error(String(r.status));
+      const fuente = r.headers.get("X-Voice-Source");
+      const blob = await r.blob();
+      const a = new Audio(URL.createObjectURL(blob));
+      audioRef.current = a;
+      a.onended = () => setPlaying(null);
+      await a.play();
+      // Pediste una voz premium y sonó la incluida: la capacidad está apagada o la
+      // llave no sirve. Decirlo aquí ahorra descubrirlo por WhatsApp.
+      if (fuente === "box" && (voices ?? []).find((v) => v.id === id)?.engine === "elevenlabs") {
+        setPlayErr("Sonó la voz incluida: ElevenLabs no está activo en este canal.");
+      }
+    } catch {
+      setPlaying(null);
+      setPlayErr("No se pudo generar la muestra.");
+    }
+  };
+
   const byEngine = (e: string) => (voices ?? []).filter((v) => v.engine === e);
   // Una voz guardada que ya no está en el catálogo (llave quitada, voz retirada) se
   // conserva como opción: si no, guardar otra cosa la borraría sin querer.
   const huerfana = current && voices && !voices.some((v) => v.id === current);
 
-  const Row = ({ id, name, hint }: { id: string; name: string; hint?: string }) => (
-    <li>
+  const Row = ({ id, name, hint, sample = true }: { id: string; name: string; hint?: string; sample?: boolean }) => (
+    <li className="flex items-center gap-1 hover:bg-grayLight">
       <button type="button" onClick={() => onPick(id)}
-        className={`w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-grayLight ${current === id ? "bg-grayLight" : ""}`}>
+        className="min-w-0 flex-1 flex items-center gap-3 px-3 py-2.5 text-left">
         <span className={`shrink-0 w-4 text-brand-500 font-bold ${current === id ? "" : "opacity-0"}`}>✓</span>
         <span className="min-w-0 flex-1">
           <span className={`block text-sm truncate ${current === id ? "font-bold" : "font-semibold"}`}>{name}</span>
           {hint && <span className="block text-[11px] text-tale truncate">{hint}</span>}
         </span>
       </button>
+      {sample && (
+        <button type="button" onClick={() => play(id)} disabled={playing === id}
+          title="Oír una muestra"
+          className="shrink-0 mr-2 w-7 h-7 rounded-lg border-2 border-black grid place-items-center bg-white text-xs disabled:opacity-40">
+          {playing === id ? "…" : "▶"}
+        </button>
+      )}
     </li>
   );
 
@@ -292,20 +339,34 @@ function VoiceList({ agent, current, onPick }: {
     </>
   );
 
+  const eleven = byEngine("elevenlabs");
+  const eligioPremium = !!current && eleven.some((v) => v.id === current);
+
   return (
     <div className="flex flex-col gap-2">
       <p className="text-xs text-marengo">
-        Con la que contesta las notas de voz. «Voz por defecto» = hereda la del agente.
+        Con la que <b>contesta las notas de voz</b>. «Voz por defecto» = hereda la del agente.
+        Distinto de la capacidad «ElevenLabs», que le sirve al agente para <i>generar</i> audios cuando quiere.
       </p>
+      {/* La voz premium NO depende sólo de esta lista: `resolveVoiceEngine` saca la llave
+          de las capacidades DEL CANAL. Elegir aquí una voz de ElevenLabs sin encender allá
+          la capacidad no hacía nada, y en silencio. */}
+      {eligioPremium && !elevenOn && (
+        <p className="text-[11px] bg-brand-yellow/40 border-2 border-black rounded-xl px-3 py-2">
+          Elegiste una voz de ElevenLabs, pero la capacidad <b>ElevenLabs</b> está apagada en
+          este canal: va a contestar con la voz incluida. Enciéndela en «Qué puede hacer».
+        </p>
+      )}
       <ul className="border-2 border-gray-200 rounded-xl divide-y-2 divide-gray-100 overflow-hidden">
-        <Row id="" name="Voz por defecto" />
+        <Row id="" name="Voz por defecto" sample={false} />
         {huerfana && <Group label="Guardada" items={[{ id: current, name: current, engine: "?", hint: "ya no está en el catálogo" }]} />}
         <Group label="Incluidas" items={byEngine("kokoro")} />
-        <Group label="ElevenLabs" items={byEngine("elevenlabs")} />
+        <Group label="ElevenLabs" items={eleven} />
       </ul>
       {voices === null && <p className="text-xs text-tale">Cargando voces…</p>}
       {failed && <p className="text-xs text-brand-red">No se pudo leer el catálogo de voces.</p>}
-      {voices !== null && !failed && byEngine("elevenlabs").length === 0 && (
+      {playErr && <p className="text-xs text-brand-red">{playErr}</p>}
+      {voices !== null && !failed && eleven.length === 0 && (
         <p className="text-[11px] text-tale">
           Para usar tus voces de ElevenLabs, guarda tu <code>ELEVENLABS_API_KEY</code> en los secretos del agente.
         </p>
@@ -314,7 +375,241 @@ function VoiceList({ agent, current, onPick }: {
   );
 }
 
+// ─── Piezas del panel de canal ──────────────────────────────────────────────
+//
+// Estas cuatro vivían declaradas DENTRO del cuerpo del componente de la página. En React
+// eso les da una identidad nueva en cada render del padre: se DESMONTAN y se vuelven a
+// montar, perdiendo su estado y repitiendo sus efectos. El selector de voz tiraba así el
+// catálogo que acababa de bajar; las demás estaban esperando su turno. Al nivel del
+// módulo su identidad es estable y lo que necesitan entra por props, a la vista.
 
+function SettingRow({ icon, label, summary, onClick }: { icon: string; label: string; summary: string; onClick: () => void }) {
+  return (
+  <li>
+    <button type="button" onClick={onClick}
+      className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-grayLight transition-colors">
+      <span className="w-7 h-7 shrink-0 rounded-lg border-2 border-black grid place-items-center bg-white"><Icon name={icon} /></span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-bold">{label}</span>
+        <span className="block text-[11px] text-tale truncate">{summary}</span>
+      </span>
+      <svg className="w-3.5 h-3.5 shrink-0 text-tale" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M9 18l6-6-6-6" />
+      </svg>
+    </button>
+  </li>
+);
+}
+
+type ChanPanelKind = "prompt" | "voz" | "caps" | "archivos";
+
+function ChannelConfig({ ch, sel, onOpen }: { ch: any; sel: any; onOpen: (kind: ChanPanelKind) => void }) {
+  const inh = ch.inherits ?? {};
+  const activas = (sel.builtins ?? []).filter((b: any) => !(ch.disabledBuiltins ?? []).includes(b.name)).length
+    + (ch.mcps?.length ?? 0)
+    + (ch.toolBuckets ?? sel.activeBuckets ?? []).length;
+  return (
+    <ul className="mt-2 border-2 border-gray-200 rounded-xl divide-y-2 divide-gray-100 overflow-hidden">
+      <SettingRow icon="lapiz" label="Instrucciones"
+        summary={ch.systemPrompt
+          ? `Propias · ${ch.systemPrompt.length} caracteres, además de las del agente`
+          : "Usa las del agente"}
+        onClick={() => onOpen("prompt")} />
+      <SettingRow icon="altavoz" label="Voz con la que contesta"
+        summary={ch.voiceId ? (inh.voice ? `${ch.voiceId} (heredada)` : ch.voiceId) : "La del agente"}
+        onClick={() => onOpen("voz")} />
+      <SettingRow icon="rayo" label="Qué puede hacer"
+        summary={`${activas} activas · ${inh.mcps === false || inh.toolGroup === false ? "lista propia" : "sigue al agente"}`}
+        onClick={() => onOpen("caps")} />
+      <SettingRow icon="clip" label="Archivos que puede enviar"
+        summary={(ch.assets?.length ?? 0) > 0 ? `${ch.assets.length} elegido${ch.assets.length !== 1 ? "s" : ""}` : "Ninguno"}
+        onClick={() => onOpen("archivos")} />
+    </ul>
+  );
+}
+
+// Archivos que el agente puede ENVIAR en este canal. No son adjuntos del prompt:
+// entran al turno como una lista "archivos disponibles para enviar" con su URL, y el
+// agente decide cuándo mandarlos (`resolveGroupAssetManifest`).
+function ChannelFiles({ ch, sel, cfg, fetcher, ownerFiles, fileQ, setFileQ }: {
+  ch: any; sel: any; cfg: any; fetcher: any;
+  ownerFiles: Array<{ id: string; name: string; contentType?: string | null }>;
+  fileQ: string; setFileQ: (v: string) => void;
+}) {
+  const chosen: string[] = ch.assets ?? [];
+  const up = (files: File[]) => {
+    for (const f of files) {
+      const fd = new FormData();
+      fd.set("intent", "upload-asset");
+      fd.set("fleetAgentId", sel.id);
+      fd.set("groupId", ch.id);
+      fd.set("file", f);
+      fetcher.submit(fd, { method: "post", action: "/dash/flota", encType: "multipart/form-data" });
+    }
+  };
+  return (
+    <div>
+      <p className="text-xs text-marengo mb-2">
+        {chosen.length === 0
+          ? "Ninguno todavía: el agente sólo manda lo que genera en el momento."
+          : `${chosen.length} a mano: catálogo, tarifas, un instructivo…`}
+      </p>
+      <div className="flex flex-wrap items-center gap-2 mb-2">
+        <input value={fileQ} onChange={(e) => setFileQ(e.target.value)} placeholder="Buscar entre tus archivos…"
+          className="flex-1 min-w-[12rem] border-2 border-gray-200 rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:border-black" />
+        <label className="shrink-0 text-xs font-bold text-brand-500 hover:underline cursor-pointer">
+          + Subir uno
+          <input type="file" multiple className="hidden"
+            onChange={(e) => { up(Array.from(e.target.files ?? [])); e.target.value = ""; }} />
+        </label>
+      </div>
+      {ownerFiles.length === 0 ? (
+        <p className="text-[11px] text-tale">
+          {fileQ.trim() ? "Nada con ese nombre." : "Busca por nombre para elegir de tus archivos, o sube uno."}
+        </p>
+      ) : (
+        <ul className="border-2 border-gray-200 rounded-xl divide-y-2 divide-gray-100 overflow-hidden">
+          {ownerFiles.map((f) => {
+            const on = chosen.includes(f.id);
+            return (
+              <li key={f.id} className="flex items-center gap-3 px-3 py-2">
+                <Toggle on={on} busy={fetcher.state !== "idle"} onClick={() => cfg.toggleAsset(ch.id, f.id, !on)} />
+                <span className={`text-sm truncate flex-1 ${on ? "font-bold" : "text-marengo"}`} title={f.name}>{f.name}</span>
+                <span className="text-[11px] text-tale shrink-0">{(f.contentType ?? "").split("/").pop()}</span>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+function CapsList({ ch, sel, cfg, buckets, capQ, setCapQ, onDetail }: {
+  ch: any; sel: any; cfg: any; buckets: any[];
+  capQ: string; setCapQ: (v: string) => void;
+  onDetail: (item: any) => void;
+}) {
+  const eff = new Set<string>(ch.toolBuckets ?? sel.activeBuckets ?? []);
+  const deny = new Set<string>(ch.toolDeny ?? []);
+  // Dato del loader, no una comparación a ojo: `inherits.X` es "la clave no existe".
+  const inh = ch.inherits ?? {};
+  const ownCaps = inh.mcps === false;
+  const ownTools = inh.toolGroup === false || inh.toolDeny === false;
+  // Un override VACÍO no es lo mismo que heredar: es "aquí no puede usar nada".
+  const vacio = ownCaps && (ch.mcps?.length ?? 0) === 0;
+  const levelOf = (b: any) => {
+    let cur = "off";
+    for (const l of b.levels ?? []) if (l.buckets.every((k: string) => eff.has(k))) cur = l.key;
+    return cur;
+  };
+  const items = [
+    ...(sel.builtins ?? []).map((b: any) => ({
+      kind: "builtin" as const, key: b.name, label: b.label,
+      desc: "Incluida con el agente", on: !(ch.disabledBuiltins ?? []).includes(b.name),
+    })),
+    ...(buckets ?? []).map((b: any) => ({
+      kind: "family" as const, key: b.key, label: b.label, desc: b.description,
+      on: b.levels ? levelOf(b) !== "off" : eff.has(b.key),
+      level: b.levels ? levelOf(b) : null, bucket: b,
+    })),
+    ...(sel.capabilities ?? []).map((c: any) => ({
+      kind: "connector" as const, key: c.name, label: c.label,
+      desc: c.description || (c.secretsPresent ? "Conector" : "Necesita una credencial"),
+      on: (ch.mcps ?? []).includes(c.name), cap: c,
+    })),
+  ];
+  // Filtra por nombre Y descripción: buscas "cobro" y sale MercadoPago.
+  const q = capQ.trim().toLowerCase();
+  const vis = q ? items.filter((i: any) => `${i.label} ${i.desc}`.toLowerCase().includes(q)) : items;
+  const TONE: Record<string, string> = { builtin: "#BAD9D8", family: "#C8F9AB", connector: "#F4B7EC" };
+  // Un icono por capacidad. Las iniciales no servían ("EasyBits" y "Email" daban
+  // las dos una "E") y los emoji tampoco: cambian de forma según el sistema.
+  const ICON: Record<string, string> = {
+    easybits: "caja", wa: "chat", render: "impresora",
+    imagenes: "imagen", documentos: "documento", investigacion: "lupa", video: "video",
+    email: "correo", db: "base", sitios: "globo", pagos: "tarjeta",
+    denik: "calendario", formmy: "tablero", kommo: "contactos", skydropx: "camion",
+    mercadopago: "tarjeta", elevenlabs: "altavoz", brightdata: "lupa",
+  };
+  return (
+    <div>
+      <div className="flex items-center justify-between gap-3 flex-wrap mb-1">
+        <p className="text-xs font-semibold">Qué puede hacer en este canal</p>
+        <div className="flex items-center gap-3">
+          {ownCaps || ownTools ? (
+            <button type="button"
+              onClick={() => { if (ownCaps) cfg.inheritCapabilities(ch.id); if (ownTools) cfg.inheritToolBuckets(ch.id); }}
+              className="text-[11px] font-bold text-brand-500 underline underline-offset-2">
+              volver a seguir al agente
+            </button>
+          ) : (
+            <span className="text-[11px] text-tale">sigue al agente</span>
+          )}
+        </div>
+      </div>
+      <p className="text-[11px] text-tale mb-2">
+        {ownCaps || ownTools
+          ? "Este canal decide lo suyo: lo que cambies en el default del agente ya no le llega."
+          : "Hereda del default del agente. En cuanto toques algo aquí, este canal manda lo suyo."}
+      </p>
+      {/* Cinco canales en producción quedaron así por un bug ya corregido (encender
+          una capacidad borraba las demás). No se tocan sus datos a ciegas: se avisa. */}
+      {vacio && (
+        <p className="text-[11px] bg-brand-yellow/40 border-2 border-black rounded-xl px-3 py-2 mb-2">
+          Este canal no tiene <b>ninguna</b> capacidad propia encendida, y no hereda.
+          {" "}
+          <button type="button" onClick={() => cfg.inheritCapabilities(ch.id)}
+            className="font-bold underline underline-offset-2">
+            ¿Querías que siguiera al agente?
+          </button>
+        </p>
+      )}
+      {/* Agrupadas por ESTADO con su conteo: lo primero que quieres saber es qué
+          tiene encendido, no el catálogo entero por orden de catálogo. */}
+      {items.length > 8 && (
+        <input value={capQ} onChange={(e) => setCapQ(e.target.value)} placeholder="Buscar capacidad…"
+          className="w-full mb-2 border-2 border-gray-200 rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:border-black" />
+      )}
+      {([["Activas", vis.filter((i: any) => i.on)], ["Disponibles", vis.filter((i: any) => !i.on)]] as const).map(([titulo, grupo]) => (grupo as any[]).length === 0 ? null : (
+      <div key={titulo} className="mb-3">
+      <p className="text-[11px] font-bold text-marengo mb-1">
+        {titulo} <span className="text-tale">({(grupo as any[]).length})</span>
+      </p>
+      <ul className="border-2 border-gray-200 rounded-xl divide-y-2 divide-gray-100 overflow-hidden">
+        {(grupo as any[]).map((it: any) => (
+          <li key={`${it.kind}-${it.key}`}>
+            <button type="button" onClick={() => onDetail(it)}
+              className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-grayLight transition-colors">
+              <span className="w-7 h-7 shrink-0 rounded-lg border-2 border-black grid place-items-center"
+                style={{ background: it.on ? TONE[it.kind] : "#fff" }}>
+                <Icon name={ICON[it.key] ?? (it.kind === "connector" ? "enchufe" : "punto")} />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className={`block text-sm truncate ${it.on ? "font-bold" : "font-semibold text-marengo"}`}>{it.label}</span>
+                <span className="block text-[11px] text-tale line-clamp-2">{it.desc}</span>
+              </span>
+              {it.kind === "connector" && it.cap && !it.cap.secretsPresent && (
+                <span className="shrink-0 text-[11px] font-semibold text-brand-red">falta credencial</span>
+              )}
+              {it.level && it.level !== "off" && (
+                <span className="shrink-0 text-[11px] font-semibold text-marengo">
+                  {it.bucket.levels.find((l: any) => l.key === it.level)?.label}
+                </span>
+              )}
+
+              <svg className="w-3.5 h-3.5 shrink-0 text-tale" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 18l6-6-6-6" />
+              </svg>
+            </button>
+          </li>
+        ))}
+      </ul>
+      </div>
+      ))}
+    </div>
+  );
+}
 
 function FullScreen({ title, onClose, children, size = "full" }: { title: string; onClose: () => void; children: React.ReactNode; size?: "full" | "auto" }) {
   const closeRef = useRef(onClose);
@@ -1056,224 +1351,15 @@ export default function Flota2() {
   // que abras nada, y al abrir sólo ves esa cosa. Antes esto era un acordeón que
   // desplegaba de golpe instrucciones + voz + once capacidades + archivos: había que
   // hacer scroll para saber qué había configurado.
-  const SettingRow = ({ icon, label, summary, onClick }: { icon: string; label: string; summary: string; onClick: () => void }) => (
-    <li>
-      <button type="button" onClick={onClick}
-        className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-grayLight transition-colors">
-        <span className="w-7 h-7 shrink-0 rounded-lg border-2 border-black grid place-items-center bg-white"><Icon name={icon} /></span>
-        <span className="min-w-0 flex-1">
-          <span className="block text-sm font-bold">{label}</span>
-          <span className="block text-[11px] text-tale truncate">{summary}</span>
-        </span>
-        <svg className="w-3.5 h-3.5 shrink-0 text-tale" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M9 18l6-6-6-6" />
-        </svg>
-      </button>
-    </li>
-  );
-
-  const ChannelConfig = ({ ch }: { ch: any }) => {
-    const inh = ch.inherits ?? {};
-    const activas = (sel.builtins ?? []).filter((b: any) => !(ch.disabledBuiltins ?? []).includes(b.name)).length
-      + (ch.mcps?.length ?? 0)
-      + (ch.toolBuckets ?? sel.activeBuckets ?? []).length;
-    return (
-      <ul className="mt-2 border-2 border-gray-200 rounded-xl divide-y-2 divide-gray-100 overflow-hidden">
-        <SettingRow icon="lapiz" label="Instrucciones"
-          summary={ch.systemPrompt
-            ? `Propias · ${ch.systemPrompt.length} caracteres, además de las del agente`
-            : "Usa las del agente"}
-          onClick={() => setChanPanel({ ch, kind: "prompt" })} />
-        <SettingRow icon="altavoz" label="Voz"
-          summary={ch.voiceId ? (inh.voice ? `${ch.voiceId} (heredada)` : ch.voiceId) : "La del agente"}
-          onClick={() => setChanPanel({ ch, kind: "voz" })} />
-        <SettingRow icon="rayo" label="Qué puede hacer"
-          summary={`${activas} activas · ${inh.mcps === false || inh.toolGroup === false ? "lista propia" : "sigue al agente"}`}
-          onClick={() => setChanPanel({ ch, kind: "caps" })} />
-        <SettingRow icon="clip" label="Archivos que puede enviar"
-          summary={(ch.assets?.length ?? 0) > 0 ? `${ch.assets.length} elegido${ch.assets.length !== 1 ? "s" : ""}` : "Ninguno"}
-          onClick={() => setChanPanel({ ch, kind: "archivos" })} />
-      </ul>
-    );
-  };
-
-  // Archivos que el agente puede ENVIAR en este canal. No son adjuntos del prompt:
-  // entran al turno como una lista "archivos disponibles para enviar" con su URL, y el
-  // agente decide cuándo mandarlos (`resolveGroupAssetManifest`).
-  const ChannelFiles = ({ ch }: { ch: any }) => {
-    const chosen: string[] = ch.assets ?? [];
-    const up = (files: File[]) => {
-      for (const f of files) {
-        const fd = new FormData();
-        fd.set("intent", "upload-asset");
-        fd.set("fleetAgentId", sel.id);
-        fd.set("groupId", ch.id);
-        fd.set("file", f);
-        fetcher.submit(fd, { method: "post", action: "/dash/flota", encType: "multipart/form-data" });
-      }
-    };
-    return (
-      <div>
-        <p className="text-xs text-marengo mb-2">
-          {chosen.length === 0
-            ? "Ninguno todavía: el agente sólo manda lo que genera en el momento."
-            : `${chosen.length} a mano: catálogo, tarifas, un instructivo…`}
-        </p>
-        <div className="flex flex-wrap items-center gap-2 mb-2">
-          <input value={fileQ} onChange={(e) => setFileQ(e.target.value)} placeholder="Buscar entre tus archivos…"
-            className="flex-1 min-w-[12rem] border-2 border-gray-200 rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:border-black" />
-          <label className="shrink-0 text-xs font-bold text-brand-500 hover:underline cursor-pointer">
-            + Subir uno
-            <input type="file" multiple className="hidden"
-              onChange={(e) => { up(Array.from(e.target.files ?? [])); e.target.value = ""; }} />
-          </label>
-        </div>
-        {ownerFiles.length === 0 ? (
-          <p className="text-[11px] text-tale">
-            {fileQ.trim() ? "Nada con ese nombre." : "Busca por nombre para elegir de tus archivos, o sube uno."}
-          </p>
-        ) : (
-          <ul className="border-2 border-gray-200 rounded-xl divide-y-2 divide-gray-100 overflow-hidden">
-            {ownerFiles.map((f) => {
-              const on = chosen.includes(f.id);
-              return (
-                <li key={f.id} className="flex items-center gap-3 px-3 py-2">
-                  <Toggle on={on} busy={fetcher.state !== "idle"} onClick={() => cfg.toggleAsset(ch.id, f.id, !on)} />
-                  <span className={`text-sm truncate flex-1 ${on ? "font-bold" : "text-marengo"}`} title={f.name}>{f.name}</span>
-                  <span className="text-[11px] text-tale shrink-0">{(f.contentType ?? "").split("/").pop()}</span>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </div>
-    );
-  };
-
-  const CapsList = ({ ch }: { ch: any }) => {
-    const eff = new Set<string>(ch.toolBuckets ?? sel.activeBuckets ?? []);
-    const deny = new Set<string>(ch.toolDeny ?? []);
-    // Dato del loader, no una comparación a ojo: `inherits.X` es "la clave no existe".
-    const inh = ch.inherits ?? {};
-    const ownCaps = inh.mcps === false;
-    const ownTools = inh.toolGroup === false || inh.toolDeny === false;
-    // Un override VACÍO no es lo mismo que heredar: es "aquí no puede usar nada".
-    const vacio = ownCaps && (ch.mcps?.length ?? 0) === 0;
-    const levelOf = (b: any) => {
-      let cur = "off";
-      for (const l of b.levels ?? []) if (l.buckets.every((k: string) => eff.has(k))) cur = l.key;
-      return cur;
-    };
-    const items = [
-      ...(sel.builtins ?? []).map((b: any) => ({
-        kind: "builtin" as const, key: b.name, label: b.label,
-        desc: "Incluida con el agente", on: !(ch.disabledBuiltins ?? []).includes(b.name),
-      })),
-      ...(buckets ?? []).map((b: any) => ({
-        kind: "family" as const, key: b.key, label: b.label, desc: b.description,
-        on: b.levels ? levelOf(b) !== "off" : eff.has(b.key),
-        level: b.levels ? levelOf(b) : null, bucket: b,
-      })),
-      ...(sel.capabilities ?? []).map((c: any) => ({
-        kind: "connector" as const, key: c.name, label: c.label,
-        desc: c.description || (c.secretsPresent ? "Conector" : "Necesita una credencial"),
-        on: (ch.mcps ?? []).includes(c.name), cap: c,
-      })),
-    ];
-    // Filtra por nombre Y descripción: buscas "cobro" y sale MercadoPago.
-    const q = capQ.trim().toLowerCase();
-    const vis = q ? items.filter((i: any) => `${i.label} ${i.desc}`.toLowerCase().includes(q)) : items;
-    const TONE: Record<string, string> = { builtin: "#BAD9D8", family: "#C8F9AB", connector: "#F4B7EC" };
-    // Un icono por capacidad. Las iniciales no servían ("EasyBits" y "Email" daban
-    // las dos una "E") y los emoji tampoco: cambian de forma según el sistema.
-    const ICON: Record<string, string> = {
-      easybits: "caja", wa: "chat", render: "impresora",
-      imagenes: "imagen", documentos: "documento", investigacion: "lupa", video: "video",
-      email: "correo", db: "base", sitios: "globo", pagos: "tarjeta",
-      denik: "calendario", formmy: "tablero", kommo: "contactos", skydropx: "camion",
-      mercadopago: "tarjeta", elevenlabs: "altavoz", brightdata: "lupa",
-    };
-    return (
-      <div>
-        <div className="flex items-center justify-between gap-3 flex-wrap mb-1">
-          <p className="text-xs font-semibold">Qué puede hacer en este canal</p>
-          <div className="flex items-center gap-3">
-            {ownCaps || ownTools ? (
-              <button type="button"
-                onClick={() => { if (ownCaps) cfg.inheritCapabilities(ch.id); if (ownTools) cfg.inheritToolBuckets(ch.id); }}
-                className="text-[11px] font-bold text-brand-500 underline underline-offset-2">
-                volver a seguir al agente
-              </button>
-            ) : (
-              <span className="text-[11px] text-tale">sigue al agente</span>
-            )}
-          </div>
-        </div>
-        <p className="text-[11px] text-tale mb-2">
-          {ownCaps || ownTools
-            ? "Este canal decide lo suyo: lo que cambies en el default del agente ya no le llega."
-            : "Hereda del default del agente. En cuanto toques algo aquí, este canal manda lo suyo."}
-        </p>
-        {/* Cinco canales en producción quedaron así por un bug ya corregido (encender
-            una capacidad borraba las demás). No se tocan sus datos a ciegas: se avisa. */}
-        {vacio && (
-          <p className="text-[11px] bg-brand-yellow/40 border-2 border-black rounded-xl px-3 py-2 mb-2">
-            Este canal no tiene <b>ninguna</b> capacidad propia encendida, y no hereda.
-            {" "}
-            <button type="button" onClick={() => cfg.inheritCapabilities(ch.id)}
-              className="font-bold underline underline-offset-2">
-              ¿Querías que siguiera al agente?
-            </button>
-          </p>
-        )}
-        {/* Agrupadas por ESTADO con su conteo: lo primero que quieres saber es qué
-            tiene encendido, no el catálogo entero por orden de catálogo. */}
-        {items.length > 8 && (
-          <input value={capQ} onChange={(e) => setCapQ(e.target.value)} placeholder="Buscar capacidad…"
-            className="w-full mb-2 border-2 border-gray-200 rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:border-black" />
-        )}
-        {([["Activas", vis.filter((i: any) => i.on)], ["Disponibles", vis.filter((i: any) => !i.on)]] as const).map(([titulo, grupo]) => (grupo as any[]).length === 0 ? null : (
-        <div key={titulo} className="mb-3">
-        <p className="text-[11px] font-bold text-marengo mb-1">
-          {titulo} <span className="text-tale">({(grupo as any[]).length})</span>
-        </p>
-        <ul className="border-2 border-gray-200 rounded-xl divide-y-2 divide-gray-100 overflow-hidden">
-          {(grupo as any[]).map((it: any) => (
-            <li key={`${it.kind}-${it.key}`}>
-              <button type="button" onClick={() => setCapDetail({ ch, item: it })}
-                className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-grayLight transition-colors">
-                <span className="w-7 h-7 shrink-0 rounded-lg border-2 border-black grid place-items-center"
-                  style={{ background: it.on ? TONE[it.kind] : "#fff" }}>
-                  <Icon name={ICON[it.key] ?? (it.kind === "connector" ? "enchufe" : "punto")} />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className={`block text-sm truncate ${it.on ? "font-bold" : "font-semibold text-marengo"}`}>{it.label}</span>
-                  <span className="block text-[11px] text-tale line-clamp-2">{it.desc}</span>
-                </span>
-                {it.kind === "connector" && it.cap && !it.cap.secretsPresent && (
-                  <span className="shrink-0 text-[11px] font-semibold text-brand-red">falta credencial</span>
-                )}
-                {it.level && it.level !== "off" && (
-                  <span className="shrink-0 text-[11px] font-semibold text-marengo">
-                    {it.bucket.levels.find((l: any) => l.key === it.level)?.label}
-                  </span>
-                )}
-
-                <svg className="w-3.5 h-3.5 shrink-0 text-tale" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M9 18l6-6-6-6" />
-                </svg>
-              </button>
-            </li>
-          ))}
-        </ul>
-        </div>
-        ))}
-      </div>
-    );
-  };
+  // La capacidad ElevenLabs se resuelve POR CANAL: lista propia si el canal la tiene,
+  // y si no, la del default del agente. Es el mismo dato que usa `resolveVoiceEngine`
+  // en el servidor para decidir el motor.
+  const elevenEnabled = (ch: any) =>
+    ((ch.inherits ?? {}).mcps === false ? (ch.mcps ?? []) : (sel.defaultMcps ?? [])).includes("elevenlabs");
 
   const VoicePicker = ({ ch }: { ch: any }) => (
-    <VoiceList agent={sel} current={ch.voiceId ?? ""} onPick={(id) => cfg.setVoice(ch.id, id)} />
+    <VoiceList agent={sel} groupId={ch.id} current={ch.voiceId ?? ""}
+      elevenOn={elevenEnabled(ch)} onPick={(id) => cfg.setVoice(ch.id, id)} />
   );
 
   const sendSkill = (entries: Array<{ file: File; path?: string }>) => {
@@ -1680,7 +1766,7 @@ export default function Flota2() {
                                 )}
                               </div>
                               {/* Sólo tiene sentido afinar un canal que atiende. */}
-                              {g.enabled && <ChannelConfig ch={g} />}
+                              {g.enabled && <ChannelConfig ch={g} sel={sel} onOpen={(kind) => setChanPanel({ ch: g, kind })} />}
                             </li>
                           ))}
                         </ul>
@@ -1757,7 +1843,7 @@ export default function Flota2() {
                                   ))}
                                 </div>
                               </div>
-                              <ChannelConfig ch={w} />
+                              <ChannelConfig ch={w} sel={sel} onOpen={(kind) => setChanPanel({ ch: w, kind })} />
                             </li>
                           ))}
                           <li>
@@ -1777,7 +1863,7 @@ export default function Flota2() {
                           ? "Recibe turnos desde Ghosty Teams."
                           : "Se conecta desde Ghosty Teams: Ajustes → Agentes → conectar este agente de la flota. Aquí sólo configuras su comportamiento en ese canal."}
                       </p>
-                      <ChannelConfig ch={sel.teamsChannel} />
+                      <ChannelConfig ch={sel.teamsChannel} sel={sel} onOpen={(kind) => setChanPanel({ ch: sel.teamsChannel, kind })} />
                     </>)}
 
                     {tab === "ch:web" && (<>
@@ -1863,7 +1949,7 @@ export default function Flota2() {
                           </div>
                         )}
                       </div>
-                      <ChannelConfig ch={sel.webChannel} />
+                      <ChannelConfig ch={sel.webChannel} sel={sel} onOpen={(kind) => setChanPanel({ ch: sel.webChannel, kind })} />
                     </>)}
                   </Card>
                 )}
@@ -2470,7 +2556,7 @@ export default function Flota2() {
         {chanPanel && (() => {
           const { ch, kind } = chanPanel;
           const nombre = ch.subject ?? (ch.id === "web" ? "Web" : ch.id === "teams" ? "Ghosty Teams" : ch.id);
-          const titulo = { prompt: "Instrucciones", voz: "Voz", caps: "Qué puede hacer", archivos: "Archivos que puede enviar" }[kind];
+          const titulo = { prompt: "Instrucciones", voz: "Voz con la que contesta", caps: "Qué puede hacer", archivos: "Archivos que puede enviar" }[kind];
           return (
             <FullScreen title={`${titulo} · ${nombre}`} size={kind === "prompt" ? "full" : "auto"}
               onClose={() => setChanPanel(null)}>
@@ -2494,8 +2580,10 @@ export default function Flota2() {
                 </fetcher.Form>
               )}
               {kind === "voz" && <VoicePicker ch={ch} />}
-              {kind === "caps" && <CapsList ch={ch} />}
-              {kind === "archivos" && <ChannelFiles ch={ch} />}
+              {kind === "caps" && <CapsList ch={ch} sel={sel} cfg={cfg} buckets={buckets ?? []}
+                capQ={capQ} setCapQ={setCapQ} onDetail={(item) => setCapDetail({ ch, item })} />}
+              {kind === "archivos" && <ChannelFiles ch={ch} sel={sel} cfg={cfg} fetcher={fetcher}
+                ownerFiles={ownerFiles} fileQ={fileQ} setFileQ={setFileQ} />}
             </FullScreen>
           );
         })()}
