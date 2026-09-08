@@ -794,6 +794,11 @@ export default function Flota2() {
   // bloque sirve para los cuatro. Vacío = hereda lo del agente; no es "sin nada".
   const ChannelConfig = ({ ch }: { ch: any }) => {
     const open = chanCfg === ch.id;
+    // `mcps` viene del loader como `gconf[id]?.mcpServers ?? []`, así que un canal que
+    // hereda y uno con lista propia vacía se ven igual desde aquí. Se distingue por si
+    // difiere del default del agente o por tener otros ajustes propios.
+    const own = (ch.mcps?.length ?? 0) > 0 &&
+      JSON.stringify([...(ch.mcps ?? [])].sort()) !== JSON.stringify([...(sel.defaultMcps ?? [])].sort());
     const overrides = (ch.mcps?.length ?? 0) + (ch.disabledBuiltins?.length ?? 0) + (ch.systemPrompt ? 1 : 0);
     return (
       <div className={`mt-1 rounded-xl border-2 ${open ? "border-black" : "border-transparent"}`}>
@@ -823,12 +828,24 @@ export default function Flota2() {
                 </fetcher.Form>
 
                 <div>
-                  <p className="text-xs font-semibold">Capacidades en este canal</p>
-                  {/* Es LA MISMA lista de la pestaña Capacidades. Se dijo aquí porque
-                      con el selector de nivel pisando el nombre parecía otra lista. */}
+                  <div className="flex items-center justify-between gap-3 flex-wrap">
+                    <p className="text-xs font-semibold">Capacidades en este canal</p>
+                    {/* Heredar u override es TODO O NADA (así lo resuelve el worker:
+                        `cfg.mcpServers ?? default`), no un merge. Si no se dice, tocar
+                        un canal lo desengancha del agente para siempre sin avisar. */}
+                    {own ? (
+                      <button type="button" onClick={() => submit({ intent: "inherit-group-mcps", groupId: ch.id })}
+                        className="text-[11px] font-bold text-brand-500 underline underline-offset-2">
+                        volver a seguir al agente
+                      </button>
+                    ) : (
+                      <span className="text-[11px] text-tale">sigue al agente</span>
+                    )}
+                  </div>
                   <p className="text-[11px] text-tale mb-1.5">
-                    La misma lista de <b>Capacidades</b>; aquí eliges qué ve en este canal y con qué
-                    alcance. Las incluidas sí se pueden apagar por canal.
+                    {own
+                      ? "Este canal tiene su PROPIA lista: lo que cambies en Capacidades ya no le llega."
+                      : "Hereda de Capacidades. En cuanto toques algo aquí, este canal deja de seguir al agente y manda esta lista."}
                   </p>
                   <ul className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
                     {(sel.builtins ?? []).map((b: any) => {

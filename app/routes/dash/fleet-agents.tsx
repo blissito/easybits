@@ -770,10 +770,29 @@ export async function action({ request }: Route.ActionArgs) {
     }
     const configs = { ...((fleetAgent.groupConfigs as Record<string, GroupConfig> | null) ?? {}) };
     const cur = configs[groupId] ?? {};
-    const set = new Set(cur.mcpServers ?? []);
+    // 🚨 MATERIALIZAR LA HERENCIA antes de togglear. `resolveGroupMcpServers` hace
+    // `cfg.mcpServers ?? all["*"].mcpServers`: un canal SIN la clave hereda el default
+    // del agente, y en cuanto la tiene GANA ella entera (no hay merge). Partiendo de
+    // `[]`, encender UNA capacidad en un canal que heredaba cinco lo dejaba con esa
+    // una y borraba las otras cuatro EN SILENCIO. Mismo fallo que ya se corrigió en
+    // `set-db-allow`; aquí seguía vivo.
+    const inherited = (configs["*"] as GroupConfig | undefined)?.mcpServers ?? [];
+    const set = new Set(cur.mcpServers ?? inherited);
     if (on) set.add(name);
     else set.delete(name);
     configs[groupId] = { ...cur, mcpServers: [...set] };
+    await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { groupConfigs: configs } });
+    return data({ ok: true });
+  }
+  if (intent === "inherit-group-mcps") {
+    // Devuelve un canal al default del agente: BORRA su `mcpServers` (no lo vacía —
+    // un array vacío es un override que apaga todo). Sin esto, un canal tocado por
+    // error se queda desenganchado del agente para siempre.
+    const groupId = String(fd.get("groupId") || "");
+    const configs = { ...((fleetAgent.groupConfigs as Record<string, GroupConfig> | null) ?? {}) };
+    const cur = { ...(configs[groupId] ?? {}) } as GroupConfig;
+    delete (cur as { mcpServers?: string[] }).mcpServers;
+    configs[groupId] = cur;
     await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { groupConfigs: configs } });
     return data({ ok: true });
   }
