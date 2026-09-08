@@ -437,11 +437,11 @@ function Boxes({ pools, capacity, onAction, busyId }: {
           ))}
         </AnimatePresence>
       </div>
-      <p className="text-[11px] text-marengo">
-        Cada carita es una caja y cada caja sostiene {capacity.maxWorkersPerVm ?? 4} conversaciones
-        (los puntitos de abajo). Ojos abiertos = atiende · cerrados = duerme, revive en 1s ·
-        punteada = cupo libre · {capacity.agentsActive}/{capacity.agentsMax} en total.
-        Haz clic en una para dormirla, despertarla o eliminarla.
+      {/* Corta a propósito: el detalle de cada caja está en su tooltip. La versión
+          larga se salía de la pantalla y empujaba la cabecera. */}
+      <p className="text-[11px] text-marengo whitespace-nowrap"
+        title={`Cada carita es una caja y sostiene ${capacity.maxWorkersPerVm ?? 4} conversaciones (los puntitos). Ojos abiertos = atiende, cerrados = duerme (revive en 1s), punteada = cupo libre. Clic para dormirla, despertarla o eliminarla.`}>
+        {capacity.agentsActive}/{capacity.agentsMax} conversaciones · clic en una caja para administrarla
       </p>
     </div>
   );
@@ -778,7 +778,17 @@ export default function Flota2() {
   const groups: any[] = sel?.groups ?? [];
   const active = groups.filter((g: any) => g.enabled);
   const others = groups.filter((g: any) => !g.enabled);
-  const cfgId = sel?.mainGroupJid || active[0]?.id || "web";
+  // El ensayo prueba la config del canal que estás mirando. Antes usaba siempre el
+  // grupo main: cambiabas algo en WhatsApp Business y ensayabas contra otro canal,
+  // así que el cambio "no se notaba". El configGroupId es OBLIGATORIO — sin él el
+  // turno arranca sin los conectores del canal y parece que el MCP está roto.
+  const cfgId = (() => {
+    if (tab === "ch:waba") return sel?.wabaNumbers?.[0]?.id ?? "web";
+    if (tab === "ch:teams") return "teams";
+    if (tab === "ch:web") return "web";
+    if (tab === "ch:baileys") return sel?.mainGroupJid || active[0]?.id || "web";
+    return sel?.mainGroupJid || active[0]?.id || "web";
+  })();
   const ensayo = useEnsayo({ id: sel?.id ?? "", token: sel?.token ?? "" }, cfgId, adminMode);
 
   useEffect(() => { setDirty(false); setBig(null); }, [sel?.id]);
@@ -1061,6 +1071,15 @@ export default function Flota2() {
       })),
     ];
     const TONE: Record<string, string> = { builtin: "#BAD9D8", family: "#C8F9AB", connector: "#F4B7EC" };
+    // Un icono por capacidad. Las iniciales no servían: "EasyBits" y "Email" daban
+    // las dos una "E", que es justo lo contrario de reconocer algo de un vistazo.
+    const ICON: Record<string, string> = {
+      easybits: "📦", wa: "💬", render: "🖨️",
+      imagenes: "🎨", documentos: "📄", investigacion: "🔎", video: "🎬",
+      email: "✉️", db: "🗄️", sitios: "🌐", pagos: "💳",
+      denik: "📅", formmy: "📋", kommo: "📇", skydropx: "🚚",
+      mercadopago: "💳", elevenlabs: "🔊", brightdata: "🔎",
+    };
     return (
       <div>
         <div className="flex items-center justify-between gap-3 flex-wrap mb-1">
@@ -1108,7 +1127,7 @@ export default function Flota2() {
                 className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-grayLight transition-colors">
                 <span className="w-7 h-7 shrink-0 rounded-lg border-2 border-black grid place-items-center text-[11px] font-bold"
                   style={{ background: it.on ? TONE[it.kind] : "#fff" }}>
-                  {it.label.slice(0, 1).toUpperCase()}
+                  {ICON[it.key] ?? (it.kind === "connector" ? "🔌" : "•")}
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className={`block text-sm truncate ${it.on ? "font-bold" : "font-semibold text-marengo"}`}>{it.label}</span>
@@ -1122,9 +1141,7 @@ export default function Flota2() {
                     {it.bucket.levels.find((l: any) => l.key === it.level)?.label}
                   </span>
                 )}
-                <span className={`shrink-0 text-[11px] font-bold ${it.on ? "text-onix" : "text-tale"}`}>
-                  {it.on ? "activa" : "apagada"}
-                </span>
+
                 <svg className="w-3.5 h-3.5 shrink-0 text-tale" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M9 18l6-6-6-6" />
                 </svg>
@@ -1414,7 +1431,7 @@ export default function Flota2() {
           </div>
         </header>
 
-        <div className="grid grid-cols-1 lg:grid-cols-[230px_minmax(0,1fr)] xl:grid-cols-[230px_minmax(0,1fr)_minmax(360px,26vw)] gap-4 items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-[200px_minmax(0,1fr)_minmax(320px,24vw)] gap-4 items-start">
           {/* ── Roster ─────────────────────────────────────────────────── */}
           <nav className="flex flex-col gap-1.5">
             {pools.map((p: any) => {
@@ -2093,13 +2110,20 @@ export default function Flota2() {
           </div>
 
           {/* ── Ensayo ─────────────────────────────────────────────────── */}
-          <div className="hidden xl:block xl:sticky xl:top-6 min-w-0">
+          <div className="hidden lg:block lg:sticky lg:top-6 min-w-0">
             <Card title="Ensayo"
               right={
                 <div className="flex items-center gap-2">
                   <Expand onClick={() => setBig("ensayo")} label="Ensayar en grande" />
                 </div>
               }>
+              {/* Contra qué config se prueba: si no se dice, cambias algo en un canal,
+                  ensayas, y no se nota — porque estabas probando otro. */}
+              <p className="text-[11px] text-tale mb-2">
+                Con la configuración de{" "}
+                <b>{CHANNELS.find((c) => `ch:${c.kind}` === tab)?.label
+                  ?? (cfgId === "web" ? "Web" : cfgId === "teams" ? "Ghosty Teams" : "WhatsApp")}</b>.
+              </p>
               <EnsayoBody msgs={ensayo.msgs} busy={ensayo.busy} loading={ensayo.loading} onSend={ensayo.send} />
               <p className="text-[11px] text-tale mt-2 leading-relaxed">
                 Aquí el agente <b>puede cambiarse a sí mismo</b>: decirle “de ahora en
@@ -2652,7 +2676,7 @@ export default function Flota2() {
       </AnimatePresence>
       {/* Tablet y abajo: el ensayo no cabe al lado, así que vive en un panel. */}
       <button type="button" onClick={() => setBig("ensayo")}
-        className="xl:hidden fixed left-4 md:left-24 bottom-4 z-30 flex items-center gap-2 border-2 border-black rounded-xl px-4 py-2 text-sm font-bold bg-brand-500 text-white shadow-[2px_2px_0_0_#000]">
+        className="lg:hidden fixed left-4 md:left-24 bottom-4 z-30 flex items-center gap-2 border-2 border-black rounded-xl px-4 py-2 text-sm font-bold bg-brand-500 text-white shadow-[2px_2px_0_0_#000]">
         <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
           <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
         </svg>
