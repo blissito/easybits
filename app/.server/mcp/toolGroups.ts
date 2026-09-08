@@ -464,6 +464,13 @@ export const SANDBOX_ALLOWLIST = new Set<string>([
   "ghosty_spawn",
   "goose_spawn",
   "sandbox_admin",
+  // Rampa de salida de lo efímero a lo permanente. `make_permanent` toma una caja
+  // que este grupo YA sabe crear, así que sin ella el ciclo queda cortado: el agente
+  // tendría que recargar el conector con `hosting` para no perder su propia caja.
+  // `list_machine_tiers` la acompaña porque hay que elegir tier al hacerlo.
+  // Mismo patrón por el que `hosting` duplica expose_port / domain_* / logs.
+  "make_permanent",
+  "list_machine_tiers",
 ]);
 
 /**

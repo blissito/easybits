@@ -62,15 +62,18 @@ import { EasybitsClient } from "@easybits.cloud/sdk";
 const eb = new EasybitsClient({ apiKey: "eb_sk_live_..." });
 \`\`\`
 
-Por defecto solo cargan 12 herramientas core. Habilita más con \`--tools\`:
+Por defecto solo carga el grupo \`core\`. Habilita más con \`--tools\`, separando
+grupos por comas:
 \`\`\`bash
 # Core + sandboxes + documents
-claude mcp add easybits -- npx -y @easybits.cloud/mcp --key eb_sk_live_YOUR_KEY --tools sandbox,docs
+claude mcp add easybits -- npx -y @easybits.cloud/mcp --key eb_sk_live_YOUR_KEY --tools core,sandbox,docs
 
-# Todo (~104 herramientas)
+# Todo
 claude mcp add easybits -- npx -y @easybits.cloud/mcp --key eb_sk_live_YOUR_KEY --tools all
 \`\`\`
-Grupos disponibles: \`core\` (por defecto), \`files\`, \`docs\`, \`slides\`, \`sites\`, \`brand\`, \`all\`. Ver [Tool Groups](#tool-groups).
+El catálogo de grupos —cuáles hay, qué trae cada uno y cuántas tools son— se
+DERIVA del servidor MCP: ver [Tool Groups](#tool-groups). No lo copies aquí a
+mano; cada cifra escrita en prosa se desincroniza en el siguiente deploy.
 `,
 
   files: `## Files

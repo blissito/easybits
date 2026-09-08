@@ -63,82 +63,38 @@ Ask your AI agent things like:
 - *"Bulk delete all my temp files"*
 - *"Duplicate that config file"*
 
-## Tools (31)
+## Tools
 
-### Files
+The proxy is a transport: every tool lives on the server, so the catalog grows
+without republishing this package. That also means **this README does not list
+the tools** — a hand-written list here rots on the next deploy. The live
+catalog is:
 
-| Tool | Description |
-|------|-------------|
-| `list_files` | List files with pagination and filtering |
-| `get_file` | Get file metadata and a signed download URL (1h expiry) |
-| `upload_file` | Create a file record and get a presigned upload URL |
-| `update_file` | Update name, access level, or metadata |
-| `delete_file` | Soft-delete a file (recoverable for 7 days) |
-| `restore_file` | Restore a soft-deleted file |
-| `list_deleted_files` | List deleted files with days until permanent purge |
-| `search_files` | AI-powered natural language file search (requires AI key) |
-| `bulk_upload_files` | Create up to 20 file records with presigned upload URLs |
-| `bulk_delete_files` | Soft-delete up to 100 files at once |
-| `duplicate_file` | Copy an existing file (creates new storage object) |
-| `list_permissions` | List sharing permissions for a file |
+- `https://www.easybits.cloud/api/tools.json` — machine-readable, derived from
+  the MCP server itself (groups, counts and every tool).
+- [The docs](https://www.easybits.cloud/docs) — the `tool-groups` and
+  `all-mcp-tools` sections are generated from the same source.
 
-### Sharing
+### Toolsets (`--tools`)
 
-| Tool | Description |
-|------|-------------|
-| `share_file` | Share a file with another user by email |
-| `generate_share_token` | Generate a presigned download URL (60s–7 days) |
-| `list_share_tokens` | List all share tokens with expiration status |
+There are far too many tools to load at once without flooding the model's
+context, so the server registers only the groups you ask for. Pass `--tools`
+with one group or several separated by commas:
 
-### Images
+```bash
+# Default when you pass nothing: the core group
+npx -y @easybits.cloud/mcp
 
-| Tool | Description |
-|------|-------------|
-| `optimize_image` | Convert images to WebP or AVIF with quality control |
-| `transform_image` | Resize, rotate, flip, convert format, or apply grayscale |
+# Core plus microVM sandboxes
+npx -y @easybits.cloud/mcp --tools core,sandbox
 
-### Webhooks
+# Everything, if your model can take it
+npx -y @easybits.cloud/mcp --tools all
+```
 
-| Tool | Description |
-|------|-------------|
-| `list_webhooks` | List your configured webhooks |
-| `create_webhook` | Create a webhook for file/website events (returns secret) |
-| `update_webhook` | Update URL, events, or status (ACTIVE/PAUSED) |
-| `delete_webhook` | Permanently delete a webhook |
-
-**Events**: `file.created`, `file.updated`, `file.deleted`, `file.restored`, `website.created`, `website.deleted`
-
-Payloads are signed with HMAC SHA-256 via `X-Easybits-Signature` header. Webhooks auto-pause after 5 consecutive failures.
-
-### Account
-
-| Tool | Description |
-|------|-------------|
-| `get_usage_stats` | Storage used/limit, file counts, plan info |
-
-### AI Configuration
-
-| Tool | Description |
-|------|-------------|
-| `set_ai_key` | Store an AI provider API key (Anthropic/OpenAI) for search |
-| `list_ai_keys` | List configured AI keys (masked) |
-| `delete_ai_key` | Remove a stored AI key |
-
-### Storage
-
-| Tool | Description |
-|------|-------------|
-| `list_providers` | List configured storage providers |
-
-### Websites
-
-| Tool | Description |
-|------|-------------|
-| `list_websites` | List all websites with stats |
-| `create_website` | Create a new website with auto-generated slug |
-| `get_website` | Get website details and computed stats |
-| `update_website` | Update website name or status |
-| `delete_website` | Delete website and soft-delete associated files |
+Groups include `core`, `web`, `sandbox`, `hosting`, `design`, `docs`, `sites`,
+`video`, `payments`, `email` and `scripting`. `tools.json` above is the
+authoritative list with what each one contains.
 
 ## Response & error contract
 
@@ -164,11 +120,15 @@ Every tool follows the same conventions, so an agent always parses the same shap
 | `EASYBITS_API_KEY` | Your EasyBits API key | Yes |
 | `EASYBITS_URL` | Custom API base URL | No |
 
-You can also set these in a `~/.easybitsrc` file:
+The key can also be passed as `--key eb_sk_live_...`, or stored in a
+`~/.easybitsrc` file, which is **JSON**:
 
+```json
+{ "apiKey": "eb_sk_live_your_key_here" }
 ```
-EASYBITS_API_KEY=eb_your_key_here
-```
+
+`baseUrl` is accepted there too. Precedence for the key is `--key`, then
+`EASYBITS_API_KEY`, then the rc file.
 
 ## SDK
 
