@@ -750,11 +750,13 @@ export default function Flota2() {
   const [editSkill, setEditSkill] = useState<string | null>(null);
   const [killAgent, setKillAgent] = useState(false);
   const [inbox, setInbox] = useState<any | null>(null);
-  const [chanCfg, setChanCfg] = useState<string | null>(null);
   const [killName, setKillName] = useState("");
   const [addMcp, setAddMcp] = useState(false);
   const [capInfo, setCapInfo] = useState<any | null>(null);
   const [capDetail, setCapDetail] = useState<{ ch: any; item: any } | null>(null);
+  const [capQ, setCapQ] = useState("");
+  const [chanPanel, setChanPanel] = useState<{ ch: any; kind: "prompt" | "voz" | "caps" | "archivos" } | null>(null);
+
   const [creating, setCreating] = useState(false);
   const [engineId, setEngineId] = useState(FLEET_ENGINES.find(engineCreatable)?.id ?? "claude");
   const [mcpBusy, setMcpBusy] = useState(false);
@@ -775,6 +777,31 @@ export default function Flota2() {
   const adminMode = true;
 
   const sel = useMemo(() => pools.find((p: any) => p.id === selId) ?? pools[0], [pools, selId]);
+
+  // Bases y archivos del dueño: NO viajan en el loader del panel (viven en otras
+  // tablas y se pagarían en cada carga). Se piden a la API de capabilities. El
+  // catálogo de archivos sin `q` sólo devuelve los YA elegidos, así que el buscador
+  // es la única forma de ver el resto.
+  const [ownerDbs, setOwnerDbs] = useState<Array<{ name: string; namespace: string }> | null>(null);
+  const [ownerFiles, setOwnerFiles] = useState<Array<{ id: string; name: string; contentType: string | null }>>([]);
+  const [fileQ, setFileQ] = useState("");
+  useEffect(() => {
+    setOwnerDbs(null);
+    if (!sel?.id || !sel?.token) return;
+    let alive = true;
+    const t = setTimeout(() => {
+      fetch(`/api/v2/fleet-agents/${sel.id}/capabilities${fileQ.trim() ? `?q=${encodeURIComponent(fileQ.trim())}` : ""}`,
+        { headers: { Authorization: `Bearer ${sel.token}` } })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => {
+          if (!alive || !d) return;
+          setOwnerDbs(d.ownerDbs ?? []);
+          setOwnerFiles(d.ownerFiles ?? []);
+        })
+        .catch(() => {});
+    }, 250);
+    return () => { alive = false; clearTimeout(t); };
+  }, [sel?.id, sel?.token, fileQ]);
   const groups: any[] = sel?.groups ?? [];
   const active = groups.filter((g: any) => g.enabled);
   const others = groups.filter((g: any) => !g.enabled);
@@ -900,93 +927,55 @@ export default function Flota2() {
   // Config POR CANAL: instrucciones propias + qué capacidades ve ahí. El loader ya
   // devuelve el mismo shape para un grupo, un número WABA, Teams y Web, así que este
   // bloque sirve para los cuatro. Vacío = hereda lo del agente; no es "sin nada".
+  // Lista corta con su resumen; el detalle vive detrás. Es lo que hacen ChatGPT
+  // (Ajustes → Plugins), Claude (Personalizar) y Goose: una fila dice su estado sin
+  // que abras nada, y al abrir sólo ves esa cosa. Antes esto era un acordeón que
+  // desplegaba de golpe instrucciones + voz + once capacidades + archivos: había que
+  // hacer scroll para saber qué había configurado.
+  const SettingRow = ({ icon, label, summary, onClick }: { icon: string; label: string; summary: string; onClick: () => void }) => (
+    <li>
+      <button type="button" onClick={onClick}
+        className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-grayLight transition-colors">
+        <span className="w-7 h-7 shrink-0 rounded-lg border-2 border-black grid place-items-center text-sm bg-white">{icon}</span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-bold">{label}</span>
+          <span className="block text-[11px] text-tale truncate">{summary}</span>
+        </span>
+        <svg className="w-3.5 h-3.5 shrink-0 text-tale" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M9 18l6-6-6-6" />
+        </svg>
+      </button>
+    </li>
+  );
+
   const ChannelConfig = ({ ch }: { ch: any }) => {
-    const open = chanCfg === ch.id;
-    // `mcps` viene del loader como `gconf[id]?.mcpServers ?? []`, así que un canal que
-    // hereda y uno con lista propia vacía se ven igual desde aquí. Se distingue por si
-    // difiere del default del agente o por tener otros ajustes propios.
-    const own = (ch.mcps?.length ?? 0) > 0 &&
-      JSON.stringify([...(ch.mcps ?? [])].sort()) !== JSON.stringify([...(sel.defaultMcps ?? [])].sort());
-    const overrides = (ch.mcps?.length ?? 0) + (ch.disabledBuiltins?.length ?? 0) + (ch.systemPrompt ? 1 : 0);
+    const inh = ch.inherits ?? {};
+    const activas = (sel.builtins ?? []).filter((b: any) => !(ch.disabledBuiltins ?? []).includes(b.name)).length
+      + (ch.mcps?.length ?? 0)
+      + (ch.toolBuckets ?? sel.activeBuckets ?? []).length;
     return (
-      <div className={`mt-1 rounded-xl border-2 ${open ? "border-black" : "border-transparent"}`}>
-        <button type="button" onClick={() => setChanCfg(open ? null : ch.id)}
-          className="flex items-center gap-2 text-xs font-bold text-brand-500 hover:underline px-1 py-1">
-          {open ? "▾" : "▸"} Cómo se comporta en este canal
-          {overrides > 0 && !open && (
-            <span className="font-semibold text-marengo">· {overrides} ajuste{overrides !== 1 ? "s" : ""} propio{overrides !== 1 ? "s" : ""}</span>
-          )}
-        </button>
-        <AnimatePresence initial={false}>
-          {open && (
-            <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}
-              className="overflow-hidden">
-              <div className="p-3 flex flex-col gap-4">
-                <fetcher.Form method="post" action="/dash/flota" className="flex flex-col gap-1">
-                  <input type="hidden" name="intent" value="set-group-prompt" />
-                  <input type="hidden" name="fleetAgentId" value={sel.id} />
-                  <input type="hidden" name="groupId" value={ch.id} />
-                  <span className="text-xs font-semibold">Instrucciones sólo para este canal</span>
-                  <textarea name="systemPrompt" defaultValue={ch.systemPrompt ?? ""} rows={3}
-                    placeholder="Vacío = usa las instrucciones del agente. Lo que escribas aquí se SUMA, no las reemplaza."
-                    className="eb-thin border-2 border-gray-200 rounded-xl p-2 text-sm font-mono resize-y focus:outline-none focus:border-brand-500" />
-                  <button type="submit" className="self-start mt-1 border-2 border-black rounded-lg px-3 py-1 text-xs font-bold bg-brand-500 text-white">
-                    Guardar
-                  </button>
-                </fetcher.Form>
-
-                <VoicePicker ch={ch} />
-
-                <CapsList ch={ch} />
-
-                <ChannelFiles ch={ch} />
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
+      <ul className="mt-2 border-2 border-gray-200 rounded-xl divide-y-2 divide-gray-100 overflow-hidden">
+        <SettingRow icon="📝" label="Instrucciones"
+          summary={ch.systemPrompt
+            ? `Propias · ${ch.systemPrompt.length} caracteres, además de las del agente`
+            : "Usa las del agente"}
+          onClick={() => setChanPanel({ ch, kind: "prompt" })} />
+        <SettingRow icon="🔊" label="Voz"
+          summary={ch.voiceId ? (inh.voice ? `${ch.voiceId} (heredada)` : ch.voiceId) : "La del agente"}
+          onClick={() => setChanPanel({ ch, kind: "voz" })} />
+        <SettingRow icon="⚡" label="Qué puede hacer"
+          summary={`${activas} activas · ${inh.mcps === false || inh.toolGroup === false ? "lista propia" : "sigue al agente"}`}
+          onClick={() => setChanPanel({ ch, kind: "caps" })} />
+        <SettingRow icon="📎" label="Archivos que puede enviar"
+          summary={(ch.assets?.length ?? 0) > 0 ? `${ch.assets.length} elegido${ch.assets.length !== 1 ? "s" : ""}` : "Ninguno"}
+          onClick={() => setChanPanel({ ch, kind: "archivos" })} />
+      </ul>
     );
   };
 
-  const [ownerDbs, setOwnerDbs] = useState<Array<{ name: string; namespace: string }> | null>(null);
-  const [ownerFiles, setOwnerFiles] = useState<Array<{ id: string; name: string; contentType: string | null }>>([]);
-  const [fileQ, setFileQ] = useState("");
-  useEffect(() => {
-    if (!sel?.id || !sel?.token) return;
-    let alive = true;
-    const t = setTimeout(() => {
-      fetch(`/api/v2/fleet-agents/${sel.id}/capabilities${fileQ.trim() ? `?q=${encodeURIComponent(fileQ.trim())}` : ""}`,
-        { headers: { Authorization: `Bearer ${sel.token}` } })
-        .then((r) => (r.ok ? r.json() : null))
-        .then((d) => { if (alive && d) setOwnerFiles(d.ownerFiles ?? []); })
-        .catch(() => {});
-    }, 250);
-    return () => { alive = false; clearTimeout(t); };
-  }, [sel?.id, sel?.token, fileQ]);
-  useEffect(() => {
-    setOwnerDbs(null);
-    if (!sel?.id || !sel?.token) return;
-    let alive = true;
-    fetch(`/api/v2/fleet-agents/${sel.id}/capabilities`, { headers: { Authorization: `Bearer ${sel.token}` } })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => { if (alive && d) setOwnerDbs(d.ownerDbs ?? []); })
-      .catch(() => {});
-    return () => { alive = false; };
-  }, [sel?.id, sel?.token]);
-
-  // ── Qué puede hacer el agente en un canal ─────────────────────────────────
-  // UNA sola lista, en filas, con el detalle detrás de cada fila. Antes eran dos
-  // rejillas de tarjetas ("capacidades" y "herramientas") que se pisaban: dos
-  // taxonomías para la misma pregunta, con los nombres cortados y los selectores
-  // apretados dentro de cada tarjeta.
-  //
-  // Tres orígenes distintos, una sola lectura para quien configura:
-  //   · incluidas  — builtins del worker (easybits, wa, render). Se apagan por canal.
-  //   · familias   — buckets de EasyBits: son TOOLS propias, con nivel y lista.
-  //   · conectores — MCPs (denik, Formmy…): son servidores externos, con credencial.
   // Archivos que el agente puede ENVIAR en este canal. No son adjuntos del prompt:
-  // entran al turno como una lista "archivos disponibles para enviar" con su URL, y
-  // el agente decide cuándo mandarlos (`resolveGroupAssetManifest`).
+  // entran al turno como una lista "archivos disponibles para enviar" con su URL, y el
+  // agente decide cuándo mandarlos (`resolveGroupAssetManifest`).
   const ChannelFiles = ({ ch }: { ch: any }) => {
     const chosen: string[] = ch.assets ?? [];
     const up = (files: File[]) => {
@@ -999,14 +988,12 @@ export default function Flota2() {
         fetcher.submit(fd, { method: "post", action: "/dash/flota", encType: "multipart/form-data" });
       }
     };
-    const shown = ownerFiles.length ? ownerFiles : [];
     return (
       <div>
-        <p className="text-xs font-semibold">Archivos que puede enviar</p>
-        <p className="text-[11px] text-tale mb-2">
+        <p className="text-xs text-marengo mb-2">
           {chosen.length === 0
-            ? "Ninguno. El agente sólo manda lo que genera en el momento."
-            : `${chosen.length} archivo${chosen.length !== 1 ? "s" : ""} a mano: catálogo, tarifas, un instructivo…`}
+            ? "Ninguno todavía: el agente sólo manda lo que genera en el momento."
+            : `${chosen.length} a mano: catálogo, tarifas, un instructivo…`}
         </p>
         <div className="flex flex-wrap items-center gap-2 mb-2">
           <input value={fileQ} onChange={(e) => setFileQ(e.target.value)} placeholder="Buscar entre tus archivos…"
@@ -1017,18 +1004,17 @@ export default function Flota2() {
               onChange={(e) => { up(Array.from(e.target.files ?? [])); e.target.value = ""; }} />
           </label>
         </div>
-        {shown.length === 0 ? (
+        {ownerFiles.length === 0 ? (
           <p className="text-[11px] text-tale">
             {fileQ.trim() ? "Nada con ese nombre." : "Busca por nombre para elegir de tus archivos, o sube uno."}
           </p>
         ) : (
           <ul className="border-2 border-gray-200 rounded-xl divide-y-2 divide-gray-100 overflow-hidden">
-            {shown.map((f) => {
+            {ownerFiles.map((f) => {
               const on = chosen.includes(f.id);
               return (
                 <li key={f.id} className="flex items-center gap-3 px-3 py-2">
-                  <Toggle on={on} busy={fetcher.state !== "idle"}
-                    onClick={() => cfg.toggleAsset(ch.id, f.id, !on)} />
+                  <Toggle on={on} busy={fetcher.state !== "idle"} onClick={() => cfg.toggleAsset(ch.id, f.id, !on)} />
                   <span className={`text-sm truncate flex-1 ${on ? "font-bold" : "text-marengo"}`} title={f.name}>{f.name}</span>
                   <span className="text-[11px] text-tale shrink-0">{(f.contentType ?? "").split("/").pop()}</span>
                 </li>
@@ -1070,6 +1056,9 @@ export default function Flota2() {
         on: (ch.mcps ?? []).includes(c.name), cap: c,
       })),
     ];
+    // Filtra por nombre Y descripción: buscas "cobro" y sale MercadoPago.
+    const q = capQ.trim().toLowerCase();
+    const vis = q ? items.filter((i: any) => `${i.label} ${i.desc}`.toLowerCase().includes(q)) : items;
     const TONE: Record<string, string> = { builtin: "#BAD9D8", family: "#C8F9AB", connector: "#F4B7EC" };
     // Un icono por capacidad. Las iniciales no servían: "EasyBits" y "Email" daban
     // las dos una "E", que es justo lo contrario de reconocer algo de un vistazo.
@@ -1115,7 +1104,11 @@ export default function Flota2() {
         )}
         {/* Agrupadas por ESTADO con su conteo: lo primero que quieres saber es qué
             tiene encendido, no el catálogo entero por orden de catálogo. */}
-        {([["Activas", items.filter((i: any) => i.on)], ["Disponibles", items.filter((i: any) => !i.on)]] as const).map(([titulo, grupo]) => (grupo as any[]).length === 0 ? null : (
+        {items.length > 8 && (
+          <input value={capQ} onChange={(e) => setCapQ(e.target.value)} placeholder="Buscar capacidad…"
+            className="w-full mb-2 border-2 border-gray-200 rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:border-black" />
+        )}
+        {([["Activas", vis.filter((i: any) => i.on)], ["Disponibles", vis.filter((i: any) => !i.on)]] as const).map(([titulo, grupo]) => (grupo as any[]).length === 0 ? null : (
         <div key={titulo} className="mb-3">
         <p className="text-[11px] font-bold text-marengo mb-1">
           {titulo} <span className="text-tale">({(grupo as any[]).length})</span>
@@ -1155,100 +1148,6 @@ export default function Flota2() {
     );
   };
 
-  // Herramientas por canal: familias (buckets) con su alcance, y el veto de tools
-  // sueltas. El `?tools=` del worker sale de aquí; sin esto, un canal usaba lo que
-  // decidiera el agente y no había forma de darle lectura pero no borrado.
-  const ToolsBlock = ({ ch, dbsBlock }: { ch: any; dbsBlock: React.ReactNode }) => {
-    const eff = new Set<string>(ch.toolBuckets ?? sel.activeBuckets ?? []);
-    const own = ch.toolBuckets != null;
-    const deny = new Set<string>(ch.toolDeny ?? []);
-    const save = (next: Set<string>) =>
-      cfg.setToolBuckets(ch.id, [...next]);
-    // El nivel activo es el ÚLTIMO cuyos buckets estén todos dentro del set: los
-    // niveles son acumulativos (escritura = base + write).
-    const levelOf = (b: any) => {
-      let cur = "off";
-      for (const l of b.levels ?? []) if (l.buckets.every((k: string) => eff.has(k))) cur = l.key;
-      return cur;
-    };
-    const setLevel = (b: any, level: string) => {
-      const next = new Set(eff);
-      for (const l of b.levels ?? []) for (const k of l.buckets) next.delete(k);
-      if (level !== "off") for (const k of (b.levels ?? []).find((l: any) => l.key === level)?.buckets ?? []) next.add(k);
-      save(next);
-    };
-    // Tools que de verdad ofrece un bucket con su nivel actual.
-    const dbLevel = levelOf((buckets ?? []).find((b: any) => b.key === "db") ?? { levels: [] });
-    const toolsOf = (b: any) => {
-      const keys = b.levels ? (b.levels.flatMap((l: any) => l.buckets) as string[]).filter((k) => eff.has(k)) : (eff.has(b.key) ? [b.key] : []);
-      return [...new Set(keys.flatMap((k) => bucketTools?.[k] ?? []))].sort();
-    };
-    return (
-      <div>
-        <div className="flex items-center justify-between gap-3 flex-wrap">
-          <p className="text-xs font-semibold">Herramientas en este canal</p>
-          {own ? (
-            <button type="button"
-              onClick={() => cfg.inheritToolBuckets(ch.id)}
-              className="text-[11px] font-bold text-brand-500 underline underline-offset-2">
-              volver a seguir al agente
-            </button>
-          ) : (
-            <span className="text-[11px] text-tale">sigue al agente</span>
-          )}
-        </div>
-        <ul className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2 mt-1.5 items-start">
-          {(buckets ?? []).map((b: any) => {
-            const on = eff.has(b.key);
-            const tools = toolsOf(b);
-            return (
-              <li key={b.key} className="self-start flex flex-col gap-1.5 border-2 border-gray-200 rounded-lg px-2.5 py-2">
-                <div className="flex items-center gap-2 min-w-0">
-                  {!b.levels && (
-                    <Toggle on={on} busy={fetcher.state !== "idle"}
-                      onClick={() => { const n = new Set(eff); on ? n.delete(b.key) : n.add(b.key); save(n); }} />
-                  )}
-                  <span className="text-xs font-semibold truncate" title={b.description}>{b.label}</span>
-                </div>
-                {b.levels && (
-                  <div className="flex rounded-lg border-2 border-black overflow-hidden">
-                    {[{ key: "off", label: "No" }, ...b.levels].map((l: any) => (
-                      <button key={l.key} type="button" onClick={() => setLevel(b, l.key)}
-                        className={`flex-1 px-1 py-1 text-[11px] font-bold transition-colors ${levelOf(b) === l.key ? "bg-black text-white" : "bg-white text-marengo hover:bg-grayLight"}`}>
-                        {l.label}
-                      </button>
-                    ))}
-                  </div>
-                )}
-                {tools.length > 0 && (
-                  <details>
-                    <summary className="text-[11px] text-tale cursor-pointer">
-                      {tools.filter((t) => !deny.has(t)).length}/{tools.length} herramientas
-                    </summary>
-                    <ul className="mt-1.5 flex flex-col gap-1">
-                      {tools.map((t) => (
-                        <li key={t} className="flex items-center gap-2">
-                          <Toggle on={!deny.has(t)} busy={fetcher.state !== "idle"}
-                            onClick={() => cfg.allowTool(ch.id, t, deny.has(t))} />
-                          <span className="text-[11px] font-mono truncate">{t}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </details>
-                )}
-              </li>
-            );
-          })}
-        </ul>
-        {/* A CUÁLES bases entra: a lo ancho y con los nombres legibles. Dentro de la
-            tarjeta del bucket quedaba sin espacio y no se veía cuál estaba encendida. */}
-        {dbLevel !== "off" && dbsBlock}
-      </div>
-    );
-  };
-
-  // Voz del canal para las notas de voz. El catálogo se pide al desplegar (kokoro
-  // incluidas + ElevenLabs si el dueño tiene su llave), no al cargar la página.
   const VoicePicker = ({ ch }: { ch: any }) => {
     const [voices, setVoices] = useState<Array<{ id: string; name: string; engine: string; hint?: string }> | null>(null);
     const load = () => {
@@ -1682,7 +1581,7 @@ export default function Flota2() {
                       ) : (
                         <ul className="grid sm:grid-cols-2 gap-x-6 gap-y-2">
                           {[...active, ...(showAll ? others.filter((g: any) => !groupQ.trim() || g.subject.toLowerCase().includes(groupQ.trim().toLowerCase())) : [])].map((g: any) => (
-                            <li key={g.id} className={`min-w-0 flex flex-col ${chanCfg === g.id ? "sm:col-span-2" : ""}`}>
+                            <li key={g.id} className="min-w-0 flex flex-col sm:col-span-2">
                               <div className="flex items-center gap-3 min-w-0">
                                 <Toggle on={g.enabled} busy={fetcher.state !== "idle"}
                                   onClick={() => cfg.toggleGroup(g.id, !g.enabled)} />
@@ -2482,6 +2381,39 @@ export default function Flota2() {
             </form>
           </FullScreen>
         )}
+        {/* El detalle de UNA fila del canal, en su propia pantalla. Nada compite. */}
+        {chanPanel && (() => {
+          const { ch, kind } = chanPanel;
+          const nombre = ch.subject ?? (ch.id === "web" ? "Web" : ch.id === "teams" ? "Ghosty Teams" : ch.id);
+          const titulo = { prompt: "Instrucciones", voz: "Voz", caps: "Qué puede hacer", archivos: "Archivos que puede enviar" }[kind];
+          return (
+            <FullScreen title={`${titulo} · ${nombre}`} size={kind === "prompt" ? "full" : "auto"}
+              onClose={() => setChanPanel(null)}>
+              {kind === "prompt" && (
+                <fetcher.Form method="post" action="/dash/flota" className="flex flex-col flex-1 min-h-0"
+                  onSubmit={() => setChanPanel(null)}>
+                  <input type="hidden" name="intent" value="set-group-prompt" />
+                  <input type="hidden" name="fleetAgentId" value={sel.id} />
+                  <input type="hidden" name="groupId" value={ch.id} />
+                  <p className="text-xs text-marengo mb-2">
+                    Se SUMAN a las instrucciones del agente, no las reemplazan. Vacío = sólo las del agente.
+                  </p>
+                  <textarea name="systemPrompt" defaultValue={ch.systemPrompt ?? ""} autoFocus
+                    placeholder="Ej.: aquí atiendes mayoreo; pide siempre RFC antes de cotizar."
+                    className="eb-thin flex-1 min-h-[40vh] border-2 border-gray-200 rounded-xl p-3 text-sm font-mono resize-none focus:outline-none focus:border-brand-500" />
+                  <div className="flex justify-end gap-2 mt-3 shrink-0">
+                    <button type="button" onClick={() => setChanPanel(null)}
+                      className="border-2 border-black rounded-xl px-4 py-1.5 text-sm font-bold bg-white">Cerrar</button>
+                    <button type="submit" className="border-2 border-black rounded-xl px-4 py-1.5 text-sm font-bold bg-brand-500 text-white">Guardar</button>
+                  </div>
+                </fetcher.Form>
+              )}
+              {kind === "voz" && <VoicePicker ch={ch} />}
+              {kind === "caps" && <CapsList ch={ch} />}
+              {kind === "archivos" && <ChannelFiles ch={ch} />}
+            </FullScreen>
+          );
+        })()}
         {capDetail && (() => {
           const { ch, item } = capDetail;
           const eff = new Set<string>(ch.toolBuckets ?? sel.activeBuckets ?? []);
