@@ -757,6 +757,7 @@ export default function Flota2() {
   const [creating, setCreating] = useState(false);
   const [engineId, setEngineId] = useState(FLEET_ENGINES.find(engineCreatable)?.id ?? "claude");
   const [mcpBusy, setMcpBusy] = useState(false);
+  const [mcpKind, setMcpKind] = useState<"stdio" | "http">("stdio");
   const [mcpError, setMcpError] = useState<string | null>(null);
   const [phone, setPhone] = useState("");
   // Dos MÉTODOS de vinculación, no dos botones sueltos: "Conectar con QR" junto a un
@@ -1788,70 +1789,10 @@ export default function Flota2() {
                         Oswaldo: cualquier servidor MCP (paquete npm o URL), con su
                         credencial opcional guardada en la bóveda. */}
                     <div className="mt-4 pt-4 border-t-2 border-gray-100">
-                      <button type="button" onClick={() => setAddMcp((v) => !v)}
+                      <button type="button" onClick={() => setAddMcp(true)}
                         className="text-xs font-bold text-brand-500 hover:underline">
-                        {addMcp ? "cancelar" : "+ Conectar otro MCP"}
+                        + Conectar otro MCP
                       </button>
-                      <AnimatePresence initial={false}>
-                        {addMcp && (
-                          <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }}
-                            className="overflow-hidden">
-                            <form onSubmit={createMcp} className="pt-3 flex flex-col gap-4">
-                              <div className="grid sm:grid-cols-2 gap-3">
-                                <label className="flex flex-col gap-1">
-                                  <span className="text-xs font-semibold">Nombre corto</span>
-                                  <input name="name" required placeholder="mi-crm" pattern="[a-zA-Z0-9_-]+"
-                                    className="border-2 border-black rounded-xl px-3 py-1.5 text-sm font-mono focus:outline-none" />
-                                </label>
-                                <label className="flex flex-col gap-1">
-                                  <span className="text-xs font-semibold">Cómo se llama para ti</span>
-                                  <input name="label" placeholder="Mi CRM"
-                                    className="border-2 border-black rounded-xl px-3 py-1.5 text-sm focus:outline-none" />
-                                </label>
-                              </div>
-
-                              <div>
-                                <p className="text-xs font-semibold mb-1">¿Dónde vive? — llena sólo uno</p>
-                                <div className="grid sm:grid-cols-2 gap-3">
-                                  <input name="pkg" placeholder="paquete npm · @mi-empresa/mcp"
-                                    className="border-2 border-black rounded-xl px-3 py-1.5 text-sm font-mono focus:outline-none" />
-                                  <input name="url" placeholder="URL http · https://…/mcp"
-                                    className="border-2 border-black rounded-xl px-3 py-1.5 text-sm font-mono focus:outline-none" />
-                                </div>
-                              </div>
-
-                              {/* La confusión anterior: el campo pedía el NOMBRE de la
-                                  variable y parecía pedir la llave. Son dos cosas — el
-                                  nombre lo dice la documentación del MCP, el valor lo
-                                  tienes tú — así que se piden por separado y con su
-                                  ejemplo. El valor se guarda cifrado en tu bóveda. */}
-                              <div>
-                                <p className="text-xs font-semibold mb-1">¿Necesita una llave? (opcional)</p>
-                                <div className="grid sm:grid-cols-2 gap-3">
-                                  <label className="flex flex-col gap-1">
-                                    <input name="requiredSecret" placeholder="MI_CRM_API_KEY" pattern="[A-Z_][A-Z0-9_]*"
-                                      className="border-2 border-black rounded-xl px-3 py-1.5 text-sm font-mono focus:outline-none" />
-                                    <span className="text-[11px] text-tale">Nombre de la variable que el MCP lee — lo dice su documentación.</span>
-                                  </label>
-                                  <label className="flex flex-col gap-1">
-                                    <input name="secretValue" type="password" autoComplete="off" placeholder="pega aquí la llave"
-                                      className="border-2 border-black rounded-xl px-3 py-1.5 text-sm focus:outline-none" />
-                                    <span className="text-[11px] text-tale">Se guarda cifrada en tu bóveda; el agente sólo la usa por nombre.</span>
-                                  </label>
-                                </div>
-                              </div>
-
-                              <div className="flex items-center gap-3">
-                                <button type="submit" disabled={mcpBusy}
-                                  className="border-2 border-black rounded-xl px-4 py-1.5 text-sm font-bold bg-brand-500 text-white disabled:opacity-50">
-                                  {mcpBusy ? "Conectando…" : "Conectar MCP"}
-                                </button>
-                                {mcpError && <p className="text-xs text-brand-red">⚠️ {mcpError}</p>}
-                              </div>
-                            </form>
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
                     </div>
 
                     {/* Skills: instrucciones + archivos empaquetados (el patrón de
@@ -1911,14 +1852,16 @@ export default function Flota2() {
                       {(sel.skills ?? []).length === 0 ? (
                         <p className="text-xs text-tale">Todavía no tiene skills. También puedes copiar uno de otro agente desde su fila.</p>
                       ) : (
-                        <ul className="flex flex-col gap-2">
+                        <ul className="border-2 border-gray-200 rounded-xl divide-y-2 divide-gray-100 overflow-hidden">
                           {sel.skills.map((sk: any) => (
-                            <li key={sk.id} className="flex items-start gap-3 border-2 border-gray-200 rounded-xl px-3 py-2.5">
+                            <li key={sk.id} className="flex items-start gap-3 px-3 py-2.5 hover:bg-grayLight transition-colors">
                               <Toggle on={sk.enabled} busy={fetcher.state !== "idle"}
                                 onClick={() => cfg.toggleSkill(sk.id, !sk.enabled)} />
                               <div className="min-w-0 flex-1">
                                 <p className="text-sm font-semibold">{sk.name}</p>
-                                {sk.description && <p className="text-[11px] text-tale line-clamp-2">{sk.description}</p>}
+                                {/* Dos líneas: la descripción es lo que el agente lee para
+                                    decidir si el skill aplica, así que importa verla. */}
+                                {sk.description && <p className="text-[11px] text-tale line-clamp-2 mt-0.5">{sk.description}</p>}
                               </div>
                               {sk.files?.length > 0 && (
                                 <span className="text-[11px] text-marengo shrink-0 mt-0.5 whitespace-nowrap">
@@ -2138,6 +2081,73 @@ export default function Flota2() {
         {/* Detalle de UNA capacidad para UN canal: encendido, alcance, sus herramientas
             una por una y —en bases— a cuáles entra. Lo que antes estaba apretado
             dentro de una tarjeta de 200px. */}
+        {addMcp && (
+          <FullScreen title="Conectar un MCP" size="auto" onClose={() => setAddMcp(false)}>
+            <form onSubmit={createMcp} className="flex flex-col gap-4">
+              <div className="grid sm:grid-cols-[1fr_auto] gap-3">
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs font-semibold">Nombre corto</span>
+                  <input name="name" required autoFocus placeholder="mi-crm" pattern="[a-zA-Z0-9_-]+"
+                    className="border-2 border-black rounded-xl px-3 py-2 text-sm font-mono focus:outline-none" />
+                </label>
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs font-semibold">Tipo</span>
+                  {/* El tipo decide DÓNDE vive: un paquete que se ejecuta, o una URL a
+                      la que se llama. Antes eran dos campos con un "llena sólo uno". */}
+                  <select value={mcpKind} onChange={(e) => setMcpKind(e.target.value as "stdio" | "http")}
+                    className="border-2 border-black rounded-xl px-3 py-2 text-sm bg-white focus:outline-none">
+                    <option value="stdio">Paquete npm</option>
+                    <option value="http">URL http</option>
+                  </select>
+                </label>
+              </div>
+              <label className="flex flex-col gap-1">
+                <span className="text-xs font-semibold">Cómo se llama para ti</span>
+                <input name="label" placeholder="Mi CRM"
+                  className="border-2 border-black rounded-xl px-3 py-2 text-sm focus:outline-none" />
+              </label>
+              {mcpKind === "stdio" ? (
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs font-semibold">Paquete</span>
+                  <input name="pkg" required placeholder="@mi-empresa/mcp"
+                    className="border-2 border-black rounded-xl px-3 py-2 text-sm font-mono focus:outline-none" />
+                  <span className="text-[11px] text-tale">Se ejecuta con npx dentro de la caja del agente.</span>
+                </label>
+              ) : (
+                <label className="flex flex-col gap-1">
+                  <span className="text-xs font-semibold">Endpoint</span>
+                  <input name="url" required placeholder="https://…/mcp" type="url"
+                    className="border-2 border-black rounded-xl px-3 py-2 text-sm font-mono focus:outline-none" />
+                  <span className="text-[11px] text-tale">La credencial viaja como Authorization: Bearer.</span>
+                </label>
+              )}
+              <div>
+                <p className="text-xs font-semibold mb-1">¿Necesita una llave? (opcional)</p>
+                <div className="grid sm:grid-cols-2 gap-3">
+                  <label className="flex flex-col gap-1">
+                    <input name="requiredSecret" placeholder="MI_CRM_API_KEY" pattern="[A-Z_][A-Z0-9_]*"
+                      className="border-2 border-black rounded-xl px-3 py-2 text-sm font-mono focus:outline-none" />
+                    <span className="text-[11px] text-tale">Nombre de la variable que el MCP lee — lo dice su documentación.</span>
+                  </label>
+                  <label className="flex flex-col gap-1">
+                    <input name="secretValue" type="password" autoComplete="off" placeholder="pega aquí la llave"
+                      className="border-2 border-black rounded-xl px-3 py-2 text-sm focus:outline-none" />
+                    <span className="text-[11px] text-tale">Se guarda cifrada en tu bóveda; el agente sólo la usa por nombre.</span>
+                  </label>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <button type="submit" disabled={mcpBusy}
+                  className="border-2 border-black rounded-xl px-4 py-2 text-sm font-bold bg-brand-500 text-white disabled:opacity-50">
+                  {mcpBusy ? "Conectando…" : "Conectar MCP"}
+                </button>
+                <button type="button" onClick={() => setAddMcp(false)}
+                  className="border-2 border-black rounded-xl px-4 py-2 text-sm font-bold bg-white">Cancelar</button>
+                {mcpError && <p className="text-xs text-brand-red">⚠️ {mcpError}</p>}
+              </div>
+            </form>
+          </FullScreen>
+        )}
         {capDetail && (() => {
           const { ch, item } = capDetail;
           const eff = new Set<string>(ch.toolBuckets ?? sel.activeBuckets ?? []);
