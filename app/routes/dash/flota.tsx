@@ -305,14 +305,75 @@ console.log(JSON.stringify({
 // Dibujarlas 1:1 mentía sobre la capacidad — por eso cada carita lleva debajo sus
 // ranuras: llenas = conversaciones pegadas a esa VM, vacías = sitio libre DENTRO
 // de una caja que ya está encendida (no cuesta caja nueva).
-function BoxFace({ color, state, title, slots, perVm }: { color: string; state: "running" | "building" | "suspended" | "system"; title: string; slots?: number; perVm?: number }) {
+// Cuánto le queda a una caja: despierta duerme a los `idleSuspendMin`, dormida muere
+// a los `destroyIdleMin`. El loader ya trae los dos instantes; aquí sólo se cuentan.
+function useLeft(at: string | null): string | null {
+  const [, tick] = useState(0);
+  useEffect(() => {
+    if (!at) return;
+    const t = setInterval(() => tick((n) => n + 1), 1000);
+    return () => clearInterval(t);
+  }, [at]);
+  if (!at) return null;
+  const ms = Date.parse(at) - Date.now();
+  if (ms <= 0) return "ya";
+  const s = Math.round(ms / 1000);
+  return s < 60 ? `${s}s` : s < 3600 ? `${Math.floor(s / 60)}m ${s % 60}s` : `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`;
+}
+
+function BoxFace({ color, state, title, slots, perVm, sandboxId, onAction, busy, suspendAt, destroyAt }: {
+  color: string; state: "running" | "building" | "suspended" | "system"; title: string;
+  slots?: number; perVm?: number; sandboxId?: string;
+  onAction?: (sandboxId: string, op: "suspend" | "resume" | "destroy") => void;
+  busy?: boolean; suspendAt?: string | null; destroyAt?: string | null;
+}) {
   const asleep = state === "suspended";
+  const [open, setOpen] = useState(false);
+  const [confirmKill, setConfirmKill] = useState(false);
+  // Despierta: cuándo duerme. Dormida: cuándo muere (y con ella su snapshot).
+  const left = useLeft(asleep ? destroyAt ?? null : suspendAt ?? null);
+  useEffect(() => { if (!open) setConfirmKill(false); }, [open]);
   return (
-    <span className="flex flex-col items-center gap-1">
-    <motion.span title={title}
+    <span className="relative flex flex-col items-center gap-1"
+      onMouseLeave={() => setOpen(false)}>
+      {sandboxId && onAction && open && (
+        <span className="absolute bottom-full mb-1 z-20 flex flex-col gap-1 bg-white border-2 border-black rounded-xl p-1.5 shadow-[2px_2px_0_0_#000] whitespace-nowrap">
+          <span className="px-1 text-[11px] text-marengo">
+            {title}
+            {left && <b className="ml-1 text-onix">{asleep ? "muere" : "duerme"} en {left}</b>}
+          </span>
+          {asleep ? (
+            <button type="button" disabled={busy} onClick={() => onAction(sandboxId, "resume")}
+              className="text-[11px] font-bold px-2 py-1 rounded-lg border-2 border-black bg-white hover:bg-grayLight disabled:opacity-50">
+              Despertar
+            </button>
+          ) : (
+            <button type="button" disabled={busy} onClick={() => onAction(sandboxId, "suspend")}
+              className="text-[11px] font-bold px-2 py-1 rounded-lg border-2 border-black bg-white hover:bg-grayLight disabled:opacity-50">
+              Dormir
+            </button>
+          )}
+          {/* Eliminar pide confirmación en el sitio: se pierde la memoria caliente y
+              el próximo turno arranca en frío (~12s). */}
+          {confirmKill ? (
+            <button type="button" disabled={busy} onClick={() => { onAction(sandboxId, "destroy"); setOpen(false); }}
+              className="text-[11px] font-bold px-2 py-1 rounded-lg border-2 border-black bg-brand-red text-white disabled:opacity-50">
+              Sí, eliminar
+            </button>
+          ) : (
+            <button type="button" onClick={() => setConfirmKill(true)}
+              className="text-[11px] font-bold px-2 py-1 rounded-lg border-2 border-gray-200 text-marengo hover:border-brand-red hover:text-brand-red">
+              Eliminar
+            </button>
+          )}
+        </span>
+      )}
+    <motion.span title={left ? `${title} · ${asleep ? "muere" : "duerme"} en ${left}` : title}
+      role={sandboxId && onAction ? "button" : undefined}
+      onClick={() => sandboxId && onAction && setOpen((v) => !v)}
       initial={{ scale: 0, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0, opacity: 0 }}
       transition={{ type: "spring", stiffness: 520, damping: 30 }}
-      className={`relative w-6 h-6 rounded-[7px] border-2 border-black flex items-center justify-center gap-[3px] ${asleep ? "opacity-50" : ""}`}
+      className={`relative w-6 h-6 rounded-[7px] border-2 border-black flex items-center justify-center gap-[3px] ${asleep ? "opacity-50" : ""} ${sandboxId && onAction ? "cursor-pointer hover:ring-2 hover:ring-brand-500" : ""} ${busy ? "animate-pulse" : ""}`}
       style={{ background: color }}>
       {[0, 1].map((i) => (
         <motion.span key={i} className="block rounded-full bg-black"
@@ -336,19 +397,28 @@ function BoxFace({ color, state, title, slots, perVm }: { color: string; state: 
   );
 }
 
-function Boxes({ pools, capacity }: { pools: any[]; capacity: any }) {
+function Boxes({ pools, capacity, onAction, busyId }: {
+  pools: any[]; capacity: any;
+  onAction?: (sandboxId: string, op: "suspend" | "resume" | "destroy") => void;
+  busyId?: string | null;
+}) {
   const workers = pools.flatMap((p: any) =>
     (p.machines ?? []).map((m: any) => ({
-      key: m.id, color: p.mascotColor || "#9870ED", status: m.status as any,
+      // ⚠️ El id que entiende el servidor es `m.sandboxId`; `m.id` es el Agent.id.
+      // En extras/parked, en cambio, el `id` YA es el sandboxId. Confundirlos = 404 mudo.
+      key: m.id, sandboxId: m.sandboxId, suspendAt: m.suspendAt, destroyAt: m.destroyAt,
+      color: p.mascotColor || "#9870ED", status: m.status as any,
       slots: m.slots ?? 0, perVm: p.maxWorkersPerVm ?? capacity.maxWorkersPerVm ?? 4,
       title: `${p.name ?? "agente"} · ${m.status === "suspended" ? "dormida" : m.status === "building" ? "encendiendo" : "despierta"} · ${m.slots ?? 0}/${p.maxWorkersPerVm ?? capacity.maxWorkersPerVm ?? 4} conversaciones`,
     }))
   );
   const extras = (capacity.extraMachines ?? []).map((m: any) => ({
-    key: m.id, color: "#D6D3D1", status: m.status as any, title: `${m.label ?? "servicio"} · ${m.status}`,
+    key: m.id, sandboxId: m.id, suspendAt: m.suspendAt, destroyAt: m.destroyAt,
+    color: "#D6D3D1", status: m.status as any, title: `${m.label ?? "servicio"} · ${m.status}`,
   }));
   const parked = (capacity.parkedExtras ?? []).map((m: any) => ({
-    key: m.id, color: "#D6D3D1", status: "suspended" as const, title: `${m.label ?? "servicio"} · dormida en disco`,
+    key: m.id, sandboxId: m.id, suspendAt: null, destroyAt: m.destroyAt,
+    color: "#D6D3D1", status: "suspended" as const, title: `${m.label ?? "servicio"} · dormida en disco`,
   }));
   const free = Math.max(0, (capacity.maxMachines ?? 0) - workers.length - extras.length);
   return (
@@ -356,7 +426,9 @@ function Boxes({ pools, capacity }: { pools: any[]; capacity: any }) {
       <div className="flex flex-wrap gap-1.5">
         <AnimatePresence initial={false}>
           {[...workers, ...extras, ...parked].map((b: any) => (
-            <BoxFace key={b.key} color={b.color} state={b.status} title={b.title} slots={b.slots} perVm={b.perVm} />
+            <BoxFace key={b.key} color={b.color} state={b.status} title={b.title} slots={b.slots} perVm={b.perVm}
+              sandboxId={b.sandboxId} onAction={onAction} busy={busyId === b.sandboxId}
+              suspendAt={b.suspendAt} destroyAt={b.destroyAt} />
           ))}
           {Array.from({ length: free }).map((_, k) => (
             <motion.span key={`free-${k}`} title="cupo libre"
@@ -368,7 +440,8 @@ function Boxes({ pools, capacity }: { pools: any[]; capacity: any }) {
       <p className="text-[11px] text-marengo">
         Cada carita es una caja y cada caja sostiene {capacity.maxWorkersPerVm ?? 4} conversaciones
         (los puntitos de abajo). Ojos abiertos = atiende · cerrados = duerme, revive en 1s ·
-        punteada = cupo libre · {capacity.agentsActive}/{capacity.agentsMax} en total
+        punteada = cupo libre · {capacity.agentsActive}/{capacity.agentsMax} en total.
+        Haz clic en una para dormirla, despertarla o eliminarla.
       </p>
     </div>
   );
@@ -607,7 +680,24 @@ function EnsayoBody({ msgs, busy, loading, onSend, tall }: { msgs: any[]; busy: 
 
 // ── Página ─────────────────────────────────────────────────────────────────
 export default function Flota2() {
-  const { pools, capacity, engineHasSecret, buckets, bucketTools } = useLoaderData() as any;
+  const loaded = useLoaderData() as any;
+  // Latido del HUD (cajas que nacen, se duermen y mueren solas). `fetch` crudo +
+  // estado local, NUNCA useRevalidator: un 5xx transitorio —la ventana de ~50s
+  // mientras Fly reemplaza la máquina en un deploy— propagaría al ErrorBoundary y
+  // dejaría la página muerta. Así, el tick malo se ignora y el siguiente se autocura.
+  const [live, setLive] = useState<any>(loaded);
+  useEffect(() => setLive(loaded), [loaded]);
+  useEffect(() => {
+    let alive = true;
+    const t = setInterval(() => {
+      fetch("/dash/flota/poll", { headers: { Accept: "application/json" } })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => { if (alive && d) setLive(d); })
+        .catch(() => { /* blip de red durante un deploy → se ignora */ });
+    }, 2500);
+    return () => { alive = false; clearInterval(t); };
+  }, []);
+  const { pools, capacity, engineHasSecret, buckets, bucketTools } = live;
   const fetcher = useFetcher();
   // Cliente TIPADO de la config (app/lib/fleetConfig.ts): los nombres literales de los
   // campos viven ahí, no repartidos por cada onClick. `integrationId` vs `groupId` y
@@ -1084,6 +1174,48 @@ export default function Flota2() {
   const waConnected = sel.status === "connected" && sel.live;
   const cfg = fleetConfig(fetcher.submit as any, sel.id);
 
+  // Acciones de caja: el resultado tarda (el host tiene que suspender/arrancar), así
+  // que se pinta al instante sobre el estado local — igual que la vista clásica. El
+  // latido del poll trae la verdad unos segundos después.
+  const [boxBusy, setBoxBusy] = useState<string | null>(null);
+  const onBoxAction = (sandboxId: string, op: "suspend" | "resume" | "destroy") => {
+    setBoxBusy(sandboxId);
+    fleetConfig(fetcher.submit as any, sel.id).box(sandboxId, op);
+    setLive((prev: any) => {
+      const next = { ...prev, capacity: { ...prev.capacity } };
+      const patch = (m: any) =>
+        op === "suspend" ? { ...m, status: "suspended" } : op === "resume" ? { ...m, status: "starting" } : m;
+      next.pools = prev.pools.map((p: any) => ({
+        ...p,
+        machines: (p.machines ?? []).filter((m: any) => !(op === "destroy" && m.sandboxId === sandboxId))
+          .map((m: any) => (m.sandboxId === sandboxId ? patch(m) : m)),
+      }));
+      next.capacity.extraMachines = (prev.capacity.extraMachines ?? [])
+        .filter((m: any) => !(op === "destroy" && m.id === sandboxId))
+        .map((m: any) => (m.id === sandboxId ? patch(m) : m));
+      next.capacity.parkedExtras = (prev.capacity.parkedExtras ?? [])
+        .filter((m: any) => !(op === "destroy" && m.id === sandboxId));
+      return next;
+    });
+    setTimeout(() => setBoxBusy(null), 3000);
+  };
+
+  // Reciclar las cajas del agente: NO es un intent del dash, es la acción admin de la
+  // API de capabilities. Es lo que hace que un cambio de modelo o de credencial (que
+  // se hornean en el env del spawn) aplique YA y no cuando el reaper recicle la VM.
+  const [recycling, setRecycling] = useState(false);
+  const recycleBoxes = async () => {
+    setRecycling(true);
+    try {
+      const res = await fetch(`/api/v2/fleet-agents/${sel.id}/capabilities`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${sel.token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "recycle-box" }),
+      });
+      if (res.ok) revalidator.revalidate();
+    } catch { /* el poll lo corrige */ } finally { setRecycling(false); }
+  };
+
   // Los canales son VARIOS y salen de la fuente única. Añadir Slack mañana = una
   // entrada más en channelsOf(), sin tocar la UI.
   const CHANNELS = channelsOf(sel);
@@ -1118,7 +1250,7 @@ export default function Flota2() {
             </p>
           </div>
           <div className="flex items-end gap-6">
-            <Boxes pools={pools} capacity={capacity} />
+            <Boxes pools={pools} capacity={capacity} onAction={onBoxAction} busyId={boxBusy} />
             <button type="button" onClick={() => setCreating(true)}
               className="shrink-0 border-2 border-black rounded-xl px-4 py-2 text-sm font-bold bg-brand-500 text-white shadow-[2px_2px_0_0_#000]">
               + Nuevo agente
@@ -1209,6 +1341,13 @@ export default function Flota2() {
                         )}
                       </>);
                     })()}
+                    {sel.vms > 0 && (
+                      <button type="button" disabled={recycling} onClick={recycleBoxes}
+                        title="Apaga sus cajas para que el próximo turno arranque con la configuración nueva (modelo, credencial). Tarda ~12s la primera vez."
+                        className="text-[11px] font-semibold text-marengo hover:text-onix underline underline-offset-2 disabled:opacity-50">
+                        {recycling ? "reciclando…" : "reciclar cajas"}
+                      </button>
+                    )}
                     <button type="button" onClick={() => setKillAgent(true)}
                       className="ml-auto text-[11px] font-semibold text-tale hover:text-brand-red underline underline-offset-2">
                       borrar agente
