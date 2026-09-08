@@ -1455,6 +1455,12 @@ export default function Flota2() {
                                   </svg>
                                 </a>
                               )}
+                              <button type="button" title="Borrar este skill" onClick={() => setKillSkill(sk.id)}
+                                className="shrink-0 p-1.5 rounded-lg border-2 border-gray-200 text-marengo hover:border-brand-red hover:text-brand-red transition-colors">
+                                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                                </svg>
+                              </button>
                               {/* Prestar el skill a otro agente: son los MISMOS archivos
                                   (no se re-suben), así que copiarlo es instantáneo. */}
                               {pools.length > 1 && (
@@ -1501,6 +1507,69 @@ export default function Flota2() {
         </div>
 
       <AnimatePresence>
+        {/* Borrar es irreversible y se lleva trabajo de meses: se confirma diciendo
+            QUÉ se pierde, con la copia a mano, y escribiendo el nombre. Nada de
+            confirm() del navegador. */}
+        {killAgent && (
+          <FullScreen title="Borrar agente" size="auto" onClose={() => { setKillAgent(false); setKillName(""); }}>
+            <div className="flex flex-col gap-4">
+              <p className="text-sm">
+                Vas a borrar <b>{sel.name || "este agente"}</b>. Se van con él sus instrucciones,
+                sus skills, sus capacidades y la vinculación de sus canales: los grupos que
+                atiende se quedan sin quien conteste.
+              </p>
+              <p className="text-xs text-marengo">
+                {sel.conversations} conversación{sel.conversations !== 1 ? "es" : ""} y{" "}
+                {sel.vms} caja{sel.vms !== 1 ? "s" : ""} encendida{sel.vms !== 1 ? "s" : ""}.
+                Tus archivos y tus secretos NO se borran. No hay deshacer.
+              </p>
+              <label className="flex flex-col gap-1">
+                <span className="text-xs font-semibold">Escribe <b>{sel.name}</b> para confirmar</span>
+                <input value={killName} onChange={(e) => setKillName(e.target.value)} autoFocus
+                  className="border-2 border-black rounded-xl px-3 py-2 text-sm focus:outline-none" />
+              </label>
+              <div className="flex gap-2">
+                <button type="button" onClick={() => { setKillAgent(false); setKillName(""); }}
+                  className="border-2 border-black rounded-xl px-4 py-2 text-sm font-bold bg-white">Cancelar</button>
+                <button type="button" disabled={killName.trim() !== (sel.name ?? "").trim()}
+                  onClick={() => { submit({ intent: "delete" }); setKillAgent(false); setKillName(""); setSelIdState(null); }}
+                  className="border-2 border-black rounded-xl px-4 py-2 text-sm font-bold bg-brand-red text-white disabled:opacity-40">
+                  Borrar definitivamente
+                </button>
+              </div>
+            </div>
+          </FullScreen>
+        )}
+        {killSkill && (() => {
+          const sk = (sel.skills ?? []).find((x: any) => x.id === killSkill);
+          if (!sk) return null;
+          return (
+            <FullScreen title="Borrar skill" size="auto" onClose={() => setKillSkill(null)}>
+              <div className="flex flex-col gap-4">
+                <p className="text-sm">
+                  Vas a quitarle <b>“{sk.name}”</b> a {sel.name}. Desde el siguiente turno deja de
+                  saber hacerlo: si traía reglas de negocio (precios, descuentos, formatos),
+                  volverá a improvisarlas.
+                </p>
+                <p className="text-xs text-marengo">
+                  Sus {sk.files?.length ?? 0} archivo{sk.files?.length !== 1 ? "s" : ""} NO se borran —
+                  quedan en Archivos. Si otro agente tiene una copia, la suya sigue intacta.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <a href={`/dash/flota/skill/${sel.id}/${sk.id}`}
+                    className="border-2 border-black rounded-xl px-4 py-2 text-sm font-bold bg-white">Descargar copia</a>
+                  <button type="button" onClick={() => setKillSkill(null)}
+                    className="border-2 border-black rounded-xl px-4 py-2 text-sm font-bold bg-white">Cancelar</button>
+                  <button type="button"
+                    onClick={() => { submit({ intent: "delete-skill", skillId: sk.id }); setKillSkill(null); }}
+                    className="border-2 border-black rounded-xl px-4 py-2 text-sm font-bold bg-brand-red text-white">
+                    Sí, borrar “{sk.name}”
+                  </button>
+                </div>
+              </div>
+            </FullScreen>
+          );
+        })()}
         {big === "prompt" && (
           <FullScreen title={`Instrucciones · ${sel.name ?? ""}`} onClose={() => setBig(null)}>
             <fetcher.Form method="post" action="/dash/flota" className="flex flex-col flex-1 min-h-0"
