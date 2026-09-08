@@ -1119,6 +1119,38 @@ function useEnsayo(agent: { id: string; token: string }, cfgId: string, admin: b
   return { msgs, busy, loading, send };
 }
 
+// Alto de un panel pegajoso, MEDIDO. Un `calc(100dvh - N)` sólo acierta cuando el panel
+// ya está pegado arriba; a mitad de página (scroll 0, que es donde entras) su borde
+// superior está más abajo y el panel se sale por el pie. Aquí el alto es lo que queda de
+// verdad entre su borde superior actual y el fondo de la ventana. Sin número mágico, y
+// sin depender de cuánto mida la cabecera de la página o el banner de "operar como".
+function useStickyFill(margen = 24) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [alto, setAlto] = useState<number | null>(null);
+  useEffect(() => {
+    let raf = 0;
+    const medir = () => {
+      raf = 0;
+      const el = ref.current;
+      if (!el) return;
+      // El alto del propio elemento no influye en su `top`: `position: sticky` lo fija en
+      // max(posición en el flujo − scroll, top). Por eso medir aquí no se realimenta.
+      const top = el.getBoundingClientRect().top;
+      setAlto(Math.max(280, Math.round(window.innerHeight - top - margen)));
+    };
+    const pedir = () => { if (!raf) raf = requestAnimationFrame(medir); };
+    medir();
+    window.addEventListener("scroll", pedir, { passive: true });
+    window.addEventListener("resize", pedir);
+    return () => {
+      if (raf) cancelAnimationFrame(raf);
+      window.removeEventListener("scroll", pedir);
+      window.removeEventListener("resize", pedir);
+    };
+  }, [margen]);
+  return { ref, alto };
+}
+
 function EnsayoBody({ msgs, busy, loading, onSend, tall }: { msgs: any[]; busy: boolean; loading?: boolean; onSend: (t: string) => void; tall?: boolean }) {
   const [input, setInput] = useState("");
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -1474,6 +1506,7 @@ export default function Flota2() {
   // previous render" y la página al ErrorBoundary, justo en el alta. No mover.
   const [boxBusy, setBoxBusy] = useState<string | null>(null);
   const [recycling, setRecycling] = useState(false);
+  const ensayoFill = useStickyFill();
 
   if (!sel) {
     return (
@@ -2263,7 +2296,8 @@ export default function Flota2() {
               textos de ayuda ni la fila de enviar: en cuanto la suma se pasaba, la
               página entera ganaba scroll sin necesitarlo). Ahora la columna mide lo que
               cabe y la lista de mensajes se queda con lo que sobre. */}
-          <div className="hidden lg:flex lg:flex-col lg:sticky lg:top-6 lg:h-[calc(100dvh-3rem)] min-w-0">
+          <div ref={ensayoFill.ref} style={ensayoFill.alto ? { height: ensayoFill.alto } : undefined}
+            className="hidden lg:flex lg:flex-col lg:sticky lg:top-6 min-w-0">
             <Card title="Ensayo" className="flex flex-col flex-1 min-h-0"
               bodyClassName="flex flex-col flex-1 min-h-0"
               right={
