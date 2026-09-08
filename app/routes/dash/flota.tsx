@@ -620,6 +620,10 @@ function FullScreen({ title, onClose, children, size = "full" }: { title: string
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
       if (modalStack[modalStack.length - 1] !== me) return;
+      // ESC con un <select> nativo abierto es "cierra el popup", no "cierra el modal".
+      // El popup lo consume el SO y el keydown llega igual hasta document: perdías el
+      // panel entero por cancelar un desplegable.
+      if ((e.target as HTMLElement | null)?.tagName === "SELECT") return;
       e.stopPropagation();
       me.close();
     };
@@ -1000,28 +1004,44 @@ function useEnsayo(agent: { id: string; token: string }, cfgId: string, admin: b
   const [loading, setLoading] = useState(true);
   const groupId = `web-test-${agent.id}`;
 
+  // Generación: sube en cada cambio de agente. Un `send()` en vuelo seguía escribiendo
+  // con `setLast` después de cambiar de agente, así que la respuesta en streaming del
+  // agente A terminaba de escribirse en el hilo del agente B.
+  const gen = useRef(0);
+
   useEffect(() => {
-    let alive = true;
+    const mine = ++gen.current;
+    // Vaciar SÍNCRONO. Antes sólo se reemplazaban los mensajes cuando el fetch resolvía,
+    // y el `.catch(() => {})` dejaba en pantalla la conversación del agente anterior.
+    setMsgs([]);
+    setBusy(false);
+    setLoading(true);
     fetch(`/api/v2/fleet-agents/${agent.id}/message-stream?groupId=${encodeURIComponent(groupId)}`, {
       headers: { Authorization: `Bearer ${agent.token}` },
     })
       .then((r) => (r.ok ? r.json() : { messages: [] }))
       .then((d: any) => {
-        if (alive && Array.isArray(d.messages)) {
-          setMsgs(d.messages.map((m: any) => ({ role: m.role === "user" ? "user" : "bot", text: m.text })));
-        }
+        if (gen.current !== mine || !Array.isArray(d.messages)) return;
+        setMsgs(d.messages.map((m: any) => ({ role: m.role === "user" ? "user" : "bot", text: m.text })));
       })
       .catch(() => {})
-      .finally(() => { if (alive) setLoading(false); });
-    return () => { alive = false; };
+      .finally(() => { if (gen.current === mine) setLoading(false); });
+    return () => { /* la generación invalida, no hace falta bandera aparte */ };
   }, [agent.id, agent.token, groupId]);
 
   async function send(text: string) {
     if (!text.trim() || busy) return;
+    const mine = gen.current;
     setBusy(true);
     setMsgs((m) => [...m, { role: "user", text }, { role: "bot", text: "" }]);
-    const setLast = (fn: (prev: string) => string) =>
-      setMsgs((m) => { const n = [...m]; n[n.length - 1] = { role: "bot", text: fn(n[n.length - 1].text) }; return n; });
+    // Si mientras llegaba el stream cambiaste de agente, esto ya no es de este hilo.
+    const setLast = (fn: (prev: string) => string) => {
+      if (gen.current !== mine) return;
+      setMsgs((m) => {
+        if (!m.length) return m;
+        const n = [...m]; n[n.length - 1] = { role: "bot", text: fn(n[n.length - 1].text) }; return n;
+      });
+    };
     try {
       const res = await fetch(`/api/v2/fleet-agents/${agent.id}/message-stream`, {
         method: "POST",
@@ -1178,11 +1198,15 @@ export default function Flota2() {
 
   const [creating, setCreating] = useState(false);
   const [engineId, setEngineId] = useState(FLEET_ENGINES.find(engineCreatable)?.id ?? "claude");
+  // Cerrar el modal no bastaba: el error del intento anterior y el tipo elegido la vez
+  // pasada seguían ahí al reabrirlo, y parecían de este intento. Un solo sitio que
+  // apaga y limpia.
   const [mcpBusy, setMcpBusy] = useState(false);
   const [mcpKind, setMcpKind] = useState<"stdio" | "http">("stdio");
   const [newToken, setNewToken] = useState(false);
   const [createdToken, setCreatedToken] = useState<string | null>(null);
   const [mcpError, setMcpError] = useState<string | null>(null);
+  const closeAddMcp = () => { setAddMcp(false); setMcpError(null); setMcpBusy(false); setMcpKind("stdio"); };
   const [phone, setPhone] = useState("");
   // Dos MÉTODOS de vinculación, no dos botones sueltos: "Conectar con QR" junto a un
   // campo de teléfono se leía como si el número fuera parte del QR.
@@ -1206,6 +1230,11 @@ export default function Flota2() {
   const [fileQ, setFileQ] = useState("");
   useEffect(() => {
     setOwnerDbs(null);
+    // También los archivos: se quedaban los del agente ANTERIOR durante el debounce
+    // (250ms, más lo que tarde el fetch, o para siempre si falla), y el toggle los
+    // adjuntaba al canal del agente nuevo. No es que se viera feo: pegaba el archivo
+    // equivocado.
+    setOwnerFiles([]);
     if (!sel?.id || !sel?.token) return;
     let alive = true;
     const t = setTimeout(() => {
@@ -1329,7 +1358,7 @@ export default function Flota2() {
         pkg: String(fd.get("pkg") || ""), url: String(fd.get("url") || ""),
         requiredSecret: secretName,
       });
-      setAddMcp(false);
+      closeAddMcp();
       form.reset();
       revalidator.revalidate();
     } catch (err) {
@@ -1357,10 +1386,6 @@ export default function Flota2() {
   const elevenEnabled = (ch: any) =>
     ((ch.inherits ?? {}).mcps === false ? (ch.mcps ?? []) : (sel.defaultMcps ?? [])).includes("elevenlabs");
 
-  const VoicePicker = ({ ch }: { ch: any }) => (
-    <VoiceList agent={sel} groupId={ch.id} current={ch.voiceId ?? ""}
-      elevenOn={elevenEnabled(ch)} onPick={(id) => cfg.setVoice(ch.id, id)} />
-  );
 
   const sendSkill = (entries: Array<{ file: File; path?: string }>) => {
     if (!entries.length) return;
@@ -1402,6 +1427,13 @@ export default function Flota2() {
     return out;
   };
 
+  // 🚨 Estos dos viven ARRIBA del `return` de "aún no tienes agentes" a propósito.
+  // Estaban debajo, y en cuanto el poll traía el primer agente la pintada siguiente
+  // corría dos hooks más que la anterior: "Rendered more hooks than during the
+  // previous render" y la página al ErrorBoundary, justo en el alta. No mover.
+  const [boxBusy, setBoxBusy] = useState<string | null>(null);
+  const [recycling, setRecycling] = useState(false);
+
   if (!sel) {
     return (
       <main className="p-8">
@@ -1419,7 +1451,6 @@ export default function Flota2() {
   // Acciones de caja: el resultado tarda (el host tiene que suspender/arrancar), así
   // que se pinta al instante sobre el estado local — igual que la vista clásica. El
   // latido del poll trae la verdad unos segundos después.
-  const [boxBusy, setBoxBusy] = useState<string | null>(null);
   const onBoxAction = (sandboxId: string, op: "suspend" | "resume" | "destroy") => {
     setBoxBusy(sandboxId);
     fleetConfig(fetcher.submit as any, sel.id).box(sandboxId, op);
@@ -1445,7 +1476,6 @@ export default function Flota2() {
   // Reciclar las cajas del agente: NO es un intent del dash, es la acción admin de la
   // API de capabilities. Es lo que hace que un cambio de modelo o de credencial (que
   // se hornean en el env del spawn) aplique YA y no cuando el reaper recicle la VM.
-  const [recycling, setRecycling] = useState(false);
   const recycleBoxes = async () => {
     setRecycling(true);
     try {
@@ -2486,7 +2516,7 @@ export default function Flota2() {
           </FullScreen>
         )}
         {addMcp && (
-          <FullScreen title="Conectar un MCP" size="auto" onClose={() => setAddMcp(false)}>
+          <FullScreen title="Conectar un MCP" size="auto" onClose={closeAddMcp}>
             <form onSubmit={createMcp} className="flex flex-col gap-4">
               <div className="grid sm:grid-cols-[1fr_auto] gap-3">
                 <label className="flex flex-col gap-1">
@@ -2545,7 +2575,7 @@ export default function Flota2() {
                   className="border-2 border-black rounded-xl px-4 py-2 text-sm font-bold bg-brand-500 text-white disabled:opacity-50">
                   {mcpBusy ? "Conectando…" : "Conectar MCP"}
                 </button>
-                <button type="button" onClick={() => setAddMcp(false)}
+                <button type="button" onClick={closeAddMcp}
                   className="border-2 border-black rounded-xl px-4 py-2 text-sm font-bold bg-white">Cancelar</button>
                 {mcpError && <p className="text-xs text-brand-red">⚠️ {mcpError}</p>}
               </div>
@@ -2579,7 +2609,14 @@ export default function Flota2() {
                   </div>
                 </fetcher.Form>
               )}
-              {kind === "voz" && <VoicePicker ch={ch} />}
+              {/* Sin envoltorio: un `VoicePicker` declarado en el cuerpo del padre cambiaba de
+                  identidad en cada render, y como el poll re-renderiza cada 2.5s, React
+                  remontaba VoiceList — se repetía el fetch del catálogo y el cleanup
+                  cortaba el ensayo ▶ a media reproducción. */}
+              {kind === "voz" && (
+                <VoiceList agent={sel} groupId={ch.id} current={ch.voiceId ?? ""}
+                  elevenOn={elevenEnabled(ch)} onPick={(id) => cfg.setVoice(ch.id, id)} />
+              )}
               {kind === "caps" && <CapsList ch={ch} sel={sel} cfg={cfg} buckets={buckets ?? []}
                 capQ={capQ} setCapQ={setCapQ} onDetail={(item) => setCapDetail({ ch, item })} />}
               {kind === "archivos" && <ChannelFiles ch={ch} sel={sel} cfg={cfg} fetcher={fetcher}
