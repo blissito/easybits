@@ -747,6 +747,7 @@ export default function Flota2() {
   const [dropping, setDropping] = useState(false);
   const skillInput = useRef<HTMLInputElement>(null);
   const [killSkill, setKillSkill] = useState<string | null>(null);
+  const [editSkill, setEditSkill] = useState<string | null>(null);
   const [killAgent, setKillAgent] = useState(false);
   const [inbox, setInbox] = useState<any | null>(null);
   const [chanCfg, setChanCfg] = useState<string | null>(null);
@@ -758,6 +759,8 @@ export default function Flota2() {
   const [engineId, setEngineId] = useState(FLEET_ENGINES.find(engineCreatable)?.id ?? "claude");
   const [mcpBusy, setMcpBusy] = useState(false);
   const [mcpKind, setMcpKind] = useState<"stdio" | "http">("stdio");
+  const [newToken, setNewToken] = useState(false);
+  const [createdToken, setCreatedToken] = useState<string | null>(null);
   const [mcpError, setMcpError] = useState<string | null>(null);
   const [phone, setPhone] = useState("");
   // Dos MÉTODOS de vinculación, no dos botones sueltos: "Conectar con QR" junto a un
@@ -925,6 +928,8 @@ export default function Flota2() {
                 <VoicePicker ch={ch} />
 
                 <CapsList ch={ch} />
+
+                <ChannelFiles ch={ch} />
               </div>
             </motion.div>
           )}
@@ -934,6 +939,20 @@ export default function Flota2() {
   };
 
   const [ownerDbs, setOwnerDbs] = useState<Array<{ name: string; namespace: string }> | null>(null);
+  const [ownerFiles, setOwnerFiles] = useState<Array<{ id: string; name: string; contentType: string | null }>>([]);
+  const [fileQ, setFileQ] = useState("");
+  useEffect(() => {
+    if (!sel?.id || !sel?.token) return;
+    let alive = true;
+    const t = setTimeout(() => {
+      fetch(`/api/v2/fleet-agents/${sel.id}/capabilities${fileQ.trim() ? `?q=${encodeURIComponent(fileQ.trim())}` : ""}`,
+        { headers: { Authorization: `Bearer ${sel.token}` } })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => { if (alive && d) setOwnerFiles(d.ownerFiles ?? []); })
+        .catch(() => {});
+    }, 250);
+    return () => { alive = false; clearTimeout(t); };
+  }, [sel?.id, sel?.token, fileQ]);
   useEffect(() => {
     setOwnerDbs(null);
     if (!sel?.id || !sel?.token) return;
@@ -955,6 +974,62 @@ export default function Flota2() {
   //   · incluidas  — builtins del worker (easybits, wa, render). Se apagan por canal.
   //   · familias   — buckets de EasyBits: son TOOLS propias, con nivel y lista.
   //   · conectores — MCPs (denik, Formmy…): son servidores externos, con credencial.
+  // Archivos que el agente puede ENVIAR en este canal. No son adjuntos del prompt:
+  // entran al turno como una lista "archivos disponibles para enviar" con su URL, y
+  // el agente decide cuándo mandarlos (`resolveGroupAssetManifest`).
+  const ChannelFiles = ({ ch }: { ch: any }) => {
+    const chosen: string[] = ch.assets ?? [];
+    const up = (files: File[]) => {
+      for (const f of files) {
+        const fd = new FormData();
+        fd.set("intent", "upload-asset");
+        fd.set("fleetAgentId", sel.id);
+        fd.set("groupId", ch.id);
+        fd.set("file", f);
+        fetcher.submit(fd, { method: "post", action: "/dash/flota", encType: "multipart/form-data" });
+      }
+    };
+    const shown = ownerFiles.length ? ownerFiles : [];
+    return (
+      <div>
+        <p className="text-xs font-semibold">Archivos que puede enviar</p>
+        <p className="text-[11px] text-tale mb-2">
+          {chosen.length === 0
+            ? "Ninguno. El agente sólo manda lo que genera en el momento."
+            : `${chosen.length} archivo${chosen.length !== 1 ? "s" : ""} a mano: catálogo, tarifas, un instructivo…`}
+        </p>
+        <div className="flex flex-wrap items-center gap-2 mb-2">
+          <input value={fileQ} onChange={(e) => setFileQ(e.target.value)} placeholder="Buscar entre tus archivos…"
+            className="flex-1 min-w-[12rem] border-2 border-gray-200 rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:border-black" />
+          <label className="shrink-0 text-xs font-bold text-brand-500 hover:underline cursor-pointer">
+            + Subir uno
+            <input type="file" multiple className="hidden"
+              onChange={(e) => { up(Array.from(e.target.files ?? [])); e.target.value = ""; }} />
+          </label>
+        </div>
+        {shown.length === 0 ? (
+          <p className="text-[11px] text-tale">
+            {fileQ.trim() ? "Nada con ese nombre." : "Busca por nombre para elegir de tus archivos, o sube uno."}
+          </p>
+        ) : (
+          <ul className="border-2 border-gray-200 rounded-xl divide-y-2 divide-gray-100 overflow-hidden">
+            {shown.map((f) => {
+              const on = chosen.includes(f.id);
+              return (
+                <li key={f.id} className="flex items-center gap-3 px-3 py-2">
+                  <Toggle on={on} busy={fetcher.state !== "idle"}
+                    onClick={() => cfg.toggleAsset(ch.id, f.id, !on)} />
+                  <span className={`text-sm truncate flex-1 ${on ? "font-bold" : "text-marengo"}`} title={f.name}>{f.name}</span>
+                  <span className="text-[11px] text-tale shrink-0">{(f.contentType ?? "").split("/").pop()}</span>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
+    );
+  };
+
   const CapsList = ({ ch }: { ch: any }) => {
     const eff = new Set<string>(ch.toolBuckets ?? sel.activeBuckets ?? []);
     const deny = new Set<string>(ch.toolDeny ?? []);
@@ -1436,7 +1511,7 @@ export default function Flota2() {
                     es (el que usan los que siguen al agente), no como un nivel
                     superior. Los datos lo pedían: los defaults están casi vacíos y la
                     configuración real vive por canal. */}
-                {CHANNELS.map((c) => {
+                {CHANNELS.filter((c) => !(sel.hiddenChannels ?? []).includes(c.kind)).map((c) => {
                   const k = `ch:${c.kind}`;
                   return (
                     <button key={k} onClick={() => setTab(k)} title={CH_HINT[c.state]}
@@ -1457,6 +1532,17 @@ export default function Flota2() {
                     </button>
                   );
                 })()}
+                {/* Canales ocultos: un agente que sólo atiende WhatsApp no necesita ver
+                    tres pestañas muertas. Se ocultan y se recuperan aquí. */}
+                {(sel.hiddenChannels ?? []).length > 0 && (
+                  <select value="" onChange={(e) => e.target.value && cfg.showChannel(e.target.value, true)}
+                    className="ml-auto border-2 border-gray-200 rounded-lg px-2 py-1 text-[11px] font-semibold bg-white hover:border-black focus:outline-none">
+                    <option value="">+ mostrar canal</option>
+                    {(sel.hiddenChannels ?? []).map((k: string) => (
+                      <option key={k} value={k}>{CHANNELS.find((c) => c.kind === k)?.label ?? k}</option>
+                    ))}
+                  </select>
+                )}
               </div>
             </div>
 
@@ -1493,9 +1579,16 @@ export default function Flota2() {
                 {tab.startsWith("ch:") && (
                   <Card title={CHANNELS.find((c) => `ch:${c.kind}` === tab)?.label ?? "Canal"}
                     right={
-                      <span className="flex items-center gap-1.5 text-xs text-marengo">
-                        <i className={`w-1.5 h-1.5 rounded-full not-italic ${CH_DOT[CHANNELS.find((c) => `ch:${c.kind}` === tab)?.state ?? "off"]}`} />
-                        {CH_HINT[CHANNELS.find((c) => `ch:${c.kind}` === tab)?.state ?? "off"]}
+                      <span className="flex items-center gap-3 text-xs text-marengo">
+                        <span className="flex items-center gap-1.5">
+                          <i className={`w-1.5 h-1.5 rounded-full not-italic ${CH_DOT[CHANNELS.find((c) => `ch:${c.kind}` === tab)?.state ?? "off"]}`} />
+                          {CH_HINT[CHANNELS.find((c) => `ch:${c.kind}` === tab)?.state ?? "off"]}
+                        </span>
+                        <button type="button" title="Ocultar este canal de la vista (se recupera desde “+ mostrar canal”)"
+                          onClick={() => { cfg.showChannel(tab.slice(3), false); setTab("instrucciones"); }}
+                          className="font-semibold text-tale hover:text-onix underline underline-offset-2">
+                          ocultar
+                        </button>
                       </span>
                     }>
                     {tab === "ch:baileys" && (<>
@@ -1575,6 +1668,22 @@ export default function Flota2() {
                             </li>
                           ))}
                         </ul>
+                      )}
+                      {/* Línea dedicada vs número compartido: decide si el bot antepone
+                          su nombre a cada mensaje (y cómo detecta sus propios ecos). */}
+                      {waConnected && (
+                        <label className="mt-3 flex items-center gap-3 text-xs">
+                          <Toggle on={!!sel.hasOwnNumber} busy={fetcher.state !== "idle"}
+                            onClick={() => cfg.setOwnNumber(!sel.hasOwnNumber)} />
+                          <span>
+                            <b>Número dedicado</b>
+                            <span className="block text-[11px] text-tale">
+                              {sel.hasOwnNumber
+                                ? "La línea es sólo del agente: contesta sin anteponer su nombre."
+                                : "Número compartido contigo: antepone “" + (sel.name || "Ghosty") + ":” para que se distinga de tus mensajes."}
+                            </span>
+                          </span>
+                        </label>
                       )}
                       {waConnected && (
                         <button type="button" onClick={() => cfg.disconnect()}
@@ -1687,9 +1796,56 @@ export default function Flota2() {
                           sus conectores</b>.
                         </p>
                         <p className="text-[11px] text-brand-red font-semibold">
-                          El token da control total del agente: llámalo desde tu servidor, nunca desde el
-                          navegador del visitante.
+                          Ese token da control total del agente: llámalo desde tu servidor, nunca desde el
+                          navegador del visitante. Si necesitas una llave para el navegador, crea una abajo.
                         </p>
+                      </div>
+
+                      {/* Llaves con alcance: para embeber un agente sin repartir la llave
+                          maestra. `flt_pk_` es la única que puede vivir en un navegador, y
+                          sólo sirve para mandar mensajes. */}
+                      <div className="flex flex-col gap-2 border-2 border-gray-200 rounded-xl p-3 mb-1">
+                        <div className="flex items-center justify-between gap-3 flex-wrap">
+                          <p className="text-xs font-semibold">Llaves con alcance</p>
+                          <button type="button" onClick={() => setNewToken(true)}
+                            className="text-xs font-bold text-brand-500 hover:underline">+ Crear llave</button>
+                        </div>
+                        {(sel.fleetTokens ?? []).length === 0 ? (
+                          <p className="text-[11px] text-tale">
+                            Sin llaves. Crea una para embeber al agente sin dar control total.
+                          </p>
+                        ) : (
+                          <ul className="border-2 border-gray-200 rounded-xl divide-y-2 divide-gray-100 overflow-hidden">
+                            {sel.fleetTokens.map((t: any) => (
+                              <li key={t.id} className="flex items-center gap-3 px-3 py-2">
+                                <div className="min-w-0 flex-1">
+                                  <p className="text-sm font-semibold truncate">{t.name}</p>
+                                  <p className="text-[11px] text-tale truncate font-mono">
+                                    {t.prefix}… · {(t.scopes ?? []).join(", ")}
+                                    {t.cfgId ? ` · ${t.cfgId}` : ""}
+                                    {t.lastUsedAt ? " · usada" : " · sin usar"}
+                                  </p>
+                                </div>
+                                <button type="button" onClick={() => cfg.revokeToken(t.id)}
+                                  className="shrink-0 text-[11px] font-bold text-tale hover:text-brand-red underline underline-offset-2">
+                                  revocar
+                                </button>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                        {/* El valor viaja UNA sola vez: si se pierde, se revoca y se crea otra. */}
+                        {createdToken && (
+                          <div className="border-2 border-black rounded-xl bg-brand-yellow/40 p-3 flex flex-col gap-2">
+                            <p className="text-xs font-bold">Cópiala ahora — no vuelve a mostrarse.</p>
+                            <code className="text-[11px] font-mono break-all">{createdToken}</code>
+                            <div className="flex gap-2">
+                              <CopyButton value={createdToken} label="Copiar llave" />
+                              <button type="button" onClick={() => setCreatedToken(null)}
+                                className="border-2 border-black rounded-lg px-2.5 py-1 text-xs font-bold bg-white">Ya la guardé</button>
+                            </div>
+                          </div>
+                        )}
                       </div>
                       <ChannelConfig ch={sel.webChannel} />
                     </>)}
@@ -1881,6 +2037,13 @@ export default function Flota2() {
                                   </svg>
                                 </a>
                               )}
+                              <button type="button" title="Administrar: nombre, descripción y archivos"
+                                onClick={() => setEditSkill(sk.id)}
+                                className="shrink-0 p-1.5 rounded-lg border-2 border-gray-200 text-marengo hover:border-black hover:text-onix transition-colors">
+                                <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z" />
+                                </svg>
+                              </button>
                               <button type="button" title="Borrar este skill" onClick={() => setKillSkill(sk.id)}
                                 className="shrink-0 p-1.5 rounded-lg border-2 border-gray-200 text-marengo hover:border-brand-red hover:text-brand-red transition-colors">
                                 <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -2081,6 +2244,138 @@ export default function Flota2() {
         {/* Detalle de UNA capacidad para UN canal: encendido, alcance, sus herramientas
             una por una y —en bases— a cuáles entra. Lo que antes estaba apretado
             dentro de una tarjeta de 200px. */}
+        {editSkill && (() => {
+          const sk = (sel.skills ?? []).find((x: any) => x.id === editSkill);
+          if (!sk) return null;
+          // Los archivos van por multipart y cada acción es su propio submit; el
+          // reemplazo conserva el mismo storageKey → la URL NO cambia, que es de lo
+          // que depende el manifiesto que ya recibió el agente.
+          const fileAction = (intent: string, files: File[], fileId?: string) => {
+            const fd = new FormData();
+            fd.set("intent", intent);
+            fd.set("fleetAgentId", sel.id);
+            fd.set("skillId", sk.id);
+            if (fileId) fd.set("fileId", fileId);
+            if (files[0]) fd.set("file", files[0]);
+            fetcher.submit(fd, { method: "post", action: "/dash/flota", encType: "multipart/form-data" });
+          };
+          return (
+            <FullScreen title={sk.name} size="auto" onClose={() => setEditSkill(null)}>
+              <div className="flex flex-col gap-5">
+                <fetcher.Form method="post" action="/dash/flota" className="flex flex-col gap-2">
+                  <input type="hidden" name="intent" value="update-skill" />
+                  <input type="hidden" name="fleetAgentId" value={sel.id} />
+                  <input type="hidden" name="skillId" value={sk.id} />
+                  <label className="flex flex-col gap-1">
+                    <span className="text-xs font-semibold">Nombre</span>
+                    <input name="name" defaultValue={sk.name}
+                      className="border-2 border-black rounded-xl px-3 py-2 text-sm focus:outline-none" />
+                  </label>
+                  <label className="flex flex-col gap-1">
+                    <span className="text-xs font-semibold">Cuándo usarlo</span>
+                    <textarea name="description" defaultValue={sk.description} rows={3}
+                      className="eb-thin border-2 border-black rounded-xl px-3 py-2 text-sm resize-y focus:outline-none" />
+                    <span className="text-[11px] text-tale">
+                      Esto es lo ÚNICO que el agente ve hasta que decide abrir el skill: dile en qué
+                      casos aplica, no lo que hace por dentro.
+                    </span>
+                  </label>
+                  <button type="submit" className="self-start border-2 border-black rounded-xl px-4 py-1.5 text-sm font-bold bg-brand-500 text-white">
+                    Guardar
+                  </button>
+                </fetcher.Form>
+
+                <div>
+                  <p className="text-sm font-bold mb-2">Archivos</p>
+                  <ul className="border-2 border-gray-200 rounded-xl divide-y-2 divide-gray-100 overflow-hidden">
+                    {(sk.files ?? []).map((f: any, i: number) => (
+                      <li key={f.id} className="flex items-center gap-3 px-3 py-2">
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-sm font-semibold truncate">{f.name}</span>
+                          {i === 0 && <span className="block text-[11px] text-tale">SKILL.md — lo que el agente lee primero</span>}
+                        </span>
+                        {f.url && (
+                          <a href={f.url} target="_blank" rel="noopener noreferrer"
+                            className="shrink-0 text-[11px] font-bold text-marengo hover:text-onix underline underline-offset-2">ver</a>
+                        )}
+                        <label className="shrink-0 text-[11px] font-bold text-brand-500 hover:underline cursor-pointer">
+                          reemplazar
+                          <input type="file" className="hidden"
+                            onChange={(e) => { fileAction("replace-skill-file", Array.from(e.target.files ?? []), f.id); e.target.value = ""; }} />
+                        </label>
+                        {(sk.files ?? []).length > 1 && i !== 0 && (
+                          <button type="button"
+                            onClick={() => fetcher.submit({ intent: "remove-skill-file", fleetAgentId: sel.id, skillId: sk.id, fileId: f.id }, { method: "post", action: "/dash/flota" })}
+                            className="shrink-0 text-[11px] font-bold text-tale hover:text-brand-red underline underline-offset-2">quitar</button>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                  <label className="inline-block mt-2 text-xs font-bold text-brand-500 hover:underline cursor-pointer">
+                    + Agregar archivo
+                    <input type="file" className="hidden"
+                      onChange={(e) => { fileAction("add-skill-file", Array.from(e.target.files ?? [])); e.target.value = ""; }} />
+                  </label>
+                  <p className="text-[11px] text-tale mt-1">
+                    Reemplazar conserva la misma URL, así que no rompe lo que el agente ya tenía anotado.
+                  </p>
+                </div>
+              </div>
+            </FullScreen>
+          );
+        })()}
+        {newToken && (
+          <FullScreen title="Nueva llave" size="auto" onClose={() => setNewToken(false)}>
+            <form className="flex flex-col gap-4"
+              onSubmit={async (e) => {
+                e.preventDefault();
+                const f = new FormData(e.currentTarget);
+                f.set("intent", "token-create");
+                f.set("fleetAgentId", sel.id);
+                const res = await fetch("/dash/flota", { method: "post", body: f }).catch(() => null);
+                const j = await res?.json().catch(() => ({} as any));
+                setNewToken(false);
+                if (j?.createdToken) setCreatedToken(j.createdToken);
+                revalidator.revalidate();
+              }}>
+              <label className="flex flex-col gap-1">
+                <span className="text-xs font-semibold">¿Para qué es?</span>
+                <input name="name" autoFocus placeholder="Burbuja del sitio, integración con X…"
+                  className="border-2 border-black rounded-xl px-3 py-2 text-sm focus:outline-none" />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-xs font-semibold">Qué puede hacer</span>
+                <select name="scope" defaultValue="MESSAGE"
+                  className="border-2 border-black rounded-xl px-3 py-2 text-sm bg-white focus:outline-none">
+                  <option value="MESSAGE">Sólo mandar mensajes</option>
+                  <option value="MANAGE">Configurar el agente (prompt, modelo, canales)</option>
+                  <option value="ADMIN">Todo, incluidas las credenciales</option>
+                </select>
+              </label>
+              <label className="flex items-start gap-2">
+                <input type="checkbox" name="publishable" className="mt-1" />
+                <span className="text-xs">
+                  <b>Puede vivir en un navegador</b> (<code className="font-mono">flt_pk_</code>)
+                  <span className="block text-[11px] text-tale">
+                    Sólo con “mandar mensajes”. Las demás llaves jamás deben salir de tu servidor.
+                  </span>
+                </span>
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-xs font-semibold">Sitios permitidos (opcional)</span>
+                <input name="allowedOrigins" placeholder="https://tusitio.com, https://otro.com"
+                  className="border-2 border-black rounded-xl px-3 py-2 text-sm font-mono focus:outline-none" />
+              </label>
+              <div className="flex gap-2">
+                <button type="submit" className="border-2 border-black rounded-xl px-4 py-2 text-sm font-bold bg-brand-500 text-white">
+                  Crear llave
+                </button>
+                <button type="button" onClick={() => setNewToken(false)}
+                  className="border-2 border-black rounded-xl px-4 py-2 text-sm font-bold bg-white">Cancelar</button>
+              </div>
+            </form>
+          </FullScreen>
+        )}
         {addMcp && (
           <FullScreen title="Conectar un MCP" size="auto" onClose={() => setAddMcp(false)}>
             <form onSubmit={createMcp} className="flex flex-col gap-4">
