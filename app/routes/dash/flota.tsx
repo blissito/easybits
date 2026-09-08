@@ -920,6 +920,8 @@ export default function Flota2() {
                   </button>
                 </fetcher.Form>
 
+                <VoicePicker ch={ch} />
+
                 <div>
                   <div className="flex items-center justify-between gap-3 flex-wrap">
                     <p className="text-xs font-semibold">Capacidades en este canal</p>
@@ -988,7 +990,7 @@ export default function Flota2() {
                     las tuyas: por eso la lista importa aunque parezca opcional. */}
                 {ownerDbs && ownerDbs.length > 0 && (
                   <div>
-                    <p className="text-xs font-semibold">Bases de datos</p>
+                    <p className="text-xs font-semibold">¿A cuáles puede entrar?</p>
                     <p className="text-[11px] text-tale mb-1.5">
                       {(ch.dbAllow ?? []).length === 0
                         ? "Ninguna elegida: en este canal puede consultar TODAS tus bases."
@@ -998,10 +1000,12 @@ export default function Flota2() {
                       {ownerDbs.map((d) => {
                         const on = (ch.dbAllow ?? []).includes(d.namespace);
                         return (
-                          <li key={d.namespace} className="flex items-center gap-2.5 border-2 border-gray-200 rounded-lg px-2.5 py-2">
+                          <li key={d.namespace} className={`flex items-center gap-2.5 border-2 rounded-lg px-2.5 py-2 ${on ? "border-black" : "border-gray-200"}`}>
                             <Toggle on={on} busy={fetcher.state !== "idle"}
                               onClick={() => cfg.allowDatabase(ch.id, d.namespace, !on)} />
-                            <span className="text-xs font-semibold truncate" title={d.namespace}>{d.name || d.namespace}</span>
+                            <span className={`text-xs truncate ${on ? "font-bold" : "font-semibold text-marengo"}`} title={d.namespace}>
+                              {d.name || d.namespace}
+                            </span>
                           </li>
                         );
                       })}
@@ -1053,6 +1057,7 @@ export default function Flota2() {
       save(next);
     };
     // Tools que de verdad ofrece un bucket con su nivel actual.
+    const dbLevel = levelOf((buckets ?? []).find((b: any) => b.key === "db") ?? { levels: [] });
     const toolsOf = (b: any) => {
       const keys = b.levels ? (b.levels.flatMap((l: any) => l.buckets) as string[]).filter((k) => eff.has(k)) : (eff.has(b.key) ? [b.key] : []);
       return [...new Set(keys.flatMap((k) => bucketTools?.[k] ?? []))].sort();
@@ -1071,12 +1076,12 @@ export default function Flota2() {
             <span className="text-[11px] text-tale">sigue al agente</span>
           )}
         </div>
-        <ul className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2 mt-1.5">
+        <ul className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2 mt-1.5 items-start">
           {(buckets ?? []).map((b: any) => {
             const on = eff.has(b.key);
             const tools = toolsOf(b);
             return (
-              <li key={b.key} className="flex flex-col gap-1.5 border-2 border-gray-200 rounded-lg px-2.5 py-2">
+              <li key={b.key} className="self-start flex flex-col gap-1.5 border-2 border-gray-200 rounded-lg px-2.5 py-2">
                 <div className="flex items-center gap-2 min-w-0">
                   {!b.levels && (
                     <Toggle on={on} busy={fetcher.state !== "idle"}
@@ -1110,12 +1115,58 @@ export default function Flota2() {
                     </ul>
                   </details>
                 )}
-                {/* Las bases sólo tienen sentido con el bucket db encendido. */}
-                {b.key === "db" && levelOf(b) !== "off" && dbsBlock}
               </li>
             );
           })}
         </ul>
+        {/* A CUÁLES bases entra: a lo ancho y con los nombres legibles. Dentro de la
+            tarjeta del bucket quedaba sin espacio y no se veía cuál estaba encendida. */}
+        {dbLevel !== "off" && dbsBlock}
+      </div>
+    );
+  };
+
+  // Voz del canal para las notas de voz. El catálogo se pide al desplegar (kokoro
+  // incluidas + ElevenLabs si el dueño tiene su llave), no al cargar la página.
+  const VoicePicker = ({ ch }: { ch: any }) => {
+    const [voices, setVoices] = useState<Array<{ id: string; name: string; engine: string; hint?: string }> | null>(null);
+    const load = () => {
+      if (voices) return;
+      fetch(`/api/v2/fleet-agents/${sel.id}/voices`, { headers: { Authorization: `Bearer ${sel.token}` } })
+        .then((r) => (r.ok ? r.json() : { voices: [] }))
+        .then((d) => setVoices(d.voices ?? []))
+        .catch(() => setVoices([]));
+    };
+    const current = ch.voiceId ?? "";
+    const byEngine = (e: string) => (voices ?? []).filter((v) => v.engine === e);
+    return (
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs font-semibold">Voz</span>
+        <select value={current} onFocus={load} onMouseDown={load}
+          onChange={(e) => cfg.setVoice(ch.id, e.target.value)}
+          className="border-2 border-gray-200 rounded-lg px-2 py-1 text-xs font-semibold bg-white hover:border-black focus:outline-none max-w-[16rem]">
+          <option value="">Voz por defecto</option>
+          {/* Si la voz guardada no está en el catálogo (llave quitada, voz retirada),
+              se conserva como opción para no borrarla sin querer al guardar otra cosa. */}
+          {current && !(voices ?? []).some((v) => v.id === current) && (
+            <option value={current}>{current}</option>
+          )}
+          {byEngine("kokoro").length > 0 && (
+            <optgroup label="Incluidas">
+              {byEngine("kokoro").map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
+            </optgroup>
+          )}
+          {byEngine("elevenlabs").length > 0 && (
+            <optgroup label="ElevenLabs">
+              {byEngine("elevenlabs").map((v) => (
+                <option key={v.id} value={v.id}>{v.name}{v.hint ? ` — ${v.hint}` : ""}</option>
+              ))}
+            </optgroup>
+          )}
+        </select>
+        <span className="text-[11px] text-tale">
+          Con la que contesta las notas de voz. Vacío = hereda la del agente.
+        </span>
       </div>
     );
   };
