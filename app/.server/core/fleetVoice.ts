@@ -78,28 +78,46 @@ function resolveVoice(voice?: string): string {
   return KOKORO_VOICE;
 }
 
+// 🚨 La caja RESPONDE al health check mucho antes de poder sintetizar: kokoro carga el
+// modelo en RAM en la PRIMERA petición. Con un solo intento de 25s, la primera nota de
+// voz después de que la caja despierta se pasaba de tiempo y el canal contestaba en
+// TEXTO — en silencio, porque el fallback está desactivado a propósito. No era un fallo
+// del ensayo: la superficie de WhatsApp comía el mismo timeout.
+//
+// Dos intentos: el primero corto (el caso normal, caja caliente), el segundo largo, que
+// es el que paga la carga del modelo. Reintentar sólo tiene sentido tras un timeout —
+// un 4xx/5xx de kokoro no mejora por insistir.
+const SPEAK_TIMEOUTS_MS = [25_000, 60_000];
+
 async function speakViaBox(speakUrl: string, text: string, fmt: VoiceFmt, voice?: string): Promise<{ buffer: Buffer; waveform?: string; contentType: string } | null> {
+  // kokoro reads the RAW body as UTF-8 text (NOT JSON); format + voice via query.
+  const q = (fmt === "ogg" ? "?format=ogg_opus" : "?format=wav") + `&voice=${encodeURIComponent(resolveVoice(voice))}`;
+  for (let i = 0; i < SPEAK_TIMEOUTS_MS.length; i++) {
   try {
-    // kokoro reads the RAW body as UTF-8 text (NOT JSON); format + voice via query.
-    const q = (fmt === "ogg" ? "?format=ogg_opus" : "?format=wav") + `&voice=${encodeURIComponent(resolveVoice(voice))}`;
     const r = await fetch(`${speakUrl}${q}`, {
       method: "POST",
       headers: { "content-type": "text/plain; charset=utf-8" },
       body: text,
-      signal: AbortSignal.timeout(25_000),
+      signal: AbortSignal.timeout(SPEAK_TIMEOUTS_MS[i]),
     });
     if (!r.ok) { console.error(`[voice] speakViaBox http=${r.status} url=${speakUrl}`); return null; }
     const buf = Buffer.from(await r.arrayBuffer());
     if (!buf.length) { console.error("[voice] speakViaBox empty body"); return null; }
+    if (i > 0) console.log("[voice] speakViaBox OK en el reintento (la caja estaba fría)");
     return {
       buffer: buf,
       waveform: r.headers.get("x-waveform") || undefined,
       contentType: fmt === "ogg" ? "audio/ogg" : "audio/wav",
     };
   } catch (e) {
-    console.error(`[voice] speakViaBox fetch FAILED url=${speakUrl}:`, (e as Error)?.message || e);
+    const esTimeout = (e as Error)?.name === "TimeoutError" || /timeout/i.test((e as Error)?.message ?? "");
+    const quedan = i < SPEAK_TIMEOUTS_MS.length - 1;
+    console.error(`[voice] speakViaBox intento ${i + 1} FALLÓ url=${speakUrl}:`, (e as Error)?.message || e);
+    if (esTimeout && quedan) continue;
     return null;
   }
+  }
+  return null;
 }
 
 // ─── ElevenLabs (voz premium, opt-in por canal) ──────────────────────────────

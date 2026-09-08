@@ -18,7 +18,9 @@ import { getSecretValue } from "~/.server/core/secretOperations";
 //
 // `groupId` importa: el motor se resuelve por CANAL (`resolveVoiceEngine` lee las
 // capacidades de ese cfgId). Sin él se prueba el default del agente.
-const FRASE = "Hola, así es como voy a sonar cuando conteste tus notas de voz.";
+// Corta a propósito: kokoro sintetiza en tiempo proporcional al texto, y esto se pide
+// desde un botón. Basta para reconocer la voz.
+const FRASE = "Hola, así voy a sonar cuando conteste.";
 
 export async function action({ request, params }: Route.ActionArgs) {
   if (request.method !== "POST") return data({ error: "method not allowed" }, { status: 405 });

@@ -283,6 +283,10 @@ function VoiceList({ agent, groupId, current, elevenOn, onPick }: {
     audioRef.current?.pause();
     setPlayErr(null);
     setPlaying(id);
+    // La caja de voz es on-demand: si estaba dormida hay que despertarla y kokoro carga
+    // su modelo en la primera petición. Sin decirlo, el botón se queda en "…" medio
+    // minuto y parece colgado.
+    const lento = setTimeout(() => setPlayErr("Levantando la caja de voz… la primera muestra tarda."), 4000);
     try {
       const r = await fetch(`/api/v2/fleet-agents/${agent.id}/voice-preview`, {
         method: "POST",
@@ -293,6 +297,7 @@ function VoiceList({ agent, groupId, current, elevenOn, onPick }: {
         const d = await r.json().catch(() => null as any);
         throw new Error(d?.error || String(r.status));
       }
+      clearTimeout(lento);
       const activa = r.headers.get("X-Voice-Active") !== "0";
       const blob = await r.blob();
       const a = new Audio(URL.createObjectURL(blob));
@@ -303,6 +308,7 @@ function VoiceList({ agent, groupId, current, elevenOn, onPick }: {
       // no sonaría así. Son dos datos distintos y se dicen por separado.
       setPlayErr(activa ? null : "Así suena, pero en este canal todavía no se usa: falta encender ElevenLabs.");
     } catch (e) {
+      clearTimeout(lento);
       setPlaying(null);
       // El motivo importa: "sin llave" y "la caja no respondió" se arreglan distinto.
       setPlayErr(e instanceof Error && e.message ? `No se pudo generar la muestra: ${e.message}` : "No se pudo generar la muestra.");
