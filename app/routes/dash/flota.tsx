@@ -23,6 +23,12 @@ import { AnimatePresence, motion } from "motion/react";
 import { FLEET_ENGINES, engineCreatable } from "~/lib/fleetEngines";
 import { zipStore } from "~/lib/zip";
 import { fleetConfig } from "~/lib/fleetConfig";
+import type { IconType } from "react-icons";
+import {
+  LuPackage, LuMessageSquare, LuPrinter, LuImage, LuFileText, LuSearch, LuVideo,
+  LuMail, LuDatabase, LuGlobe, LuCreditCard, LuCalendar, LuClipboardList, LuContact,
+  LuTruck, LuVolume2, LuPencil, LuZap, LuPaperclip, LuPlug, LuCircle,
+} from "react-icons/lu";
 
 // Editor de prompts del proyecto (CodeMirror + preview markdown, client-only).
 // Un prompt es markdown, no texto con formato: Tiptap serializaría HTML dentro del
@@ -126,41 +132,24 @@ function Skeleton({ lines = 6 }: { lines?: number }) {
   );
 }
 
-// Iconos de línea, no emoji: el emoji cambia de forma y de color según el sistema
-// (y en Windows algunos ni existen), así que una lista de doce capacidades se veía
-// como doce estilos distintos. Trazo simple, hereda el color del texto.
-const ICON_PATHS: Record<string, string> = {
-  caja: "M21 8v13H3V8M1 3h22v5H1zM10 12h4",
-  chat: "M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z",
-  impresora: "M6 9V2h12v7M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v8H6z",
-  imagen: "M3 3h18v18H3zM8.5 10a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3zM21 15l-5-5L5 21",
-  documento: "M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M9 13h6M9 17h6",
-  lupa: "M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM21 21l-4.35-4.35",
-  video: "M23 7l-7 5 7 5zM1 5h15v14H1z",
-  correo: "M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zM22 6l-10 7L2 6",
-  base: "M12 8c4.4 0 8-1.3 8-3s-3.6-3-8-3-8 1.3-8 3 3.6 3 8 3zM20 5v14c0 1.7-3.6 3-8 3s-8-1.3-8-3V5M20 12c0 1.7-3.6 3-8 3s-8-1.3-8-3",
-  globo: "M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM2 12h20M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20z",
-  tarjeta: "M2 6h20v12H2zM2 10h20",
-  calendario: "M3 5h18v16H3zM3 9h18M8 3v4M16 3v4",
-  tablero: "M9 3h6v3H9zM5 6h14v15H5zM9 12h6M9 16h4",
-  contactos: "M4 3h16v18H4zM9 10a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM7 16c.6-1.8 2.2-3 4-3s3.4 1.2 4 3",
-  camion: "M1 6h13v10H1zM14 9h4l3 3v4h-7zM6 19a2 2 0 1 0 0-4 2 2 0 0 0 0 4zM18 19a2 2 0 1 0 0-4 2 2 0 0 0 0 4z",
-  altavoz: "M11 5L6 9H2v6h4l5 4zM16 8a5 5 0 0 1 0 8M19 5a9 9 0 0 1 0 14",
-  lapiz: "M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z",
-  rayo: "M13 2L3 14h8l-1 8 10-12h-8z",
-  clip: "M21 12.8l-9.2 9.2a5.7 5.7 0 0 1-8-8l9.2-9.2a3.8 3.8 0 1 1 5.4 5.4l-9.2 9.2a1.9 1.9 0 1 1-2.7-2.7l8.5-8.5",
-  enchufe: "M9 2v6M15 2v6M6 8h12v4a6 6 0 0 1-12 0zM12 18v4",
-  punto: "M12 10a2 2 0 1 0 0 4 2 2 0 0 0 0-4z",
+// Iconos: Lucide, vía `react-icons/lu` — que ya es dependencia directa del repo y ya
+// se usa en otras pantallas, así que no añade nada al bundle que no estuviera.
+//
+// No emoji: cambia de forma y color según el sistema (y en Windows algunos ni
+// existen), así que una lista de doce capacidades se veía como doce estilos. Y no
+// dibujados a mano: mantener veinte `path` propios es trabajo que Lucide ya hizo mejor.
+const ICONS: Record<string, IconType> = {
+  caja: LuPackage, chat: LuMessageSquare, impresora: LuPrinter,
+  imagen: LuImage, documento: LuFileText, lupa: LuSearch, video: LuVideo,
+  correo: LuMail, base: LuDatabase, globo: LuGlobe, tarjeta: LuCreditCard,
+  calendario: LuCalendar, tablero: LuClipboardList, contactos: LuContact,
+  camion: LuTruck, altavoz: LuVolume2, lapiz: LuPencil, rayo: LuZap,
+  clip: LuPaperclip, enchufe: LuPlug, punto: LuCircle,
 };
 
 function Icon({ name, className = "w-4 h-4" }: { name: string; className?: string }) {
-  const d = ICON_PATHS[name] ?? ICON_PATHS.punto;
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor"
-      strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d={d} />
-    </svg>
-  );
+  const C = ICONS[name] ?? LuCircle;
+  return <C className={className} aria-hidden="true" />;
 }
 
 function CopyButton({ value, label = "Copiar", className = "" }: { value: string; label?: string; className?: string }) {
