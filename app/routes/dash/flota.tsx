@@ -505,6 +505,7 @@ export default function Flota2() {
   const setSelId = (id: string) => { setSelIdState(id); remember("a", id); };
   const setTab = (t: string) => { setTabState(t); remember("t", t); };
   const [showAll, setShowAll] = useState(false);
+  const [groupQ, setGroupQ] = useState("");
   const [dirty, setDirty] = useState(false);
   const [big, setBig] = useState<null | "prompt" | "ensayo">(null);
   const [creds, setCreds] = useState<string | null>(null);
@@ -670,7 +671,7 @@ export default function Flota2() {
                   <input type="hidden" name="fleetAgentId" value={sel.id} />
                   <input type="hidden" name="groupId" value={ch.id} />
                   <span className="text-xs font-semibold">Instrucciones sólo para este canal</span>
-                  <textarea name="systemPrompt" defaultValue={ch.systemPrompt ?? ""} rows={4}
+                  <textarea name="systemPrompt" defaultValue={ch.systemPrompt ?? ""} rows={3}
                     placeholder="Vacío = usa las instrucciones del agente. Lo que escribas aquí se SUMA, no las reemplaza."
                     className="eb-thin border-2 border-gray-200 rounded-xl p-2 text-sm font-mono resize-y focus:outline-none focus:border-brand-500" />
                   <button type="submit" className="self-start mt-1 border-2 border-black rounded-lg px-3 py-1 text-xs font-bold bg-brand-500 text-white">
@@ -679,15 +680,21 @@ export default function Flota2() {
                 </fetcher.Form>
 
                 <div>
-                  <p className="text-xs font-semibold mb-1.5">Capacidades en este canal</p>
-                  <ul className="grid sm:grid-cols-2 gap-2">
+                  <p className="text-xs font-semibold">Capacidades en este canal</p>
+                  {/* Es LA MISMA lista de la pestaña Capacidades. Se dijo aquí porque
+                      con el selector de nivel pisando el nombre parecía otra lista. */}
+                  <p className="text-[11px] text-tale mb-1.5">
+                    La misma lista de <b>Capacidades</b>; aquí eliges qué ve en este canal y con qué
+                    alcance. Las incluidas sí se pueden apagar por canal.
+                  </p>
+                  <ul className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
                     {(sel.builtins ?? []).map((b: any) => {
                       const off = (ch.disabledBuiltins ?? []).includes(b.name);
                       return (
-                        <li key={b.name} className="flex items-center gap-2.5 border-2 border-gray-200 rounded-lg px-2.5 py-1.5">
+                        <li key={b.name} className="flex items-center gap-2.5 border-2 border-gray-200 rounded-lg px-2.5 py-2">
                           <Toggle on={!off} busy={fetcher.state !== "idle"}
                             onClick={() => submit({ intent: "toggle-group-builtin", groupId: ch.id, name: b.name, on: off ? "1" : "0" })} />
-                          <span className="text-xs font-semibold truncate">{b.label}</span>
+                          <span className="text-xs font-semibold truncate" title={b.label}>{b.label}</span>
                         </li>
                       );
                     })}
@@ -695,15 +702,18 @@ export default function Flota2() {
                       const on = (ch.mcps ?? []).includes(c.name);
                       const level = ch.capLevels?.[c.name] ?? "";
                       return (
-                        <li key={c.name} className="flex items-center gap-2.5 border-2 border-gray-200 rounded-lg px-2.5 py-1.5">
-                          <Toggle on={on} busy={fetcher.state !== "idle" || !c.secretsPresent}
-                            onClick={() => submit({ intent: "toggle-group-mcp", groupId: ch.id, mcp: c.name, on: on ? "0" : "1" })} />
-                          <span className="text-xs font-semibold truncate flex-1">{c.label}</span>
-                          {/* Nivel de acceso, cuando el conector declara varios. */}
+                        <li key={c.name} className="flex flex-col gap-1.5 border-2 border-gray-200 rounded-lg px-2.5 py-2">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <Toggle on={on} busy={fetcher.state !== "idle" || !c.secretsPresent}
+                              onClick={() => submit({ intent: "toggle-group-mcp", groupId: ch.id, mcp: c.name, on: on ? "0" : "1" })} />
+                            <span className="text-xs font-semibold truncate" title={c.label}>{c.label}</span>
+                          </div>
+                          {/* Nivel de acceso (cuando el conector declara varios) EN SU
+                              LÍNEA: compitiendo con el nombre, ambos salían cortados. */}
                           {on && c.levels?.length > 0 && (
                             <select value={level} onChange={(e) => submit({ intent: "set-cap-level", groupId: ch.id, mcp: c.name, level: e.target.value })}
-                              className="shrink-0 border-2 border-gray-200 rounded-lg px-1.5 py-0.5 text-[11px] font-semibold bg-white hover:border-black focus:outline-none">
-                              <option value="">todo</option>
+                              className="w-full border-2 border-gray-200 rounded-lg px-2 py-1 text-[11px] font-semibold bg-white hover:border-black focus:outline-none">
+                              <option value="">acceso completo</option>
                               {c.levels.map((l: any) => <option key={l.key} value={l.key}>{l.label}</option>)}
                             </select>
                           )}
@@ -712,7 +722,7 @@ export default function Flota2() {
                     })}
                   </ul>
                   <p className="text-[11px] text-tale mt-1.5">
-                    Esto manda sobre lo que elegiste en <b>Capacidades</b> para todo el agente.
+                    Esto manda sobre lo que elegiste para todo el agente.
                   </p>
                 </div>
               </div>
@@ -1031,8 +1041,8 @@ export default function Flota2() {
                         <p className="text-xs text-tale">Todavía no se ven grupos. Aparecen solos en cuanto le escriban.</p>
                       ) : (
                         <ul className="grid sm:grid-cols-2 gap-x-6 gap-y-2">
-                          {[...active, ...(showAll ? others : [])].map((g: any) => (
-                            <li key={g.id} className="min-w-0 flex flex-col">
+                          {[...active, ...(showAll ? others.filter((g: any) => !groupQ.trim() || g.subject.toLowerCase().includes(groupQ.trim().toLowerCase())) : [])].map((g: any) => (
+                            <li key={g.id} className={`min-w-0 flex flex-col ${chanCfg === g.id ? "sm:col-span-2" : ""}`}>
                               <div className="flex items-center gap-3 min-w-0">
                                 <Toggle on={g.enabled} busy={fetcher.state !== "idle"}
                                   onClick={() => submit({ intent: "toggle-group", groupId: g.id, on: g.enabled ? "0" : "1" })} />
@@ -1057,8 +1067,13 @@ export default function Flota2() {
                           Desconectar WhatsApp
                         </button>
                       )}
+                      {showAll && others.length > 8 && (
+                        <input value={groupQ} onChange={(e) => setGroupQ(e.target.value)}
+                          placeholder={`Buscar entre ${others.length} grupos…`}
+                          className="mt-3 w-full sm:w-72 border-2 border-gray-200 rounded-xl px-3 py-1.5 text-sm focus:outline-none focus:border-black" />
+                      )}
                       {others.length > 0 && (
-                        <button onClick={() => setShowAll((s) => !s)} className="mt-3 text-xs font-bold text-brand-500 hover:underline">
+                        <button onClick={() => setShowAll((s) => !s)} className="mt-3 block text-xs font-bold text-brand-500 hover:underline">
                           {showAll ? "Ocultar los que no atiende" : `+ ${others.length} grupo${others.length !== 1 ? "s" : ""} que no atiende`}
                         </button>
                       )}
@@ -1085,13 +1100,13 @@ export default function Flota2() {
                                 <span className={`w-2 h-2 rounded-full shrink-0 ${w.mode === "off" ? "bg-gray-300" : "bg-emerald"}`} />
                                 <input key={`wn-${w.id}`} defaultValue={w.name || ""} placeholder={w.subject}
                                   onBlur={(e) => { const v = e.target.value.trim();
-                                    if (v !== (w.name || "")) submit({ intent: "set-waba-identity", groupId: w.id, name: v, systemPrompt: w.systemPrompt ?? "" }); }}
+                                    if (v !== (w.name || "")) submit({ intent: "set-waba-identity", integrationId: w.integrationId, name: v }); }}
                                   className="flex-1 min-w-0 text-sm font-semibold bg-transparent border-2 border-transparent rounded-lg px-1 hover:border-gray-200 focus:border-black focus:outline-none" />
                                 <span className="text-[11px] text-tale shrink-0 font-mono">{w.phoneNumber || w.integrationId}</span>
                                 {/* Tres modos, no un texto: apagado / sólo permitidos / todos. */}
                                 <div className="flex rounded-lg border-2 border-black overflow-hidden shrink-0">
                                   {([["off", "Apagado"], ["only", "Sólo permitidos"], ["all", "Todos"]] as const).map(([m, label]) => (
-                                    <button key={m} type="button" onClick={() => submit({ intent: "set-waba-mode", groupId: w.id, mode: m })}
+                                    <button key={m} type="button" onClick={() => submit({ intent: "set-waba-mode", integrationId: w.integrationId, mode: m })}
                                       className={`px-2 py-1 text-[11px] font-bold transition-colors ${w.mode === m ? "bg-black text-white" : "bg-white text-marengo hover:bg-grayLight"}`}>
                                       {label}
                                     </button>
