@@ -809,8 +809,13 @@ export async function action({ request }: Route.ActionArgs) {
     }
     const configs = { ...((fleetAgent.groupConfigs as Record<string, GroupConfig> | null) ?? {}) };
     const cur = configs[groupId] ?? {};
-    const set = new Set(cur.mcpServers ?? []);
-    const levels = { ...(cur.capLevels ?? {}) };
+    // ⚠️ Materializar la herencia: un canal SIN la clave hereda la del agente ("*"),
+    // y en cuanto la tiene GANA entera (no hay merge). Partir del valor propio cuando
+    // el canal heredaba convierte lo heredado en un override RECORTADO — borra en
+    // silencio lo que el usuario estaba viendo.
+    const def = (configs["*"] as GroupConfig | undefined) ?? {};
+    const set = new Set(cur.mcpServers ?? def.mcpServers ?? []);
+    const levels = { ...(cur.capLevels ?? def.capLevels ?? {}) };
     if (level === "off") { set.delete(name); delete levels[name]; }
     else { set.add(name); levels[name] = level; }
     configs[groupId] = { ...cur, mcpServers: [...set], capLevels: levels };
@@ -826,7 +831,11 @@ export async function action({ request }: Route.ActionArgs) {
     const voiceId = String(fd.get("voiceId") || "").trim();
     const configs = { ...((fleetAgent.groupConfigs as Record<string, GroupConfig> | null) ?? {}) };
     const cur = configs[groupId] ?? {};
-    const env = { ...(cur.env ?? {}) };
+    // ⚠️ Materializar la herencia: un canal SIN la clave hereda la del agente ("*"),
+    // y en cuanto la tiene GANA entera (no hay merge). Partir del valor propio cuando
+    // el canal heredaba convierte lo heredado en un override RECORTADO — borra en
+    // silencio lo que el usuario estaba viendo.
+    const env = { ...(cur.env ?? (configs["*"] as GroupConfig | undefined)?.env ?? {}) };
     if (voiceId) env.ELEVENLABS_VOICE_ID = voiceId;
     else delete env.ELEVENLABS_VOICE_ID;
     configs[groupId] = { ...cur, env };
@@ -856,7 +865,10 @@ export async function action({ request }: Route.ActionArgs) {
     if (groupId) {
       const configs = { ...((fleetAgent.groupConfigs as Record<string, GroupConfig> | null) ?? {}) };
       const cur = configs[groupId] ?? {};
-      configs[groupId] = { ...cur, assets: [...new Set([...(cur.assets ?? []), created.id])] };
+      // Materializa la herencia (ver nota en toggle-group-asset): subir un archivo a
+      // un canal que heredaba N lo dejaba con UNO.
+      const inheritedAssets = cur.assets ?? (configs["*"] as GroupConfig | undefined)?.assets ?? [];
+      configs[groupId] = { ...cur, assets: [...new Set([...inheritedAssets, created.id])] };
       await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { groupConfigs: configs } });
     }
     return data({ ok: true, fileId: created.id });
@@ -890,7 +902,11 @@ export async function action({ request }: Route.ActionArgs) {
     const on = String(fd.get("on") || "") === "1";
     const configs = { ...((fleetAgent.groupConfigs as Record<string, GroupConfig> | null) ?? {}) };
     const cur = configs[groupId] ?? {};
-    const set = new Set(cur.assets ?? []);
+    // ⚠️ Materializar la herencia: un canal SIN la clave hereda la del agente ("*"),
+    // y en cuanto la tiene GANA entera (no hay merge). Partir del valor propio cuando
+    // el canal heredaba convierte lo heredado en un override RECORTADO — borra en
+    // silencio lo que el usuario estaba viendo.
+    const set = new Set(cur.assets ?? (configs["*"] as GroupConfig | undefined)?.assets ?? []);
     if (on) set.add(fileId); else set.delete(fileId);
     configs[groupId] = { ...cur, assets: [...set] };
     await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { groupConfigs: configs } });
@@ -1097,7 +1113,11 @@ export async function action({ request }: Route.ActionArgs) {
     if (!tool) return data({ error: "tool requerida" }, { status: 400 });
     const configs = { ...((fleetAgent.groupConfigs as Record<string, GroupConfig> | null) ?? {}) };
     const cur = configs[groupId] ?? {};
-    const set = new Set(cur.toolDeny ?? []);
+    // ⚠️ Materializar la herencia: un canal SIN la clave hereda la del agente ("*"),
+    // y en cuanto la tiene GANA entera (no hay merge). Partir del valor propio cuando
+    // el canal heredaba convierte lo heredado en un override RECORTADO — borra en
+    // silencio lo que el usuario estaba viendo.
+    const set = new Set(cur.toolDeny ?? (configs["*"] as GroupConfig | undefined)?.toolDeny ?? []);
     if (on) set.delete(tool); else set.add(tool);
     configs[groupId] = { ...cur, toolDeny: [...set] };
     await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { groupConfigs: configs } });

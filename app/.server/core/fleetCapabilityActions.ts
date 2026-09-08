@@ -376,13 +376,19 @@ export async function applyCapabilityAction(fa: FleetAgentRow, b: Record<string,
   if (!groupId) return r({ error: "groupId required" }, 400);
   const configs = cfgs(fa);
   const cur = configs[groupId] ?? {};
+  // ⚠️ Herencia: un canal SIN la clave usa la del agente ("*"); en cuanto la tiene,
+  // gana entera. Hay que MATERIALIZAR lo heredado antes de mutar o el resultado es un
+  // override recortado que borra en silencio lo que el usuario veía. Mismo fallo que
+  // ya se corrigió en el dash (toggle-group-mcp) — aquí vivía igual, y ésta es la
+  // superficie que usan GTeams y la API.
+  const def = configs["*"] ?? {};
 
   if (action === "set-cap-level") {
     const cap = String(b?.cap ?? "");
     const level = String(b?.level ?? "");
     if (!mergedCapabilities(fa).some((e) => e.name === cap && !e.builtin)) return r({ error: "unknown capability" }, 400);
-    const set = new Set(cur.mcpServers ?? []);
-    const levels = { ...(cur.capLevels ?? {}) };
+    const set = new Set(cur.mcpServers ?? def.mcpServers ?? []);
+    const levels = { ...(cur.capLevels ?? def.capLevels ?? {}) };
     if (level === "off") { set.delete(cap); delete levels[cap]; }
     else { set.add(cap); levels[cap] = level; }
     configs[groupId] = { ...cur, mcpServers: [...set], capLevels: levels };
@@ -397,7 +403,7 @@ export async function applyCapabilityAction(fa: FleetAgentRow, b: Record<string,
     configs[groupId] = { ...cur, systemPrompt: systemPrompt || undefined };
   } else if (action === "toggle-asset") {
     const fileId = String(b?.fileId ?? "");
-    const set = new Set(cur.assets ?? []);
+    const set = new Set(cur.assets ?? def.assets ?? []);
     if (b?.on) set.add(fileId); else set.delete(fileId);
     configs[groupId] = { ...cur, assets: [...set] };
   } else if (action === "set-db-allow") {
@@ -420,7 +426,7 @@ export async function applyCapabilityAction(fa: FleetAgentRow, b: Record<string,
     // Per-tool: `on:false` = destildar = DENY esa tool; `on:true` = re-permitir (quitar del deny).
     const tool = String(b?.tool ?? "").trim();
     if (!tool) return r({ error: "tool required" }, 400);
-    const set = new Set(cur.toolDeny ?? []);
+    const set = new Set(cur.toolDeny ?? def.toolDeny ?? []);
     if (b?.on) set.delete(tool); else set.add(tool);
     configs[groupId] = { ...cur, toolDeny: [...set] };
   } else {
