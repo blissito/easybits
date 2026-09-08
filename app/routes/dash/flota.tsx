@@ -125,6 +125,22 @@ function Skeleton({ lines = 6 }: { lines?: number }) {
   );
 }
 
+function CopyButton({ value, label = "Copiar", className = "" }: { value: string; label?: string; className?: string }) {
+  const [done, setDone] = useState(false);
+  return (
+    <button type="button"
+      onClick={() => {
+        navigator.clipboard?.writeText(value).then(() => {
+          setDone(true);
+          setTimeout(() => setDone(false), 2000);
+        }).catch(() => {});
+      }}
+      className={`border-2 border-black rounded-lg px-2.5 py-1 text-xs font-bold transition-colors ${done ? "bg-emerald" : "bg-white hover:bg-grayLight"} ${className}`}>
+      {done ? "Copiado ✓" : label}
+    </button>
+  );
+}
+
 function Toggle({ on, onClick, busy }: { on: boolean; onClick: () => void; busy?: boolean }) {
   return (
     <button type="button" disabled={busy} onClick={onClick}
@@ -357,6 +373,132 @@ function Boxes({ pools, capacity }: { pools: any[]; capacity: any }) {
   );
 }
 
+// ── Inbox de WhatsApp Business ─────────────────────────────────────────────
+// Donde el dueño toma una conversación: la pausa para atenderla él, marca a alguien
+// como admin, o la deja hablar cuando el número responde "sólo a permitidos".
+// La lista NO viene del loader (son mensajes, otra tabla): endpoint propio con
+// búsqueda server-side por teléfono o nombre.
+type WabaConv = {
+  sender: string; name: string; lastText: string; lastRole: string; lastAt: string;
+  count: number; allowed: boolean; admin: boolean;
+  paused: boolean; permanent: boolean; until: string | null;
+};
+
+function PauseLeft({ until }: { until: string | null }) {
+  const [, tick] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => tick((n) => n + 1), 30_000);
+    return () => clearInterval(t);
+  }, []);
+  if (!until) return null;
+  const ms = Date.parse(until) - Date.now();
+  if (ms <= 0) return null;
+  const min = Math.round(ms / 60_000);
+  return <span className="text-[11px] text-marengo">· {min >= 60 ? `${Math.floor(min / 60)}h ${min % 60}m` : `${min} min`}</span>;
+}
+
+function WabaInbox({ agent, number }: { agent: { id: string }; number: { integrationId: string; subject: string; mode: string } }) {
+  const [q, setQ] = useState("");
+  const [convs, setConvs] = useState<WabaConv[] | null>(null);
+  const act = useFetcher();
+
+  const reload = () => {
+    const url = `/api/v2/fleet-agents/${agent.id}/waba-inbox?integrationId=${encodeURIComponent(number.integrationId)}${q.trim() ? `&q=${encodeURIComponent(q.trim())}` : ""}`;
+    // Este endpoint autentica por SESIÓN (getUserOrRedirect), no por token del
+    // agente: la cookie viaja sola al ser mismo origen.
+    fetch(url)
+      .then((r) => (r.ok ? r.json() : { conversations: [] }))
+      .then((d) => setConvs(d.conversations ?? []))
+      .catch(() => setConvs([]));
+  };
+  // Debounce 250ms: cada tecla es una consulta a mensajes.
+  useEffect(() => {
+    const t = setTimeout(reload, 250);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [q, agent.id, number.integrationId]);
+  // Tras cada acción, refrescar (pausar/reanudar pasa por Formmy y puede fallar).
+  useEffect(() => { if (act.state === "idle" && act.data) reload(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [act.state, act.data]);
+
+  const send = (fields: Record<string, string>, c: WabaConv) =>
+    act.submit({ ...fields, fleetAgentId: agent.id, integrationId: number.integrationId, sender: c.sender },
+      { method: "post", action: "/dash/flota" });
+  const busy = act.state !== "idle";
+
+  return (
+    <div className="flex flex-col gap-3">
+      <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar por teléfono o nombre…"
+        className="w-full border-2 border-black rounded-xl px-3 py-2 text-sm focus:outline-none" />
+      {convs === null && <Skeleton lines={5} />}
+      {convs?.length === 0 && <p className="text-xs text-tale">Sin conversaciones{q.trim() ? " que coincidan" : " todavía"}.</p>}
+      <ul className="flex flex-col gap-2">
+        {(convs ?? []).map((c) => (
+          <li key={c.sender} className="flex flex-col gap-2 border-2 border-gray-200 rounded-xl px-3 py-2.5">
+            <div className="flex items-center gap-2 min-w-0">
+              <button type="button" title={c.admin ? "Quitar admin" : "Marcar como admin (puede administrar al agente)"}
+                onClick={() => send({ intent: "waba-set-admin", on: c.admin ? "0" : "1" }, c)}
+                className={`shrink-0 text-xs font-bold px-2 py-1 rounded-lg border-2 ${c.admin ? "border-black bg-brand-500 text-white" : "border-gray-200 text-tale hover:border-black hover:text-onix"}`}>
+                {c.admin ? "★" : "☆"}
+              </button>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold truncate">
+                  {c.name || c.sender}
+                  <span className="ml-2 text-[11px] font-normal text-tale font-mono">{c.sender}</span>
+                </p>
+                <p className="text-[11px] text-tale truncate">
+                  {c.paused
+                    ? "El agente no responde aquí — la atiendes tú"
+                    : `${c.lastRole === "agent" ? "↩︎ " : ""}${c.lastText}`}
+                </p>
+              </div>
+              {c.paused && (
+                <span className="shrink-0 text-[11px] font-semibold text-brand-red">
+                  ⏸ {c.permanent ? "pausada" : "en pausa"}<PauseLeft until={c.until} />
+                </span>
+              )}
+              <span className="shrink-0 text-[11px] text-marengo">{c.count}</span>
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {c.paused ? (
+                <button type="button" disabled={busy} onClick={() => send({ intent: "waba-resume" }, c)}
+                  className="text-[11px] font-bold px-2 py-1 rounded-lg border-2 border-black bg-brand-500 text-white disabled:opacity-50">
+                  Devolvérsela al agente
+                </button>
+              ) : (
+                <>
+                  <span className="text-[11px] text-tale">Atenderla yo:</span>
+                  {([["30min", "30 min"], ["2h", "2 horas"], ["permanent", "hasta que yo diga"]] as const).map(([d, label]) => (
+                    <button key={d} type="button" disabled={busy} onClick={() => send({ intent: "waba-pause", duration: d }, c)}
+                      className="text-[11px] font-bold px-2 py-1 rounded-lg border-2 border-gray-200 hover:border-black disabled:opacity-50">
+                      {label}
+                    </button>
+                  ))}
+                </>
+              )}
+              {number.mode === "only" && (
+                <button type="button" disabled={busy} onClick={() => send({ intent: "toggle-waba-sender", on: c.allowed ? "0" : "1" }, c)}
+                  className={`text-[11px] font-bold px-2 py-1 rounded-lg border-2 ${c.allowed ? "border-black bg-emerald" : "border-gray-200 text-tale hover:border-black"}`}>
+                  {c.allowed ? "En la lista" : "Dejarle hablar"}
+                </button>
+              )}
+              <button type="button" disabled={busy} title="Pídele al agente que escriba ahora"
+                onClick={() => send({ intent: "waba-request-reply" }, c)}
+                className="text-[11px] font-bold px-2 py-1 rounded-lg border-2 border-gray-200 hover:border-black disabled:opacity-50">
+                Que responda
+              </button>
+              <button type="button" disabled={busy} title="Empieza de cero: olvida el hilo de esta conversación"
+                onClick={() => send({ intent: "waba-clear" }, c)}
+                className="ml-auto text-[11px] font-bold text-tale hover:text-brand-red underline underline-offset-2 disabled:opacity-50">
+                Olvidar el hilo
+              </button>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 // ── Ensayo ─────────────────────────────────────────────────────────────────
 // El `configGroupId` es OBLIGATORIO: sin él el turno arranca sin los conectores del
 // canal y parece que el MCP está roto (ver CLAUDE.md, sección FleetAgent).
@@ -513,6 +655,7 @@ export default function Flota2() {
   const skillInput = useRef<HTMLInputElement>(null);
   const [killSkill, setKillSkill] = useState<string | null>(null);
   const [killAgent, setKillAgent] = useState(false);
+  const [inbox, setInbox] = useState<any | null>(null);
   const [chanCfg, setChanCfg] = useState<string | null>(null);
   const [killName, setKillName] = useState("");
   const [addMcp, setAddMcp] = useState(false);
@@ -1140,6 +1283,10 @@ export default function Flota2() {
                                     if (v !== (w.name || "")) submit({ intent: "set-waba-identity", integrationId: w.integrationId, name: v }); }}
                                   className="flex-1 min-w-0 text-sm font-semibold bg-transparent border-2 border-transparent rounded-lg px-1 hover:border-gray-200 focus:border-black focus:outline-none" />
                                 <span className="text-[11px] text-tale shrink-0 font-mono">{w.phoneNumber || w.integrationId}</span>
+                                <button type="button" onClick={() => setInbox(w)}
+                                  className="shrink-0 text-xs font-bold px-2.5 py-1 rounded-lg border-2 border-gray-200 hover:border-black hover:text-onix text-marengo">
+                                  Conversaciones
+                                </button>
                                 {/* Tres modos, no un texto: apagado / sólo permitidos / todos. */}
                                 <div className="flex rounded-lg border-2 border-black overflow-hidden shrink-0">
                                   {([["off", "Apagado"], ["only", "Sólo permitidos"], ["all", "Todos"]] as const).map(([m, label]) => (
@@ -1190,11 +1337,7 @@ export default function Flota2() {
   -H "Content-Type: application/json" \\
   -d '{"groupId":"web-<id-de-la-visita>","configGroupId":"web","text":"hola"}'`}</pre>
                         <div className="flex flex-wrap items-center gap-2">
-                          <button type="button"
-                            onClick={() => navigator.clipboard?.writeText(sel.token).catch(() => {})}
-                            className="border-2 border-black rounded-lg px-2.5 py-1 text-xs font-bold bg-white hover:bg-grayLight">
-                            Copiar token
-                          </button>
+                          <CopyButton value={sel.token} label="Copiar token" />
                           <code className="text-[11px] font-mono text-marengo">{sel.token.slice(0, 6)}••••••</code>
                         </div>
                         <p className="text-[11px] text-marengo">
@@ -1510,6 +1653,13 @@ export default function Flota2() {
         {/* Borrar es irreversible y se lleva trabajo de meses: se confirma diciendo
             QUÉ se pierde, con la copia a mano, y escribiendo el nombre. Nada de
             confirm() del navegador. */}
+        {inbox && (
+          <FullScreen title={`Conversaciones · ${inbox.subject}`} onClose={() => setInbox(null)}>
+            <div className="overflow-y-auto eb-thin flex-1 min-h-0">
+              <WabaInbox agent={{ id: sel.id }} number={inbox} />
+            </div>
+          </FullScreen>
+        )}
         {killAgent && (
           <FullScreen title="Borrar agente" size="auto" onClose={() => { setKillAgent(false); setKillName(""); }}>
             <div className="flex flex-col gap-4">
