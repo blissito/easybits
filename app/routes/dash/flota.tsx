@@ -607,7 +607,7 @@ function EnsayoBody({ msgs, busy, loading, onSend, tall }: { msgs: any[]; busy: 
 
 // ── Página ─────────────────────────────────────────────────────────────────
 export default function Flota2() {
-  const { pools, capacity, engineHasSecret } = useLoaderData() as any;
+  const { pools, capacity, engineHasSecret, buckets, bucketTools } = useLoaderData() as any;
   const fetcher = useFetcher();
   const revalidator = useRevalidator();
   // Agente y pestaña viven en la URL (?a=…&t=…), no en useState: así sobreviven al
@@ -886,6 +886,11 @@ export default function Flota2() {
                   </p>
                 </div>
 
+                {/* Herramientas del canal: qué familias puede usar y con qué alcance.
+                    La lista de BASES cuelga del bucket `db` — sin ese bucket activo,
+                    elegir bases no hace nada. */}
+                <ToolsBlock ch={ch} dbsBlock={ownerDbs && ownerDbs.length > 0 ? (
+                  <>
                 {/* A CUÁL base puede entrar en este canal. Sin elegir ninguna ve todas
                     las tuyas: por eso la lista importa aunque parezca opcional. */}
                 {ownerDbs && ownerDbs.length > 0 && (
@@ -910,6 +915,8 @@ export default function Flota2() {
                     </ul>
                   </div>
                 )}
+                </>
+                ) : null} />
               </div>
             </motion.div>
           )}
@@ -929,6 +936,96 @@ export default function Flota2() {
       .catch(() => {});
     return () => { alive = false; };
   }, [sel?.id, sel?.token]);
+
+  // Herramientas por canal: familias (buckets) con su alcance, y el veto de tools
+  // sueltas. El `?tools=` del worker sale de aquí; sin esto, un canal usaba lo que
+  // decidiera el agente y no había forma de darle lectura pero no borrado.
+  const ToolsBlock = ({ ch, dbsBlock }: { ch: any; dbsBlock: React.ReactNode }) => {
+    const eff = new Set<string>(ch.toolBuckets ?? sel.activeBuckets ?? []);
+    const own = ch.toolBuckets != null;
+    const deny = new Set<string>(ch.toolDeny ?? []);
+    const save = (next: Set<string>) =>
+      submit({ intent: "set-group-toolgroup", groupId: ch.id, buckets: [...next].join(","), inherit: "0" });
+    // El nivel activo es el ÚLTIMO cuyos buckets estén todos dentro del set: los
+    // niveles son acumulativos (escritura = base + write).
+    const levelOf = (b: any) => {
+      let cur = "off";
+      for (const l of b.levels ?? []) if (l.buckets.every((k: string) => eff.has(k))) cur = l.key;
+      return cur;
+    };
+    const setLevel = (b: any, level: string) => {
+      const next = new Set(eff);
+      for (const l of b.levels ?? []) for (const k of l.buckets) next.delete(k);
+      if (level !== "off") for (const k of (b.levels ?? []).find((l: any) => l.key === level)?.buckets ?? []) next.add(k);
+      save(next);
+    };
+    // Tools que de verdad ofrece un bucket con su nivel actual.
+    const toolsOf = (b: any) => {
+      const keys = b.levels ? (b.levels.flatMap((l: any) => l.buckets) as string[]).filter((k) => eff.has(k)) : (eff.has(b.key) ? [b.key] : []);
+      return [...new Set(keys.flatMap((k) => bucketTools?.[k] ?? []))].sort();
+    };
+    return (
+      <div>
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <p className="text-xs font-semibold">Herramientas en este canal</p>
+          {own ? (
+            <button type="button"
+              onClick={() => submit({ intent: "set-group-toolgroup", groupId: ch.id, buckets: "", inherit: "1" })}
+              className="text-[11px] font-bold text-brand-500 underline underline-offset-2">
+              volver a seguir al agente
+            </button>
+          ) : (
+            <span className="text-[11px] text-tale">sigue al agente</span>
+          )}
+        </div>
+        <ul className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2 mt-1.5">
+          {(buckets ?? []).map((b: any) => {
+            const on = eff.has(b.key);
+            const tools = toolsOf(b);
+            return (
+              <li key={b.key} className="flex flex-col gap-1.5 border-2 border-gray-200 rounded-lg px-2.5 py-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  {!b.levels && (
+                    <Toggle on={on} busy={fetcher.state !== "idle"}
+                      onClick={() => { const n = new Set(eff); on ? n.delete(b.key) : n.add(b.key); save(n); }} />
+                  )}
+                  <span className="text-xs font-semibold truncate" title={b.description}>{b.label}</span>
+                </div>
+                {b.levels && (
+                  <div className="flex rounded-lg border-2 border-black overflow-hidden">
+                    {[{ key: "off", label: "No" }, ...b.levels].map((l: any) => (
+                      <button key={l.key} type="button" onClick={() => setLevel(b, l.key)}
+                        className={`flex-1 px-1 py-1 text-[11px] font-bold transition-colors ${levelOf(b) === l.key ? "bg-black text-white" : "bg-white text-marengo hover:bg-grayLight"}`}>
+                        {l.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {tools.length > 0 && (
+                  <details>
+                    <summary className="text-[11px] text-tale cursor-pointer">
+                      {tools.filter((t) => !deny.has(t)).length}/{tools.length} herramientas
+                    </summary>
+                    <ul className="mt-1.5 flex flex-col gap-1">
+                      {tools.map((t) => (
+                        <li key={t} className="flex items-center gap-2">
+                          <Toggle on={!deny.has(t)} busy={fetcher.state !== "idle"}
+                            onClick={() => submit({ intent: "set-tool-deny", groupId: ch.id, tool: t, on: deny.has(t) ? "1" : "0" })} />
+                          <span className="text-[11px] font-mono truncate">{t}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                )}
+                {/* Las bases sólo tienen sentido con el bucket db encendido. */}
+                {b.key === "db" && levelOf(b) !== "off" && dbsBlock}
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+    );
+  };
 
   const sendSkill = (entries: Array<{ file: File; path?: string }>) => {
     if (!entries.length) return;
