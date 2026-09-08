@@ -760,6 +760,62 @@ export async function action({ request }: Route.ActionArgs) {
     }
     return data({ ok: true });
   }
+  // ── Puente a la superficie API ─────────────────────────────────────────────
+  // Estas mutaciones VIVEN en `fleetCapabilityActions.applyCapabilityAction`, que es
+  // la superficie que usan también GTeams y la API v2. Aquí estaban DUPLICADAS, y esa
+  // duplicación costó cara: el bug de herencia que borraba capacidades en silencio
+  // hubo que arreglarlo dos veces, una en cada copia. El dashboard es un cliente más.
+  const API_BRIDGE: Record<string, (fd: FormData) => Record<string, unknown>> = {
+    "set-cap-level": (f) => ({ action: "set-cap-level", groupId: f.get("groupId"), cap: f.get("cap"), level: f.get("level") }),
+    "toggle-group-builtin": (f) => ({ action: "toggle-builtin", groupId: f.get("groupId"), builtin: f.get("name"), on: String(f.get("on")) === "1" }),
+    "toggle-group-asset": (f) => ({ action: "toggle-asset", groupId: f.get("groupId"), fileId: f.get("fileId"), on: String(f.get("on")) === "1" }),
+    "set-tool-deny": (f) => ({ action: "set-tool-deny", groupId: f.get("groupId"), tool: f.get("tool"), on: String(f.get("on")) === "1" }),
+    "set-group-toolgroup": (f) => ({
+      action: "set-toolgroup", groupId: f.get("groupId"),
+      inherit: String(f.get("inherit")) === "1",
+      buckets: String(f.get("buckets") || "").split(",").map((x) => x.trim()).filter(Boolean),
+    }),
+    "set-db-allow": (f) => {
+      // La API recibe la lista COMPLETA; el dash manda un toggle. La herencia se
+      // materializa aquí (un canal sin lista propia usa la del agente).
+      const gid = String(f.get("groupId") || "");
+      const ns = String(f.get("namespace") || "");
+      const on = String(f.get("on")) === "1";
+      const cfg = ((fleetAgent.groupConfigs as Record<string, GroupConfig> | null) ?? {});
+      const clean = (a?: string[]) => (a ?? []).filter((x) => x && x.trim());
+      const own = clean(cfg[gid]?.dbAllow);
+      const set = new Set(own.length ? own : clean(cfg["*"]?.dbAllow));
+      if (on && ns.trim()) set.add(ns); else set.delete(ns);
+      return { action: "set-db-allow", groupId: gid, dbAllow: [...set] };
+    },
+  };
+  if (API_BRIDGE[intent]) {
+    const { applyCapabilityAction } = await import("~/.server/core/fleetCapabilityActions");
+    const res = await applyCapabilityAction(fleetAgent as never, API_BRIDGE[intent](fd) as Record<string, unknown>);
+    return data(res.body as object, { status: res.status });
+  }
+
+  if (intent === "set-group-prompt") {
+    // ⚠️ NO se delega a la API a propósito: para un NÚMERO de WABA el prompt vive en
+    // `wabaConfig.orgs[id].systemPrompt` (lo inyecta `waba.server.ts:357` como
+    // appendSystemPrompt y el loader lo lee de ahí). `set-prompt` de la API escribe en
+    // groupConfigs → quedaría guardado donde la UI no mira. Dos destinos, un intent.
+    const groupId = String(fd.get("groupId") || "");
+    const systemPrompt = String(fd.get("systemPrompt") || "").slice(0, 8000);
+    if (groupId.startsWith("waba:")) {
+      const integrationId = groupId.slice("waba:".length);
+      const wc = { ...((fleetAgent.wabaConfig as { orgs?: Record<string, unknown> } | null) ?? {}) };
+      const orgs = { ...((wc.orgs as Record<string, Record<string, unknown>> | undefined) ?? {}) };
+      orgs[integrationId] = { ...(orgs[integrationId] ?? {}), systemPrompt };
+      await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { wabaConfig: { ...wc, orgs } as object } });
+      return data({ ok: true });
+    }
+    const configs = { ...((fleetAgent.groupConfigs as Record<string, GroupConfig> | null) ?? {}) };
+    const cur = configs[groupId] ?? {};
+    configs[groupId] = { ...cur, systemPrompt: systemPrompt || undefined };
+    await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { groupConfigs: configs } });
+    return data({ ok: true });
+  }
   if (intent === "toggle-group-mcp") {
     // Enable/disable a capability (curated ∪ custom) for one group.
     const groupId = String(fd.get("groupId") || "");
@@ -793,32 +849,6 @@ export async function action({ request }: Route.ActionArgs) {
     const cur = { ...(configs[groupId] ?? {}) } as GroupConfig;
     delete (cur as { mcpServers?: string[] }).mcpServers;
     configs[groupId] = cur;
-    await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { groupConfigs: configs } });
-    return data({ ok: true });
-  }
-  if (intent === "set-cap-level") {
-    // Tri-estado de una capacidad por grupo: "off" | "read" | "write".
-    // off → la quita de mcpServers; read/write → la agrega + fija capLevels[name].
-    // Traduce a <SERVER>_TOOLSETS en resolveGroupMcpServers. Esto ES el gate
-    // "admin desde baileys / lectura desde waba" hecho pura config.
-    const groupId = String(fd.get("groupId") || "");
-    const name = String(fd.get("cap") || "");
-    const level = String(fd.get("level") || ""); // off | read | write
-    if (!mergedCapabilities(fleetAgent).some((e) => e.name === name && !e.builtin)) {
-      return data({ error: "esa capacidad no existe" }, { status: 400 });
-    }
-    const configs = { ...((fleetAgent.groupConfigs as Record<string, GroupConfig> | null) ?? {}) };
-    const cur = configs[groupId] ?? {};
-    // ⚠️ Materializar la herencia: un canal SIN la clave hereda la del agente ("*"),
-    // y en cuanto la tiene GANA entera (no hay merge). Partir del valor propio cuando
-    // el canal heredaba convierte lo heredado en un override RECORTADO — borra en
-    // silencio lo que el usuario estaba viendo.
-    const def = (configs["*"] as GroupConfig | undefined) ?? {};
-    const set = new Set(cur.mcpServers ?? def.mcpServers ?? []);
-    const levels = { ...(cur.capLevels ?? def.capLevels ?? {}) };
-    if (level === "off") { set.delete(name); delete levels[name]; }
-    else { set.add(name); levels[name] = level; }
-    configs[groupId] = { ...cur, mcpServers: [...set], capLevels: levels };
     await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { groupConfigs: configs } });
     return data({ ok: true });
   }
@@ -872,65 +902,6 @@ export async function action({ request }: Route.ActionArgs) {
       await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { groupConfigs: configs } });
     }
     return data({ ok: true, fileId: created.id });
-  }
-  if (intent === "set-db-allow") {
-    // Scope por-base del bucket DB ("decirle CUÁL"): añade/quita un namespace del
-    // set permitido de este canal. Vacío = todas. Se inyecta al prompt del turno.
-    const groupId = String(fd.get("groupId") || "");
-    const ns = String(fd.get("namespace") || "");
-    const on = String(fd.get("on") || "") === "1";
-    const configs = { ...((fleetAgent.groupConfigs as Record<string, GroupConfig> | null) ?? {}) };
-    const cur = configs[groupId] ?? {};
-    // El set EFECTIVO (el que la UI pinta y el que `resolveGroupDbScope` inyecta)
-    // hereda de "*" cuando el grupo no tiene entradas propias. Escribir siempre
-    // sobre el set propio hacía que apagar una base heredada borrara de un set
-    // vacío: el cambio no ocurría y el checkbox se volvía a prender solo. Se
-    // MATERIALIZA la herencia antes de togglear, para operar sobre lo que se ve.
-    const clean = (a?: string[]) => (a ?? []).filter((x) => x && x.trim());
-    const own = clean(cur.dbAllow);
-    const inherited = clean((configs["*"] as GroupConfig | undefined)?.dbAllow);
-    const set = new Set(own.length ? own : inherited);
-    if (on && ns.trim()) set.add(ns); else set.delete(ns);
-    configs[groupId] = { ...cur, dbAllow: [...set] };
-    await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { groupConfigs: configs } });
-    return data({ ok: true });
-  }
-  if (intent === "toggle-group-asset") {
-    // Añade/quita un archivo público del owner al set entregable de este canal.
-    const groupId = String(fd.get("groupId") || "");
-    const fileId = String(fd.get("fileId") || "");
-    const on = String(fd.get("on") || "") === "1";
-    const configs = { ...((fleetAgent.groupConfigs as Record<string, GroupConfig> | null) ?? {}) };
-    const cur = configs[groupId] ?? {};
-    // ⚠️ Materializar la herencia: un canal SIN la clave hereda la del agente ("*"),
-    // y en cuanto la tiene GANA entera (no hay merge). Partir del valor propio cuando
-    // el canal heredaba convierte lo heredado en un override RECORTADO — borra en
-    // silencio lo que el usuario estaba viendo.
-    const set = new Set(cur.assets ?? (configs["*"] as GroupConfig | undefined)?.assets ?? []);
-    if (on) set.add(fileId); else set.delete(fileId);
-    configs[groupId] = { ...cur, assets: [...set] };
-    await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { groupConfigs: configs } });
-    return data({ ok: true });
-  }
-  if (intent === "set-group-prompt") {
-    // System prompt por número/grupo (capa 3, se APPENDEA nunca reemplaza).
-    // WABA (groupId "waba:<id>") → wabaConfig.orgs[id].systemPrompt; Baileys →
-    // groupConfigs[groupId].systemPrompt. Ambos convergen en el mismo turno.
-    const groupId = String(fd.get("groupId") || "");
-    const systemPrompt = String(fd.get("systemPrompt") || "").slice(0, 8000);
-    if (groupId.startsWith("waba:")) {
-      const integrationId = groupId.slice("waba:".length);
-      const wc = { ...((fleetAgent.wabaConfig as { orgs?: Record<string, unknown> } | null) ?? {}) };
-      const orgs = { ...((wc.orgs as Record<string, Record<string, unknown>> | undefined) ?? {}) };
-      orgs[integrationId] = { ...(orgs[integrationId] ?? {}), systemPrompt };
-      await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { wabaConfig: { ...wc, orgs } as object } });
-      return data({ ok: true });
-    }
-    const configs = { ...((fleetAgent.groupConfigs as Record<string, GroupConfig> | null) ?? {}) };
-    const cur = configs[groupId] ?? {};
-    configs[groupId] = { ...cur, systemPrompt: systemPrompt || undefined };
-    await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { groupConfigs: configs } });
-    return data({ ok: true });
   }
   if (intent === "toggle-channel") {
     // Mostrar/ocultar un canal para ESTE agente (explícito, decisión del dueño — NO
@@ -1067,61 +1038,6 @@ export async function action({ request }: Route.ActionArgs) {
       }
     );
     return data({ ok: true, engine: engine.id, recycled });
-  }
-  if (intent === "toggle-group-builtin") {
-    // Turn a BUILTIN (easybits/wa) on/off for one group. `on=0` adds it to
-    // disabledBuiltins → the worker removes it from the merged MCP set that turn.
-    const groupId = String(fd.get("groupId") || "");
-    const name = String(fd.get("builtin") || "");
-    const on = String(fd.get("on") || "") === "1";
-    if (!DEFAULT_MCP_CATALOG.some((e) => e.name === name)) {
-      return data({ error: "ese builtin no existe" }, { status: 400 });
-    }
-    const configs = { ...((fleetAgent.groupConfigs as Record<string, GroupConfig> | null) ?? {}) };
-    const cur = configs[groupId] ?? {};
-    const set = new Set(cur.disabledBuiltins ?? []);
-    if (on) set.delete(name); // on = NOT disabled
-    else set.add(name);
-    configs[groupId] = { ...cur, disabledBuiltins: [...set] };
-    await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { groupConfigs: configs } });
-    return data({ ok: true });
-  }
-  if (intent === "set-group-toolgroup") {
-    // Buckets de EasyBits POR-NÚMERO/grupo (capacidades finas). Se guarda en
-    // groupConfigs[groupId].toolGroup; el worker lo aplica per-turno (?tools=),
-    // sobreescribiendo el default del agente (persona.env). inherit=1 → limpia
-    // (vuelve a heredar del agente). El worker debe estar rebuildeado (OVH).
-    const groupId = String(fd.get("groupId") || "");
-    const inherit = String(fd.get("inherit") || "") === "1";
-    const bucketList = String(fd.get("buckets") || "").split(",").map((s) => s.trim()).filter(Boolean);
-    const configs = { ...((fleetAgent.groupConfigs as Record<string, GroupConfig> | null) ?? {}) };
-    const cur = configs[groupId] ?? {};
-    // Los buckets SON la superficie de easybits → tocar buckets ENCIENDE el MCP
-    // easybits (quita "easybits" de disabledBuiltins). Antes el conector easybits
-    // separado en OFF lo apagaba y dejaba los buckets inertes ("no usa easybits").
-    const disabled = (cur.disabledBuiltins ?? []).filter((n) => n !== "easybits");
-    configs[groupId] = { ...cur, toolGroup: inherit ? undefined : bucketsToToolsParam(bucketList), disabledBuiltins: disabled };
-    await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { groupConfigs: configs } });
-    return data({ ok: true });
-  }
-  if (intent === "set-tool-deny") {
-    // Per-tool: destildar una tool de un bucket ON = DENY (on=0); re-permitir = on=1.
-    // Se codifica como `-<tool>` en el ?tools= (resolveToolGroup) al armar el turno.
-    const groupId = String(fd.get("groupId") || "");
-    const tool = String(fd.get("tool") || "").trim();
-    const on = String(fd.get("on") || "") === "1";
-    if (!tool) return data({ error: "tool requerida" }, { status: 400 });
-    const configs = { ...((fleetAgent.groupConfigs as Record<string, GroupConfig> | null) ?? {}) };
-    const cur = configs[groupId] ?? {};
-    // ⚠️ Materializar la herencia: un canal SIN la clave hereda la del agente ("*"),
-    // y en cuanto la tiene GANA entera (no hay merge). Partir del valor propio cuando
-    // el canal heredaba convierte lo heredado en un override RECORTADO — borra en
-    // silencio lo que el usuario estaba viendo.
-    const set = new Set(cur.toolDeny ?? (configs["*"] as GroupConfig | undefined)?.toolDeny ?? []);
-    if (on) set.delete(tool); else set.add(tool);
-    configs[groupId] = { ...cur, toolDeny: [...set] };
-    await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { groupConfigs: configs } });
-    return data({ ok: true });
   }
   if (intent === "add-mcp") {
     // Register a CUSTOM (advanced) MCP in the agent's catalog. stdio (npx) or http.

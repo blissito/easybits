@@ -22,6 +22,7 @@ import { useFetcher, useLoaderData, useRevalidator, useSearchParams } from "reac
 import { AnimatePresence, motion } from "motion/react";
 import { FLEET_ENGINES, engineCreatable } from "~/lib/fleetEngines";
 import { zipStore } from "~/lib/zip";
+import { fleetConfig } from "~/lib/fleetConfig";
 
 // Editor de prompts del proyecto (CodeMirror + preview markdown, client-only).
 // Un prompt es markdown, no texto con formato: Tiptap serializaría HTML dentro del
@@ -420,9 +421,8 @@ function WabaInbox({ agent, number }: { agent: { id: string }; number: { integra
   // Tras cada acción, refrescar (pausar/reanudar pasa por Formmy y puede fallar).
   useEffect(() => { if (act.state === "idle" && act.data) reload(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [act.state, act.data]);
 
-  const send = (fields: Record<string, string>, c: WabaConv) =>
-    act.submit({ ...fields, fleetAgentId: agent.id, integrationId: number.integrationId, sender: c.sender },
-      { method: "post", action: "/dash/flota" });
+  const cfg = fleetConfig(act.submit as any, agent.id);
+  const iid = number.integrationId;
   const busy = act.state !== "idle";
 
   return (
@@ -436,7 +436,7 @@ function WabaInbox({ agent, number }: { agent: { id: string }; number: { integra
           <li key={c.sender} className="flex flex-col gap-2 border-2 border-gray-200 rounded-xl px-3 py-2.5">
             <div className="flex items-center gap-2 min-w-0">
               <button type="button" title={c.admin ? "Quitar admin" : "Marcar como admin (puede administrar al agente)"}
-                onClick={() => send({ intent: "waba-set-admin", on: c.admin ? "0" : "1" }, c)}
+                onClick={() => cfg.wabaSetAdmin(iid, c.sender, !c.admin)}
                 className={`shrink-0 text-xs font-bold px-2 py-1 rounded-lg border-2 ${c.admin ? "border-black bg-brand-500 text-white" : "border-gray-200 text-tale hover:border-black hover:text-onix"}`}>
                 {c.admin ? "★" : "☆"}
               </button>
@@ -460,7 +460,7 @@ function WabaInbox({ agent, number }: { agent: { id: string }; number: { integra
             </div>
             <div className="flex flex-wrap items-center gap-1.5">
               {c.paused ? (
-                <button type="button" disabled={busy} onClick={() => send({ intent: "waba-resume" }, c)}
+                <button type="button" disabled={busy} onClick={() => cfg.wabaResume(iid, c.sender)}
                   className="text-[11px] font-bold px-2 py-1 rounded-lg border-2 border-black bg-brand-500 text-white disabled:opacity-50">
                   Devolvérsela al agente
                 </button>
@@ -468,7 +468,7 @@ function WabaInbox({ agent, number }: { agent: { id: string }; number: { integra
                 <>
                   <span className="text-[11px] text-tale">Atenderla yo:</span>
                   {([["30min", "30 min"], ["2h", "2 horas"], ["permanent", "hasta que yo diga"]] as const).map(([d, label]) => (
-                    <button key={d} type="button" disabled={busy} onClick={() => send({ intent: "waba-pause", duration: d }, c)}
+                    <button key={d} type="button" disabled={busy} onClick={() => cfg.wabaPause(iid, c.sender, d)}
                       className="text-[11px] font-bold px-2 py-1 rounded-lg border-2 border-gray-200 hover:border-black disabled:opacity-50">
                       {label}
                     </button>
@@ -476,18 +476,18 @@ function WabaInbox({ agent, number }: { agent: { id: string }; number: { integra
                 </>
               )}
               {number.mode === "only" && (
-                <button type="button" disabled={busy} onClick={() => send({ intent: "toggle-waba-sender", on: c.allowed ? "0" : "1" }, c)}
+                <button type="button" disabled={busy} onClick={() => cfg.wabaAllowSender(iid, c.sender, !c.allowed)}
                   className={`text-[11px] font-bold px-2 py-1 rounded-lg border-2 ${c.allowed ? "border-black bg-emerald" : "border-gray-200 text-tale hover:border-black"}`}>
                   {c.allowed ? "En la lista" : "Dejarle hablar"}
                 </button>
               )}
               <button type="button" disabled={busy} title="Pídele al agente que escriba ahora"
-                onClick={() => send({ intent: "waba-request-reply" }, c)}
+                onClick={() => cfg.wabaRequestReply(iid, c.sender)}
                 className="text-[11px] font-bold px-2 py-1 rounded-lg border-2 border-gray-200 hover:border-black disabled:opacity-50">
                 Que responda
               </button>
               <button type="button" disabled={busy} title="Empieza de cero: olvida el hilo de esta conversación"
-                onClick={() => send({ intent: "waba-clear" }, c)}
+                onClick={() => cfg.wabaClear(iid, c.sender)}
                 className="ml-auto text-[11px] font-bold text-tale hover:text-brand-red underline underline-offset-2 disabled:opacity-50">
                 Olvidar el hilo
               </button>
@@ -609,6 +609,9 @@ function EnsayoBody({ msgs, busy, loading, onSend, tall }: { msgs: any[]; busy: 
 export default function Flota2() {
   const { pools, capacity, engineHasSecret, buckets, bucketTools } = useLoaderData() as any;
   const fetcher = useFetcher();
+  // Cliente TIPADO de la config (app/lib/fleetConfig.ts): los nombres literales de los
+  // campos viven ahí, no repartidos por cada onClick. `integrationId` vs `groupId` y
+  // `sandboxId` vs `id` ya costaron botones muertos que no avisan de nada.
   const revalidator = useRevalidator();
   // Agente y pestaña viven en la URL (?a=…&t=…), no en useState: así sobreviven al
   // refresh (que un `fetcher` dispara solo al guardar) y el enlace es compartible.
@@ -834,7 +837,7 @@ export default function Flota2() {
                         `cfg.mcpServers ?? default`), no un merge. Si no se dice, tocar
                         un canal lo desengancha del agente para siempre sin avisar. */}
                     {own ? (
-                      <button type="button" onClick={() => submit({ intent: "inherit-group-mcps", groupId: ch.id })}
+                      <button type="button" onClick={() => cfg.inheritCapabilities(ch.id)}
                         className="text-[11px] font-bold text-brand-500 underline underline-offset-2">
                         volver a seguir al agente
                       </button>
@@ -853,7 +856,7 @@ export default function Flota2() {
                       return (
                         <li key={b.name} className="flex items-center gap-2.5 border-2 border-gray-200 rounded-lg px-2.5 py-2">
                           <Toggle on={!off} busy={fetcher.state !== "idle"}
-                            onClick={() => submit({ intent: "toggle-group-builtin", groupId: ch.id, name: b.name, on: off ? "1" : "0" })} />
+                            onClick={() => cfg.toggleBuiltin(ch.id, b.name, off)} />
                           <span className="text-xs font-semibold truncate" title={b.label}>{b.label}</span>
                         </li>
                       );
@@ -865,13 +868,13 @@ export default function Flota2() {
                         <li key={c.name} className="flex flex-col gap-1.5 border-2 border-gray-200 rounded-lg px-2.5 py-2">
                           <div className="flex items-center gap-2.5 min-w-0">
                             <Toggle on={on} busy={fetcher.state !== "idle" || !c.secretsPresent}
-                              onClick={() => submit({ intent: "toggle-group-mcp", groupId: ch.id, mcp: c.name, on: on ? "0" : "1" })} />
+                              onClick={() => cfg.toggleCapability(ch.id, c.name, !on)} />
                             <span className="text-xs font-semibold truncate" title={c.label}>{c.label}</span>
                           </div>
                           {/* Nivel de acceso (cuando el conector declara varios) EN SU
                               LÍNEA: compitiendo con el nombre, ambos salían cortados. */}
                           {on && c.levels?.length > 0 && (
-                            <select value={level} onChange={(e) => submit({ intent: "set-cap-level", groupId: ch.id, mcp: c.name, level: e.target.value })}
+                            <select value={level} onChange={(e) => cfg.setCapLevel(ch.id, c.name, e.target.value)}
                               className="w-full border-2 border-gray-200 rounded-lg px-2 py-1 text-[11px] font-semibold bg-white hover:border-black focus:outline-none">
                               <option value="">acceso completo</option>
                               {c.levels.map((l: any) => <option key={l.key} value={l.key}>{l.label}</option>)}
@@ -907,7 +910,7 @@ export default function Flota2() {
                         return (
                           <li key={d.namespace} className="flex items-center gap-2.5 border-2 border-gray-200 rounded-lg px-2.5 py-2">
                             <Toggle on={on} busy={fetcher.state !== "idle"}
-                              onClick={() => submit({ intent: "set-db-allow", groupId: ch.id, namespace: d.namespace, on: on ? "0" : "1" })} />
+                              onClick={() => cfg.allowDatabase(ch.id, d.namespace, !on)} />
                             <span className="text-xs font-semibold truncate" title={d.namespace}>{d.name || d.namespace}</span>
                           </li>
                         );
@@ -945,7 +948,7 @@ export default function Flota2() {
     const own = ch.toolBuckets != null;
     const deny = new Set<string>(ch.toolDeny ?? []);
     const save = (next: Set<string>) =>
-      submit({ intent: "set-group-toolgroup", groupId: ch.id, buckets: [...next].join(","), inherit: "0" });
+      cfg.setToolBuckets(ch.id, [...next]);
     // El nivel activo es el ÚLTIMO cuyos buckets estén todos dentro del set: los
     // niveles son acumulativos (escritura = base + write).
     const levelOf = (b: any) => {
@@ -970,7 +973,7 @@ export default function Flota2() {
           <p className="text-xs font-semibold">Herramientas en este canal</p>
           {own ? (
             <button type="button"
-              onClick={() => submit({ intent: "set-group-toolgroup", groupId: ch.id, buckets: "", inherit: "1" })}
+              onClick={() => cfg.inheritToolBuckets(ch.id)}
               className="text-[11px] font-bold text-brand-500 underline underline-offset-2">
               volver a seguir al agente
             </button>
@@ -1010,7 +1013,7 @@ export default function Flota2() {
                       {tools.map((t) => (
                         <li key={t} className="flex items-center gap-2">
                           <Toggle on={!deny.has(t)} busy={fetcher.state !== "idle"}
-                            onClick={() => submit({ intent: "set-tool-deny", groupId: ch.id, tool: t, on: deny.has(t) ? "1" : "0" })} />
+                            onClick={() => cfg.allowTool(ch.id, t, deny.has(t))} />
                           <span className="text-[11px] font-mono truncate">{t}</span>
                         </li>
                       ))}
@@ -1079,8 +1082,7 @@ export default function Flota2() {
 
   const state = agentState(sel);
   const waConnected = sel.status === "connected" && sel.live;
-  const submit = (fields: Record<string, string>) =>
-    fetcher.submit({ ...fields, fleetAgentId: sel.id }, { method: "post", action: "/dash/flota" });
+  const cfg = fleetConfig(fetcher.submit as any, sel.id);
 
   // Los canales son VARIOS y salen de la fuente única. Añadir Slack mañana = una
   // entrada más en channelsOf(), sin tocar la UI.
@@ -1160,7 +1162,7 @@ export default function Flota2() {
                         patrón que la vista clásica), sin botón ni modal. */}
                     <input key={`n-${sel.id}`} defaultValue={sel.name || ""} placeholder="sin nombre"
                       onBlur={(e) => { const v = e.target.value.trim();
-                        if (v && v !== (sel.name || "")) submit({ intent: "rename", name: v }); }}
+                        if (v && v !== (sel.name || "")) cfg.rename(v); }}
                       onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }}
                       className="text-xl font-bold bg-transparent border-2 border-transparent rounded-lg px-1 -ml-1 min-w-0 w-44 hover:border-gray-200 focus:border-black focus:outline-none" />
                     {(() => {
@@ -1188,7 +1190,7 @@ export default function Flota2() {
                       return (<>
                         <span>·</span>
                         <select value={sel.engineId} title="Motor del agente — aplica al reciclar su caja"
-                          onChange={(e) => submit({ intent: "set-engine", engine: e.target.value })}
+                          onChange={(e) => cfg.setEngine(e.target.value)}
                           className="border-2 border-gray-200 rounded-lg px-1.5 py-0.5 text-xs font-semibold bg-white hover:border-black focus:outline-none">
                           {FLEET_ENGINES.map((x) => (
                             <option key={x.id} value={x.id} disabled={!engineCreatable(x)}>{x.label}</option>
@@ -1196,7 +1198,7 @@ export default function Flota2() {
                         </select>
                         {eng.models.length > 1 && (
                           <select value={sel.agentModel ?? eng.defaultModel ?? ""} title="Modelo — aplica al reciclar su caja"
-                            onChange={(e) => submit({ intent: "set-model", model: e.target.value })}
+                            onChange={(e) => cfg.setModel(e.target.value)}
                             className="border-2 border-gray-200 rounded-lg px-1.5 py-0.5 text-xs font-semibold bg-white hover:border-black focus:outline-none">
                             {eng.models.map((m) => (
                               <option key={m.id} value={m.id} disabled={m.ready === false}>
@@ -1320,7 +1322,7 @@ export default function Flota2() {
                               )}
                               <button type="button"
                                 disabled={inFlow || fetcher.state !== "idle" || (pairMode === "code" && !phone.trim())}
-                                onClick={() => submit(pairMode === "code" ? { intent: "connect", phone } : { intent: "connect" })}
+                                onClick={() => cfg.connect(pairMode === "code" ? phone : undefined)}
                                 className="border-2 border-black rounded-xl px-3 py-1.5 text-sm font-bold bg-brand-500 text-white disabled:opacity-50">
                                 {inFlow ? "Generando…" : "Vincular"}
                               </button>
@@ -1339,10 +1341,10 @@ export default function Flota2() {
                             <li key={g.id} className={`min-w-0 flex flex-col ${chanCfg === g.id ? "sm:col-span-2" : ""}`}>
                               <div className="flex items-center gap-3 min-w-0">
                                 <Toggle on={g.enabled} busy={fetcher.state !== "idle"}
-                                  onClick={() => submit({ intent: "toggle-group", groupId: g.id, on: g.enabled ? "0" : "1" })} />
+                                  onClick={() => cfg.toggleGroup(g.id, !g.enabled)} />
                                 <span className={`flex-1 text-sm truncate ${g.enabled ? "font-bold" : "text-marengo"}`}>{g.subject}</span>
                                 {g.enabled && (
-                                  <button onClick={() => submit({ intent: "set-main", groupId: g.id })}
+                                  <button onClick={() => cfg.setMainGroup(g.id)}
                                     title="El grupo main puede administrar al agente"
                                     className={`text-xs font-bold px-2 py-1 rounded-lg border-2 shrink-0 ${sel.mainGroupJid === g.id ? "border-black bg-brand-500 text-white" : "border-gray-200 text-tale hover:border-black hover:text-onix"}`}>
                                     {sel.mainGroupJid === g.id ? "★" : "☆"}
@@ -1356,7 +1358,7 @@ export default function Flota2() {
                         </ul>
                       )}
                       {waConnected && (
-                        <button type="button" onClick={() => submit({ intent: "disconnect" })}
+                        <button type="button" onClick={() => cfg.disconnect()}
                           className="mt-3 ml-auto block text-xs font-bold text-marengo hover:text-brand-red underline underline-offset-2">
                           Desconectar WhatsApp
                         </button>
@@ -1394,7 +1396,7 @@ export default function Flota2() {
                                 <span className={`w-2 h-2 rounded-full shrink-0 ${w.mode === "off" ? "bg-gray-300" : "bg-emerald"}`} />
                                 <input key={`wn-${w.id}`} defaultValue={w.name || ""} placeholder={w.subject}
                                   onBlur={(e) => { const v = e.target.value.trim();
-                                    if (v !== (w.name || "")) submit({ intent: "set-waba-identity", integrationId: w.integrationId, name: v }); }}
+                                    if (v !== (w.name || "")) cfg.setWabaName(w.integrationId, v); }}
                                   className="flex-1 min-w-0 text-sm font-semibold bg-transparent border-2 border-transparent rounded-lg px-1 hover:border-gray-200 focus:border-black focus:outline-none" />
                                 <span className="text-[11px] text-tale shrink-0 font-mono">{w.phoneNumber || w.integrationId}</span>
                                 <button type="button" onClick={() => setInbox(w)}
@@ -1404,7 +1406,7 @@ export default function Flota2() {
                                 {/* Tres modos, no un texto: apagado / sólo permitidos / todos. */}
                                 <div className="flex rounded-lg border-2 border-black overflow-hidden shrink-0">
                                   {([["off", "Apagado"], ["only", "Sólo permitidos"], ["all", "Todos"]] as const).map(([m, label]) => (
-                                    <button key={m} type="button" onClick={() => submit({ intent: "set-waba-mode", integrationId: w.integrationId, mode: m })}
+                                    <button key={m} type="button" onClick={() => cfg.setWabaMode(w.integrationId, m)}
                                       className={`px-2 py-1 text-[11px] font-bold transition-colors ${w.mode === m ? "bg-black text-white" : "bg-white text-marengo hover:bg-grayLight"}`}>
                                       {label}
                                     </button>
@@ -1497,7 +1499,7 @@ export default function Flota2() {
                           <li key={c.name} className={`border-2 rounded-xl px-3 py-2 ${open ? "border-black sm:col-span-2 xl:col-span-3" : "border-gray-200"}`}>
                             <div className="flex items-center gap-3">
                               <Toggle on={on} busy={fetcher.state !== "idle" || !c.secretsPresent}
-                                onClick={() => submit({ intent: "toggle-group-mcp", groupId: "*", mcp: c.name, on: on ? "0" : "1" })} />
+                                onClick={() => cfg.toggleCapability("*", c.name, !on)} />
                               <div className="min-w-0 flex-1">
                                 <button type="button" onClick={() => setCapInfo(c)}
                                   className="text-sm font-semibold line-clamp-2 text-left hover:underline underline-offset-2">
@@ -1505,7 +1507,7 @@ export default function Flota2() {
                                 </button>
                                 {c.custom && !open && (
                                   <button type="button"
-                                    onClick={() => submit({ intent: "remove-mcp", name: c.name })}
+                                    onClick={() => cfg.removeMcp(c.name)}
                                     className="float-right text-[11px] text-tale hover:text-brand-red underline underline-offset-2">
                                     quitar
                                   </button>
@@ -1689,7 +1691,7 @@ export default function Flota2() {
                           {sel.skills.map((sk: any) => (
                             <li key={sk.id} className="flex items-start gap-3 border-2 border-gray-200 rounded-xl px-3 py-2.5">
                               <Toggle on={sk.enabled} busy={fetcher.state !== "idle"}
-                                onClick={() => submit({ intent: "toggle-skill", skillId: sk.id, on: sk.enabled ? "0" : "1" })} />
+                                onClick={() => cfg.toggleSkill(sk.id, !sk.enabled)} />
                               <div className="min-w-0 flex-1">
                                 <p className="text-sm font-semibold">{sk.name}</p>
                                 {sk.description && <p className="text-[11px] text-tale line-clamp-2">{sk.description}</p>}
@@ -1726,7 +1728,7 @@ export default function Flota2() {
                                 // etiqueta, así que se ve como control.
                                 <select defaultValue="" title="Copiar este skill a otro agente"
                                   onChange={(e) => { const t = e.target.value; e.target.value = "";
-                                    if (t) submit({ intent: "copy-skill", skillId: sk.id, targetId: t }); }}
+                                    if (t) cfg.copySkill(sk.id, t); }}
                                   className="shrink-0 w-36 border-2 border-gray-200 rounded-lg pl-2.5 pr-1 py-1.5 text-xs font-semibold bg-white cursor-pointer hover:border-black focus:border-black focus:outline-none">
                                   <option value="">Copiar a…</option>
                                   {pools.filter((o: any) => o.id !== sel.id).map((o: any) => (
@@ -1796,7 +1798,7 @@ export default function Flota2() {
                 <button type="button" onClick={() => { setKillAgent(false); setKillName(""); }}
                   className="border-2 border-black rounded-xl px-4 py-2 text-sm font-bold bg-white">Cancelar</button>
                 <button type="button" disabled={killName.trim() !== (sel.name ?? "").trim()}
-                  onClick={() => { submit({ intent: "delete" }); setKillAgent(false); setKillName(""); setSelIdState(null); }}
+                  onClick={() => { cfg.remove(); setKillAgent(false); setKillName(""); setSelIdState(null); }}
                   className="border-2 border-black rounded-xl px-4 py-2 text-sm font-bold bg-brand-red text-white disabled:opacity-40">
                   Borrar definitivamente
                 </button>
@@ -1825,7 +1827,7 @@ export default function Flota2() {
                   <button type="button" onClick={() => setKillSkill(null)}
                     className="border-2 border-black rounded-xl px-4 py-2 text-sm font-bold bg-white">Cancelar</button>
                   <button type="button"
-                    onClick={() => { submit({ intent: "delete-skill", skillId: sk.id }); setKillSkill(null); }}
+                    onClick={() => { cfg.deleteSkill(sk.id); setKillSkill(null); }}
                     className="border-2 border-black rounded-xl px-4 py-2 text-sm font-bold bg-brand-red text-white">
                     Sí, borrar “{sk.name}”
                   </button>
@@ -1951,12 +1953,12 @@ export default function Flota2() {
                 <div className="flex flex-wrap gap-2">
                   <button type="button" disabled={!capInfo.secretsPresent}
                     onClick={() => { const on = (sel.defaultMcps ?? []).includes(capInfo.name);
-                      submit({ intent: "toggle-group-mcp", groupId: "*", mcp: capInfo.name, on: on ? "0" : "1" }); setCapInfo(null); }}
+                      cfg.toggleCapability("*", capInfo.name, !on); setCapInfo(null); }}
                     className="border-2 border-black rounded-xl px-4 py-1.5 text-sm font-bold bg-brand-500 text-white disabled:opacity-40">
                     {(sel.defaultMcps ?? []).includes(capInfo.name) ? "Apagar" : "Encender"}
                   </button>
                   {capInfo.custom && (
-                    <button type="button" onClick={() => { submit({ intent: "remove-mcp", name: capInfo.name }); setCapInfo(null); }}
+                    <button type="button" onClick={() => { cfg.removeMcp(capInfo.name); setCapInfo(null); }}
                       className="border-2 border-black rounded-xl px-4 py-1.5 text-sm font-bold bg-white">
                       Quitar
                     </button>
