@@ -725,6 +725,31 @@ export default function Flota2() {
                     Esto manda sobre lo que elegiste para todo el agente.
                   </p>
                 </div>
+
+                {/* A CUÁL base puede entrar en este canal. Sin elegir ninguna ve todas
+                    las tuyas: por eso la lista importa aunque parezca opcional. */}
+                {ownerDbs && ownerDbs.length > 0 && (
+                  <div>
+                    <p className="text-xs font-semibold">Bases de datos</p>
+                    <p className="text-[11px] text-tale mb-1.5">
+                      {(ch.dbAllow ?? []).length === 0
+                        ? "Ninguna elegida: en este canal puede consultar TODAS tus bases."
+                        : `Sólo estas ${(ch.dbAllow ?? []).length}; el resto de tus bases quedan fuera de su alcance.`}
+                    </p>
+                    <ul className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                      {ownerDbs.map((d) => {
+                        const on = (ch.dbAllow ?? []).includes(d.namespace);
+                        return (
+                          <li key={d.namespace} className="flex items-center gap-2.5 border-2 border-gray-200 rounded-lg px-2.5 py-2">
+                            <Toggle on={on} busy={fetcher.state !== "idle"}
+                              onClick={() => submit({ intent: "set-db-allow", groupId: ch.id, namespace: d.namespace, on: on ? "0" : "1" })} />
+                            <span className="text-xs font-semibold truncate" title={d.namespace}>{d.name || d.namespace}</span>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                )}
               </div>
             </motion.div>
           )}
@@ -732,6 +757,18 @@ export default function Flota2() {
       </div>
     );
   };
+
+  const [ownerDbs, setOwnerDbs] = useState<Array<{ name: string; namespace: string }> | null>(null);
+  useEffect(() => {
+    setOwnerDbs(null);
+    if (!sel?.id || !sel?.token) return;
+    let alive = true;
+    fetch(`/api/v2/fleet-agents/${sel.id}/capabilities`, { headers: { Authorization: `Bearer ${sel.token}` } })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (alive && d) setOwnerDbs(d.ownerDbs ?? []); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [sel?.id, sel?.token]);
 
   const sendSkill = (entries: Array<{ file: File; path?: string }>) => {
     if (!entries.length) return;
