@@ -79,3 +79,36 @@ describe("herencia canal↔agente: tocar un campo no borra lo heredado", () => {
     expect(saved().mcpServers.sort()).toEqual(["dos", "uno"]);
   });
 });
+
+// ── Herencia en el RUNTIME (lo que de verdad recibe el turno) ───────────────
+// La regla es una sola: `cfg.X ?? default.X`, campo a campo. Antes había
+// acoplamientos: tener conectores propios en un canal apagaba la herencia de su env
+// (donde vive la VOZ) y de sus niveles; `disabledBuiltins` no heredaba nunca; y el
+// `toolDeny` de un canal sin `toolGroup` propio era inerte.
+import { resolveDisabledBuiltins, resolveToolGroup } from "~/.server/core/fleetAgentOperations";
+
+describe("herencia en runtime: cada campo por su cuenta", () => {
+  it("disabledBuiltins hereda del default del agente", () => {
+    const fa = { groupConfigs: { "*": { disabledBuiltins: ["easybits"] }, canal: {} } };
+    expect(resolveDisabledBuiltins(fa, "canal")).toContain("easybits");
+  });
+
+  it("el canal con su propia lista de builtins manda", () => {
+    const fa = { groupConfigs: { "*": { disabledBuiltins: ["easybits"] }, canal: { disabledBuiltins: [] } } };
+    expect(resolveDisabledBuiltins(fa, "canal")).not.toContain("easybits");
+  });
+
+  it("un canal WABA nunca ve el MCP wa (lo manda el canal, no la config)", () => {
+    expect(resolveDisabledBuiltins({ groupConfigs: {} }, "waba:abc")).toContain("wa");
+  });
+
+  it("el toolDeny propio aplica aunque el canal no tenga toolGroup", () => {
+    const fa = { groupConfigs: { "*": { toolGroup: "scripting,documentos" }, canal: { toolDeny: ["borrar_todo"] } } };
+    expect(resolveToolGroup(fa, "canal")).toBe("scripting,documentos,-borrar_todo");
+  });
+
+  it("sin nada propio, hereda buckets y deny del agente", () => {
+    const fa = { groupConfigs: { "*": { toolGroup: "scripting,db", toolDeny: ["db_exec"] } } };
+    expect(resolveToolGroup(fa, "canal")).toBe("scripting,db,-db_exec");
+  });
+});

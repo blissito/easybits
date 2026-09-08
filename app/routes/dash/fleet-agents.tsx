@@ -130,8 +130,26 @@ export async function loader({ request }: Route.LoaderArgs) {
       // al abrir el modal (GET /api/v2/fleet-agents/:id/capabilities), para no
       // trabar la lista ni el poll de 2.5s.
       const gconf = (p.groupConfigs as Record<string, GroupConfig> | null) ?? {};
+      // ¿Qué HEREDA cada canal? La clave AUSENTE = hereda; presente = manda (aunque
+      // esté vacía). Sin esto la UI no puede distinguir "sigue al agente" de "tiene
+      // su propia lista vacía" — llegan las dos como [] — y acaba adivinando.
+      const inheritsOf = (id: string) => {
+        const c = gconf[id] ?? {};
+        return {
+          mcps: c.mcpServers === undefined,
+          builtins: c.disabledBuiltins === undefined,
+          levels: c.capLevels === undefined,
+          assets: c.assets === undefined,
+          dbAllow: c.dbAllow === undefined,
+          toolGroup: c.toolGroup === undefined,
+          toolDeny: c.toolDeny === undefined,
+          voice: c.env?.ELEVENLABS_VOICE_ID === undefined,
+          prompt: !c.systemPrompt,
+        };
+      };
       const groups = rawGroups.map((g: { id: string; subject: string; enabled: boolean }) => ({
         ...g,
+        inherits: inheritsOf(g.id),
         mcps: gconf[g.id]?.mcpServers ?? [],
         disabledBuiltins: gconf[g.id]?.disabledBuiltins ?? [],
         capLevels: gconf[g.id]?.capLevels ?? {},
@@ -157,6 +175,7 @@ export async function loader({ request }: Route.LoaderArgs) {
         const mode: "off" | "all" | "only" = o.responseMode ?? (o.enabled === false ? "off" : "all");
         return {
           id,
+          inherits: inheritsOf(id),
           integrationId,
           subject: o.name || o.phoneNumber || o.phoneNumberId || integrationId,
           name: o.name ?? "",
@@ -186,6 +205,7 @@ export async function loader({ request }: Route.LoaderArgs) {
       const teamsConnected = !!teamsCfg.connectedAt;
       const teamsChannel = {
         id: "teams",
+        inherits: inheritsOf("teams"),
         subject: "Ghosty Teams",
         mcps: teamsCfg.mcpServers ?? [],
         disabledBuiltins: teamsCfg.disabledBuiltins ?? [],
@@ -206,6 +226,7 @@ export async function loader({ request }: Route.LoaderArgs) {
       const webConnected = !!webCfg.connectedAt;
       const webChannel = {
         id: "web",
+        inherits: inheritsOf("web"),
         subject: "Bubbles públicos",
         mcps: webCfg.mcpServers ?? [],
         disabledBuiltins: webCfg.disabledBuiltins ?? [],

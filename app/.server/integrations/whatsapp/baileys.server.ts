@@ -807,7 +807,13 @@ export async function createFleetAgentGroup(
       // necesita el toggle manual. La ruta-key (groupKeys→worker) ya adjunta el
       // MCP, pero setear groupConfigs.mcpServers lo hace explícito y consistente
       // con los grupos configurados desde la UI (evita el caso "Maru sin citas").
-      groupEntry.mcpServers = ["denik"];
+      //
+      // ⚠️ Se AÑADE sobre lo heredado, no se reemplaza: escribir la clave desengancha
+      // este grupo del default del agente para siempre (la regla es `cfg ?? default`,
+      // sin merge). Con `["denik"]` a secas, un agente con otros conectores en su
+      // default perdía TODOS en el grupo recién creado, en silencio.
+      const heredado = existingConfigs["*"]?.mcpServers ?? [];
+      groupEntry.mcpServers = [...new Set([...(groupEntry.mcpServers ?? heredado), "denik"])];
     }
     if (timezone) groupEntry.timezone = timezone;
     data.groupConfigs = { ...existingConfigs, [groupJid]: groupEntry };

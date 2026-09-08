@@ -1033,9 +1033,12 @@ export default function Flota2() {
   const CapsList = ({ ch }: { ch: any }) => {
     const eff = new Set<string>(ch.toolBuckets ?? sel.activeBuckets ?? []);
     const deny = new Set<string>(ch.toolDeny ?? []);
-    const ownCaps = (ch.mcps?.length ?? 0) > 0 &&
-      JSON.stringify([...(ch.mcps ?? [])].sort()) !== JSON.stringify([...(sel.defaultMcps ?? [])].sort());
-    const ownTools = ch.toolBuckets != null;
+    // Dato del loader, no una comparación a ojo: `inherits.X` es "la clave no existe".
+    const inh = ch.inherits ?? {};
+    const ownCaps = inh.mcps === false;
+    const ownTools = inh.toolGroup === false || inh.toolDeny === false;
+    // Un override VACÍO no es lo mismo que heredar: es "aquí no puede usar nada".
+    const vacio = ownCaps && (ch.mcps?.length ?? 0) === 0;
     const levelOf = (b: any) => {
       let cur = "off";
       for (const l of b.levels ?? []) if (l.buckets.every((k: string) => eff.has(k))) cur = l.key;
@@ -1079,6 +1082,18 @@ export default function Flota2() {
             ? "Este canal decide lo suyo: lo que cambies en el default del agente ya no le llega."
             : "Hereda del default del agente. En cuanto toques algo aquí, este canal manda lo suyo."}
         </p>
+        {/* Cinco canales en producción quedaron así por un bug ya corregido (encender
+            una capacidad borraba las demás). No se tocan sus datos a ciegas: se avisa. */}
+        {vacio && (
+          <p className="text-[11px] bg-brand-yellow/40 border-2 border-black rounded-xl px-3 py-2 mb-2">
+            Este canal no tiene <b>ninguna</b> capacidad propia encendida, y no hereda.
+            {" "}
+            <button type="button" onClick={() => cfg.inheritCapabilities(ch.id)}
+              className="font-bold underline underline-offset-2">
+              ¿Querías que siguiera al agente?
+            </button>
+          </p>
+        )}
         {/* Agrupadas por ESTADO con su conteo: lo primero que quieres saber es qué
             tiene encendido, no el catálogo entero por orden de catálogo. */}
         {([["Activas", items.filter((i: any) => i.on)], ["Disponibles", items.filter((i: any) => !i.on)]] as const).map(([titulo, grupo]) => (grupo as any[]).length === 0 ? null : (

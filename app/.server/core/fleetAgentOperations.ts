@@ -594,8 +594,11 @@ export function resolveDisabledBuiltins(
   fleetAgent: { groupConfigs?: unknown },
   groupId: string
 ): string[] {
-  const cfg = ((fleetAgent.groupConfigs as Record<string, GroupConfig> | null) ?? {})[groupId] ?? {};
-  const disabled = [...(cfg.disabledBuiltins ?? [])];
+  const all = ((fleetAgent.groupConfigs as Record<string, GroupConfig> | null) ?? {});
+  const cfg = all[groupId] ?? {};
+  // Hereda del default del agente cuando el canal no dice nada. Antes NO heredaba:
+  // apagar un builtin en el default era letra muerta — no llegaba a ningún canal.
+  const disabled = [...(cfg.disabledBuiltins ?? all["*"]?.disabledBuiltins ?? [])];
   // WABA y Teams NO usan el MCP `wa` (Baileys in-process): el envío va por otra vía
   // (WABA→Formmy, Teams→A2A/GTeams; URLs en el texto → adjuntos). Sin esto el agente
   // VE `wa` en su toolset → la heurística de canal del prompt ("si tengo wa, estoy en
@@ -650,12 +653,12 @@ export function resolveToolGroup(
   groupId: string
 ): string | undefined {
   const all = (fleetAgent.groupConfigs as Record<string, GroupConfig> | null) ?? {};
-  // El cfg que provee el toolGroup (per-grupo gana sobre "*") es también quien
-  // aporta el deny → van juntos para no mezclar buckets de un cfg con deny de otro.
-  const cfg = all[groupId]?.toolGroup != null ? all[groupId] : all["*"];
-  const base = cfg?.toolGroup;
+  // Cada campo hereda POR SU CUENTA: `cfg.X ?? default.X`. Antes se elegía el cfg
+  // ENTERO según quién tuviera `toolGroup`, así que el `toolDeny` de un canal sin
+  // toolGroup propio era INERTE — se guardaba, se pintaba, y no vetaba nada.
+  const base = all[groupId]?.toolGroup ?? all["*"]?.toolGroup;
   if (!base) return undefined;
-  const deny = (cfg?.toolDeny ?? []).filter(Boolean);
+  const deny = ((all[groupId]?.toolDeny ?? all["*"]?.toolDeny) ?? []).filter(Boolean);
   return deny.length ? [base, ...deny.map((t) => `-${t}`)].join(",") : base;
 }
 
@@ -893,9 +896,12 @@ export async function resolveGroupMcpServers(
   const enabled = cfg.mcpServers ?? all["*"]?.mcpServers;
   if (!enabled?.length) return undefined;
   // env del grupo: el del grupo específico, o el del default si hereda.
-  const cfgEnv = cfg.mcpServers ? cfg.env : (cfg.env ?? all["*"]?.env);
+  // ⚠️ Antes: `cfg.mcpServers ? cfg.env : (cfg.env ?? default.env)`. Es decir, poner
+  // conectores propios en un canal apagaba en silencio la herencia de su env — y ahí
+  // vive la VOZ. Cada campo hereda por su cuenta.
+  const cfgEnv = cfg.env ?? all["*"]?.env;
   const caps = mergedCapabilities(fleetAgent);
-  const levels = (cfg.mcpServers ? cfg.capLevels : (cfg.capLevels ?? all["*"]?.capLevels)) ?? {};
+  const levels = (cfg.capLevels ?? all["*"]?.capLevels) ?? {};
   const out: Record<string, unknown> = {};
   for (const e of caps) {
     if (e.builtin || !enabled.includes(e.name)) continue;
@@ -960,7 +966,7 @@ export async function resolveGroupCodeCaps(
   // static env at resolution time") — sólo estaba implementado para los MCP. Sin esto, una
   // preferencia por canal (p.ej. ELEVENLABS_VOICE_ID, la voz elegida en el admin) nunca
   // llegaba ni al worker ni al motor de voz.
-  const cfgEnv = cfg.mcpServers ? cfg.env : (cfg.env ?? all["*"]?.env);
+  const cfgEnv = cfg.env ?? all["*"]?.env;
   const caps = mergedCapabilities(fleetAgent);
   const env: Record<string, string> = {};
   const skillDocs: string[] = [];
