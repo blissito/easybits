@@ -115,7 +115,7 @@ const ELEVEN_MODEL = process.env.ELEVENLABS_MODEL || "eleven_multilingual_v2";
 // peor que kokoro. Override con ELEVENLABS_DEFAULT_VOICE.
 const ELEVEN_FALLBACK_VOICE = process.env.ELEVENLABS_DEFAULT_VOICE || "htFfPSZGJwjBv1CL0aMD";
 
-async function speakViaElevenLabs(
+export async function speakViaElevenLabs(
   apiKey: string,
   text: string,
   voiceId: string,

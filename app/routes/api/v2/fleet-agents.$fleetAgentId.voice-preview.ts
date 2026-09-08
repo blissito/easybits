@@ -2,7 +2,8 @@ import type { Route } from "./+types/fleet-agents.$fleetAgentId.voice-preview";
 import { data } from "react-router";
 import { db } from "~/.server/db";
 import { getUserOrRedirect } from "~/.server/getters";
-import { synthesizeVoice } from "~/.server/core/fleetVoice";
+import { synthesizeVoice, speakViaElevenLabs, resolveVoiceEngine, KOKORO_VOICES } from "~/.server/core/fleetVoice";
+import { getSecretValue } from "~/.server/core/secretOperations";
 
 // POST /api/v2/fleet-agents/:fleetAgentId/voice-preview
 //
@@ -32,27 +33,60 @@ export async function action({ request, params }: Route.ActionArgs) {
 
   const body = (await request.json().catch(() => ({}))) as { voiceId?: string; groupId?: string };
   const voice = typeof body.voiceId === "string" && body.voiceId ? body.voiceId : undefined;
+  const esKokoro = !voice || KOKORO_VOICES.some((v) => v.id === voice);
 
   try {
+    // Qué motor le TOCA a este canal de verdad. Es lo que decidirá un turno real.
+    const eng = await resolveVoiceEngine(user.id, {
+      voice,
+      fleetAgentId: fleetAgent.id,
+      cfgId: body.groupId || undefined,
+    });
+
+    // 🚨 Una voz de ElevenLabs NO se le puede pedir a kokoro: son catálogos distintos y
+    // la caja devuelve nada. Ése era el "no se pudo generar la muestra" cuando la
+    // capacidad estaba apagada — precisamente el caso en que MÁS quieres oírla, porque
+    // estás decidiendo si vale la pena encenderla.
+    //
+    // Así que el ensayo usa la llave del DUEÑO directamente (la misma que ya lee el
+    // catálogo en /voices) y avisa aparte si ese motor está activo en el canal o no.
+    // Oyes la voz real; la cabecera te dice si hoy sonaría.
+    if (!esKokoro) {
+      const apiKey = eng.engine === "elevenlabs"
+        ? eng.apiKey
+        : await getSecretValue(user.id, "ELEVENLABS_API_KEY").catch(() => null);
+      if (!apiKey) {
+        return data({ error: "sin llave de ElevenLabs" }, { status: 400 });
+      }
+      const buf = await speakViaElevenLabs(apiKey, FRASE, voice!, "ogg");
+      if (!buf) return data({ error: "ElevenLabs no devolvió audio" }, { status: 502 });
+      return audio(buf, "elevenlabs", eng.engine === "elevenlabs");
+    }
+
+    // Voz incluida: por el mismo camino que un turno real.
     const res = await synthesizeVoice(user.id, FRASE, {
       voice,
       fleetAgentId: fleetAgent.id,
       cfgId: body.groupId || undefined,
     });
-    // `null` = ni el motor premium ni la caja de voz respondieron. No es un 500 nuestro:
-    // el admin necesita saber que ESA voz no se pudo sintetizar, no ver un error genérico.
-    if (!res) return data({ error: "no se pudo sintetizar" }, { status: 502 });
-    return new Response(new Uint8Array(res.buffer), {
-      headers: {
-        "Content-Type": "audio/ogg",
-        "Cache-Control": "no-store",
-        // Qué motor sonó de verdad, para que la UI pueda decir "pediste premium y
-        // sonó la incluida" en vez de dejar al admin adivinando.
-        "X-Voice-Source": res.source,
-      },
-    });
+    if (!res) return data({ error: "la caja de voz no respondió" }, { status: 502 });
+    return audio(res.buffer, res.source, true);
   } catch (e) {
     console.error("[voice-preview] falló:", (e as Error)?.message || e);
     return data({ error: "no se pudo sintetizar" }, { status: 502 });
   }
+}
+
+// `X-Voice-Source` = qué motor sonó. `X-Voice-Active` = si ESE motor es el que usaría
+// hoy este canal. Separados a propósito: oír la voz y saber que todavía no está
+// encendida son dos datos distintos, y juntarlos en uno obliga a mentir en un caso.
+function audio(buffer: Buffer, source: string, active: boolean) {
+  return new Response(new Uint8Array(buffer), {
+    headers: {
+      "Content-Type": "audio/ogg",
+      "Cache-Control": "no-store",
+      "X-Voice-Source": source,
+      "X-Voice-Active": active ? "1" : "0",
+    },
+  });
 }

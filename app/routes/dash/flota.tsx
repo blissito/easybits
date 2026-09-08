@@ -289,21 +289,23 @@ function VoiceList({ agent, groupId, current, elevenOn, onPick }: {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ voiceId: id, groupId }),
       });
-      if (!r.ok) throw new Error(String(r.status));
-      const fuente = r.headers.get("X-Voice-Source");
+      if (!r.ok) {
+        const d = await r.json().catch(() => null as any);
+        throw new Error(d?.error || String(r.status));
+      }
+      const activa = r.headers.get("X-Voice-Active") !== "0";
       const blob = await r.blob();
       const a = new Audio(URL.createObjectURL(blob));
       audioRef.current = a;
       a.onended = () => setPlaying(null);
       await a.play();
-      // Pediste una voz premium y sonó la incluida: la capacidad está apagada o la
-      // llave no sirve. Decirlo aquí ahorra descubrirlo por WhatsApp.
-      if (fuente === "box" && (voices ?? []).find((v) => v.id === id)?.engine === "elevenlabs") {
-        setPlayErr("Sonó la voz incluida: ElevenLabs no está activo en este canal.");
-      }
-    } catch {
+      // Oyes la voz de verdad, pero si su motor no está encendido en este canal hoy
+      // no sonaría así. Son dos datos distintos y se dicen por separado.
+      setPlayErr(activa ? null : "Así suena, pero en este canal todavía no se usa: falta encender ElevenLabs.");
+    } catch (e) {
       setPlaying(null);
-      setPlayErr("No se pudo generar la muestra.");
+      // El motivo importa: "sin llave" y "la caja no respondió" se arreglan distinto.
+      setPlayErr(e instanceof Error && e.message ? `No se pudo generar la muestra: ${e.message}` : "No se pudo generar la muestra.");
     }
   };
 
@@ -485,6 +487,37 @@ function ChannelFiles({ ch, sel, cfg, fetcher, ownerFiles, fileQ, setFileQ }: {
   );
 }
 
+// El nivel de un bucket sale de qué llaves están efectivamente encendidas. Vivía
+// duplicado, idéntico, en CapsList y en el detalle de una capacidad: dos fuentes para
+// lo mismo se desincronizan en cuanto se añade un nivel.
+function bucketLevelOf(b: any, eff: Set<string>): string {
+  let cur = "off";
+  for (const l of b.levels ?? []) if (l.buckets.every((k: string) => eff.has(k))) cur = l.key;
+  return cur;
+}
+
+// La lista de capacidades del canal, DERIVADA. El detalle de una capacidad la vuelve a
+// pedir en cada render en vez de quedarse con el objeto que se capturó al abrir el modal.
+function capItemsOf(ch: any, sel: any, buckets: any[]) {
+  const eff = new Set<string>(ch.toolBuckets ?? sel.activeBuckets ?? []);
+  return [
+    ...(sel.builtins ?? []).map((b: any) => ({
+      kind: "builtin" as const, key: b.name, label: b.label,
+      desc: "Incluida con el agente", on: !(ch.disabledBuiltins ?? []).includes(b.name),
+    })),
+    ...(buckets ?? []).map((b: any) => ({
+      kind: "family" as const, key: b.key, label: b.label, desc: b.description,
+      on: b.levels ? bucketLevelOf(b, eff) !== "off" : eff.has(b.key),
+      level: b.levels ? bucketLevelOf(b, eff) : null, bucket: b,
+    })),
+    ...(sel.capabilities ?? []).map((c: any) => ({
+      kind: "connector" as const, key: c.name, label: c.label,
+      desc: c.description || (c.secretsPresent ? "Conector" : "Necesita una credencial"),
+      on: (ch.mcps ?? []).includes(c.name), cap: c,
+    })),
+  ];
+}
+
 function CapsList({ ch, sel, cfg, buckets, capQ, setCapQ, onDetail }: {
   ch: any; sel: any; cfg: any; buckets: any[];
   capQ: string; setCapQ: (v: string) => void;
@@ -498,27 +531,7 @@ function CapsList({ ch, sel, cfg, buckets, capQ, setCapQ, onDetail }: {
   const ownTools = inh.toolGroup === false || inh.toolDeny === false;
   // Un override VACÍO no es lo mismo que heredar: es "aquí no puede usar nada".
   const vacio = ownCaps && (ch.mcps?.length ?? 0) === 0;
-  const levelOf = (b: any) => {
-    let cur = "off";
-    for (const l of b.levels ?? []) if (l.buckets.every((k: string) => eff.has(k))) cur = l.key;
-    return cur;
-  };
-  const items = [
-    ...(sel.builtins ?? []).map((b: any) => ({
-      kind: "builtin" as const, key: b.name, label: b.label,
-      desc: "Incluida con el agente", on: !(ch.disabledBuiltins ?? []).includes(b.name),
-    })),
-    ...(buckets ?? []).map((b: any) => ({
-      kind: "family" as const, key: b.key, label: b.label, desc: b.description,
-      on: b.levels ? levelOf(b) !== "off" : eff.has(b.key),
-      level: b.levels ? levelOf(b) : null, bucket: b,
-    })),
-    ...(sel.capabilities ?? []).map((c: any) => ({
-      kind: "connector" as const, key: c.name, label: c.label,
-      desc: c.description || (c.secretsPresent ? "Conector" : "Necesita una credencial"),
-      on: (ch.mcps ?? []).includes(c.name), cap: c,
-    })),
-  ];
+  const items = capItemsOf(ch, sel, buckets);
   // Filtra por nombre Y descripción: buscas "cobro" y sale MercadoPago.
   const q = capQ.trim().toLowerCase();
   const vis = q ? items.filter((i: any) => `${i.label} ${i.desc}`.toLowerCase().includes(q)) : items;
@@ -1192,9 +1205,13 @@ export default function Flota2() {
   const [killName, setKillName] = useState("");
   const [addMcp, setAddMcp] = useState(false);
   const [capInfo, setCapInfo] = useState<any | null>(null);
-  const [capDetail, setCapDetail] = useState<{ ch: any; item: any } | null>(null);
+  // 🚨 Guardan IDENTIFICADORES, no los objetos. Guardaban `{ ch, item }` capturados al
+  // abrir: el fetcher escribía en el servidor, el poll traía el `sel` nuevo… y el modal
+  // seguía pintando el objeto viejo. El toggle "no encendía" y el ✓ de la voz no se
+  // movía, aunque el cambio ya estuviera guardado. Ahora se re-derivan en cada render.
+  const [capDetail, setCapDetail] = useState<{ chId: string; key: string } | null>(null);
   const [capQ, setCapQ] = useState("");
-  const [chanPanel, setChanPanel] = useState<{ ch: any; kind: "prompt" | "voz" | "caps" | "archivos" } | null>(null);
+  const [chanPanel, setChanPanel] = useState<{ chId: string; kind: ChanPanelKind } | null>(null);
 
   const [creating, setCreating] = useState(false);
   const [engineId, setEngineId] = useState(FLEET_ENGINES.find(engineCreatable)?.id ?? "claude");
@@ -1491,6 +1508,13 @@ export default function Flota2() {
   // Los canales son VARIOS y salen de la fuente única. Añadir Slack mañana = una
   // entrada más en channelsOf(), sin tocar la UI.
   const CHANNELS = channelsOf(sel);
+  // Un canal por id, SIEMPRE del `sel` de este render. Los paneles guardan el id y
+  // vuelven aquí: así lo que ven es lo que acaba de guardarse, no lo que había al abrir.
+  const chById = (id: string): any =>
+    (sel.groups ?? []).find((g: any) => g.id === id)
+    ?? (sel.wabaNumbers ?? []).find((w: any) => w.id === id)
+    ?? (sel.teamsChannel?.id === id ? sel.teamsChannel : null)
+    ?? (sel.webChannel?.id === id ? sel.webChannel : null);
 
   const promptEditor = (
     <Suspense fallback={<div className="flex-1 min-h-[260px] rounded-lg border-2 border-gray-200 p-4"><Skeleton lines={12} /></div>}>
@@ -1796,7 +1820,7 @@ export default function Flota2() {
                                 )}
                               </div>
                               {/* Sólo tiene sentido afinar un canal que atiende. */}
-                              {g.enabled && <ChannelConfig ch={g} sel={sel} onOpen={(kind) => setChanPanel({ ch: g, kind })} />}
+                              {g.enabled && <ChannelConfig ch={g} sel={sel} onOpen={(kind) => setChanPanel({ chId: g.id, kind })} />}
                             </li>
                           ))}
                         </ul>
@@ -1873,7 +1897,7 @@ export default function Flota2() {
                                   ))}
                                 </div>
                               </div>
-                              <ChannelConfig ch={w} sel={sel} onOpen={(kind) => setChanPanel({ ch: w, kind })} />
+                              <ChannelConfig ch={w} sel={sel} onOpen={(kind) => setChanPanel({ chId: w.id, kind })} />
                             </li>
                           ))}
                           <li>
@@ -1893,7 +1917,7 @@ export default function Flota2() {
                           ? "Recibe turnos desde Ghosty Teams."
                           : "Se conecta desde Ghosty Teams: Ajustes → Agentes → conectar este agente de la flota. Aquí sólo configuras su comportamiento en ese canal."}
                       </p>
-                      <ChannelConfig ch={sel.teamsChannel} sel={sel} onOpen={(kind) => setChanPanel({ ch: sel.teamsChannel, kind })} />
+                      <ChannelConfig ch={sel.teamsChannel} sel={sel} onOpen={(kind) => setChanPanel({ chId: sel.teamsChannel.id, kind })} />
                     </>)}
 
                     {tab === "ch:web" && (<>
@@ -1979,7 +2003,7 @@ export default function Flota2() {
                           </div>
                         )}
                       </div>
-                      <ChannelConfig ch={sel.webChannel} sel={sel} onOpen={(kind) => setChanPanel({ ch: sel.webChannel, kind })} />
+                      <ChannelConfig ch={sel.webChannel} sel={sel} onOpen={(kind) => setChanPanel({ chId: sel.webChannel.id, kind })} />
                     </>)}
                   </Card>
                 )}
@@ -2584,7 +2608,11 @@ export default function Flota2() {
         )}
         {/* El detalle de UNA fila del canal, en su propia pantalla. Nada compite. */}
         {chanPanel && (() => {
-          const { ch, kind } = chanPanel;
+          const { chId, kind } = chanPanel;
+          const ch = chById(chId);
+          // El canal desapareció mientras el panel estaba abierto (lo quitaste, el poll
+          // ya no lo trae): cerrar es más honesto que pintar un panel sin datos.
+          if (!ch) return null;
           const nombre = ch.subject ?? (ch.id === "web" ? "Web" : ch.id === "teams" ? "Ghosty Teams" : ch.id);
           const titulo = { prompt: "Instrucciones", voz: "Voz con la que contesta", caps: "Qué puede hacer", archivos: "Archivos que puede enviar" }[kind];
           return (
@@ -2618,21 +2646,20 @@ export default function Flota2() {
                   elevenOn={elevenEnabled(ch)} onPick={(id) => cfg.setVoice(ch.id, id)} />
               )}
               {kind === "caps" && <CapsList ch={ch} sel={sel} cfg={cfg} buckets={buckets ?? []}
-                capQ={capQ} setCapQ={setCapQ} onDetail={(item) => setCapDetail({ ch, item })} />}
+                capQ={capQ} setCapQ={setCapQ} onDetail={(item) => setCapDetail({ chId: ch.id, key: `${item.kind}-${item.key}` })} />}
               {kind === "archivos" && <ChannelFiles ch={ch} sel={sel} cfg={cfg} fetcher={fetcher}
                 ownerFiles={ownerFiles} fileQ={fileQ} setFileQ={setFileQ} />}
             </FullScreen>
           );
         })()}
         {capDetail && (() => {
-          const { ch, item } = capDetail;
+          const ch = chById(capDetail.chId);
+          if (!ch) return null;
+          const item = capItemsOf(ch, sel, buckets ?? []).find((i) => `${i.kind}-${i.key}` === capDetail.key);
+          if (!item) return null;
           const eff = new Set<string>(ch.toolBuckets ?? sel.activeBuckets ?? []);
           const deny = new Set<string>(ch.toolDeny ?? []);
-          const levelOf = (b: any) => {
-            let cur = "off";
-            for (const l of b.levels ?? []) if (l.buckets.every((k: string) => eff.has(k))) cur = l.key;
-            return cur;
-          };
+          const levelOf = (b: any) => bucketLevelOf(b, eff);
           const setLevel = (b: any, level: string) => {
             const next = new Set(eff);
             for (const l of b.levels ?? []) for (const k of l.buckets) next.delete(k);
