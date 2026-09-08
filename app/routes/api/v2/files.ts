@@ -4,6 +4,7 @@ import {
   listFiles,
   listDeletedFiles,
   uploadFile,
+  findFileByStorageKey,
 } from "~/.server/core/operations";
 
 // GET /api/v2/files
@@ -13,6 +14,14 @@ export async function loader({ request }: Route.LoaderArgs) {
   const assetId = url.searchParams.get("assetId") || undefined;
   const limit = Number(url.searchParams.get("limit")) || 50;
   const cursor = url.searchParams.get("cursor") || undefined;
+
+  // Deterministic lookup: "which of my files is this public URL / storage key?".
+  // Answers with the single file or null — never the listing.
+  const lookup = url.searchParams.get("url") || url.searchParams.get("key");
+  if (lookup) {
+    const file = await findFileByStorageKey(ctx, lookup);
+    return Response.json({ file });
+  }
 
   const status = url.searchParams.get("status");
   if (status === "DELETED") {

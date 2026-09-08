@@ -55,7 +55,7 @@ vi.mock("~/.server/webhooks", () => ({ dispatchWebhooks: vi.fn() }));
 vi.mock("~/.server/core/notificationOperations", () => ({ notifyFilesPurged: vi.fn() }));
 vi.mock("~/lib/fly_certs/certs_getters", () => ({ createHost: vi.fn(), removeHost: vi.fn() }));
 
-import { deleteFile, purgeDeletedFiles } from "~/.server/core/operations";
+import { deleteFile, purgeDeletedFiles, findFileByStorageKey } from "~/.server/core/operations";
 
 const ctx = { user: { id: "u1" }, scopes: ["READ", "WRITE", "DELETE", "ADMIN"] } as never;
 
@@ -105,6 +105,7 @@ describe("deleteFile", () => {
 
 describe("purgeDeletedFiles", () => {
   it("keeps the row of a file whose public object survived, and purges the rest", async () => {
+    dbMock.file.updateMany.mockResolvedValue({ count: 0 });
     dbMock.file.findMany.mockResolvedValue([
       { ...publicFile, id: "a", storageKey: "u1/a.pdf" },
       { ...publicFile, id: "b", storageKey: "u1/b.pdf" },
@@ -116,9 +117,72 @@ describe("purgeDeletedFiles", () => {
 
     const result = await purgeDeletedFiles();
 
-    expect(result).toEqual({ purged: 2, eligible: 3 });
+    expect(result).toEqual({ purged: 2, eligible: 3, sealed: 0 });
     // The survivor keeps its DB row so it stays auditable and retryable.
     const deletedIds = dbMock.file.delete.mock.calls.map(([arg]) => arg.where.id);
     expect(deletedIds).toEqual(["a", "c"]);
+  });
+
+  // Mongo does not match an ABSENT field with `{ lt: cutoff }`, so legacy rows
+  // (soft-deleted before the deletedAt field existed) never entered the sweep.
+  it("stamps deletedAt on legacy rows that have none, without purging them in the same run", async () => {
+    dbMock.file.updateMany.mockResolvedValue({ count: 3 });
+    dbMock.file.findMany.mockResolvedValue([]);
+
+    const result = await purgeDeletedFiles();
+
+    expect(result).toEqual({ purged: 0, eligible: 0, sealed: 3 });
+    const [sealArg] = dbMock.file.updateMany.mock.calls[0];
+    expect(sealArg.where.status).toBe("DELETED");
+    expect(sealArg.where.OR).toEqual([
+      { deletedAt: null },
+      { deletedAt: { isSet: false } },
+    ]);
+    expect(sealArg.data.deletedAt).toBeInstanceOf(Date);
+    // Sealed rows keep their 7-day window: nothing is hard-deleted this run.
+    expect(dbMock.file.delete).not.toHaveBeenCalled();
+  });
+});
+
+describe("findFileByStorageKey", () => {
+  const own = {
+    id: "f1",
+    name: "CATALOGO.pdf",
+    size: 9_000_000,
+    contentType: "application/pdf",
+    access: "public",
+    url: "https://easybits-public.t3.storage.dev/u1/abc-CATALOGO.pdf",
+    storageKey: "u1/abc-CATALOGO.pdf",
+    status: "DONE",
+    ownerId: "u1",
+    workspaceId: null,
+  };
+
+  it("resolves a public URL back to the owner's file", async () => {
+    dbMock.file.findUnique.mockResolvedValue(own);
+
+    const found = await findFileByStorageKey(ctx, own.url);
+
+    expect(dbMock.file.findUnique).toHaveBeenCalledWith({
+      where: { storageKey: "u1/abc-CATALOGO.pdf" },
+    });
+    expect(found?.id).toBe("f1");
+  });
+
+  it("accepts a bare storage key too", async () => {
+    dbMock.file.findUnique.mockResolvedValue(own);
+    expect((await findFileByStorageKey(ctx, "u1/abc-CATALOGO.pdf"))?.id).toBe("f1");
+  });
+
+  it("returns null for another account's file, a deleted one, or garbage", async () => {
+    dbMock.file.findUnique.mockResolvedValue({ ...own, ownerId: "u2" });
+    expect(await findFileByStorageKey(ctx, own.url)).toBeNull();
+
+    dbMock.file.findUnique.mockResolvedValue({ ...own, status: "DELETED" });
+    expect(await findFileByStorageKey(ctx, own.url)).toBeNull();
+
+    dbMock.file.findUnique.mockResolvedValue(null);
+    expect(await findFileByStorageKey(ctx, "https://ajeno.example/x.pdf")).toBeNull();
+    expect(await findFileByStorageKey(ctx, "   ")).toBeNull();
   });
 });

@@ -57,6 +57,7 @@ const LEGACY_DOC_TOOLS = new Set([
 import {
   listFiles,
   getFile,
+  findFileByStorageKey,
   uploadFile,
   deleteFile,
   restoreFile,
@@ -720,15 +721,23 @@ function registerCoreTools(server: McpServer) {
     server,
     "get_file",
     {
-      description: "Get file metadata and a signed download URL. Returns file object with a `readUrl` field containing a presigned GET URL (expires in 1h).",
+      description: "Get file metadata and a signed download URL. Returns file object with a `readUrl` field containing a presigned GET URL (expires in 1h). Pass `fileId`, or `url` when all you have is a public/CDN URL of your own file (resolves it back to the file — useful to REUSE an existing file instead of re-uploading the same bytes).",
       inputSchema: {
-        fileId: z.string().describe("The file ID"),
+        fileId: z.string().optional().describe("The file ID"),
+        url: z.string().optional().describe("Public URL (or storage key) of one of your files. Alternative to fileId."),
       },
       _meta: { ui: { resourceUri: "ui://easybits/file-preview" } },
     },
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
-      const result = await getFile(ctx, params.fileId);
+      let fileId = params.fileId;
+      if (!fileId) {
+        if (!params.url) throw new Error("get_file requires fileId or url");
+        const found = await findFileByStorageKey(ctx, params.url);
+        if (!found) throw new Error("No file of yours matches that URL");
+        fileId = found.id;
+      }
+      const result = await getFile(ctx, fileId);
       return {
         content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
         structuredContent: result as Record<string, unknown>,

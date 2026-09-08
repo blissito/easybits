@@ -138,6 +138,62 @@ export async function getFile(ctx: AuthContext, fileId: string) {
   return { ...file, readUrl };
 }
 
+// --- Find File by storage key / public URL ---
+
+/**
+ * Resolve a storage key (or the public URL that contains it) back to the file
+ * that owns it. Deterministic and cheap: `storageKey` is @unique, so this is a
+ * single index hit — unlike `/api/v2/files/search`, which is an AI search and
+ * cannot answer "which file is this URL?".
+ *
+ * Exists so a caller holding only a public URL (e.g. the WhatsApp surface about
+ * to mirror an outbound attachment) can REUSE the file instead of re-uploading
+ * the same bytes under a new id. Returns null instead of throwing — "not mine /
+ * not found" is a normal answer here, and the caller falls back to uploading.
+ */
+export async function findFileByStorageKey(ctx: AuthContext, keyOrUrl: string) {
+  requireScope(ctx, "READ");
+
+  const storageKey = storageKeyFromUrl(keyOrUrl);
+  if (!storageKey) return null;
+
+  const file = await db.file.findUnique({ where: { storageKey } });
+  // Ownership only — no permission-grant path. This answers "is this MY file?",
+  // and a shared file resolved here would be re-attributed to the wrong account.
+  if (!file || file.status === "DELETED" || file.ownerId !== ctx.user.id) return null;
+  requireWorkspace(ctx, file.workspaceId);
+
+  return {
+    id: file.id,
+    name: file.name,
+    size: file.size,
+    contentType: file.contentType,
+    access: file.access,
+    url: file.url,
+    storageKey: file.storageKey,
+  };
+}
+
+/**
+ * Accepts either a bare storage key ("<ownerId>/<nanoid>") or a full https URL
+ * whose path IS the key (buildPublicAssetUrl is `https://<bucket>.<host>/<key>`).
+ * The host is deliberately NOT validated: the ownership check above is what
+ * grants access, and the public bucket has moved hosts before (t3.storage.dev
+ * vs fly.storage.tigris.dev) — a host allowlist here would just rot.
+ */
+function storageKeyFromUrl(input: string): string | null {
+  const raw = input.trim();
+  if (!raw) return null;
+  if (!/^https?:\/\//i.test(raw)) return raw;
+  try {
+    const u = new URL(raw);
+    const key = decodeURIComponent(u.pathname.replace(/^\/+/, ""));
+    return key || null;
+  } catch {
+    return null;
+  }
+}
+
 // --- Upload File ---
 
 export async function uploadFile(
@@ -429,6 +485,19 @@ async function hardDeleteFile(file: {
 export async function purgeDeletedFiles() {
   const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
+  // Legacy rows from before `deletedAt` existed: in Mongo an ABSENT field does
+  // not match `{ lt: cutoff }`, so they never entered the sweep and sat in the
+  // trash forever, holding their storage object. Stamp the clock NOW instead of
+  // purging them here — we don't know how long they've been there, so they get
+  // the full 7-day window like everyone else and leave on the next run.
+  const sealed = await db.file.updateMany({
+    where: {
+      status: "DELETED",
+      OR: [{ deletedAt: null }, { deletedAt: { isSet: false } }],
+    },
+    data: { deletedAt: new Date() },
+  });
+
   const files = await db.file.findMany({
     where: { status: "DELETED", deletedAt: { lt: cutoff } },
   });
@@ -464,7 +533,7 @@ export async function purgeDeletedFiles() {
   }
 
   const purged = [...purgedByOwner.values()].reduce((n, a) => n + a.length, 0);
-  return { purged, eligible: files.length };
+  return { purged, eligible: files.length, sealed: sealed.count };
 }
 
 /**

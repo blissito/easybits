@@ -24,17 +24,51 @@ export async function createNotification(
   });
 }
 
+// Nombres máximos que guardamos en metadata. Nadie lee ese campo hoy (la campana
+// sólo pinta title/body) y una purga grande metía 1,598 nombres en un doc de 62 KB.
+const MAX_STORED_NAMES = 50;
+
+// Familias reconocibles de archivo, para que el body diga algo en vez de listar
+// cinco nombres tipo "wa-audio-1729073131…". El orden importa: primer match gana.
+const FILE_FAMILIES: ReadonlyArray<[RegExp, string, string]> = [
+  [/^wa-(image|video)/i, "imagen de WhatsApp", "imágenes de WhatsApp"],
+  [/^wa-audio/i, "audio de WhatsApp", "audios de WhatsApp"],
+  [/^wa-/i, "archivo de WhatsApp", "archivos de WhatsApp"],
+  [/^cot[-_]/i, "cotización", "cotizaciones"],
+  [/^fac/i, "factura", "facturas"],
+];
+
+function summarizeNames(fileNames: string[]): string {
+  const counts = new Map<string, { n: number; one: string; many: string }>();
+  for (const name of fileNames) {
+    const hit = FILE_FAMILIES.find(([re]) => re.test(name));
+    const one = hit ? hit[1] : "otro archivo";
+    const many = hit ? hit[2] : "otros archivos";
+    const cur = counts.get(many) ?? { n: 0, one, many };
+    cur.n += 1;
+    counts.set(many, cur);
+  }
+  return [...counts.values()]
+    .sort((a, b) => b.n - a.n)
+    .map((c) => `${c.n.toLocaleString("es-MX")} ${c.n === 1 ? c.one : c.many}`)
+    .join(", ");
+}
+
 // One grouped notification per purge run per owner (anti-spam). `fileNames` is
 // the list of names permanently deleted in this run.
 export async function notifyFilesPurged(ownerId: string, fileNames: string[]) {
   const count = fileNames.length;
   if (count < 1) return null;
   const title = `Se ${count === 1 ? "borró" : "borraron"} permanentemente ${count} archivo${count === 1 ? "" : "s"} de tu papelera`;
+  // Pocos archivos: los nombres SÍ informan. Muchos: un resumen por familia, que
+  // es lo que el dueño puede reconocer ("1,240 imágenes de WhatsApp").
+  const body =
+    count <= 5 ? fileNames.join(", ") : summarizeNames(fileNames);
   return createNotification(ownerId, {
     type: "file.purged",
     title,
-    body: fileNames.slice(0, 5).join(", ") + (count > 5 ? `, +${count - 5} más` : ""),
-    metadata: { count, fileNames },
+    body,
+    metadata: { count, fileNames: fileNames.slice(0, MAX_STORED_NAMES) },
   });
 }
 
