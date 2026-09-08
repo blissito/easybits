@@ -753,6 +753,7 @@ export default function Flota2() {
   const [killName, setKillName] = useState("");
   const [addMcp, setAddMcp] = useState(false);
   const [capInfo, setCapInfo] = useState<any | null>(null);
+  const [capDetail, setCapDetail] = useState<{ ch: any; item: any } | null>(null);
   const [creating, setCreating] = useState(false);
   const [engineId, setEngineId] = useState(FLEET_ENGINES.find(engineCreatable)?.id ?? "claude");
   const [mcpBusy, setMcpBusy] = useState(false);
@@ -922,98 +923,7 @@ export default function Flota2() {
 
                 <VoicePicker ch={ch} />
 
-                <div>
-                  <div className="flex items-center justify-between gap-3 flex-wrap">
-                    <p className="text-xs font-semibold">Capacidades en este canal</p>
-                    {/* Heredar u override es TODO O NADA (así lo resuelve el worker:
-                        `cfg.mcpServers ?? default`), no un merge. Si no se dice, tocar
-                        un canal lo desengancha del agente para siempre sin avisar. */}
-                    {own ? (
-                      <button type="button" onClick={() => cfg.inheritCapabilities(ch.id)}
-                        className="text-[11px] font-bold text-brand-500 underline underline-offset-2">
-                        volver a seguir al agente
-                      </button>
-                    ) : (
-                      <span className="text-[11px] text-tale">sigue al agente</span>
-                    )}
-                  </div>
-                  <p className="text-[11px] text-tale mb-1.5">
-                    {own
-                      ? "Este canal tiene su PROPIA lista: lo que cambies en Capacidades ya no le llega."
-                      : "Hereda de Capacidades. En cuanto toques algo aquí, este canal deja de seguir al agente y manda esta lista."}
-                  </p>
-                  <ul className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2">
-                    {(sel.builtins ?? []).map((b: any) => {
-                      const off = (ch.disabledBuiltins ?? []).includes(b.name);
-                      return (
-                        <li key={b.name} className="flex items-center gap-2.5 border-2 border-gray-200 rounded-lg px-2.5 py-2">
-                          <Toggle on={!off} busy={fetcher.state !== "idle"}
-                            onClick={() => cfg.toggleBuiltin(ch.id, b.name, off)} />
-                          <span className="text-xs font-semibold truncate" title={b.label}>{b.label}</span>
-                        </li>
-                      );
-                    })}
-                    {(sel.capabilities ?? []).map((c: any) => {
-                      const on = (ch.mcps ?? []).includes(c.name);
-                      const level = ch.capLevels?.[c.name] ?? "";
-                      return (
-                        <li key={c.name} className="flex flex-col gap-1.5 border-2 border-gray-200 rounded-lg px-2.5 py-2">
-                          <div className="flex items-center gap-2.5 min-w-0">
-                            <Toggle on={on} busy={fetcher.state !== "idle" || !c.secretsPresent}
-                              onClick={() => cfg.toggleCapability(ch.id, c.name, !on)} />
-                            <span className="text-xs font-semibold truncate" title={c.label}>{c.label}</span>
-                          </div>
-                          {/* Nivel de acceso (cuando el conector declara varios) EN SU
-                              LÍNEA: compitiendo con el nombre, ambos salían cortados. */}
-                          {on && c.levels?.length > 0 && (
-                            <select value={level} onChange={(e) => cfg.setCapLevel(ch.id, c.name, e.target.value)}
-                              className="w-full border-2 border-gray-200 rounded-lg px-2 py-1 text-[11px] font-semibold bg-white hover:border-black focus:outline-none">
-                              <option value="">acceso completo</option>
-                              {c.levels.map((l: any) => <option key={l.key} value={l.key}>{l.label}</option>)}
-                            </select>
-                          )}
-                        </li>
-                      );
-                    })}
-                  </ul>
-                  <p className="text-[11px] text-tale mt-1.5">
-                    Esto manda sobre lo que elegiste para todo el agente.
-                  </p>
-                </div>
-
-                {/* Herramientas del canal: qué familias puede usar y con qué alcance.
-                    La lista de BASES cuelga del bucket `db` — sin ese bucket activo,
-                    elegir bases no hace nada. */}
-                <ToolsBlock ch={ch} dbsBlock={ownerDbs && ownerDbs.length > 0 ? (
-                  <>
-                {/* A CUÁL base puede entrar en este canal. Sin elegir ninguna ve todas
-                    las tuyas: por eso la lista importa aunque parezca opcional. */}
-                {ownerDbs && ownerDbs.length > 0 && (
-                  <div>
-                    <p className="text-xs font-semibold">¿A cuáles puede entrar?</p>
-                    <p className="text-[11px] text-tale mb-1.5">
-                      {(ch.dbAllow ?? []).length === 0
-                        ? "Ninguna elegida: en este canal puede consultar TODAS tus bases."
-                        : `Sólo estas ${(ch.dbAllow ?? []).length}; el resto de tus bases quedan fuera de su alcance.`}
-                    </p>
-                    <ul className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                      {ownerDbs.map((d) => {
-                        const on = (ch.dbAllow ?? []).includes(d.namespace);
-                        return (
-                          <li key={d.namespace} className={`flex items-center gap-2.5 border-2 rounded-lg px-2.5 py-2 ${on ? "border-black" : "border-gray-200"}`}>
-                            <Toggle on={on} busy={fetcher.state !== "idle"}
-                              onClick={() => cfg.allowDatabase(ch.id, d.namespace, !on)} />
-                            <span className={`text-xs truncate ${on ? "font-bold" : "font-semibold text-marengo"}`} title={d.namespace}>
-                              {d.name || d.namespace}
-                            </span>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  </div>
-                )}
-                </>
-                ) : null} />
+                <CapsList ch={ch} />
               </div>
             </motion.div>
           )}
@@ -1033,6 +943,100 @@ export default function Flota2() {
       .catch(() => {});
     return () => { alive = false; };
   }, [sel?.id, sel?.token]);
+
+  // ── Qué puede hacer el agente en un canal ─────────────────────────────────
+  // UNA sola lista, en filas, con el detalle detrás de cada fila. Antes eran dos
+  // rejillas de tarjetas ("capacidades" y "herramientas") que se pisaban: dos
+  // taxonomías para la misma pregunta, con los nombres cortados y los selectores
+  // apretados dentro de cada tarjeta.
+  //
+  // Tres orígenes distintos, una sola lectura para quien configura:
+  //   · incluidas  — builtins del worker (easybits, wa, render). Se apagan por canal.
+  //   · familias   — buckets de EasyBits: son TOOLS propias, con nivel y lista.
+  //   · conectores — MCPs (denik, Formmy…): son servidores externos, con credencial.
+  const CapsList = ({ ch }: { ch: any }) => {
+    const eff = new Set<string>(ch.toolBuckets ?? sel.activeBuckets ?? []);
+    const deny = new Set<string>(ch.toolDeny ?? []);
+    const ownCaps = (ch.mcps?.length ?? 0) > 0 &&
+      JSON.stringify([...(ch.mcps ?? [])].sort()) !== JSON.stringify([...(sel.defaultMcps ?? [])].sort());
+    const ownTools = ch.toolBuckets != null;
+    const levelOf = (b: any) => {
+      let cur = "off";
+      for (const l of b.levels ?? []) if (l.buckets.every((k: string) => eff.has(k))) cur = l.key;
+      return cur;
+    };
+    const items = [
+      ...(sel.builtins ?? []).map((b: any) => ({
+        kind: "builtin" as const, key: b.name, label: b.label,
+        desc: "Incluida con el agente", on: !(ch.disabledBuiltins ?? []).includes(b.name),
+      })),
+      ...(buckets ?? []).map((b: any) => ({
+        kind: "family" as const, key: b.key, label: b.label, desc: b.description,
+        on: b.levels ? levelOf(b) !== "off" : eff.has(b.key),
+        level: b.levels ? levelOf(b) : null, bucket: b,
+      })),
+      ...(sel.capabilities ?? []).map((c: any) => ({
+        kind: "connector" as const, key: c.name, label: c.label,
+        desc: c.description || (c.secretsPresent ? "Conector" : "Necesita una credencial"),
+        on: (ch.mcps ?? []).includes(c.name), cap: c,
+      })),
+    ];
+    const TONE: Record<string, string> = { builtin: "#BAD9D8", family: "#C8F9AB", connector: "#F4B7EC" };
+    return (
+      <div>
+        <div className="flex items-center justify-between gap-3 flex-wrap mb-1">
+          <p className="text-xs font-semibold">Qué puede hacer en este canal</p>
+          <div className="flex items-center gap-3">
+            {ownCaps || ownTools ? (
+              <button type="button"
+                onClick={() => { if (ownCaps) cfg.inheritCapabilities(ch.id); if (ownTools) cfg.inheritToolBuckets(ch.id); }}
+                className="text-[11px] font-bold text-brand-500 underline underline-offset-2">
+                volver a seguir al agente
+              </button>
+            ) : (
+              <span className="text-[11px] text-tale">sigue al agente</span>
+            )}
+          </div>
+        </div>
+        <p className="text-[11px] text-tale mb-2">
+          {ownCaps || ownTools
+            ? "Este canal decide lo suyo: lo que cambies en el default del agente ya no le llega."
+            : "Hereda del default del agente. En cuanto toques algo aquí, este canal manda lo suyo."}
+        </p>
+        <ul className="border-2 border-gray-200 rounded-xl divide-y-2 divide-gray-100 overflow-hidden">
+          {items.map((it: any) => (
+            <li key={`${it.kind}-${it.key}`}>
+              <button type="button" onClick={() => setCapDetail({ ch, item: it })}
+                className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-grayLight transition-colors">
+                <span className="w-7 h-7 shrink-0 rounded-lg border-2 border-black grid place-items-center text-[11px] font-bold"
+                  style={{ background: it.on ? TONE[it.kind] : "#fff" }}>
+                  {it.label.slice(0, 1).toUpperCase()}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className={`block text-sm truncate ${it.on ? "font-bold" : "font-semibold text-marengo"}`}>{it.label}</span>
+                  <span className="block text-[11px] text-tale truncate">{it.desc}</span>
+                </span>
+                {it.kind === "connector" && it.cap && !it.cap.secretsPresent && (
+                  <span className="shrink-0 text-[11px] font-semibold text-brand-red">falta credencial</span>
+                )}
+                {it.level && it.level !== "off" && (
+                  <span className="shrink-0 text-[11px] font-semibold text-marengo">
+                    {it.bucket.levels.find((l: any) => l.key === it.level)?.label}
+                  </span>
+                )}
+                <span className={`shrink-0 text-[11px] font-bold ${it.on ? "text-onix" : "text-tale"}`}>
+                  {it.on ? "activa" : "apagada"}
+                </span>
+                <svg className="w-3.5 h-3.5 shrink-0 text-tale" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M9 18l6-6-6-6" />
+                </svg>
+              </button>
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
+  };
 
   // Herramientas por canal: familias (buckets) con su alcance, y el veto de tools
   // sueltas. El `?tools=` del worker sale de aquí; sin esto, un canal usaba lo que
@@ -1410,13 +1414,18 @@ export default function Flota2() {
               {/* Izquierda: lo del AGENTE. Derecha: un tab por CANAL, con su punto de
                   estado y su conteo. Una fila, un solo nivel. */}
               <div className="flex flex-wrap items-center gap-x-1 mt-4 border-b-2 border-gray-100">
-                {(["instrucciones", "capacidades"] as const).map((t) => (
+                {(["instrucciones"] as const).map((t) => (
                   <button key={t} onClick={() => setTab(t)}
                     className={`px-3 py-2 text-sm font-bold border-b-2 -mb-0.5 capitalize whitespace-nowrap transition-colors ${tab === t ? "border-brand-500 text-brand-500" : "border-transparent text-tale hover:text-onix"}`}>
                     {t}
                   </button>
                 ))}
                 <span className="w-px h-5 bg-gray-200 mx-2 shrink-0" />
+                {/* Las capacidades son cosa del CANAL: aquí sólo queda el valor por
+                    defecto, y va al final de los canales para que se lea como lo que
+                    es (el que usan los que siguen al agente), no como un nivel
+                    superior. Los datos lo pedían: los defaults están casi vacíos y la
+                    configuración real vive por canal. */}
                 {CHANNELS.map((c) => {
                   const k = `ch:${c.kind}`;
                   return (
@@ -1428,6 +1437,16 @@ export default function Flota2() {
                     </button>
                   );
                 })}
+                {(() => {
+                  const heredan = CHANNELS.filter((c) => c.state !== "off").length; // aprox: canales vivos
+                  return (
+                    <button onClick={() => setTab("capacidades")}
+                      title="Lo que usan los canales que siguen al agente"
+                      className={`px-3 py-2 text-sm font-bold border-b-2 -mb-0.5 whitespace-nowrap transition-colors ${tab === "capacidades" ? "border-brand-500 text-brand-500" : "border-transparent text-tale hover:text-onix"}`}>
+                      Por defecto
+                    </button>
+                  );
+                })()}
               </div>
             </div>
 
@@ -1668,7 +1687,13 @@ export default function Flota2() {
                 )}
 
                 {tab === "capacidades" && (
-                  <Card title="Capacidades" right={<span className="text-xs text-marengo">valen para todos sus canales</span>}>
+                  <Card title="Capacidades por defecto"
+                    right={<span className="text-xs text-marengo">para los canales que siguen al agente</span>}>
+                    <p className="text-[11px] text-tale mb-3">
+                      Esto NO manda sobre un canal que ya tiene su propia lista. Cada canal decide
+                      lo suyo en <b>“Cómo se comporta en este canal”</b>; aquí sólo eliges con qué
+                      empiezan los que no han tocado nada.
+                    </p>
                     <ul className="grid sm:grid-cols-2 xl:grid-cols-3 gap-2">
                       {(sel.builtins ?? []).map((b: any) => (
                         <li key={b.name}>
@@ -2098,6 +2123,138 @@ export default function Flota2() {
                   </button>
                 </div>
               </fetcher.Form>
+            </FullScreen>
+          );
+        })()}
+        {/* Detalle de UNA capacidad para UN canal: encendido, alcance, sus herramientas
+            una por una y —en bases— a cuáles entra. Lo que antes estaba apretado
+            dentro de una tarjeta de 200px. */}
+        {capDetail && (() => {
+          const { ch, item } = capDetail;
+          const eff = new Set<string>(ch.toolBuckets ?? sel.activeBuckets ?? []);
+          const deny = new Set<string>(ch.toolDeny ?? []);
+          const levelOf = (b: any) => {
+            let cur = "off";
+            for (const l of b.levels ?? []) if (l.buckets.every((k: string) => eff.has(k))) cur = l.key;
+            return cur;
+          };
+          const setLevel = (b: any, level: string) => {
+            const next = new Set(eff);
+            for (const l of b.levels ?? []) for (const k of l.buckets) next.delete(k);
+            if (level !== "off") for (const k of (b.levels ?? []).find((l: any) => l.key === level)?.buckets ?? []) next.add(k);
+            cfg.setToolBuckets(ch.id, [...next]);
+          };
+          const bucketToolNames = (b: any) => {
+            const keys = b.levels
+              ? (b.levels.flatMap((l: any) => l.buckets) as string[]).filter((k) => eff.has(k))
+              : (eff.has(b.key) ? [b.key] : []);
+            return [...new Set(keys.flatMap((k) => bucketTools?.[k] ?? []))].sort();
+          };
+          const row = (label: string, value: React.ReactNode) => (
+            <div className="flex items-center justify-between gap-4 py-2 border-b-2 border-gray-100">
+              <span className="text-sm text-marengo">{label}</span>
+              <span className="text-sm font-semibold text-right">{value}</span>
+            </div>
+          );
+          return (
+            <FullScreen title={item.label} size="auto" onClose={() => setCapDetail(null)}>
+              <div className="flex flex-col">
+                <p className="text-sm text-marengo mb-3">{item.desc}</p>
+
+                {item.kind === "builtin" && (<>
+                  {row("En este canal", (
+                    <Toggle on={item.on} busy={fetcher.state !== "idle"}
+                      onClick={() => cfg.toggleBuiltin(ch.id, item.key, item.on)} />
+                  ))}
+                  <p className="text-[11px] text-tale mt-2">
+                    Viene con el agente. Aquí puedes apagarla sólo para este canal.
+                  </p>
+                </>)}
+
+                {item.kind === "family" && (<>
+                  {item.bucket.levels ? (
+                    row("Alcance", (
+                      <span className="flex rounded-lg border-2 border-black overflow-hidden">
+                        {[{ key: "off", label: "No" }, ...item.bucket.levels].map((l: any) => (
+                          <button key={l.key} type="button" onClick={() => setLevel(item.bucket, l.key)}
+                            className={`px-2 py-1 text-[11px] font-bold ${levelOf(item.bucket) === l.key ? "bg-black text-white" : "bg-white text-marengo hover:bg-grayLight"}`}>
+                            {l.label}
+                          </button>
+                        ))}
+                      </span>
+                    ))
+                  ) : (
+                    row("En este canal", (
+                      <Toggle on={eff.has(item.key)} busy={fetcher.state !== "idle"}
+                        onClick={() => { const n = new Set(eff); eff.has(item.key) ? n.delete(item.key) : n.add(item.key); cfg.setToolBuckets(ch.id, [...n]); }} />
+                    ))
+                  )}
+                  {/* Bases: a cuáles entra. Sin ninguna elegida entra a TODAS. */}
+                  {item.key === "db" && levelOf(item.bucket) !== "off" && (ownerDbs ?? []).length > 0 && (
+                    <div className="mt-4">
+                      <p className="text-sm font-bold">¿A cuáles entra?</p>
+                      <p className="text-[11px] text-tale mb-2">
+                        {(ch.dbAllow ?? []).length === 0
+                          ? "Ninguna elegida: puede consultar TODAS tus bases."
+                          : `Sólo estas ${(ch.dbAllow ?? []).length}; el resto quedan fuera de su alcance.`}
+                      </p>
+                      <ul className="flex flex-col gap-1.5">
+                        {(ownerDbs ?? []).map((d) => {
+                          const on = (ch.dbAllow ?? []).includes(d.namespace);
+                          return (
+                            <li key={d.namespace} className="flex items-center gap-3">
+                              <Toggle on={on} busy={fetcher.state !== "idle"}
+                                onClick={() => cfg.allowDatabase(ch.id, d.namespace, !on)} />
+                              <span className={`text-sm truncate ${on ? "font-bold" : "text-marengo"}`}>{d.name || d.namespace}</span>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </div>
+                  )}
+                  {bucketToolNames(item.bucket).length > 0 && (
+                    <div className="mt-4">
+                      <p className="text-sm font-bold">Herramientas</p>
+                      <p className="text-[11px] text-tale mb-2">
+                        Puedes quitarle una suelta sin apagar toda la familia.
+                      </p>
+                      <ul className="flex flex-col gap-1">
+                        {bucketToolNames(item.bucket).map((t: string) => (
+                          <li key={t} className="flex items-center gap-3">
+                            <Toggle on={!deny.has(t)} busy={fetcher.state !== "idle"}
+                              onClick={() => cfg.allowTool(ch.id, t, deny.has(t))} />
+                            <span className="text-xs font-mono truncate">{t}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </>)}
+
+                {item.kind === "connector" && (<>
+                  {row("En este canal", (
+                    <Toggle on={item.on} busy={fetcher.state !== "idle" || !item.cap.secretsPresent}
+                      onClick={() => cfg.toggleCapability(ch.id, item.key, !item.on)} />
+                  ))}
+                  {item.cap.levels?.length > 0 && row("Alcance", (
+                    <select value={ch.capLevels?.[item.key] ?? ""}
+                      onChange={(e) => cfg.setCapLevel(ch.id, item.key, e.target.value)}
+                      className="border-2 border-gray-200 rounded-lg px-2 py-1 text-sm font-semibold bg-white hover:border-black focus:outline-none">
+                      <option value="">acceso completo</option>
+                      {item.cap.levels.map((l: any) => <option key={l.key} value={l.key}>{l.label}</option>)}
+                    </select>
+                  ))}
+                  {row("Conexión", item.cap.secretsPresent
+                    ? <span className="text-emerald">credencial lista</span>
+                    : <span className="text-brand-red">falta credencial</span>)}
+                  {row("Nombre técnico", <code className="text-xs font-mono">{item.key}</code>)}
+                  {!item.cap.secretsPresent && (
+                    <p className="text-[11px] text-tale mt-2">
+                      Conéctala desde <b>Por defecto</b>: la credencial es del dueño, no del canal.
+                    </p>
+                  )}
+                </>)}
+              </div>
             </FullScreen>
           );
         })()}
