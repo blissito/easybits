@@ -1252,10 +1252,47 @@ export async function action({ request }: Route.ActionArgs) {
     // Sube un skill como BUNDLE: el SKILL.md (obligatorio, frontmatter name+desc) +
     // scripts/assets opcionales. Todos como archivos públicos; se agrupan en un
     // objeto Skill de 1ª clase. name/description salen del frontmatter.
-    const files = fd.getAll("files").filter((f): f is File => f instanceof File);
+    const uploaded = fd.getAll("files").filter((f): f is File => f instanceof File);
+    // Un skill se distribuye como CARPETA (es el formato Agent Skills), y lo que el
+    // navegador deja subir de una carpeta es un .zip. Si viene uno, se expande aquí
+    // y a partir de ahí el flujo es idéntico a subir los archivos sueltos.
+    // `paths` viaja en paralelo a `files` (mismo orden) cuando el navegador SÍ conoce
+    // la estructura de carpetas (input webkitdirectory o arrastrar una carpeta). Un
+    // File sólo lleva su basename, y perder "scripts/" rompería las referencias del
+    // SKILL.md — la misma razón por la que el .zip conserva rutas.
+    const paths = fd.getAll("paths").map((v) => String(v));
+    let files: Array<{ name: string; type: string; bytes: () => Promise<Buffer> }> = uploaded.map((f, i) => ({
+      name: (paths[i] || f.name).replace(/^\/+/, ""), type: f.type, bytes: async () => Buffer.from(await f.arrayBuffer()),
+    }));
+    const zips = uploaded.filter((f) => /\.zip$/i.test(f.name) || f.type === "application/zip");
+    if (zips.length) {
+      const { unzip, isUsefulSkillFile } = await import("~/.server/unzip");
+      const expanded: typeof files = files.filter((f) => !/\.zip$/i.test(f.name) && f.type !== "application/zip");
+      for (const z of zips) {
+        let entries;
+        try {
+          entries = unzip(Buffer.from(await z.arrayBuffer()));
+        } catch (e) {
+          return data({ error: e instanceof Error ? e.message : "no se pudo leer el .zip" }, { status: 400 });
+        }
+        const useful = entries.filter((e) => isUsefulSkillFile(e.path));
+        // Se quita SÓLO la carpeta contenedora (el zip de una carpeta trae todo bajo
+        // "cotizacion/"), y se CONSERVA el resto de la ruta: el manifiesto que ve el
+        // agente lista los archivos por su `name`, así que si el SKILL.md dice
+        // "corre scripts/cotizar.mjs", el archivo tiene que llamarse justo así o la
+        // instrucción apunta a un archivo que el agente no encuentra.
+        const roots = new Set(useful.map((e) => e.path.split("/")[0]));
+        const strip = roots.size === 1 && useful.every((e) => e.path.includes("/"));
+        for (const e of useful) {
+          const rel = strip ? e.path.split("/").slice(1).join("/") : e.path;
+          expanded.push({ name: rel, type: "", bytes: async () => e.bytes });
+        }
+      }
+      files = expanded;
+    }
     const md = files.find((f) => /\.md$/i.test(f.name)) ?? files[0];
     if (!md) return data({ error: "sube al menos el SKILL.md" }, { status: 400 });
-    const mdText = await md.text();
+    const mdText = (await md.bytes()).toString("utf8");
     // Frontmatter YAML mínimo: name + description entre los --- iniciales.
     const fm = /^---\s*\n([\s\S]*?)\n---/.exec(mdText)?.[1] ?? "";
     const pick = (k: string) => new RegExp(`^${k}\\s*:\\s*(.+)$`, "m").exec(fm)?.[1]?.trim().replace(/^["']|["']$/g, "");
@@ -1267,10 +1304,10 @@ export async function action({ request }: Route.ActionArgs) {
     const ordered = [md, ...files.filter((f) => f !== md)];
     const fileIds: string[] = [];
     for (const file of ordered) {
-      const buf = Buffer.from(await file.arrayBuffer());
+      const buf = await file.bytes();
       const safe = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
       const storageKey = `${user.id}/${randomUUID()}-${safe}`;
-      const ctype = file.type || (/\.mjs$|\.js$/i.test(file.name) ? "text/javascript" : /\.md$/i.test(file.name) ? "text/markdown" : "application/octet-stream");
+      const ctype = file.type || (/\.mjs$|\.js$/i.test(file.name) ? "text/javascript" : /\.md$/i.test(file.name) ? "text/markdown" : /\.json$/i.test(file.name) ? "application/json" : /\.csv$/i.test(file.name) ? "text/csv" : "application/octet-stream");
       await getPlatformPublicClient().putObject(storageKey, buf, ctype);
       const created = await db.file.create({
         data: { storageKey, slug: storageKey, name: file.name, size: buf.length, contentType: ctype, status: "DONE", url: buildPublicAssetUrl(storageKey), access: "public", ownerId: user.id, assetIds: [] },
@@ -1282,6 +1319,26 @@ export async function action({ request }: Route.ActionArgs) {
     const skills = [...fleetSkills(fleetAgent), skill];
     await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { skills } });
     return data({ ok: true, skillId: skill.id });
+  }
+  if (intent === "copy-skill") {
+    // Prestar un skill a otro agente del MISMO dueño. Un skill es
+    // {name, description, files[]} y sus archivos son filas File públicas ya
+    // subidas: copiar NO re-sube nada, se reusan los mismos ids. Por eso pasar la
+    // "Cotización" de un agente a otro es instantáneo y no duplica storage.
+    const skillId = String(fd.get("skillId") || "");
+    const targetId = String(fd.get("targetId") || "");
+    const skill = fleetSkills(fleetAgent).find((s) => s.id === skillId);
+    if (!skill) return data({ error: "ese skill no existe" }, { status: 404 });
+    const target = await db.fleetAgent.findUnique({ where: { id: targetId } });
+    if (!target || target.ownerId !== user.id) return data({ error: "not found" }, { status: 404 });
+    const existing = fleetSkills(target);
+    if (existing.some((s) => s.name === skill.name)) {
+      return data({ error: `${target.name ?? "ese agente"} ya tiene "${skill.name}"` }, { status: 400 });
+    }
+    const { randomUUID } = await import("node:crypto");
+    const copy: FleetSkill = { ...skill, id: randomUUID().slice(0, 8), enabled: true };
+    await db.fleetAgent.update({ where: { id: targetId }, data: { skills: [...existing, copy] } });
+    return data({ ok: true });
   }
   if (intent === "toggle-skill") {
     const skillId = String(fd.get("skillId") || "");
@@ -2898,6 +2955,13 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
     // dock) a la derecha en lg+ → el contenido se empuja en vez de quedar tapado, y la
     // flota sigue interactiva. En mobile el dock se superpone (sin espacio que reservar).
     <div className={`max-w-7xl mx-auto p-6 transition-[margin] duration-300 ease-out ${chatAgent ? "lg:mr-[28rem]" : ""}`}>
+      {/* Esta es la vista ANTERIOR: /dash/flota ya sirve el panel nuevo. Se conserva
+          porque aquí siguen viviendo cosas todavía sin portar (tokens con scope,
+          gestión de cajas, inbox de WABA, toolsets por canal, archivos por canal). */}
+      <div className="mb-4 flex flex-wrap items-center gap-2 text-sm border-2 border-black rounded-xl bg-brand-yellow/40 px-3 py-2">
+        <span>Estás en la <b>vista anterior</b> de la flota.</span>
+        <a href="/dash/flota" className="font-bold underline underline-offset-2">Ir al panel nuevo →</a>
+      </div>
       <div className="flex items-center gap-2 mb-1">
         <h1 className="text-2xl font-bold">Tu flota de agentes</h1>
         <span className="group relative inline-flex">

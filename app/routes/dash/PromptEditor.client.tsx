@@ -10,13 +10,15 @@ export function PromptEditor({
   name,
   defaultValue,
   onDirty,
+  defaultMode = "live",
 }: {
   name: string;
   defaultValue: string;
   onDirty?: () => void;
+  defaultMode?: "edit" | "live" | "preview";
 }) {
   const [val, setVal] = useState(defaultValue || "");
-  const [mode, setMode] = useState<"edit" | "live" | "preview">("live");
+  const [mode, setMode] = useState<"edit" | "live" | "preview">(defaultMode);
   return (
     <div data-color-mode="light" className="eb-prompt-editor flex-1 min-h-0 flex flex-col">
       {/* Contraste de selección: por defecto MDEditor pinta el texto del textarea
@@ -45,6 +47,14 @@ export function PromptEditor({
         ))}
         <span className="ml-auto text-[10px] text-gray-400 font-normal">{val.length.toLocaleString()} caracteres · Markdown</span>
       </div>
+      {/* Preview propio: MDEditor en `preview="preview"` deja el panel VACÍO (su
+          preview se posiciona respecto al panel de edición, que en ese modo mide 0).
+          Renderizamos el markdown nosotros — mismo renderer, y encima scrollea bien. */}
+      {mode === "preview" ? (
+        <div data-color-mode="light" className="flex-1 min-h-0 overflow-y-auto rounded-lg border-2 border-gray-200 p-4 bg-white">
+          <MDEditor.Markdown source={val} style={{ background: "transparent" }} />
+        </div>
+      ) : (
       <div className="flex-1 min-h-0 overflow-hidden rounded-lg border-2 border-gray-200">
         <MDEditor
           value={val}
@@ -58,6 +68,7 @@ export function PromptEditor({
           textareaProps={{ placeholder: "Personalidad, reglas, catálogo, tono…" }}
         />
       </div>
+      )}
       <input type="hidden" name={name} value={val} />
     </div>
   );

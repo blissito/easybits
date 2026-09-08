@@ -152,8 +152,15 @@ export default [
       // tenía dónde verlo. La versión anterior (routes/dash/hosting/*, mezclada
       // con WhatsApp) se borró en ce77fcd8; ésta se reescribió desde la API.
       route("hosting", "routes/dash/hosting.tsx"),
-      // FleetAgents de WhatsApp ("Líneas") — superficie Baileys + workers efímeros
-      route("flota", "routes/dash/fleet-agents.tsx"),
+      // Panel de la flota: roster de agentes, canales, capacidades, skills y ensayo.
+      route("flota", "routes/dash/flota.tsx"),
+      // La vista anterior (acordeón + modal de capacidades) sigue accesible mientras
+      // se termina de portar lo que aún sólo vive ahí (tokens, cajas, inbox WABA…).
+      route("flota-clasica", "routes/dash/fleet-agents.tsx"),
+
+      // Descarga de un skill como .zip (ruta de RECURSO: el bucket público no manda
+      // CORS, así que el zip se arma en el servidor)
+      route("flota/skill/:fleetAgentId/:skillId", "routes/dash/flota.skill.tsx"),
       // Poll resiliente del HUD de la flota (JSON, no tumba la página en deploys)
       route("flota/poll", "routes/dash/fleet-agents.poll.tsx"),
       // Cuentas de clientes — roster + "operar como" (impersonation)
