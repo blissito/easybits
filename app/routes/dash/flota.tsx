@@ -1003,8 +1003,15 @@ export default function Flota2() {
             ? "Este canal decide lo suyo: lo que cambies en el default del agente ya no le llega."
             : "Hereda del default del agente. En cuanto toques algo aquí, este canal manda lo suyo."}
         </p>
+        {/* Agrupadas por ESTADO con su conteo: lo primero que quieres saber es qué
+            tiene encendido, no el catálogo entero por orden de catálogo. */}
+        {([["Activas", items.filter((i: any) => i.on)], ["Disponibles", items.filter((i: any) => !i.on)]] as const).map(([titulo, grupo]) => (grupo as any[]).length === 0 ? null : (
+        <div key={titulo} className="mb-3">
+        <p className="text-[11px] font-bold text-marengo mb-1">
+          {titulo} <span className="text-tale">({(grupo as any[]).length})</span>
+        </p>
         <ul className="border-2 border-gray-200 rounded-xl divide-y-2 divide-gray-100 overflow-hidden">
-          {items.map((it: any) => (
+          {(grupo as any[]).map((it: any) => (
             <li key={`${it.kind}-${it.key}`}>
               <button type="button" onClick={() => setCapDetail({ ch, item: it })}
                 className="w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-grayLight transition-colors">
@@ -1014,7 +1021,7 @@ export default function Flota2() {
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className={`block text-sm truncate ${it.on ? "font-bold" : "font-semibold text-marengo"}`}>{it.label}</span>
-                  <span className="block text-[11px] text-tale truncate">{it.desc}</span>
+                  <span className="block text-[11px] text-tale line-clamp-2">{it.desc}</span>
                 </span>
                 {it.kind === "connector" && it.cap && !it.cap.secretsPresent && (
                   <span className="shrink-0 text-[11px] font-semibold text-brand-red">falta credencial</span>
@@ -1034,6 +1041,8 @@ export default function Flota2() {
             </li>
           ))}
         </ul>
+        </div>
+        ))}
       </div>
     );
   };
