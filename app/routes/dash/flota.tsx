@@ -179,14 +179,16 @@ function Toggle({ on, onClick, busy }: { on: boolean; onClick: () => void; busy?
   );
 }
 
-function Card({ title, right, children, className = "" }: { title: string; right?: React.ReactNode; children: React.ReactNode; className?: string }) {
+// `bodyClassName` existe para las tarjetas de ALTURA FIJA (hoy sólo el ensayo): sin él
+// el cuerpo no puede repartirse el alto sobrante y la tarjeta crece por dentro.
+function Card({ title, right, children, className = "", bodyClassName = "" }: { title: string; right?: React.ReactNode; children: React.ReactNode; className?: string; bodyClassName?: string }) {
   return (
     <section className={`border-2 border-black rounded-2xl bg-white overflow-hidden ${className}`}>
-      <header className="flex items-center justify-between gap-3 px-4 py-2.5 border-b-2 border-black bg-grayLight">
+      <header className="flex items-center justify-between gap-3 px-4 py-2.5 border-b-2 border-black bg-grayLight shrink-0">
         <h3 className="text-sm font-bold">{title}</h3>
         {right}
       </header>
-      <div className="p-4">{children}</div>
+      <div className={`p-4 ${bodyClassName}`}>{children}</div>
     </section>
   );
 }
@@ -772,14 +774,30 @@ function BoxFace({ color, state, title, slots, perVm, sandboxId, onAction, busy,
   const asleep = state === "suspended";
   const [open, setOpen] = useState(false);
   const [confirmKill, setConfirmKill] = useState(false);
+  // El menú se abría SIEMPRE hacia arriba. Las cajas viven arriba del panel, así que
+  // contra el banner de "operar como" (fixed, z-100 a propósito: salir de impersonación
+  // no se puede tapar nunca) quedaba cortado por la mitad. Si no cabe arriba, abre
+  // hacia abajo — el que se mueve es el menú, no el banner.
+  const [haciaAbajo, setHaciaAbajo] = useState(false);
+  const anclaRef = useRef<HTMLSpanElement>(null);
+  const ALTO_MENU = 132; // tres botones + el renglón de estado
+  const toggle = () => {
+    setOpen((v) => {
+      if (!v) {
+        const top = anclaRef.current?.getBoundingClientRect().top ?? 0;
+        setHaciaAbajo(top < ALTO_MENU + 56);
+      }
+      return !v;
+    });
+  };
   // Despierta: cuándo duerme. Dormida: cuándo muere (y con ella su snapshot).
   const left = useLeft(asleep ? destroyAt ?? null : suspendAt ?? null);
   useEffect(() => { if (!open) setConfirmKill(false); }, [open]);
   return (
-    <span className="relative flex flex-col items-center gap-1"
+    <span ref={anclaRef} className="relative flex flex-col items-center gap-1"
       onMouseLeave={() => setOpen(false)}>
       {sandboxId && onAction && open && (
-        <span className="absolute bottom-full mb-1 z-20 flex flex-col gap-1 bg-white border-2 border-black rounded-xl p-1.5 shadow-[2px_2px_0_0_#000] whitespace-nowrap">
+        <span className={`absolute z-20 flex flex-col gap-1 bg-white border-2 border-black rounded-xl p-1.5 shadow-[2px_2px_0_0_#000] whitespace-nowrap ${haciaAbajo ? "top-full mt-1" : "bottom-full mb-1"}`}>
           <span className="px-1 text-[11px] text-marengo">
             {title}
             {left && <b className="ml-1 text-onix">{asleep ? "muere" : "duerme"} en {left}</b>}
@@ -812,7 +830,7 @@ function BoxFace({ color, state, title, slots, perVm, sandboxId, onAction, busy,
       )}
     <motion.span title={left ? `${title} · ${asleep ? "muere" : "duerme"} en ${left}` : title}
       role={sandboxId && onAction ? "button" : undefined}
-      onClick={() => sandboxId && onAction && setOpen((v) => !v)}
+      onClick={() => sandboxId && onAction && toggle()}
       initial={{ scale: 0, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0, opacity: 0 }}
       transition={{ type: "spring", stiffness: 520, damping: 30 }}
       className={`relative w-6 h-6 rounded-[7px] border-2 border-black flex items-center justify-center gap-[3px] ${asleep ? "opacity-50" : ""} ${sandboxId && onAction ? "cursor-pointer hover:ring-2 hover:ring-brand-500" : ""} ${busy ? "animate-pulse" : ""}`}
@@ -2240,8 +2258,14 @@ export default function Flota2() {
           </div>
 
           {/* ── Ensayo ─────────────────────────────────────────────────── */}
-          <div className="hidden lg:block lg:sticky lg:top-6 min-w-0">
-            <Card title="Ensayo"
+          {/* El alto se ata al viewport en vez de restar un número mágico (antes
+              `h-[calc(100vh-21rem)]`, que no contaba el header de la tarjeta, los dos
+              textos de ayuda ni la fila de enviar: en cuanto la suma se pasaba, la
+              página entera ganaba scroll sin necesitarlo). Ahora la columna mide lo que
+              cabe y la lista de mensajes se queda con lo que sobre. */}
+          <div className="hidden lg:flex lg:flex-col lg:sticky lg:top-6 lg:h-[calc(100dvh-3rem)] min-w-0">
+            <Card title="Ensayo" className="flex flex-col flex-1 min-h-0"
+              bodyClassName="flex flex-col flex-1 min-h-0"
               right={
                 <div className="flex items-center gap-2">
                   <Expand onClick={() => setBig("ensayo")} label="Ensayar en grande" />
@@ -2249,13 +2273,13 @@ export default function Flota2() {
               }>
               {/* Contra qué config se prueba: si no se dice, cambias algo en un canal,
                   ensayas, y no se nota — porque estabas probando otro. */}
-              <p className="text-[11px] text-tale mb-2">
+              <p className="text-[11px] text-tale mb-2 shrink-0">
                 Con la configuración de{" "}
                 <b>{CHANNELS.find((c) => `ch:${c.kind}` === tab)?.label
                   ?? (cfgId === "web" ? "Web" : cfgId === "teams" ? "Ghosty Teams" : "WhatsApp")}</b>.
               </p>
-              <EnsayoBody msgs={ensayo.msgs} busy={ensayo.busy} loading={ensayo.loading} onSend={ensayo.send} />
-              <p className="text-[11px] text-tale mt-2 leading-relaxed">
+              <EnsayoBody msgs={ensayo.msgs} busy={ensayo.busy} loading={ensayo.loading} onSend={ensayo.send} tall />
+              <p className="text-[11px] text-tale mt-2 leading-relaxed shrink-0">
                 Aquí el agente <b>puede cambiarse a sí mismo</b>: decirle “de ahora en
                 adelante…” reescribe sus instrucciones de verdad.{" "}
                 <button onClick={() => revalidator.revalidate()} className="font-bold underline">Recargar</button> para verlas arriba.
