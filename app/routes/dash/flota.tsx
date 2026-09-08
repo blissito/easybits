@@ -233,13 +233,111 @@ function Expand({ onClick, label = "Expandir" }: { onClick: () => void; label?: 
 }
 
 // Modal a pantalla casi completa — cierra con ESC. Sin scroll de página detrás.
-function FullScreen({ title, onClose, children, size = "full" }: { title: string; onClose: () => void; children: React.ReactNode; size?: "full" | "auto" }) {
+// Pila de modales. Cada FullScreen montaba SU listener de `keydown` en document con
+// `[onClose]` de dependencia; como el onClose siempre llega como flecha inline, el efecto
+// se re-suscribía en cada render. Con dos modales encimados, ESC disparaba los dos y el
+// que ganaba era el que hubiera re-renderizado al último — por eso parecía cerrar el de
+// atrás. Ahora sólo responde el de ARRIBA de la pila.
+const modalStack: Array<{ close: () => void }> = [];
+
+type Voice = { id: string; name: string; engine: string; hint?: string };
+
+// El selector de voz era un <select> nativo que cargaba su catálogo en `onMouseDown`:
+// la primera vez que lo abrías, el popup del sistema ya estaba dibujado con una sola
+// opción y las voces llegaban después — se veía vacío, y al reabrirlo aparecía un menú
+// gris del SO encima de la UI. Además vivía declarado DENTRO del componente padre, así
+// que cada render lo remontaba y tiraba el catálogo recién bajado.
+//
+// Ahora es una lista propia, del mismo material que el resto del panel: carga al montar,
+// dice si está cargando, y muestra el acento/género en su renglón en vez de embutirlo en
+// una línea de 90 caracteres.
+function VoiceList({ agent, current, onPick }: {
+  agent: { id: string; token: string };
+  current: string;
+  onPick: (id: string) => void;
+}) {
+  const [voices, setVoices] = useState<Voice[] | null>(null);
+  const [failed, setFailed] = useState(false);
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    let alive = true;
+    fetch(`/api/v2/fleet-agents/${agent.id}/voices`, { headers: { Authorization: `Bearer ${agent.token}` } })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+      .then((d) => alive && setVoices(d.voices ?? []))
+      .catch(() => { if (alive) { setVoices([]); setFailed(true); } });
+    return () => { alive = false; };
+  }, [agent.id]);
+
+  const byEngine = (e: string) => (voices ?? []).filter((v) => v.engine === e);
+  // Una voz guardada que ya no está en el catálogo (llave quitada, voz retirada) se
+  // conserva como opción: si no, guardar otra cosa la borraría sin querer.
+  const huerfana = current && voices && !voices.some((v) => v.id === current);
+
+  const Row = ({ id, name, hint }: { id: string; name: string; hint?: string }) => (
+    <li>
+      <button type="button" onClick={() => onPick(id)}
+        className={`w-full flex items-center gap-3 px-3 py-2.5 text-left hover:bg-grayLight ${current === id ? "bg-grayLight" : ""}`}>
+        <span className={`shrink-0 w-4 text-brand-500 font-bold ${current === id ? "" : "opacity-0"}`}>✓</span>
+        <span className="min-w-0 flex-1">
+          <span className={`block text-sm truncate ${current === id ? "font-bold" : "font-semibold"}`}>{name}</span>
+          {hint && <span className="block text-[11px] text-tale truncate">{hint}</span>}
+        </span>
+      </button>
+    </li>
+  );
+
+  const Group = ({ label, items }: { label: string; items: Voice[] }) => items.length === 0 ? null : (
+    <>
+      <li className="px-3 pt-3 pb-1 text-[11px] font-bold uppercase tracking-wide text-tale">{label}</li>
+      {items.map((v) => <Row key={v.id} id={v.id} name={v.name} hint={v.hint} />)}
+    </>
+  );
+
+  return (
+    <div className="flex flex-col gap-2">
+      <p className="text-xs text-marengo">
+        Con la que contesta las notas de voz. «Voz por defecto» = hereda la del agente.
+      </p>
+      <ul className="border-2 border-gray-200 rounded-xl divide-y-2 divide-gray-100 overflow-hidden">
+        <Row id="" name="Voz por defecto" />
+        {huerfana && <Group label="Guardada" items={[{ id: current, name: current, engine: "?", hint: "ya no está en el catálogo" }]} />}
+        <Group label="Incluidas" items={byEngine("kokoro")} />
+        <Group label="ElevenLabs" items={byEngine("elevenlabs")} />
+      </ul>
+      {voices === null && <p className="text-xs text-tale">Cargando voces…</p>}
+      {failed && <p className="text-xs text-brand-red">No se pudo leer el catálogo de voces.</p>}
+      {voices !== null && !failed && byEngine("elevenlabs").length === 0 && (
+        <p className="text-[11px] text-tale">
+          Para usar tus voces de ElevenLabs, guarda tu <code>ELEVENLABS_API_KEY</code> en los secretos del agente.
+        </p>
+      )}
+    </div>
+  );
+}
+
+
+
+function FullScreen({ title, onClose, children, size = "full" }: { title: string; onClose: () => void; children: React.ReactNode; size?: "full" | "auto" }) {
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+  useEffect(() => {
+    const me = { close: () => closeRef.current() };
+    modalStack.push(me);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (modalStack[modalStack.length - 1] !== me) return;
+      e.stopPropagation();
+      me.close();
+    };
     document.addEventListener("keydown", onKey);
     document.body.style.overflow = "hidden";
-    return () => { document.removeEventListener("keydown", onKey); document.body.style.overflow = ""; };
-  }, [onClose]);
+    return () => {
+      const i = modalStack.indexOf(me);
+      if (i >= 0) modalStack.splice(i, 1);
+      document.removeEventListener("keydown", onKey);
+      // El de abajo sigue abierto: no le devuelvas el scroll al body todavía.
+      if (!modalStack.length) document.body.style.overflow = "";
+    };
+  }, []);
   return (
     <motion.div className="fixed inset-0 z-50 bg-black/40 p-4 sm:p-8 flex"
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose}>
@@ -1174,48 +1272,9 @@ export default function Flota2() {
     );
   };
 
-  const VoicePicker = ({ ch }: { ch: any }) => {
-    const [voices, setVoices] = useState<Array<{ id: string; name: string; engine: string; hint?: string }> | null>(null);
-    const load = () => {
-      if (voices) return;
-      fetch(`/api/v2/fleet-agents/${sel.id}/voices`, { headers: { Authorization: `Bearer ${sel.token}` } })
-        .then((r) => (r.ok ? r.json() : { voices: [] }))
-        .then((d) => setVoices(d.voices ?? []))
-        .catch(() => setVoices([]));
-    };
-    const current = ch.voiceId ?? "";
-    const byEngine = (e: string) => (voices ?? []).filter((v) => v.engine === e);
-    return (
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-xs font-semibold">Voz</span>
-        <select value={current} onFocus={load} onMouseDown={load}
-          onChange={(e) => cfg.setVoice(ch.id, e.target.value)}
-          className="border-2 border-gray-200 rounded-lg px-2 py-1 text-xs font-semibold bg-white hover:border-black focus:outline-none max-w-[16rem]">
-          <option value="">Voz por defecto</option>
-          {/* Si la voz guardada no está en el catálogo (llave quitada, voz retirada),
-              se conserva como opción para no borrarla sin querer al guardar otra cosa. */}
-          {current && !(voices ?? []).some((v) => v.id === current) && (
-            <option value={current}>{current}</option>
-          )}
-          {byEngine("kokoro").length > 0 && (
-            <optgroup label="Incluidas">
-              {byEngine("kokoro").map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
-            </optgroup>
-          )}
-          {byEngine("elevenlabs").length > 0 && (
-            <optgroup label="ElevenLabs">
-              {byEngine("elevenlabs").map((v) => (
-                <option key={v.id} value={v.id}>{v.name}{v.hint ? ` — ${v.hint}` : ""}</option>
-              ))}
-            </optgroup>
-          )}
-        </select>
-        <span className="text-[11px] text-tale">
-          Con la que contesta las notas de voz. Vacío = hereda la del agente.
-        </span>
-      </div>
-    );
-  };
+  const VoicePicker = ({ ch }: { ch: any }) => (
+    <VoiceList agent={sel} current={ch.voiceId ?? ""} onPick={(id) => cfg.setVoice(ch.id, id)} />
+  );
 
   const sendSkill = (entries: Array<{ file: File; path?: string }>) => {
     if (!entries.length) return;
