@@ -3426,12 +3426,24 @@ export default function Pools({ loaderData }: Route.ComponentProps) {
                     </div>
                   )}
 
-                  {liveConnected ? (
+                  {/* La config NO vive en el socket: los grupos (enabledGroups ∪ seenGroups)
+                      están en la DB y se muestran aunque WhatsApp esté caído. Antes esta
+                      sección estaba detrás de `liveConnected` y un socket muerto hacía
+                      DESAPARECER los grupos ya configurados — se leía como pérdida de datos.
+                      Desconectado los toggles siguen persistiendo; solo avisamos que no
+                      responde hasta reconectar. */}
+                  {liveConnected || p.groups.length > 0 ? (
                     <div>
                       <div className="flex items-center justify-between mb-2">
                         <span className="font-semibold text-sm">Grupos que atiende</span>
                         <span className="text-xs text-gray-400">{p.conversations} conv.</span>
                       </div>
+                      {!liveConnected && (
+                        <p className="text-xs text-amber-700 bg-amber-50 border-2 border-amber-300 rounded-lg px-3 py-2 mb-2">
+                          ⚠️ WhatsApp desconectado: tu configuración sigue guardada, pero el agente
+                          no responde hasta que vuelvas a vincular la sesión.
+                        </p>
+                      )}
                       {p.groups.length === 0 && <p className="text-xs text-gray-400">No se ven grupos aún. Solo responde en los que actives.</p>}
                       {(() => {
                         const active = p.groups.filter((g) => g.enabled);
