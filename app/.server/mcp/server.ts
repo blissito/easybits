@@ -26,7 +26,7 @@ import { SANDBOX_TEMPLATES } from "../sandbox/schemas";
 import { MAX_SANDBOX_TTL_SECONDS } from "../../lib/plans";
 import { filePreviewHtml, fileUploadHtml, fileListHtml } from "./apps/html";
 import { registerStructuredDocTool } from "./structured/tool";
-import { GROUP_ALLOWLISTS, DYNAMIC_ONLY_TOOLS, TOOL_GROUPS, type ToolGroupKey } from "./toolGroups";
+import { GROUP_ALLOWLISTS, GROUP_HIDDEN_SCOPE, DYNAMIC_ONLY_TOOLS, TOOL_GROUPS, isStrictGroup, type ToolGroupKey } from "./toolGroups";
 import { importHtml, type ImportHtmlInput } from "./tools/importHtml";
 import { safeImageBlock } from "./safeImageBlock";
 import { offloadOversizedRead } from "./offloadOversizedRead";
@@ -491,6 +491,14 @@ export function createMcpServer(groups?: string[], denyTools?: string[]) {
   }
   const enabled = new Set(validos.length ? validos : ["core"]);
 
+  // ⚠️ `all` junto a un grupo strict EVAPORA el candado: deja `activeAllowlist` en null y con
+  // él el scope de `run_tool`, o sea que pedir `ghostyapp,all` devolvería el catálogo entero
+  // — el agujero que el strict existe para tapar, y sin una sola señal. Gana el strict.
+  if (enabled.has("all") && [...enabled].some(isStrictGroup)) {
+    enabled.delete("all");
+    console.warn("[mcp] `all` ignorado: hay un toolset strict entre los pedidos");
+  }
+
   // Merge allowlists for all requested groups (e.g. "core,design" = union).
   // Allowlists live in ./toolGroups.ts so the dashboard UI can import the same
   // source of truth (labels, descriptions, tool counts).
@@ -505,12 +513,24 @@ export function createMcpServer(groups?: string[], denyTools?: string[]) {
     }
   }
 
+  // Scope OCULTO: alcanzable por `run_tool`, invisible en `tools/list`. Deliberadamente
+  // FUERA de `activeAllowlist` — el pase de `.disable()` de abajo tiene que seguir
+  // escondiéndolas; lo único que cambia es hasta dónde llegan las meta-tools.
+  const hiddenScope = new Set<string>();
+  for (const g of enabled) {
+    GROUP_HIDDEN_SCOPE[g as ToolGroupKey]?.forEach((t) => hiddenScope.add(t));
+  }
+
   // Per-tool deny (`-<tool>` entries en el `?tools=`). Default = todas las tools del
   // bucket activas; el user destila una y llega aquí como deny. Subtrae del allowlist
   // (así el scope de run_tool en modo strict también las excluye) y se aplica aparte
   // más abajo para cubrir los grupos SIN allowlist (`all`/`docs`).
   const denySet = denyTools && denyTools.length ? new Set(denyTools) : null;
   if (denySet && activeAllowlist) for (const t of denySet) activeAllowlist.delete(t);
+  // ⚠️ Y del scope oculto TAMBIÉN. El pase de deny de más abajo no hace nada sobre una tool
+  // que ya está deshabilitada, así que sin esta resta un `-create_website` sería cosmético:
+  // seguiría alcanzable por `run_tool`.
+  if (denySet) for (const t of denySet) hiddenScope.delete(t);
   // Groups WITHOUT a curated allowlist (`docs`, `sites`, `brand` alone) keep
   // their previous behavior: no filtering — every registered tool stays
   // visible. The new dynamic-discovery meta-tools are appended afterwards.
@@ -582,8 +602,12 @@ export function createMcpServer(groups?: string[], denyTools?: string[]) {
   // cannot reach tools outside its profile (no DBs/sandboxes for a "Público"
   // agent), even via run_tool. Other clients (Claude.ai) never send `scripting`
   // → meta-tools keep their full-catalog escape-hatch.
-  const strict = enabled.has("scripting");
-  installDynamicTools(server, strict && activeAllowlist ? { scopeAllowlist: activeAllowlist } : {});
+  // Un grupo puede declararse strict POR SÍ SOLO (`ghostyapp`), sin obligar a su caja a
+  // pedir un bucket extra que le ensuciaría el `tools/list`.
+  const strict = enabled.has("scripting") || [...enabled].some(isStrictGroup);
+  const scope =
+    strict && activeAllowlist ? new Set<string>([...activeAllowlist, ...hiddenScope]) : null;
+  installDynamicTools(server, scope ? { scopeAllowlist: scope } : {});
 
   // The SDK answers a tools/call for an unknown OR disabled (out-of-group) tool
   // with a raw McpError(-32602 InvalidParams) — bypassing our fail() contract

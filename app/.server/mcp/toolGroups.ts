@@ -49,6 +49,13 @@ export interface ToolGroup {
   recommended?: boolean;
   /** Rough count shown to users; keep in sync with allowlist size. */
   toolCount?: number;
+  /**
+   * El grupo acota `run_tool` a su propio scope SIN que el cliente tenga que pedir
+   * `scripting`. Pedirlo sería el camino obvio y está mal: el allowlist activo es la UNIÓN
+   * de los grupos, así que las tres tools de `scripting` pasarían a verse en `tools/list` —
+   * justo lo que un perfil curado evita.
+   */
+  strict?: boolean;
 }
 
 /** Display order = order users see in the connector UI. */
@@ -85,6 +92,7 @@ export const TOOL_GROUPS: ToolGroup[] = [
     label: "Ghosty App",
     description:
       "Para el agente del TELÉFONO (app Ghosty): imágenes, buscar y leer la web, fotos e iconos de stock, captura de una página y link para compartir. Deliberadamente sin DB, sites, forms ni brand: nadie hace eso desde un móvil, y cada tool de más empeora la elección.",
+    strict: true,
   },
   {
     key: "docs",
@@ -729,6 +737,34 @@ export const SCRIPTING_ALLOWLIST = new Set<string>([
  * selector de tool de ningún agente. NO se borran — se degradan a la vía
  * dinámica. server.ts las deshabilita incondicionalmente tras el allowlist.
  */
+/**
+ * Scope OCULTO por grupo: tools ALCANZABLES por `run_tool`/`discover_tools` en modo strict,
+ * pero NUNCA visibles en `tools/list`.
+ *
+ * No se suman a `activeAllowlist` — sólo al scope de las meta-tools (ver `server.ts`). Así
+ * el pase de `.disable()` las sigue escondiendo, el selector de tool del modelo no engorda,
+ * y `toolCount` (que se deriva del allowlist, más abajo) sigue diciendo la verdad.
+ *
+ * `ghostyapp`: la caja del teléfono publica sitios desde una skill de code-mode, que llama
+ * `run_tool`. No necesita las nueve schemas en su contexto para eso.
+ *
+ * ⚠️ Set propio y no `SITIOS_ALLOWLIST`: aquél trae además `get_file`/`list_files`/
+ * `upload_file`, o sea que metería IO de archivos en el scope del teléfono sin quererlo.
+ */
+export const GROUP_HIDDEN_SCOPE: Partial<Record<ToolGroupKey, Set<string>>> = {
+  ghostyapp: new Set<string>([
+    "create_website",
+    "get_website",
+    "update_website",
+    "delete_website",
+    "deploy_website_file",
+    "upload_website_file",
+    "list_website_files",
+    "inject_html",
+    "list_websites",
+  ]),
+};
+
 export const DYNAMIC_ONLY_TOOLS = new Set<string>([
   // Sistema viejo de share-token — superado por create/list/revoke_share_link
   "generate_share_token", "list_share_tokens", "revoke_share_token",
@@ -775,6 +811,14 @@ export const GROUP_ALLOWLISTS: Partial<Record<ToolGroupKey, Set<string>>> = {
 for (const g of TOOL_GROUPS) {
   const al = GROUP_ALLOWLISTS[g.key];
   if (al) g.toolCount = al.size;
+}
+// ⚠️ `toolCount` sale SÓLO de `GROUP_ALLOWLISTS`, jamás de `GROUP_HIDDEN_SCOPE`: aquéllas
+// son las que el usuario ve en `tools/list`, y sumar las ocultas haría que el catálogo
+// prometiera más tools de las que enseña.
+
+/** ¿Este grupo acota `run_tool` por sí solo? (no confundir con el bucket `scripting`). */
+export function isStrictGroup(key: string): boolean {
+  return TOOL_GROUPS.some((g) => g.key === key && g.strict === true);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
