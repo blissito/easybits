@@ -25,6 +25,8 @@ describe("toolset ghostyapp — el agente del teléfono", () => {
       "transform_image",
       "web_search",
       "web_fetch",
+      "web_extract",
+      "web_extract_status",
       "search_stock_photo",
       "search_icon",
       "screenshot_url",
@@ -44,6 +46,10 @@ describe("toolset ghostyapp — el agente del teléfono", () => {
     for (const t of ["create_website", "create_form", "create_brand_kit", "sandbox_create"]) {
       expect(v.has(t), `${t} no debería estar`).toBe(false);
     }
+  });
+
+  it("deja fuera web_crawl: recorrer un sitio desde un móvil es lento y caro", () => {
+    expect(GHOSTYAPP_ALLOWLIST.has("web_crawl")).toBe(false);
   });
 
   it("no mete alias deprecados: dos nombres para la misma tool", () => {

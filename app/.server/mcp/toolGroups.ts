@@ -355,9 +355,16 @@ export const GHOSTYAPP_ALLOWLIST = new Set<string>([
   // (ya se sacó del grupo `imagenes` con el mismo argumento).
   "create_or_edit_image",
   "transform_image",
-  // Web
+  // Web. `web_fetch` ES el scrape (lee una página aunque bloquee bots); `web_extract` es
+  // el scraping de verdad: saca REGISTROS con esquema (Maps, Mercado Libre, Amazon,
+  // Instagram). Va con su `_status` porque es asíncrona y sin él el agente se queda con un
+  // id y sin forma de recogerlo.
+  //
+  // `web_crawl` NO entra: recorrer un sitio entero desde un teléfono es lento y caro.
   "web_search",
   "web_fetch",
+  "web_extract",
+  "web_extract_status",
   // Material visual sin credenciales
   "search_stock_photo",
   "search_icon",
