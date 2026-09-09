@@ -2116,6 +2116,67 @@ console.log(status.result);  // resultado final del agente`} />
               después.
             </p>
 
+            <h3 className="text-lg font-bold mt-8 mb-3">Bootstrap al reanudar</h3>
+            <p className="text-gray-600 text-sm mb-3">
+              Una caja restaurada de un snapshot revive <strong>sin boot</strong>: no vuelve a correr systemd, ni el entrypoint, ni <code className="bg-gray-100 px-1 rounded">.bashrc</code>. Una caja que durmió tres días despierta con el mundo de hace tres días, y nada lo señala. El bootstrap es la receta que el <strong>host</strong> corre en <strong>cada</strong> despertar, venga de donde venga (una petición al proxy de un puerto, un mensaje al agente, el dominio público) — no sólo cuando llamas a <code className="bg-gray-100 px-1 rounded">sandbox_resume</code>.
+            </p>
+            <CodeExample title="SDK" code={`await sbx.setBootstrap({
+  script: 'git -C /data/work fetch --all --prune' +
+          ' && git -C /data/work checkout -B "sesion/\${EB_SANDBOX_ID}" origin/main' +
+          ' && ln -sfn /skills /data/work/.claude/skills',
+  mode: "async",   // "blocking" espera hasta timeoutSeconds antes de servir
+});`} />
+            <ul className="list-disc ml-5 mt-3 text-sm text-gray-600 space-y-1">
+              <li><strong>No es un campo de <code className="bg-gray-100 px-1 rounded">POST /sandboxes</code></strong>: es una segunda llamada sobre la caja ya creada.</li>
+              <li><strong>Hazlo idempotente</strong> — corre en CADA despertar: <code className="bg-gray-100 px-1 rounded">checkout -B</code>, no <code className="bg-gray-100 px-1 rounded">-b</code>; <code className="bg-gray-100 px-1 rounded">ln -sfn</code>, no <code className="bg-gray-100 px-1 rounded">ln -s</code>.</li>
+              <li>Variables disponibles: <code className="bg-gray-100 px-1 rounded">EB_RESUME=1</code> y <code className="bg-gray-100 px-1 rounded">EB_SANDBOX_ID</code>. El cwd es <code className="bg-gray-100 px-1 rounded">/data/work</code>.</li>
+              <li>Un script que falla <strong>nunca</strong> deja la caja inalcanzable: el resultado queda anotado (<code className="bg-gray-100 px-1 rounded">eb_boot_exit</code>, <code className="bg-gray-100 px-1 rounded">eb_boot_err</code>). Script vacío = apagarlo.</li>
+              <li>⚠️ <strong>Nunca metas una credencial en el script</strong>: la receta viaja en el metadata de la caja y aparece en los listados. Usa <code className="bg-gray-100 px-1 rounded">$secret:</code> desde una tool de git.</li>
+            </ul>
+
+            <h3 className="text-lg font-bold mt-8 mb-3">Git: que el trabajo del agente sobreviva a la caja</h3>
+            <p className="text-gray-600 text-sm mb-3">
+              Sin una forma de publicar, lo que el agente escribió muere con la caja. Siete herramientas cierran el ciclo: clonar el repo, trabajar, publicar. Es también la pieza que bootstrapea el repo de un agente (código + skills) en cada arranque.
+            </p>
+            <TabbedCode
+              tabs={[
+                { label: "SDK", code: `await eb.secrets.set({ name: "GITHUB_TOKEN", value: "ghp_…" });   // una vez
+
+const sbx = await eb.sandboxes.create({ template: "node" });
+await sbx.git.clone({ repo, dir: "/data/work", token: "$secret:GITHUB_TOKEN" });
+await sbx.git.checkout({ dir: "/data/work", branch: "feature/x", create: true });
+await sbx.git.commit({ dir: "/data/work", message: "cambios del agente" });
+await sbx.git.push({ dir: "/data/work", setUpstream: true, token: "$secret:GITHUB_TOKEN" });
+
+const st = await sbx.git.status("/data/work");   // { branch, ahead, behind, clean, ... }` },
+                { label: "REST", code: `# POST para clone|commit|push|pull|checkout, GET para status|log
+curl -X POST https://www.easybits.cloud/api/v2/sandboxes/$SB/git/clone \\
+  -H "Authorization: Bearer $EB_KEY" -H 'Content-Type: application/json' \\
+  -d '{"repo":"https://github.com/tu/repo.git","dir":"/data/work","token":"$secret:GITHUB_TOKEN"}'
+
+curl "https://www.easybits.cloud/api/v2/sandboxes/$SB/git/status?dir=/data/work" \\
+  -H "Authorization: Bearer $EB_KEY"` },
+                { label: "MCP", code: `sandbox_git_clone({ sandboxId, repo, dir, branch?, depth?, commit?, token? })
+sandbox_git_status({ sandboxId, dir })
+sandbox_git_commit({ sandboxId, dir, message, addAll?, paths? })
+sandbox_git_push({ sandboxId, dir, branch?, setUpstream?, token? })
+sandbox_git_pull({ sandboxId, dir, rebase?, token? })
+sandbox_git_checkout({ sandboxId, dir, branch, create?, from? })
+sandbox_git_log({ sandboxId, dir, limit?, cursor? })` },
+              ]}
+            />
+            <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 my-4 text-sm">
+              <strong>La credencial es POR LLAMADA y no se queda en la caja.</strong> El token viaja para esa operación y se borra al terminar: nunca se escribe en el <code className="bg-gray-100 px-1 rounded">.git/config</code> ni aparece en la línea de comando, así que un <code className="bg-gray-100 px-1 rounded">ps</code> desde adentro no lo ve. Un URL con credenciales embebidas (<code className="bg-gray-100 px-1 rounded">https://user:token@…</code>) se rechaza con 422 en vez de aceptarse en silencio, precisamente porque git SÍ lo persistiría.
+            </div>
+            <ul className="list-disc ml-5 mt-3 mb-6 text-sm text-gray-600 space-y-1">
+              <li><code className="bg-gray-100 px-1 rounded">sandbox_git_status</code> devuelve datos, no texto: <code className="bg-gray-100 px-1 rounded">{`{ branch, upstream, ahead, behind, clean, staged[], modified[], untracked[], conflicted[] }`}</code>. Sale de <code className="bg-gray-100 px-1 rounded">porcelain=v2</code>, así que no cambia entre versiones de git ni con el idioma del sistema.</li>
+              <li><code className="bg-gray-100 px-1 rounded">sandbox_git_commit</code> sin cambios devuelve <code className="bg-gray-100 px-1 rounded">{`{ nothingToCommit: true }`}</code> como <strong>éxito</strong>. Un error ahí invita al agente a reintentar, y reintentar no cambia nada: es un bucle.</li>
+              <li><code className="bg-gray-100 px-1 rounded">sandbox_git_checkout</code> con <code className="bg-gray-100 px-1 rounded">create: true</code> usa <code className="bg-gray-100 px-1 rounded">-B</code>, idempotente — pensado para correrse en cada arranque sin fallar con "branch already exists".</li>
+              <li><code className="bg-gray-100 px-1 rounded">sandbox_git_push</code> con <code className="bg-gray-100 px-1 rounded">force</code> usa <code className="bg-gray-100 px-1 rounded">--force-with-lease</code>: si alguien más empujó a esa rama, falla en vez de borrarle el trabajo.</li>
+              <li>La identidad del commit va por llamada (<code className="bg-gray-100 px-1 rounded">authorName</code> / <code className="bg-gray-100 px-1 rounded">authorEmail</code>, default <code className="bg-gray-100 px-1 rounded">EasyBits Agent</code>), sin dejar un <code className="bg-gray-100 px-1 rounded">git config</code> escrito en el repo del cliente.</li>
+              <li>Para repos privados en <code className="bg-gray-100 px-1 rounded">launch_app</code>, el mismo mecanismo: <code className="bg-gray-100 px-1 rounded">launch_app({`{ repo, repoToken: "$secret:GITHUB_TOKEN" }`})</code>. El token no entra al runspec ni al tarball del release.</li>
+            </ul>
+
             <h3 className="text-lg font-bold mt-8 mb-3">Herramientas MCP del grupo sandbox</h3>
             <div className="grid md:grid-cols-2 gap-3 mb-6">
               {[
@@ -2133,6 +2194,14 @@ console.log(status.result);  // resultado final del agente`} />
                 ["sandbox_exec_kill", "sandboxId, execId", "Matar una ejecución background (lo que falta cuando algo se cuelga)"],
                 ["sandbox_run_code", "sandboxId, code, lang", "Ejecutar Python/Node/Bash inline"],
                 ["sandbox_run_cell", "sandboxId, code", "Ejecutar celda en kernel Jupyter persistente"],
+                ["sandbox_set_bootstrap", "sandboxId, script, mode?, timeoutSeconds?", "Receta que el host corre en CADA despertar (idempotente)"],
+                ["sandbox_git_clone", "sandboxId, repo, dir, branch?, depth?, commit?, token?", "Clonar un repo dentro de la caja (token por llamada)"],
+                ["sandbox_git_status", "sandboxId, dir", "Estado como datos: branch, ahead, behind, clean, archivos"],
+                ["sandbox_git_commit", "sandboxId, dir, message, addAll?, paths?", "Commit (sin cambios → nothingToCommit, es éxito)"],
+                ["sandbox_git_push", "sandboxId, dir, branch?, setUpstream?, token?", "Publicar (force usa --force-with-lease)"],
+                ["sandbox_git_pull", "sandboxId, dir, rebase?, token?", "Traer cambios del remoto"],
+                ["sandbox_git_checkout", "sandboxId, dir, branch, create?, from?", "Cambiar de rama (create usa -B, idempotente)"],
+                ["sandbox_git_log", "sandboxId, dir, limit?, cursor?", "Historial paginado"],
                 ["sandbox_files_write", "sandboxId, path, content", "Escribir archivo en el sandbox"],
                 ["sandbox_files_read", "sandboxId, path", "Leer archivo del sandbox"],
                 ["sandbox_files_list", "sandboxId, path", "Listar directorio"],
