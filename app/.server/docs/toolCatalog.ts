@@ -17,7 +17,7 @@ import { TOOL_GROUPS, GROUP_ALLOWLISTS } from "../mcp/toolGroups";
 export type CatalogTool = { name: string; description: string; group: string };
 
 /** Grupos que son PERFILES (recortes por audiencia), no dominios: no agrupan nada. */
-const NON_DOMAIN_GROUPS = new Set(["all", "publico", "ghosty", "public-safe"]);
+const NON_DOMAIN_GROUPS = new Set(["all", "publico", "ghosty", "ghostyapp", "public-safe"]);
 
 // Una tool aparece en varios allowlists porque son perfiles solapados, no una taxonomía.
 // Se elige el allowlist MÁS PEQUEÑO que la contiene = la clasificación más específica.

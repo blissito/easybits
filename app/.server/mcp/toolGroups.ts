@@ -13,6 +13,7 @@
 export type ToolGroupKey =
   | "core"
   | "ghosty"
+  | "ghostyapp"
   | "design"
   | "docs"
   | "sites"
@@ -78,6 +79,12 @@ export const TOOL_GROUPS: ToolGroup[] = [
     label: "Ghosty",
     description: "Curado y mínimo para agentes Ghosty (DeepSeek): set DB completo + documentos + archivos + imagen (gpt-image-2). Sin brand/forms/websites/media para no floodear la elección de tool.",
     toolCount: 25,
+  },
+  {
+    key: "ghostyapp",
+    label: "Ghosty App",
+    description:
+      "Para el agente del TELÉFONO (app Ghosty): imágenes, buscar y leer la web, fotos e iconos de stock, captura de una página y link para compartir. Deliberadamente sin DB, sites, forms ni brand: nadie hace eso desde un móvil, y cada tool de más empeora la elección.",
   },
   {
     key: "docs",
@@ -324,6 +331,40 @@ export const GHOSTY_ALLOWLIST = new Set<string>([
   "create_or_edit_image",
   // Vision — describir/OCR de imágenes (screenshots, fotos) barato (1 cr)
   "describe_image",
+]);
+
+/**
+ * Ghosty App toolset — el agente que vive en el teléfono.
+ *
+ * El criterio de qué entra es "lo que su CAJA no sabe hacer ya". El SDK de la caja trae
+ * render a PDF, voz, transcripción y subagentes, y hay skills de documentos: si esto
+ * ofreciera lo mismo, el modelo tendría dos caminos para una cosa y elegiría mal — que es
+ * exactamente el problema que GHOSTY_ALLOWLIST dice estar evitando.
+ *
+ * Fuera a propósito: DB, websites, forms, brand kits, sandbox, flota, pagos y correo.
+ * Nadie hace eso desde un móvil.
+ *
+ * ⚠️ `research_search` y `research_scrape` NO entran: son alias deprecados de `web_search`
+ * y `web_fetch`, así que darían dos nombres para la misma tool.
+ *
+ * ⚠️ `describe_image` tampoco: el cerebro de esta app es Claude y VE las imágenes. En el
+ * set de DeepSeek sí está, y por eso mismo — aquél no ve.
+ */
+export const GHOSTYAPP_ALLOWLIST = new Set<string>([
+  // Imagen. `create_or_edit_image` cubre crear y editar; `edit_image` está fuera por eso
+  // (ya se sacó del grupo `imagenes` con el mismo argumento).
+  "create_or_edit_image",
+  "transform_image",
+  // Web
+  "web_search",
+  "web_fetch",
+  // Material visual sin credenciales
+  "search_stock_photo",
+  "search_icon",
+  // "enséñame cómo se ve esta página"
+  "screenshot_url",
+  // Repartir lo que genere
+  "create_share_link",
 ]);
 
 /** Video toolset — video_create + character CRUD + list, plus get_file to retrieve the finished mp4. */
@@ -697,6 +738,7 @@ export const DYNAMIC_ONLY_TOOLS = new Set<string>([
 export const GROUP_ALLOWLISTS: Partial<Record<ToolGroupKey, Set<string>>> = {
   core: CORE_ALLOWLIST,
   ghosty: GHOSTY_ALLOWLIST,
+  ghostyapp: GHOSTYAPP_ALLOWLIST,
   design: DESIGN_ALLOWLIST,
   magnet: MAGNET_ALLOWLIST,
   video: VIDEO_ALLOWLIST,

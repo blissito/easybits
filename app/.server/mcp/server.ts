@@ -26,7 +26,7 @@ import { SANDBOX_TEMPLATES } from "../sandbox/schemas";
 import { MAX_SANDBOX_TTL_SECONDS } from "../../lib/plans";
 import { filePreviewHtml, fileUploadHtml, fileListHtml } from "./apps/html";
 import { registerStructuredDocTool } from "./structured/tool";
-import { GROUP_ALLOWLISTS, DYNAMIC_ONLY_TOOLS, type ToolGroupKey } from "./toolGroups";
+import { GROUP_ALLOWLISTS, DYNAMIC_ONLY_TOOLS, TOOL_GROUPS, type ToolGroupKey } from "./toolGroups";
 import { importHtml, type ImportHtmlInput } from "./tools/importHtml";
 import { safeImageBlock } from "./safeImageBlock";
 import { offloadOversizedRead } from "./offloadOversizedRead";
@@ -474,7 +474,22 @@ export function createMcpServer(groups?: string[], denyTools?: string[]) {
   // which tools are visible in `tools/list` — non-selected tools stay in
   // `_registeredTools` (disabled) so `discover_tools` + `run_tool` can reach
   // them without a session reconnect (see ./dynamicTools.ts).
-  const enabled = new Set(groups?.length ? groups : ["core"]);
+  // ⚠️ Un grupo DESCONOCIDO se descarta, y esto no es cosmética.
+  //
+  // Antes cualquier string valía: `needsAllowlist` sólo se activaba si algún grupo pedido
+  // tenía allowlist, así que un nombre que no existe —un typo en el arranque de una caja,
+  // un toolset renombrado— dejaba `activeAllowlist` en null y eso equivale a `all`: se
+  // exponía el catálogo ENTERO, sandbox, flota, pagos y correo incluidos. Y sin ruido: el
+  // agente funcionaba, sólo que con todo. El fallo mudo de siempre.
+  //
+  // Ahora se cae a `core`, que es el suelo. Falla CERRADO.
+  const conocidos = new Set<string>([...TOOL_GROUPS.map((g) => g.key), ...Object.keys(GROUP_ALLOWLISTS)]);
+  const pedidos = groups?.length ? groups : [];
+  const validos = pedidos.filter((g) => conocidos.has(g));
+  for (const g of pedidos) {
+    if (!conocidos.has(g)) console.warn(`[mcp] toolset desconocido, se ignora: ${JSON.stringify(g)}`);
+  }
+  const enabled = new Set(validos.length ? validos : ["core"]);
 
   // Merge allowlists for all requested groups (e.g. "core,design" = union).
   // Allowlists live in ./toolGroups.ts so the dashboard UI can import the same
