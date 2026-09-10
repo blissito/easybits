@@ -2051,6 +2051,75 @@ function emitTurnWebhook(fleetAgent: PoolRow, p: TurnWebhookInput): void {
   });
 }
 
+// ─── Auto-curación: devolverle al modelo lo que su caja perdió ────────────────────
+//
+// Cuando una caja se evapora sin respaldo, el historial sigue entero en
+// `FleetAgentMessage` pero el MODELO empieza en blanco. Avisar de eso (`gap`) es
+// necesario pero no suficiente: sin esto, el usuario escribe "sí, ese mismo" y el
+// agente contesta "¿cuál?".
+//
+// Se paga UNA vez, en el turno siguiente a la pérdida — no en cada turno, que es el
+// parche caro en el que caen los clientes cuando el backend no resuelve esto.
+
+const REPLAY_MAX_MESSAGES = 12;
+/** Tope por CARACTERES, no por número de mensajes: un solo turno puede ser enorme. */
+const REPLAY_MAX_CHARS = 6000;
+
+/** Costura de test: el armado del bloque es lo único con reglas propias que fijar. */
+export const buildContextReplayForTest = (a: string, g: string) => buildContextReplay(a, g);
+
+/** Interruptor por agente. Encendido por defecto; `persona.replayOnReset:false` lo apaga. */
+function replayOnReset(fleetAgent: PoolRow): boolean {
+  const persona = fleetAgent.persona as { replayOnReset?: boolean } | null;
+  return persona?.replayOnReset !== false;
+}
+
+/**
+ * Los últimos mensajes de la conversación, envueltos y etiquetados.
+ *
+ * El envoltorio importa: sin él, el modelo lee el historial como si el usuario acabara
+ * de mandar todo eso de golpe y contesta a la pregunta de hace tres días.
+ */
+async function buildContextReplay(fleetAgentId: string, groupId: string): Promise<string | null> {
+  try {
+    const filas = await db.fleetAgentMessage.findMany({
+      where: { fleetAgentId, groupId },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      take: REPLAY_MAX_MESSAGES,
+      select: { role: true, text: true, mediaUrl: true },
+    });
+    if (!filas.length) return null;
+
+    // Vienen del más nuevo al más viejo: se recorta por el más VIEJO (que es lo que
+    // menos falta hace) y luego se voltea al orden en que se dijeron.
+    const lineas: string[] = [];
+    let total = 0;
+    for (const f of filas) {
+      const quien = f.role === "agent" ? "tú" : "el usuario";
+      const texto = f.mediaUrl ? `${f.text}\n(adjunto: ${f.mediaUrl})` : f.text;
+      const linea = `[${quien}] ${texto}`;
+      if (total + linea.length > REPLAY_MAX_CHARS) break;
+      total += linea.length;
+      lineas.push(linea);
+    }
+    if (!lineas.length) return null;
+    lineas.reverse();
+
+    return [
+      "<contexto_previo>",
+      "Tu memoria de esta conversación se perdió por un problema de infraestructura, así",
+      "que aquí va lo último que se dijo, reconstruido. NO es un mensaje nuevo del usuario",
+      "y no hay que responderlo: úsalo solo para retomar el hilo. No menciones este bloque",
+      "ni el fallo salvo que te pregunten.",
+      ...lineas,
+      "</contexto_previo>",
+    ].join("\n");
+  } catch (e) {
+    console.error(`fleetAgent context replay ${groupId} failed:`, e);
+    return null; // nunca vale la pena tumbar un turno por esto
+  }
+}
+
 // ─── Cursor de conversación (replay para clientes móviles) ────────────────────────
 //
 // Opaco a propósito: el cliente lo guarda y lo devuelve, no lo interpreta. Dentro va
@@ -2509,10 +2578,6 @@ async function runTurn(
   }
 
   let content = bareCompact ? "/compact" : formatContent(msg); // stable UUID → per-conversation .jsonl transcript
-  // ⚠️ El turnId se acuña UNA vez por turno LÓGICO, aquí y no dentro del bucle de
-  // reintento: una caja evaporada que se auto-cura da dos vueltas, y dos ids para un
-  // mismo turno romperían la idempotencia que el webhook le promete al integrador (el
-  // mismo push puede llegar dos veces; `turnId` es como se deduplica).
   // ⚠️ El turnId se acuña UNA vez por turno LÓGICO, en el envoltorio: una caja evaporada
   // que se auto-cura da dos vueltas al bucle de abajo, y dos ids para un mismo turno
   // romperían la idempotencia que el webhook le promete al integrador.
@@ -2524,6 +2589,12 @@ async function runTurn(
   // muerta): si cualquiera de las dos arrancó sin transcript, el modelo no se acuerda.
   let memoryFresh = placed.memoryFresh;
   track.memoryFresh = memoryFresh;
+  // Auto-curación: si el modelo arrancó sin memoria pero el historial sigue en la DB,
+  // se lo devolvemos UNA vez, en este turno. Va antes de que `content` entre al turno.
+  if (memoryFresh && replayOnReset(fleetAgent) && !bareCompact) {
+    const previo = await buildContextReplay(fleetAgent.id, msg.groupId);
+    if (previo) content = `${previo}\n\n${content}`;
+  }
   // Config unit for key + capabilities: the number (WABA) o la conversación misma.
   // Canal WEB (bubbles en landings): los groupId son `web-<uuid>` EFÍMEROS (uno por
   // conversación) → normalizamos a la clave ESTABLE "web" para que TODAS las burbujas

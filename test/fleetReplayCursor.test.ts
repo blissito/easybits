@@ -34,10 +34,14 @@ const porOrden = (a: Msg, b: Msg) =>
 
 const db = {
   fleetAgentMessage: {
-    findMany: async ({ where, take }: any) => {
+    findMany: async ({ where, take, orderBy }: any) => {
+      // ⚠️ Honrar `orderBy`: el replay del cursor pide asc y la reinyección desc. Un
+      // falso que siempre ordena asc devolvería los mensajes MÁS VIEJOS donde el código
+      // real toma los más nuevos, y el test pasaría estando al revés.
+      const desc = Array.isArray(orderBy) && orderBy[0]?.createdAt === "desc";
       let filas = messages
         .filter((m) => m.fleetAgentId === where.fleetAgentId && m.groupId === where.groupId)
-        .sort(porOrden);
+        .sort(desc ? (a, b) => porOrden(b, a) : porOrden);
       if (where.OR) {
         const [gt, tie] = where.OR;
         filas = filas.filter(
@@ -67,9 +71,8 @@ vi.mock("~/.server/storage", () => ({
   buildPublicAssetUrl: (k: string) => k,
 }));
 
-const { listFleetMessages, encodeFleetCursor, decodeFleetCursor } = await import(
-  "~/.server/core/fleetAgentOperations"
-);
+const { listFleetMessages, encodeFleetCursor, decodeFleetCursor, buildContextReplayForTest } =
+  await import("~/.server/core/fleetAgentOperations");
 
 const T0 = new Date("2026-09-10T12:00:00.000Z");
 const fila = (id: string, ms: number, role = "user"): Msg => ({
@@ -192,5 +195,55 @@ describe("gap — el hueco se declara, no se esconde", () => {
     const p1 = await listFleetMessages("fa1", "web-1");
     const p = await listFleetMessages("fa1", "web-1", { since: p1.items[2].cursor });
     expect(p.gap).toBe(false);
+  });
+});
+
+/**
+ * Auto-curación. Avisar del hueco no basta: si el modelo arranca en blanco, el usuario
+ * escribe "sí, ese mismo" y el agente contesta "¿cuál?". Aquí se fija que lo que se le
+ * devuelve al modelo esté ORDENADO, ACOTADO y ETIQUETADO como historial — sin la
+ * etiqueta, el modelo lee el bloque como si el usuario acabara de mandarlo todo de
+ * golpe y responde a la pregunta de hace tres días.
+ */
+describe("reinyección de contexto tras perder la memoria", () => {
+  beforeEach(() => {
+    route = null;
+    messages = [];
+  });
+
+  it("no inventa nada si no hay historial", async () => {
+    expect(await buildContextReplayForTest("fa1", "web-1")).toBeNull();
+  });
+
+  it("devuelve el hilo en el orden en que se dijo, etiquetado y sin pedir respuesta", async () => {
+    messages = [fila("a", 0), fila("b", 1000, "agent"), fila("c", 2000)];
+    const out = (await buildContextReplayForTest("fa1", "web-1"))!;
+    expect(out).toContain("<contexto_previo>");
+    expect(out).toMatch(/NO es un mensaje nuevo del usuario/);
+    // Orden cronológico, no el inverso en que se consultan.
+    expect(out.indexOf("msg a")).toBeLessThan(out.indexOf("msg b"));
+    expect(out.indexOf("msg b")).toBeLessThan(out.indexOf("msg c"));
+    // Quién dijo qué: sin esto el modelo se atribuye lo del usuario.
+    expect(out).toContain("[el usuario] msg a");
+    expect(out).toContain("[tú] msg b");
+  });
+
+  it("recorta por el mensaje más VIEJO, que es el que menos falta hace", async () => {
+    // 12 mensajes de 1000 chars: el tope de 6000 deja los ~6 últimos.
+    messages = Array.from({ length: 12 }, (_, i) => ({
+      ...fila(`m${String(i).padStart(2, "0")}`, i * 1000),
+      text: `${i}`.repeat(1000),
+    }));
+    const out = (await buildContextReplayForTest("fa1", "web-1"))!;
+    expect(out.length).toBeLessThan(7000);
+    // El más reciente sobrevive; el más viejo no.
+    expect(out).toContain("11".repeat(10));
+    expect(out).not.toContain("00".repeat(10));
+  });
+
+  it("conserva el adjunto: si no, el agente ignora la foto que ya había visto", async () => {
+    messages = [{ ...fila("a", 0), mediaUrl: "https://cdn.test/foto.jpg" }];
+    const out = (await buildContextReplayForTest("fa1", "web-1"))!;
+    expect(out).toContain("https://cdn.test/foto.jpg");
   });
 });
