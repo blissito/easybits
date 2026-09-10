@@ -2,13 +2,22 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "cloud.easybits/easybits",
   "title": "EasyBits",
-  "description": "La nube para agentes: microVMs, web, archivos, bases SQL, documentos, video y hosting.",
+  "description": "Persistent Linux microVMs for agents: root, internet, sub-second resume and a public URL.",
   "repository": {
     "url": "https://github.com/blissito/easybits",
     "source": "github"
   },
-  "version": "0.3.4",
+  "version": "0.3.5",
   "websiteUrl": "https://www.easybits.cloud",
+  "icons": [
+    {
+      "src": "https://www.easybits.cloud/logo-purple.svg",
+      "mimeType": "image/svg+xml",
+      "sizes": [
+        "any"
+      ]
+    }
+  ],
   "remotes": [
     {
       "type": "streamable-http",
