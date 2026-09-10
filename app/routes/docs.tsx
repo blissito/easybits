@@ -2338,7 +2338,7 @@ export AGENT_TOKEN="agt_…"`}
               sin saldo el agente responde <code className="bg-gray-100 px-1 rounded">402 insufficient_quota</code> y parece mudo.
             </div>
 
-            <h3 className="text-lg font-bold mb-3">Tus propias tools (MCP)</h3>
+            <h3 id="ghosty-lite-mcp" className="text-lg font-bold mb-3 scroll-mt-24">Tus propias tools (MCP)</h3>
             <p className="text-gray-600 text-sm mb-4">
               El agente monta servidores <a href="https://modelcontextprotocol.io" className="underline" target="_blank" rel="noreferrer">MCP</a> propios al abrir su
               sesión: los declaras al crearlo, en <code className="bg-gray-100 px-1 rounded">mcpServers</code>. La caja ya trae{" "}
@@ -2365,7 +2365,7 @@ export AGENT_TOKEN="agt_…"`}
         "type": "http",
         "name": "easybits",
         "url": "https://www.easybits.cloud/api/mcp",
-        "headers": { "Authorization": "$secret:EASYBITS_API_KEY" }
+        "headers": { "Authorization": "Bearer $secret:EASYBITS_API_KEY" }
       }
     ]
   }'`}
@@ -2390,7 +2390,8 @@ export AGENT_TOKEN="agt_…"`}
               <code className="bg-gray-100 px-1 rounded">{'{ "CLAVE": "valor" }'}</code> o la lista{" "}
               <code className="bg-gray-100 px-1 rounded">{'[{ "name": …, "value": … }]'}</code> del protocolo; da igual cuál escribas. Un valor{" "}
               <code className="bg-gray-100 px-1 rounded">$secret:NOMBRE</code> se resuelve contra tu{" "}
-              <a href="#secrets" className="underline">vault</a> al arrancar la caja: la credencial no queda escrita en el comando ni se guarda dos veces,
+              <a href="#secrets" className="underline">vault</a> al arrancar la caja — dentro del valor, así que{" "}
+              <code className="bg-gray-100 px-1 rounded">"Bearer $secret:EASYBITS_API_KEY"</code> queda como esperas: la credencial no queda escrita en el comando ni se guarda dos veces,
               y rotarla basta para que el próximo arranque tome la nueva.
             </p>
             <div className="mb-8 bg-yellow-50 border-2 border-yellow-300 rounded-xl p-4 text-sm">
@@ -2417,7 +2418,7 @@ export AGENT_TOKEN="agt_…"`}
                 { name: "template", type: "string", desc: '"ghosty-lite" (requerido)' },
                 { name: "name", type: "string", desc: "Cómo lo verás en tu lista de agentes" },
                 { name: "env", type: "object", desc: "Vacío para el cerebro medido con tu llave. Ver Otro cerebro." },
-                { name: "mcpServers", type: "array", desc: "Tus propias tools. Ver Tus propias tools (MCP)." },
+                { name: "mcpServers", type: "array", desc: "Tus propias tools MCP (stdio o http/sse). Ver #ghosty-lite-mcp." },
               ]}
             />
             <Endpoint

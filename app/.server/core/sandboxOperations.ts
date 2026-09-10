@@ -4,7 +4,7 @@ import { promises as dns } from "node:dns";
 import { db } from "../db";
 import type { AuthContext } from "../apiAuth";
 import { requireScope } from "../apiAuth";
-import { getSecretValue, createSecret, SECRET_REF_RE } from "./secretOperations";
+import { getSecretValue, createSecret } from "./secretOperations";
 import { encryptSecret, decryptSecret } from "../crypto";
 import { createApiKey } from "../iam";
 import { can, delegatedAccountIds, SCOPES } from "../delegation";
@@ -438,24 +438,30 @@ async function expandAcpMcpSecrets(
   ownerId: string
 ): Promise<AcpMcpServer[]> {
   const cache = new Map<string, string>();
-  const resolve = async (list: Array<{ name: string; value: string }>, where: string) =>
-    Promise.all(
-      list.map(async (e) => {
-        const m = e.value.match(SECRET_REF_RE);
-        if (!m) return e;
+  // A diferencia del `$secret:` canónico (que exige ser TODO el valor), aquí la
+  // referencia se interpola DENTRO del string: un header de MCP casi siempre es
+  // `Bearer <llave>`, y con el patrón anclado el valor salía sin el `Bearer` — un 401
+  // que parece del servidor remoto. Un valor que es sólo la referencia sigue igual.
+  const REF_INLINE = /\$secret:([A-Z_][A-Z0-9_]*)/g;
+  const resolve = async (list: Array<{ name: string; value: string }>, where: string) => {
+    for (const e of list) {
+      for (const m of e.value.matchAll(REF_INLINE)) {
         const secretName = m[1];
-        if (!cache.has(secretName)) {
-          const v = await getSecretValue(ownerId, secretName).catch(() => null);
-          if (v == null) {
-            throw new Error(
-              `${where}.${e.name} apunta a $secret:${secretName}, que no existe en el vault. Cárgalo con \`secret_set\` o en /dash/developer/secrets.`
-            );
-          }
-          cache.set(secretName, v);
+        if (cache.has(secretName)) continue;
+        const v = await getSecretValue(ownerId, secretName).catch(() => null);
+        if (v == null) {
+          throw new Error(
+            `${where}.${e.name} apunta a $secret:${secretName}, que no existe en el vault. Cárgalo con \`secret_set\` o en /dash/developer/secrets.`
+          );
         }
-        return { name: e.name, value: cache.get(secretName)! };
-      })
-    );
+        cache.set(secretName, v);
+      }
+    }
+    return list.map((e) => ({
+      name: e.name,
+      value: e.value.replace(REF_INLINE, (_, n: string) => cache.get(n)!),
+    }));
+  };
   const out: AcpMcpServer[] = [];
   for (const s of servers) {
     if ("url" in s) {
