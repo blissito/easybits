@@ -18,3 +18,7 @@ scripts/_backups/
 
 # Runtime logs (Winston) — no deben trackearse
 *.log
+
+# Llave privada Ed25519 del MCP Registry (namespace cloud.easybits/*). NUNCA al repo.
+*.pem
+mcp-registry-key.pem
