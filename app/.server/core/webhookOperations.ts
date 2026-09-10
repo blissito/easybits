@@ -2,7 +2,7 @@ import { randomBytes } from "crypto";
 import { db } from "../db";
 import type { AuthContext } from "../apiAuth";
 import { requireScope } from "../apiAuth";
-import { WEBHOOK_EVENTS, type WebhookEvent } from "../webhooks";
+import { WEBHOOK_EVENTS, forgetWebhookCache, type WebhookEvent } from "../webhooks";
 
 // Derivado del catálogo único (`webhooks.ts`). Cuando esto era una lista a mano se quedó
 // atrás: `workspace.*` se despachaba pero no se podía suscribir.
@@ -67,6 +67,7 @@ export async function createWebhook(
       userId: ctx.user.id,
     },
   });
+  forgetWebhookCache(ctx.user.id);
 
   return {
     id: webhook.id,
@@ -148,6 +149,7 @@ export async function updateWebhookConfig(
     where: { id: webhookId },
     data: updates,
   });
+  forgetWebhookCache(ctx.user.id);
 
   return {
     id: updated.id,
@@ -171,5 +173,6 @@ export async function deleteWebhookById(ctx: AuthContext, webhookId: string) {
     });
   }
   await db.webhook.delete({ where: { id: webhookId } });
+  forgetWebhookCache(ctx.user.id);
   return { success: true };
 }

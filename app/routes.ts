@@ -258,6 +258,7 @@ export default [
     route("fleet-agents/:fleetAgentId/delete", "routes/api/v2/fleet-agents.$fleetAgentId.delete.ts"),
     route("fleet-agents/:fleetAgentId/message", "routes/api/v2/fleet-agents.$fleetAgentId.message.ts"),
     route("fleet-agents/:fleetAgentId/message-stream", "routes/api/v2/fleet-agents.$fleetAgentId.message-stream.ts"),
+    route("fleet-agents/:fleetAgentId/messages", "routes/api/v2/fleet-agents.$fleetAgentId.messages.ts"),
     route("fleet-agents/:fleetAgentId/group", "routes/api/v2/fleet-agents.$fleetAgentId.group.ts"),
     route("fleet-agents/:fleetAgentId/capabilities", "routes/api/v2/fleet-agents.$fleetAgentId.capabilities.ts"),
     route("fleet-agents/:fleetAgentId/tokens", "routes/api/v2/fleet-agents.$fleetAgentId.tokens.ts"),

@@ -27,6 +27,7 @@ import {
 import { getSecretValue } from "~/.server/core/secretOperations";
 import { ensureWorkerTokens } from "~/.server/core/fleetTokens";
 import { recordFleetTurnUsage } from "~/.server/core/fleetUsage";
+import { dispatchWebhooks } from "~/.server/webhooks";
 import { attributeSandboxSession } from "~/.server/core/sandboxSessions";
 import { getReservedCapacity } from "~/.server/core/sandboxReservations";
 import {
@@ -1799,7 +1800,57 @@ export function shouldRotateSession(
   return age > ttl && idle > sessionTtlMinIdleMs();
 }
 
-type Reservation = { agentId: string; sessionUuid: string; needsRestore: boolean };
+/** Por qué el modelo arrancó sin su transcript. Se persiste en `FleetAgentRoute`. */
+export type ContextResetReason = "cold-no-blob" | "box-lost" | "session-rotate";
+
+type Reservation = {
+  agentId: string;
+  sessionUuid: string;
+  needsRestore: boolean;
+  // Pérdida de contexto DELIBERADA (rotación de sesión): no hay nada que restaurar, pero
+  // el modelo igual arranca en blanco y el cliente merece enterarse.
+  resetReason?: ContextResetReason;
+};
+
+/**
+ * Marca en la ruta que el modelo arrancó sin memoria — pero SOLO si de verdad se perdió
+ * algo.
+ *
+ * ⚠️ El discriminador es el que hace que esto sirva: una conversación NUEVA también
+ * "restaura en falso", y eso no es una pérdida, es un estreno. Sin este filtro, TODO
+ * primer turno reportaría un hueco y el cliente aprendería a ignorar la señal — que es
+ * la forma más rápida de que una alarma deje de valer.
+ *
+ * La prueba de que hubo algo que perder es que existan mensajes previos: el historial
+ * está en `FleetAgentMessage` (fuente de verdad, independiente del worker), así que
+ * "hablamos antes y ahora no se acuerda" es exactamente `findFirst` sobre el índice
+ * `[fleetAgentId, groupId, createdAt]`. Solo se paga en el camino frío con restore
+ * fallido, que es raro.
+ *
+ * Best-effort: nunca tumba un turno.
+ */
+async function stampContextReset(
+  fleetAgentId: string,
+  groupId: string,
+  reason: ContextResetReason
+): Promise<boolean> {
+  try {
+    const previo = await db.fleetAgentMessage.findFirst({
+      where: { fleetAgentId, groupId },
+      select: { id: true },
+    });
+    if (!previo) return false; // conversación nueva: no hay nada perdido
+    await db.fleetAgentRoute.update({
+      where: { fleetAgentId_groupId: { fleetAgentId, groupId } },
+      data: { contextResetAt: new Date(), contextResetReason: reason },
+    });
+    auditLog("context.reset", { fleetAgent: fleetAgentId, groupId, reason });
+    return true;
+  } catch (e) {
+    console.error(`fleetAgent contextReset stamp ${groupId} failed:`, e);
+    return false;
+  }
+}
 async function reserveVm(ctx: AuthContext, fleetAgent: PoolRow, groupId: string): Promise<Reservation> {
   const key = { fleetAgentId_groupId: { fleetAgentId: fleetAgent.id, groupId } };
   return withLock(`place:${fleetAgent.id}`, async () => {
@@ -1894,7 +1945,7 @@ async function reserveVm(ctx: AuthContext, fleetAgent: PoolRow, groupId: string)
           to: rotated,
           ageHours: Math.round((Date.now() - fresh.createdAt.getTime()) / 3600_000),
         });
-        return { agentId: target.id, sessionUuid: rotated, needsRestore: false };
+        return { agentId: target.id, sessionUuid: rotated, needsRestore: false, resetReason: "session-rotate" };
       }
       const moved = fresh.agentId !== target.id;
       if (moved) {
@@ -1915,6 +1966,223 @@ async function reserveVm(ctx: AuthContext, fleetAgent: PoolRow, groupId: string)
   });
 }
 
+// ─── Avisos de turno (el que hace posible una app móvil) ──────────────────────────
+//
+// En iOS/Android la app se va al fondo, el sistema mata el socket y el turno termina
+// dentro de la microVM sin que nadie se entere. Este webhook es la mitad que faltaba:
+// el integrador lo recibe en su servidor y dispara su propio APNs/FCM.
+//
+// Por eso el payload trae `title` y `summary` ya masticados: un push de "tu agente
+// terminó" tiene que ser una alerta VISIBLE, y una alerta visible necesita texto. Si
+// solo mandáramos ids, cada integrador tendría que hacer una segunda petición antes de
+// poder notificar — justo en el momento en que menos tiempo tiene.
+
+/** Cuánto del reply cabe en la pantalla de bloqueo antes de estorbar. */
+const TURN_SUMMARY_CHARS = 140;
+
+function turnSummary(reply: string): string {
+  const plano = reply.replace(/\s+/g, " ").trim();
+  return plano.length > TURN_SUMMARY_CHARS ? `${plano.slice(0, TURN_SUMMARY_CHARS - 1)}…` : plano;
+}
+
+type TurnWebhookInput = {
+  turnId: string;
+  groupId: string;
+  sessionUuid: string;
+  startedAt: Date;
+  memoryReset: boolean;
+  /** Éxito. `reply` YA debe venir limpio (ver el aviso de abajo). */
+  reply?: string;
+  replyRow?: { id: string; createdAt: Date } | null;
+  usage?: FleetTurnUsage;
+  /** Fallo. Excluyente con `reply`. */
+  error?: { code: "at_capacity" | "rate_limited" | "worker_error"; message: string };
+};
+
+/**
+ * Emite `turn.completed` / `turn.failed`. Fire-and-forget: jamás retrasa ni tumba un turno.
+ *
+ * ⚠️ `reply` tiene que llegar ya pasado por `stripInternal`. El texto crudo puede llevar
+ * `<internal>…</internal>` — el razonamiento privado con el que un agente decide callarse —
+ * y eso ya se filtró a clientes por WhatsApp antes. Filtrarlo a la pantalla de bloqueo de
+ * un teléfono sería peor: ahí no hay forma de borrarlo.
+ */
+function emitTurnWebhook(fleetAgent: PoolRow, p: TurnWebhookInput): void {
+  const finishedAt = new Date();
+  const base = {
+    turnId: p.turnId,
+    fleetAgentId: fleetAgent.id,
+    agentName: fleetAgent.name ?? null,
+    groupId: p.groupId,
+    sessionUuid: p.sessionUuid,
+    memoryReset: p.memoryReset,
+    startedAt: p.startedAt.toISOString(),
+    finishedAt: finishedAt.toISOString(),
+    durationMs: finishedAt.getTime() - p.startedAt.getTime(),
+  };
+
+  if (p.error) {
+    void dispatchWebhooks(fleetAgent.ownerId, "turn.failed", {
+      ...base,
+      title: fleetAgent.name ? `${fleetAgent.name} no pudo responder` : "El agente no pudo responder",
+      summary: p.error.message,
+      error: p.error,
+    });
+    return;
+  }
+
+  const reply = p.reply ?? "";
+  void dispatchWebhooks(fleetAgent.ownerId, "turn.completed", {
+    ...base,
+    title: fleetAgent.name ? `${fleetAgent.name} respondió` : "Tu agente respondió",
+    summary: turnSummary(reply),
+    replyLength: reply.length,
+    // El cursor JUSTO de este turno: el cliente lo manda en `?since=` y recibe lo que
+    // venga DESPUÉS, sin volver a bajarse la respuesta que el push ya le contó.
+    cursor: p.replyRow ? encodeFleetCursor(p.replyRow) : null,
+    usage: p.usage
+      ? {
+          model: p.usage.model ?? null,
+          inputTokens: p.usage.inputTokens ?? null,
+          outputTokens: p.usage.outputTokens ?? null,
+          toolCalls: p.usage.toolCalls ?? null,
+        }
+      : null,
+  });
+}
+
+// ─── Cursor de conversación (replay para clientes móviles) ────────────────────────
+//
+// Opaco a propósito: el cliente lo guarda y lo devuelve, no lo interpreta. Dentro va
+// `(createdAt, id)` porque `createdAt` solo no basta — dos filas del mismo milisegundo
+// (el par pregunta/respuesta de un turno rápido) se saltarían una.
+
+export type FleetCursor = { t: Date; i: string };
+
+export function encodeFleetCursor(row: { createdAt: Date; id: string }): string {
+  return Buffer.from(JSON.stringify({ t: row.createdAt.toISOString(), i: row.id })).toString("base64url");
+}
+
+export function decodeFleetCursor(raw: string): FleetCursor | null {
+  try {
+    const { t, i } = JSON.parse(Buffer.from(raw, "base64url").toString("utf8"));
+    const fecha = new Date(t);
+    if (!i || typeof i !== "string" || Number.isNaN(fecha.getTime())) return null;
+    return { t: fecha, i };
+  } catch {
+    return null;
+  }
+}
+
+export type FleetMessagesPage = {
+  items: Array<{
+    id: string;
+    role: string;
+    text: string;
+    sender: string | null;
+    senderName: string | null;
+    mediaUrl: string | null;
+    mediaType: string | null;
+    mediaMime: string | null;
+    createdAt: Date;
+    cursor: string;
+  }>;
+  /** Dónde reanudar la próxima vez. Existe aunque `hasMore` sea false. */
+  cursor: string | null;
+  hasMore: boolean;
+  /** El cliente debe recargar entero: lo que devolvemos no es un delta fiable. */
+  gap: boolean;
+  gapReason?: "cursor_too_old" | "context_reset";
+  /** Cuándo el agente perdió la memoria (solo con gapReason "context_reset"). */
+  resetAt?: Date;
+};
+
+const MAX_REPLAY_LIMIT = 200;
+
+/**
+ * Historial de una conversación, con cursor de seguimiento de cola.
+ *
+ * Es lo que hace usable un agente desde una app móvil: el teléfono se va al fondo, el
+ * sistema mata el SSE, y al volver la app pide `since=<lo último que vio>` en vez de
+ * traerse el hilo entero.
+ *
+ * `gap` es la parte honesta. Un hueco silencioso es pérdida de mensajes, así que se
+ * declara en dos casos distintos:
+ *   · `cursor_too_old` — el cursor no se entiende o es anterior a lo que conservamos.
+ *   · `context_reset`  — tenemos el historial, pero el AGENTE no: su caja se evaporó sin
+ *     respaldo (o se rotó la sesión). El hilo se lee bien; el modelo empieza en blanco.
+ */
+export async function listFleetMessages(
+  fleetAgentId: string,
+  groupId: string,
+  opts: { since?: string | null; limit?: number } = {}
+): Promise<FleetMessagesPage> {
+  const limit = Math.min(Math.max(opts.limit ?? 50, 1), MAX_REPLAY_LIMIT);
+  const cursor = opts.since ? decodeFleetCursor(opts.since) : null;
+  const cursorIlegible = !!opts.since && !cursor;
+
+  const select = {
+    id: true, role: true, text: true, sender: true, senderName: true,
+    mediaUrl: true, mediaType: true, mediaMime: true, createdAt: true,
+  } as const;
+
+  const filas = await db.fleetAgentMessage.findMany({
+    where: {
+      fleetAgentId,
+      groupId,
+      ...(cursor
+        ? { OR: [{ createdAt: { gt: cursor.t } }, { createdAt: cursor.t, id: { gt: cursor.i } }] }
+        : {}),
+    },
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    take: limit + 1,
+    select,
+  });
+
+  const hasMore = filas.length > limit;
+  const page = hasMore ? filas.slice(0, limit) : filas;
+  const items = page.map((f) => ({ ...f, cursor: encodeFleetCursor(f) }));
+
+  // El cursor que se devuelve es el de la última fila entregada; si no vino nada, se
+  // conserva el que el cliente ya tenía (no se le puede pedir que empiece de cero).
+  const último = items.at(-1)?.cursor ?? opts.since ?? null;
+
+  let gap = false;
+  let gapReason: FleetMessagesPage["gapReason"];
+  let resetAt: Date | undefined;
+
+  if (cursorIlegible) {
+    gap = true;
+    gapReason = "cursor_too_old";
+  } else if (cursor) {
+    // ¿El cursor es anterior a la fila más vieja que conservamos? Hoy la retención es
+    // infinita, así que esto solo salta con un cursor inventado — pero la rama existe
+    // desde el día uno a propósito: el día que haya purga, añadirla sería un cambio
+    // incompatible para todo cliente que ya dependa de `?since=`.
+    const másVieja = await db.fleetAgentMessage.findFirst({
+      where: { fleetAgentId, groupId },
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+      select: { createdAt: true },
+    });
+    if (másVieja && cursor.t < másVieja.createdAt) {
+      gap = true;
+      gapReason = "cursor_too_old";
+    } else {
+      const route = await db.fleetAgentRoute.findUnique({
+        where: { fleetAgentId_groupId: { fleetAgentId, groupId } },
+        select: { contextResetAt: true },
+      });
+      if (route?.contextResetAt && route.contextResetAt > cursor.t) {
+        gap = true;
+        gapReason = "context_reset";
+        resetAt = route.contextResetAt;
+      }
+    }
+  }
+
+  return { items, cursor: último, hasMore, gap, ...(gapReason ? { gapReason } : {}), ...(resetAt ? { resetAt } : {}) };
+}
+
 // Resolve the VM that should host the worker for `groupId`. Sticky per group:
 //   - warm path (route + running agent): return it, no lock, no wait.
 //   - cold path: reserve under the lock (fast), then boot + restore OUTSIDE the
@@ -1929,7 +2197,7 @@ export async function pickOrSpawn(ctx: AuthContext, fleetAgent: PoolRow, groupId
     const agent = await db.agent.findUnique({ where: { id: route.agentId } });
     if (agent?.status === "running") {
       auditLog("place.warm", { groupId, agentId: agent.id });
-      return { vm: agent, sessionUuid: route.sessionUuid };
+      return { vm: agent, sessionUuid: route.sessionUuid, memoryFresh: false };
     }
   }
 
@@ -1959,10 +2227,21 @@ export async function pickOrSpawn(ctx: AuthContext, fleetAgent: PoolRow, groupId
       auditLog("place.retry", { groupId, agentId: res.agentId, attempt });
       continue;
     }
+    // El booleano de `restoreConversation` se tiraba a la basura, y era justo el dato
+    // que dice si el MODELO se acuerda de algo: `false` = no había blob que restaurar,
+    // así que el worker arranca en blanco aunque el historial siga entero en la DB.
+    let memoryFresh = false;
     if (res.needsRestore) {
-      await restoreConversation(ctx, vm, fleetAgent.id, res.sessionUuid).catch((e) =>
-        console.error(`fleetAgent restore ${res.sessionUuid} failed:`, e)
-      );
+      const restored = await restoreConversation(ctx, vm, fleetAgent.id, res.sessionUuid).catch((e) => {
+        console.error(`fleetAgent restore ${res.sessionUuid} failed:`, e);
+        return false;
+      });
+      if (!restored) {
+        memoryFresh = await stampContextReset(fleetAgent.id, groupId, "cold-no-blob");
+      }
+    } else if (res.resetReason) {
+      // Rotación de sesión: pérdida deliberada, sin restore de por medio.
+      memoryFresh = await stampContextReset(fleetAgent.id, groupId, res.resetReason);
     }
     auditLog("place.cold", {
       groupId,
@@ -1970,9 +2249,10 @@ export async function pickOrSpawn(ctx: AuthContext, fleetAgent: PoolRow, groupId
       bootMs: Date.now() - t0,
       building: wasBuilding,
       restored: res.needsRestore,
+      memoryFresh,
       ...(attempt > 1 ? { attempt } : {}),
     });
-    return { vm, sessionUuid: res.sessionUuid };
+    return { vm, sessionUuid: res.sessionUuid, memoryFresh };
   }
 }
 
@@ -2043,29 +2323,111 @@ export async function clearGroupSession(ctx: AuthContext, fleetAgent: PoolRow, g
 
 // MAIN ENTRY — the Baileys surface calls this per inbound group message.
 // Returns the agent's reply text (to send back to the group).
+/**
+ * Estado del turno que el envoltorio necesita para poder avisar de un FALLO.
+ * El cuerpo lo va rellenando conforme se entera de las cosas.
+ */
+type TurnTrack = {
+  turnId: string;
+  startedAt: Date;
+  agent: PoolRow | null;
+  sessionUuid: string;
+  memoryFresh: boolean;
+};
+
+/**
+ * Envoltorio: acuña la identidad del turno y garantiza que un turno que muere avise.
+ *
+ * Un cliente móvil que no oye NADA no distingue "sigue pensando" de "se murió" — que es
+ * exactamente el fallo que este trabajo existe para arreglar.
+ *
+ * ⚠️ `FleetAgentAtCapacity` NO se avisa aquí: la superficie lo reintenta
+ * (`withAdmitRetry`, hasta ~25s en HTTP y ~4min en Baileys) y la inmensa mayoría de las
+ * veces el turno acaba saliendo bien. Avisar de un fallo que se va a resolver solo es
+ * peor que no avisar: entrena al integrador a ignorar el evento. Quien abandona de
+ * verdad es la superficie, y para eso está `emitTurnAdmissionFailure`.
+ */
 export async function routeMessage(
   fleetAgentId: string,
   msg: InboundMessage,
-  // `onBlock`: entrega TEMPRANA — se llama con el texto dicho antes de cada tool, para
-  // que el "permíteme un momento" salga MIENTRAS el agente trabaja. Con él, el valor
-  // devuelto es sólo lo que falta por mandar. Ver collectStream.
-  opts: {
-    skipRateLimit?: boolean;
-    hasMedia?: boolean;
-    skipUserLog?: boolean;
-    onChunk?: (s: string) => void;
-    onTool?: (name: string, ev?: FleetToolEvent) => void;
-    onBlock?: (text: string) => Promise<void> | void;
-    /**
-     * Cierre del turno con su consumo. Se llama UNA vez, después del último chunk:
-     * los tokens sólo se conocen al final. Si el worker no reporta consumo (caja
-     * vieja sin el evento `usage` en el cable), llega igual con duración y número de
-     * tools — que es lo que EasyBits mide por su cuenta.
-     */
-    onUsage?: (u: FleetTurnUsage) => void;
-  } = {}
+  opts: RouteMessageOpts = {}
+): Promise<string> {
+  const track: TurnTrack = {
+    turnId: randomUUID(),
+    startedAt: new Date(),
+    agent: null,
+    sessionUuid: "",
+    memoryFresh: false,
+  };
+  try {
+    return await runTurn(fleetAgentId, msg, opts, track);
+  } catch (e) {
+    if (track.agent && !(e instanceof FleetAgentAtCapacity)) {
+      emitTurnWebhook(track.agent, {
+        turnId: track.turnId,
+        groupId: msg.groupId,
+        sessionUuid: track.sessionUuid,
+        startedAt: track.startedAt,
+        memoryReset: track.memoryFresh,
+        error: {
+          code: e instanceof FleetAgentRateLimited ? "rate_limited" : "worker_error",
+          message: e instanceof Error ? e.message : String(e),
+        },
+      });
+    }
+    throw e;
+  }
+}
+
+/**
+ * Aviso de que la superficie ABANDONÓ por saturación, tras agotar sus reintentos.
+ * Se llama desde la superficie, no desde el turno, porque solo ella sabe que se rindió.
+ */
+export async function emitTurnAdmissionFailure(fleetAgentId: string, groupId: string, message: string) {
+  try {
+    const fleetAgent = await db.fleetAgent.findUniqueOrThrow({ where: { id: fleetAgentId } });
+    emitTurnWebhook(fleetAgent, {
+      turnId: randomUUID(),
+      groupId,
+      sessionUuid: "",
+      startedAt: new Date(),
+      memoryReset: false,
+      error: { code: "at_capacity", message },
+    });
+  } catch (e) {
+    console.error("fleetAgent admission-failure webhook failed:", e);
+  }
+}
+
+type RouteMessageOpts = {
+  skipRateLimit?: boolean;
+  hasMedia?: boolean;
+  skipUserLog?: boolean;
+  onChunk?: (s: string) => void;
+  onTool?: (name: string, ev?: FleetToolEvent) => void;
+  /**
+   * Entrega TEMPRANA — se llama con el texto dicho antes de cada tool, para que el
+   * "permíteme un momento" salga MIENTRAS el agente trabaja. Con él, el valor devuelto
+   * es sólo lo que falta por mandar. Ver collectStream.
+   */
+  onBlock?: (text: string) => Promise<void> | void;
+  /**
+   * Cierre del turno con su consumo. Se llama UNA vez, después del último chunk:
+   * los tokens sólo se conocen al final. Si el worker no reporta consumo (caja
+   * vieja sin el evento `usage` en el cable), llega igual con duración y número de
+   * tools — que es lo que EasyBits mide por su cuenta.
+   */
+  onUsage?: (u: FleetTurnUsage) => void;
+};
+
+async function runTurn(
+  fleetAgentId: string,
+  msg: InboundMessage,
+  opts: RouteMessageOpts,
+  track: TurnTrack
 ): Promise<string> {
   const fleetAgent = await db.fleetAgent.findUniqueOrThrow({ where: { id: fleetAgentId } });
+  track.agent = fleetAgent;
   const ctx = await ctxForOwner(fleetAgent.ownerId);
 
   // Channel-agnostic STT: a non-Baileys channel can hand us a raw voice note;
@@ -2147,7 +2509,21 @@ export async function routeMessage(
   }
 
   let content = bareCompact ? "/compact" : formatContent(msg); // stable UUID → per-conversation .jsonl transcript
+  // ⚠️ El turnId se acuña UNA vez por turno LÓGICO, aquí y no dentro del bucle de
+  // reintento: una caja evaporada que se auto-cura da dos vueltas, y dos ids para un
+  // mismo turno romperían la idempotencia que el webhook le promete al integrador (el
+  // mismo push puede llegar dos veces; `turnId` es como se deduplica).
+  // ⚠️ El turnId se acuña UNA vez por turno LÓGICO, en el envoltorio: una caja evaporada
+  // que se auto-cura da dos vueltas al bucle de abajo, y dos ids para un mismo turno
+  // romperían la idempotencia que el webhook le promete al integrador.
+  const { turnId, startedAt: turnStartedAt } = track;
+  let lastTurnUsage: FleetTurnUsage | undefined;
   let placed = await pickOrSpawn(ctx, fleetAgent, msg.groupId);
+  track.sessionUuid = placed.sessionUuid;
+  // ⚠️ Se OR-ea entre las DOS llamadas a pickOrSpawn (aquí y el re-place por caja
+  // muerta): si cualquiera de las dos arrancó sin transcript, el modelo no se acuerda.
+  let memoryFresh = placed.memoryFresh;
+  track.memoryFresh = memoryFresh;
   // Config unit for key + capabilities: the number (WABA) o la conversación misma.
   // Canal WEB (bubbles en landings): los groupId son `web-<uuid>` EFÍMEROS (uno por
   // conversación) → normalizamos a la clave ESTABLE "web" para que TODAS las burbujas
@@ -2478,6 +2854,7 @@ export async function routeMessage(
         toolCalls,
       };
       opts.onUsage?.(turnUsage);
+      lastTurnUsage = turnUsage;
       // Contabilidad dentro de routeMessage, no en las rutas: así queda cubierto todo
       // canal (Baileys, WABA, HTTP, SSE) de una vez y no depende de que cada superficie
       // se acuerde de registrar.
@@ -2511,6 +2888,9 @@ export async function routeMessage(
       });
       await markWorkerLost(worker.id);
       placed = await pickOrSpawn(ctx, fleetAgent, msg.groupId); // fresh box, restores memory
+      memoryFresh ||= placed.memoryFresh; // la caja evaporada pudo no traer respaldo
+      track.memoryFresh = memoryFresh;
+      track.sessionUuid = placed.sessionUuid;
     } finally {
       busyVms.delete(worker.id);
     }
@@ -2526,11 +2906,30 @@ export async function routeMessage(
   // Transcript = turno COMPLETO (adelantos + resto), aunque al canal hayan salido en
   // mensajes distintos.
   const fullTurn = [...earlyBlocks, reply].filter(Boolean).join("\n\n");
+  let replyRow: { id: string; createdAt: Date } | null = null;
   if (fullTurn) {
-    await db.fleetAgentMessage.create({
+    replyRow = await db.fleetAgentMessage.create({
       data: { fleetAgentId: fleetAgent.id, groupId: msg.groupId, role: "agent", text: fullTurn },
+      select: { id: true, createdAt: true },
     });
   }
+  // ⚠️ El aviso sale AQUÍ, con la fila ya escrita, y no junto al `auditLog("turn.ok")`
+  // de arriba: ese punto está DENTRO del bucle de reintento y antes de este insert. Si
+  // el webhook saliera antes, la app despertaría por el push, pediría `?since=` y no
+  // vería todavía la respuesta de la que la acaban de avisar — una carrera garantizada.
+  //
+  // `stripInternal` sobre el texto que va al resumen: el crudo puede llevar el
+  // razonamiento privado del agente, y una pantalla de bloqueo no tiene deshacer.
+  emitTurnWebhook(fleetAgent, {
+    turnId,
+    groupId: msg.groupId,
+    sessionUuid: placed.sessionUuid,
+    startedAt: turnStartedAt,
+    memoryReset: memoryFresh,
+    reply: stripInternal(fullTurn),
+    replyRow,
+    usage: lastTurnUsage,
+  });
   // Auto-compact trigger (off the critical path): measure the transcript AFTER
   // replying; if it crosses the threshold, flag the session so the NEXT turn
   // injects a "/compact". Fire-and-forget — never delays or fails this reply.

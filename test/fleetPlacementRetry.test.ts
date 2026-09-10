@@ -24,10 +24,15 @@ type Route = {
   createdAt: Date;
   lastMessageAt: Date;
   detachedAt: Date | null;
+  // Sello de "el modelo arrancó sin su transcript" — lo que luego contesta `gap`.
+  contextResetAt?: Date;
+  contextResetReason?: string;
 };
 
 let agents: Agent[] = [];
 let routes: Route[] = [];
+/** Historial previo de la conversación: es el discriminador de "se perdió memoria". */
+let messages: { fleetAgentId: string; groupId: string }[] = [];
 
 const db = {
   agent: {
@@ -57,8 +62,14 @@ const db = {
       return routes.find((r) => r.fleetAgentId === k.fleetAgentId && r.groupId === k.groupId) ?? null;
     },
     count: async ({ where }: any) => routes.filter((r) => r.agentId === where.agentId).length,
+    // El caller direcciona la ruta de DOS formas: por `id` y por la clave compuesta
+    // `fleetAgentId_groupId` (el @@unique del esquema). El falso tiene que entender las
+    // dos o un update silencioso se pierde y el test miente.
     update: async ({ where, data }: any) => {
-      const r = routes.find((x) => x.id === where.id)!;
+      const k = where.fleetAgentId_groupId;
+      const r = k
+        ? routes.find((x) => x.fleetAgentId === k.fleetAgentId && x.groupId === k.groupId)!
+        : routes.find((x) => x.id === where.id)!;
       Object.assign(r, data);
       return r;
     },
@@ -71,6 +82,10 @@ const db = {
       routes.push(r);
       return r;
     },
+  },
+  fleetAgentMessage: {
+    findFirst: async ({ where }: any) =>
+      messages.find((m) => m.fleetAgentId === where.fleetAgentId && m.groupId === where.groupId) ?? null,
   },
 };
 
@@ -110,6 +125,7 @@ function boxIsGone(sandboxId: string) {
 describe("pickOrSpawn — una caja evaporada no cuesta el turno", () => {
   beforeEach(() => {
     resumeSandbox.mockReset();
+    messages = [];
     agents = [
       { id: "agent-dead", sandboxId: "sb_dead", fleetAgentId: "fa1", status: "suspended" },
       { id: "agent-ok", sandboxId: "sb_ok", fleetAgentId: "fa1", status: "suspended" },
@@ -163,5 +179,60 @@ describe("pickOrSpawn — una caja evaporada no cuesta el turno", () => {
     const placed = await pickOrSpawn(CTX, FLEET, "web-1");
     expect(placed.vm.id).toBe("agent-dead"); // la ruta ya apuntaba aquí; despertó bien
     expect(resumeSandbox).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * `memoryFresh` = "el modelo arrancó SIN su transcript". Es la señal con la que un
+ * cliente móvil se entera de que el agente ya no recuerda la conversación, aunque el
+ * historial siga entero en la DB.
+ *
+ * El storage está mockeado sin blob (`getReadUrl → null`), así que `restoreConversation`
+ * devuelve false en TODA colocación fría: es exactamente el escenario de la caja que se
+ * evaporó con su fierro y no dejó respaldo.
+ */
+describe("pickOrSpawn — la señal de memoria perdida", () => {
+  beforeEach(() => {
+    resumeSandbox.mockReset();
+    resumeSandbox.mockResolvedValue(undefined);
+    messages = [];
+    agents = [{ id: "agent-ok", sandboxId: "sb_ok", fleetAgentId: "fa1", status: "suspended" }];
+    routes = [
+      {
+        id: "route-1",
+        fleetAgentId: "fa1",
+        groupId: "web-1",
+        agentId: null, // ruta desatada = camino frío ⇒ intenta restaurar
+        sessionUuid: "sess-abc",
+        createdAt: new Date(),
+        lastMessageAt: new Date(),
+        detachedAt: new Date(),
+      },
+    ];
+  });
+
+  it("avisa cuando la conversación TENÍA historial y el respaldo no estaba", async () => {
+    messages = [{ fleetAgentId: "fa1", groupId: "web-1" }]; // hablamos antes
+    const placed = await pickOrSpawn(CTX, FLEET, "web-1");
+    expect(placed.memoryFresh).toBe(true);
+    // Y queda sellado en la ruta, que es lo que permite contestar `gap` más tarde.
+    expect(routes[0].contextResetAt).toBeInstanceOf(Date);
+    expect(routes[0].contextResetReason).toBe("cold-no-blob");
+  });
+
+  it("NO avisa en una conversación nueva: estrenar no es perder", async () => {
+    // Sin mensajes previos. Sin este discriminador, TODO primer turno reportaría un
+    // hueco falso y el integrador aprendería a ignorar la señal.
+    const placed = await pickOrSpawn(CTX, FLEET, "web-1");
+    expect(placed.memoryFresh).toBe(false);
+    expect(routes[0].contextResetAt).toBeUndefined();
+  });
+
+  it("una colocación CALIENTE nunca reporta pérdida", async () => {
+    messages = [{ fleetAgentId: "fa1", groupId: "web-1" }];
+    agents[0].status = "running";
+    routes[0].agentId = "agent-ok";
+    const placed = await pickOrSpawn(CTX, FLEET, "web-1");
+    expect(placed.memoryFresh).toBe(false);
   });
 });

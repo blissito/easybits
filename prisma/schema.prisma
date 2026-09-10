@@ -1432,6 +1432,17 @@ model FleetAgentRoute {
   detachedAt    DateTime?
   createdAt     DateTime @default(now())
   lastMessageAt DateTime @default(now())
+  // La ÚLTIMA vez que el worker arrancó esta conversación SIN su transcript previo, es
+  // decir: el historial existe en FleetAgentMessage pero el MODELO ya no se acuerda.
+  // Pasa cuando la caja se evaporó con su fierro (resume 404, sin respaldo posible), o
+  // cuando se rota el sessionUuid a propósito.
+  //
+  // Se persiste porque es la única forma de contestar honestamente a un cliente que
+  // vuelve con un cursor viejo: sin esto, `gap` solo podría significar "cursor caducado",
+  // que es la mitad deshonesta — el hueco que importa es el del agente, no el del log.
+  // AUSENTE en las filas viejas: filtrar con `{ isSet: false }`, nunca `{ not: … }`.
+  contextResetAt     DateTime?
+  contextResetReason String?   // "cold-no-blob" | "box-lost" | "session-rotate"
 
   @@unique([fleetAgentId, groupId])
   @@index([agentId])

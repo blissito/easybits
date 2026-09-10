@@ -71,6 +71,26 @@ function sign(payload: string, secret: string): string {
 }
 
 /**
+ * Caché NEGATIVA: usuarios que no tienen ningún webhook activo.
+ *
+ * `turn.completed` pone webhooks en el camino más caliente del producto — un turno de
+ * agente es muchísimo más frecuente que `file.created`, y la inmensa mayoría de las
+ * cuentas no tiene webhooks. Sin esto, cada turno de cada agente paga un `findMany`
+ * contra Mongo para descubrir que no hay nada que mandar.
+ *
+ * Solo cachea el NO (barato y seguro de equivocarse por poco tiempo); el sí siempre
+ * consulta. `forgetWebhookCache()` la invalida al crear o modificar uno, así que el TTL es
+ * una red por si algo escribe la tabla por otro camino.
+ */
+const SIN_WEBHOOKS_TTL_MS = 60_000;
+const sinWebhooks = new Map<string, number>();
+
+/** Invalida la caché negativa de un usuario. La llaman create/update/delete. */
+export function forgetWebhookCache(userId: string) {
+  sinWebhooks.delete(userId);
+}
+
+/**
  * Dispatch webhook event to all active webhooks for a user.
  * Fire-and-forget — errors are caught and logged, never thrown.
  */
@@ -79,6 +99,12 @@ export async function dispatchWebhooks(
   event: WebhookEvent,
   data: Record<string, unknown>
 ) {
+  const vencimiento = sinWebhooks.get(userId);
+  if (vencimiento !== undefined) {
+    if (vencimiento > Date.now()) return;
+    sinWebhooks.delete(userId);
+  }
+
   let webhooks;
   try {
     webhooks = await db.webhook.findMany({
@@ -88,6 +114,13 @@ export async function dispatchWebhooks(
         events: { has: event },
       },
     });
+    // Ojo: la consulta filtra por `event`, así que "cero resultados" no basta para
+    // concluir que el usuario no tiene webhooks — podría tener uno suscrito a OTRO
+    // evento. Se confirma con un conteo sin filtro de evento, y solo entonces se cachea.
+    if (webhooks.length === 0) {
+      const activos = await db.webhook.count({ where: { userId, status: "ACTIVE" } });
+      if (activos === 0) sinWebhooks.set(userId, Date.now() + SIN_WEBHOOKS_TTL_MS);
+    }
   } catch {
     return;
   }
