@@ -1,0 +1,37 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "cloud.easybits/easybits",
+  "title": "EasyBits",
+  "description": "La nube para agentes: microVMs, web, archivos, bases SQL, documentos, video y hosting.",
+  "repository": {
+    "url": "https://github.com/blissito/easybits",
+    "source": "github"
+  },
+  "version": "0.3.4",
+  "websiteUrl": "https://www.easybits.cloud",
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://www.easybits.cloud/api/mcp"
+    }
+  ],
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "@easybits.cloud/mcp",
+      "version": "0.3.4",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "EASYBITS_API_KEY",
+          "description": "API key de EasyBits, desde easybits.cloud/dash/developer",
+          "isRequired": true,
+          "isSecret": true,
+          "format": "string"
+        }
+      ]
+    }
+  ]
+}

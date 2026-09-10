@@ -511,6 +511,8 @@ export default [
   route("/.well-known/oauth-protected-resource", "routes/api/wellknown/oauth-protected-resource.ts"),
   route("/.well-known/oauth-protected-resource/*", "routes/api/wellknown/oauth-protected-resource.ts", { id: "oauth-protected-resource-suffix" }),
   route("/.well-known/oauth-authorization-server", "routes/api/wellknown/oauth-authorization-server.ts"),
+  // Prueba de dominio del MCP Registry oficial (namespace cloud.easybits/*).
+  route("/.well-known/mcp-registry-auth", "routes/api/wellknown/mcp-registry-auth.ts"),
   // Cierre del flujo OAuth para clientes MCP: el CLI redirige aquí al terminar.
   route("/oauth/listo", "routes/oauth/listo.tsx"),
   route("/oauth/register", "routes/api/oauth/register.ts"),

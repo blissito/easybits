@@ -1,6 +1,7 @@
 {
   "name": "@easybits.cloud/mcp",
-  "version": "0.3.3",
+  "version": "0.3.4",
+  "mcpName": "cloud.easybits/easybits",
   "description": "MCP server for EasyBits — the cloud for AI agents: sandboxes, web, files, SQL databases, documents and app hosting",
   "type": "module",
   "bin": {
@@ -21,7 +22,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/easybits-cloud/easybits",
+    "url": "https://github.com/blissito/easybits",
     "directory": "packages/mcp"
   },
   "license": "MIT",
