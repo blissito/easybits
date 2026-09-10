@@ -4,6 +4,8 @@ import { applySandboxRateLimit } from "~/.server/rateLimiter";
 import {
   createAgent,
   listAgents,
+  normalizeAcpMcpServers,
+  type AcpMcpServer,
   type SandboxTemplate,
 } from "~/.server/core/sandboxOperations";
 
@@ -29,12 +31,24 @@ export async function action({ request }: Route.ActionArgs) {
   if (!body?.template || typeof body.env !== "object" || body.env === null) {
     return Response.json({ error: "template and env required" }, { status: 400 });
   }
+  // `mcpServers` sólo tiene efecto en templates ACP (ghosty-lite, goose): viaja en el
+  // `session/new` del handshake. Se valida acá para que un typo devuelva 400 con el
+  // campo culpable, en vez de un agente que nace mudo de tools.
+  let mcpServers: AcpMcpServer[] | undefined;
+  if (body.mcpServers !== undefined) {
+    try {
+      mcpServers = normalizeAcpMcpServers(body.mcpServers);
+    } catch (e) {
+      return Response.json({ error: (e as Error).message }, { status: 400 });
+    }
+  }
   const result = await createAgent(ctx, {
     template: body.template as SandboxTemplate,
     env: body.env as Record<string, string>,
     name: typeof body.name === "string" ? body.name : undefined,
     timeoutSeconds: typeof body.timeoutSeconds === "number" ? body.timeoutSeconds : undefined,
     seedFiles: Array.isArray(body.seedFiles) ? body.seedFiles : undefined,
+    mcpServers,
     // port/healthPath ya no se aceptan del caller — vienen del template
     // metadata leído por createAgent.
   });
