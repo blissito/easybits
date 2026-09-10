@@ -106,9 +106,16 @@ export function failService(
     return fail(`Servicio no configurado (falta ${e.missing}).`, { code: e.code });
   }
   if (e instanceof ServiceProviderError) {
-    return fail(`${label}: ${e.providerMessage}`, {
+    // 429 del proveedor = cooldown temporal sobre esa consulta, no una rotura.
+    // Sin la pista el agente lo lee como definitivo (y se rinde) o reintenta en bucle.
+    const hint =
+      e.providerStatus === 429
+        ? " El proveedor puso esta consulta en espera; reintenta en ~1 minuto."
+        : "";
+    return fail(`${label}: ${e.providerMessage}.${hint}`, {
       code: e.code,
       providerStatus: e.providerStatus,
+      retryable: e.providerStatus === 429,
     });
   }
   return null;

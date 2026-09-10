@@ -101,3 +101,47 @@ describe("extractMainContent", () => {
     expect(c).not.toContain("news-icon.svg");
   });
 });
+
+// ── Reintento del captcha de la zona SERP ─────────────────────────────────
+// El envelope de Brightdata llega con HTTP 200 aunque el target falle: el
+// captcha de Google viene como status_code 502 (`expect_body`) y el cooldown
+// posterior como 429 (`failed_query_rejected`), ambos con body vacío.
+import { brightdataSearchService } from "../app/.server/services/providers/brightdata";
+import { ServiceProviderError } from "../app/.server/services/errors";
+
+const envelope = (status: number, code: string, body = "") =>
+  new Response(JSON.stringify({ status_code: status, headers: { "x-brd-error-code": code, "x-brd-error": code }, body }), { status: 200 });
+
+const okEnvelope = (body: unknown) =>
+  new Response(JSON.stringify({ status_code: 200, headers: {}, body: JSON.stringify(body) }), { status: 200 });
+
+describe("brightdataRequest — captcha de la zona SERP", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    process.env.BRIGHTDATA_API_TOKEN = "test-token";
+    vi.spyOn(globalThis, "setTimeout" as never).mockImplementation(((fn: () => void) => { fn(); return 0 as never; }) as never);
+  });
+
+  it("reintenta el 502 expect_body y devuelve el resultado del segundo intento", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(envelope(502, "expect_body"))
+      .mockResolvedValueOnce(okEnvelope({ organic: [{ title: "hit" }] }));
+    const r = await brightdataSearchService.execute({ query: "agentes de ia" }, { userId: "u1" } as never);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect((r.data as { results: { organic: unknown[] } }).results.organic).toHaveLength(1);
+  });
+
+  it("agota los reintentos si el captcha persiste", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async () => envelope(502, "captcha"));
+    await expect(brightdataSearchService.execute({ query: "x" }, { userId: "u1" } as never)).rejects.toBeInstanceOf(ServiceProviderError);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it("NO reintenta el cooldown 429: insistir sólo lo alarga", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async () => envelope(429, "failed_query_rejected"));
+    const err = await brightdataSearchService.execute({ query: "x" }, { userId: "u1" } as never).catch((e) => e);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(err).toBeInstanceOf(ServiceProviderError);
+    expect((err as ServiceProviderError).providerStatus).toBe(429);
+  });
+});

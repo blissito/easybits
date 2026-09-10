@@ -28,15 +28,29 @@ const OPS: Record<string, string> = {
   crawl: "research.brightdata.crawl",
 };
 
+// URL ABSOLUTA: el cliente puede ser un agente en un chat, donde "/dash/packs"
+// no es clickeable ni resoluble. Misma constante que app/.server/mcp/responses.ts.
+const APP_URL = process.env.APP_URL || "https://www.easybits.cloud";
+
 function mapError(e: unknown): Response | null {
   if (e instanceof QuotaExceededError) {
     return Response.json(
-      { error: "Sin consultas web", code: e.code, requiredCost: e.requiredCost, available: e.available, buy: "/dash/packs?tab=web" },
+      { error: "Sin consultas web", code: e.code, requiredCost: e.requiredCost, available: e.available, buy: `${APP_URL}/dash/packs?tab=web` },
       { status: 402 },
     );
   }
   if (e instanceof ServiceConfigError) return Response.json({ error: "Servicio no configurado", code: e.code }, { status: 503 });
-  if (e instanceof ServiceProviderError) return Response.json({ error: e.providerMessage, code: e.code }, { status: 502 });
+  if (e instanceof ServiceProviderError) {
+    // Cooldown de Brightdata sobre esa query (failed_query_rejected): es
+    // temporal y reintentable — un 502 haría creer al cliente que se rompió.
+    if (e.providerStatus === 429) {
+      return Response.json(
+        { error: e.providerMessage, code: "UPSTREAM_COOLDOWN", retryAfter: 60 },
+        { status: 429, headers: { "Retry-After": "60" } },
+      );
+    }
+    return Response.json({ error: e.providerMessage, code: e.code }, { status: 502 });
+  }
   return null;
 }
 

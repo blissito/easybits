@@ -23,6 +23,20 @@ import type { ServiceDef, ServiceResult } from "../types";
 
 const BRIGHTDATA_URL = "https://api.brightdata.com/request";
 
+// La zona SERP falla contra Google de forma INTERMITENTE: el captcha llega como
+// status_code 502 con `x-brd-error-code: expect_body|captcha`. Medido: de 3
+// intentos con la misma query, uno pasó. Sin reintento el agente se rinde a la
+// primera. Mismo patrón que sqldFetch (app/.server/sqld.ts).
+//
+// El 429 `failed_query_rejected` NO se reintenta: es el cooldown que Brightdata
+// pone sobre esa query tras un fallo — insistir sólo lo alarga. Se propaga para
+// que la superficie lo mapee como reintentable (429 + Retry-After).
+const CAPTCHA_RETRIES = 3;
+const CAPTCHA_BACKOFF_MS = [1200, 2500]; // tras el intento 1 y 2
+const RETRYABLE_BRD_CODES = new Set(["expect_body", "captcha"]);
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 function getApiKey(): string {
   const key = process.env.BRIGHTDATA_API_TOKEN || process.env.BRIGHTDATA_API_KEY;
   if (!key) {
@@ -56,38 +70,47 @@ async function brightdataRequest(input: BrightdataRequestInput): Promise<Brightd
   if (input.country) body.country = input.country;
   if (input.data_format) body.data_format = input.data_format;
 
-  const res = await fetch(BRIGHTDATA_URL, {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
-  });
+  for (let attempt = 0; ; attempt++) {
+    const res = await fetch(BRIGHTDATA_URL, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
 
-  const text = await res.text();
-  if (!res.ok) {
-    throw new ServiceProviderError(input.serviceId, res.status, `Brightdata: ${text.slice(0, 300)}`);
+    const text = await res.text();
+    // Fallo de la API misma (llave, zona inexistente, payload malo): no se reintenta.
+    if (!res.ok) {
+      throw new ServiceProviderError(input.serviceId, res.status, `Brightdata: ${text.slice(0, 300)}`);
+    }
+    // format=raw → HTML body directly. format=json → JSON envelope.
+    if (input.format === "raw") return text;
+    let parsed: BrightdataResponse;
+    try {
+      parsed = JSON.parse(text) as BrightdataResponse;
+    } catch {
+      throw new ServiceProviderError(input.serviceId, res.status, `Brightdata: invalid JSON response`);
+    }
+    // El envelope viene con HTTP 200 aunque el target haya fallado: un captcha de
+    // Google llega como status_code 502 (`expect_body`/`captcha`) y el cooldown
+    // posterior como 429 (`failed_query_rejected`), ambos con `body` vacío. Sin
+    // esto se devolvía un resultado vacío como éxito — y se cobraba la consulta.
+    const upstream = Number(parsed?.status_code ?? 0);
+    if (upstream >= 400) {
+      const hdrs = (parsed?.headers ?? {}) as Record<string, string>;
+      const code = hdrs["x-brd-error-code"] ?? "";
+      const reason = hdrs["x-brd-error"] || code || "upstream error";
+      const transient = upstream >= 500 && RETRYABLE_BRD_CODES.has(code);
+      if (transient && attempt < CAPTCHA_RETRIES - 1) {
+        await sleep(CAPTCHA_BACKOFF_MS[attempt] ?? 2500);
+        continue;
+      }
+      throw new ServiceProviderError(input.serviceId, upstream, `Brightdata: ${reason}`);
+    }
+    return parsed;
   }
-  // format=raw → HTML body directly. format=json → JSON envelope.
-  if (input.format === "raw") return text;
-  let parsed: BrightdataResponse;
-  try {
-    parsed = JSON.parse(text) as BrightdataResponse;
-  } catch {
-    throw new ServiceProviderError(input.serviceId, res.status, `Brightdata: invalid JSON response`);
-  }
-  // El envelope viene con HTTP 200 aunque el target haya fallado: un captcha de
-  // Google llega como status_code 502 (`expect_body`/`captcha`) y el cooldown
-  // posterior como 429 (`failed_query_rejected`), ambos con `body` vacío. Sin
-  // esto se devolvía un resultado vacío como éxito — y se cobraba la consulta.
-  const upstream = Number(parsed?.status_code ?? 0);
-  if (upstream >= 400) {
-    const hdrs = (parsed?.headers ?? {}) as Record<string, string>;
-    const reason = hdrs["x-brd-error"] || hdrs["x-brd-error-code"] || "upstream error";
-    throw new ServiceProviderError(input.serviceId, upstream, `Brightdata: ${reason}`);
-  }
-  return parsed;
 }
 
 /* ────────────────────────────────────────────────────────────────────── */
