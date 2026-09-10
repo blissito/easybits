@@ -17,6 +17,8 @@ import {
   ServiceProviderError,
 } from "../services/errors";
 
+const APP_URL = process.env.APP_URL || "https://www.easybits.cloud";
+
 type McpTextResponse = {
   content: { type: "text"; text: string }[];
   structuredContent?: unknown;
@@ -82,11 +84,23 @@ export function failService(
   label: string
 ): McpTextResponse | null {
   if (e instanceof QuotaExceededError) {
+    // URL ABSOLUTA: el agente suele hablar por WhatsApp/chat, donde "/dash/packs"
+    // no es clickeable ni resoluble. Va en el texto Y como campo estructurado.
+    const purchaseUrl =
+      e.unit === "web"
+        ? `${APP_URL}/dash/packs?tab=web`
+        : `${APP_URL}/dash/packs`;
     const msg =
       e.unit === "web"
-        ? `Sin consultas web: necesitas ${e.requiredCost}, tienes ${e.available}. Compra un pack Web en /dash/packs para continuar.`
-        : `Faltan créditos: necesitas ${e.requiredCost}, tienes ${e.available}. Compra un pack para continuar.`;
-    return fail(msg, { code: e.code, unit: e.unit, requiredCost: e.requiredCost, available: e.available });
+        ? `Sin consultas web: necesitas ${e.requiredCost}, tienes ${e.available}. Compra un pack Web aquí: ${purchaseUrl}`
+        : `Faltan créditos: necesitas ${e.requiredCost}, tienes ${e.available}. Compra un pack aquí: ${purchaseUrl}`;
+    return fail(msg, {
+      code: e.code,
+      unit: e.unit,
+      requiredCost: e.requiredCost,
+      available: e.available,
+      purchaseUrl,
+    });
   }
   if (e instanceof ServiceConfigError) {
     return fail(`Servicio no configurado (falta ${e.missing}).`, { code: e.code });
