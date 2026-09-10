@@ -1,6 +1,13 @@
 // EasyBits API Reference — returned by get_docs MCP tool and GET /api/v2/docs
 
 import { HOSTING_CATALOG, SELLABLE_TIERS } from "../../lib/hostingCatalog";
+import { WEBHOOK_EVENTS, WEBHOOK_EVENT_DOCS } from "../webhooks";
+
+// Lista de eventos de webhook, derivada de la fuente única (`webhooks.ts`). Escrita a
+// mano se quedó atrás: faltaban `workspace.*` y `broadcast.sent`.
+const WEBHOOK_EVENTS_MD = WEBHOOK_EVENTS.map(
+  (e) => `- \`${e}\` — ${WEBHOOK_EVENT_DOCS[e]}`
+).join("\n");
 
 // Catálogo de tiers en Markdown, derivado de la fuente única (hostingCatalog).
 // Un tier nuevo aparece aquí sin editar prosa a mano.
@@ -304,14 +311,7 @@ SDK: \`eb.updateWebhook(webhookId, { url?, events?, status? })\`
 SDK: \`eb.deleteWebhook(webhookId)\`
 
 ### Events
-- \`file.created\` — new file uploaded
-- \`file.updated\` — file name, access, or metadata changed
-- \`file.deleted\` — file soft-deleted
-- \`file.restored\` — file restored from trash
-- \`website.created\` — new website created
-- \`website.deleted\` — website deleted
-- \`database.created\` — new database created
-- \`database.deleted\` — database deleted
+${WEBHOOK_EVENTS_MD}
 
 ### Payload format
 \`\`\`json

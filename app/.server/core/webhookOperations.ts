@@ -2,21 +2,11 @@ import { randomBytes } from "crypto";
 import { db } from "../db";
 import type { AuthContext } from "../apiAuth";
 import { requireScope } from "../apiAuth";
-import type { WebhookEvent } from "../webhooks";
+import { WEBHOOK_EVENTS, type WebhookEvent } from "../webhooks";
 
-const VALID_EVENTS: WebhookEvent[] = [
-  "file.created",
-  "file.updated",
-  "file.deleted",
-  "file.restored",
-  "website.created",
-  "website.deleted",
-  "database.created",
-  "database.deleted",
-  "form.submitted",
-  "payment.paid",
-  "broadcast.sent",
-];
+// Derivado del catálogo único (`webhooks.ts`). Cuando esto era una lista a mano se quedó
+// atrás: `workspace.*` se despachaba pero no se podía suscribir.
+const VALID_EVENTS: readonly WebhookEvent[] = WEBHOOK_EVENTS;
 
 export async function listWebhooks(ctx: AuthContext) {
   requireScope(ctx, "READ");

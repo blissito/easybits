@@ -88,6 +88,7 @@ import {
   updateWebhookConfig,
   deleteWebhookById,
 } from "../core/webhookOperations";
+import { WEBHOOK_EVENTS } from "../webhooks";
 import {
   createPaymentLink,
   listPaymentLinks,
@@ -1275,10 +1276,10 @@ How to embed safely (the only reliable rule):
 
   server.tool(
     "create_webhook",
-    "Create a webhook to receive event notifications. Returns the webhook with its secret (shown only once). Events: file.created, file.updated, file.deleted, file.restored, website.created, website.deleted, form.submitted, payment.paid, broadcast.sent.",
+    `Create a webhook to receive event notifications. Returns the webhook with its secret (shown only once). Events: ${WEBHOOK_EVENTS.join(", ")}.`,
     {
       url: z.string().describe("HTTPS URL to receive POST notifications"),
-      events: z.array(z.enum(["file.created","file.updated","file.deleted","file.restored","website.created","website.deleted","form.submitted","payment.paid","broadcast.sent"])).describe("Events to subscribe to"),
+      events: z.array(z.enum(WEBHOOK_EVENTS)).describe("Events to subscribe to"),
     },
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
@@ -1293,7 +1294,7 @@ How to embed safely (the only reliable rule):
     {
       webhookId: z.string().describe("The webhook ID"),
       url: z.string().optional().describe("New HTTPS URL"),
-      events: z.array(z.enum(["file.created","file.updated","file.deleted","file.restored","website.created","website.deleted","form.submitted","payment.paid","broadcast.sent"])).optional().describe("New events list"),
+      events: z.array(z.enum(WEBHOOK_EVENTS)).optional().describe("New events list"),
       status: z.enum(["ACTIVE", "PAUSED"]).optional().describe("Set status"),
     },
     wrapHandler(async (params, extra) => {
