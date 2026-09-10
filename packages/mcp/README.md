@@ -2,6 +2,8 @@
 
 The cloud for AI agents. Connect your AI to [EasyBits](https://www.easybits.cloud) — run code in an isolated microVM, search and read the web, store files, query SQL databases, generate documents and deploy apps — all through natural language.
 
+Listed in the [official MCP Registry](https://registry.modelcontextprotocol.io) as `cloud.easybits/easybits`, with both the remote endpoint (streamable-http) and this stdio proxy.
+
 ## Quick Start
 
 ### 1. Get your API key
