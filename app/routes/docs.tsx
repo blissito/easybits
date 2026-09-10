@@ -179,6 +179,84 @@ export default function DocsPage({ loaderData }: Route.ComponentProps) {
     return () => { stop = true; cancelAnimationFrame(raf); };
   }, []);
 
+  // Ancla por título: cada h2/h3/h4 de los docs gana un enlace que aparece al pasar
+  // el mouse y copia su URL. Se inyecta en un solo efecto en vez de tocar los ~200
+  // encabezados a mano — así un título nuevo lo hereda sin que nadie se acuerde.
+  // Los que no traen `id` propio reciben uno derivado de su texto, prefijado con el
+  // de su sección para que no choquen entre secciones.
+  useEffect(() => {
+    const slug = (t: string) =>
+      t
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "")
+        .slice(0, 60);
+
+    const used = new Set<string>();
+    document.querySelectorAll<HTMLElement>("[id]").forEach((el) => used.add(el.id));
+
+    const headings = Array.from(
+      document.querySelectorAll<HTMLHeadingElement>("main h2, main h3, main h4")
+    );
+    const cleanups: Array<() => void> = [];
+
+    for (const h of headings) {
+      if (h.dataset.anchored === "1") continue;
+      const sectionId = h.closest("section[id]")?.id ?? "";
+      // Un h2 ES el título de su sección: el ancla apunta al id que ya usa el índice,
+      // y NO se le pone id propio — sería un ancla gemela apuntando dos píxeles abajo.
+      let targetId = h.id;
+      if (!targetId && h.tagName === "H2" && sectionId) {
+        targetId = sectionId;
+      } else if (!targetId) {
+        let id = [sectionId, slug(h.textContent ?? "")].filter(Boolean).join("-");
+        if (!id) continue;
+        let n = 2;
+        const base = id;
+        while (used.has(id)) id = `${base}-${n++}`;
+        h.id = id;
+        targetId = id;
+      }
+      used.add(targetId);
+      h.dataset.anchored = "1";
+      h.classList.add("group", "scroll-mt-24");
+
+      const a = document.createElement("a");
+      a.href = `#${targetId}`;
+      a.setAttribute("aria-label", "Copiar enlace a esta sección");
+      a.title = "Copiar enlace";
+      a.textContent = "#";
+      a.className =
+        "ml-2 align-middle text-[#9870ED] no-underline opacity-0 transition-opacity " +
+        "group-hover:opacity-60 hover:!opacity-100 focus:opacity-100 cursor-pointer";
+      const onClick = (e: MouseEvent) => {
+        e.preventDefault();
+        // `location` acá es el de react-router (useLocation), no el del navegador.
+        const url = `${window.location.origin}${window.location.pathname}#${targetId}`;
+        window.history.replaceState(null, "", `#${targetId}`);
+        // El portapapeles puede negarse (http, permisos): el hash ya cambió, así que
+        // la URL de la barra sirve igual — no hay por qué avisar de un fallo.
+        navigator.clipboard?.writeText(url).then(
+          () => {
+            a.textContent = "copiado";
+            setTimeout(() => (a.textContent = "#"), 1200);
+          },
+          () => {}
+        );
+      };
+      a.addEventListener("click", onClick);
+      h.appendChild(a);
+      cleanups.push(() => {
+        a.removeEventListener("click", onClick);
+        a.remove();
+        delete h.dataset.anchored;
+      });
+    }
+    return () => cleanups.forEach((fn) => fn());
+  }, []);
+
   return (
     <section className="min-h-screen bg-white">
       {/* JSON-LD: WebAPI + SoftwareApplication for LLM/search discovery */}
