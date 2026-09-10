@@ -71,11 +71,23 @@ async function brightdataRequest(input: BrightdataRequestInput): Promise<Brightd
   }
   // format=raw → HTML body directly. format=json → JSON envelope.
   if (input.format === "raw") return text;
+  let parsed: BrightdataResponse;
   try {
-    return JSON.parse(text) as BrightdataResponse;
+    parsed = JSON.parse(text) as BrightdataResponse;
   } catch {
     throw new ServiceProviderError(input.serviceId, res.status, `Brightdata: invalid JSON response`);
   }
+  // El envelope viene con HTTP 200 aunque el target haya fallado: un captcha de
+  // Google llega como status_code 502 (`expect_body`/`captcha`) y el cooldown
+  // posterior como 429 (`failed_query_rejected`), ambos con `body` vacío. Sin
+  // esto se devolvía un resultado vacío como éxito — y se cobraba la consulta.
+  const upstream = Number(parsed?.status_code ?? 0);
+  if (upstream >= 400) {
+    const hdrs = (parsed?.headers ?? {}) as Record<string, string>;
+    const reason = hdrs["x-brd-error"] || hdrs["x-brd-error-code"] || "upstream error";
+    throw new ServiceProviderError(input.serviceId, upstream, `Brightdata: ${reason}`);
+  }
+  return parsed;
 }
 
 /* ────────────────────────────────────────────────────────────────────── */
