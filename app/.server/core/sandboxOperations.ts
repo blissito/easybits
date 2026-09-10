@@ -352,6 +352,127 @@ async function readAcpRpcResult(
   return { error: { code: -1, message: "stream closed without matching result" } };
 }
 
+/**
+ * Un MCP server declarado por el dueño al crear un agente ACP. Es la forma del
+ * protocolo (`session/new.params.mcpServers`), no la de Claude Code: es un ARRAY y
+ * `env`/`headers` van como lista de `{name,value}`. Se acepta también la forma
+ * cómoda (objeto `{K: "v"}`) y se normaliza aquí, que es lo que la gente escribe.
+ */
+export type AcpMcpServer =
+  | { name: string; command: string; args?: string[]; env?: Array<{ name: string; value: string }> }
+  | { type: "http" | "sse"; name: string; url: string; headers?: Array<{ name: string; value: string }> };
+
+const MCP_NAME_RE = /^[a-zA-Z0-9_-]{1,64}$/;
+
+function toNameValueList(
+  raw: unknown,
+  where: string
+): Array<{ name: string; value: string }> | undefined {
+  if (raw == null) return undefined;
+  if (Array.isArray(raw)) {
+    return raw.map((e, i) => {
+      const o = e as Record<string, unknown>;
+      if (!o || typeof o.name !== "string" || typeof o.value !== "string") {
+        throw new Error(`${where}[${i}] debe ser {name, value} con strings`);
+      }
+      return { name: o.name, value: o.value };
+    });
+  }
+  if (typeof raw === "object") {
+    return Object.entries(raw as Record<string, unknown>).map(([name, value]) => ({
+      name,
+      value: String(value),
+    }));
+  }
+  throw new Error(`${where} debe ser un objeto {NOMBRE: "valor"} o una lista {name,value}`);
+}
+
+/**
+ * Valida y normaliza lo que llega del caller. Lanza con un mensaje que se pueda leer
+ * en una terminal: esto lo escribe una persona a mano en un curl, no un SDK.
+ */
+export function normalizeAcpMcpServers(raw: unknown): AcpMcpServer[] {
+  if (!Array.isArray(raw)) throw new Error("mcpServers debe ser un array");
+  if (raw.length > 20) throw new Error("mcpServers: máximo 20 por agente");
+  return raw.map((entry, i) => {
+    const o = entry as Record<string, unknown>;
+    if (!o || typeof o !== "object") throw new Error(`mcpServers[${i}] debe ser un objeto`);
+    const name = o.name;
+    if (typeof name !== "string" || !MCP_NAME_RE.test(name)) {
+      throw new Error(`mcpServers[${i}].name requerido ([a-zA-Z0-9_-], máx 64)`);
+    }
+    const type = o.type;
+    if (type === "http" || type === "sse") {
+      if (typeof o.url !== "string" || !/^https?:\/\//.test(o.url)) {
+        throw new Error(`mcpServers[${i}].url debe ser http(s) para type "${type}"`);
+      }
+      const headers = toNameValueList(o.headers, `mcpServers[${i}].headers`);
+      return { type, name, url: o.url, ...(headers ? { headers } : {}) };
+    }
+    if (type !== undefined && type !== "stdio") {
+      throw new Error(`mcpServers[${i}].type debe ser "stdio", "http" o "sse"`);
+    }
+    if (typeof o.command !== "string" || !o.command) {
+      throw new Error(`mcpServers[${i}].command requerido (stdio)`);
+    }
+    if (o.args !== undefined && (!Array.isArray(o.args) || o.args.some((a) => typeof a !== "string"))) {
+      throw new Error(`mcpServers[${i}].args debe ser un array de strings`);
+    }
+    const env = toNameValueList(o.env, `mcpServers[${i}].env`);
+    return {
+      name,
+      command: o.command,
+      ...(o.args ? { args: o.args as string[] } : {}),
+      ...(env ? { env } : {}),
+    };
+  });
+}
+
+/**
+ * Resuelve `$secret:NOMBRE` en `env`/`headers` contra el vault del DUEÑO, justo antes
+ * del handshake. Se guarda la forma con la referencia, no el valor: así rotar el secreto
+ * basta para que el próximo bring-up lo tome, y la fila no guarda la credencial dos veces.
+ */
+async function expandAcpMcpSecrets(
+  servers: AcpMcpServer[],
+  ownerId: string
+): Promise<AcpMcpServer[]> {
+  const cache = new Map<string, string>();
+  // A diferencia del `$secret:` canónico (que exige ser TODO el valor), aquí la
+  // referencia se interpola DENTRO del string: un header de MCP casi siempre es
+  // `Bearer <llave>`, y con el patrón anclado el valor salía sin el `Bearer` — un 401
+  // que parece del servidor remoto. Un valor que es sólo la referencia sigue igual.
+  const REF_INLINE = /\$secret:([A-Z_][A-Z0-9_]*)/g;
+  const resolve = async (list: Array<{ name: string; value: string }>, where: string) => {
+    for (const e of list) {
+      for (const m of e.value.matchAll(REF_INLINE)) {
+        const secretName = m[1];
+        if (cache.has(secretName)) continue;
+        const v = await getSecretValue(ownerId, secretName).catch(() => null);
+        if (v == null) {
+          throw new Error(
+            `${where}.${e.name} apunta a $secret:${secretName}, que no existe en el vault. Cárgalo con \`secret_set\` o en /dash/developer/secrets.`
+          );
+        }
+        cache.set(secretName, v);
+      }
+    }
+    return list.map((e) => ({
+      name: e.name,
+      value: e.value.replace(REF_INLINE, (_, n: string) => cache.get(n)!),
+    }));
+  };
+  const out: AcpMcpServer[] = [];
+  for (const s of servers) {
+    if ("url" in s) {
+      out.push(s.headers ? { ...s, headers: await resolve(s.headers, `mcpServers.${s.name}.headers`) } : s);
+    } else {
+      out.push(s.env ? { ...s, env: await resolve(s.env, `mcpServers.${s.name}.env`) } : s);
+    }
+  }
+  return out;
+}
+
 // runAcpHandshake: initialize + session/new. Returns both:
 //   - acpTransportSessionId: header from initialize, must be sent on every
 //     subsequent ACP call (Goose serve enforces this).
@@ -364,7 +485,9 @@ async function runAcpHandshake(
   port: number,
   messagePath: string,
   /** Credencial con la que EasyBits se identifica ante la caja (ver acpAuthHeaders). */
-  authToken?: string
+  authToken?: string,
+  /** MCP servers del dueño, ya con los `$secret:` resueltos. */
+  mcpServers: AcpMcpServer[] = []
 ): Promise<{ acpTransportSessionId: string; acpSessionId: string }> {
   const auth = acpAuthHeaders(authToken);
   // 1. initialize
@@ -397,7 +520,7 @@ async function runAcpHandshake(
       jsonrpc: "2.0",
       id: 2,
       method: "session/new",
-      params: { cwd: "/", mcpServers: [] },
+      params: { cwd: "/", mcpServers },
     },
   });
   const sessRes = await readAcpRpcResult(sess.stream, 2);
@@ -2823,6 +2946,8 @@ async function bringUpAgentRuntime(
     port: number;
     messagePath: string;
     seedFiles?: Array<{ name: string; contentBase64: string }>;
+    /** ACP: MCP servers a declarar en session/new (aún con `$secret:` sin resolver). */
+    mcpServers?: AcpMcpServer[];
   }
 ): Promise<{
   agentUrl: string;
@@ -2883,7 +3008,10 @@ async function bringUpAgentRuntime(
       ctx.user.id,
       port,
       messagePath,
-      args.env.ACP_AGENT_TOKEN
+      args.env.ACP_AGENT_TOKEN,
+      args.mcpServers?.length
+        ? await expandAcpMcpSecrets(args.mcpServers, ctx.user.id)
+        : []
     );
     acpSessionId = handshake.acpSessionId;
     acpTransportSessionId = handshake.acpTransportSessionId;
@@ -2948,6 +3076,12 @@ export async function createAgent(
     // apagado normal lo hace el reaper propio de easybits — si ese latido se para
     // (deploy, restart, health check caído), esto es lo único que devuelve la RAM.
     suspendOnIdle?: boolean;
+    /**
+     * ACP (ghosty-lite, goose): MCP servers que el agente monta al abrir su sesión.
+     * Ya normalizados por `normalizeAcpMcpServers`. Se persisten en la fila para que
+     * una caja recreada vuelva con las mismas tools.
+     */
+    mcpServers?: AcpMcpServer[];
   }
 ): Promise<CreatedAgent> {
   requireScope(ctx, "WRITE");
@@ -3182,6 +3316,10 @@ export async function createAgent(
       // Con esto la caja se puede VOLVER A LEVANTAR con el mismo env (ensureAgentBox).
       // Cifrado con la master de secretos: lleva llaves de proveedor.
       spawnEnv: isAcp ? encryptSecret(JSON.stringify(env)) : null,
+      acpMcpServers:
+        isAcp && params.mcpServers?.length
+          ? encryptSecret(JSON.stringify(params.mcpServers))
+          : null,
     },
   });
 
@@ -3204,6 +3342,7 @@ export async function createAgent(
         port,
         messagePath,
         seedFiles: params.seedFiles,
+        mcpServers: params.mcpServers,
       });
       await db.agent.update({ where: { id: row.id }, data: { status: "running", ...up } });
     } catch (e) {
@@ -3940,6 +4079,11 @@ async function reviveAgentBox(agentId: string): Promise<AgentRecord> {
     throw new Error("this agent predates revive support (no spawn env recorded); recreate it");
   }
   const env = JSON.parse(decryptSecret(row.spawnEnv)) as Record<string, string>;
+  // Sin esto, una caja recreada volvía SIN los MCP del dueño: responde igual, sólo que
+  // sin tools — el fallo más caro de diagnosticar que tiene la flota.
+  const mcpServers = row.acpMcpServers
+    ? (JSON.parse(decryptSecret(row.acpMcpServers)) as AcpMcpServer[])
+    : undefined;
   const template = row.template as SandboxTemplate;
   const tpl = await resolveTemplate(ctx, template);
   const port = row.port ?? tpl.agent?.port ?? 3000;
@@ -3980,6 +4124,7 @@ async function reviveAgentBox(agentId: string): Promise<AgentRecord> {
       protocol: "acp",
       port,
       messagePath,
+      mcpServers,
     });
     const updated = await db.agent.update({
       where: { id: agentId },
