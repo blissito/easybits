@@ -807,6 +807,95 @@ export interface FleetMessageBody {
   [k: string]: unknown;
 }
 
+
+/** Un mensaje del historial de una conversación de flota. */
+export interface FleetMessage {
+  id: string;
+  role: "user" | "agent";
+  text: string;
+  sender: string | null;
+  senderName: string | null;
+  mediaUrl: string | null;
+  mediaType: string | null;
+  mediaMime: string | null;
+  createdAt: string;
+  /** Cursor DE esta fila. Guárdalo para pedir lo siguiente. */
+  cursor: string;
+}
+
+/**
+ * Una página del historial, con cursor de seguimiento de cola.
+ *
+ * ⚠️ `gap: true` significa "no te fíes de este delta, recarga el hilo entero". Hay dos
+ * razones y conviene distinguirlas:
+ *   · `cursor_too_old`  — tu cursor ya no sirve.
+ *   · `context_reset`   — nosotros tenemos el historial, pero el AGENTE no: su caja se
+ *     perdió sin respaldo. El hilo se lee bien; el modelo empieza en blanco. Es el
+ *     momento de decírselo al usuario en vez de dejar que descubra solo que el agente
+ *     "se volvió tonto".
+ */
+export interface FleetMessagesPage {
+  items: FleetMessage[];
+  /** Dónde reanudar. Existe aunque `hasMore` sea false. */
+  cursor: string | null;
+  hasMore: boolean;
+  gap: boolean;
+  gapReason?: "cursor_too_old" | "context_reset";
+  resetAt?: string;
+}
+
+/** Lo común a los dos avisos de turno. */
+interface FleetTurnEventBase {
+  /** Clave de idempotencia: el mismo aviso puede llegar dos veces. */
+  turnId: string;
+  fleetAgentId: string;
+  agentName: string | null;
+  /** La conversación — sirve de deep-link para abrirla desde el push. */
+  groupId: string;
+  sessionUuid: string;
+  /** El agente arrancó este turno SIN su memoria previa. */
+  memoryReset: boolean;
+  startedAt: string;
+  finishedAt: string;
+  durationMs: number;
+  /** Listo para el título de una notificación visible. */
+  title: string;
+  /** Listo para el cuerpo. Ya viene recortado y sin razonamiento privado. */
+  summary: string;
+}
+
+/**
+ * `turn.completed` — el agente terminó de responder.
+ *
+ * Es el evento que hace posible una app móvil: el teléfono mata el socket al irse al
+ * fondo, así que la única forma de enterarse es que te avisemos nosotros. Manda un push
+ * VISIBLE (no silencioso: el silencioso no llega con la app cerrada ni en Bajo Consumo)
+ * y usa `cursor` para traer el delta con UNA llamada a `fleet.messages`.
+ */
+export interface TurnCompletedPayload extends FleetTurnEventBase {
+  replyLength: number;
+  /** Pásalo como `since` para recibir lo que venga DESPUÉS de este turno. */
+  cursor: string | null;
+  usage: {
+    model: string | null;
+    inputTokens: number | null;
+    outputTokens: number | null;
+    toolCalls: number | null;
+  } | null;
+}
+
+/** `turn.failed` — el turno murió. Sin esto, el cliente no distingue "sigue pensando". */
+export interface TurnFailedPayload extends FleetTurnEventBase {
+  error: { code: "at_capacity" | "rate_limited" | "worker_error"; message: string };
+}
+
+/** Sobre común de todo webhook de EasyBits. */
+export interface WebhookEnvelope<T> {
+  event: string;
+  timestamp: string;
+  data: T;
+}
+
 /** Baileys (WhatsApp) connection state — poll via fleet.connectionState(id). */
 export interface BaileysState {
   status: "qr_pending" | "pairing" | "connecting" | "connected" | "failed" | "disconnected";
@@ -2016,6 +2105,26 @@ export class EasybitsClient {
       // ── Messaging (auth = an agent token with MESSAGE scope) ──
       message: (id: string, token: string, body: FleetMessageBody): Promise<{ reply: string }> =>
         req(`/fleet-agents/${id}/message`, asAgent(token, { method: "POST", body: JSON.stringify(body) })),
+
+      /**
+       * El historial de una conversación, con cursor.
+       *
+       * Es la vuelta del viaje que empieza en el webhook `turn.completed`: llega el
+       * push, la app despierta y pide `since: <el cursor del aviso>` — solo lo nuevo,
+       * en vez de bajarse el hilo entero cada vez que el usuario abre la app.
+       *
+       * Mira `gap` antes de confiar en el delta.
+       */
+      messages: (
+        id: string,
+        token: string,
+        opts: { groupId: string; since?: string | null; limit?: number }
+      ): Promise<FleetMessagesPage> => {
+        const qs = new URLSearchParams({ groupId: opts.groupId });
+        if (opts.since) qs.set("since", opts.since);
+        if (opts.limit) qs.set("limit", String(opts.limit));
+        return req(`/fleet-agents/${id}/messages?${qs}`, asAgent(token));
+      },
 
       /**
        * Same as `message`, but streams the turn over SSE. This is what you want in an
@@ -3579,4 +3688,65 @@ export async function createClientFromEnv(): Promise<EasybitsClient> {
   }
   const baseUrl = await resolveBaseUrl();
   return new EasybitsClient({ apiKey, baseUrl });
+}
+
+/**
+ * Verifica la firma de un webhook de EasyBits.
+ *
+ * Existe aquí porque si no lo damos, cada integrador lo reimplementa — y lo reimplementa
+ * mal: comparando con `===` (fuga por tiempo), firmando el JSON re-serializado en vez
+ * del cuerpo CRUDO (cualquier reordenamiento de claves lo invalida), o directamente
+ * saltándose la verificación porque "el endpoint es secreto". Un webhook sin verificar
+ * es un endpoint público que acepta órdenes de cualquiera.
+ *
+ * ⚠️ `body` tiene que ser el cuerpo TAL CUAL llegó, antes de parsear el JSON. En Express
+ * eso es `express.raw({ type: "application/json" })`; en un handler de fetch,
+ * `await request.text()`.
+ *
+ * Usa WebCrypto, así que funciona igual en Node 18+, en el navegador y en edge.
+ *
+ * @example
+ * ```ts
+ * const raw = await request.text();
+ * const ok = await verifyWebhookSignature(
+ *   raw,
+ *   request.headers.get("x-easybits-signature"),
+ *   process.env.EB_WEBHOOK_SECRET!
+ * );
+ * if (!ok) return new Response("bad signature", { status: 401 });
+ *
+ * const evt = JSON.parse(raw) as WebhookEnvelope<TurnCompletedPayload>;
+ * if (evt.event === "turn.completed") await sendPush(evt.data.title, evt.data.summary);
+ * ```
+ */
+export async function verifyWebhookSignature(
+  body: string,
+  signatureHeader: string | null | undefined,
+  secret: string
+): Promise<boolean> {
+  if (!signatureHeader || !secret) return false;
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey(
+    "raw",
+    enc.encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  const mac = await crypto.subtle.sign("HMAC", key, enc.encode(body));
+  const hex = Array.from(new Uint8Array(mac))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+  return timingSafeEqual(`sha256=${hex}`, signatureHeader);
+}
+
+/**
+ * Comparación en tiempo constante. Un `===` normal se rinde en el primer byte distinto,
+ * y esa diferencia de tiempo basta para adivinar la firma byte a byte.
+ */
+function timingSafeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  return diff === 0;
 }

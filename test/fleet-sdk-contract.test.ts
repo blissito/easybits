@@ -108,6 +108,27 @@ describe("eb.fleet.* contract", () => {
     expect(JSON.parse(last().body!)).toEqual({ groupId: "web-1", text: "hola" });
   });
 
+  // ── Replay con cursor: la vuelta del viaje que empieza en `turn.completed` ──
+  it("messages → GET /messages con el token del agente", async () => {
+    await eb.fleet.messages(ID, TOK, { groupId: "web-1" });
+    expect(last().method).toBe("GET");
+    expect(last().url).toBe(url(`/fleet-agents/${ID}/messages?groupId=web-1`));
+    // Token del AGENTE (scope MESSAGE), no la llave del cliente: así un `flt_pk_`
+    // efímero de navegador puede leer su propio hilo sin permisos de administración.
+    expect(last().headers.Authorization).toBe(`Bearer ${TOK}`);
+  });
+
+  it("messages → pasa since y limit, y NO los manda si no se piden", async () => {
+    await eb.fleet.messages(ID, TOK, { groupId: "web-1", since: "cur+/=", limit: 25 });
+    // El cursor es base64url y aun así se codifica: un `+` sin escapar llegaría como
+    // espacio al servidor y el delta saldría mal.
+    expect(last().url).toBe(url(`/fleet-agents/${ID}/messages?groupId=web-1&since=cur%2B%2F%3D&limit=25`));
+
+    await eb.fleet.messages(ID, TOK, { groupId: "web-1" });
+    expect(last().url).not.toContain("since");
+    expect(last().url).not.toContain("limit");
+  });
+
   // ── Baileys connection flow — auth = client credential (owner), NO per-agent token ──
   it("connect → POST /connect con credencial del cliente (QR o pairingPhone)", async () => {
     await eb.fleet.connect(ID, { pairingPhone: "5215500000000" });
@@ -188,5 +209,37 @@ describe("eb.searchStockPhoto contract", () => {
   it("manda save=true cuando se pide guardar", async () => {
     await eb.searchStockPhoto({ query: "gym", save: true });
     expect(last().url).toBe(`${BASE}/api/v2/stock-photos?q=gym&save=true`);
+  });
+});
+
+/**
+ * El verificador de firma vive en el SDK porque, si no lo damos, cada integrador lo
+ * reimplementa mal: comparando con `===`, firmando el JSON re-serializado en vez del
+ * cuerpo crudo, o saltándoselo. Un webhook sin verificar es un endpoint público que
+ * acepta órdenes de cualquiera.
+ */
+describe("verifyWebhookSignature", () => {
+  const SECRET = "whsec_" + "ab".repeat(24);
+  const BODY = JSON.stringify({ event: "turn.completed", data: { turnId: "t1", summary: "Ácentos 🎉" } });
+
+  /** El firmante REAL del servidor (app/.server/webhooks.ts), copiado a mano. */
+  async function firmaDelServidor(body: string, secret: string) {
+    const { createHmac } = await import("node:crypto");
+    return `sha256=${createHmac("sha256", secret).update(body).digest("hex")}`;
+  }
+
+  it("acepta una firma hecha por el servidor", async () => {
+    const { verifyWebhookSignature } = await import("../packages/sdk/src/index");
+    expect(await verifyWebhookSignature(BODY, await firmaDelServidor(BODY, SECRET), SECRET)).toBe(true);
+  });
+
+  it("rechaza cuerpo alterado, secreto distinto y header ausente o basura", async () => {
+    const { verifyWebhookSignature } = await import("../packages/sdk/src/index");
+    const firma = await firmaDelServidor(BODY, SECRET);
+    expect(await verifyWebhookSignature(BODY + " ", firma, SECRET)).toBe(false);
+    expect(await verifyWebhookSignature(BODY, firma, "otro-secreto")).toBe(false);
+    expect(await verifyWebhookSignature(BODY, null, SECRET)).toBe(false);
+    expect(await verifyWebhookSignature(BODY, "sha256=00", SECRET)).toBe(false);
+    expect(await verifyWebhookSignature(BODY, firma, "")).toBe(false);
   });
 });

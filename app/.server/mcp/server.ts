@@ -89,6 +89,7 @@ import {
   deleteWebhookById,
 } from "../core/webhookOperations";
 import { WEBHOOK_EVENTS } from "../webhooks";
+import { listFleetMessages } from "../core/fleetAgentOperations";
 import {
   createPaymentLink,
   listPaymentLinks,
@@ -3036,6 +3037,35 @@ How to embed safely (the only reliable rule):
         select: { id: true, name: true, assistantName: true, workerTemplate: true, hasOwnNumber: true, createdAt: true },
       });
       return ok(paginate(rows, { total: rows.length }));
+    })
+  );
+
+  server.tool(
+    "fleet_agent_messages",
+    "Historial de UNA conversación de un FleetAgent, con cursor. `groupId` es la conversación; `since` es el cursor de la última fila que ya viste (el webhook `turn.completed` trae el suyo) y devuelve SOLO lo posterior. Devuelve { items:[{id,role,text,sender,senderName,mediaUrl,createdAt,cursor}], cursor, hasMore, gap, gapReason?, resetAt? }. ⚠️ `gap:true` = no te fíes del delta, relee entero: `cursor_too_old` (tu cursor ya no sirve) o `context_reset` (tenemos el hilo pero el AGENTE perdió su memoria — su caja se perdió sin respaldo).",
+    {
+      fleetAgentId: z.string().describe("id del FleetAgent (de fleet_agent_list)"),
+      groupId: z.string().describe("la conversación (jid de WhatsApp, `web-<uuid>`, …)"),
+      since: z.string().optional().describe("cursor: devuelve solo lo posterior a esa fila"),
+      limit: z.number().optional().describe("máximo de filas (tope 200, default 50)"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      requireScope(ctx, "READ");
+      await ownedFleetAgent(ctx, params.fleetAgentId);
+      const page = await listFleetMessages(params.fleetAgentId, params.groupId, {
+        since: params.since,
+        limit: params.limit,
+      });
+      // `paginate` es el envelope ÚNICO de toda lista; las señales propias del replay
+      // (gap/gapReason/resetAt) viajan al lado, no dentro de la paginación.
+      return ok({
+        ...paginate(page.items, { nextCursor: page.hasMore ? page.cursor ?? undefined : undefined }),
+        cursor: page.cursor,
+        gap: page.gap,
+        ...(page.gapReason ? { gapReason: page.gapReason } : {}),
+        ...(page.resetAt ? { resetAt: page.resetAt } : {}),
+      });
     })
   );
 

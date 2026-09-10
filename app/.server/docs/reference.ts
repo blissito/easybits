@@ -336,6 +336,64 @@ const isValid = signature === \`sha256=\${expected}\`;
 
 ### Auto-pause
 Webhooks auto-pause after 5 consecutive delivery failures (non-2xx response or timeout). Reactivate by updating status to "ACTIVE".
+
+### Turn notifications — building a mobile app on EasyBits
+
+On iOS/Android your app gets backgrounded, the OS kills the SSE socket, and the turn
+finishes inside the microVM with nobody listening. \`turn.completed\` is how you find out.
+
+The loop:
+
+1. Your app sends a turn (\`POST /fleet-agents/:id/message\`) and may background at any point.
+2. When the turn finishes, we POST \`turn.completed\` to your webhook.
+3. Your server sends the push. **Make it a VISIBLE alert, not a silent one** — a silent
+   push does not arrive when the app was swiped away or the device is in Low Power Mode,
+   and iOS throttles them across *all* apps on the phone. \`title\` and \`summary\` are
+   already trimmed for a lock screen, so you need no extra round-trip.
+4. The user taps; your app calls
+   \`GET /fleet-agents/:id/messages?groupId=…&since=<cursor from the payload>\` and gets
+   only what it missed.
+
+\`\`\`json
+{
+  "event": "turn.completed",
+  "timestamp": "2026-09-10T18:04:11.204Z",
+  "data": {
+    "turnId": "8f1c…",
+    "fleetAgentId": "68d…", "agentName": "Soporte", "groupId": "web-9f2…",
+    "sessionUuid": "…",
+    "title": "Soporte respondió",
+    "summary": "Ya generé el reporte de octubre y lo…",
+    "replyLength": 812,
+    "cursor": "eyJ0IjoiMjAyNi0wOS0xMFQ…",
+    "memoryReset": false,
+    "startedAt": "…", "finishedAt": "…", "durationMs": 4213,
+    "usage": { "model": "claude-sonnet-5", "inputTokens": 8123, "outputTokens": 244, "toolCalls": 3 }
+  }
+}
+\`\`\`
+
+**Deduplicate on \`turnId\`** — the same notification can reach you twice.
+
+\`turn.failed\` has the same shape plus \`error: { code, message }\`. Send it too: a client
+that hears nothing cannot tell "still thinking" from "died". Note that a turn queued
+behind a busy fleet is retried automatically and does *not* emit \`turn.failed\`.
+
+### Reading a conversation with a cursor
+\`GET /fleet-agents/:fleetAgentId/messages?groupId=…&since=<cursor>&limit=50\`
+Auth: the agent token (MESSAGE scope) — an ephemeral \`flt_pk_\` works.
+SDK: \`eb.fleet.messages(agentId, token, { groupId, since })\`
+
+Returns \`{ items, cursor, hasMore, gap, gapReason?, resetAt? }\`. Each item carries its
+own \`cursor\`; persist the top-level \`cursor\` and send it back as \`since\` next time.
+
+**Always check \`gap\` before trusting the delta.** \`gap: true\` means "reload the whole
+thread", for one of two reasons:
+- \`cursor_too_old\` — your cursor no longer resolves.
+- \`context_reset\` — we still have the transcript, but the **agent** does not: its box was
+  lost without a backup, so the model starts blank (\`resetAt\` says when). Turns that ran
+  this way also carry \`memoryReset: true\` in \`turn.completed\`. Worth telling the user,
+  rather than letting them discover on their own that the agent "got dumber".
 `,
 
   websites: `## Websites (Static Site Hosting)
