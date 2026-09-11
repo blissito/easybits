@@ -5,8 +5,11 @@ import { RateLimiter } from "~/.server/rateLimiter";
 
 // Per-user rate limit for MCP. Keyed by user id (not IP) so users behind a
 // shared NAT/proxy don't share a bucket, and so the ceiling fits agentic
-// batch workloads. Ample headroom: 300 calls/min per user.
-const mcpRateLimiter = new RateLimiter({ windowMs: 60_000, maxRequests: 300 });
+// batch workloads. Una cuenta suma TODOS sus clientes (Claude.ai + Claude Code
+// + cada worker de flota pega aquí con el mismo user id), y cada handshake
+// cuenta (initialize + tools/list + notificaciones): 300/min se topaba en una
+// demo con varios agentes vivos. 1200/min.
+const mcpRateLimiter = new RateLimiter({ windowMs: 60_000, maxRequests: 1200 });
 
 // Stateless mode — each request is independent, auth via Bearer token
 export async function handleMcp(request: Request): Promise<Response> {
