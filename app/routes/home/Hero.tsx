@@ -12,7 +12,7 @@ export const Hero = () => {
       <div className="w-full md:w-[50%] ">
         <TextBlurEffect>
           <h1 className="text-4xl  md:text-5xl lg:text-6xl xl:text-[72px] leading-tight font-bold">
-            Tu agente{" "}
+            Tu agente de IA{" "}
             <span className="underline decoration-4 decoration-brand-500 underline-offset-4">
               en producción.
             </span>
