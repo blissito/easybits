@@ -26,13 +26,6 @@ export const Hero = () => {
           <Link to="/login">
             <BrutalButton id="EmpezarGratisHome">Empezar gratis →</BrutalButton>
           </Link>
-          <Link
-            to="/calculadora"
-            id="CotizarMiAgenteHome"
-            className="text-lg font-medium underline decoration-2 underline-offset-4 hover:decoration-brand-500"
-          >
-            Calcula tu costo
-          </Link>
         </div>
         {/* Prueba social: números verificables (server.ts, catálogo web, resume de microVM). */}
         <p className="text-iron text-sm md:text-base mt-6 md:mt-8 font-mono">
