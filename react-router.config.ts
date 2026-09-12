@@ -11,6 +11,7 @@ export default {
     // Con la lista horneada se sirve directo, y el índice sale del directorio de
     // posts, así que el snapshot es correcto en cada deploy.
     "/blog",
+    "/aprende",
     "/planes",
     "/funcionalidades",
     "/terminos-y-condiciones",

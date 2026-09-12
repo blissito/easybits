@@ -22,6 +22,10 @@ export const AuthNav = ({ user, noCTA }: { user?: User; noCTA?: boolean }) => {
       path: "/blog",
     },
     {
+      title: "Aprende",
+      path: "/aprende",
+    },
+    {
       title: "Docs",
       path: "/docs",
     },

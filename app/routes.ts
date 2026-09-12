@@ -46,6 +46,7 @@ export default [
   route("/docs", "routes/docs.tsx"),
   route("/status", "routes/status.tsx"),
   route("/blog", "routes/blog.tsx"),
+  route("/aprende", "routes/aprende.tsx"),
   route("/blog/:slug", "routes/blog.$slug.tsx"),
   route("/sitemap.xml", "routes/sitemap.xml.ts"),
   route("/robots.txt", "routes/robots.txt.ts"),

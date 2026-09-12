@@ -261,6 +261,7 @@ export class BlogSEOService {
       { path: "/developers", priority: "0.8", changefreq: "monthly" },
       { path: "/funcionalidades", priority: "0.8", changefreq: "monthly" },
       { path: "/docs", priority: "0.7", changefreq: "monthly" },
+      { path: "/aprende", priority: "0.8", changefreq: "weekly" },
       // Páginas de pilar: son las que deben aterrizar una búsqueda de producto.
       { path: "/sandboxes", priority: "0.9", changefreq: "monthly" },
       { path: "/hosting", priority: "0.9", changefreq: "monthly" },
