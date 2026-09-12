@@ -1,4 +1,4 @@
-import { Link } from "react-router";
+import { Link, redirect } from "react-router";
 import { AuthNav } from "~/components/login/auth-nav";
 import { Footer } from "~/components/common/Footer";
 import { FloatingChat } from "~/components/ai/FloatingChat";
@@ -8,11 +8,13 @@ import getBasicMetaTags from "~/utils/getBasicMetaTags";
 import type { Route } from "./+types/aprende";
 import type { CourseProgress } from "~/.server/core/courseProgress";
 import { LEVEL_LABEL, ProgressBar, WorkshopCards, card } from "./aprende/shared";
+import { wantsMarkdown } from "./aprende/shared";
 
 // Prerenderizada: el loader corre en el build y NO conoce al usuario. El
 // progreso llega por clientLoader (patrón planes.tsx: servidor para el crawler,
 // cliente para la sesión).
-export const loader = async () => {
+export const loader = async ({ request }: Route.LoaderArgs) => {
+  if (wantsMarkdown(request)) throw redirect("/aprende.md");
   const [courses, posts] = await Promise.all([listCourses(), listPublishedPosts()]);
   const cases = posts
     .filter((p) => p.kind === "build-in-public")

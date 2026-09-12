@@ -1,4 +1,4 @@
-import { Link, data, useFetcher, useRevalidator } from "react-router";
+import { Link, data, redirect, useFetcher, useRevalidator } from "react-router";
 import { AuthNav } from "~/components/login/auth-nav";
 import { Footer } from "~/components/common/Footer";
 import { PostContent } from "./blog/PostContent";
@@ -7,8 +7,10 @@ import getBasicMetaTags from "~/utils/getBasicMetaTags";
 import type { Route } from "./+types/aprende.$curso.$leccion";
 import type { CourseProgress } from "~/.server/core/courseProgress";
 import { Check, LessonList, card } from "./aprende/shared";
+import { wantsMarkdown } from "./aprende/shared";
 
-export const loader = async ({ params }: Route.LoaderArgs) => {
+export const loader = async ({ request, params }: Route.LoaderArgs) => {
+  if (wantsMarkdown(request)) throw redirect(`/aprende/${params.curso}/${params.leccion}.md`);
   const found = await getLesson(params.curso, params.leccion);
   if (!found) throw data("Lección no encontrada", { status: 404 });
   const { course, lesson } = found;

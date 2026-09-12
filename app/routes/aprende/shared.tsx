@@ -1,6 +1,11 @@
 import { Link } from "react-router";
 import type { CourseProgress } from "~/.server/core/courseProgress";
 
+/** Un agente que pide `Accept: text/markdown` va a la versión .md de la misma página. */
+export function wantsMarkdown(request: Request) {
+  return /text\/markdown/i.test(request.headers.get("accept") ?? "");
+}
+
 export const WORKSHOPS = [
   {
     title: "Diseño de sistemas agénticos",
@@ -53,13 +58,15 @@ export function LessonList({ course, progress, current }: { course: { slug: stri
         <li key={l.slug}>
           <Link
             to={`/aprende/${course.slug}/${l.slug}`}
-            className={`flex items-center gap-3 p-4 hover:bg-brand-100 transition-colors ${current === l.slug ? "bg-brand-100" : ""}`}
+            className={`flex items-start gap-3 p-4 hover:bg-brand-100 transition-colors ${current === l.slug ? "bg-brand-100" : ""}`}
           >
             <Check done={doneBy.get(l.slug) === true} />
-            <span className="font-mono text-xs text-iron w-5">{i + 1}</span>
-            <span className="flex-1 font-semibold">{l.title}</span>
-            <span className="font-mono text-xs text-iron">
-              {l.minutes} min{l.verify ? " · verificada" : ""}
+            <span className="font-mono text-xs text-iron pt-1">{i + 1}</span>
+            <span className="min-w-0 flex-1">
+              <span className="block font-semibold leading-snug">{l.title}</span>
+              <span className="block font-mono text-xs text-iron mt-1">
+                {l.minutes} min{l.verify ? " · verificada por uso" : " · lectura"}
+              </span>
             </span>
           </Link>
         </li>

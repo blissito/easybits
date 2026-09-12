@@ -71,6 +71,11 @@ Esto es un índice. Carga sólo la sección que necesites; el documento completo
 - **Pagos y email** — links de MercadoPago (el dinero va directo a tu cuenta) y envíos
   con contactos y bajas automáticas.
 
+## Aprende (cursos gratis, navegables por un agente)
+
+- [Academia](${BASE}/aprende.md) — 3 rutas; cada lección en Markdown con navegación y un
+  prompt "hazlo con tu agente". Progreso verificado por uso real: \`get_learning_progress\`.
+
 ## Cómo conectarte
 
 **MCP (recomendado)** — un endpoint, todas las tools:
