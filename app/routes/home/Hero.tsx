@@ -12,15 +12,14 @@ export const Hero = () => {
       <div className="w-full md:w-[50%] ">
         <TextBlurEffect>
           <h1 className="text-4xl  md:text-5xl lg:text-6xl xl:text-[72px] leading-tight font-bold">
-            Un sandbox{" "}
+            Tu agente{" "}
             <span className="underline decoration-4 decoration-brand-500 underline-offset-4">
-              no vende.
+              en producción.
             </span>
           </h1>
 
           <p className="text-iron text-xl lg:text-2xl xl:text-2xl font-extralight mb-6 md:mb-10 mt-2 md:mt-6">
-            Dale a tu agente una computadora, un número de WhatsApp y una forma
-            de cobrar. Desde un MCP, en pesos.
+            Un MCP todo en uno: computadora, WhatsApp, datos y cobro. En pesos.
           </p>
         </TextBlurEffect>
         <div className="flex flex-wrap items-center gap-4 justify-center md:justify-start">

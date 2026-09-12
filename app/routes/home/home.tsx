@@ -37,9 +37,9 @@ export const clientLoader = async ({ serverLoader }: Route.ClientLoaderArgs) => 
 
 export const meta = () => [
   ...getBasicMetaTags({
-    title: "EasyBits — La nube para agentes que venden",
+    title: "EasyBits — Tu agente en producción. Un MCP todo en uno.",
     description:
-      "Un sandbox no vende. Dale a tu agente una computadora, un número de WhatsApp y una forma de cobrar. Desde un MCP, en pesos. Empieza gratis.",
+      "Un MCP todo en uno: computadora, WhatsApp, datos y cobro para tu agente. En pesos. Empieza gratis.",
     url: "https://www.easybits.cloud",
   }),
   { tagName: "link", rel: "canonical", href: "https://www.easybits.cloud" },
@@ -56,7 +56,7 @@ const HOME_JSON_LD = {
       name: "EasyBits",
       url: "https://www.easybits.cloud",
       logo: "https://www.easybits.cloud/logo-purple.svg",
-      slogan: "Un sandbox no vende.",
+      slogan: "Tu agente en producción. Un MCP todo en uno.",
       areaServed: "MX",
       sameAs: [
         "https://www.npmjs.com/package/@easybits.cloud/sdk",
