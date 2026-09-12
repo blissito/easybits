@@ -5,6 +5,7 @@ import {
   closeSandboxSession,
   markSandboxResumed,
   markSandboxSuspended,
+  OPEN_SESSION,
 } from "./sandboxSessions";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -54,7 +55,7 @@ export async function reconcileSandboxSessions(): Promise<ReconcileResult> {
   const now = Date.now();
 
   const open = await db.sandboxSession.findMany({
-    where: { endedAt: null, startedAt: { lt: new Date(now - GRACE_MS) } },
+    where: { ...OPEN_SESSION, startedAt: { lt: new Date(now - GRACE_MS) } },
   });
   if (!open.length) return out;
   out.checked = open.length;

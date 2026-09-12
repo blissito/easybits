@@ -1,4 +1,5 @@
 import { db } from "../db";
+import type { Prisma } from "@prisma/client";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Sandbox lifecycle telemetry — INTERVALOS, no muestreo.
@@ -28,6 +29,14 @@ const ENABLED = process.env.SANDBOX_SESSIONS !== "0";
 // los acumuladores (que son la fuente de verdad de las VM-horas) siguen exactos
 // y el documento no crece sin techo.
 const TRANSITIONS_CAP = 40;
+
+// Filtro "sesión abierta". En Mongo un campo AUSENTE no matchea `{ endedAt: null }`
+// (solo el null explícito), y `create` no escribía `endedAt`: durante meses NINGUNA
+// sesión se cerró, suspendió ni atribuyó porque ningún findFirst la encontraba.
+// Se escribe `endedAt: null` al crear y, por si acaso, se acepta ausente aquí.
+export const OPEN_SESSION: Prisma.SandboxSessionWhereInput = {
+  OR: [{ endedAt: null }, { endedAt: { isSet: false } }],
+};
 
 export type SandboxSessionKind =
   | "sandbox"
@@ -81,7 +90,7 @@ export async function openSandboxSession(input: {
     const now = new Date();
     // Huérfanas del mismo id: sellarlas antes de abrir la nueva.
     const orphans = await db.sandboxSession.findMany({
-      where: { sandboxId: input.sandboxId, endedAt: null },
+      where: { sandboxId: input.sandboxId, ...OPEN_SESSION },
       select: { id: true },
     });
     for (const o of orphans) {
@@ -104,6 +113,7 @@ export async function openSandboxSession(input: {
         startedAt,
         lastStateAt: startedAt,
         state: "running",
+        endedAt: null,
       },
     });
   } catch (e) {
@@ -124,7 +134,7 @@ async function transition(
   if (!sandboxId) return;
   try {
     const s = await db.sandboxSession.findFirst({
-      where: { sandboxId, endedAt: null },
+      where: { sandboxId, ...OPEN_SESSION },
       orderBy: { startedAt: "desc" },
     });
     // Sin sesión abierta: caja creada antes del rollout, o con el flag apagado.
@@ -193,7 +203,7 @@ export async function attributeSandboxSession(
   if (!sandboxId) return;
   try {
     const s = await db.sandboxSession.findFirst({
-      where: { sandboxId, endedAt: null },
+      where: { sandboxId, ...OPEN_SESSION },
       orderBy: { startedAt: "desc" },
       select: { id: true },
     });
@@ -248,7 +258,7 @@ export async function listSessionsOverlapping(
     where: {
       ...(ownerId ? { ownerId } : {}),
       startedAt: { lt: to },
-      OR: [{ endedAt: null }, { endedAt: { gt: from } }],
+      OR: [...(OPEN_SESSION.OR as Prisma.SandboxSessionWhereInput[]), { endedAt: { gt: from } }],
       ...(filter?.kind ? { kind: filter.kind } : {}),
       ...(filter?.fleetAgentId ? { fleetAgentId: filter.fleetAgentId } : {}),
     },
