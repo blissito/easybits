@@ -1,5 +1,5 @@
 import type { User } from "@prisma/client";
-import { Link } from "react-router";
+import { Link, NavLink } from "react-router";
 import { useEffect, useState } from "react";
 import { motion, useAnimate } from "motion/react";
 import { BrutalButton } from "../common/BrutalButton";
@@ -56,15 +56,20 @@ export const AuthNav = ({ user, noCTA }: { user?: User; noCTA?: boolean }) => {
         <div className="h-full items-center content-center hidden md:flex">
           <div className=" flex justify-center items-center h-full">
             {navItems.map(({ title, path }, key) => (
-              <Link
+              <NavLink
                 key={key}
                 to={path}
-                className={cn
-                  ("w-fit px-6 hover:text-black hover:border-b-[1px] hover:border-black  hover:bg-white h-full grig place-content-center text-center transition-all ", key === 0 && "px-3")
+                className={({ isActive }) =>
+                  cn(
+                    "w-fit px-6 hover:text-black hover:border-b-[1px] hover:border-black hover:bg-white h-full grid place-content-center text-center transition-all",
+                    key === 0 && "px-3",
+                    // Página actual: mismo look que el hover, fijo.
+                    isActive && "text-black border-b-[1px] border-black bg-white"
+                  )
                 }
               >
                 {title}
-              </Link>
+              </NavLink>
             ))}
           </div>
           {!noCTA && !user?.id && (

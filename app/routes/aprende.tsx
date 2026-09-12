@@ -88,7 +88,7 @@ export default function Aprende({ loaderData }: Route.ComponentProps) {
                 <h3 className="text-2xl font-bold mt-1">{c.title}</h3>
                 <p className="text-iron mt-2 flex-1">{c.description}</p>
                 <p className="font-mono text-xs text-iron mt-4">
-                  {c.lessons} lecciones · ~{Math.round(c.minutes / 60)}h · {c.verified} verificadas por uso
+                  {c.lessons} {c.lessons === 1 ? "lección" : "lecciones"} · ~{Math.round(c.minutes / 60)}h · {c.verified} {c.verified === 1 ? "verificada" : "verificadas"} por uso
                 </p>
                 <div className="mt-3">
                   <ProgressBar percent={p?.percent ?? 0} />
