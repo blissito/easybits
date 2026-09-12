@@ -61,7 +61,7 @@ const PREFIX_GROUPS: Array<[RegExp, string]> = [
   [/^agent_/, "sandbox"],
   [/(scorecard|screening_report)/, "magnet"],
   [/^(replace_html|get_document_directions)/, "docs"],
-  [/^(get_docs|get_usage_stats)/, "core"],
+  [/^(get_docs|get_usage_stats|get_learning_progress)/, "core"],
 ];
 
 function groupFor(name: string, index: Map<string, string>): string {

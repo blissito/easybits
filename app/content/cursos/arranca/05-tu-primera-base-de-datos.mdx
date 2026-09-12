@@ -1,0 +1,45 @@
+---
+title: "Tu primera base de datos"
+description: "SQL real para tu agente, sin servidor que administrar."
+minutes: 15
+cost: "$0 (Byte incluye 3)"
+verify: database
+agentPrompt: "Crea una base de datos llamada 'notas' en EasyBits con db_create. Luego crea la tabla notas(id INTEGER PRIMARY KEY, texto TEXT), inserta dos filas y devuélveme un SELECT con db_query."
+---
+
+## Qué vas a lograr
+
+Una base de datos SQL (libSQL, compatible con SQLite) que tu agente crea y consulta. Es donde va la memoria que debe sobrevivir a la conversación.
+
+## Pasos
+
+Desde el agente con el prompt de abajo. Desde la UI: [Desarrollador → Bases de datos](/dash/developer/databases).
+
+Por SDK:
+
+```ts
+const db = await eb.createDatabase({ name: "notas" });
+await eb.execDatabase(db.id, [
+  { sql: "CREATE TABLE notas(id INTEGER PRIMARY KEY, texto TEXT)" },
+  { sql: "INSERT INTO notas(texto) VALUES ('primera'), ('segunda')" },
+]);
+const rows = await eb.queryDatabase(db.id, "SELECT * FROM notas");
+```
+
+## Hazlo con tu agente
+
+Cierra la conversación, abre otra y pídele *"¿qué notas tengo?"*. Si las lee de la base, ya tiene memoria que no depende del contexto.
+
+<Callout type="info">
+Cada base es un namespace aislado. Un agente que atiende a varios clientes puede tener **una base por cliente** — eso es multi-tenant, y es el corazón de la ruta *Vende tu agente*.
+</Callout>
+
+## Qué acabas de aprender
+
+Archivos para lo que se sirve, SQL para lo que se consulta. Con esta lección tu cuenta tiene llave, MCP, archivo, caja y base: **el kit completo**. Esta lección se marca hecha cuando **tu cuenta tiene una base de datos**.
+
+## Terminaste *Arranca*
+
+Tu certificado está en el temario del curso. Es una URL pública que solo existe mientras tu cuenta cumpla los cinco hechos — no un PDF de asistencia.
+
+Siguiente ruta: *Agente en producción* — el mismo agente, pero atendiendo WhatsApp de verdad.

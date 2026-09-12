@@ -1,0 +1,40 @@
+---
+title: "Tu primer archivo, con URL pública"
+description: "Sube algo desde el agente y obtén un enlace servido por CDN."
+minutes: 10
+cost: "$0"
+verify: file
+agentPrompt: "Crea un archivo hola.txt con el texto 'hola desde mi agente' y súbelo a EasyBits con upload_file como público. Devuélveme la URL."
+---
+
+## Qué vas a lograr
+
+Un archivo en EasyBits con una URL pública que puedes abrir en el navegador. Es la base de todo lo demás: documentos, sitios, releases y respaldos son archivos.
+
+## Pasos
+
+Desde el agente (recomendado) usa el prompt de abajo. Desde la UI: [Desarrollador → Archivos](/dash/developer/files) → subir.
+
+Por API, si prefieres verlo crudo:
+
+```bash
+curl -X POST https://www.easybits.cloud/api/v2/files \
+  -H "Authorization: Bearer eb_sk_live_TU_LLAVE" \
+  -F "file=@hola.txt" -F "access=public"
+```
+
+## Hazlo con tu agente
+
+El resultado trae `url`. Ábrela: si ves el texto, el archivo ya vive en el CDN.
+
+<Callout type="info">
+Un archivo **privado** no tiene URL abierta; se comparte con `create_share_link` (enlace con caducidad). Elige `public` solo para lo que de verdad es público.
+</Callout>
+
+## Qué acabas de aprender
+
+Los archivos de EasyBits son direccionables: el agente sube, recibe una URL y puede pasársela a un cliente, a un sitio o a otro agente. Esta lección se marca hecha cuando **tu cuenta tiene al menos un archivo**.
+
+## Siguiente
+
+Dale a tu agente una computadora propia.

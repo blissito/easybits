@@ -65,6 +65,12 @@ export async function validateApiKey(raw: string) {
     });
     return null;
   }
+  // Sello throttled: una escritura por hora por llave, nunca en el camino crítico.
+  if (!key.lastUsedAt || Date.now() - key.lastUsedAt.getTime() > 3_600_000) {
+    db.apiKey
+      .update({ where: { id: key.id }, data: { lastUsedAt: new Date() } })
+      .catch(() => {});
+  }
   return key;
 }
 

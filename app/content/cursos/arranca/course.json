@@ -1,0 +1,7 @@
+{
+  "title": "Arranca",
+  "description": "De cero a tu agente usando EasyBits: cuenta, MCP, un archivo, una caja y una base de datos. Sin tarjeta.",
+  "level": "inicial",
+  "minutes": 60,
+  "outcome": "Tu agente (Claude, Cursor o Codex) ya guarda archivos, ejecuta código en su propia microVM y consulta SQL desde EasyBits."
+}

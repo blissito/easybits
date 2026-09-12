@@ -1,0 +1,42 @@
+---
+title: "Tu primera caja: una microVM para tu agente"
+description: "Ejecuta código real en una máquina aislada que nace en segundos."
+minutes: 15
+cost: "$0 (Byte incluye 1 caja)"
+verify: sandbox
+agentPrompt: "Crea una caja en EasyBits con sandbox_create, ejecuta dentro `uname -a && node --version` con sandbox_exec, y muéstrame la salida. Al final destrúyela con sandbox_destroy."
+---
+
+## Qué vas a lograr
+
+Una microVM (Firecracker) con tu agente adentro: Linux completo, red, disco. No es un contenedor compartido ni un `eval` — es una máquina.
+
+## Pasos
+
+Desde el agente con el prompt de abajo. Con el SDK:
+
+```ts
+import { EasybitsClient } from "@easybits.cloud/sdk";
+const eb = new EasybitsClient({ apiKey: process.env.EASYBITS_API_KEY! });
+
+const box = await eb.sandboxes.create({ template: "node" });
+const out = await box.exec("node -e \"console.log(40+2)\"");
+console.log(out.stdout); // 42
+await box.destroy();
+```
+
+## Hazlo con tu agente
+
+Mira dos cosas en la respuesta: el tiempo que tardó en nacer (segundos, no minutos) y que `uname` es un kernel distinto al de tu máquina.
+
+<Callout type="info">
+Una caja **efímera** muere sola al terminar su TTL. Si quieres que persista (disco + snapshot), es una máquina vendida y eso se cobra aparte — lo vemos en la ruta *Vende tu agente*.
+</Callout>
+
+## Qué acabas de aprender
+
+Un agente con caja puede instalar paquetes, correr pruebas, buildear un sitio o procesar un PDF de 200 MB sin tocar tu laptop. Esta lección se marca hecha cuando **tu cuenta ha tenido una caja**, aunque ya la hayas destruido.
+
+## Siguiente
+
+Dale memoria: una base de datos SQL.

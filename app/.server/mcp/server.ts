@@ -90,6 +90,7 @@ import {
 } from "../core/webhookOperations";
 import { WEBHOOK_EVENTS } from "../webhooks";
 import { listFleetMessages } from "../core/fleetAgentOperations";
+import { getLearningProgress } from "../core/courseProgress";
 import {
   createPaymentLink,
   listPaymentLinks,
@@ -3420,6 +3421,23 @@ How to embed safely (the only reliable rule):
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await getUsageStats(ctx);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "get_learning_progress",
+    "Academia EasyBits (/aprende): progreso del usuario en cada curso. Las lecciones con `verify` se marcan solas cuando la cuenta cumple el hecho (tiene una caja, una base de datos…); no hay quiz. Úsalo para sugerir la siguiente lección o hacerla por el usuario.",
+    {},
+    wrapHandler(async (_params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const courses = await getLearningProgress(ctx.user.id);
+      return ok({
+        courses: courses.map((c) => ({
+          ...c,
+          url: `https://www.easybits.cloud/aprende/${c.slug}`,
+          next: c.lessons.find((l) => !l.done)?.slug ?? null,
+        })),
+      });
     })
   );
 

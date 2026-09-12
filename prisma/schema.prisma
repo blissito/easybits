@@ -498,6 +498,9 @@ model ApiKey {
   // Null = account-wide key (legacy behavior, full access to the owner's resources).
   workspaceId String?    @db.ObjectId
   workspace   Workspace? @relation(fields: [workspaceId], references: [id])
+  // Última vez que la llave autenticó una request (sellado a lo más 1 vez/hora).
+  // Es la única evidencia de que el usuario conectó de verdad su agente.
+  lastUsedAt DateTime?
   createdAt DateTime     @default(now())
   updatedAt DateTime     @updatedAt
 
@@ -1813,4 +1816,15 @@ model SandboxSession {
   @@index([ownerId, endedAt])
   // PATH CALIENTE: sellar una transición busca la sesión abierta por sandboxId.
   @@index([sandboxId, endedAt])
+}
+
+// Academia (/aprende): sólo las lecciones de LECTURA se marcan a mano. Las que
+// tienen `verify` se comprueban contra el uso real de la cuenta (courseProgress.ts).
+model LessonProgress {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId      String   @db.ObjectId
+  lessonId    String // "<curso>/<leccion>"
+  completedAt DateTime @default(now())
+
+  @@unique([userId, lessonId])
 }

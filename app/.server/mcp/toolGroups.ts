@@ -281,6 +281,7 @@ export const CORE_ALLOWLIST = new Set<string>([
   "edit_fast_pdf",
   "structured_doc",
   "get_usage_stats",
+  "get_learning_progress",
   "create_form",
   "list_forms",
   "list_form_submissions",

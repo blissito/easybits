@@ -262,6 +262,9 @@ export class BlogSEOService {
       { path: "/funcionalidades", priority: "0.8", changefreq: "monthly" },
       { path: "/docs", priority: "0.7", changefreq: "monthly" },
       { path: "/aprende", priority: "0.8", changefreq: "weekly" },
+      { path: "/aprende/arranca", priority: "0.8", changefreq: "weekly" },
+      { path: "/aprende/agente-en-produccion", priority: "0.7", changefreq: "weekly" },
+      { path: "/aprende/vende-tu-agente", priority: "0.7", changefreq: "weekly" },
       // Páginas de pilar: son las que deben aterrizar una búsqueda de producto.
       { path: "/sandboxes", priority: "0.9", changefreq: "monthly" },
       { path: "/hosting", priority: "0.9", changefreq: "monthly" },

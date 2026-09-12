@@ -1,0 +1,54 @@
+---
+title: "Conecta el MCP a tu agente"
+description: "Un endpoint, todas las herramientas: Claude Code, Claude.ai, Cursor o Codex."
+minutes: 10
+cost: "$0"
+verify: mcp_connected
+agentPrompt: "Lista mis archivos en EasyBits con list_files. Si la herramienta no existe, dime exactamente qué error ves."
+---
+
+## Qué vas a lograr
+
+Que tu agente vea las herramientas de EasyBits (`upload_file`, `sandbox_create`, `db_query`…) sin instalar nada más que un conector.
+
+## Pasos
+
+**Claude Code** (un comando):
+
+```bash
+claude mcp add easybits -- npx -y @easybits.cloud/mcp --key eb_sk_live_TU_LLAVE
+```
+
+**Cursor / VS Code / Windsurf / Codex** (Streamable HTTP, sin proxy):
+
+```json
+{
+  "mcpServers": {
+    "easybits": {
+      "type": "streamable-http",
+      "url": "https://www.easybits.cloud/api/mcp",
+      "headers": { "Authorization": "Bearer eb_sk_live_TU_LLAVE" }
+    }
+  }
+}
+```
+
+**Claude.ai** (web/app): Ajustes → Conectores → añadir `https://www.easybits.cloud/api/mcp` y autorizar con tu cuenta (OAuth, sin pegar la llave).
+
+Después **reinicia la sesión** del agente: los clientes MCP piden la lista de herramientas al arrancar y no la refrescan.
+
+## Hazlo con tu agente
+
+Pídele que llame una herramienta. Si responde con tus archivos (aunque la lista esté vacía), está conectado.
+
+<Callout type="warning">
+Si el agente dice "no tengo esa herramienta", no le creas a la primera: pídele que la llame. Un agente puede negar capacidades que sí tiene. El error real (401, timeout) sí es información.
+</Callout>
+
+## Qué acabas de aprender
+
+MCP es la forma en que un agente descubre herramientas. EasyBits expone todas por un solo endpoint; por defecto carga el grupo `core` y puedes pedir más con `--tools sandbox,docs`. Esta lección se marca hecha cuando **tu llave autentica una llamada real** (o tu conector OAuth queda vivo).
+
+## Siguiente
+
+Guarda tu primer archivo desde el agente.

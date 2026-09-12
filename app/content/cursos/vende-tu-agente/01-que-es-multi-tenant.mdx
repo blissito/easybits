@@ -1,0 +1,24 @@
+---
+title: "Qué es multi-tenant y por qué te importa"
+description: "Un agente, muchos clientes, cero mezcla de datos."
+minutes: 15
+cost: "$0"
+---
+
+## Qué vas a lograr
+
+Entender la única decisión de arquitectura que separa "hice un bot" de "vendo un servicio": cómo aislar a cada cliente.
+
+## La regla
+
+**Un tenant = una base de datos + una llave.** El agente es el mismo; lo que cambia por cliente es *a qué* tiene acceso en ese turno. En EasyBits eso es literal: cada base es un namespace, y la flota puede inyectar una llave distinta por conversación.
+
+Lo que NO es multi-tenant: una tabla `clientes` con una columna `cliente_id` y rezar para que ningún prompt la olvide. Un agente que puede leer todas las filas eventualmente las lee.
+
+## Qué acabas de aprender
+
+Aislar por infraestructura (base, llave, caja) en vez de por instrucciones. Marca esta lección como leída cuando lo tengas claro; la siguiente lo construye.
+
+## Siguiente
+
+Una base por cliente, provisionada por el propio agente.

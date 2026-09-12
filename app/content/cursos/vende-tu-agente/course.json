@@ -1,0 +1,7 @@
+{
+  "title": "Vende tu agente",
+  "description": "De un agente a un producto: un cliente por base de datos, cobro, hosting y los casos que ya funcionan.",
+  "level": "avanzado",
+  "minutes": 240,
+  "outcome": "Un agente multi-tenant con cobro y hosting propio, y un caso real medido para vender el siguiente."
+}

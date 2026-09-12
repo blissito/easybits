@@ -1,0 +1,7 @@
+{
+  "title": "Agente en producción",
+  "description": "Un agente que vive en su propia caja, atiende WhatsApp, recuerda, y del que sabes cuánto cuesta.",
+  "level": "intermedio",
+  "minutes": 240,
+  "outcome": "Un agente de flota con número de WhatsApp real, memoria SQL, costo medido y una app desplegada con launch_app."
+}

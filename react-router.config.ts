@@ -12,6 +12,9 @@ export default {
     // posts, así que el snapshot es correcto en cada deploy.
     "/blog",
     "/aprende",
+    "/aprende/arranca",
+    "/aprende/agente-en-produccion",
+    "/aprende/vende-tu-agente",
     "/planes",
     "/funcionalidades",
     "/terminos-y-condiciones",
