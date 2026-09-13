@@ -1,0 +1,14 @@
+name: Hosting monitor
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch: {}
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe sold domains, restart what is down, alert
+        run: |
+          curl -fsS --max-time 280 \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            https://easybits.cloud/api/cron/check-hosting

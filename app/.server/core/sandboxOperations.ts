@@ -683,7 +683,7 @@ export function hostErrorResponse(e: unknown): Response | null {
   return Response.json(body, { status: e.status });
 }
 
-async function callHost<T>(
+export async function callHost<T>(
   method: "GET" | "POST" | "DELETE" | "PATCH",
   path: string,
   body?: unknown,

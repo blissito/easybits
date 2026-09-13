@@ -227,6 +227,7 @@ export default [
   route("api/cron/sweep-fleet-memory", "routes/api/cron/sweep-fleet-memory.ts"),
   route("api/cron/reap-service-boxes", "routes/api/cron/reap-service-boxes.ts"),
   route("api/cron/purge-notifications", "routes/api/cron/purge-notifications.ts"),
+  route("api/cron/check-hosting", "routes/api/cron/check-hosting.ts"),
   // Webhooks (inbound from external providers)
   route("api/webhooks/mercadopago", "routes/api/webhooks/mercadopago.ts"),
   // Unsubscribe (public)
