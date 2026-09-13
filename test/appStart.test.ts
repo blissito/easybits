@@ -1,11 +1,16 @@
 import { describe, it, expect } from "vitest";
-import { buildStartScript, runspecSchema, PID_FILE } from "~/.server/core/releaseOperations";
+import {
+  buildStartScript,
+  runspecSchema,
+  PID_FILE,
+  APP_UNIT,
+  START_SCRIPT_FILE,
+} from "~/.server/core/releaseOperations";
 
-// Un deploy que arranca la app SIN parar la anterior no despliega nada: el
-// `nohup … &` devuelve 0, se publica el release y todo parece bien, pero el
-// puerto sigue tomado por el proceso viejo —con su código y su entorno
-// viejos— y el nuevo muere sin poder escuchar. Se ve como "desplegado" y el
-// visitante sigue viendo lo de antes.
+// La app arrancaba con `nohup … &`: sobrevivía al deploy, no a la caja. Al
+// reiniciar la microVM (resume, reboot del fierro) nadie la relevantaba y el
+// sitio quedaba en 502 hasta que alguien lo notara (brendago.studio, ~5h el
+// 2026-09-12). Ahora la sostiene una unit de systemd con Restart=always.
 describe("arranque de la app", () => {
   const spec = runspecSchema.parse({
     appDir: "/srv/store",
@@ -15,69 +20,51 @@ describe("arranque de la app", () => {
   });
   const script = buildStartScript(spec, true);
 
-  it("para la instancia anterior antes de arrancar", () => {
+  it("instala una unit enabled con Restart=always y la arranca", () => {
+    expect(script).toContain(`/etc/systemd/system/${APP_UNIT}.service`);
+    expect(script).toContain("Restart=always");
+    expect(script).toContain("WantedBy=multi-user.target");
+    expect(script).toContain(`systemctl enable ${APP_UNIT}`);
+    expect(script).toContain(`systemctl restart ${APP_UNIT}`);
+    expect(script).not.toContain("nohup");
+  });
+
+  it("para la instancia anterior (unit o proceso suelto) antes de arrancar", () => {
+    expect(script).toContain(`systemctl stop ${APP_UNIT}`);
     expect(script).toContain(`kill "$OLD"`);
-    // El orden importa: matar DESPUÉS de arrancar mataría al nuevo.
-    expect(script.indexOf("killPortHolders")).toBeLessThan(script.indexOf("nohup"));
+    expect(script).toContain(`rm -f '${PID_FILE}'`);
+    expect(script.indexOf("killPortHolders")).toBeLessThan(script.indexOf("systemctl restart"));
   });
 
   it("mata al que tenga el puerto sin depender de paquetes opcionales", () => {
-    // Una caja anterior a esto no tiene pidfile, y su proceso es justo el que
-    // hay que reemplazar. Se hizo con `fuser` y no funcionaba: psmisc no viene
-    // en el template y la guarda `command -v` saltaba el kill en silencio.
     expect(script).not.toContain("fuser");
     expect(script).toContain("ss -ltnp");
     expect(script).toContain(`grep ":3000 "`);
     expect(script).toContain("killPortHolders -9");
   });
 
-  it("anota el pid del proceso de la app, no el de un shell padre", () => {
-    // Sin `exec`, el pid guardado es el del sh, y matarlo deja al hijo
-    // huérfano y escuchando: el siguiente deploy vuelve a no reemplazar nada.
-    expect(script).toContain("exec ");
-    expect(script).toContain(`echo $! > '${PID_FILE}'`);
-  });
-
-  it("confirma que quedó vivo, en vez de fiarse del código de salida", () => {
-    expect(script).toContain("kill -0");
-    expect(script).toContain("STARTED");
-    // Y si no arrancó, el log dice por qué en la misma respuesta.
-    expect(script).toContain("tail -30 /var/log/easybits-app.log");
-    expect(script).toContain("exit 1");
-  });
-
-  it("carga los secretos en el arranque", () => {
+  it("el script de arranque hace exec del comando con los secretos cargados", () => {
+    expect(script).toContain(START_SCRIPT_FILE);
+    expect(script).toContain("exec npm start");
+    expect(script).not.toContain("exec set");
+    expect(script.indexOf("set -a")).toBeLessThan(script.indexOf("exec npm start"));
     expect(script).toContain(".easybits.env");
     const sinSecretos = buildStartScript(
       runspecSchema.parse({ appDir: "/srv/store", startCommand: "npm start" }),
       false
     );
     expect(sinSecretos).not.toContain(".easybits.env");
-  });
-});
-
-// El `exec` sirve para que el pid anotado sea el de la app y no el de un
-// shell padre. Pero tiene que ir pegado al comando final: con secretos, el
-// script empieza por `set -a`, y `exec set -a` revienta —`set` es un builtin,
-// no un ejecutable— así que la app no llega ni a arrancar.
-describe("exec y secretos en el mismo arranque", () => {
-  const spec = runspecSchema.parse({
-    appDir: "/srv/store",
-    startCommand: "npm start",
-    port: 3000,
-    secretNames: ["DATABASE_URL"],
+    expect(sinSecretos).toContain("exec npm start");
   });
 
-  it("no antepone exec al `set` de los secretos", () => {
-    const script = buildStartScript(spec, true);
-    expect(script).not.toContain("exec set");
-    expect(script).toContain("exec npm start");
-    // Y el orden es: cargar secretos, luego exec.
-    expect(script.indexOf("set -a")).toBeLessThan(script.indexOf("exec npm start"));
+  it("confirma que quedó vivo, en vez de fiarse del código de salida", () => {
+    expect(script).toContain(`systemctl is-active --quiet ${APP_UNIT}`);
+    expect(script).toContain("STARTED");
+    expect(script).toContain("tail -30 /var/log/easybits-app.log");
+    expect(script).toContain("exit 1");
   });
 
-  it("sin secretos, el exec sigue pegado al comando", () => {
-    const sin = runspecSchema.parse({ appDir: "/srv/store", startCommand: "npm start", port: 3000 });
-    expect(buildStartScript(sin, false)).toContain("exec npm start");
+  it("el log sigue en el archivo que lee readMachineLogs", () => {
+    expect(script).toContain("StandardOutput=append:/var/log/easybits-app.log");
   });
 });

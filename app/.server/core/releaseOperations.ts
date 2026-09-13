@@ -751,47 +751,74 @@ function withSecrets(
   });
 }
 
+/** Unit de systemd que sostiene la app arrancada por `startCommand`. */
+export const APP_UNIT = "easybits-app";
+
+/** Script de arranque que la unit ejecuta (secretos + runspec.env + exec). */
+export const START_SCRIPT_FILE = ".easybits-start.sh";
+
 /**
- * Arranca la app REEMPLAZANDO la que ya estuviera corriendo.
+ * Arranca la app bajo una unit de systemd, REEMPLAZANDO la que ya estuviera
+ * corriendo.
  *
- * Sin el paso de parada, un deploy dejaba viva la instancia anterior: el
- * `nohup … &` devolvía 0, se publicaba el release y todo parecía correcto,
- * pero el puerto seguía ocupado por el proceso viejo —con su código y su
- * entorno viejos— y el nuevo moría al no poder escuchar. Un redeploy no
- * cambiaba nada de lo que el visitante veía.
+ * Antes era `nohup … &` con un pidfile. Funcionaba hasta que la caja
+ * reiniciaba (resume tras suspensión, reboot del fierro): nadie volvía a
+ * arrancar la app y el sitio quedaba en 502 hasta que alguien lo notara —
+ * brendago.studio estuvo ~5h caído así el 2026-09-12. Con la unit
+ * (`Restart=always`, enabled) la app vuelve sola tras un crash o un boot.
  *
- * Se para por pidfile y, como red de seguridad, por quien tenga tomado el
- * puerto: un pidfile puede perderse (cajas anteriores a esto no lo tienen).
- * Y se comprueba que quede alguien escuchando antes de dar el arranque por
- * bueno.
+ * Sigue parando a mano lo que ocupe el puerto: cajas anteriores a esto tienen
+ * el proceso suelto de `nohup`, y ese es justo el que hay que reemplazar.
  */
 export function buildStartScript(spec: Runspec, hasSecrets: boolean): string {
   const dir = shQuote(spec.appDir);
   const pid = shQuote(PID_FILE);
   const port = spec.port ?? 3000;
-  const command = shQuote(withSecrets(spec.startCommand!, spec, hasSecrets, { exec: true }));
+  const command = withSecrets(spec.startCommand!, spec, hasSecrets, { exec: true });
+  const startScript = `${spec.appDir}/${START_SCRIPT_FILE}`;
+  const unit = [
+    "[Unit]",
+    "Description=EasyBits hosted app",
+    "After=network.target app.mount",
+    "",
+    "[Service]",
+    `WorkingDirectory=${spec.appDir}`,
+    `Environment=PORT=${port} NODE_ENV=production PATH=/usr/local/bin:/usr/bin:/bin`,
+    `ExecStart=/bin/sh ${startScript}`,
+    "Restart=always",
+    "RestartSec=3",
+    `StandardOutput=append:${APP_LOG_FILE}`,
+    `StandardError=append:${APP_LOG_FILE}`,
+    "",
+    "[Install]",
+    "WantedBy=multi-user.target",
+    "",
+  ].join("\n");
   return [
     `cd ${dir}`,
-    // 1. La instancia anterior, por su pid.
-    `if [ -f ${pid} ]; then OLD=$(cat ${pid}); kill "$OLD" 2>/dev/null || true; fi`,
-    // 2. Y quien siga ocupando el puerto, venga de donde venga: una caja
-    //    anterior a esto no tiene pidfile, y ese proceso es justo el que hay
-    //    que reemplazar. El pid sale de `ss`, que está en el template; con
-    //    `fuser` no funcionaba porque psmisc no viene instalado y la guarda
-    //    `command -v` hacía que el kill se saltara en silencio.
+    // 0. La unit, si ya existe: se para antes de tocar el puerto.
+    `systemctl stop ${APP_UNIT} 2>/dev/null || true`,
+    // 1. La instancia suelta (cajas anteriores a la unit), por su pid.
+    `if [ -f ${pid} ]; then OLD=$(cat ${pid}); kill "$OLD" 2>/dev/null || true; rm -f ${pid}; fi`,
+    // 2. Y quien siga ocupando el puerto, venga de donde venga. El pid sale de
+    //    `ss`, que está en el template; con `fuser` no funcionaba porque
+    //    psmisc no viene instalado.
     `killPortHolders() { ss -ltnp 2>/dev/null | grep ":${port} " | grep -o "pid=[0-9]*" | cut -d= -f2 | sort -u | while read P; do [ -n "$P" ] && kill $1 "$P" 2>/dev/null || true; done; }`,
     `killPortHolders`,
-    // 3. Darle un momento a soltar el puerto antes de insistir a la mala.
     `for i in 1 2 3 4 5; do ss -ltn 2>/dev/null | grep -q ":${port} " || break; sleep 1; done`,
     `killPortHolders -9`,
     `for i in 1 2 3; do ss -ltn 2>/dev/null | grep -q ":${port} " || break; sleep 1; done`,
-    // `exec` dentro del sh: el pid anotado ES el del proceso de la app, no el
-    // de un shell padre que al morir dejaría al hijo huérfano y escuchando.
-    `nohup sh -c ${command} >${APP_LOG_FILE} 2>&1 &`,
-    `echo $! > ${pid}`,
+    // 3. Script de arranque (secretos + exec) y unit que lo sostiene.
+    `printf '%s\n' ${shQuote("#!/bin/sh")} ${shQuote(`cd ${shQuote(spec.appDir)}`)} ${shQuote(command)} > ${shQuote(startScript)}`,
+    `chmod 700 ${shQuote(startScript)}`,
+    `printf '%s' ${shQuote(unit)} > /etc/systemd/system/${APP_UNIT}.service`,
+    `: > ${APP_LOG_FILE}`,
+    `systemctl daemon-reload`,
+    `systemctl enable ${APP_UNIT} >/dev/null 2>&1 || true`,
+    `systemctl restart ${APP_UNIT}`,
     `sleep 3`,
-    // Que el proceso siga vivo Y escuchando; si no, el log dice por qué.
-    `if kill -0 "$(cat ${pid})" 2>/dev/null; then echo STARTED; else echo "NO_ARRANCO"; tail -30 ${APP_LOG_FILE}; exit 1; fi`,
+    // Que la unit siga viva Y escuchando; si no, el log dice por qué.
+    `if systemctl is-active --quiet ${APP_UNIT}; then echo STARTED; else echo "NO_ARRANCO"; tail -30 ${APP_LOG_FILE}; exit 1; fi`,
   ].join("\n");
 }
 
