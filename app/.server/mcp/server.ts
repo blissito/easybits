@@ -2315,9 +2315,11 @@ How to embed safely (the only reliable rule):
     },
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
-      const { sandboxId, ...rest } = params;
-      const result = await sandboxReadFile(ctx, sandboxId, rest);
-      return offloadOversizedRead(ctx, result, params.path);
+      const { sandboxId, path, encoding } = params;
+      // Sin encoding explícito se lee en base64: el host decodifica utf8 con
+      // pérdida (U+FFFD) y corrompía binarios >1MB en la ruta de storage.
+      const result = await sandboxReadFile(ctx, sandboxId, { path, encoding: encoding ?? "base64" });
+      return offloadOversizedRead(ctx, result, path, { autoDetect: !encoding });
     })
   );
 

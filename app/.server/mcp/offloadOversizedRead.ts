@@ -30,7 +30,8 @@ type ToolResponse = { content: McpContentBlock[] };
 export async function offloadOversizedRead(
   ctx: AuthContext,
   result: SandboxReadResult,
-  sandboxPath: string
+  sandboxPath: string,
+  opts: { autoDetect?: boolean } = {}
 ): Promise<ToolResponse> {
   const isUtf8 = result.encoding === "utf8";
 
@@ -45,6 +46,23 @@ export async function offloadOversizedRead(
   const buf = isUtf8
     ? Buffer.from(result.content, "utf8")
     : Buffer.from(result.content, "base64");
+
+  // Sin `encoding` explícito el tool pide base64 al host (leer como utf8 ahí
+  // sustituye cada byte ≥0x80 por U+FFFD y el binario llega corrupto). Aquí
+  // decidimos: si los bytes son UTF-8 válido y caben, se devuelven como texto.
+  if (opts.autoDetect && buf.length < INLINE_TEXT_MAX_BYTES) {
+    const text = decodeUtf8Strict(buf);
+    if (text !== null) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify({ content: text, size: result.size, encoding: "utf8" }, null, 2),
+          },
+        ],
+      };
+    }
+  }
 
   const detectedMime = detectMime(buf);
   if (detectedMime && buf.length < INLINE_IMAGE_MAX_BYTES) {
@@ -81,6 +99,16 @@ export async function offloadOversizedRead(
       },
     ],
   };
+}
+
+/** UTF-8 estricto; null si hay bytes inválidos o NUL (binario). */
+function decodeUtf8Strict(buf: Buffer): string | null {
+  if (buf.includes(0)) return null;
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(buf);
+  } catch {
+    return null;
+  }
 }
 
 function guessMimeFromPath(path: string): string | null {
