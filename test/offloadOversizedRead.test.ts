@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { createHash } from "crypto";
 
-const put = vi.fn(async () => {});
+const put = vi.fn(async (_k: string, _b: Buffer, _m: string) => {});
 vi.mock("../app/.server/storage", () => ({
   getPlatformDefaultClient: () => ({
     putObject: put,
