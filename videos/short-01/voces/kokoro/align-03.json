@@ -1,0 +1,80 @@
+[
+  {
+    "text": "Su",
+    "start": 0.02,
+    "end": 0.07,
+    "id": "w0"
+  },
+  {
+    "text": "código",
+    "start": 0.16,
+    "end": 0.56,
+    "id": "w1"
+  },
+  {
+    "text": "expone",
+    "start": 0.56,
+    "end": 0.98,
+    "id": "w2"
+  },
+  {
+    "text": "sus",
+    "start": 0.98,
+    "end": 1.19,
+    "id": "w3"
+  },
+  {
+    "text": "datos",
+    "start": 1.19,
+    "end": 1.54,
+    "id": "w4"
+  },
+  {
+    "text": "como",
+    "start": 1.54,
+    "end": 1.82,
+    "id": "w5"
+  },
+  {
+    "text": "TOLS",
+    "start": 1.82,
+    "end": 2.09,
+    "id": "w6"
+  },
+  {
+    "text": "de",
+    "start": 2.09,
+    "end": 2.22,
+    "id": "w7"
+  },
+  {
+    "text": "MSP,",
+    "start": 2.26,
+    "end": 2.62,
+    "id": "w8"
+  },
+  {
+    "text": "vigencias,",
+    "start": 2.62,
+    "end": 3.5,
+    "id": "w9"
+  },
+  {
+    "text": "tanques,",
+    "start": 3.5,
+    "end": 4.01,
+    "id": "w10"
+  },
+  {
+    "text": "recepciones,",
+    "start": 4.01,
+    "end": 4.74,
+    "id": "w11"
+  },
+  {
+    "text": "normas.",
+    "start": 4.74,
+    "end": 5.28,
+    "id": "w12"
+  }
+]

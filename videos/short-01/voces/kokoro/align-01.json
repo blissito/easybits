@@ -1,0 +1,134 @@
+[
+  {
+    "text": "Una",
+    "start": 0,
+    "end": 0.19,
+    "id": "w0"
+  },
+  {
+    "text": "gasolinera",
+    "start": 0.19,
+    "end": 0.79,
+    "id": "w1"
+  },
+  {
+    "text": "le",
+    "start": 0.88,
+    "end": 0.94,
+    "id": "w2"
+  },
+  {
+    "text": "pregunta",
+    "start": 0.94,
+    "end": 1.44,
+    "id": "w3"
+  },
+  {
+    "text": "a",
+    "start": 1.44,
+    "end": 1.5,
+    "id": "w4"
+  },
+  {
+    "text": "su",
+    "start": 1.5,
+    "end": 1.6,
+    "id": "w5"
+  },
+  {
+    "text": "bitácora",
+    "start": 1.69,
+    "end": 2.12,
+    "id": "w6"
+  },
+  {
+    "text": "por",
+    "start": 2.12,
+    "end": 2.31,
+    "id": "w7"
+  },
+  {
+    "text": "WhatsApp",
+    "start": 2.31,
+    "end": 2.72,
+    "id": "w8"
+  },
+  {
+    "text": "algún",
+    "start": 3.15,
+    "end": 3.44,
+    "id": "w9"
+  },
+  {
+    "text": "tanque",
+    "start": 3.44,
+    "end": 3.8,
+    "id": "w10"
+  },
+  {
+    "text": "tiene",
+    "start": 3.8,
+    "end": 4.17,
+    "id": "w11"
+  },
+  {
+    "text": "agua",
+    "start": 4.17,
+    "end": 4.48,
+    "id": "w12"
+  },
+  {
+    "text": "y",
+    "start": 4.48,
+    "end": 4.54,
+    "id": "w13"
+  },
+  {
+    "text": "le",
+    "start": 4.81,
+    "end": 4.97,
+    "id": "w14"
+  },
+  {
+    "text": "contesta",
+    "start": 5.05,
+    "end": 5.5,
+    "id": "w15"
+  },
+  {
+    "text": "con",
+    "start": 5.5,
+    "end": 5.68,
+    "id": "w16"
+  },
+  {
+    "text": "el",
+    "start": 5.68,
+    "end": 5.8,
+    "id": "w17"
+  },
+  {
+    "text": "dato",
+    "start": 5.8,
+    "end": 6.01,
+    "id": "w18"
+  },
+  {
+    "text": "de",
+    "start": 6.09,
+    "end": 6.15,
+    "id": "w19"
+  },
+  {
+    "text": "la",
+    "start": 6.15,
+    "end": 6.27,
+    "id": "w20"
+  },
+  {
+    "text": "consola.",
+    "start": 6.27,
+    "end": 6.86,
+    "id": "w21"
+  }
+]

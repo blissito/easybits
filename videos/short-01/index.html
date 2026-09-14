@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1080, height=1920" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js" integrity="sha384-sG0Hv1tP1lZCk9KQmrIbY/XNwi+OY84GQqhMscbnsoBFqAz8KNCil1kvfL3Hbbk2" crossorigin="anonymous"></script>
+    <style>
+      @font-face { font-family: 'Archivo Black'; src: url('assets/fonts/ArchivoBlack.ttf') format('truetype'); font-display: block; }
+      @font-face { font-family: 'JetBrains Mono'; src: url('assets/fonts/JetBrainsMono.ttf') format('truetype'); font-weight: 700; font-display: block; }
+      @font-face { font-family: 'Inter'; src: url('assets/fonts/Inter_Variable.woff2') format('woff2'); font-weight: 100 900; font-display: block; }
+      @font-face { font-family: 'Jersey 10'; src: url('assets/fonts/Jersey10.ttf') format('truetype'); font-display: block; }
+
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { width: 1080px; height: 1920px; overflow: hidden; background: #F3F0F5; }
+      #root { position: relative; width: 1080px; height: 1920px; overflow: hidden; background: #F3F0F5; color: #111111; font-family: 'Inter', system-ui, sans-serif; }
+
+      /* ---------- fondo: papel ---------- */
+      .bg { position: absolute; inset: 0; background: #F3F0F5; }
+      .grid { position: absolute; inset: -120px; background-image: linear-gradient(rgba(17,17,17,0.09) 1px, transparent 1px), linear-gradient(90deg, rgba(17,17,17,0.09) 1px, transparent 1px); background-size: 60px 60px; }
+      .blob { position: absolute; width: 900px; height: 900px; border-radius: 50%; filter: blur(120px); }
+      .blob-a { left: -300px; top: -200px; background: #D9FF3D; opacity: 0.55; }
+      .blob-b { right: -350px; bottom: -250px; background: #9870ED; opacity: 0.22; }
+      .grain { position: absolute; inset: 0; opacity: 0.16; mix-blend-mode: multiply; }
+      .vignette { position: absolute; inset: 0; background: radial-gradient(ellipse at center, transparent 50%, rgba(17,17,17,0.14) 100%); }
+
+      /* ---------- escenas y paneles ---------- */
+      .scene { position: absolute; inset: 0; }
+      .panel { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 200px 80px; text-align: center; }
+      .panel.wait { transform: translateX(100%); opacity: 0; }
+      .stack { display: flex; flex-direction: column; align-items: center; gap: 40px; }
+
+      .kicker { font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 30px; letter-spacing: 0.22em; text-transform: uppercase; color: #111111; }
+      .kicker.mute { color: #6B7785; }
+      .h { font-family: 'Archivo Black', sans-serif; font-size: 108px; line-height: 0.92; letter-spacing: -0.03em; color: #111111; text-transform: uppercase; }
+      .h em { font-style: normal; background: #D9FF3D; padding: 0 0.12em; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
+      .num { font-family: 'Archivo Black', sans-serif; font-size: 460px; line-height: 0.85; letter-spacing: -0.05em; color: #111111; }
+      .num small { font-size: 0.3em; letter-spacing: -0.02em; background: #D9FF3D; padding: 0 0.15em; }
+      .note { font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 30px; line-height: 1.35; color: #323232; }
+      .foot { font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 26px; letter-spacing: 0.06em; color: #8391A1; text-transform: uppercase; }
+
+      /* banda lima girada: el titular del cartel */
+      .band { display: inline-block; background: #D9FF3D; border: 5px solid #111111; box-shadow: 14px 14px 0 #111111; padding: 34px 60px 28px; transform: rotate(-6deg); }
+      .band .h { font-size: 118px; white-space: nowrap; }
+      .tag { display: inline-block; background: #111111; color: #D9FF3D; font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 34px; letter-spacing: 0.18em; text-transform: uppercase; padding: 18px 34px; border: 5px solid #111111; }
+      .tag.tilt { transform: rotate(4deg); }
+
+      .card { background: #FFFFFF; border: 5px solid #111111; box-shadow: 14px 14px 0 #111111; padding: 48px 56px; }
+      .card.ink { background: #111111; color: #F3F0F5; box-shadow: 14px 14px 0 #D9FF3D; }
+
+      .chips { display: flex; gap: 20px; justify-content: center; flex-wrap: wrap; }
+      .chip { font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 34px; letter-spacing: 0.12em; text-transform: uppercase; padding: 20px 34px; border: 5px solid #111111; color: #111111; background: #FFFFFF; box-shadow: 8px 8px 0 #111111; }
+
+      .phone { width: 640px; border: 6px solid #111111; border-radius: 48px; overflow: hidden; background: #FFFFFF; box-shadow: 18px 18px 0 #111111; }
+      .phone img { display: block; width: 100%; height: auto; }
+      .phone.crop { height: 1040px; }
+
+      .art { display: block; }
+      .art.robot { width: 700px; height: 700px; }
+      .art.box { width: 620px; height: 620px; }
+
+      .wa { display: flex; align-items: center; gap: 30px; background: #25D366; color: #111111; border: 6px solid #111111; box-shadow: 16px 16px 0 #111111; padding: 36px 54px; }
+      .wa svg { width: 90px; height: 90px; flex: none; }
+      .bub { font-family: 'Inter', sans-serif; font-weight: 800; font-size: 92px; line-height: 1.05; letter-spacing: -0.02em; color: #111111; background: #FFFFFF; border: 5px solid #111111; box-shadow: 14px 14px 0 #111111; padding: 44px 56px; text-align: left; max-width: 920px; }
+      .bub.me { background: #25D366; }
+      .bub.bot { background: #FFFFFF; }
+      .col2 { display:flex; flex-direction:column; gap:28px; width:920px; }
+
+      /* columna mono ornamental (lista de tools) */
+      .toolcol { display: grid; grid-template-columns: 1fr 1fr; gap: 14px 60px; font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 42px; letter-spacing: 0.06em; color: #8391A1; text-align: left; }
+      .toolcol span { padding: 6px 14px; white-space: nowrap; }
+      .toolcol span.on { color: #111111; background: #D9FF3D; outline: 4px solid #111111; }
+
+      /* diagrama MCP → agente → WhatsApp */
+      .flow { display: flex; flex-direction: column; align-items: center; gap: 0; }
+      .node { width: 760px; background: #FFFFFF; border: 5px solid #111111; box-shadow: 12px 12px 0 #111111; padding: 30px 40px; text-align: left; }
+      .node .kicker { font-size: 26px; color: #8391A1; }
+      .node .h { font-size: 72px; margin-top: 8px; }
+      .node.ink { background: #111111; color: #F3F0F5; box-shadow: 12px 12px 0 #D9FF3D; }
+      .node.ink .h { color: #F3F0F5; }
+      .node.ink .kicker { color: #D9FF3D; }
+      .arrow { font-family: 'Archivo Black', sans-serif; font-size: 110px; line-height: 0.9; color: #111111; padding: 6px 0; }
+
+      /* logos de productos */
+      .logos { display: flex; gap: 34px; justify-content: center; align-items: stretch; }
+      .logo { background: #FFFFFF; border: 5px solid #111111; box-shadow: 12px 12px 0 #111111; padding: 34px 40px; display: flex; align-items: center; justify-content: center; }
+      .logo img, .logo svg { display: block; height: 92px; width: auto; }
+
+      /* marca: ojitos + wordmark Jersey 10 con FlipLetters */
+      .brand { display: flex; align-items: center; gap: 28px; }
+      .brand .eyes { width: 190px; height: auto; display: block; }
+      .fl { position: relative; font-family: 'Jersey 10', serif; font-size: 230px; line-height: 0.9; color: #111111; perspective: 1000px; }
+      .fl .row { display: flex; }
+      .fl .row.back { position: absolute; inset: 0; color: #7c5ce0; }
+      .fl span { display: inline-block; transform-style: preserve-3d; backface-visibility: hidden; }
+      .fl .back span { color: #7c5ce0; }
+      .brand.sm .eyes { width: 92px; } .brand.sm .fl { font-size: 110px; }
+      .corner { position: absolute; top: 96px; left: 80px; }
+
+      .url { background: #D9FF3D; border: 5px solid #111111; box-shadow: 14px 14px 0 #111111; padding: 24px 54px 18px; font-family: 'Archivo Black', sans-serif; font-size: 84px; letter-spacing: -0.03em; color: #111111; transform: rotate(-3deg); white-space: nowrap; }
+
+      /* ---------- transición: columnas lima ---------- */
+      .wipe { position: absolute; inset: 0; pointer-events: none; }
+      .wipe .col { position: absolute; top: 0; width: 181px; height: 1920px; background: #D9FF3D; border-right: 5px solid #111111; background-image: linear-gradient(rgba(17,17,17,0.22) 1px, transparent 1px), linear-gradient(90deg, rgba(17,17,17,0.22) 1px, transparent 1px); background-size: 60px 60px; transform: translateY(-101%); }
+      .wipe .col:nth-child(1){left:0}.wipe .col:nth-child(2){left:180px}.wipe .col:nth-child(3){left:360px}.wipe .col:nth-child(4){left:540px}.wipe .col:nth-child(5){left:720px}.wipe .col:nth-child(6){left:900px}
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-duration="39.579" data-width="1080" data-height="1920">
+
+      <!-- fondo (toda la duración) -->
+      <div class="clip bg" id="fondo" data-start="0" data-duration="39.579" data-track-index="0">
+        <div class="grid" id="grid"></div>
+        <div class="blob blob-a" id="blob-a"></div>
+        <div class="blob blob-b" id="blob-b"></div>
+        <svg class="grain" xmlns="http://www.w3.org/2000/svg" width="1080" height="1920"><filter id="g"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" stitchTiles="stitch"/><feColorMatrix values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.9 0"/></filter><rect width="1080" height="1920" filter="url(#g)"/></svg>
+        <div class="vignette"></div>
+      </div>
+
+      <!-- ===== Escena 1 · Gancho: pregunta por WhatsApp (t según build.py) ===== -->
+      <div class="clip scene" id="esc-1" data-start="0.0" data-duration="8.257" data-track-index="1">
+        <div class="panel" id="s1-a">
+          <div class="stack" style="gap:48px">
+            <div class="kicker">Una gasolinera · por WhatsApp</div>
+            <div class="col2"><div class="bub me" id="s1-q">¿Algún tanque tiene agua?</div></div>
+            <div class="tag tilt" id="s1-tag">a su bitácora</div>
+          </div>
+        </div>
+        <div class="panel wait" id="s1-b">
+          <div class="stack" style="gap:44px">
+            <div class="phone crop" id="s1-phone"><img src="assets/img/asistente-agua.png" alt="El asistente responde con la lectura de la consola" /></div>
+            <div class="h" id="s1-h" style="font-size:76px">el dato de la <em>consola</em></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== Escena 2 · Semanas, cero servidores (t según build.py) ===== -->
+      <div class="clip scene" id="esc-2" data-start="8.257" data-duration="5.921" data-track-index="1">
+        <div class="brand sm corner" id="c2"><img class="eyes" src="assets/img/eyes.svg" alt="" /><div class="fl"><div class="row">EasyBits</div></div></div>
+        <div class="panel" id="s2-a">
+          <div class="stack" style="gap:30px">
+            <img class="art robot" id="s2-robot" src="assets/img/robot.png" alt="Robot de hojalata con una caja" />
+            <div class="band" id="s2-band"><div class="h">semanas</div></div>
+            <div class="tag" id="s2-tag" style="margin-top:30px">Normi lo construyó</div>
+          </div>
+        </div>
+        <div class="panel wait" id="s2-b">
+          <div class="stack" style="gap:48px">
+            <div class="num" id="s2-num" style="font-size:520px">0</div>
+            <div class="h" id="s2-h" style="font-size:84px">servidores de <em>IA</em><br/>que operar</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== Escena 3 · Sus datos como tools MCP (t según build.py) ===== -->
+      <div class="clip scene" id="esc-3" data-start="14.178" data-duration="6.145" data-track-index="1">
+        <div class="brand sm corner"><img class="eyes" src="assets/img/eyes.svg" alt="" /><div class="fl"><div class="row">EasyBits</div></div></div>
+        <div class="panel" id="s3-a">
+          <div class="stack" style="gap:44px">
+            <div class="kicker">Su código expone sus datos</div>
+            <div class="tag" id="s3-tag">tools de MCP</div>
+            <div class="toolcol" id="s3-tools">
+              <span>estacion</span><span class="on" id="t-vig">vigencias</span>
+              <span class="on" id="t-tan">tanques</span><span>incidentes</span>
+              <span class="on" id="t-rec">recepciones</span><span>mantenimiento</span>
+              <span>programa_semana</span><span>ieps_mes</span>
+              <span class="on" id="t-nor">normativa</span><span>leer_norma</span>
+              <span>preparar_recepcion</span><span>anotar_vigencia</span>
+            </div>
+          </div>
+        </div>
+        <div class="panel wait" id="s3-b">
+          <div class="flow">
+            <div class="node" id="s3-n1"><div class="kicker">Tu app</div><div class="h">servidor <em>MCP</em></div></div>
+            <div class="arrow">↓</div>
+            <div class="node ink" id="s3-n2"><div class="kicker">Easybits</div><div class="h">agente de flota</div></div>
+            <div class="arrow">↓</div>
+            <div class="node" id="s3-n3" style="background:#25D366"><div class="kicker" style="color:#111">Tu cliente</div><div class="h">WhatsApp</div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== Escena 4 · Una caja por cliente, $0 en idle (t según build.py) ===== -->
+      <div class="clip scene" id="esc-4" data-start="20.323" data-duration="9.864" data-track-index="1">
+        <div class="brand sm corner"><img class="eyes" src="assets/img/eyes.svg" alt="" /><div class="fl"><div class="row">EasyBits</div></div></div>
+        <div class="panel" id="s4-a">
+          <div class="stack" style="gap:34px">
+            <img class="art box" id="s4-box" src="assets/img/box.png" alt="Caja metálica aislada" />
+            <div class="band" id="s4-band"><div class="h" style="font-size:96px">1 cliente = 1 caja</div></div>
+            <div class="chips" style="margin-top:34px">
+              <div class="chip" id="s4-c1">Modelo</div>
+              <div class="chip" id="s4-c2">Memoria</div>
+              <div class="chip" id="s4-c3">WhatsApp</div>
+            </div>
+          </div>
+        </div>
+        <div class="panel wait" id="s4-b">
+          <div class="stack" style="gap:44px">
+            <div class="kicker mute">se duerme cuando nadie habla</div>
+            <div class="num" id="s4-num" style="font-size:440px;white-space:nowrap">$0<small> idle</small></div>
+            <div class="h" id="s4-h" style="font-size:84px">pagas por<br/><em>conversación</em></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== Escena 5 · Ya corren tres; CTA (t según build.py) ===== -->
+      <div class="clip scene" id="esc-5" data-start="30.187" data-duration="9.392" data-track-index="1">
+        <div class="panel" id="s5-a">
+          <div class="stack" style="gap:56px">
+            <div class="logos">
+              <div class="logo" id="s5-l1"><img src="assets/img/normi.svg" alt="Normi" /></div>
+              <div class="logo" id="s5-l2"><img src="assets/img/formmy.svg" alt="Formmy" /></div>
+              <div class="logo" id="s5-l3"><img src="assets/img/denik.svg" alt="Denik" /></div>
+            </div>
+            <div class="band" id="s5-band"><div class="h" style="font-size:88px">la misma flota</div></div>
+          </div>
+        </div>
+        <div class="panel wait" id="s5-b">
+          <div class="stack" style="gap:70px">
+            <div class="h" id="s5-h" style="font-size:96px">tu software,<br/>con <em>asistente</em></div>
+            <div class="brand" id="s5-brand">
+              <img class="eyes" src="assets/img/eyes.svg" alt="EasyBits" />
+              <div class="fl" id="s5-fl">
+                <div class="row front"><span>E</span><span>a</span><span>s</span><span>y</span><span>B</span><span>i</span><span>t</span><span>s</span></div>
+                <div class="row back"><span>E</span><span>a</span><span>s</span><span>y</span><span>B</span><span>i</span><span>t</span><span>s</span></div>
+              </div>
+            </div>
+            <div class="url" id="s5-url">easybits.cloud</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== Transiciones (columnas) ===== -->
+      <div class="clip wipe" id="w1" data-start="7.957" data-duration="0.95" data-track-index="5"><div class="col"></div><div class="col"></div><div class="col"></div><div class="col"></div><div class="col"></div><div class="col"></div></div>
+      <div class="clip wipe" id="w2" data-start="13.878" data-duration="0.95" data-track-index="5"><div class="col"></div><div class="col"></div><div class="col"></div><div class="col"></div><div class="col"></div><div class="col"></div></div>
+      <div class="clip wipe" id="w3" data-start="20.023" data-duration="0.95" data-track-index="5"><div class="col"></div><div class="col"></div><div class="col"></div><div class="col"></div><div class="col"></div><div class="col"></div></div>
+      <div class="clip wipe" id="w4" data-start="29.887" data-duration="0.95" data-track-index="5"><div class="col"></div><div class="col"></div><div class="col"></div><div class="col"></div><div class="col"></div><div class="col"></div></div>
+
+      <!-- ===== Voz ===== -->
+      <audio id="voz-01" src="voces/kokoro/01.wav" data-start="0.9" data-duration="7.057" data-track-index="10" data-volume="1"></audio>
+      <audio id="voz-02" src="voces/kokoro/02.wav" data-start="8.657" data-duration="5.221" data-track-index="10" data-volume="1"></audio>
+      <audio id="voz-03" src="voces/kokoro/03.wav" data-start="14.578" data-duration="5.445" data-track-index="10" data-volume="1"></audio>
+      <audio id="voz-04" src="voces/kokoro/04.wav" data-start="20.723" data-duration="9.164" data-track-index="10" data-volume="1"></audio>
+      <audio id="voz-05" src="voces/kokoro/05.wav" data-start="30.587" data-duration="6.592" data-track-index="10" data-volume="1"></audio>
+    </div>
+
+    <script>
+      (function () {
+        // GENERADO por build.py para voces/kokoro — no editar a mano; edita build.py.
+        window.__timelines = window.__timelines || {};
+        var tl = gsap.timeline({ paused: true });
+        var SWAP = { duration: 0.42, ease: "power4.inOut" };
+        function swap(a, b, t) {
+          tl.to(a, { xPercent: -200, duration: SWAP.duration, ease: SWAP.ease }, t);
+          tl.set(b, { opacity: 1 }, t);
+          tl.fromTo(b, { x: 0, xPercent: 100 }, { x: 0, xPercent: 0, duration: SWAP.duration, ease: SWAP.ease }, t); // x:0 anula el translateX del CSS
+        }
+        function settle(sel, t, d) { tl.from(sel, { y: 26, duration: d || 0.5, ease: "power3.out" }, t); } // sin opacity: cuadro 0 completo
+        function pulse(sel, t, s) { tl.to(sel, { scale: s || 1.22, duration: 0.18, ease: "power2.out", repeat: 1, yoyo: true, transformOrigin: "50% 50%" }, t); }
+        function wipe(id, t) {
+          tl.to(id + " .col", { yPercent: 101, duration: 0.3, ease: "power3.in", stagger: 0.035 }, t);
+          tl.to(id + " .col", { yPercent: 202, duration: 0.32, ease: "power3.out", stagger: 0.035 }, t + 0.3);
+        }
+        function chip(sel, t) { tl.to(sel, { backgroundColor: "#D9FF3D", duration: 0.12 }, t); pulse(sel, t); }
+        function tool(sel, t) { tl.to(sel, { backgroundColor: "#D9FF3D", color: "#111111", duration: 0.12 }, t); pulse(sel, t, 1.12); }
+        // bandas giradas: el reposo (rotate) vive en CSS; GSAP solo escala
+        function bandPulse(sel, t, s) { tl.to(sel, { scale: s || 1.06, rotation: -6, duration: 0.18, ease: "power2.out", repeat: 1, yoyo: true, transformOrigin: "50% 50%" }, t); }
+        // FlipLetters (marca): la fila de atrás empieza de canto
+        tl.set("#s5-fl .back span", { rotateX: 90 }, 0);
+        tl.set("#s5-fl .front span", { rotateX: 0 }, 0);
+        function flip(t) {
+          tl.to("#s5-fl .front span", { rotateX: 90, yPercent: -40, duration: 0.3, stagger: 0.05 }, t);
+          tl.to("#s5-fl .back span", { rotateX: 0, duration: 0.3, stagger: 0.05 }, t);
+        }
+
+        tl.to("#grid", { x: 60, y: 60, duration: 4, ease: "none", repeat: 10 }, 0);
+        tl.to("#blob-a", { scale: 1.25, x: 80, duration: 3.2, ease: "sine.inOut", repeat: 12, yoyo: true }, 0);
+        tl.to("#blob-b", { scale: 1.2, y: -80, duration: 3.9, ease: "sine.inOut", repeat: 10, yoyo: true }, 0.7);
+
+        // Escena 1 · voz 0.90
+        settle("#s1-a .kicker", 0.05, 0.4);
+        tl.from("#s1-q", { y: 40, rotation: -3, duration: 0.45, ease: "back.out(1.6)", transformOrigin: "50% 100%" }, 0.12);
+        settle("#s1-tag", 0.3);
+        pulse("#s1-a .kicker", 1.09, 1.06); pulse("#s1-tag", 3.21, 1.08); pulse("#s1-q", 4.34, 1.05); pulse("#s1-q", 5.07, 1.08);
+        swap("#s1-a", "#s1-b", 5.5);
+        tl.from("#s1-phone", { y: 80, rotation: -4, duration: 0.5, ease: "power3.out", transformOrigin: "50% 100%" }, 5.7);
+        settle("#s1-h", 5.9); pulse("#s1-phone", 6.7, 1.03); pulse("#s1-h", 7.17, 1.08);
+
+        // Escena 2 · voz 8.66
+        tl.from("#s2-robot", { y: 60, rotation: -4, duration: 0.5, ease: "back.out(1.4)", transformOrigin: "50% 100%" }, 8.307);
+        settle("#s2-band", 8.407); settle("#s2-tag", 8.557);
+        pulse("#s2-tag", 8.66, 1.08); bandPulse("#s2-band", 9.81, 1.1); pulse("#s2-robot", 9.81, 1.04);
+        swap("#s2-a", "#s2-b", 9.83);
+        settle("#s2-num", 10.13); settle("#s2-h", 10.28);
+        pulse("#s2-num", 11.21, 1.12); pulse("#s2-h", 11.83, 1.06);
+
+        // Escena 3 · voz 14.58
+        settle("#s3-a .kicker", 14.218, 0.4); settle("#s3-tag", 14.298); settle("#s3-tools", 14.418000000000001);
+        pulse("#s3-a .kicker", 14.74, 1.05); pulse("#s3-tag", 16.84, 1.1);
+        tool("#t-vig", 17.2); tool("#t-tan", 18.08); tool("#t-rec", 18.59); tool("#t-nor", 19.32);
+        swap("#s3-a", "#s3-b", 18.72);
+        settle("#s3-n1", 19.02); settle("#s3-n2", 19.14); settle("#s3-n3", 19.259999999999998);
+        pulse("#s3-n2", 19.619999999999997, 1.04);
+
+        // Escena 4 · voz 20.72
+        tl.from("#s4-box", { y: 60, rotation: 4, duration: 0.5, ease: "back.out(1.4)", transformOrigin: "50% 100%" }, 20.373);
+        settle("#s4-band", 20.473); settle("#s4-a .chips", 20.623);
+        pulse("#s4-box", 22.22, 1.08); bandPulse("#s4-band", 23.09, 1.08);
+        chip("#s4-c1", 23.9); chip("#s4-c2", 24.47); chip("#s4-c3", 25.21);
+        swap("#s4-a", "#s4-b", 26.0);
+        settle("#s4-b .kicker", 26.3, 0.4); settle("#s4-num", 26.4); settle("#s4-h", 26.55);
+        pulse("#s4-b .kicker", 26.5, 1.05); pulse("#s4-num", 28.11, 1.12); pulse("#s4-h", 28.67, 1.08);
+
+        // Escena 5 · voz 30.59
+        settle("#s5-a .logos", 30.237000000000002); settle("#s5-band", 30.387);
+        pulse("#s5-l1", 30.59, 1.1); pulse("#s5-l2", 31.02, 1.1); pulse("#s5-l3", 31.36, 1.1); bandPulse("#s5-band", 32.87, 1.08);
+        swap("#s5-a", "#s5-b", 33.27);
+        settle("#s5-h", 33.57); settle("#s5-brand", 33.720000000000006); settle("#s5-url", 33.870000000000005);
+        pulse("#s5-h", 34.36, 1.06);
+        flip(35.06);
+        tl.to("#s5-url", { scale: 1.1, rotation: -3, duration: 0.18, ease: "power2.out", repeat: 1, yoyo: true, transformOrigin: "50% 50%" }, 35.49);
+
+        wipe("#w1", 7.957); wipe("#w2", 13.878); wipe("#w3", 20.023); wipe("#w4", 29.887);
+        window.__timelines["main"] = tl;
+      })();
+    </script>
+  </body>
+</html>

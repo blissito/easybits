@@ -22,3 +22,8 @@ scripts/_backups/
 # Llave privada Ed25519 del MCP Registry (namespace cloud.easybits/*). NUNCA al repo.
 *.pem
 mcp-registry-key.pem
+
+videos/*/renders
+videos/*/voces/*/*.mp3
+videos/*/assets/bgm/*.mp3
+videos/*/node_modules
