@@ -69,6 +69,7 @@ export const VideoShort = () => {
               {muted ? "🔇 clic para oír" : "🔊 con sonido"}
             </span>
           </button>
+        </div>
       </div>
     </section>
   );
