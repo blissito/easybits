@@ -14,5 +14,5 @@ Voz: Antonio. ~38 s. 5 escenas.
    A: columna mono con los nombres de las tools · B: diagrama MCP → agente.
 4. Easybits pone lo demás: una caja aislada por cliente, el modelo, la memoria y el canal de WhatsApp. Se duerme cuando nadie habla y pagas por conversación.
    A: cajita metálica halftone con "1 CLIENTE = 1 CAJA" · B: número grande "$0 en idle".
-5. Tu software, con asistente. Entra a easybits punto cloud.
-   Cierre: ojitos + wordmark, banda lima "easybits.cloud".
+5. Normi, Formmy y Denik ya corren sobre la misma flota. Tu software, con asistente: entra a easybits punto cloud.
+   A: fila de tres logos en cajas negras sobre banda lima · Cierre: ojitos + wordmark, banda lima "easybits.cloud".

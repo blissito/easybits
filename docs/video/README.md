@@ -15,7 +15,11 @@ tools, EasyBits pone la caja, el modelo, la memoria y el canal.
 La audiencia NO es la gasolinera: es **el integrador / dev que construye un SaaS vertical para PyMEs**
 y quiere "asistente con mis datos, en WhatsApp y en mi app" sin armar la infraestructura. Es la
 misma audiencia de FixterGeek (ver memoria "plataforma para ayudar a INTEGRADORES a vender").
-El short muestra Normi como prueba, pero el CTA es a easybits.cloud.
+Prueba que ya existe (2026-09-14): **Normi** (gasolineras), **Formmy** (agentes de WhatsApp
+para negocios, tablero automático), **Denik** (agenda/citas; grupo de WhatsApp + burbuja pública) y
+**10 estudiantes del taller de sistemas agénticos en trial**. Cuatro productos distintos sobre la
+misma flota: el argumento del short es "no es un demo, ya corre en producción para varios".
+El short muestra un caso como protagonista y los otros como fila de logos; el CTA es easybits.cloud.
 
 Serie propuesta (un golpe por short):
 1. **"Tu SaaS ya tiene asistente"** — el caso Normi: pregunta en WhatsApp → respuesta con dato de
