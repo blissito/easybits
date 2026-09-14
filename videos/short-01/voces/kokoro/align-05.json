@@ -26,97 +26,103 @@
   {
     "text": "Nick",
     "start": 0.92,
-    "end": 1.08,
+    "end": 1.07,
     "id": "w4"
   },
   {
     "text": "ya",
-    "start": 1.18,
-    "end": 1.3,
+    "start": 1.19,
+    "end": 1.2,
     "id": "w5"
   },
   {
     "text": "corren",
-    "start": 1.3,
-    "end": 1.74,
+    "start": 1.29,
+    "end": 1.64,
     "id": "w6"
   },
   {
     "text": "sobre",
-    "start": 1.74,
-    "end": 2.02,
+    "start": 1.64,
+    "end": 1.94,
     "id": "w7"
   },
   {
     "text": "la",
-    "start": 2.02,
-    "end": 2.13,
+    "start": 1.94,
+    "end": 2.06,
     "id": "w8"
   },
   {
     "text": "misma",
-    "start": 2.13,
-    "end": 2.41,
+    "start": 2.06,
+    "end": 2.32,
     "id": "w9"
   },
   {
     "text": "flota.",
-    "start": 2.41,
-    "end": 2.86,
+    "start": 2.36,
+    "end": 2.88,
     "id": "w10"
   },
   {
     "text": "EasyBits,",
-    "start": 3.24,
-    "end": 3.52,
+    "start": 3.28,
+    "end": 3.54,
     "id": "w11"
   },
   {
     "text": "los",
-    "start": 3.52,
-    "end": 3.72,
+    "start": 3.54,
+    "end": 3.74,
     "id": "w12"
   },
   {
     "text": "agentes",
-    "start": 3.72,
-    "end": 4.18,
+    "start": 3.74,
+    "end": 4.2,
     "id": "w13"
   },
   {
     "text": "para",
-    "start": 4.18,
-    "end": 4.44,
+    "start": 4.2,
+    "end": 4.47,
     "id": "w14"
   },
   {
-    "text": "tu",
-    "start": 4.45,
-    "end": 4.58,
+    "text": "tus",
+    "start": 4.48,
+    "end": 4.68,
     "id": "w15"
   },
   {
-    "text": "software.",
-    "start": 4.58,
-    "end": 5.36,
+    "text": "aplicaciones",
+    "start": 4.68,
+    "end": 5.5,
     "id": "w16"
   },
   {
-    "text": "Entra",
-    "start": 5.7,
-    "end": 5.71,
+    "text": "web,",
+    "start": 5.5,
+    "end": 5.94,
     "id": "w17"
   },
   {
-    "text": "a",
-    "start": 5.71,
-    "end": 5.78,
+    "text": "entra",
+    "start": 5.94,
+    "end": 6.2,
     "id": "w18"
   },
   {
-    "text": "easybits.cloud.",
-    "start": 5.78,
-    "end": 7.1,
+    "text": "a",
+    "start": 6.2,
+    "end": 6.52,
     "id": "w19"
+  },
+  {
+    "text": "easybits.cloud.",
+    "start": 6.52,
+    "end": 7.82,
+    "id": "w20"
   }
 ]

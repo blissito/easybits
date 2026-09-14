@@ -105,10 +105,10 @@
     </style>
   </head>
   <body>
-    <div id="root" data-composition-id="main" data-start="0" data-duration="51.41" data-width="1080" data-height="1920">
+    <div id="root" data-composition-id="main" data-start="0" data-duration="52.02" data-width="1080" data-height="1920">
 
       <!-- fondo (toda la duración) -->
-      <div class="clip bg" id="fondo" data-start="0" data-duration="51.41" data-track-index="0">
+      <div class="clip bg" id="fondo" data-start="0" data-duration="52.02" data-track-index="0">
         <div class="grid" id="grid"></div>
         <div class="blob blob-a" id="blob-a"></div>
         <div class="blob blob-b" id="blob-b"></div>
@@ -206,7 +206,7 @@
       </div>
 
       <!-- ===== Escena 5 · Ya corren tres; CTA (t según build.py) ===== -->
-      <div class="clip scene" id="esc-5" data-start="40.029" data-duration="11.381" data-track-index="1">
+      <div class="clip scene" id="esc-5" data-start="40.029" data-duration="11.992" data-track-index="1">
         <div class="panel" id="s5-a">
           <div class="stack" style="gap:56px">
             <div class="logos">
@@ -219,7 +219,7 @@
         </div>
         <div class="panel wait" id="s5-b">
           <div class="stack" style="gap:70px">
-            <div class="h" id="s5-h" style="font-size:96px">los <em>agentes</em><br/>para tu software</div>
+            <div class="h" id="s5-h" style="font-size:88px">los <em>agentes</em><br/>para tus<br/>aplicaciones web</div>
             <div class="brand" id="s5-brand">
               <img class="eyes" src="assets/img/eyes.svg" alt="EasyBits" />
               <div class="fl" id="s5-fl">
@@ -243,7 +243,7 @@
       <audio id="voz-02" src="voces/kokoro/02.wav" data-start="10.757" data-duration="5.871" data-track-index="10" data-volume="1"></audio>
       <audio id="voz-03" src="voces/kokoro/03.wav" data-start="19.228" data-duration="8.878" data-track-index="10" data-volume="1"></audio>
       <audio id="voz-04" src="voces/kokoro/04.wav" data-start="30.706" data-duration="7.723" data-track-index="10" data-volume="1"></audio>
-      <audio id="voz-05" src="voces/kokoro/05.wav" data-start="41.029" data-duration="7.381" data-track-index="10" data-volume="1"></audio>
+      <audio id="voz-05" src="voces/kokoro/05.wav" data-start="41.029" data-duration="7.992" data-track-index="10" data-volume="1"></audio>
     </div>
 
     <script>
@@ -275,9 +275,9 @@
           tl.to("#s5-fl .back span", { rotateX: 0, duration: 0.3, stagger: 0.05 }, t);
         }
 
-        tl.to("#grid", { x: 60, y: 60, duration: 4, ease: "none", repeat: 13 }, 0);
-        tl.to("#blob-a", { scale: 1.25, x: 80, duration: 3.2, ease: "sine.inOut", repeat: 15, yoyo: true }, 0);
-        tl.to("#blob-b", { scale: 1.2, y: -80, duration: 3.9, ease: "sine.inOut", repeat: 13, yoyo: true }, 0.7);
+        tl.to("#grid", { x: 60, y: 60, duration: 4, ease: "none", repeat: 14 }, 0);
+        tl.to("#blob-a", { scale: 1.25, x: 80, duration: 3.2, ease: "sine.inOut", repeat: 16, yoyo: true }, 0);
+        tl.to("#blob-b", { scale: 1.2, y: -80, duration: 3.9, ease: "sine.inOut", repeat: 14, yoyo: true }, 0.7);
 
         // Escena 1 · voz 1.10
         settle("#s1-a .kicker", 0.05, 0.4);
@@ -315,12 +315,12 @@
 
         // Escena 5 · voz 41.03
         settle("#s5-a .logos", 40.079); settle("#s5-band", 40.229000000000006);
-        pulse("#s5-l1", 41.03, 1.1); pulse("#s5-l2", 41.46, 1.1); pulse("#s5-l3", 41.8, 1.1); bandPulse("#s5-band", 43.44, 1.08);
-        swap("#s5-a", "#s5-b", 43.77);
-        settle("#s5-h", 44.07); settle("#s5-brand", 44.220000000000006); settle("#s5-url", 44.370000000000005);
-        pulse("#s5-h", 44.75, 1.1); pulse("#s5-brand", 44.27, 1.06);
-        flip(46.73);
-        tl.to("#s5-url", { scale: 1.1, rotation: -3, duration: 0.18, ease: "power2.out", repeat: 1, yoyo: true, transformOrigin: "50% 50%" }, 46.81);
+        pulse("#s5-l1", 41.03, 1.1); pulse("#s5-l2", 41.46, 1.1); pulse("#s5-l3", 41.8, 1.1); bandPulse("#s5-band", 43.39, 1.08);
+        swap("#s5-a", "#s5-b", 43.81);
+        settle("#s5-h", 44.11); settle("#s5-brand", 44.260000000000005); settle("#s5-url", 44.410000000000004);
+        pulse("#s5-h", 44.77, 1.1); pulse("#s5-brand", 44.31, 1.06);
+        flip(46.97);
+        tl.to("#s5-url", { scale: 1.1, rotation: -3, duration: 0.18, ease: "power2.out", repeat: 1, yoyo: true, transformOrigin: "50% 50%" }, 47.55);
 
         wipe("#w1", 9.456999999999999); wipe("#w2", 17.928); wipe("#w3", 29.406); wipe("#w4", 39.729000000000006);
         window.__timelines["main"] = tl;
