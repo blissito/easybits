@@ -75,12 +75,12 @@ export const AuthNav = ({ user, noCTA }: { user?: User; noCTA?: boolean }) => {
           {!noCTA && !user?.id && (
             <div className="flex h-full items-center">
               <Link
-                to="/login"
+                to="/calculadora"
                 className="px-8 border-l border-white/30 h-full flex items-center  hover:text-black border-b hover:border-black  hover:bg-white"
               >
-                Iniciar Sesión
+                Calcula tu costo
               </Link>
-              <Link to="/calculadora" className="h-full border-x border-white/30">
+              <Link to="/login" className="h-full border-x border-white/30">
                 <motion.button
                   initial={{ borderRadius: "0px" }}
                   whileHover={{ borderRadius: "199px" }}
@@ -88,7 +88,7 @@ export const AuthNav = ({ user, noCTA }: { user?: User; noCTA?: boolean }) => {
                   transition={{ type: "tween" }}
                   className="bg-brand-500 w-48 h-full font-medium text-black px-3"
                 >
-                  Calcula tu costo
+                  Iniciar sesión
                 </motion.button>
               </Link>
             </div>
@@ -141,14 +141,14 @@ export const AuthNav = ({ user, noCTA }: { user?: User; noCTA?: boolean }) => {
           </Link> */}
           {!noCTA && !user && (
             <>
-              <Link to="/login" key="account">
+              <Link to="/calculadora" key="calculadora">
                 <p className="h-16 grid place-content-center text-white text-xl w-full mb-4 ">
-                  Iniciar sesión
+                  Calcula tu costo
                 </p>
               </Link>
-              <Link to="/calculadora">
+              <Link to="/login" key="account">
                 <BrutalButton className="mx-auto">
-                  Calcula tu costo
+                  Iniciar sesión
                 </BrutalButton>{" "}
               </Link>
             </>
