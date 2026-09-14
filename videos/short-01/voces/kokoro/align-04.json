@@ -1,152 +1,158 @@
 [
   {
-    "text": "EasyBits",
+    "text": "Y",
     "start": 0,
-    "end": 0.38,
+    "end": 0.05,
     "id": "w0"
   },
   {
-    "text": "pone",
-    "start": 0.49,
-    "end": 0.65,
+    "text": "Sibitz",
+    "start": 0.05,
+    "end": 0.38,
     "id": "w1"
   },
   {
-    "text": "lo",
-    "start": 0.65,
-    "end": 0.75,
+    "text": "pone",
+    "start": 0.38,
+    "end": 0.61,
     "id": "w2"
   },
   {
-    "text": "demás,",
-    "start": 0.76,
-    "end": 1.16,
+    "text": "lo",
+    "start": 0.61,
+    "end": 0.72,
     "id": "w3"
+  },
+  {
+    "text": "demás,",
+    "start": 0.72,
+    "end": 1.16,
+    "id": "w4"
   },
   {
     "text": "una",
     "start": 1.16,
-    "end": 1.23,
-    "id": "w4"
-  },
-  {
-    "text": "caja",
-    "start": 1.46,
-    "end": 1.61,
+    "end": 1.22,
     "id": "w5"
   },
   {
-    "text": "aislada",
-    "start": 1.7,
-    "end": 2.14,
+    "text": "caja",
+    "start": 1.48,
+    "end": 1.62,
     "id": "w6"
   },
   {
-    "text": "por",
-    "start": 2.14,
-    "end": 2.35,
+    "text": "aislada",
+    "start": 1.72,
+    "end": 2.11,
     "id": "w7"
+  },
+  {
+    "text": "por",
+    "start": 2.16,
+    "end": 2.35,
+    "id": "w8"
   },
   {
     "text": "cliente,",
     "start": 2.35,
-    "end": 3.04,
-    "id": "w8"
-  },
-  {
-    "text": "el",
-    "start": 3.04,
-    "end": 3.14,
+    "end": 3.06,
     "id": "w9"
   },
   {
-    "text": "modelo,",
-    "start": 3.14,
-    "end": 3.56,
+    "text": "el",
+    "start": 3.06,
+    "end": 3.16,
     "id": "w10"
+  },
+  {
+    "text": "modelo,",
+    "start": 3.16,
+    "end": 3.56,
+    "id": "w11"
   },
   {
     "text": "la",
     "start": 3.56,
-    "end": 3.71,
-    "id": "w11"
-  },
-  {
-    "text": "memoria",
-    "start": 3.71,
-    "end": 4.24,
+    "end": 3.7,
     "id": "w12"
   },
   {
-    "text": "y",
-    "start": 4.24,
-    "end": 4.31,
+    "text": "memoria",
+    "start": 3.7,
+    "end": 4.22,
     "id": "w13"
   },
   {
-    "text": "el",
-    "start": 4.31,
-    "end": 4.45,
+    "text": "y",
+    "start": 4.22,
+    "end": 4.28,
     "id": "w14"
   },
   {
-    "text": "canal",
-    "start": 4.45,
-    "end": 4.8,
+    "text": "el",
+    "start": 4.28,
+    "end": 4.41,
     "id": "w15"
   },
   {
-    "text": "de",
-    "start": 4.8,
-    "end": 4.91,
+    "text": "canal",
+    "start": 4.41,
+    "end": 4.76,
     "id": "w16"
   },
   {
-    "text": "WhatsApp,",
-    "start": 4.91,
-    "end": 5.4,
+    "text": "de",
+    "start": 4.76,
+    "end": 4.93,
     "id": "w17"
   },
   {
-    "text": "y",
-    "start": 5.4,
-    "end": 5.45,
+    "text": "WhatsApp,",
+    "start": 4.93,
+    "end": 5.42,
     "id": "w18"
   },
   {
-    "text": "paga",
-    "start": 5.56,
-    "end": 5.79,
+    "text": "todo",
+    "start": 5.42,
+    "end": 5.72,
     "id": "w19"
   },
   {
-    "text": "sólo",
-    "start": 6,
-    "end": 6.08,
+    "text": "por",
+    "start": 5.74,
+    "end": 5.75,
     "id": "w20"
   },
   {
-    "text": "cuando",
-    "start": 6.16,
-    "end": 6.58,
+    "text": "una",
+    "start": 6.03,
+    "end": 6.19,
     "id": "w21"
   },
   {
-    "text": "la",
-    "start": 6.58,
-    "end": 6.74,
+    "text": "cuota",
+    "start": 6.19,
+    "end": 6.54,
     "id": "w22"
   },
   {
-    "text": "gente",
-    "start": 6.74,
-    "end": 7.11,
+    "text": "fija",
+    "start": 6.64,
+    "end": 6.84,
     "id": "w23"
   },
   {
-    "text": "trabaja.",
-    "start": 7.21,
-    "end": 7.95,
+    "text": "al",
+    "start": 6.95,
+    "end": 7.02,
     "id": "w24"
+  },
+  {
+    "text": "mes.",
+    "start": 7.02,
+    "end": 7.54,
+    "id": "w25"
   }
 ]
