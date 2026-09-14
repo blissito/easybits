@@ -1,5 +1,5 @@
 Una gasolinera le pregunta a su bitácora por WhatsApp: ¿algún tanque tiene agua? Y le contesta con el dato de la consola.
 Normi lo construyó en semanas, sin operar un solo servidor de inteligencia artificial.
-Su código expone sus datos como tools de eme ce pe: vigencias, tanques, recepciones, normas.
-Ísibits pone lo demás: una caja aislada por cliente, el modelo, la memoria y el canal de WhatsApp. Se duerme cuando nadie habla y pagas por conversación.
-Normi, Formmy y Denik ya corren sobre la misma flota. Tu software, con asistente: entra a ísibits punto cloud.
+Su código expone sus datos como herramientas de eme ce pe: vigencias, tanques, recepciones, normas. Ísibits las conecta a un agente, y el agente a WhatsApp.
+Ísibits pone lo demás: una caja aislada por cliente, el modelo, la memoria y el canal de WhatsApp. Y pagas solo cuando el agente trabaja.
+Normi, Formmy y Denik ya corren sobre la misma flota. Ísibits: los agentes para tu software. Entra a ísibits punto cloud.

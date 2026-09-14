@@ -22,7 +22,7 @@ def find(ws, key, default):
 
 N=5
 D=[dur(f"{VDIR}/0{i}.wav") for i in range(1,N+1)]
-LEAD=[0.9,0.4,0.4,0.4,0.4]; TAIL=[0.3,0.3,0.3,0.3,2.4]
+LEAD=[1.0,0.8,0.8,0.8,0.8]; TAIL=[1.0,1.0,1.0,1.0,2.6]
 start=[0.0]
 for i in range(N):
     start.append(start[i]+LEAD[i]+D[i]+TAIL[i])
@@ -35,14 +35,12 @@ def has(i,key): return any(w.startswith(key) for w,_ in W[i])
 k = dict(
  gasolinera=t(0,"gasolinera",0.05*D[0]), whats=t(0,"whats",0.3*D[0]), tanque=t(0,"tanque",0.45*D[0]), agua=t(0,"agua",0.55*D[0]), contesta=t(0,"contesta",0.68*D[0]), dato=t(0,"dato",0.8*D[0]), consola=t(0,"consola",0.93*D[0]),
  normi=t(1,"normi",0.02), semanas=t(1,"semanas",0.35*D[1]), sin=t(1,"sin",0.5*D[1]), servidor=t(1,"servidor",0.7*D[1]), ia=t(1,"inteligencia",0.85*D[1]),
- codigo=t(2,"codigo",0.05*D[2]), tools=t(2,("tools","tols"),0.4*D[2]), mcp=t(2,("eme","msp","mcp"),0.5*D[2]), vig=t(2,"vigencias",0.62*D[2]), tan=t(2,"tanques",0.74*D[2]), rec=t(2,"recepciones",0.85*D[2]), nor=t(2,"normas",0.95*D[2]),
- easybits=t(3,("easybits","yasi","easy","isi"),0.02), caja=t(3,"caja",0.18*D[3]), cliente=t(3,"cliente",0.3*D[3]), modelo=t(3,"modelo",0.38*D[3]), memoria=t(3,"memoria",0.46*D[3]), canal=t(3,"canal",0.54*D[3]), duerme=t(3,"duerme",0.68*D[3]), pagas=t(3,"pagas",0.85*D[3]), conversacion=t(3,"conversacion",0.93*D[3]),
- normi2=t(4,"normi",0.02), formmy=t(4,("formmy","formie","formi"),0.12*D[4]), denik=t(4,("denik","the","deni"),0.22*D[4]), flota=t(4,"flota",0.45*D[4]), software=t(4,"software",0.58*D[4]), asistente=t(4,"asistente",0.7*D[4]), entra=t(4,"entra",0.8*D[4]), cloud=t(4,("cloud","yacybits","easybits.","isibits"),0.97*D[4]),
+ codigo=t(2,"codigo",0.05*D[2]), tools=t(2,("herramienta","tools","tols"),0.4*D[2]), mcp=t(2,("eme","msp","mcp"),0.5*D[2]), vig=t(2,"vigencias",0.62*D[2]), tan=t(2,"tanques",0.74*D[2]), rec=t(2,"recepciones",0.55*D[2]), nor=t(2,"normas",0.62*D[2]), conecta=t(2,"conecta",0.72*D[2]), agente3=t(2,"agente",0.82*D[2]), whats3=t(2,"whats",0.95*D[2]),
+ easybits=t(3,("easybits","yasi","easy","isi"),0.02), caja=t(3,"caja",0.18*D[3]), cliente=t(3,"cliente",0.3*D[3]), modelo=t(3,"modelo",0.38*D[3]), memoria=t(3,"memoria",0.46*D[3]), canal=t(3,"canal",0.54*D[3]), pagas=t(3,("pagas","paga"),0.7*D[3]), agente4=t(3,("agente","gente"),0.85*D[3]), trabaja=t(3,"trabaja",0.95*D[3]),
+ normi2=t(4,"normi",0.02), formmy=t(4,("formmy","formie","formi"),0.12*D[4]), denik=t(4,("denik","the","deni"),0.22*D[4]), flota=t(4,"flota",0.4*D[4]), easy5=t(4,("isibits","easybits","ysi","isi"),0.5*D[4]), agentes=t(4,"agentes",0.58*D[4]), software=t(4,"software",0.7*D[4]), entra=t(4,"entra",0.82*D[4]), cloud=t(4,("cloud","yacybits","easybits.","isibits"),0.97*D[4]),
 )
-swaps=[round(k["contesta"]-0.45,2), round(k["sin"]-0.45,2), round(k["vig"]+0.9,2) if False else round(k["nor"]+0.35,2), round(k["duerme"]-0.5,2), round(k["software"]-0.5,2)]
-# escena 3: el panel B (diagrama) entra después de nombrar las cuatro tools; si eso deja <1.4 s, entra antes
-if start[3]-swaps[2] < 1.6: swaps[2]=round(start[3]-1.6,2)
-pulses=[k["agua"],k["consola"],k["semanas"],k["ia"],k["vig"],k["tan"],k["rec"],k["nor"],k["modelo"],k["memoria"],k["canal"],k["conversacion"],k["normi2"],k["formmy"],k["denik"]]
+swaps=[round(k["contesta"]-0.45,2), round(k["sin"]-0.45,2), round(k["conecta"]-0.5,2), round(k["pagas"]-0.5,2), round(k["easy5"]-0.5,2)]
+pulses=[k["agua"],k["consola"],k["semanas"],k["ia"],k["vig"],k["tan"],k["rec"],k["nor"],k["agente3"],k["whats3"],k["modelo"],k["memoria"],k["canal"],k["trabaja"],k["normi2"],k["formmy"],k["denik"],k["agentes"]]
 hits=[k["caja"],k["pagas"],k["cloud"]]
 s=[round(x,3) for x in start]; sd=[round(LEAD[i]+D[i]+TAIL[i],3) for i in range(N)]
 
@@ -113,7 +111,7 @@ js=f'''    <script>
         tool("#t-vig", {k["vig"]}); tool("#t-tan", {k["tan"]}); tool("#t-rec", {k["rec"]}); tool("#t-nor", {k["nor"]});
         swap("#s3-a", "#s3-b", {swaps[2]});
         settle("#s3-n1", {swaps[2]+0.3}); settle("#s3-n2", {swaps[2]+0.42}); settle("#s3-n3", {swaps[2]+0.54});
-        pulse("#s3-n2", {swaps[2]+0.9}, 1.04);
+        pulse("#s3-n1", {k["conecta"]}, 1.04); pulse("#s3-n2", {k["agente3"]}, 1.06); pulse("#s3-n3", {k["whats3"]}, 1.06);
 
         // Escena 4 · voz {voice[3]:.2f}
         tl.from("#s4-box", {{ y: 60, rotation: 4, duration: 0.5, ease: "back.out(1.4)", transformOrigin: "50% 100%" }}, {s[3]+0.05});
@@ -121,15 +119,15 @@ js=f'''    <script>
         pulse("#s4-box", {k["caja"]}, 1.08); bandPulse("#s4-band", {k["cliente"]}, 1.08);
         chip("#s4-c1", {k["modelo"]}); chip("#s4-c2", {k["memoria"]}); chip("#s4-c3", {k["canal"]});
         swap("#s4-a", "#s4-b", {swaps[3]});
-        settle("#s4-b .kicker", {swaps[3]+0.3}, 0.4); settle("#s4-num", {swaps[3]+0.4}); settle("#s4-h", {swaps[3]+0.55});
-        pulse("#s4-b .kicker", {k["duerme"]}, 1.05); pulse("#s4-num", {k["pagas"]}, 1.12); pulse("#s4-h", {k["conversacion"]}, 1.08);
+        settle("#s4-b .kicker", {swaps[3]+0.3}, 0.4); settle("#s4-h", {swaps[3]+0.4}); settle("#s4-tag", {swaps[3]+0.55});
+        pulse("#s4-h", {k["agente4"]}, 1.05); pulse("#s4-h", {k["trabaja"]}, 1.1); pulse("#s4-tag", {k["trabaja"]+0.3}, 1.08);
 
         // Escena 5 · voz {voice[4]:.2f}
         settle("#s5-a .logos", {s[4]+0.05}); settle("#s5-band", {s[4]+0.2});
         pulse("#s5-l1", {k["normi2"]}, 1.1); pulse("#s5-l2", {k["formmy"]}, 1.1); pulse("#s5-l3", {k["denik"]}, 1.1); bandPulse("#s5-band", {k["flota"]}, 1.08);
         swap("#s5-a", "#s5-b", {swaps[4]});
         settle("#s5-h", {swaps[4]+0.3}); settle("#s5-brand", {swaps[4]+0.45}); settle("#s5-url", {swaps[4]+0.6});
-        pulse("#s5-h", {k["asistente"]}, 1.06);
+        pulse("#s5-h", {k["agentes"]}, 1.1); pulse("#s5-brand", {k["easy5"]}, 1.06);
         flip({k["entra"]});
         tl.to("#s5-url", {{ scale: 1.1, rotation: -3, duration: 0.18, ease: "power2.out", repeat: 1, yoyo: true, transformOrigin: "50% 50%" }}, {k["cloud"]});
 

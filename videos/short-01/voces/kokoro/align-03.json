@@ -1,80 +1,146 @@
 [
   {
     "text": "Su",
-    "start": 0.02,
-    "end": 0.07,
+    "start": 0,
+    "end": 0.06,
     "id": "w0"
   },
   {
     "text": "código",
     "start": 0.16,
-    "end": 0.56,
+    "end": 0.47,
     "id": "w1"
   },
   {
     "text": "expone",
-    "start": 0.56,
-    "end": 0.98,
+    "start": 0.53,
+    "end": 0.9,
     "id": "w2"
   },
   {
     "text": "sus",
-    "start": 0.98,
-    "end": 1.19,
+    "start": 0.9,
+    "end": 1.04,
     "id": "w3"
   },
   {
     "text": "datos",
-    "start": 1.19,
-    "end": 1.54,
+    "start": 1.09,
+    "end": 1.38,
     "id": "w4"
   },
   {
     "text": "como",
-    "start": 1.54,
-    "end": 1.82,
+    "start": 1.47,
+    "end": 1.68,
     "id": "w5"
   },
   {
-    "text": "TOLS",
-    "start": 1.82,
-    "end": 2.09,
+    "text": "herramientas",
+    "start": 1.68,
+    "end": 2.42,
     "id": "w6"
   },
   {
     "text": "de",
-    "start": 2.09,
-    "end": 2.22,
+    "start": 2.45,
+    "end": 2.59,
     "id": "w7"
   },
   {
     "text": "MSP,",
-    "start": 2.26,
-    "end": 2.62,
+    "start": 2.59,
+    "end": 2.96,
     "id": "w8"
   },
   {
     "text": "vigencias,",
-    "start": 2.62,
-    "end": 3.5,
+    "start": 2.96,
+    "end": 3.63,
     "id": "w9"
   },
   {
     "text": "tanques,",
-    "start": 3.5,
-    "end": 4.01,
+    "start": 3.64,
+    "end": 4.11,
     "id": "w10"
   },
   {
     "text": "recepciones,",
-    "start": 4.01,
-    "end": 4.74,
+    "start": 4.11,
+    "end": 4.84,
     "id": "w11"
   },
   {
     "text": "normas.",
-    "start": 4.74,
-    "end": 5.28,
+    "start": 4.84,
+    "end": 5.47,
     "id": "w12"
+  },
+  {
+    "text": "EasyBits",
+    "start": 5.92,
+    "end": 5.99,
+    "id": "w13"
+  },
+  {
+    "text": "las",
+    "start": 6.08,
+    "end": 6.18,
+    "id": "w14"
+  },
+  {
+    "text": "conecta",
+    "start": 6.18,
+    "end": 6.63,
+    "id": "w15"
+  },
+  {
+    "text": "a",
+    "start": 6.63,
+    "end": 6.69,
+    "id": "w16"
+  },
+  {
+    "text": "un",
+    "start": 6.69,
+    "end": 6.82,
+    "id": "w17"
+  },
+  {
+    "text": "agente",
+    "start": 6.82,
+    "end": 7.21,
+    "id": "w18"
+  },
+  {
+    "text": "y",
+    "start": 7.21,
+    "end": 7.27,
+    "id": "w19"
+  },
+  {
+    "text": "el",
+    "start": 7.27,
+    "end": 7.4,
+    "id": "w20"
+  },
+  {
+    "text": "agente",
+    "start": 7.4,
+    "end": 7.79,
+    "id": "w21"
+  },
+  {
+    "text": "a",
+    "start": 7.79,
+    "end": 7.85,
+    "id": "w22"
+  },
+  {
+    "text": "WhatsApp.",
+    "start": 7.85,
+    "end": 8.56,
+    "id": "w23"
   }
 ]
