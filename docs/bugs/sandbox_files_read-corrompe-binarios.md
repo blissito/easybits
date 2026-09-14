@@ -56,3 +56,16 @@ al host y decide del lado EasyBits: UTF-8 válido y <50 KB → inline como texto
 con los bytes intactos (`app/.server/mcp/offloadOversizedRead.ts`, `autoDetect`).
 Test: `test/offloadOversizedRead.test.ts`. La REST `GET /api/v2/sandboxes/:id/files/read?encoding=utf8`
 sigue siendo con pérdida por diseño — para binarios pasar `encoding=base64`.
+
+## Verificado en prod (14 sep 2026, deploy `e9f93263`)
+
+Caja `ubuntu` fresca (la del reporte ya no existía), 2 MB de `/dev/urandom` + texto con acentos:
+
+```
+sandbox_exec   sha256sum /tmp/bin.test → 0b3847f8…4380fb
+sandbox_files_read /tmp/bin.test       → size_bytes 2097152, sha256 0b3847f8…4380fb
+curl -o bin.dl "$url" && shasum -a 256 → 0b3847f8…4380fb   (2097152 bytes)
+sandbox_files_read /tmp/txt.test       → { content: "hola ñandú\n", encoding: "utf8" }
+```
+
+Bytes intactos y el texto sigue llegando inline. **Cerrado.**
