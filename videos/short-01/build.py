@@ -34,7 +34,7 @@ def has(i,key): return any(w.startswith(key) for w,_ in W[i])
 
 k = dict(
  gasolinera=t(0,"gasolinera",0.05*D[0]), whats=t(0,"whats",0.3*D[0]), tanque=t(0,"tanque",0.45*D[0]), agua=t(0,"agua",0.55*D[0]), contesta=t(0,"contesta",0.68*D[0]), dato=t(0,"dato",0.8*D[0]), consola=t(0,"consola",0.93*D[0]),
- normi=t(1,"normi",0.02), semanas=t(1,"semanas",0.35*D[1]), sin=t(1,"sin",0.5*D[1]), servidor=t(1,"servidor",0.7*D[1]), ia=t(1,"inteligencia",0.85*D[1]),
+ normi=t(1,"normi",0.02), semanas=t(1,"herramienta",0.3*D[1]), sin=t(1,("agente","el"),0.5*D[1]), servidor=t(1,"memoria",0.7*D[1]), ia=t(1,"whats",0.8*D[1]), eb2=t(1,("isibits","easybits","ysi","isi"),0.95*D[1]),
  codigo=t(2,"codigo",0.05*D[2]), tools=t(2,("herramienta","tools","tols"),0.4*D[2]), mcp=t(2,("eme","msp","mcp"),0.5*D[2]), vig=t(2,"vigencias",0.62*D[2]), tan=t(2,"tanques",0.74*D[2]), rec=t(2,"recepciones",0.55*D[2]), nor=t(2,"normas",0.62*D[2]), conecta=t(2,"conecta",0.72*D[2]), agente3=t(2,"agente",0.82*D[2]), whats3=t(2,"whats",0.95*D[2]),
  easybits=t(3,("easybits","yasi","easy","isi"),0.02), caja=t(3,"caja",0.18*D[3]), cliente=t(3,"cliente",0.3*D[3]), modelo=t(3,"modelo",0.38*D[3]), memoria=t(3,"memoria",0.46*D[3]), canal=t(3,"canal",0.54*D[3]), pagas=t(3,("todo","cuota"),0.72*D[3]), agente4=t(3,"cuota",0.85*D[3]), trabaja=t(3,"mes",0.97*D[3]),
  normi2=t(4,"normi",0.02), formmy=t(4,("formmy","formie","formi"),0.12*D[4]), denik=t(4,("denik","the","deni"),0.22*D[4]), flota=t(4,"flota",0.4*D[4]), easy5=t(4,("isibits","easybits","ysi","isi"),0.5*D[4]), agentes=t(4,"agentes",0.58*D[4]), software=t(4,"software",0.7*D[4]), entra=t(4,"entra",0.82*D[4]), cloud=t(4,("cloud","yacybits","easybits.","isibits"),0.97*D[4]),
@@ -102,8 +102,8 @@ js=f'''    <script>
         settle("#s2-band", {s[1]+0.15}); settle("#s2-tag", {s[1]+0.3});
         pulse("#s2-tag", {k["normi"]}, 1.08); bandPulse("#s2-band", {k["semanas"]}, 1.1); pulse("#s2-robot", {k["semanas"]}, 1.04);
         swap("#s2-a", "#s2-b", {swaps[1]});
-        settle("#s2-num", {swaps[1]+0.3}); settle("#s2-h", {swaps[1]+0.45});
-        pulse("#s2-num", {k["servidor"]}, 1.12); pulse("#s2-h", {k["ia"]}, 1.06);
+        settle("#s2-card", {swaps[1]+0.3}); settle("#s2-b .chips", {swaps[1]+0.45});
+        chip("#s2-c1", {k["servidor"]}); chip("#s2-c2", {k["ia"]}); pulse("#s2-card", {k["eb2"]}, 1.06);
 
         // Escena 3 · voz {voice[2]:.2f}
         settle("#s3-a .kicker", {s[2]+0.04}, 0.4); settle("#s3-tag", {s[2]+0.12}); settle("#s3-tools", {s[2]+0.24});

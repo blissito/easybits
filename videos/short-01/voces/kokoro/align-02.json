@@ -2,79 +2,103 @@
   {
     "text": "Normie",
     "start": 0,
-    "end": 0.36,
+    "end": 0.3,
     "id": "w0"
   },
   {
-    "text": "lo",
-    "start": 0.36,
-    "end": 0.41,
+    "text": "solo",
+    "start": 0.3,
+    "end": 0.5,
     "id": "w1"
   },
   {
-    "text": "construyó",
+    "text": "escribió",
     "start": 0.5,
-    "end": 1.03,
+    "end": 0.9,
     "id": "w2"
   },
   {
-    "text": "en",
-    "start": 1.03,
-    "end": 1.15,
+    "text": "las",
+    "start": 0.9,
+    "end": 1.05,
     "id": "w3"
   },
   {
-    "text": "semanas",
-    "start": 1.15,
-    "end": 1.62,
+    "text": "herramientas",
+    "start": 1.05,
+    "end": 1.68,
     "id": "w4"
   },
   {
-    "text": "sin",
-    "start": 1.62,
-    "end": 1.72,
+    "text": "de",
+    "start": 1.74,
+    "end": 1.81,
     "id": "w5"
   },
   {
-    "text": "operar",
-    "start": 1.98,
-    "end": 2.18,
+    "text": "sus",
+    "start": 1.81,
+    "end": 1.98,
     "id": "w6"
   },
   {
-    "text": "un",
-    "start": 2.18,
-    "end": 2.3,
+    "text": "datos,",
+    "start": 1.98,
+    "end": 2.38,
     "id": "w7"
   },
   {
-    "text": "solo",
-    "start": 2.3,
-    "end": 2.55,
+    "text": "el",
+    "start": 2.38,
+    "end": 2.51,
     "id": "w8"
   },
   {
-    "text": "servidor",
-    "start": 2.55,
-    "end": 3.05,
+    "text": "agente,",
+    "start": 2.6,
+    "end": 3.14,
     "id": "w9"
   },
   {
-    "text": "de",
-    "start": 3.05,
-    "end": 3.16,
+    "text": "la",
+    "start": 3.14,
+    "end": 3.29,
     "id": "w10"
   },
   {
-    "text": "inteligencia",
-    "start": 3.17,
-    "end": 3.92,
+    "text": "memoria",
+    "start": 3.29,
+    "end": 3.88,
     "id": "w11"
   },
   {
-    "text": "artificial.",
-    "start": 3.93,
-    "end": 4.82,
+    "text": "y",
+    "start": 3.88,
+    "end": 3.94,
     "id": "w12"
+  },
+  {
+    "text": "WhatsApp",
+    "start": 3.94,
+    "end": 4.37,
+    "id": "w13"
+  },
+  {
+    "text": "los",
+    "start": 4.45,
+    "end": 4.53,
+    "id": "w14"
+  },
+  {
+    "text": "pone",
+    "start": 4.67,
+    "end": 4.85,
+    "id": "w15"
+  },
+  {
+    "text": "EasyBits.",
+    "start": 4.96,
+    "end": 5.7,
+    "id": "w16"
   }
 ]
