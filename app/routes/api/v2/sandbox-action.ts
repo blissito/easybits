@@ -44,6 +44,33 @@ const invalid = (issues: unknown) =>
 //          run-cell | kernel-restart | logs | runtime | apply-patch | expose |
 //          expose-raw | unexpose-raw | ssh-enable | ssh-disable |
 //          domain-add | domain-remove | domain-list | domain-verify
+// GET /api/v2/sandboxes/:id/logs?unit=&lines=&since=&grep= — la única acción de lectura.
+// Sin este loader un GET a cualquier acción reventaba con "Unexpected Server Error" (ruta
+// sin loader), que obligaba a ir por `journalctl` vía exec. Las demás acciones: 405 con la
+// pista de que son POST.
+export async function loader({ request, params }: Route.LoaderArgs) {
+  const ctx = requireAuth(await authenticateRequest(request));
+  if (params.action !== "logs") {
+    return Response.json(
+      { error: `Method not allowed: /${params.action} es POST` },
+      { status: 405, headers: { Allow: "POST" } }
+    );
+  }
+  const q = new URL(request.url).searchParams;
+  const p = SandboxLogsBody.safeParse({
+    unit: q.get("unit") ?? undefined,
+    lines: q.get("lines") ? Number(q.get("lines")) : undefined,
+    since: q.get("since") ?? undefined,
+    grep: q.get("grep") ?? undefined,
+  });
+  if (!p.success) return invalid(p.error.issues);
+  try {
+    return Response.json(await readLogs(ctx, params.id, p.data));
+  } catch (e) {
+    return hostErrorResponse(e) ?? Promise.reject(e);
+  }
+}
+
 export async function action({ request, params }: Route.ActionArgs) {
   if (request.method !== "POST") {
     return Response.json({ error: "Method not allowed" }, { status: 405 });

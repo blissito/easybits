@@ -936,7 +936,7 @@ Flujo: \`domain-add\` → crea el registro DNS que indica \`dns\` → \`domain-v
 - \`sandbox_files_edit({ sandboxId, path, oldString, newString, replaceAll? })\` — edición quirúrgica in-place (read→replace→write). Usa esto en vez de exec+sed: evita el escaping de shell. Reemplaza todas las ocurrencias por defecto; \`replaceAll:false\` = solo la primera. SDK: \`sb.files.edit(path, old, new)\`
 
 ### Logs & runtime del daemon
-- \`sandbox_logs({ sandboxId, unit?, lines?, since?, grep? })\` — logs journald nativos (sin pipear journalctl por exec). \`unit\` filtra un servicio systemd (ej. \`ghosty-gc-runtime\`, convención \`<template>-runtime\`); omítelo para el journal completo. Sin follow/streaming. SDK: \`sb.logs({ unit, lines, since, grep })\`
+- \`sandbox_logs({ sandboxId, unit?, lines?, since?, grep? })\` — logs journald nativos (sin pipear journalctl por exec). REST: \`POST /sandboxes/:id/logs\` con ese body, o \`GET /sandboxes/:id/logs?unit=&lines=&grep=\`. \`unit\` filtra un servicio systemd (ej. \`ghosty-gc-runtime\`, convención \`<template>-runtime\`); omítelo para el journal completo. Sin follow/streaming. SDK: \`sb.logs({ unit, lines, since, grep })\`
 - \`sandbox_runtime({ sandboxId, action, unit?, buildCommand?, cwd? })\` — control vía systemd. \`status\` (estado del unit) · \`restart\` (unit requerido) · \`rebuild\` (corre buildCommand en cwd y reinicia unit). SDK: \`sb.runtime(action, { unit, buildCommand, cwd })\`
 - \`sandbox_apply_patch({ sandboxId, edits[], rebuild?, restart? })\` — hotfix atómico: aplica N edits → rebuild opcional → restart opcional, en una llamada. Si el build falla NO reinicia (el daemon vivo se queda). SDK: \`sb.applyPatch({ edits, rebuild, restart })\`
 
@@ -950,7 +950,8 @@ Flujo: \`domain-add\` → crea el registro DNS que indica \`dns\` → \`domain-v
 
 ### Agentes persistentes (agent_create)
 \`POST /agents\`
-Body: \`{ template, env, name?, timeoutSeconds?, seedFiles? }\` — \`env\` es obligatorio (\`{}\` si el template no pide nada): llaves del modelo y config del agente; se escriben dentro de la VM y no vuelven a salir por la API.
+Body: \`{ template, env, name?, timeoutSeconds?, seedFiles?, mcpServers? }\` — \`env\` es obligatorio (\`{}\` si el template no pide nada): llaves del modelo y config del agente; se escriben dentro de la VM y no vuelven a salir por la API.
+\`seedFiles: [{ name, contentBase64 }]\` se escriben en \`/data/workspace/<name>\` **aplanados** (sin subcarpetas: \`/\` se vuelve \`_\`); sirven para meter un MCP o conocimiento sin clonar un repo. \`mcpServers\` (sólo templates ACP) viaja en el \`session/new\`; ver abajo.
 Responde de inmediato con \`status: building\`; consulta \`GET /agents/:id\` hasta \`running\` antes del primer mensaje.
 MCP: \`agent_create({ template })\` — crea agente con endpoint HTTP público
 MCP: \`agent_list()\` — listar agentes
@@ -963,6 +964,7 @@ Agentes que hablan [ACP](https://agentclientprotocol.com) (Agent Client Protocol
 **1. Crear** — con \`env: {}\` basta: \`ghosty-lite\` arranca con **tu propia llave EasyBits** como cerebro (proveedor \`easybits\`, modelo \`deepseek-v4-pro\`) y con el MCP de EasyBits ya conectado. Es la misma llave para las dos cosas: los turnos se descuentan de **tus** tokens LLM (\`GET /llm/balance\`) y el agente opera sobre **tu** cuenta. Si no tienes una guardada, se mintea una con los scopes de la llave que hizo la llamada.
 Para otro cerebro, el \`env\` manda: \`{ GHOSTY_PROVIDER: "anthropic", GHOSTY_MODEL: "claude-haiku-4-5", ANTHROPIC_API_KEY: "..." }\` · goose usa \`GOOSE_PROVIDER\` / \`GOOSE_MODEL\`.
 Proveedores: \`easybits\` (medido, default), \`anthropic\`, \`openai\`, \`custom_deepseek\` (+ \`DEEPSEEK_API_KEY\`, off-meter), \`ollama\`… Si sólo mandas \`DEEPSEEK_API_KEY\`, la caja elige DeepSeek sola.
+**Tu suscripción Claude (Max/Pro)**: manda \`CLAUDE_CODE_OAUTH_TOKEN\` (el de \`claude setup-token\`) y el agente nace con \`GHOSTY_PROVIDER: "claude-acp"\` + \`GHOSTY_MODEL: "current"\` (el modelo que el adaptador traiga); tarifa plana, off-meter. El proxy medido (\`/llm/v1/models\`) NO ofrece Claude: ese es el único camino a Claude en \`ghosty-lite\`.
 
 **2. Esperar \`running\`** — para ACP significa que Easybits ya hizo \`initialize\` + \`session/new\` y guardó la sesión (~6 s desde crear). Antes de eso \`/message\` no tiene sesión.
 
@@ -970,11 +972,11 @@ Proveedores: \`easybits\` (medido, default), \`anthropic\`, \`openai\`, \`custom
 
 **4. La máquina es tuya** — \`POST /sandboxes/:sandboxId/exec\` para leer lo que el agente escribió; \`DELETE /agents/:id\` la destruye. Sin borrar, se duerme al idlear y despierta con el siguiente mensaje.
 
-**Desde un editor (Zed, JetBrains, VS Code), Ghosty Teams o cualquier cliente ACP**: pon \`ACP_AGENT_TOKEN\` en el \`env\` al crear y conecta por WebSocket a la **URL estable del agente**, que viene en \`agentUrl\` cuando llega a \`running\`: \`wss://acp-<agentId>.sandboxes.easybits.cloud/acp?token=<ACP_AGENT_TOKEN>\` (con el puente \`npx ghosty-acp <esa url>\`, \`env: {}\`; las llaves ya viven en la caja). El puerto 3000 ya está expuesto; no hace falta \`/expose\`.
+**Desde un editor (Zed, JetBrains, VS Code), Ghosty Teams o cualquier cliente ACP**: pon \`ACP_AGENT_TOKEN\` en el \`env\` al crear y conecta por WebSocket a la **URL estable del agente**, que viene en \`agentUrl\` desde el POST (responde cuando llega a \`running\`): \`wss://acp-<agentId>.sandboxes.easybits.cloud/acp?token=<ACP_AGENT_TOKEN>\` — el \`/acp\` **es parte de la URL** (con el puente \`npx ghosty-acp <esa url>\`, \`env: {}\`; las llaves ya viven en la caja). El puerto 3000 ya está expuesto; no hace falta \`/expose\`.
 
 **5. Identidad estable y revive** — la URL lleva el \`agentId\`, no la máquina: si el host recicla la caja (días sin uso), la URL sigue siendo la misma. \`POST /agents/:id/revive\` (Bearer \`eb_sk\` del dueño **o** el \`embedToken\` / \`ACP_AGENT_TOKEN\` del agente) la vuelve a levantar sobre el mismo agente y devuelve \`{ agentId, sandboxId, status, wsUrl }\`; si la caja existe no hace nada. Tarda lo que tarda el boot (~10-60 s): espera la respuesta, no reintentes. Se pierde el disco (\`/data\`) de la caja anterior. \`/message\` lo hace solo cuando encuentra el agente en \`lost\`. Un cliente WebSocket lo reconoce por un \`404\` con \`preview host not found\` en la URL del agente.
 
-Consumo: con el cerebro \`easybits\` (el default) lo mide el proxy y se ve en \`GET /llm/balance\`; con un proveedor propio (BYOK) el gasto es contra ese proveedor y EasyBits no lo cuenta. El SSE de \`/message\` emite además un \`{type:"usage", inputTokens, outputTokens, totalTokens}\` justo antes del \`done\`, cuando el agente lo reporta (son totales de la SESIÓN, no del turno). Tools propias por ACP (\`mcpServers\` stdio/http en \`session/new\`): hoy sólo por WebSocket (Ghosty Teams, editores); por esta API REST aún no.
+Consumo: con el cerebro \`easybits\` (el default) lo mide el proxy y se ve en \`GET /llm/balance\`; con un proveedor propio (BYOK) el gasto es contra ese proveedor y EasyBits no lo cuenta. El SSE de \`/message\` emite además un \`{type:"usage", inputTokens, outputTokens, totalTokens}\` justo antes del \`done\`, cuando el agente lo reporta (son totales de la SESIÓN, no del turno). **Tools propias (\`mcpServers\`)**: \`[{ name, command, args?, env? }]\` (stdio) o \`[{ name, type:"http", url, headers? }]\`; \`$secret:NOMBRE\` en \`env\`/\`headers\` se resuelve del vault del dueño. ⚠️ Con \`claude-acp\` **sólo entran MCPs por http** (anuncia \`mcpCapabilities: {http:true}\`, sin stdio): un stdio se rechaza con 400. Levanta el servidor por Streamable HTTP dentro de la caja (p. ej. sembrado con \`seedFiles\`) y decláralo como \`{ type:"http", url:"http://127.0.0.1:<puerto>/mcp" }\`. Con \`easybits\`/DeepSeek (goose) stdio sí funciona.
 
 ### Agent Run (one-shot)
 MCP: \`agent_run({ prompt, model?, maxTurns? })\` — agente Claude asíncrono

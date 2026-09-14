@@ -3236,6 +3236,18 @@ export async function createAgent(
   // así que un `env: {}` moría en validateRequiredEnv antes de llegar al launcher. Default
   // = el cerebro medido con la llave del dueño, que es lo que queremos para todos.
   // Si el caller trae su propio proveedor o una llave de proveedor, no se toca nada (BYOK).
+  // ⚠️ CLAUDE_CODE_OAUTH_TOKEN ES una llave BYOK (la suscripción Max del dueño, tarifa
+  // plana). Antes no estaba en esta lista: un POST con sólo el OAuth caía en
+  // `easybits` + DeepSeek medido, y el launcher sólo convierte a `claude-acp` cuando el
+  // provider llega vacío/anthropic — `easybits` se quedaba. Con saldo en cero el síntoma
+  // era un "add more credits" que parecía de Anthropic. Se fija el provider aquí, explícito,
+  // para que la fila diga la verdad; `current` = "no toques el modelo del adaptador".
+  if (params.template === "ghosty-lite" && env.CLAUDE_CODE_OAUTH_TOKEN) {
+    if (!env.GHOSTY_PROVIDER || ["anthropic", "claude-code"].includes(env.GHOSTY_PROVIDER)) {
+      env.GHOSTY_PROVIDER = "claude-acp";
+    }
+    if (env.GHOSTY_PROVIDER === "claude-acp" && !env.GHOSTY_MODEL) env.GHOSTY_MODEL = "current";
+  }
   if (
     params.template === "ghosty-lite" &&
     !env.GHOSTY_PROVIDER &&
@@ -3246,6 +3258,18 @@ export async function createAgent(
   ) {
     env.GHOSTY_PROVIDER = "easybits";
     if (!env.GHOSTY_MODEL) env.GHOSTY_MODEL = "deepseek-v4-pro";
+  }
+  // `claude-acp` anuncia `mcpCapabilities: {http:true, sse:false}` y NO stdio: un
+  // `mcpServers[]` stdio pasaba la validación, viajaba en `session/new` y desaparecía sin
+  // error ni aviso (nunca salía en `extensions/list`). Mejor 400 aquí que un agente mudo.
+  if (env.GHOSTY_PROVIDER === "claude-acp" && params.mcpServers?.some((m) => !("url" in m))) {
+    const names = params.mcpServers.filter((m) => !("url" in m)).map((m) => m.name).join(", ");
+    throw new Response(
+      JSON.stringify({
+        error: `mcpServers: el provider claude-acp sólo acepta MCPs por http (stdio no se monta): ${names}. Levanta el servidor por Streamable HTTP dentro de la caja y decláralo con {type:"http", url:"http://127.0.0.1:<puerto>/mcp"}.`,
+      }),
+      { status: 400, headers: { "content-type": "application/json" } }
+    );
   }
   // Acceso a las tools de EasyBits — UNA sola vez, para todos los templates que las
   // consumen. Va después de las ramas por template para que el env que ellas fijen
@@ -3329,6 +3353,11 @@ export async function createAgent(
   //    systemd unit started. For ghostyclaw the readiness check polls the
   //    /chat/ready endpoint inside the VM (Docker up + agent image built);
   //    for other templates we trust startAgent's exit code.
+  // Un agente ACP tiene URL ESTABLE y determinista (dominio por agentId + message_path):
+  // se devuelve desde el POST y se guarda ya en la fila, no un `sandbox://…` provisional
+  // que obligaba a re-leer `GET /agents/:id`. Sigue sin responder hasta `status: "running"`.
+  const stableAgentUrl = isAcp ? acpWsUrlFor(row.id, messagePath) : provisionalAgentUrl;
+  if (isAcp) await db.agent.update({ where: { id: row.id }, data: { agentUrl: stableAgentUrl } });
   void (async () => {
     try {
       const up = await bringUpAgentRuntime(ctx, {
@@ -3359,7 +3388,7 @@ export async function createAgent(
     embedToken,
     sandboxId: sb.sandboxId,
     template: params.template,
-    agentUrl: provisionalAgentUrl,
+    agentUrl: stableAgentUrl,
     healthUrl: "",
     expiresAt,
     tuiCommand: tuiCommandFor(params.template, row.id, embedToken),
@@ -3708,11 +3737,18 @@ function toAgentRecord(row: {
   desktopUrl?: string | null;
   terminalUrl?: string | null;
 }): AgentRecord {
+  // Filas ACP viejas guardaron `wss://acp-<id>…/` sin el path: dos agentes seguidos daban
+  // dos formas de URL. Se normaliza al leer: `/acp` ES parte de la URL.
+  const messagePath = row.messagePath ?? "/message";
+  const agentUrl =
+    row.protocol === "acp" && row.agentUrl.startsWith("wss://") && !row.agentUrl.endsWith(messagePath)
+      ? acpWsUrlFor(row.id, messagePath)
+      : row.agentUrl;
   return {
     agentId: row.id,
     ownerId: row.ownerId,
     sandboxId: row.sandboxId,
-    agentUrl: row.agentUrl,
+    agentUrl,
     template: row.template,
     embedToken: row.embedToken,
     name: row.name,
@@ -3722,7 +3758,7 @@ function toAgentRecord(row: {
     protocol: row.protocol ?? "sse",
     port: row.port ?? 3000,
     unit: row.unit ?? "chat-runtime",
-    messagePath: row.messagePath ?? "/message",
+    messagePath,
     acpSessionId: row.acpSessionId,
     acpTransportSessionId: row.acpTransportSessionId,
     desktopUrl: row.desktopUrl ?? null,
