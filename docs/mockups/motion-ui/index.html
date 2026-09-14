@@ -1,0 +1,408 @@
+<!doctype html>
+<html lang="es-MX">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EasyBits Motion — Lanzamiento Sandbox v2</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* ---- Tokens de marca EasyBits ---- */
+  :root{
+    --bg:#0b0b0f; --surface:#15151c; --surface-2:#1c1c25; --border:#2a2a36;
+    --purple:#7c3aed; --amber:#fbbf24; --text:#f2f2f5; --muted:#8a8a99;
+    --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+    --sans:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;
+    --back:cubic-bezier(.34,1.56,.64,1);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14px;line-height:1.4}
+  button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+  .mono{font-family:var(--mono)}
+
+  /* ---- Barra superior ---- */
+  .topbar{display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid var(--border);background:var(--surface);flex-wrap:wrap}
+  .top-row{display:contents}
+  @media (max-width:1023px){
+    .topbar{flex-wrap:nowrap;flex-direction:column;align-items:stretch;gap:8px}
+    .top-row{display:flex;align-items:center;gap:8px;min-width:0}
+    .top-row.secondary{overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+    .top-row.secondary::-webkit-scrollbar{display:none}
+    .top-row.secondary>*{flex:none}
+    .project{flex:1;min-width:0}
+    .project .name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .project .meta,.brand small{display:none}
+    .btn-primary{padding:7px 10px;font-size:13px;white-space:nowrap}
+    .topbar{display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"row1 export" "row2 row2";align-items:center}
+    .top-row:not(.secondary){grid-area:row1}.spacer{display:none}.top-row.secondary{grid-area:row2}.btn-primary{grid-area:export}
+    .badge-amber,.btn-ghost{white-space:nowrap}
+  }
+  .brand{display:flex;align-items:center;gap:8px;font-weight:700}
+  .brand .logo{width:26px;height:26px;background:var(--purple);border-radius:6px;display:grid;place-items:center;font-family:var(--mono);font-size:13px;color:#fff;animation:logo-tilt 6s var(--back) infinite}
+  @keyframes logo-tilt{0%,90%{transform:rotate(0)}95%{transform:rotate(-14deg) scale(1.15)}100%{transform:rotate(0)}}
+  .brand small{color:var(--muted);font-weight:500}
+  .project{display:flex;align-items:center;gap:8px;padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg)}
+  .project .dot{width:8px;height:8px;border-radius:50%;background:var(--amber);animation:pulse 1.2s ease-in-out infinite}
+  @keyframes pulse{50%{transform:scale(1.6);opacity:.5}}
+  .project span.name{font-weight:600}
+  .project span.meta{color:var(--muted);font-family:var(--mono);font-size:12px}
+  .spacer{flex:1}
+  .engine{display:flex;align-items:center;gap:6px;border:1px solid var(--border);border-radius:8px;overflow:hidden;background:var(--bg);font-family:var(--mono);font-size:12px}
+  .engine .lbl{padding:0 0 0 10px;color:var(--muted)}
+  .engine button{padding:6px 10px;color:var(--muted);display:flex;align-items:center;gap:6px}
+  .engine button.active{background:var(--purple);color:#fff}
+  .engine .blink{width:7px;height:7px;border-radius:50%;background:var(--amber);animation:blink 1s steps(1) infinite}
+  @keyframes blink{50%{opacity:0}}
+  .btn-primary{background:var(--amber);color:#0b0b0f;font-weight:700;padding:8px 14px;border-radius:8px;position:relative;overflow:hidden}
+  .btn-primary.ready{animation:pop .6s var(--back)}
+  @keyframes pop{0%{transform:scale(.7)}100%{transform:scale(1)}}
+  .btn-ghost{border:1px solid var(--border);padding:7px 12px;border-radius:8px;color:var(--text)}
+  .badge-amber{font-family:var(--mono);font-size:11px;color:#0b0b0f;background:var(--amber);padding:4px 8px;border-radius:6px;font-weight:600;animation:wiggle 6s var(--back) infinite}
+  @keyframes wiggle{0%,80%{transform:rotate(0)}85%{transform:rotate(-3deg) scale(1.08)}90%{transform:rotate(3deg) scale(1.08)}100%{transform:rotate(0)}}
+
+  /* ---- Layout principal ---- */
+  .workbench{display:grid;gap:12px;padding:12px 16px 24px;grid-template-columns:minmax(0,1fr);grid-template-areas:"preview" "agent" "timeline" "inspector"}
+  @media (min-width:1024px){
+    .workbench{grid-template-columns:300px 1fr 300px;grid-template-rows:minmax(560px,1fr) auto;grid-template-areas:"agent preview inspector" "timeline timeline timeline";height:calc(100vh - 57px)}
+  }
+  .panel{background:var(--surface);border:1px solid var(--border);border-radius:10px;display:flex;flex-direction:column;min-width:0;overflow:hidden}
+  .panel-head{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;border-bottom:1px solid var(--border);font-size:12px;font-weight:600;letter-spacing:.02em;text-transform:uppercase;color:var(--muted)}
+  .panel-head .tag{font-family:var(--mono);text-transform:none;letter-spacing:0;color:var(--amber);font-weight:500}
+
+  /* ---- Panel del agente ---- */
+  .agent{grid-area:agent}
+  .agent-body{padding:12px;display:flex;flex-direction:column;gap:10px;overflow:auto;flex:1}
+  .msg{display:flex;flex-direction:column;gap:6px}
+  .msg .who{font-size:11px;color:var(--muted);font-family:var(--mono)}
+  .msg .bubble{padding:8px 10px;font-size:13px;border-radius:8px;border:1px solid var(--border);background:var(--surface-2)}
+  .plan{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+  .plan li{display:flex;gap:8px;align-items:center;padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);font-size:13px;color:var(--muted);transition:color .3s}
+  .plan li.done{color:var(--text)}
+  .plan .chk{width:16px;height:16px;border-radius:50%;border:2px solid var(--muted);flex:none;display:grid;place-items:center;font-size:10px;transition:background .2s}
+  .plan li.done .chk{background:var(--purple);border-color:var(--purple);color:#fff;animation:pop .5s var(--back)}
+  .plan li.done .chk::after{content:"✓"}
+  .log{margin:0 12px 10px;font-family:var(--mono);font-size:11px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;height:76px;overflow:hidden;flex:none}
+  .log div{white-space:pre-wrap;min-height:1.5em}
+  .log .ok{color:var(--amber)}
+  .log .caret{display:inline-block;width:7px;height:12px;background:var(--purple);vertical-align:-2px;animation:blink 1s steps(1) infinite}
+  .render{margin:0 12px 10px;flex:none;display:flex;flex-direction:column;gap:6px;font-family:var(--mono);font-size:11px;color:var(--muted)}
+  .render .row{display:flex;justify-content:space-between}
+  .render .row b{color:var(--text)}
+  .render .bar{height:8px;background:var(--bg);border:1px solid var(--border);border-radius:4px;overflow:hidden}
+  .render .fill{height:100%;width:0;background:var(--purple)}
+  .render .done{color:#0b0b0f;background:var(--amber);padding:6px 10px;border-radius:6px;font-weight:600;text-align:center;transform:scale(0);opacity:0}
+  .render .done.show{animation:pop-in .6s var(--back) forwards}
+  @keyframes pop-in{to{transform:scale(1);opacity:1}}
+  .composer{border-top:1px solid var(--border);padding:10px 12px;display:flex;flex-direction:column;gap:8px}
+  .composer .input{border:1px solid var(--border);background:var(--bg);border-radius:8px;padding:8px 12px;color:var(--muted);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .composer .row{display:flex;gap:8px;align-items:center;justify-content:space-between}
+  .chip{font-family:var(--mono);font-size:11px;padding:4px 8px;border:1px solid var(--border);border-radius:6px;color:var(--muted);background:var(--surface-2)}
+  .btn-send{background:var(--purple);color:#fff;font-weight:600;padding:7px 14px;border-radius:8px}
+
+  /* ---- Preview 9:16 ---- */
+  .preview{grid-area:preview}
+  .preview-body{flex:1;display:grid;place-items:center;padding:16px;background:var(--surface-2)}
+  .stage{width:min(100%,320px);aspect-ratio:9/16;background:var(--bg);border:1px solid var(--border);border-radius:14px;position:relative;overflow:hidden;box-shadow:0 0 0 4px var(--surface);container-type:inline-size}
+  @media (min-width:1024px){.stage{width:auto;height:100%;max-height:100%}}
+  .dots{position:absolute;inset:-40px;background-image:radial-gradient(#3a3a4a 1.6px,transparent 1.7px);background-size:22px 22px;animation:breathe 3s ease-in-out infinite}
+  @keyframes breathe{0%,100%{transform:scale(1);opacity:.7}50%{transform:scale(1.08) translate(6px,6px);opacity:1}}
+  .scene-layer{position:absolute;inset:0}
+  .scene-layer[hidden]{display:none}
+  .stage .badge{position:absolute;top:24px;left:22px;font-family:var(--mono);font-size:11px;color:var(--amber);border:1px solid var(--amber);border-radius:6px;padding:3px 8px}
+  .headline{position:absolute;left:22px;right:22px;top:36%;margin:0;font-size:clamp(28px,15cqw,44px);font-weight:900;line-height:1.02;letter-spacing:-.03em}
+  .headline .w{display:inline-block;animation:rise 6s var(--back) infinite}
+  .headline .w.amber{color:var(--amber);animation:stretch 6s var(--back) infinite}
+  .headline .w:nth-child(1){animation-delay:0s}.headline .w:nth-child(2){animation-delay:.1s}
+  .headline .w:nth-child(4){animation-delay:.2s}.headline .w:nth-child(5){animation-delay:.3s}
+  .headline .w:nth-child(6){animation-delay:.4s}.headline .w:nth-child(7){animation-delay:.5s}
+  /* frame 0 completo; sale a los 5.2 s y reentra con rebote justo antes del bucle */
+  @keyframes rise{0%,84%{opacity:1;transform:none}88%,90%{opacity:0;transform:translateY(-14px)}91%{opacity:0;transform:translateY(40px) scale(.8)}100%{opacity:1;transform:none}}
+  @keyframes stretch{0%,84%{opacity:1;transform:none}10%{transform:scaleX(1.35) scaleY(.9)}16%{transform:scaleX(.92) scaleY(1.1)}22%{transform:none}88%,90%{opacity:0;transform:translateY(-14px)}91%{opacity:0;transform:translateY(40px) scale(.8)}100%{opacity:1;transform:none}}
+  .stage .sub{position:absolute;left:22px;right:22px;bottom:21%;color:var(--muted);font-size:13px}
+  .stage .bar{position:absolute;left:22px;bottom:14%;height:5px;width:0;background:var(--purple);animation:grow 6s linear infinite}
+  @keyframes grow{to{width:calc(100% - 44px)}}
+  .stage .logo-eb{position:absolute;right:22px;bottom:24px;font-family:var(--mono);font-size:11px;color:var(--muted)}
+  /* escena CTA */
+  .cta-big{position:absolute;left:22px;right:22px;top:30%;margin:0;font-size:clamp(26px,13cqw,40px);font-weight:900;line-height:1.05;letter-spacing:-.03em}
+  .cta-big .w{display:inline-block;animation:enter .8s var(--back) both}
+  .cta-big .w:nth-child(2){animation-delay:.1s}.cta-big .w:nth-child(3){animation-delay:.2s}
+  @keyframes enter{from{opacity:0;transform:translateY(40px) scale(.8)}}
+  .cta-btn{position:absolute;left:22px;top:58%;background:var(--amber);color:#0b0b0f;font-weight:800;padding:12px 18px;border-radius:10px;font-size:15px;animation:enter .8s var(--back) .4s both,bounce 1.6s var(--back) 1.4s infinite}
+  @keyframes bounce{0%,100%{transform:none}50%{transform:translateY(-6px) scale(1.04)}}
+  .ghost{position:absolute;right:20px;top:66%;width:72px;height:80px;background:var(--purple);border-radius:36px 36px 12px 12px;animation:enter .9s var(--back) .6s both,hover 2s ease-in-out 1.5s infinite}
+  .ghost::before,.ghost::after{content:"";position:absolute;top:26px;width:12px;height:16px;background:#0b0b0f;border-radius:6px;left:18px}
+  .ghost::after{left:42px}
+  @keyframes hover{50%{transform:translateY(-8px)}}
+  /* cortinilla de rebanadas diagonales */
+  .wipe{position:absolute;inset:0;pointer-events:none;display:flex;flex-direction:column}
+  .wipe i{flex:1;background:var(--purple);transform:translateX(-120%) skewX(-14deg);transform-origin:left}
+  .wipe i:nth-child(odd){background:var(--amber)}
+  .wipe.go i{animation:slice .9s var(--back) forwards}
+  .wipe.go i:nth-child(2){animation-delay:.05s}.wipe.go i:nth-child(3){animation-delay:.1s}
+  .wipe.go i:nth-child(4){animation-delay:.15s}.wipe.go i:nth-child(5){animation-delay:.2s}
+  .wipe.go i:nth-child(6){animation-delay:.25s}.wipe.go i:nth-child(7){animation-delay:.3s}
+  @keyframes slice{0%{transform:translateX(-120%) skewX(-14deg)}45%,55%{transform:translateX(0) skewX(-14deg)}100%{transform:translateX(120%) skewX(-14deg)}}
+  .preview-foot{display:flex;align-items:center;gap:10px;padding:8px 12px;border-top:1px solid var(--border);font-family:var(--mono);font-size:12px;color:var(--muted);flex-wrap:wrap}
+  .preview-foot b{color:var(--text);font-weight:600}
+  .play{width:28px;height:28px;border-radius:50%;background:var(--purple);color:#fff;display:grid;place-items:center;font-size:11px;animation:pulse 1.5s ease-in-out infinite}
+
+  /* ---- Inspector ---- */
+  .inspector{grid-area:inspector}
+  .inspector-body{padding:12px;display:flex;flex-direction:column;gap:10px;overflow:auto;flex:1}
+  .selected{font-size:12px;color:var(--muted)}
+  .selected b{color:var(--text);display:block;font-size:13px}
+  .tabs{display:flex;border:1px solid var(--border);border-radius:8px;overflow:hidden}
+  .tabs button{flex:1;padding:6px;font-size:12px;color:var(--muted)}
+  .tabs button.active{background:var(--purple);color:#fff}
+  .track{display:grid;grid-template-columns:56px 1fr 48px;gap:8px;align-items:center;font-family:var(--mono);font-size:11px}
+  .track .name{color:var(--muted)}
+  .track .val{text-align:right;color:var(--text)}
+  .track .lane{position:relative;height:22px;background:var(--bg);border:1px solid var(--border);border-radius:5px}
+  .track .lane::before{content:"";position:absolute;left:6px;right:6px;top:50%;height:1px;background:var(--border)}
+  .kf{position:absolute;top:50%;width:9px;height:9px;background:var(--muted);transform:translate(-50%,-50%) rotate(45deg);border:1px solid var(--bg);transition:background .15s}
+  .kf.lit{background:var(--amber);animation:kf-pop .5s var(--back)}
+  .kf.p.lit{background:var(--purple)}
+  @keyframes kf-pop{50%{transform:translate(-50%,-50%) rotate(45deg) scale(1.9)}}
+  .lane .ph{position:absolute;top:0;bottom:0;width:2px;background:var(--amber);left:var(--x,0%)}
+  .ease{display:flex;justify-content:space-between;align-items:center;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--bg);font-size:12px}
+  .ease span.mono{color:var(--amber)}
+  .frames{display:flex;justify-content:space-between;align-items:baseline;padding:10px;border:1px solid var(--purple);border-radius:8px;background:var(--bg)}
+  .frames b{font-family:var(--mono);font-size:26px;font-weight:600;color:var(--text)}
+  .frames span{font-family:var(--mono);font-size:11px;color:var(--muted)}
+
+  /* ---- Timeline ---- */
+  .timeline{grid-area:timeline}
+  .tl-head{display:flex;align-items:center;gap:12px;padding:8px 12px;border-bottom:1px solid var(--border);font-family:var(--mono);font-size:12px;color:var(--muted);flex-wrap:wrap}
+  .tl-head .time{color:var(--text);font-weight:600;min-width:64px}
+  .tl-scroll{overflow-x:auto}
+  .tl{position:relative;min-width:640px;padding:0 12px 12px 12px}
+  .ruler{display:grid;grid-template-columns:repeat(12,1fr);height:22px;border-bottom:1px solid var(--border);font-family:var(--mono);font-size:10px;color:var(--muted);margin-left:90px}
+  .ruler span{border-left:1px solid var(--border);padding:4px 0 0 4px}
+  .tl-row{display:grid;grid-template-columns:90px 1fr;align-items:center;min-height:40px;border-bottom:1px solid var(--border)}
+  .tl-row .lbl{font-size:12px;color:var(--muted);font-weight:600}
+  .tl-row .lane{position:relative;height:30px;display:grid;grid-template-columns:repeat(12,1fr)}
+  .scene{position:relative;border-radius:6px;border:1px solid var(--border);background:var(--surface-2);display:flex;align-items:center;padding:0 10px;font-size:12px;font-weight:600;margin:2px 3px;overflow:hidden;white-space:nowrap;transition:background .25s,border-color .25s}
+  .scene.hi{background:var(--purple);border-color:var(--purple);color:#fff;animation:pop .5s var(--back)}
+  .scene small{margin-left:auto;color:var(--muted);font-family:var(--mono);font-weight:400}
+  .scene.hi small{color:#e9ddff}
+  .tx{position:absolute;top:2px;bottom:2px;width:12px;background:var(--amber);border-radius:3px;transform:translateX(-6px)}
+  .tx.lit{animation:kf-pop2 .6s var(--back)}
+  @keyframes kf-pop2{50%{transform:translateX(-6px) scale(1.8)}}
+  .clip{border-radius:5px;background:var(--bg);border:1px solid var(--border);margin:4px 3px;height:22px;display:flex;align-items:center;padding:0 8px;font-family:var(--mono);font-size:10px;color:var(--muted);overflow:hidden;white-space:nowrap}
+  .clip.a{border-color:var(--amber);color:var(--amber)}
+  .playhead{position:absolute;top:0;bottom:12px;width:2px;background:var(--amber);left:calc(102px + var(--p,0)*(100% - 114px));pointer-events:none}
+  .playhead::before{content:"";position:absolute;top:0;left:-5px;border:6px solid transparent;border-top:8px solid var(--amber)}
+</style>
+</head>
+<body>
+
+<!-- Barra superior: proyecto, motor y exportar -->
+<header class="topbar">
+  <!-- Fila 1 en mobile: marca, proyecto y exportar -->
+  <div class="top-row">
+    <div class="brand"><span class="logo">M</span>Motion <small>· EasyBits</small></div>
+    <div class="project"><span class="dot"></span><span class="name">Lanzamiento Sandbox v2</span><span class="meta">1080×1920 · 30 fps</span></div>
+  </div>
+  <div class="spacer"></div>
+  <!-- Fila 2 en mobile: chips con scroll horizontal -->
+  <div class="top-row secondary">
+    <span class="badge-amber">Sin marca de agua · sin renta de GPU</span>
+    <div class="engine" role="group" aria-label="Motor del agente">
+      <span class="lbl">Motor:</span>
+      <button class="active"><span class="blink"></span>Claude Code</button><button>Codex</button><button>Gemini</button>
+    </div>
+    <button class="btn-ghost">Compartir</button>
+  </div>
+  <button class="btn-primary" id="export">Exportar MP4</button>
+</header>
+
+<main class="workbench">
+
+  <!-- Panel izquierdo: chat, plan, log y render del agente -->
+  <section class="panel agent">
+    <div class="panel-head"><span>Agente</span><span class="tag">claude-code · sesión #14</span></div>
+    <div class="agent-body">
+      <div class="msg"><span class="who">tú</span><div class="bubble">Short de 12 s para el lanzamiento de Sandbox v2. Titular: "Tu agente, en su propia caja". Cierra con CTA.</div></div>
+      <div class="msg"><span class="who">motion · claude-code</span>
+        <ul class="plan" id="plan">
+          <li><span class="chk"></span>Plan: 4 escenas · Hook · Features · Ghosty · CTA</li>
+          <li><span class="chk"></span>Aplicar design system EasyBits</li>
+          <li><span class="chk"></span>Escribir keyframes y transiciones</li>
+          <li><span class="chk"></span>Render 1080×1920 · 360 frames</li>
+        </ul>
+      </div>
+    </div>
+    <div class="log" id="log" aria-live="polite"></div>
+    <div class="render">
+      <div class="row"><span>Render</span><b id="pct">0 %</b></div>
+      <div class="bar"><div class="fill" id="fill"></div></div>
+      <div class="done" id="done">MP4 listo · 12 s</div>
+    </div>
+    <div class="composer">
+      <div class="input">Describe cómo debería moverse "Titular · Tu agente…"</div>
+      <div class="row"><span class="chip">design-system: easybits</span><button class="btn-send">Enviar</button></div>
+    </div>
+  </section>
+
+  <!-- Centro: preview 9:16 -->
+  <section class="panel preview">
+    <div class="panel-head"><span>Vista previa</span><span class="tag" id="scene-tag">escena 1 · Hook</span></div>
+    <div class="preview-body">
+      <div class="stage" aria-label="Vista previa del video">
+        <div class="dots"></div>
+        <div class="scene-layer" id="scene-hook">
+          <span class="badge">SANDBOX v2</span>
+          <h1 class="headline"><span class="w">Tu</span> <span class="w">agente,</span><br><span class="w">en</span> <span class="w">su</span> <span class="w">propia</span> <span class="w amber">caja</span></h1>
+          <p class="sub">Aislado, con su propio disco y sin tocar tu máquina.</p>
+          <div class="bar"></div>
+        </div>
+        <div class="scene-layer" id="scene-cta" hidden>
+          <span class="badge">CTA</span>
+          <h1 class="cta-big"><span class="w">Pruébalo</span> <span class="w">hoy,</span><br><span class="w" style="color:var(--amber)">gratis.</span></h1>
+          <span class="cta-btn">easybits.cloud →</span>
+          <div class="ghost"></div>
+        </div>
+        <div class="wipe" id="wipe"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+        <span class="logo-eb">easybits.cloud</span>
+      </div>
+    </div>
+    <div class="preview-foot"><span class="play">▶</span><b id="clock">00:00.00</b><span>/ 00:12.00</span><span>·</span><span>frame <b id="frame">0</b> / 360</span><span class="spacer"></span><span>loop</span></div>
+  </section>
+
+  <!-- Derecha: inspector de keyframes -->
+  <aside class="panel inspector">
+    <div class="panel-head"><span>Inspector</span><span class="tag">6 pistas</span></div>
+    <div class="inspector-body">
+      <div class="selected">Seleccionado<b>Titular · "Tu agente, en su propia caja"</b></div>
+      <div class="tabs"><button>Preset</button><button class="active">Keyframes</button></div>
+      <div class="track"><span class="name">x</span><div class="lane"><span class="ph"></span><i class="kf" style="left:8%"></i><i class="kf" style="left:60%"></i></div><span class="val" id="v-x">0 px</span></div>
+      <div class="track"><span class="name">y</span><div class="lane"><span class="ph"></span><i class="kf p" style="left:8%"></i><i class="kf" style="left:34%"></i><i class="kf" style="left:88%"></i></div><span class="val" id="v-y">24 px</span></div>
+      <div class="track"><span class="name">scale</span><div class="lane"><span class="ph"></span><i class="kf" style="left:8%"></i><i class="kf p" style="left:50%"></i></div><span class="val" id="v-s">1.00</span></div>
+      <div class="track"><span class="name">rotate</span><div class="lane"><span class="ph"></span><i class="kf" style="left:20%"></i><i class="kf" style="left:72%"></i></div><span class="val" id="v-r">0°</span></div>
+      <div class="track"><span class="name">opacity</span><div class="lane"><span class="ph"></span><i class="kf" style="left:8%"></i><i class="kf" style="left:30%"></i><i class="kf" style="left:80%"></i><i class="kf" style="left:94%"></i></div><span class="val" id="v-o">1.00</span></div>
+      <div class="track"><span class="name">blur</span><div class="lane"><span class="ph"></span><i class="kf" style="left:8%"></i><i class="kf" style="left:26%"></i></div><span class="val" id="v-b">0 px</span></div>
+      <div class="ease"><span>Easing</span><span class="mono">cubic-bezier(.34,1.56,.64,1)</span></div>
+      <div class="ease"><span>Duración</span><span class="mono">0.9 s</span></div>
+      <div class="frames"><span>frames</span><b id="frames-big">0</b><span>/ 360</span></div>
+    </div>
+  </aside>
+
+  <!-- Abajo: timeline de escenas y transiciones -->
+  <section class="panel timeline">
+    <div class="tl-head"><span class="play">▶</span><span class="time" id="tl-clock">00:00.00</span><span>Timeline</span><span class="chip">4 escenas · 3 transiciones</span><span class="spacer"></span><span>zoom 100%</span></div>
+    <div class="tl-scroll"><div class="tl">
+      <div class="ruler"><span>0s</span><span>1s</span><span>2s</span><span>3s</span><span>4s</span><span>5s</span><span>6s</span><span>7s</span><span>8s</span><span>9s</span><span>10s</span><span>11s</span></div>
+      <div class="tl-row"><span class="lbl">Escenas</span><div class="lane" id="scenes">
+        <div class="scene hi" data-from="0" style="grid-column:1/4">Hook<small>3 s</small></div>
+        <div class="scene" data-from="3" style="grid-column:4/8">Features<small>4 s</small></div>
+        <div class="scene" data-from="7" style="grid-column:8/11">Ghosty<small>3 s</small></div>
+        <div class="scene" data-from="10" style="grid-column:11/13">CTA<small>2 s</small></div>
+      </div></div>
+      <div class="tl-row"><span class="lbl">Transiciones</span><div class="lane" style="position:relative">
+        <span class="tx" data-at="3" style="left:25%"></span><span class="tx" data-at="7" style="left:58.3%"></span><span class="tx" data-at="10" style="left:83.3%"></span>
+      </div></div>
+      <div class="tl-row"><span class="lbl">Texto</span><div class="lane">
+        <div class="clip a" style="grid-column:1/4">titular · caja</div>
+        <div class="clip" style="grid-column:4/8">3 features</div>
+        <div class="clip" style="grid-column:11/13">easybits.cloud</div>
+      </div></div>
+      <div class="tl-row"><span class="lbl">Ghosty</span><div class="lane"><div class="clip" style="grid-column:8/11">entra · saluda</div></div></div>
+      <div class="tl-row"><span class="lbl">Música</span><div class="lane"><div class="clip" style="grid-column:1/13">cama CC BY · sidechain</div></div></div>
+      <div class="playhead" id="playhead"></div>
+    </div></div>
+  </section>
+</main>
+
+<script>
+  // Reloj maestro: 12 s en bucle. Todo lo demás se cuelga de él.
+  const DURATION = 12, FPS = 30, HEAD_CYCLE = 6; // el titular vive en ciclos de 6 s
+  const $ = id => document.getElementById(id);
+  const clock = $('clock'), tlClock = $('tl-clock'), frameEl = $('frame'), framesBig = $('frames-big');
+  const playhead = $('playhead'), lanes = document.querySelectorAll('.inspector .ph');
+  const kfs = [...document.querySelectorAll('.inspector .kf')].map(k => ({ el: k, at: parseFloat(k.style.left) / 100 }));
+  const scenes = [...document.querySelectorAll('#scenes .scene')], txs = [...document.querySelectorAll('.tx')];
+  const sceneTag = $('scene-tag'), hook = $('scene-hook'), cta = $('scene-cta'), wipe = $('wipe');
+  const vals = { x: $('v-x'), y: $('v-y'), s: $('v-s'), r: $('v-r'), o: $('v-o'), b: $('v-b') };
+  const start = performance.now();
+  let lastCycle = -1;
+  const fmt = t => { const s = Math.floor(t), c = Math.floor((t - s) * 100); return `00:${String(s).padStart(2,'0')}.${String(c).padStart(2,'0')}`; };
+  const backOut = p => { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(p - 1, 3) + c1 * Math.pow(p - 1, 2); };
+
+  function tick(now){
+    const t = ((now - start) / 1000) % DURATION, p = t / DURATION;
+    clock.textContent = tlClock.textContent = fmt(t);
+    frameEl.textContent = framesBig.textContent = Math.floor(t * FPS);
+    playhead.style.setProperty('--p', p);
+
+    // Escena resaltada en la timeline y transiciones que se encienden al pasar
+    scenes.forEach(s => s.classList.toggle('hi', t >= +s.dataset.from && t < +(s.nextElementSibling?.dataset.from ?? DURATION)));
+    txs.forEach(x => x.classList.toggle('lit', Math.abs(t - +x.dataset.at) < 0.6));
+
+    // Inspector: cabeza en cada pista y keyframes encendiéndose al pasar
+    const local = (t % HEAD_CYCLE) / HEAD_CYCLE;
+    lanes.forEach(l => l.style.setProperty('--x', (local * 100) + '%'));
+    kfs.forEach(k => k.el.classList.toggle('lit', local >= k.at));
+    const e = backOut(Math.min(1, local / 0.15));
+    vals.x.textContent = Math.round((1 - e) * -40) + ' px';
+    vals.y.textContent = Math.round(24 * (1 - e)) + ' px';
+    vals.s.textContent = (0.8 + 0.2 * e).toFixed(2);
+    vals.r.textContent = Math.round((1 - e) * -6) + '°';
+    vals.o.textContent = Math.min(1, local / 0.1).toFixed(2);
+    vals.b.textContent = Math.round((1 - e) * 8) + ' px';
+
+    // Cortinilla cada 6 s: cambia Hook ↔ CTA en el preview
+    const cycle = Math.floor(t / HEAD_CYCLE);
+    if (cycle !== lastCycle) {
+      lastCycle = cycle;
+      if (now - start > 500) {
+        wipe.classList.remove('go'); void wipe.offsetWidth; wipe.classList.add('go');
+        setTimeout(() => {
+          const showCta = cycle % 2 === 1;
+          hook.hidden = showCta; cta.hidden = !showCta;
+          sceneTag.textContent = showCta ? 'escena 4 · CTA' : 'escena 1 · Hook';
+          // reiniciar las animaciones de entrada
+          [hook, cta].forEach(l => l.querySelectorAll('.w,.cta-btn,.ghost,.bar').forEach(n => { n.style.animation = 'none'; void n.offsetWidth; n.style.animation = ''; }));
+        }, 450);
+      }
+    }
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+
+  // Log del agente letra por letra + plan que se marca + barra de render con pop
+  const LINES = [
+    'Plan: 4 escenas · Hook · Features · Ghosty · CTA',
+    'Aplicando design system EasyBits… morado · ámbar',
+    'Escribiendo keyframes · 6 pistas · 3 transiciones',
+    'Render: 360 frames · 12 s · listo ✓'
+  ];
+  const log = $('log'), plan = document.querySelectorAll('#plan li'), fill = $('fill'), pct = $('pct'), done = $('done'), exportBtn = $('export');
+  function typeLine(i){
+    if (i >= LINES.length) return renderBar();
+    const row = document.createElement('div'); log.appendChild(row);
+    let j = 0;
+    const iv = setInterval(() => {
+      row.innerHTML = LINES[i].slice(0, ++j) + '<span class="caret"></span>';
+      if (j >= LINES[i].length) { clearInterval(iv); row.innerHTML = LINES[i]; if (i === LINES.length - 1) row.classList.add('ok'); plan[i].classList.add('done'); setTimeout(() => typeLine(i + 1), 400); }
+    }, 24);
+  }
+  function renderBar(){
+    let v = 0;
+    const iv = setInterval(() => {
+      v = Math.min(100, v + 2 + Math.random() * 3);
+      fill.style.width = v + '%'; pct.textContent = Math.round(v) + ' %';
+      if (v >= 100) {
+        clearInterval(iv); done.classList.add('show'); exportBtn.classList.add('ready');
+        setTimeout(reset, 3500);
+      }
+    }, 60);
+  }
+  function reset(){
+    log.innerHTML = ''; plan.forEach(li => li.classList.remove('done'));
+    fill.style.width = '0'; pct.textContent = '0 %'; done.classList.remove('show'); exportBtn.classList.remove('ready');
+    typeLine(0);
+  }
+  typeLine(0);
+</script>
+</body>
+</html>

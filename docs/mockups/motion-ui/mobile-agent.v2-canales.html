@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="es-MX">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EasyBits Motion — el agente edita</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="lib/kinetic-headline.css">
+<style>
+  /* ---- Tokens de marca EasyBits ---- */
+  :root{
+    --bg:#0b0b0f; --surface:#15151c; --surface-2:#1c1c25; --border:#2a2a36;
+    --purple:#7c3aed; --amber:#fbbf24; --text:#f2f2f5; --muted:#8a8a99;
+    --mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+    --sans:Inter,system-ui,-apple-system,"Segoe UI",sans-serif;
+    --back:cubic-bezier(.34,1.56,.64,1);
+    /* paleta que leen las recetas fx (confetti) */
+    --accent:#7c3aed; --accent-2:#fbbf24; --ok:#f2f2f5; --warn:#fbbf24; --danger:#7c3aed;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font-family:var(--sans);font-size:14px;line-height:1.4;overflow:hidden}
+  .app{height:812px;max-height:100vh;display:flex;flex-direction:column;padding:0 16px 16px}
+
+  /* ---- Barra: marca EasyBits + producto ---- */
+  .topbar{display:flex;align-items:center;gap:10px;padding:12px 0;flex:none}
+  .brand{display:flex;align-items:center;gap:8px;flex:none}
+  .brand .eyes{width:34px;height:20px;display:block}
+  .brand .wm{height:11px;display:block}
+  .brand .prod{font-weight:800;font-size:14px;letter-spacing:-.01em}
+  .brand .prod b{color:var(--purple)}
+  .project{flex:1;min-width:0;font-weight:600;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}
+  .chip{flex:none;display:flex;align-items:center;gap:6px;font-family:var(--mono);font-size:11px;padding:4px 8px;border:1px solid var(--border);border-radius:6px;background:var(--surface)}
+  .chip i{width:6px;height:6px;border-radius:50%;background:var(--amber);animation:blink 1s steps(1) infinite}
+  @keyframes blink{50%{opacity:0}}
+
+  /* ---- Escenas (el agente las va encendiendo) ---- */
+  .scenes{flex:none;display:flex;gap:6px;padding-bottom:10px}
+  .scenes span{flex:1;text-align:center;font-family:var(--mono);font-size:10px;padding:5px 0;border:1px solid var(--border);border-radius:6px;color:var(--muted);background:var(--surface);transition:all .3s var(--back)}
+  .scenes span.on{background:var(--purple);border-color:var(--purple);color:#fff;transform:scale(1.06)}
+  .scenes span.done{border-color:var(--amber);color:var(--amber)}
+
+  /* ---- Preview 9:16 ---- */
+  .preview{flex:none;height:392px;display:grid;place-items:center}
+  .stage{height:100%;aspect-ratio:9/16;max-width:100%;background:var(--surface);border:1px solid var(--border);border-radius:16px;position:relative;overflow:hidden;container-type:inline-size}
+  .dots{position:absolute;inset:-40px;background-image:radial-gradient(#3a3a4a 1.6px,transparent 1.7px);background-size:22px 22px;animation:breathe 3s ease-in-out infinite}
+  @keyframes breathe{0%,100%{transform:scale(1);opacity:.7}50%{transform:scale(1.08) translate(6px,6px);opacity:1}}
+  .layer{position:absolute;inset:0}
+  .layer.off{visibility:hidden}
+  .badge{position:absolute;top:18px;left:18px;font-family:var(--mono);font-size:10px;color:var(--amber);border:1px solid var(--amber);border-radius:6px;padding:3px 7px}
+  .headline{position:absolute;left:18px;right:18px;top:30%;margin:0;font-size:clamp(24px,13cqw,40px);font-weight:900;line-height:1.02;letter-spacing:-.03em}
+  .headline .caja{display:inline-block;transition:color .3s;position:relative}
+  .headline .caja.amber{color:var(--amber);animation:bounce-in .9s var(--back)}
+  .headline .caja.amber::after{content:"";position:absolute;inset:-6px -10px;border:3px solid var(--amber);border-radius:12px;animation:ring .9s ease-out forwards}
+  @keyframes ring{from{transform:scale(.7);opacity:1}to{transform:scale(1.5);opacity:0}}
+  @keyframes bounce-in{0%{transform:scale(.6)}60%{transform:scale(1.15)}100%{transform:scale(1)}}
+  .sub{position:absolute;left:18px;width:58%;bottom:12%;color:var(--muted);font-size:12px}
+  .ghosty{position:absolute;right:12px;bottom:6%;width:36cqw;transform:translateY(160%);opacity:0}
+  .ghosty.in{animation:ghost-in 1.1s var(--back) forwards,hover 2.2s ease-in-out 1.2s infinite}
+  @keyframes ghost-in{0%{transform:translateY(160%) scale(1.1,.8);opacity:1}55%{transform:translateY(-8%) scale(.9,1.15)}80%{transform:translateY(3%) scale(1.05,.95)}100%{transform:none;opacity:1}}
+  @keyframes hover{50%{transform:translateY(-8px)}}
+  .cta-big{position:absolute;left:18px;right:18px;top:26%;margin:0;font-size:clamp(24px,13cqw,40px);font-weight:900;line-height:1.05;letter-spacing:-.03em}
+  .cta-big .k-unit:last-child{color:var(--amber)}
+  .cta-btn{position:absolute;left:18px;top:52%;background:var(--amber);color:#0b0b0f;font-weight:800;padding:11px 16px;border-radius:10px;font-size:14px;transform:scale(0)}
+  .cta .cta-btn{animation:pop-in .7s var(--back) .5s forwards,bounce 1.6s var(--back) 1.4s infinite}
+  @keyframes bounce{0%,100%{transform:none}50%{transform:translateY(-6px) scale(1.04)}}
+  .url{position:absolute;left:18px;top:66%;font-family:var(--mono);font-size:13px;min-height:1.3em}
+  .logo-eb{position:absolute;right:18px;bottom:14px;height:9px;opacity:.7}
+  /* cortinilla de rebanadas diagonales */
+  .wipe{position:absolute;inset:0;pointer-events:none;display:flex;flex-direction:column}
+  .wipe i{flex:1;background:var(--purple);transform:translateX(-120%) skewX(-14deg)}
+  .wipe i:nth-child(odd){background:var(--amber)}
+  .wipe.go i{animation:slice .9s var(--back) forwards}
+  .wipe.go i:nth-child(2){animation-delay:.05s}.wipe.go i:nth-child(3){animation-delay:.1s}
+  .wipe.go i:nth-child(4){animation-delay:.15s}.wipe.go i:nth-child(5){animation-delay:.2s}
+  .wipe.go i:nth-child(6){animation-delay:.25s}.wipe.go i:nth-child(7){animation-delay:.3s}
+  @keyframes slice{0%{transform:translateX(-120%) skewX(-14deg)}45%,55%{transform:translateX(0) skewX(-14deg)}100%{transform:translateX(120%) skewX(-14deg)}}
+  /* render */
+  .render{position:absolute;left:18px;right:18px;bottom:8%;font-family:var(--mono);font-size:11px;color:var(--muted);display:none;flex-direction:column;gap:6px}
+  .render.on{display:flex}
+  .render .meta{display:flex;justify-content:space-between}
+  .render .bar{height:8px;background:var(--bg);border:1px solid var(--border);border-radius:4px;overflow:hidden}
+  .render .fill{height:100%;width:0;background:var(--purple);transition:width 2s linear}
+  .render .done{color:#0b0b0f;background:var(--amber);padding:8px 10px;border-radius:6px;font-weight:700;text-align:center;transform:scale(0)}
+  .render .done.show{animation:pop-in .6s var(--back) forwards}
+  @keyframes pop-in{to{transform:scale(1)}}
+  .fx{position:absolute;inset:0;pointer-events:none}
+
+  /* ---- Chat ---- */
+  .chat{flex:1;min-height:0;display:flex;flex-direction:column;gap:8px;padding-top:12px}
+  .messages{flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column;gap:8px;justify-content:flex-end}
+  .msg{max-width:86%;padding:8px 11px;border-radius:12px;font-size:13px;line-height:1.35;animation:enter .6s var(--back)}
+  @keyframes enter{from{opacity:0;transform:translateY(24px) scale(.9)}}
+  .msg.user{align-self:flex-end;background:var(--surface);border:1px solid var(--border);border-bottom-right-radius:4px;position:relative}
+  .msg.user .via{display:block;font-family:var(--mono);font-size:9px;color:var(--muted);margin-bottom:3px;letter-spacing:.04em}
+  .msg.user .via b{color:var(--amber);font-weight:600}
+  .channels{flex:none;display:flex;gap:6px;align-items:center;font-family:var(--mono);font-size:10px;color:var(--muted);padding-bottom:8px}
+  .channels span{border:1px solid var(--border);border-radius:6px;padding:3px 7px;background:var(--surface);transition:all .3s var(--back)}
+  .channels span.on{border-color:var(--amber);color:var(--amber);transform:scale(1.08)}
+  .msg.agent{align-self:flex-start;background:var(--surface-2);border:1px solid var(--border);border-bottom-left-radius:4px;display:flex;gap:8px;align-items:flex-start;font-family:var(--mono);font-size:12px}
+  .msg.agent::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--purple);flex:none;margin-top:5px}
+  .typing{display:flex;gap:4px;padding:10px 12px}
+  .typing b{width:6px;height:6px;border-radius:50%;background:var(--muted);animation:dot 1s ease-in-out infinite}
+  .typing b:nth-child(2){animation-delay:.15s}.typing b:nth-child(3){animation-delay:.3s}
+  @keyframes dot{50%{transform:translateY(-4px);opacity:.5}}
+  .input{flex:none;display:flex;align-items:center;gap:8px;border:1px solid var(--border);background:var(--surface);border-radius:12px;padding:10px 12px;min-height:44px}
+  .input span{flex:1;color:var(--text);font-size:13px;min-height:1.3em}
+  .input span:empty::before{content:"Dile al agente qué cambiar…";color:var(--muted)}
+  .input .caret{width:2px;height:14px;background:var(--purple);animation:blink 1s steps(1) infinite}
+  .input .send{flex:none;width:30px;height:30px;border-radius:8px;background:var(--purple);color:#fff;display:grid;place-items:center;font-size:12px}
+  .send.hit{animation:pop-in .4s var(--back)}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <div class="brand">
+      <img class="eyes" src="lib/eyes-eb.svg" alt="EasyBits">
+      <span class="prod">Motion <b>Graphics</b></span>
+    </div>
+    <span class="project">Lanzamiento Sandbox v2</span>
+    <span class="chip"><i></i>Claude Code</span>
+  </header>
+
+  <div class="channels" id="channels">Te escriben desde <span>WhatsApp</span><span>Telegram</span><span>Web</span></div>
+  <div class="scenes" id="scenes"><span>Hook</span><span>Palabra</span><span>Ghosty</span><span>CTA</span></div>
+
+  <section class="preview">
+    <div class="stage">
+      <div class="dots"></div>
+      <div class="layer" id="hook">
+        <span class="badge">SANDBOX v2</span>
+        <h1 class="headline"><span id="kh" data-kinetic data-kinetic-anim="pop">Tu agente, en su propia</span> <span class="caja" id="caja">caja</span></h1>
+        <p class="sub">Aislado, con su propio disco y sin tocar tu máquina.</p>
+        <img class="ghosty" id="ghosty" src="ghosty.png" alt="Ghosty">
+      </div>
+      <div class="layer off" id="cta">
+        <span class="badge">CTA</span>
+        <h1 class="cta-big"><span id="kc" data-kinetic data-kinetic-anim="pop">Pruébalo hoy, gratis.</span></h1>
+        <span class="cta-btn">Empieza gratis</span>
+        <span class="url" id="url"></span>
+        <div class="render" id="render">
+          <div class="meta"><span>render · h264</span><span><b id="frames">0</b> / 360</span></div>
+          <div class="bar"><div class="fill" id="fill"></div></div>
+          <div class="done" id="done">MP4 listo · 12 s</div>
+        </div>
+      </div>
+      <div class="wipe" id="wipe"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+      <div class="fx" id="fx"></div>
+      <img class="logo-eb" src="lib/wordmark-eb.svg" alt="EasyBits">
+    </div>
+  </section>
+
+  <section class="chat">
+    <div class="messages" id="messages"></div>
+    <div class="input"><span id="draft"></span><i class="caret"></i><span class="send" id="send">➤</span></div>
+  </section>
+</div>
+
+<script src="lib/kinetic-headline.js"></script>
+<script src="lib/text-scramble.js"></script>
+<script src="lib/_util.js"></script>
+<script src="lib/confetti-cannon.js"></script>
+<script>
+  // Guion de 24 s en bucle: cada mensaje del usuario cambia el preview un segundo después.
+  // Recetas de motion-anything: kinetic-headline (titulares), text-scramble (respuestas del agente), confetti (export).
+  const LOOP = 24000;
+  const $ = id => document.getElementById(id);
+  const messages = $('messages'), draft = $('draft'), send = $('send');
+  const scenes = [...$('scenes').children];
+  const SCRIPT = [
+    { at: 2500,  scene: 1, via: 'WhatsApp', user: "Pon 'caja' en ámbar y que rebote", agent: "Listo: caja → #fbbf24, back.out 0.9 s", effect: () => $('caja').classList.add('amber') },
+    { at: 8000,  scene: 2, via: 'Telegram', user: "Mete a Ghosty entrando desde abajo", agent: "Ghosty entra con squash & stretch", effect: () => $('ghosty').classList.add('in') },
+    { at: 13500, scene: 3, via: 'Web', user: "Cierra con CTA a easybits.cloud", agent: "Escena 4: CTA · 12 s totales", effect: () => wipeTo('cta') },
+    { at: 19000, scene: 3, via: 'WhatsApp', user: "Exporta", agent: "Render 1080×1920 · 360 frames", effect: () => renderMp4() },
+  ];
+  const timers = [];
+  const later = (ms, fn) => timers.push(setTimeout(fn, ms));
+  let confetti = null;
+
+  function typeDraft(text, cb){
+    let i = 0; draft.textContent = '';
+    const iv = setInterval(() => { draft.textContent = text.slice(0, ++i); if (i >= text.length) { clearInterval(iv); cb(); } }, 40);
+  }
+  function bubble(cls, text, via){ const m = document.createElement('div'); m.className = 'msg ' + cls; if (via) { const v = document.createElement('span'); v.className = 'via'; v.innerHTML = 'vía <b>' + via + '</b>'; m.appendChild(v); } m.appendChild(document.createTextNode(text)); messages.appendChild(m); return m; }
+  const channels = [...$('channels').querySelectorAll('span')];
+  function setChannel(name){ channels.forEach(c => c.classList.toggle('on', c.textContent === name)); }
+  function agentSays(text){ const m = bubble('agent', ''); m.textContent = ''; scrambleTo(m, text); }
+  function setScene(i){ scenes.forEach((s, j) => { s.classList.toggle('on', j === i); s.classList.toggle('done', j < i); }); }
+  function kinetic(id){ const el = $(id); el.classList.remove('is-in'); void el.offsetWidth; requestAnimationFrame(() => requestAnimationFrame(() => el.classList.add('is-in'))); }
+  function step(s){
+    later(s.at, () => typeDraft(s.user, () => {
+      send.classList.add('hit'); later(150, () => send.classList.remove('hit'));
+      later(200, () => { bubble('user', s.user, s.via); setChannel(s.via); draft.textContent = ''; });
+      const ty = bubble('typing', ''); ty.innerHTML = '<b></b><b></b><b></b>'; ty.classList.add('typing');
+      later(1000, () => { ty.remove(); agentSays(s.agent); setScene(s.scene); s.effect(); });
+    }));
+  }
+  function wipeTo(id){
+    const w = $('wipe'); w.classList.remove('go'); void w.offsetWidth; w.classList.add('go');
+    later(450, () => { $('hook').classList.add('off'); $(id).classList.remove('off'); kinetic('kc'); scrambleTo($('url'), 'easybits.cloud'); });
+  }
+  function renderMp4(){
+    const r = $('render'); r.classList.add('on');
+    later(50, () => $('fill').style.width = '100%');
+    // contador de frames al ritmo de la barra
+    const t0 = performance.now();
+    (function tick(){ const p = Math.min(1, (performance.now() - t0) / 2000); $('frames').textContent = Math.round(p * 360); if (p < 1) requestAnimationFrame(tick); })();
+    later(2100, () => { $('done').classList.add('show'); scenes.forEach(s => { s.classList.remove('on'); s.classList.add('done'); }); confetti = HPX['confetti-cannon']($('fx')); });
+    later(4400, () => { if (confetti) { confetti.stop(); confetti = null; } });
+  }
+  function reset(){
+    timers.forEach(clearTimeout); timers.length = 0;
+    if (confetti) { confetti.stop(); confetti = null; }
+    messages.innerHTML = ''; draft.textContent = '';
+    $('caja').classList.remove('amber'); $('ghosty').classList.remove('in');
+    $('hook').classList.remove('off'); $('cta').classList.add('off');
+    $('render').classList.remove('on'); $('fill').style.width = '0'; $('done').classList.remove('show'); $('frames').textContent = '0'; $('url').textContent = '';
+    setScene(0); setChannel('');
+  }
+  function run(){
+    reset();
+    kinetic('kh');                              // el titular entra por palabras con rebote
+    later(600, () => agentSays('Escena 1 lista · dime qué cambiar'));
+    SCRIPT.forEach(step);
+    // cierre: la cortinilla tapa el corte y del otro lado ya está la escena 1 completa (nunca un frame vacío)
+    later(LOOP - 900, () => { const w = $('wipe'); w.classList.remove('go'); void w.offsetWidth; w.classList.add('go'); });
+    later(LOOP - 450, () => { run(); });
+  }
+  window.startLoop = run;
+  if (!location.search.includes('manual')) run();
+</script>
+</body>
+</html>
