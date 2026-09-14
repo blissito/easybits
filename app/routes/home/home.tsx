@@ -12,6 +12,7 @@ import type { Route } from "./+types/home";
 import type { User } from "@prisma/client";
 import getBasicMetaTags from "~/utils/getBasicMetaTags";
 import { Steps } from "./Steps";
+import { VideoShort } from "./VideoShort";
 import { getUserOrNull } from "~/.server/getters";
 import { PLANS } from "~/lib/plans";
 
@@ -227,6 +228,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
           </a>
         </p>
       </Bento>
+      <VideoShort />
       <Bento
         title="Todo en un solo MCP, listo para tu agente"
         image="https://i.imgur.com/R8qvNsB.png"
