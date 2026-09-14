@@ -28,7 +28,7 @@ place() { # archivo, segundo, ganancia dB
   local ms; ms=$(python3 -c "print(max(0,int($2*1000)))")
   inputs+=(-i "$1"); filter+="[${idx}:a]adelay=${ms}|${ms},volume=${3}dB,apad[s${idx}];"; mixins+="[s${idx}]"; idx=$((idx+1))
 }
-for t in "${CUTS[@]}";   do place "$SOPLO"  "$(python3 -c "print($t-0.34)")" "$G_SOPLO"; place "assets/sfx/thud.mp3" "$(python3 -c "print($t+0.28)")" -5; done
+for t in "${CUTS[@]}";   do place "$SOPLO"  "$(python3 -c "print($t-0.34)")" "$G_SOPLO"; done
 for t in "${SWAPS[@]}";  do place "$CUERPO" "$t" "$G_CUERPO"; done
 for t in "${PULSES[@]}"; do place "$SUAVE"  "$t" "$G_SUAVE"; done
 for t in "${HITS[@]}";   do place "$THUD"   "$(python3 -c "print($t-0.05)")" "$G_THUD"; done
