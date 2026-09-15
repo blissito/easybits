@@ -246,7 +246,7 @@
     <div class="step"><b>4</b> Descargar</div>
     <div class="sheetwrap"><canvas id="preview"></canvas></div>
     <div class="pager">
-      <span id="pageInfo">Sin imágenes todavía</span><span id="legend" hidden style="font-size:.78rem">· <span style="color:#b8452a">- - -</span> línea de corte · <span style="opacity:.6">▨</span> zona del sensor (sólo en pantalla)</span>
+      <span id="pageInfo">Sin imágenes todavía</span><span id="legend" hidden style="font-size:.78rem">· <span style="color:#b8452a">- - -</span> línea de corte · <span style="opacity:.6">▨</span> zona que lee el sensor (sólo en pantalla)</span>
       <span class="nav"><button id="prevPage" disabled>‹</button><button id="nextPage" disabled>›</button></span>
     </div>
     <div class="summary" id="summary"></div>
@@ -291,7 +291,7 @@
 
 <a class="ad" id="ad" target="_blank" rel="noopener"></a>
 
-<script src="engine.js?v=496437"></script>
+<script src="engine.js?v=496594"></script>
 <script>
 // ---------- Catálogo de tamaños (cm) ----------
 const SIZES = [
@@ -589,25 +589,19 @@ function drawPreview() {
 // Sobre la previsualización (nunca en los archivos): cuadrícula de 1 cm como el tapete de
 // Studio y las esquinas rayadas donde el sensor lee las marcas.
 function drawOverlay(x, sheet, k) {
+  const marks = currentMode().marks; if (!marks) return;
   x.save();
-  x.strokeStyle = 'rgba(80,120,200,.18)'; x.lineWidth = 1;
-  for (let mm = 10; mm < sheet.w; mm += 10) { x.beginPath(); x.moveTo(Math.round(mm * k) + .5, 0); x.lineTo(Math.round(mm * k) + .5, sheet.h * k); x.stroke(); }
-  for (let mm = 10; mm < sheet.h; mm += 10) { x.beginPath(); x.moveTo(0, Math.round(mm * k) + .5); x.lineTo(sheet.w * k, Math.round(mm * k) + .5); x.stroke(); }
-  const marks = currentMode().marks;
-  if (marks) {
-    const z = (SC.REG.inset + SC.REG.len + SC.REG.clearance) * k;
-    const corners = [[0, 0], [sheet.w * k - z, 0], [0, sheet.h * k - z]]; if (marks === 4) corners.push([sheet.w * k - z, sheet.h * k - z]);
-    x.strokeStyle = 'rgba(0,0,0,.22)'; x.fillStyle = 'rgba(0,0,0,.04)';
-    for (const [cx, cy] of corners) {
-      x.fillRect(cx, cy, z, z);
-      x.save(); x.beginPath(); x.rect(cx, cy, z, z); x.clip();
-      for (let d = -z; d < z * 2; d += 6) { x.beginPath(); x.moveTo(cx + d, cy); x.lineTo(cx + d + z, cy + z); x.stroke(); }
-      x.restore();
-    }
+  const z = (SC.REG.inset + SC.REG.len + SC.REG.clearance) * k, W = sheet.w * k, H = sheet.h * k;
+  const zones = [[0, 0, W, z], [0, 0, z, H]]; if (marks === 4) zones.push([W - z, H - z, z, z]);
+  x.strokeStyle = 'rgba(0,0,0,.2)'; x.fillStyle = 'rgba(0,0,0,.035)'; x.lineWidth = 1;
+  for (const [zx, zy, zw, zh] of zones) {
+    x.fillRect(zx, zy, zw, zh);
+    x.save(); x.beginPath(); x.rect(zx, zy, zw, zh); x.clip();
+    const n = zw + zh; for (let d = -zh; d < n; d += 7) { x.beginPath(); x.moveTo(zx + d, zy); x.lineTo(zx + d + zh, zy + zh); x.stroke(); }
+    x.restore();
   }
   x.restore();
-}
-function updateSummary() {
+}function updateSummary() {
   const total = items.reduce((a, it) => a + it.qty, 0), placed = total - missing;
   $('pageInfo').textContent = pages.length ? `Hoja ${pageIdx + 1} de ${pages.length}` : (items.length ? 'No cabe ninguna pieza en esta hoja' : 'Sin imágenes todavía');
   $('prevPage').disabled = pageIdx <= 0; $('nextPage').disabled = pageIdx >= pages.length - 1;

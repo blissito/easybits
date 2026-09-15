@@ -35,16 +35,13 @@
 
   const BIG_MARGIN = 6.35; // 0.25" en hojas grandes
 
-  // Zonas (mm) que ninguna pieza puede tocar: Studio raya un CUADRO en cada esquina con
-  // marca (inset + brazo + holgura), no bandas completas. Con 4 marcas, las cuatro esquinas.
+  // Zonas (mm) que ninguna pieza puede tocar. Studio raya una BANDA a lo largo de todo
+  // el borde superior y otra a lo largo del izquierdo (donde el sensor busca las marcas)
+  // y, con 4 marcas (Cameo 5 Alpha), también la esquina inferior derecha.
   function markZones(sheet, marks) {
     if (!marks) return [];
     const s = REG.inset + REG.len + REG.clearance;
-    const z = [
-      { x: 0, y: 0, w: s, h: s },                         // arriba-izq
-      { x: sheet.w - s, y: 0, w: s, h: s },               // arriba-der
-      { x: 0, y: sheet.h - s, w: s, h: s },               // abajo-izq
-    ];
+    const z = [{ x: 0, y: 0, w: sheet.w, h: s }, { x: 0, y: 0, w: s, h: sheet.h }];
     if (marks === 4) z.push({ x: sheet.w - s, y: sheet.h - s, w: s, h: s });
     return z;
   }
@@ -58,9 +55,11 @@
     let x = 0, y = 0, w = sheet.w, h = sheet.h;
     if (m.area) { w = Math.min(sheet.w, m.area.w); h = Math.min(sheet.h, m.area.h); x = (sheet.w - w) / 2; y = (sheet.h - h) / 2; }
     else if (sheet.big) { x = y = BIG_MARGIN; w -= 2 * BIG_MARGIN; h -= 2 * BIG_MARGIN; }
-    // Con marcas no se recorta el área: se excluyen sólo las ESQUINAS (ver freeRects),
-    // así el espacio entre marcas a lo largo de los bordes sí se aprovecha.
-    return { x, y, w, h, marks: m.marks, corner: m.marks ? REG.inset + REG.len + REG.clearance : 0 };
+    // Con marcas: fuera las bandas superior e izquierda; la esquina inferior derecha
+    // (sólo 4 marcas) se respeta por fila en layout().
+    const corner = m.marks ? REG.inset + REG.len + REG.clearance : 0;
+    if (m.marks) { const nx = Math.max(x, corner), ny = Math.max(y, corner); w -= nx - x; h -= ny - y; x = nx; y = ny; }
+    return { x, y, w, h, marks: m.marks, corner };
   }
   // Empaque por filas (estantes) con first-fit: ordena por alto, llena filas de
   // izquierda a derecha y prueba las filas anteriores antes de abrir otra. Da hojas
@@ -69,12 +68,13 @@
   function layout(items, sheetKey, mode, gapOverride) { return packPages(items, sheetKey, mode, gapOverride, 0, true); }
   function packPages(items, sheetKey, mode, gapOverride, yOff, firstPass) {
     const sheet = SHEETS[sheetKey], gap = gapOverride != null ? gapOverride : CUT_MODES[mode].gap, area = usableRect(sheet, mode);
-    const z = area.marks ? Math.max(0, area.corner - area.x) : 0; // lo que invade la esquina dentro del área
+    // Con 4 marcas la esquina inferior derecha (sheet.w-z .. sheet.w) queda prohibida.
+    const z = area.marks === 4 ? area.corner : 0;
+    const xRight = area.x + area.w - (sheet.w - (z || 0)); // cuánto invade esa esquina el área por la derecha
     // yOff = dónde quedará realmente la fila tras centrar el bloque (segunda pasada).
     const xRange = (y, h) => {
       let x0 = 0, x1 = area.w; y += yOff;
-      if (z && y < z) { x0 = z; x1 = area.w - z; }                                   // toca esquinas superiores
-      if (z && y + h > area.h - z) { x0 = Math.max(x0, z); if (area.marks === 4) x1 = Math.min(x1, area.w - z); } // inferiores
+      if (z && area.y + y + h > sheet.h - z) x1 = area.w - Math.max(0, xRight); // toca la esquina inferior derecha
       return [x0, x1];
     };
     const pieces = [];
@@ -84,7 +84,7 @@
     const newPage = () => { const p = { sheet, sheetKey, mode, cells: [], shelves: [] }; pages.push(p); return p; };
     const put = (p, sh, it) => { p.cells.push({ x: sh.x, y: sh.y, w: it.w, h: it.h, item: it, shape: it.shape || 'rect', radius: it.radius || 0, path: it.path }); sh.x += it.w + gap; };
     for (const it of pieces) {
-      if (it.w > area.w - 2 * z + 1e-6 || it.h > area.h + 1e-6) { missing++; continue; }
+      if (it.w > area.w + 1e-6 || it.h > area.h + 1e-6) { missing++; continue; }
       let placed = false;
       for (const p of pages) {
         let sh = p.shelves.find(sh => it.h <= sh.h + 1e-6 && sh.x + it.w <= sh.x1 + 1e-6);
