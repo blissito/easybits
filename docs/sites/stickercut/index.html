@@ -191,8 +191,8 @@
       <select id="sheet"></select>
       <label>¿Con qué vas a cortar?</label>
       <div class="modes" id="modes">
-        <label class="mode on"><input type="radio" name="mode" value="scissors" checked><span>Tijeras / guillotina<small>guías tenues para cortar a mano</small></span></label>
         <label class="mode"><input type="radio" name="mode" value="silhouette4"><span>Cameo 5 Alpha<small>Silhouette · 4 marcas (también Pro MK II)</small></span></label>
+        <label class="mode"><input type="radio" name="mode" value="scissors"><span>Tijeras / guillotina<small>guías tenues para cortar a mano</small></span></label>
         <label class="mode"><input type="radio" name="mode" value="silhouette3"><span>Otras Silhouette<small>3 marcas · Cameo 1–4, Portrait, Curio</small></span></label>
         <label class="mode"><input type="radio" name="mode" value="cricut"><span>Cricut<small>Maker, Explore, Joy Xtra</small></span></label>
       </div>
@@ -280,8 +280,9 @@ sizeEl.value = localStorage.getItem('sc.size2') || 'fit'; // default: la pieza t
 // ---------- Estado ----------
 let items = [];       // { id, img, name, qty, sizeKey ('global' | k), zoom, cx, cy }
 let pages = [], missing = 0, pageIdx = 0;
-let mode = localStorage.getItem('sc.mode') || 'scissors';
+let mode = localStorage.getItem('sc.mode2') || 'silhouette4'; // default: Cameo 5 Alpha
 document.querySelector(`input[name=mode][value=${mode}]`).checked = true;
+document.querySelectorAll('.mode').forEach(l => l.classList.toggle('on', l.querySelector('input').checked));
 
 const fitWidth = () => Math.max(5, Math.round((Number(cwEl.value) || 5) * 10));
 // 'fit': la pieza toma la proporción de la imagen (logos, stickers ya recortados) y
@@ -521,7 +522,7 @@ function updateSummary() {
     : 'Las piezas van pegadas en bloque para cortar con pocos tijeretazos; las guías se imprimen tenues.';
 }
 function update() {
-  localStorage.setItem('sc.sheet', sheetEl.value); localStorage.setItem('sc.size2', sizeEl.value); localStorage.setItem('sc.mode', mode);
+  localStorage.setItem('sc.sheet', sheetEl.value); localStorage.setItem('sc.size2', sizeEl.value); localStorage.setItem('sc.mode2', mode);
   const fitAny = sizeEl.value === 'fit' || items.some(it => it.sizeKey === 'fit');
   $('customRow').hidden = !(sizeEl.value === 'custom' || fitAny); $('chWrap').hidden = sizeEl.value !== 'custom' && fitAny; $('radiusRow').hidden = shapeEl.value !== 'rounded'; $('borderRow').hidden = shapeEl.value !== 'contour';
   for (const o of sheetEl.options) o.hidden = !sheetAllowed(o.value);
