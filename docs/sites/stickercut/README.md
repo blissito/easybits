@@ -21,6 +21,7 @@ para plóter (Silhouette 3/4 marcas, Cricut). Plan: `~/.claude/plans/zippy-crunc
 - `index.html` — la app (Fase 1).
 
 ## Publicar
+⚠️ `engine.js` se sirve con `cache-control: immutable` (1 año): cada vez que cambie, subir el `?v=` de `<script src="engine.js?v=…">` en `index.html` y `calib.html` y republicar los tres.
 Primera vez de cada archivo: MCP `deploy_website_file` (crea el File). Después:
 `npx tsx scripts/publish-site-html.ts rayo-creciente docs/sites/stickercut/<archivo> <archivo>`
 (repunta el File con llave nueva; el CDN cachea por URL).

@@ -253,7 +253,7 @@
 
 <a class="ad" id="ad" target="_blank" rel="noopener"></a>
 
-<script src="engine.js"></script>
+<script src="engine.js?v=492502"></script>
 <script>
 // ---------- Catálogo de tamaños (cm) ----------
 const SIZES = [
@@ -275,7 +275,8 @@ const sizeEl = $('size'), shapeEl = $('shape'), borderEl = $('border'), sheetEl 
 for (const s of SIZES) sizeEl.add(new Option(s.label, s.k));
 for (const [k, s] of Object.entries(SC.SHEETS)) sheetEl.add(new Option(s.label, k));
 sheetEl.value = localStorage.getItem('sc.sheet') || 'carta';
-sizeEl.value = localStorage.getItem('sc.size2') || 'fit'; // default: la pieza toma la proporción de la imagen
+sizeEl.value = localStorage.getItem('sc.size2') || 'fit';
+shapeEl.value = localStorage.getItem('sc.shape') || 'contour'; // default: silueta // default: la pieza toma la proporción de la imagen
 
 // ---------- Estado ----------
 let items = [];       // { id, img, name, qty, sizeKey ('global' | k), zoom, cx, cy }
@@ -522,7 +523,7 @@ function updateSummary() {
     : 'Las piezas van pegadas en bloque para cortar con pocos tijeretazos; las guías se imprimen tenues.';
 }
 function update() {
-  localStorage.setItem('sc.sheet', sheetEl.value); localStorage.setItem('sc.size2', sizeEl.value); localStorage.setItem('sc.mode2', mode);
+  localStorage.setItem('sc.sheet', sheetEl.value); localStorage.setItem('sc.size2', sizeEl.value); localStorage.setItem('sc.shape', shapeEl.value); localStorage.setItem('sc.mode2', mode);
   const fitAny = sizeEl.value === 'fit' || items.some(it => it.sizeKey === 'fit');
   $('customRow').hidden = !(sizeEl.value === 'custom' || fitAny); $('chWrap').hidden = sizeEl.value !== 'custom' && fitAny; $('radiusRow').hidden = shapeEl.value !== 'rounded'; $('borderRow').hidden = shapeEl.value !== 'contour';
   for (const o of sheetEl.options) o.hidden = !sheetAllowed(o.value);
