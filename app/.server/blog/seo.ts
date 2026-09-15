@@ -277,6 +277,9 @@ export class BlogSEOService {
       // Documentación en texto plano para agentes y LLMs.
       { path: "/llms.txt", priority: "0.6", changefreq: "weekly" },
       { path: "/calculadora", priority: "0.9", changefreq: "monthly" },
+      // Herramientas públicas servidas como sitio estático (/s/<slug>/)
+      { path: "/s/rayo-creciente/", priority: "0.8", changefreq: "monthly" },
+      { path: "/s/colina-fulgurante/", priority: "0.7", changefreq: "monthly" },
       { path: "/cuanto-cuesta-mi-agente", priority: "0.8", changefreq: "monthly" },
       { path: "/mcp", priority: "0.7", changefreq: "monthly" },
       { path: "/login", priority: "0.5", changefreq: "yearly" },
