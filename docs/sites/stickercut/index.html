@@ -173,6 +173,7 @@
             <option value="rect">Rectángulo</option>
             <option value="rounded">Esquinas redondeadas</option>
             <option value="circle">Círculo</option>
+            <option value="contour">Silueta (contorno de la imagen)</option>
           </select>
         </div>
       </div>
@@ -180,6 +181,7 @@
         <div><label>Ancho (cm)</label><input type="number" id="cw" min="0.5" max="30" step="0.1" value="5"></div>
         <div id="chWrap"><label>Alto (cm)</label><input type="number" id="ch" min="0.5" max="30" step="0.1" value="5"></div>
       </div>
+      <div id="borderRow" hidden><label>Borde blanco alrededor (mm)</label><input type="number" id="border" min="0" max="10" step="0.5" value="2"><p class="hint">Sigue el contorno de la imagen. Necesita PNG con fondo transparente; si no lo tiene, esa pieza sale en rectángulo.</p></div>
       <div id="radiusRow" hidden><label>Radio de esquina (mm)</label><input type="number" id="radius" min="0.5" max="30" step="0.5" value="3"></div>
     </section>
 
@@ -269,7 +271,7 @@ const SIZES = [
   { k: 'custom', label: 'Personalizado…' },
 ];
 const $ = id => document.getElementById(id);
-const sizeEl = $('size'), shapeEl = $('shape'), sheetEl = $('sheet'), gapEl = $('gap'), guidesEl = $('guides'), radiusEl = $('radius'), cwEl = $('cw'), chEl = $('ch');
+const sizeEl = $('size'), shapeEl = $('shape'), borderEl = $('border'), sheetEl = $('sheet'), gapEl = $('gap'), guidesEl = $('guides'), radiusEl = $('radius'), cwEl = $('cw'), chEl = $('ch');
 for (const s of SIZES) sizeEl.add(new Option(s.label, s.k));
 for (const [k, s] of Object.entries(SC.SHEETS)) sheetEl.add(new Option(s.label, k));
 sheetEl.value = localStorage.getItem('sc.sheet') || 'carta';
@@ -285,6 +287,17 @@ const fitWidth = () => Math.max(5, Math.round((Number(cwEl.value) || 5) * 10));
 // 'fit': la pieza toma la proporción de la imagen (logos, stickers ya recortados) y
 // sólo se fija el ancho; así no se recorta nada. Cada imagen forma su propio grupo.
 function sizeFor(key, it) {
+  if (it && shapeEl.value === 'contour') {
+    const base = key === 'fit' || key === 'custom' ? fitWidth() : (SIZES.find(s => s.k === key) || { w: 50 }).w;
+    const ct = contourOf(it, base);
+    if (ct) {
+      const ar = ct.bbox.w / ct.bbox.h;
+      if (key === 'fit') return { w: base, h: Math.max(5, Math.round(base / ar)) };
+      const fixed = sizeFor(key, null); // cabe dentro del tamaño fijo, conservando proporción
+      const sc = Math.min(fixed.w / ct.bbox.w, fixed.h / ct.bbox.h);
+      return { w: Math.max(5, Math.round(ct.bbox.w * sc)), h: Math.max(5, Math.round(ct.bbox.h * sc)) };
+    }
+  }
   if (key === 'fit' && it) return { w: fitWidth(), h: Math.max(5, Math.round(fitWidth() * it.img.height / it.img.width)) };
   if (key === 'custom' || key === 'fit') return { w: fitWidth(), h: Math.max(5, Number(chEl.value) * 10 || 50) };
   const s = SIZES.find(s => s.k === key); return s ? { w: s.w, h: s.h } : { w: 50, h: 50 };
@@ -341,6 +354,16 @@ async function addFiles(list) {
   }
 }
 
+// ---------- Silueta ----------
+// El borde se define en mm; se convierte a proporción de la imagen según el ancho
+// final de la pieza para que el trazado sea independiente de la resolución.
+function borderMm() { return Math.max(0, Number(borderEl.value) || 0); }
+function contourOf(it, targetWmm) {
+  const ratio = borderMm() / Math.max(1, targetWmm); // borde / ancho de la pieza
+  const key = ratio.toFixed(4);
+  if (it._ck !== key) { it._ck = key; it._contour = SC.traceContour(it.img, ratio); }
+  return it._contour;
+}
 // ---------- Encuadre: cover con zoom y centro normalizado (independiente del tamaño del canvas) ----------
 function coverScale(it, w, h) { return Math.max(w / it.img.width, h / it.img.height); }
 function containZoom(it, w, h) { return Math.min(w / it.img.width, h / it.img.height) / coverScale(it, w, h); }
@@ -356,7 +379,17 @@ function drawItem(it, ctx, x, y, w, h) {
   ctx.drawImage(it.img, dx, dy, iw, ih);
   return { dx, dy, iw, ih };
 }
-function drawTile(cell, ctx, x, y, w, h) { drawItem(cell.item, ctx, x, y, w, h); }
+function drawTile(cell, ctx, x, y, w, h) {
+  const it = cell.item;
+  if (cell.shape === 'contour' && cell.path) {
+    // El clip ya es la silueta con borde; el blanco de fondo ES el borde impreso.
+    ctx.fillStyle = '#fff'; ctx.fillRect(x, y, w, h);
+    const ct = it._contour, sc = w / ct.bbox.w;
+    ctx.drawImage(it.img, x - ct.bbox.x * sc, y - ct.bbox.y * sc, it.img.width * sc, it.img.height * sc);
+    return;
+  }
+  drawItem(it, ctx, x, y, w, h);
+}
 
 // Con "sólo una hoja", la cantidad sube hasta donde cabe y ahí se detiene.
 function fitsOneSheet() { compute(); return pages.length <= 1 && !missing; }
@@ -385,7 +418,9 @@ function renderItems() {
     const th = el.querySelector('.thumb'), tx = th.getContext('2d');
     // Miniatura con el mismo encuadre que saldrá impreso (proporción de la pieza).
     const ar = sz.w / sz.h, tw = ar >= 1 ? 112 : Math.round(112 * ar), thh = ar >= 1 ? Math.round(112 / ar) : 112;
-    th.width = tw; th.height = thh; drawItem(it, tx, 0, 0, tw, thh);
+    th.width = tw; th.height = thh;
+    if (shapeEl.value === 'contour' && it._contour) { tx.save(); SC.shapePath(tx, 0, 0, tw, thh, 'contour', 0, it._contour.path); tx.clip(); drawTile({ item: it, shape: 'contour', path: it._contour.path }, tx, 0, 0, tw, thh); tx.restore(); }
+    else drawItem(it, tx, 0, 0, tw, thh);
     el.querySelector('.tbox').addEventListener('click', () => openCrop(it));
     el.querySelector('.isize').addEventListener('change', e => { it.sizeKey = e.target.value; update(); });
     const q = el.querySelector('.qty input');
@@ -443,9 +478,13 @@ function sheetAllowed(k) {
 }
 function compute() {
   const shape = shapeEl.value, radius = radiusMm();
-  const list = items.map(it => { const sz = sizeOf(it); return { ...it, w: sz.w, h: sz.h, shape, radius, item: it }; });
+  const list = items.map(it => {
+    const sz = sizeOf(it); let sh = shape, path = null;
+    if (shape === 'contour') { const ct = contourOf(it, sz.w); if (ct) path = ct.path; else sh = 'rect'; }
+    return { ...it, w: sz.w, h: sz.h, shape: sh, radius, path, item: it };
+  });
   // layout() usa {id,w,h,qty,shape,radius}; la celda referencia a `item` → aquí el objeto es el propio wrapper.
-  const r = SC.layout(list.map(o => ({ id: o.id, w: o.w, h: o.h, qty: o.qty, shape, radius, src: o.item })), sheetEl.value, mode, mode === 'scissors' ? 0 : Number(gapEl.value));
+  const r = SC.layout(list.map(o => ({ id: o.id, w: o.w, h: o.h, qty: o.qty, shape: o.shape, radius, path: o.path, src: o.item })), sheetEl.value, mode, mode === 'scissors' ? 0 : Number(gapEl.value));
   for (const p of r.pages) for (const c of p.cells) c.item = c.item.src;
   pages = r.pages; missing = r.missing;
   if (pageIdx >= pages.length) pageIdx = Math.max(0, pages.length - 1);
@@ -483,13 +522,13 @@ function updateSummary() {
 function update() {
   localStorage.setItem('sc.sheet', sheetEl.value); localStorage.setItem('sc.size2', sizeEl.value); localStorage.setItem('sc.mode', mode);
   const fitAny = sizeEl.value === 'fit' || items.some(it => it.sizeKey === 'fit');
-  $('customRow').hidden = !(sizeEl.value === 'custom' || fitAny); $('chWrap').hidden = sizeEl.value !== 'custom' && fitAny; $('radiusRow').hidden = shapeEl.value !== 'rounded';
+  $('customRow').hidden = !(sizeEl.value === 'custom' || fitAny); $('chWrap').hidden = sizeEl.value !== 'custom' && fitAny; $('radiusRow').hidden = shapeEl.value !== 'rounded'; $('borderRow').hidden = shapeEl.value !== 'contour';
   for (const o of sheetEl.options) o.hidden = !sheetAllowed(o.value);
   if (!sheetAllowed(sheetEl.value)) sheetEl.value = 'carta';
   compute(); renderItems(); drawPreview(); updateSummary();
 }
-[sizeEl, shapeEl, sheetEl, gapEl, guidesEl, radiusEl, cwEl, chEl, $('oneSheet')].forEach(el => el.addEventListener('change', () => { full = false; update(); }));
-[radiusEl, cwEl, chEl].forEach(el => el.addEventListener('input', update));
+[sizeEl, shapeEl, sheetEl, gapEl, guidesEl, radiusEl, borderEl, cwEl, chEl, $('oneSheet')].forEach(el => el.addEventListener('change', () => { full = false; update(); }));
+[radiusEl, borderEl, cwEl, chEl].forEach(el => el.addEventListener('input', update));
 $('modes').addEventListener('change', e => { mode = e.target.value; document.querySelectorAll('.mode').forEach(l => l.classList.toggle('on', l.querySelector('input').checked)); pageIdx = 0; update(); });
 $('prevPage').addEventListener('click', () => { pageIdx--; drawPreview(); updateSummary(); });
 $('nextPage').addEventListener('click', () => { pageIdx++; drawPreview(); updateSummary(); });

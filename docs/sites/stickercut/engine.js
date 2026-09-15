@@ -86,9 +86,9 @@
           const last = p.shelves[p.shelves.length - 1], y = last ? last.y + last.h + gap : 0;
           if (y + it.h <= area.h + 1e-6) { sh = { y, h: it.h, x: 0 }; p.shelves.push(sh); }
         }
-        if (sh) { p.cells.push({ x: sh.x, y: sh.y, w: it.w, h: it.h, item: it, shape: it.shape || 'rect', radius: it.radius || 0 }); sh.x += it.w + gap; placed = true; break; }
+        if (sh) { p.cells.push({ x: sh.x, y: sh.y, w: it.w, h: it.h, item: it, shape: it.shape || 'rect', radius: it.radius || 0, path: it.path }); sh.x += it.w + gap; placed = true; break; }
       }
-      if (!placed) { const p = newPage(); const sh = { y: 0, h: it.h, x: it.w + gap }; p.shelves.push(sh); p.cells.push({ x: 0, y: 0, w: it.w, h: it.h, item: it, shape: it.shape || 'rect', radius: it.radius || 0 }); }
+      if (!placed) { const p = newPage(); const sh = { y: 0, h: it.h, x: it.w + gap }; p.shelves.push(sh); p.cells.push({ x: 0, y: 0, w: it.w, h: it.h, item: it, shape: it.shape || 'rect', radius: it.radius || 0, path: it.path }); }
     }
     // Centrar el bloque de cada página dentro del área útil.
     for (const p of pages) {
@@ -101,8 +101,9 @@
   }
 
   // ---- Raster -------------------------------------------------------------
-  function shapePath(ctx, x, y, w, h, shape, radius) {
+  function shapePath(ctx, x, y, w, h, shape, radius, path) {
     ctx.beginPath();
+    if (shape === 'contour' && path && path.length > 2) { path.forEach(([px, py], i) => ctx[i ? 'lineTo' : 'moveTo'](x + px * w, y + py * h)); ctx.closePath(); return; }
     if (shape === 'circle') { const r = Math.min(w, h) / 2; ctx.arc(x + w / 2, y + h / 2, r, 0, Math.PI * 2); }
     else if (shape === 'rounded' && radius > 0) { const r = Math.min(radius, w / 2, h / 2); ctx.roundRect(x, y, w, h, r); }
     else ctx.rect(x, y, w, h);
@@ -137,14 +138,66 @@
     for (const cell of page.cells) {
       const x = mm2px(cell.x), y = mm2px(cell.y), w = mm2px(cell.w), h = mm2px(cell.h);
       ctx.save();
-      shapePath(ctx, x, y, w, h, cell.shape, mm2px(cell.radius));
+      shapePath(ctx, x, y, w, h, cell.shape, mm2px(cell.radius), cell.path);
       ctx.clip();
       opts.drawTile(cell, ctx, x, y, w, h);
       ctx.restore();
-      if (opts.guides) { ctx.strokeStyle = 'rgba(0,0,0,.15)'; ctx.lineWidth = 1; shapePath(ctx, x + .5, y + .5, w - 1, h - 1, cell.shape, mm2px(cell.radius)); ctx.stroke(); }
+      if (opts.guides) { ctx.strokeStyle = 'rgba(0,0,0,.15)'; ctx.lineWidth = 1; shapePath(ctx, x + .5, y + .5, w - 1, h - 1, cell.shape, mm2px(cell.radius), cell.path); ctx.stroke(); }
     }
     if (opts.marks) drawMarks(ctx, sheet, opts.marks);
     return c;
+  }
+
+  // ---- Silueta: contorno exterior de la imagen con borde extra ---------------------
+  // Devuelve { path: [[x,y]...] normalizado al bbox del sticker, bbox: {x,y,w,h} en px
+  // de la imagen original (ya incluye el borde) } o null si la imagen no tiene alfa.
+  function traceContour(img, borderRatio) {
+    const MAX = 320, k = Math.min(1, MAX / Math.max(img.width, img.height));
+    const w = Math.max(2, Math.round(img.width * k)), h = Math.max(2, Math.round(img.height * k));
+    const pad = Math.max(2, Math.ceil(borderRatio * Math.max(w, h)));
+    const W = w + 2 * pad, H = h + 2 * pad;
+    const c = document.createElement('canvas'); c.width = W; c.height = H;
+    const ctx = c.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(img, pad, pad, w, h);
+    const d = ctx.getImageData(0, 0, W, H).data;
+    let mask = new Uint8Array(W * H), opaque = 0;
+    for (let i = 0; i < W * H; i++) if (d[i * 4 + 3] > 40) { mask[i] = 1; opaque++; }
+    if (!opaque || opaque > 0.97 * w * h) return null; // sin alfa útil: rectángulo normal
+    // Dilatar con un disco de radio pad (borde blanco) usando transformada de distancia aproximada (dos pasadas).
+    const INF = 1e9, dist = new Float32Array(W * H).fill(INF);
+    for (let i = 0; i < W * H; i++) if (mask[i]) dist[i] = 0;
+    const pass = (dir) => { for (let y0 = 0; y0 < H; y0++) for (let x0 = 0; x0 < W; x0++) { const y = dir ? H - 1 - y0 : y0, x = dir ? W - 1 - x0 : x0, i = y * W + x; let m = dist[i]; const nb = dir ? [[1, 0, 1], [0, 1, 1], [1, 1, 1.414], [-1, 1, 1.414]] : [[-1, 0, 1], [0, -1, 1], [-1, -1, 1.414], [1, -1, 1.414]]; for (const [dx, dy, cst] of nb) { const nx = x + dx, ny = y + dy; if (nx >= 0 && ny >= 0 && nx < W && ny < H) m = Math.min(m, dist[ny * W + nx] + cst); } dist[i] = m; } };
+    pass(0); pass(1);
+    const dil = new Uint8Array(W * H); for (let i = 0; i < W * H; i++) dil[i] = dist[i] <= pad ? 1 : 0;
+    // Rellenar huecos: todo lo no alcanzable desde el borde exterior es interior.
+    const outside = new Uint8Array(W * H), st = [];
+    for (let x = 0; x < W; x++) { st.push(x, (H - 1) * W + x); } for (let y = 0; y < H; y++) { st.push(y * W, y * W + W - 1); }
+    while (st.length) { const i = st.pop(); if (i < 0 || i >= W * H || outside[i] || dil[i]) continue; outside[i] = 1; const x = i % W; st.push(i - W, i + W); if (x > 0) st.push(i - 1); if (x < W - 1) st.push(i + 1); }
+    const solid = new Uint8Array(W * H); for (let i = 0; i < W * H; i++) solid[i] = outside[i] ? 0 : 1;
+    // Contorno exterior por seguimiento de borde (Moore) sobre la componente que toca el primer píxel sólido en lectura.
+    let start = -1; for (let i = 0; i < W * H; i++) if (solid[i]) { start = i; break; }
+    if (start < 0) return null;
+    const at = (x, y) => x >= 0 && y >= 0 && x < W && y < H && solid[y * W + x];
+    const dirs = [[1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1], [1, -1]];
+    let x = start % W, y = (start / W) | 0, dir = 6, pts = [[x, y]], guard = W * H * 4;
+    do {
+      let found = false;
+      for (let t = 0; t < 8; t++) { const nd = (dir + 6 + t) % 8, nx = x + dirs[nd][0], ny = y + dirs[nd][1]; if (at(nx, ny)) { x = nx; y = ny; dir = nd; pts.push([x, y]); found = true; break; } }
+      if (!found) break;
+    } while ((x !== pts[0][0] || y !== pts[0][1]) && --guard > 0);
+    pts.pop();
+    // Simplificar (Ramer–Douglas–Peucker) a ~0.6 px de tolerancia en la máscara.
+    const rdp = (p, eps) => { if (p.length < 3) return p; let dmax = 0, idx = 0; const [ax, ay] = p[0], [bx, by] = p[p.length - 1]; const L = Math.hypot(bx - ax, by - ay) || 1; for (let i = 1; i < p.length - 1; i++) { const dd = Math.abs((by - ay) * p[i][0] - (bx - ax) * p[i][1] + bx * ay - by * ax) / L; if (dd > dmax) { dmax = dd; idx = i; } } if (dmax > eps) { const l = rdp(p.slice(0, idx + 1), eps), r = rdp(p.slice(idx), eps); return l.slice(0, -1).concat(r); } return [p[0], p[p.length - 1]]; };
+    // Anillo cerrado: se simplifica en dos mitades (con inicio = fin, RDP colapsaría todo).
+    const mid = pts.length >> 1;
+    pts = rdp(pts.slice(0, mid + 1), 0.6).slice(0, -1).concat(rdp(pts.slice(mid).concat([pts[0]]), 0.6).slice(0, -1));
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const [px, py] of pts) { minX = Math.min(minX, px); maxX = Math.max(maxX, px); minY = Math.min(minY, py); maxY = Math.max(maxY, py); }
+    // +1 para incluir el píxel completo del borde
+    const bw = maxX - minX + 1, bh = maxY - minY + 1;
+    const path = pts.map(([px, py]) => [(px + 0.5 - minX) / bw, (py + 0.5 - minY) / bh]);
+    // bbox en coordenadas de la imagen original (píxeles): el sticker es más grande que la imagen por el borde.
+    return { path, bbox: { x: (minX - pad) / k, y: (minY - pad) / k, w: bw / k, h: bh / k }, mask: { W, H, k, pad } };
   }
 
   // ---- PDF a mano: una imagen JPEG por página, MediaBox exacto en puntos --------
@@ -188,8 +241,10 @@
     const circle = (cx, cy, r) => out.push('0\nCIRCLE\n8\n0\n10\n' + f(cx) + '\n20\n' + f(Y(cy)) + '\n30\n0\n40\n' + f(r));
     // Arco en grados CCW en coordenadas DXF (Y arriba). Centro (cx,cy) en mm-papel.
     const arc = (cx, cy, r, a1, a2) => out.push('0\nARC\n8\n0\n10\n' + f(cx) + '\n20\n' + f(Y(cy)) + '\n30\n0\n40\n' + f(r) + '\n50\n' + a1 + '\n51\n' + a2);
+    const poly = pts => { out.push('0\nPOLYLINE\n8\n0\n66\n1\n70\n1'); for (const [px, py] of pts) out.push('0\nVERTEX\n8\n0\n10\n' + f(px) + '\n20\n' + f(Y(py)) + '\n30\n0'); out.push('0\nSEQEND\n8\n0'); };
     for (const c of page.cells) {
       const { x, y, w, h } = c;
+      if (c.shape === 'contour' && c.path) { poly(c.path.map(([px, py]) => [x + px * w, y + py * h])); continue; }
       if (c.shape === 'circle') { circle(x + w / 2, y + h / 2, Math.min(w, h) / 2); continue; }
       const r = c.shape === 'rounded' ? Math.min(c.radius, w / 2, h / 2) : 0;
       if (!r) { line(x, y, x + w, y); line(x + w, y, x + w, y + h); line(x + w, y + h, x, y + h); line(x, y + h, x, y); continue; }
@@ -231,5 +286,5 @@
 
   function download(blob, name) { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 5000); }
 
-  global.SC = { DPI, MM_PER_IN, SHEETS, REG, CUT_MODES, BIG_MARGIN, mm2px, mm2in, layout, usableRect, renderPage, drawMarks, shapePath, toPDF, toDXF, toPNG, download };
+  global.SC = { DPI, MM_PER_IN, SHEETS, REG, CUT_MODES, BIG_MARGIN, mm2px, mm2in, layout, usableRect, renderPage, drawMarks, shapePath, traceContour, toPDF, toDXF, toPNG, download };
 })(window);
