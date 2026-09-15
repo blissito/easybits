@@ -47,59 +47,56 @@
   }
   const overlaps = (a, b) => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
 
-  // Rejilla centrada de celdas w×h (mm) con separación gap; recorta columnas/filas
-  // hasta que ninguna celda toque una zona de marca. Devuelve { cols, rows, x0, y0 }.
-  function gridFor(sheet, cell, mode) {
+  // Área útil de la hoja (mm): margen en hojas grandes, área fija en Cricut y, con
+  // marcas de registro, un anillo libre alrededor (inset + brazo + holgura) para que
+  // ninguna pieza toque las marcas ni la banda que lee el sensor.
+  function usableRect(sheet, mode) {
     const m = CUT_MODES[mode];
-    const gap = m.gap;
-    let areaW = sheet.w, areaH = sheet.h, ax = 0, ay = 0;
-    if (m.area) { areaW = Math.min(sheet.w, m.area.w); areaH = Math.min(sheet.h, m.area.h); ax = (sheet.w - areaW) / 2; ay = (sheet.h - areaH) / 2; }
-    else if (sheet.big) { areaW -= 2 * BIG_MARGIN; areaH -= 2 * BIG_MARGIN; ax = ay = BIG_MARGIN; }
-    let cols = Math.max(0, Math.floor((areaW + gap) / (cell.w + gap)));
-    let rows = Math.max(0, Math.floor((areaH + gap) / (cell.h + gap)));
-    const zones = markZones(sheet, m.marks);
-    const place = () => {
-      const totalW = cols * cell.w + (cols - 1) * gap, totalH = rows * cell.h + (rows - 1) * gap;
-      return { cols, rows, x0: ax + (areaW - totalW) / 2, y0: ay + (areaH - totalH) / 2, totalW, totalH };
-    };
-    // Si el bloque toca una marca, quitar la dimensión que más sobra hasta librar.
-    for (let guard = 0; guard < 50 && cols > 0 && rows > 0; guard++) {
-      const g = place();
-      const block = { x: g.x0, y: g.y0, w: g.totalW, h: g.totalH };
-      if (!zones.some(z => overlaps(block, z))) break;
-      if (g.totalW / areaW > g.totalH / areaH) cols--; else rows--;
+    let x = 0, y = 0, w = sheet.w, h = sheet.h;
+    if (m.area) { w = Math.min(sheet.w, m.area.w); h = Math.min(sheet.h, m.area.h); x = (sheet.w - w) / 2; y = (sheet.h - h) / 2; }
+    else if (sheet.big) { x = y = BIG_MARGIN; w -= 2 * BIG_MARGIN; h -= 2 * BIG_MARGIN; }
+    if (m.marks) {
+      const z = REG.inset + REG.len + REG.clearance;
+      const x2 = Math.min(x + w, sheet.w - z), y2 = Math.min(y + h, sheet.h - z);
+      x = Math.max(x, z); y = Math.max(y, z); w = x2 - x; h = y2 - y;
     }
-    return place();
+    return { x, y, w, h };
   }
 
-  // Reparte items {id, w, h, qty, shape, radius} en páginas. Todas las piezas de una
-  // página comparten tamaño (rejilla uniforme, como recomienda SCM); si hay tamaños
-  // distintos, cada tamaño ocupa sus propias páginas.
+  // Empaque por estantes (shelf packing): las piezas pueden ser de tamaños distintos.
+  // Se ordenan por alto y se acomodan en filas de izquierda a derecha; cada fila
+  // toma el alto de su primera pieza. El bloque resultante se centra en el área útil.
+  // items: {id, w, h, qty, shape, radius, ...}. Devuelve { pages, missing }.
   function layout(items, sheetKey, mode) {
-    const sheet = SHEETS[sheetKey];
-    const pages = [];
-    const bySize = new Map();
-    for (const it of items) {
-      const k = it.w + 'x' + it.h;
-      if (!bySize.has(k)) bySize.set(k, { w: it.w, h: it.h, queue: [] });
-      for (let i = 0; i < it.qty; i++) bySize.get(k).queue.push(it);
-    }
-    let missing = 0;
-    for (const { w, h, queue } of bySize.values()) {
-      const g = gridFor(sheet, { w, h }, mode);
-      const per = g.cols * g.rows;
-      if (!per) { missing += queue.length; continue; }
-      const gap = CUT_MODES[mode].gap;
-      while (queue.length) {
-        const cells = [];
-        for (let r = 0; r < g.rows && queue.length; r++) for (let c = 0; c < g.cols && queue.length; c++) {
-          const it = queue.shift();
-          cells.push({ x: g.x0 + c * (w + gap), y: g.y0 + r * (h + gap), w, h, item: it, shape: it.shape || 'rect', radius: it.radius || 0 });
+    const sheet = SHEETS[sheetKey], gap = CUT_MODES[mode].gap, area = usableRect(sheet, mode);
+    const pieces = [];
+    for (const it of items) for (let i = 0; i < it.qty; i++) pieces.push(it);
+    pieces.sort((a, b) => b.h - a.h || b.w - a.w);
+    const pages = []; let missing = 0;
+    // Estante = { y, h, x }; first-fit: se prueba en todos los estantes de la página
+    // antes de abrir uno nuevo, así los huecos a la derecha se aprovechan.
+    const newPage = () => { const p = { sheet, sheetKey, mode, cells: [], shelves: [] }; pages.push(p); return p; };
+    for (const it of pieces) {
+      if (it.w > area.w + 1e-6 || it.h > area.h + 1e-6) { missing++; continue; }
+      let placed = false;
+      for (const p of pages) {
+        let sh = p.shelves.find(sh => it.h <= sh.h + 1e-6 && sh.x + it.w <= area.w + 1e-6);
+        if (!sh) {
+          const last = p.shelves[p.shelves.length - 1], y = last ? last.y + last.h + gap : 0;
+          if (y + it.h <= area.h + 1e-6) { sh = { y, h: it.h, x: 0 }; p.shelves.push(sh); }
         }
-        pages.push({ sheet, sheetKey, mode, cells, grid: g });
+        if (sh) { p.cells.push({ x: sh.x, y: sh.y, w: it.w, h: it.h, item: it, shape: it.shape || 'rect', radius: it.radius || 0 }); sh.x += it.w + gap; placed = true; break; }
       }
+      if (!placed) { const p = newPage(); const sh = { y: 0, h: it.h, x: it.w + gap }; p.shelves.push(sh); p.cells.push({ x: 0, y: 0, w: it.w, h: it.h, item: it, shape: it.shape || 'rect', radius: it.radius || 0 }); }
     }
-    return { pages, missing };
+    // Centrar el bloque de cada página dentro del área útil.
+    for (const p of pages) {
+      const maxX = Math.max(...p.cells.map(c => c.x + c.w)), maxY = Math.max(...p.cells.map(c => c.y + c.h));
+      const dx = area.x + (area.w - maxX) / 2, dy = area.y + (area.h - maxY) / 2;
+      for (const c of p.cells) { c.x += dx; c.y += dy; }
+      p.used = { w: maxX, h: maxY };
+    }
+    return { pages, missing, area };
   }
 
   // ---- Raster -------------------------------------------------------------
@@ -233,5 +230,5 @@
 
   function download(blob, name) { const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 5000); }
 
-  global.SC = { DPI, MM_PER_IN, SHEETS, REG, CUT_MODES, BIG_MARGIN, mm2px, mm2in, layout, gridFor, renderPage, drawMarks, shapePath, toPDF, toDXF, toPNG, download };
+  global.SC = { DPI, MM_PER_IN, SHEETS, REG, CUT_MODES, BIG_MARGIN, mm2px, mm2in, layout, usableRect, renderPage, drawMarks, shapePath, toPDF, toDXF, toPNG, download };
 })(window);

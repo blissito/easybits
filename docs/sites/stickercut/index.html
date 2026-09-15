@@ -166,7 +166,7 @@
       </div>
       <div class="two" id="customRow" hidden>
         <div><label>Ancho (cm)</label><input type="number" id="cw" min="0.5" max="30" step="0.1" value="5"></div>
-        <div><label>Alto (cm)</label><input type="number" id="ch" min="0.5" max="30" step="0.1" value="5"></div>
+        <div id="chWrap"><label>Alto (cm)</label><input type="number" id="ch" min="0.5" max="30" step="0.1" value="5"></div>
       </div>
       <div id="radiusRow" hidden><label>Radio de esquina (mm)</label><input type="number" id="radius" min="0.5" max="30" step="0.5" value="3"></div>
       <div class="items" id="items"></div>
@@ -203,13 +203,13 @@
       <button id="dlCricut" disabled hidden><svg viewBox="0 0 24 24"><path d="M4 4h16v16H4z"/><path d="M8 8h8v8H8z"/></svg>PNG para Cricut</button>
     </div>
     <details id="helpSil" hidden>
-      <summary>Cómo cortarlo en Silhouette Studio (una sola vez por tamaño)</summary>
+      <summary>Cómo cortarlo en Silhouette Studio (cada hoja trae su DXF)</summary>
       <ol>
         <li>Imprime el PDF desde Vista Previa / Acrobat al <b>100 %</b> (no "ajustar a página").</li>
         <li>Conecta la máquina y abre Studio. <b>Preferences → Import</b>: "DXF Open" = <b>As-is</b>.</li>
         <li>Abre el <code>.dxf</code>. En <b>Page Setup</b> pon la hoja exacta (Carta = 8.5 × 11 in) y orientación vertical; el rectángulo gris debe coincidir con la hoja, luego bórralo.</li>
         <li><b>Print &amp; Cut</b>: marcas de registro activas; largo, grosor e inset en <b>0</b> (Studio usa sus mínimos: 5 mm / 1 mm / 10 mm, que son los impresos).</li>
-        <li>Hoja en el tapete, esquina superior izquierda, y <b>Enviar</b>. Guarda el proyecto como <code>.studio3</code>: sirve para siempre con este tamaño y hoja.</li>
+        <li>Hoja en el tapete, esquina superior izquierda, y <b>Enviar</b>. Si repites la misma hoja, guarda el proyecto como <code>.studio3</code> y reutilízalo.</li>
       </ol>
       <p>Portrait: máximo 8.5" de ancho (Carta / A4). Cameo: todas las hojas con tapete 12 × 24. ¿Primera vez? Corre antes la <a href="calib.html" target="_blank">hoja de calibración</a>.</p>
     </details>
@@ -251,6 +251,7 @@ const SIZES = [
   { k: '6x6', label: 'Sticker 6 × 6 cm', w: 60, h: 60 },
   { k: '5x7', label: 'Sticker 5 × 7 cm', w: 50, h: 70 },
   { k: '7.5x10', label: 'Foto 7.5 × 10 cm', w: 75, h: 100 },
+  { k: 'fit', label: 'Proporción de la imagen (defino el ancho)' },
   { k: 'custom', label: 'Personalizado…' },
 ];
 const $ = id => document.getElementById(id);
@@ -266,14 +267,16 @@ let pages = [], missing = 0, pageIdx = 0;
 let mode = localStorage.getItem('sc.mode') || 'scissors';
 document.querySelector(`input[name=mode][value=${mode}]`).checked = true;
 
-function globalSize() {
-  if (sizeEl.value === 'custom') return { w: Math.max(5, Number(cwEl.value) * 10 || 50), h: Math.max(5, Number(chEl.value) * 10 || 50) };
-  const s = SIZES.find(s => s.k === sizeEl.value); return { w: s.w, h: s.h };
+const fitWidth = () => Math.max(5, Math.round((Number(cwEl.value) || 5) * 10));
+// 'fit': la pieza toma la proporción de la imagen (logos, stickers ya recortados) y
+// sólo se fija el ancho; así no se recorta nada. Cada imagen forma su propio grupo.
+function sizeFor(key, it) {
+  if (key === 'fit' && it) return { w: fitWidth(), h: Math.max(5, Math.round(fitWidth() * it.img.height / it.img.width)) };
+  if (key === 'custom' || key === 'fit') return { w: fitWidth(), h: Math.max(5, Number(chEl.value) * 10 || 50) };
+  const s = SIZES.find(s => s.k === key); return s ? { w: s.w, h: s.h } : { w: 50, h: 50 };
 }
-function sizeOf(it) {
-  if (it.sizeKey === 'global') return globalSize();
-  const s = SIZES.find(s => s.k === it.sizeKey); return s ? { w: s.w, h: s.h } : globalSize();
-}
+function globalSize(it) { return sizeFor(sizeEl.value, it); }
+function sizeOf(it) { return it.sizeKey === 'global' ? globalSize(it) : sizeFor(it.sizeKey, it); }
 function radiusMm() { return shapeEl.value === 'rounded' ? Math.max(0.5, Number(radiusEl.value) || 3) : 0; }
 
 // ---------- Carga de imágenes ----------
@@ -435,10 +438,9 @@ function drawPreview() {
 }
 function updateSummary() {
   const total = items.reduce((a, it) => a + it.qty, 0), placed = total - missing;
-  const per = pages[0] ? pages[0].grid.cols * pages[0].grid.rows : 0;
   $('pageInfo').textContent = pages.length ? `Hoja ${pageIdx + 1} de ${pages.length}` : (items.length ? 'No cabe ninguna pieza en esta hoja' : 'Sin imágenes todavía');
   $('prevPage').disabled = pageIdx <= 0; $('nextPage').disabled = pageIdx >= pages.length - 1;
-  $('summary').innerHTML = items.length ? `<b>${placed}</b> pieza${placed === 1 ? '' : 's'} en <b>${pages.length}</b> hoja${pages.length === 1 ? '' : 's'}${per ? ` · caben ${per} por hoja` : ''}${missing ? ` · <span style="color:#b8452a">${missing} no caben (pieza más grande que el área útil)</span>` : ''}` : '';
+  $('summary').innerHTML = items.length ? `<b>${placed}</b> pieza${placed === 1 ? '' : 's'} en <b>${pages.length}</b> hoja${pages.length === 1 ? '' : 's'}${missing ? ` · <span style="color:#b8452a">${missing} no caben (pieza más grande que el área útil)</span>` : ''}` : '';
   const has = pages.length > 0;
   $('dlPdf').disabled = $('print').disabled = $('dlDxf').disabled = $('dlCricut').disabled = !has;
   const sil = mode.startsWith('silhouette'), cri = mode === 'cricut';
@@ -451,7 +453,8 @@ function updateSummary() {
 }
 function update() {
   localStorage.setItem('sc.sheet', sheetEl.value); localStorage.setItem('sc.size', sizeEl.value); localStorage.setItem('sc.mode', mode);
-  $('customRow').hidden = sizeEl.value !== 'custom'; $('radiusRow').hidden = shapeEl.value !== 'rounded';
+  const fitAny = sizeEl.value === 'fit' || items.some(it => it.sizeKey === 'fit');
+  $('customRow').hidden = !(sizeEl.value === 'custom' || fitAny); $('chWrap').hidden = sizeEl.value !== 'custom' && fitAny; $('radiusRow').hidden = shapeEl.value !== 'rounded';
   for (const o of sheetEl.options) o.hidden = !sheetAllowed(o.value);
   if (!sheetAllowed(sheetEl.value)) sheetEl.value = 'carta';
   compute(); renderItems(); drawPreview(); updateSummary();
@@ -468,17 +471,9 @@ async function buildPDF() { return SC.toPDF(pages.map(p => renderPageCanvas(p)),
 $('dlPdf').addEventListener('click', async () => SC.download(await buildPDF(), `stickercut-${sheetFile()}.pdf`));
 $('print').addEventListener('click', async () => { const url = URL.createObjectURL(await buildPDF()); window.open(url, '_blank'); });
 $('dlDxf').addEventListener('click', () => {
-  // Una plantilla por tamaño de pieza: todas las hojas de ese tamaño comparten celdas.
-  const seen = new Set();
-  for (const p of pages) {
-    const c = p.cells[0], key = `${c.w}x${c.h}-${c.shape}`;
-    if (seen.has(key)) continue; seen.add(key);
-    // La plantilla lleva la rejilla COMPLETA (no sólo las celdas ocupadas) para que sirva siempre.
-    const full = { ...p, cells: [] };
-    const g = p.grid, gap = currentMode().gap;
-    for (let r = 0; r < g.rows; r++) for (let col = 0; col < g.cols; col++) full.cells.push({ x: g.x0 + col * (c.w + gap), y: g.y0 + r * (c.h + gap), w: c.w, h: c.h, shape: c.shape, radius: c.radius });
-    SC.download(SC.toDXF(full), `stickercut-corte-${sheetFile()}-${c.w / 10}x${c.h / 10}cm-${c.shape}.dxf`);
-  }
+  // Un DXF por hoja: las piezas pueden ser distintas, así que el corte va ligado a
+  // ESA hoja impresa (no es plantilla reutilizable).
+  pages.forEach((p, i) => SC.download(SC.toDXF(p), `stickercut-corte-${sheetFile()}${pages.length > 1 ? '-' + (i + 1) : ''}.dxf`));
 });
 $('dlCricut').addEventListener('click', async () => {
   const m = currentMode(), sheet = SC.SHEETS[sheetEl.value];
