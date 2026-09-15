@@ -298,7 +298,8 @@ function sizeFor(key, it) {
     if (ct) {
       const ar = ct.bbox.w / ct.bbox.h;
       if (key === 'fit') return { w: base, h: Math.max(5, Math.round(base / ar)) };
-      const fixed = own ? { w: it.cw || 50, h: it.ch || 50 } : sizeFor(key, null); // cabe dentro del tamaño fijo, conservando proporción
+      if (own) return { w: base, h: Math.max(5, Math.round(base / ar)) }; // medida propia: el ancho manda, el alto sigue a la imagen
+      const fixed = sizeFor(key, null); // cabe dentro del tamaño fijo, conservando proporción
       const sc = Math.min(fixed.w / ct.bbox.w, fixed.h / ct.bbox.h);
       return { w: Math.max(5, Math.round(ct.bbox.w * sc)), h: Math.max(5, Math.round(ct.bbox.h * sc)) };
     }
@@ -428,8 +429,17 @@ function renderItems() {
     if (shapeEl.value === 'contour' && it._contour) { tx.save(); SC.shapePath(tx, 0, 0, tw, thh, 'contour', 0, it._contour.path); tx.clip(); drawTile({ item: it, shape: 'contour', path: it._contour.path }, tx, 0, 0, tw, thh); tx.restore(); }
     else drawItem(it, tx, 0, 0, tw, thh);
     el.querySelector('.tbox').addEventListener('click', () => openCrop(it));
-    el.querySelector('.isize').addEventListener('change', e => { it.sizeKey = e.target.value; update(); });
-    el.querySelectorAll('.own input').forEach(inp => inp.addEventListener('change', () => { it.cw = Math.round((Number(el.querySelector('.ow').value) || 5) * 10); it.ch = Math.round((Number(el.querySelector('.oh').value) || 5) * 10); update(); }));
+    el.querySelector('.isize').addEventListener('change', e => { const cur = sizeOf(it); it.sizeKey = e.target.value; if (it.sizeKey === 'custom' && !it.cw) { it.cw = cur.w; it.ch = cur.h; } update(); });
+    // Medida propia: con silueta la proporción la manda la imagen, así que al cambiar
+    // un lado se recalcula el otro; con formas fijas los dos campos son libres.
+    el.querySelectorAll('.own input').forEach(inp => inp.addEventListener('change', () => {
+      const w = Math.round((Number(el.querySelector('.ow').value) || 5) * 10), h = Math.round((Number(el.querySelector('.oh').value) || 5) * 10);
+      const ct = shapeEl.value === 'contour' ? contourOf(it, w) : null;
+      const ar = ct ? ct.bbox.w / ct.bbox.h : null;
+      if (ar) { if (inp.classList.contains('ow')) { it.cw = w; it.ch = Math.max(5, Math.round(w / ar)); } else { it.ch = h; it.cw = Math.max(5, Math.round(h * ar)); } }
+      else { it.cw = w; it.ch = h; }
+      update();
+    }));
     const q = el.querySelector('.qty input');
     el.querySelector('.dec').addEventListener('click', () => { it.qty = Math.max(1, it.qty - 1); update(); });
     el.querySelector('.inc').addEventListener('click', () => setQty(it, it.qty + 1));
