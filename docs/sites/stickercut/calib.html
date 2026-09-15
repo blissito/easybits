@@ -45,14 +45,14 @@
       <li><b>Preferences → Import</b> (Mac: menú <i>Silhouette Studio</i>; Windows: <i>Edit</i>): "DXF Open" = <b>As-is</b>.</li>
       <li><b>Abrir</b> el <code>.dxf</code> descargado.</li>
       <li><b>Page Setup</b>: tapete 12×12 (12×24 si la hoja pasa de 12"), tamaño de hoja a mano en pulgadas (Carta = 8.5 × 11), orientación vertical. El rectángulo gris debe coincidir exactamente con la hoja; si coincide, <b>bórralo</b>. Si no coincide, no cortes: mándame foto.</li>
-      <li><b>Print &amp; Cut</b>: activar marcas de registro. Si aparece "estilo", deja el de tu máquina. Pon largo, grosor e inset en <b>0</b> y <b>lee los valores que Studio deja</b>: deben quedar 0.197" / 0.039" / 0.394" (5 mm / 1 mm / 10 mm), que son los impresos. Si muestra otros números, mándamelos antes de cortar.</li>
+      <li><b>Print &amp; Cut</b>: activar marcas de registro. Si aparece "estilo", deja el de tu máquina. Deja el <b>largo</b> en su default (0.787" = 20 mm, igual al impreso); pon grosor e inset en <b>0</b> y <b>lee los valores que Studio deja</b>: deben quedar ≈0.039" / 0.394" (1 mm / 10 mm), que son los impresos. Si muestra otros números, mándamelos antes de cortar.</li>
       <li>Hoja impresa en el tapete alineada a la esquina superior izquierda, cargar y <b>Enviar</b>.</li>
       <li>Si el corte cae sobre el borde negro, <b>Guardar como .studio3</b>: esa plantilla sirve para siempre con este tamaño de pieza y hoja.</li>
     </ol>
   </div>
 </div>
 
-<script src="engine.js?v=495718"></script>
+<script src="engine.js?v=496023"></script>
 <script>
 const sheetEl = document.getElementById('sheet'), marksEl = document.getElementById('marks'), prev = document.getElementById('prev');
 for (const [k, s] of Object.entries(SC.SHEETS)) if (s.big) sheetEl.add(new Option(s.label, k));

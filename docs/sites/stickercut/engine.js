@@ -18,10 +18,12 @@
     'legal':  { w: 215.9, h: 355.6, label: 'Legal 8.5 × 14"',    file: 'legal',  big: true },
   };
 
-  // Marcas de registro Silhouette (mínimos de Studio): inset 10 mm a la esquina de la
-  // "L" / centro del cuadro, brazos 5 mm, grosor 1 mm, cuadro 5×5 mm. 3 marcas =
-  // cuadro arriba-izq + L arriba-der y abajo-izq. 4 marcas (Cameo 5 Alpha) = L en las 4.
-  const REG = { inset: 10, len: 5, thick: 1, square: 5, clearance: 3 };
+  // Marcas de registro Silhouette: inset 10 mm a la esquina de la "L" / centro del
+  // cuadro, grosor 1 mm, cuadro 5×5 mm. Brazos de 20 mm = el largo por default de
+  // Studio (0.787"); silhouette-card-maker imprime hasta 40 mm y el sensor lee mejor
+  // cuanto más largos (brazos de 5 mm se reportaron "muy pequeños" en Cameo 5 Alpha).
+  // 3 marcas = cuadro arriba-izq + L arriba-der y abajo-izq. 4 marcas (Cameo 5 Alpha) = L en las 4.
+  const REG = { inset: 10, len: 20, thick: 1, square: 5, clearance: 3 };
 
   // Modos de corte: qué marcas lleva la hoja y qué separación entre piezas.
   const CUT_MODES = {
