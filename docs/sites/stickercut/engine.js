@@ -142,6 +142,8 @@
       ctx.clip();
       opts.drawTile(cell, ctx, x, y, w, h);
       ctx.restore();
+      // outline: sólo en la previsualización de pantalla (la línea de corte no se imprime).
+      if (opts.outline) { ctx.save(); ctx.strokeStyle = 'rgba(184,69,42,.9)'; ctx.lineWidth = 3; ctx.setLineDash([12, 8]); shapePath(ctx, x, y, w, h, cell.shape, mm2px(cell.radius), cell.path); ctx.stroke(); ctx.restore(); }
       if (opts.guides) { ctx.strokeStyle = 'rgba(0,0,0,.15)'; ctx.lineWidth = 1; shapePath(ctx, x + .5, y + .5, w - 1, h - 1, cell.shape, mm2px(cell.radius), cell.path); ctx.stroke(); }
     }
     if (opts.marks) drawMarks(ctx, sheet, opts.marks);

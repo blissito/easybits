@@ -25,7 +25,7 @@
   h1 { font-size: 1.35rem; margin: 0; letter-spacing: -.01em; }
   h1 small { font-weight: 500; color: var(--muted); font-size: .85rem; margin-left: 8px; }
   p.sub { margin: 4px 0 16px; color: var(--muted); font-size: .92rem; }
-  .app { display: grid; grid-template-columns: minmax(260px, 340px) minmax(260px, 320px) 1fr; gap: 16px; max-width: 1400px; margin-inline: auto; align-items: start; }
+  .app { display: grid; grid-template-columns: minmax(280px, 340px) minmax(300px, 340px) 1fr; gap: 16px; max-width: 1400px; margin-inline: auto; align-items: start; }
   @media (max-width: 1100px) { .app { grid-template-columns: minmax(280px, 1fr) 1.4fr; } .col2 { grid-column: 1; } .out { grid-column: 2; grid-row: 1 / span 2; } }
   @media (max-width: 860px) { .app { grid-template-columns: 1fr; } .out { grid-column: 1; grid-row: auto; } }
   .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; }
@@ -162,13 +162,13 @@
   <div class="col2">
     <section class="card">
       <div class="step"><b>2</b> Pieza</div>
-      <div class="two">
+      <div>
         <div>
           <label>Tamaño de cada pieza</label>
           <select id="size"></select>
         </div>
         <div>
-          <label>Forma</label>
+          <label>Forma de corte</label>
           <select id="shape">
             <option value="rect">Rectángulo</option>
             <option value="rounded">Esquinas redondeadas</option>
@@ -208,7 +208,7 @@
     <div class="step"><b>4</b> Descargar</div>
     <div class="sheetwrap"><canvas id="preview"></canvas></div>
     <div class="pager">
-      <span id="pageInfo">Sin imágenes todavía</span>
+      <span id="pageInfo">Sin imágenes todavía</span><span id="legend" hidden style="font-size:.78rem">· <span style="color:#b8452a">- - -</span> línea de corte (sólo en pantalla)</span>
       <span class="nav"><button id="prevPage" disabled>‹</button><button id="nextPage" disabled>›</button></span>
     </div>
     <div class="summary" id="summary"></div>
@@ -413,7 +413,7 @@ function renderItems() {
     const sz = sizeOf(it);
     el.innerHTML = `<div class="tbox" title="Encuadrar"><canvas class="thumb" width="112" height="112"></canvas></div>
       <div><div class="name">${it.name.replace(/[<>&]/g, '')}</div>
-        <div class="meta"><select class="isize"><option value="global">Tamaño general</option>${SIZES.filter(s => s.k !== 'custom').map(s => `<option value="${s.k}" ${it.sizeKey === s.k ? 'selected' : ''}>${s.label}</option>`).join('')}</select><span>${sz.w / 10} × ${sz.h / 10} cm</span></div></div>
+        <div class="meta"><select class="isize"><option value="global">Tamaño general</option>${SIZES.filter(s => s.k !== 'custom').map(s => `<option value="${s.k}" ${it.sizeKey === s.k ? 'selected' : ''}>${s.label}</option>`).join('')}</select><span>${sz.w / 10} × ${sz.h / 10} cm${shapeEl.value === 'contour' ? (it._contour ? ' · silueta' : ' · <em title="La imagen no tiene fondo transparente">rectángulo (sin transparencia)</em>') : ''}</span></div></div>
       <div class="side"><button class="x" title="Quitar">×</button><span class="qty"><button class="dec">−</button><input type="number" min="1" max="500" value="${it.qty}"><button class="inc">+</button></span></div>`;
     const th = el.querySelector('.thumb'), tx = th.getContext('2d');
     // Miniatura con el mismo encuadre que saldrá impreso (proporción de la pieza).
@@ -500,7 +500,8 @@ function drawPreview() {
     if (currentMode().marks) { x.save(); x.scale(.25, .25); SC.drawMarks(x, sheet, currentMode().marks); x.restore(); }
     return;
   }
-  const c = renderPageCanvas(pages[pageIdx]);
+  // En pantalla se marca la línea de corte (punteada); en los archivos no va.
+  const c = renderPageCanvas(pages[pageIdx], { outline: mode !== 'scissors' });
   prevC.width = c.width / 2; prevC.height = c.height / 2;
   prevC.getContext('2d').drawImage(c, 0, 0, prevC.width, prevC.height);
 }
@@ -514,7 +515,7 @@ function updateSummary() {
   const sil = mode.startsWith('silhouette'), cri = mode === 'cricut';
   $('dlDxf').hidden = !sil; $('dlCricut').hidden = !cri;
   $('helpSil').hidden = !sil; $('helpCri').hidden = !cri;
-  $('guidesRow').hidden = mode !== 'scissors'; $('gapRow').hidden = mode === 'scissors';
+  $('legend').hidden = mode === 'scissors' || !pages.length; $('guidesRow').hidden = mode !== 'scissors'; $('gapRow').hidden = mode === 'scissors';
   $('modeHint').textContent = sil ? 'La hoja se imprime con marcas de registro y las piezas separadas; las líneas de corte no se imprimen, van en el DXF.'
     : cri ? `Cricut recorta sólo dentro de un área de 19.2 × 25.2 cm (7.55 × 9.94"); el PNG sale transparente con la separación elegida. Sólo impresoras inkjet.`
     : 'Las piezas van pegadas en bloque para cortar con pocos tijeretazos; las guías se imprimen tenues.';
