@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>StickerCut — hoja de calibración</title>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 0; padding: 24px; max-width: 760px; margin-inline: auto; color: #222; background: #fff; }
+  h1 { font-size: 1.3rem; margin: 0 0 6px; }
+  p { line-height: 1.5; }
+  .row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; margin: 14px 0; }
+  select, button { font-size: .95rem; padding: 9px 14px; border-radius: 8px; border: 1px solid #ccc; background: #fff; cursor: pointer; }
+  button.primary { background: #ff7a59; color: #fff; border-color: #ff7a59; }
+  canvas { width: 100%; max-width: 420px; border: 1px solid #ddd; border-radius: 6px; display: block; }
+  ol li { margin: 6px 0; }
+  code { background: #f3f3f3; padding: 1px 5px; border-radius: 4px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  @media (max-width: 640px) { .grid { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<h1>Hoja de calibración StickerCut</h1>
+<p>Imprime el PDF al <b>100 %</b> (sin "ajustar a página"), abre el DXF en Silhouette Studio y corta. Si los cortes caen sobre los bordes negros (±0.5 mm), el motor está bien.</p>
+
+<div class="row">
+  <label>Hoja <select id="sheet"></select></label>
+  <label>Marcas <select id="marks"><option value="silhouette3">3 marcas (Cameo 1–4, Portrait, Curio)</option><option value="silhouette4" selected>4 marcas (Cameo 5 Alpha, Pro MK II)</option></select></label>
+</div>
+<div class="row">
+  <button class="primary" id="pdf">Descargar PDF</button>
+  <button id="dxf">Descargar DXF</button>
+  <button id="png">Descargar PNG</button>
+</div>
+
+<div class="grid">
+  <canvas id="prev"></canvas>
+  <div>
+    <h3>En Silhouette Studio (una sola vez)</h3>
+    <ol>
+      <li><b>Edit → Preferences → Import</b>: "DXF Open" = <b>As-is</b>.</li>
+      <li><b>Abrir</b> el <code>.dxf</code> descargado.</li>
+      <li><b>Page Setup</b>: tapete 12×12 (o 12×24 si la hoja es más larga de 12"), tamaño de hoja igual al elegido aquí, orientación vertical. Verifica que el rectángulo gris coincida con la hoja; luego bórralo.</li>
+      <li><b>Print &amp; Cut</b>: activar marcas de registro, estilo Type 1, largo / grosor / inset en <b>0</b> (Studio usa sus mínimos: 5 mm / 1 mm / 10 mm, que son los impresos).</li>
+      <li>Coloca la hoja impresa en el tapete alineada a la esquina superior izquierda y <b>Enviar</b>. Los rectángulos son "Cortar", la capa PAGE "No cortar".</li>
+      <li>Si todo coincide, <b>Guardar como .studio3</b>: esa plantilla sirve para siempre con este tamaño de pieza y hoja.</li>
+    </ol>
+    <p>Regla impresa: debe medir <b>exactamente 10 cm</b>. Si no, la impresora está escalando.</p>
+  </div>
+</div>
+
+<script src="engine.js"></script>
+<script>
+const sheetEl = document.getElementById('sheet'), marksEl = document.getElementById('marks'), prev = document.getElementById('prev');
+for (const [k, s] of Object.entries(SC.SHEETS)) if (s.big) sheetEl.add(new Option(s.label, k));
+
+// 6 rectángulos de 40×40 mm numerados + 1 círculo + 1 redondeado: cubre las tres
+// formas que exporta el motor.
+function build() {
+  const items = [
+    { id: 'sq', w: 40, h: 40, qty: 4, shape: 'rect' },
+    { id: 'rd', w: 40, h: 40, qty: 1, shape: 'rounded', radius: 5 },
+    { id: 'ci', w: 40, h: 40, qty: 1, shape: 'circle' },
+  ];
+  const { pages } = SC.layout(items, sheetEl.value, marksEl.value);
+  return pages[0];
+}
+function drawTile(cell, ctx, x, y, w, h) {
+  // Relleno claro + borde negro de 0.3 mm por dentro: el corte debe caer sobre el borde.
+  ctx.fillStyle = '#fde8d7'; ctx.fillRect(x, y, w, h);
+  ctx.lineWidth = SC.mm2px(0.3); ctx.strokeStyle = '#000';
+  SC.shapePath(ctx, x + ctx.lineWidth / 2, y + ctx.lineWidth / 2, w - ctx.lineWidth, h - ctx.lineWidth, cell.shape, SC.mm2px(cell.radius)); ctx.stroke();
+  ctx.fillStyle = '#000'; ctx.font = `bold ${SC.mm2px(10)}px system-ui`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(String(drawTile.n = (drawTile.n || 0) + 1), x + w / 2, y + h / 2);
+}
+function ruler(ctx, page) {
+  // Regla de 10 cm con ticks cada cm.
+  // Va centrada abajo, lejos de las esquinas con marcas.
+  const y = SC.mm2px(page.sheet.h - 14), x0 = SC.mm2px((page.sheet.w - 100) / 2);
+  ctx.fillStyle = '#000'; ctx.fillRect(x0, y, SC.mm2px(100), SC.mm2px(0.4));
+  for (let i = 0; i <= 10; i++) ctx.fillRect(x0 + SC.mm2px(i * 10) - 1, y - SC.mm2px(i % 5 ? 2 : 3.5), SC.mm2px(0.3), SC.mm2px(i % 5 ? 2 : 3.5));
+  ctx.font = `${SC.mm2px(3)}px system-ui`; ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+  ctx.fillText('10 cm — StickerCut calibración · ' + page.sheet.label + ' · ' + SC.CUT_MODES[page.mode].label, x0, y + SC.mm2px(1.5));
+}
+function render(page, opts) {
+  drawTile.n = 0;
+  const c = SC.renderPage(page, { drawTile, marks: SC.CUT_MODES[page.mode].marks, ...opts });
+  if (!opts || !opts.transparent) ruler(c.getContext('2d'), page);
+  return c;
+}
+function preview() {
+  const page = build(), c = render(page);
+  prev.width = c.width / 4; prev.height = c.height / 4;
+  prev.getContext('2d').drawImage(c, 0, 0, prev.width, prev.height);
+}
+sheetEl.onchange = marksEl.onchange = preview; preview();
+const name = () => `stickercut-calibracion-${sheetEl.value}-${marksEl.value}`;
+document.getElementById('pdf').onclick = async () => { const p = build(); SC.download(await SC.toPDF([render(p)], p.sheet), name() + '.pdf'); };
+document.getElementById('dxf').onclick = () => SC.download(SC.toDXF(build()), name() + '.dxf');
+document.getElementById('png').onclick = async () => SC.download(await SC.toPNG(render(build())), name() + '.png');
+</script>
+</body>
+</html>
