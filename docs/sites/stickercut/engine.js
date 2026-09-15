@@ -55,47 +55,77 @@
     let x = 0, y = 0, w = sheet.w, h = sheet.h;
     if (m.area) { w = Math.min(sheet.w, m.area.w); h = Math.min(sheet.h, m.area.h); x = (sheet.w - w) / 2; y = (sheet.h - h) / 2; }
     else if (sheet.big) { x = y = BIG_MARGIN; w -= 2 * BIG_MARGIN; h -= 2 * BIG_MARGIN; }
-    if (m.marks) {
-      const z = REG.inset + REG.len + REG.clearance;
-      const x2 = Math.min(x + w, sheet.w - z), y2 = Math.min(y + h, sheet.h - z);
-      x = Math.max(x, z); y = Math.max(y, z); w = x2 - x; h = y2 - y;
-    }
-    return { x, y, w, h };
+    // Con marcas no se recorta el área: se excluyen sólo las ESQUINAS (ver freeRects),
+    // así el espacio entre marcas a lo largo de los bordes sí se aprovecha.
+    return { x, y, w, h, marks: m.marks, corner: m.marks ? REG.inset + REG.len + REG.clearance : 0 };
+  }
+  // Rectángulos libres iniciales del área (coordenadas relativas al área, con +gap):
+  // sin marcas es uno solo; con marcas, una cruz que deja fuera las esquinas ocupadas.
+  function freeRects(area, gap) {
+    const W = area.w + gap, H = area.h + gap;
+    if (!area.marks) return [{ x: 0, y: 0, w: W, h: H }];
+    const z = Math.max(0, area.corner - area.x); // lo que la esquina invade dentro del área
+    const rects = [{ x: z, y: 0, w: W - 2 * z, h: H }, { x: 0, y: z, w: W, h: H - 2 * z }];
+    if (area.marks === 3) rects.push({ x: z, y: z, w: W - z, h: H - z }); // abajo-derecha libre (sin marca)
+    return rects;
   }
 
-  // Empaque por estantes (shelf packing): las piezas pueden ser de tamaños distintos.
-  // Se ordenan por alto y se acomodan en filas de izquierda a derecha; cada fila
-  // toma el alto de su primera pieza. El bloque resultante se centra en el área útil.
-  // items: {id, w, h, qty, shape, radius, ...}. Devuelve { pages, missing }.
-  // gapOverride (mm) sustituye la separación del modo (sólo tiene sentido con plóter).
+  // Empaque MaxRects (best short side fit): piezas de tamaños distintos sin desperdiciar
+  // filas completas como el empaque por estantes. Cada página mantiene su lista de
+  // rectángulos libres; al colocar una pieza se parten y se podan los contenidos.
+  // items: {id, w, h, qty, shape, radius, path...}. Devuelve { pages, missing, area }.
   function layout(items, sheetKey, mode, gapOverride) {
     const sheet = SHEETS[sheetKey], gap = gapOverride != null ? gapOverride : CUT_MODES[mode].gap, area = usableRect(sheet, mode);
     const pieces = [];
     for (const it of items) for (let i = 0; i < it.qty; i++) pieces.push(it);
-    pieces.sort((a, b) => b.h - a.h || b.w - a.w);
+    // Primero las grandes (área), y a igual área las más altas: menos huecos.
+    pieces.sort((a, b) => (b.w * b.h) - (a.w * a.h) || b.h - a.h);
     const pages = []; let missing = 0;
-    // Estante = { y, h, x }; first-fit: se prueba en todos los estantes de la página
-    // antes de abrir uno nuevo, así los huecos a la derecha se aprovechan.
-    const newPage = () => { const p = { sheet, sheetKey, mode, cells: [], shelves: [] }; pages.push(p); return p; };
+    const newPage = () => { const p = { sheet, sheetKey, mode, cells: [], free: freeRects(area, gap) }; pages.push(p); return p; };
+    // Cada pieza ocupa (w+gap)×(h+gap); el área libre se amplía en gap para que la última
+    // fila/columna no pierda el margen que no necesita.
+    const tryPlace = (p, W, H) => {
+      let best = null;
+      for (const r of p.free) {
+        if (W <= r.w + 1e-6 && H <= r.h + 1e-6) {
+          const score = Math.min(r.w - W, r.h - H), tie = Math.max(r.w - W, r.h - H);
+          if (!best || score < best.score || (score === best.score && tie < best.tie)) best = { x: r.x, y: r.y, score, tie };
+        }
+      }
+      return best;
+    };
+    const place = (p, x, y, W, H) => {
+      const used = { x, y, w: W, h: H }, next = [];
+      for (const r of p.free) {
+        if (!overlaps(r, used)) { next.push(r); continue; }
+        if (used.x > r.x) next.push({ x: r.x, y: r.y, w: used.x - r.x, h: r.h });
+        if (used.x + used.w < r.x + r.w) next.push({ x: used.x + used.w, y: r.y, w: r.x + r.w - used.x - used.w, h: r.h });
+        if (used.y > r.y) next.push({ x: r.x, y: r.y, w: r.w, h: used.y - r.y });
+        if (used.y + used.h < r.y + r.h) next.push({ x: r.x, y: used.y + used.h, w: r.w, h: r.y + r.h - used.y - used.h });
+      }
+      // Podar rectángulos contenidos en otros.
+      const inside = (a, b) => a.x >= b.x - 1e-6 && a.y >= b.y - 1e-6 && a.x + a.w <= b.x + b.w + 1e-6 && a.y + a.h <= b.y + b.h + 1e-6;
+      p.free = next.filter((r, i) => r.w > 1e-6 && r.h > 1e-6 && !next.some((o, j) => j !== i && (inside(r, o) && !(inside(o, r) && j > i))));
+    };
     for (const it of pieces) {
       if (it.w > area.w + 1e-6 || it.h > area.h + 1e-6) { missing++; continue; }
-      let placed = false;
-      for (const p of pages) {
-        let sh = p.shelves.find(sh => it.h <= sh.h + 1e-6 && sh.x + it.w <= area.w + 1e-6);
-        if (!sh) {
-          const last = p.shelves[p.shelves.length - 1], y = last ? last.y + last.h + gap : 0;
-          if (y + it.h <= area.h + 1e-6) { sh = { y, h: it.h, x: 0 }; p.shelves.push(sh); }
-        }
-        if (sh) { p.cells.push({ x: sh.x, y: sh.y, w: it.w, h: it.h, item: it, shape: it.shape || 'rect', radius: it.radius || 0, path: it.path }); sh.x += it.w + gap; placed = true; break; }
-      }
-      if (!placed) { const p = newPage(); const sh = { y: 0, h: it.h, x: it.w + gap }; p.shelves.push(sh); p.cells.push({ x: 0, y: 0, w: it.w, h: it.h, item: it, shape: it.shape || 'rect', radius: it.radius || 0, path: it.path }); }
+      const W = it.w + gap, H = it.h + gap;
+      let done = false;
+      for (const p of pages) { const b = tryPlace(p, W, H); if (b) { place(p, b.x, b.y, W, H); p.cells.push({ x: b.x, y: b.y, w: it.w, h: it.h, item: it, shape: it.shape || 'rect', radius: it.radius || 0, path: it.path }); done = true; break; } }
+      if (!done) { const p = newPage(); const b = tryPlace(p, W, H); place(p, b.x, b.y, W, H); p.cells.push({ x: b.x, y: b.y, w: it.w, h: it.h, item: it, shape: it.shape || 'rect', radius: it.radius || 0, path: it.path }); }
     }
     // Centrar el bloque de cada página dentro del área útil.
     for (const p of pages) {
       const maxX = Math.max(...p.cells.map(c => c.x + c.w)), maxY = Math.max(...p.cells.map(c => c.y + c.h));
-      const dx = area.x + (area.w - maxX) / 2, dy = area.y + (area.h - maxY) / 2;
+      let dx = area.x + (area.w - maxX) / 2, dy = area.y + (area.h - maxY) / 2;
+      if (area.marks) {
+        // Centrar podría meter una pieza en una esquina con marca: en ese caso no se centra.
+        const zones = markZones(p.sheet, area.marks);
+        const hits = p.cells.some(c => zones.some(z => overlaps({ x: c.x + dx, y: c.y + dy, w: c.w, h: c.h }, z)));
+        if (hits) { dx = area.x; dy = area.y; }
+      }
       for (const c of p.cells) { c.x += dx; c.y += dy; }
-      p.used = { w: maxX, h: maxY };
+      p.used = { w: maxX, h: maxY }; delete p.free;
     }
     return { pages, missing, area };
   }

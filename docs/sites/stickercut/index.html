@@ -291,7 +291,7 @@
 
 <a class="ad" id="ad" target="_blank" rel="noopener"></a>
 
-<script src="engine.js?v=492793"></script>
+<script src="engine.js?v=495718"></script>
 <script>
 // ---------- Catálogo de tamaños (cm) ----------
 const SIZES = [
@@ -610,7 +610,7 @@ function update() {
 }
 [sizeEl, shapeEl, sheetEl, gapEl, guidesEl, radiusEl, borderEl, cwEl, chEl, $('oneSheet')].forEach(el => el.addEventListener('change', () => { full = false; update(); }));
 [radiusEl, borderEl, cwEl, chEl].forEach(el => el.addEventListener('input', update));
-$('modes').addEventListener('change', e => { mode = e.target.value; document.querySelectorAll('.mode').forEach(l => l.classList.toggle('on', l.querySelector('input').checked)); pageIdx = 0; update(); });
+$('modes').addEventListener('change', e => { mode = e.target.value; full = false; document.querySelectorAll('.mode').forEach(l => l.classList.toggle('on', l.querySelector('input').checked)); pageIdx = 0; update(); });
 $('clearAll').addEventListener('click', () => { items = []; update(); });
 $('prevPage').addEventListener('click', () => { pageIdx--; drawPreview(); updateSummary(); });
 $('nextPage').addEventListener('click', () => { pageIdx++; drawPreview(); updateSummary(); });
@@ -619,7 +619,7 @@ $('nextPage').addEventListener('click', () => { pageIdx++; drawPreview(); update
 const sheetFile = () => SC.SHEETS[sheetEl.value].file;
 async function buildPDF() { return SC.toPDF(pages.map(p => renderPageCanvas(p)), SC.SHEETS[sheetEl.value]); }
 $('dlPdf').addEventListener('click', async () => SC.download(await buildPDF(), `stickercut-${sheetFile()}.pdf`));
-$('print').addEventListener('click', async () => { const url = URL.createObjectURL(await buildPDF()); window.open(url, '_blank'); });
+$('print').addEventListener('click', async () => { const w = window.open('', '_blank'); const url = URL.createObjectURL(await buildPDF()); if (w) w.location = url; else window.open(url, '_blank'); });
 $('dlDxf').addEventListener('click', () => {
   // Un DXF por hoja: las piezas pueden ser distintas, así que el corte va ligado a
   // ESA hoja impresa (no es plantilla reutilizable).
