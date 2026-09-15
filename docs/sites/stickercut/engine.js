@@ -66,11 +66,13 @@
   // izquierda a derecha y prueba las filas anteriores antes de abrir otra. Da hojas
   // ordenadas (como las de Studio) y admite tamaños distintos. Cada fila conoce su
   // rango útil en X: si toca una esquina con marca, ese lado se recorta.
-  function layout(items, sheetKey, mode, gapOverride) {
+  function layout(items, sheetKey, mode, gapOverride) { return packPages(items, sheetKey, mode, gapOverride, 0, true); }
+  function packPages(items, sheetKey, mode, gapOverride, yOff, firstPass) {
     const sheet = SHEETS[sheetKey], gap = gapOverride != null ? gapOverride : CUT_MODES[mode].gap, area = usableRect(sheet, mode);
     const z = area.marks ? Math.max(0, area.corner - area.x) : 0; // lo que invade la esquina dentro del área
+    // yOff = dónde quedará realmente la fila tras centrar el bloque (segunda pasada).
     const xRange = (y, h) => {
-      let x0 = 0, x1 = area.w;
+      let x0 = 0, x1 = area.w; y += yOff;
       if (z && y < z) { x0 = z; x1 = area.w - z; }                                   // toca esquinas superiores
       if (z && y + h > area.h - z) { x0 = Math.max(x0, z); if (area.marks === 4) x1 = Math.min(x1, area.w - z); } // inferiores
       return [x0, x1];
@@ -94,14 +96,20 @@
       }
       if (!placed) { const p = newPage(); const [x0, x1] = xRange(0, it.h); const sh = { y: 0, h: it.h, x: x0, x0, x1 }; p.shelves.push(sh); put(p, sh, it); }
     }
+    // Primera pasada con una sola página: repetir con el bloque centrado verticalmente
+    // para que las filas alejadas de las esquinas recuperen el ancho completo.
+    if (firstPass && pages.length === 1 && z) {
+      const maxY = Math.max(...pages[0].cells.map(c => c.y + c.h)), dy = (area.h - maxY) / 2;
+      if (dy > 0.5) { const again = packPages(items, sheetKey, mode, gapOverride, dy, false); if (again.pages.length === 1) return again; }
+    }
     // Centrar: cada fila en su rango, y el bloque completo verticalmente.
     for (const p of pages) {
       for (const sh of p.shelves) {
         const row = p.cells.filter(c => c.y === sh.y), used = sh.x - gap - sh.x0, dx = (sh.x1 - sh.x0 - used) / 2;
         for (const c of row) c.x += dx;
       }
-      const maxY = Math.max(...p.cells.map(c => c.y + c.h)), dy = (area.h - maxY) / 2;
-      // Al bajar el bloque una fila podría entrar en una esquina inferior: sólo se centra si no choca.
+      const maxY = Math.max(...p.cells.map(c => c.y + c.h)), dy = firstPass ? (area.h - maxY) / 2 : yOff;
+      // Al bajar el bloque una fila podría entrar en una esquina: sólo se centra si no choca.
       const zones = markZones(sheet, area.marks);
       const ok = !p.cells.some(c => zones.some(q => overlaps({ x: c.x + area.x, y: c.y + dy + area.y, w: c.w, h: c.h }, q)));
       for (const c of p.cells) { c.x += area.x; c.y += area.y + (ok ? dy : 0); }
