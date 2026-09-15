@@ -26,9 +26,9 @@
   // Modos de corte: qué marcas lleva la hoja y qué separación entre piezas.
   const CUT_MODES = {
     scissors:    { label: 'Tijeras / guillotina', marks: 0, gap: 0,    maxW: Infinity },
-    silhouette3: { label: 'Silhouette (3 marcas)', marks: 3, gap: 1.25, maxW: 304.8 },
-    silhouette4: { label: 'Silhouette (4 marcas)', marks: 4, gap: 1.25, maxW: 304.8 },
-    cricut:      { label: 'Cricut',                marks: 0, gap: 2,    maxW: 215.9, area: { w: 7.55 * MM_PER_IN, h: 9.94 * MM_PER_IN } },
+    silhouette3: { label: 'Silhouette (3 marcas)', marks: 3, gap: 3, maxW: 304.8 },
+    silhouette4: { label: 'Silhouette (4 marcas)', marks: 4, gap: 3, maxW: 304.8 },
+    cricut:      { label: 'Cricut',                marks: 0, gap: 3,    maxW: 215.9, area: { w: 7.55 * MM_PER_IN, h: 9.94 * MM_PER_IN } },
   };
 
   const BIG_MARGIN = 6.35; // 0.25" en hojas grandes
@@ -67,8 +67,9 @@
   // Se ordenan por alto y se acomodan en filas de izquierda a derecha; cada fila
   // toma el alto de su primera pieza. El bloque resultante se centra en el área útil.
   // items: {id, w, h, qty, shape, radius, ...}. Devuelve { pages, missing }.
-  function layout(items, sheetKey, mode) {
-    const sheet = SHEETS[sheetKey], gap = CUT_MODES[mode].gap, area = usableRect(sheet, mode);
+  // gapOverride (mm) sustituye la separación del modo (sólo tiene sentido con plóter).
+  function layout(items, sheetKey, mode, gapOverride) {
+    const sheet = SHEETS[sheetKey], gap = gapOverride != null ? gapOverride : CUT_MODES[mode].gap, area = usableRect(sheet, mode);
     const pieces = [];
     for (const it of items) for (let i = 0; i < it.qty; i++) pieces.push(it);
     pieces.sort((a, b) => b.h - a.h || b.w - a.w);

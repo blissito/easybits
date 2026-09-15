@@ -184,6 +184,8 @@
         <label class="mode"><input type="radio" name="mode" value="silhouette3"><span>Otras Silhouette<small>3 marcas · Cameo 1–4, Portrait, Curio</small></span></label>
         <label class="mode"><input type="radio" name="mode" value="cricut"><span>Cricut<small>Maker, Explore, Joy Xtra</small></span></label>
       </div>
+      <div id="gapRow" hidden><label>Separación entre piezas</label>
+        <select id="gap"><option value="1.25">1.25 mm — mínima (fotos, cartas)</option><option value="3" selected>3 mm — recomendada para stickers</option><option value="5">5 mm</option><option value="10">10 mm — holgada (Cricut)</option></select></div>
       <label class="toggle" id="guidesRow"><span>Guías de corte impresas <small style="color:var(--muted)">(líneas tenues)</small></span><input type="checkbox" id="guides" checked><span class="track"></span></label>
       <p class="hint" id="modeHint"></p>
     </section>
@@ -256,7 +258,7 @@ const SIZES = [
   { k: 'custom', label: 'Personalizado…' },
 ];
 const $ = id => document.getElementById(id);
-const sizeEl = $('size'), shapeEl = $('shape'), sheetEl = $('sheet'), guidesEl = $('guides'), radiusEl = $('radius'), cwEl = $('cw'), chEl = $('ch');
+const sizeEl = $('size'), shapeEl = $('shape'), sheetEl = $('sheet'), gapEl = $('gap'), guidesEl = $('guides'), radiusEl = $('radius'), cwEl = $('cw'), chEl = $('ch');
 for (const s of SIZES) sizeEl.add(new Option(s.label, s.k));
 for (const [k, s] of Object.entries(SC.SHEETS)) sheetEl.add(new Option(s.label, k));
 sheetEl.value = localStorage.getItem('sc.sheet') || 'carta';
@@ -419,7 +421,7 @@ function compute() {
   const shape = shapeEl.value, radius = radiusMm();
   const list = items.map(it => { const sz = sizeOf(it); return { ...it, w: sz.w, h: sz.h, shape, radius, item: it }; });
   // layout() usa {id,w,h,qty,shape,radius}; la celda referencia a `item` → aquí el objeto es el propio wrapper.
-  const r = SC.layout(list.map(o => ({ id: o.id, w: o.w, h: o.h, qty: o.qty, shape, radius, src: o.item })), sheetEl.value, mode);
+  const r = SC.layout(list.map(o => ({ id: o.id, w: o.w, h: o.h, qty: o.qty, shape, radius, src: o.item })), sheetEl.value, mode, mode === 'scissors' ? 0 : Number(gapEl.value));
   for (const p of r.pages) for (const c of p.cells) c.item = c.item.src;
   pages = r.pages; missing = r.missing;
   if (pageIdx >= pages.length) pageIdx = Math.max(0, pages.length - 1);
@@ -449,9 +451,9 @@ function updateSummary() {
   const sil = mode.startsWith('silhouette'), cri = mode === 'cricut';
   $('dlDxf').hidden = !sil; $('dlCricut').hidden = !cri;
   $('helpSil').hidden = !sil; $('helpCri').hidden = !cri;
-  $('guidesRow').hidden = mode !== 'scissors';
-  $('modeHint').textContent = sil ? 'La hoja se imprime con marcas de registro y las piezas separadas 1.25 mm; las líneas de corte no se imprimen, van en el DXF.'
-    : cri ? `Cricut recorta sólo dentro de un área de 19.2 × 25.2 cm (7.55 × 9.94"); el PNG sale transparente con 2 mm entre piezas. Sólo impresoras inkjet.`
+  $('guidesRow').hidden = mode !== 'scissors'; $('gapRow').hidden = mode === 'scissors';
+  $('modeHint').textContent = sil ? 'La hoja se imprime con marcas de registro y las piezas separadas; las líneas de corte no se imprimen, van en el DXF.'
+    : cri ? `Cricut recorta sólo dentro de un área de 19.2 × 25.2 cm (7.55 × 9.94"); el PNG sale transparente con la separación elegida. Sólo impresoras inkjet.`
     : 'Las piezas van pegadas en bloque para cortar con pocos tijeretazos; las guías se imprimen tenues.';
 }
 function update() {
@@ -462,7 +464,7 @@ function update() {
   if (!sheetAllowed(sheetEl.value)) sheetEl.value = 'carta';
   compute(); renderItems(); drawPreview(); updateSummary();
 }
-[sizeEl, shapeEl, sheetEl, guidesEl, radiusEl, cwEl, chEl].forEach(el => el.addEventListener('change', update));
+[sizeEl, shapeEl, sheetEl, gapEl, guidesEl, radiusEl, cwEl, chEl].forEach(el => el.addEventListener('change', update));
 [radiusEl, cwEl, chEl].forEach(el => el.addEventListener('input', update));
 $('modes').addEventListener('change', e => { mode = e.target.value; document.querySelectorAll('.mode').forEach(l => l.classList.toggle('on', l.querySelector('input').checked)); pageIdx = 0; update(); });
 $('prevPage').addEventListener('click', () => { pageIdx--; drawPreview(); updateSummary(); });
