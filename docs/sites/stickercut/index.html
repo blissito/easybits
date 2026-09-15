@@ -183,7 +183,7 @@
         <div id="chWrap"><label>Alto (cm)</label><input type="number" id="ch" min="0.5" max="30" step="0.1" value="5"></div>
       </div>
       <div id="borderRow" hidden><label>Borde blanco alrededor (mm)</label><input type="number" id="border" min="0" max="10" step="0.5" value="2"><p class="hint">Sigue el contorno de la imagen. Necesita PNG con fondo transparente; si no lo tiene, esa pieza sale en rectángulo.</p></div>
-      <label class="toggle"><span>Imprimir la línea de corte <small style="color:var(--muted)">(gris tenue, 0.2 mm)</small></span><input type="checkbox" id="guides" checked><span class="track"></span></label>
+      <label class="toggle"><span>Línea de corte <small style="color:var(--muted)">(en pantalla punteada; impresa gris tenue de 0.2 mm)</small></span><input type="checkbox" id="guides" checked><span class="track"></span></label>
       <div id="radiusRow" hidden><label>Radio de esquina (mm)</label><input type="number" id="radius" min="0.5" max="30" step="0.5" value="3"></div>
     </section>
 
@@ -518,7 +518,7 @@ function drawPreview() {
     return;
   }
   // En pantalla se marca la línea de corte (punteada); en los archivos no va.
-  const c = renderPageCanvas(pages[pageIdx], { outline: true });
+  const c = renderPageCanvas(pages[pageIdx], { outline: guidesEl.checked });
   prevC.width = c.width / 2; prevC.height = c.height / 2;
   prevC.getContext('2d').drawImage(c, 0, 0, prevC.width, prevC.height);
 }
@@ -532,7 +532,7 @@ function updateSummary() {
   const sil = mode.startsWith('silhouette'), cri = mode === 'cricut';
   $('dlDxf').hidden = !sil; $('dlCricut').hidden = !cri;
   $('helpSil').hidden = !sil; $('helpCri').hidden = !cri;
-  $('legend').hidden = !pages.length; $('gapRow').hidden = mode === 'scissors';
+  $('legend').hidden = !pages.length || !guidesEl.checked; $('gapRow').hidden = mode === 'scissors';
   $('modeHint').textContent = sil ? 'La hoja se imprime con marcas de registro y las piezas separadas; las líneas de corte no se imprimen, van en el DXF.'
     : cri ? `Cricut recorta sólo dentro de un área de 19.2 × 25.2 cm (7.55 × 9.94"); el PNG sale transparente con la separación elegida. Sólo impresoras inkjet.`
     : 'Las piezas van pegadas en bloque para cortar con pocos tijeretazos.';
