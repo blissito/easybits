@@ -291,7 +291,7 @@
 
 <a class="ad" id="ad" target="_blank" rel="noopener"></a>
 
-<script src="engine.js?v=496594"></script>
+<script src="engine.js?v=497068"></script>
 <script>
 // ---------- Catálogo de tamaños (cm) ----------
 const SIZES = [
@@ -592,7 +592,7 @@ function drawOverlay(x, sheet, k) {
   const marks = currentMode().marks; if (!marks) return;
   x.save();
   const z = (SC.REG.inset + SC.REG.len + SC.REG.clearance) * k, W = sheet.w * k, H = sheet.h * k;
-  const zones = [[0, 0, W, z], [0, 0, z, H]]; if (marks === 4) zones.push([W - z, H - z, z, z]);
+  const zones = [[0, 0, z, z], [W - z, 0, z, z], [0, H - z, z, z]]; if (marks === 4) zones.push([W - z, H - z, z, z]);
   x.strokeStyle = 'rgba(0,0,0,.2)'; x.fillStyle = 'rgba(0,0,0,.035)'; x.lineWidth = 1;
   for (const [zx, zy, zw, zh] of zones) {
     x.fillRect(zx, zy, zw, zh);
