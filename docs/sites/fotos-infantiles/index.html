@@ -138,6 +138,23 @@
   .toggle input:focus-visible + .track { outline: 2px solid #7c5cff; outline-offset: 2px; }
 
   /* Una sola pantalla: nada de scroll vertical cuando hay altura suficiente. */
+  /* Pie: anuncio discreto de EasyBits (una línea, sin tapar la herramienta). */
+  .ad { display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap;
+    margin-top: 18px; padding: 8px 14px; border-top: 1px solid #8883; font-size: .82rem; opacity: .78;
+    color: inherit; text-decoration: none; transition: opacity .2s; }
+  .ad:hover { opacity: 1; }
+  .ad svg { width: 22px; height: 22px; flex: none; }
+  .ad .bit { transform-box: fill-box; transform-origin: 50% 100%; animation: bit-hop 4.5s ease-in-out infinite; }
+  .ad .bit:nth-child(2) { animation-delay: .15s; } .ad .bit:nth-child(3) { animation-delay: .3s; }
+  @keyframes bit-hop { 0%, 78%, 100% { transform: translateY(0) scaleY(1); } 84% { transform: translateY(0) scaleY(.8); } 90% { transform: translateY(-5px) scaleY(1.05); } 96% { transform: translateY(0) scaleY(1); } }
+  .ad .words { display: inline-grid; text-align: left; }
+  .ad .words span { grid-area: 1/1; animation: word-cycle 12s infinite; opacity: 0; color: #7c3aed; font-weight: 600; }
+  .ad .words span:nth-child(2) { animation-delay: 4s; } .ad .words span:nth-child(3) { animation-delay: 8s; }
+  @keyframes word-cycle { 0%, 2% { opacity: 0; transform: translateY(6px); } 6%, 30% { opacity: 1; transform: none; } 34%, 100% { opacity: 0; transform: translateY(-6px); } }
+  .ad .cta { color: #7c3aed; font-weight: 600; white-space: nowrap; }
+  @media (prefers-reduced-motion: reduce) { .ad .bit, .ad .words span { animation: none; } .ad .words span { opacity: 1; } .ad .words span:not(:first-child) { display: none; } }
+  @media print { .ad { display: none; } }
+
   @media (min-width: 900px) and (min-height: 620px) {
     html { height: 100%; }
     body { height: 100dvh; display: flex; flex-direction: column; overflow: hidden; padding: 18px 24px; }
@@ -157,6 +174,7 @@
     .actions { margin-top: 12px; }
     #preview { max-height: 72vh; width: auto; max-width: 100%; margin-inline: auto; }
     .spacer { flex: 1; min-height: 0; }
+    .ad { flex: 0 0 auto; margin-top: 10px; padding: 6px 14px 0; }
   }
 </style>
 </head>
@@ -241,6 +259,17 @@
     <div class="spacer"></div>
   </div>
 </div>
+
+<a class="ad" href="https://www.easybits.cloud/?utm_source=fotos-infantiles&utm_medium=footer" target="_blank" rel="noopener">
+  <svg viewBox="0 0 24 24" aria-hidden="true">
+    <rect class="bit" x="2"  y="10" width="6" height="12" rx="1.5" fill="#7c3aed"/>
+    <rect class="bit" x="9"  y="6"  width="6" height="16" rx="1.5" fill="#fbbf24"/>
+    <rect class="bit" x="16" y="2"  width="6" height="20" rx="1.5" fill="#7c3aed"/>
+  </svg>
+  <span>Esta herramienta se hizo con <b>EasyBits</b>: con IA crea</span>
+  <span class="words"><span>sitios como este</span><span>documentos y presentaciones</span><span>agentes que trabajan por ti</span></span>
+  <span class="cta">Pruébalo gratis →</span>
+</a>
 
 <script>
 const DPI = 300;
