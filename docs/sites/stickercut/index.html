@@ -87,6 +87,25 @@
   details ol { padding-left: 20px; line-height: 1.5; }
   details code { background: #f4efea; padding: 1px 5px; border-radius: 4px; }
 
+  /* Una sola pantalla en escritorio: la columna de controles hace scroll interno,
+     la hoja se ajusta a la altura disponible. */
+  @media (min-width: 861px) and (min-height: 600px) {
+    html, body { height: 100%; }
+    body { display: flex; flex-direction: column; overflow: hidden; padding: 14px 20px 10px; }
+    h1 { font-size: 1.2rem; }
+    p.sub { margin-bottom: 10px; font-size: .86rem; }
+    .app { flex: 1; min-height: 0; grid-template-rows: minmax(0, 1fr); align-items: stretch; width: 100%; }
+    .app > div { min-height: 0; overflow-y: auto; padding-right: 4px; scrollbar-width: thin; }
+    .out { position: static; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+    .out details { overflow-y: auto; flex: 0 1 auto; }
+    .sheetwrap { flex: 1; min-height: 0; padding: 10px; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+    #preview { height: 100%; width: auto; max-width: 100%; max-height: none; object-fit: contain; }
+    .card { padding: 14px; }
+    .drop { padding: 14px 12px; }
+    label { margin-top: 8px; }
+    .ad { margin-top: 8px; padding-top: 6px; }
+  }
+
   /* Modal de encuadre */
   dialog { border: 0; border-radius: 16px; padding: 0; max-width: min(92vw, 560px); width: 100%; box-shadow: 0 20px 60px rgba(0,0,0,.3); }
   dialog::backdrop { background: rgba(43,36,32,.45); }
@@ -119,7 +138,7 @@
 </head>
 <body>
 <h1>StickerCut <small>hojas de stickers y fotos, listas para imprimir y cortar</small></h1>
-<p class="sub">Sube tus imágenes, di cuántas quieres de cada una y descarga la hoja. Todo pasa en tu navegador: nada se sube a ningún servidor.</p>
+<p class="sub">Sube tus imágenes, di cuántas quieres de cada una y descarga la hoja. Todo pasa en tu navegador: nada se sube a ningún servidor. <a href="calib.html" style="color:var(--accent-ink)">Hoja de calibración para plóter →</a></p>
 
 <div class="app">
   <div>
@@ -128,8 +147,8 @@
       <div class="drop" id="drop" tabindex="0" role="button">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4"/><path d="m7 9 5-5 5 5"/><path d="M5 20h14"/></svg>
         <strong>Arrastra tus imágenes aquí</strong>
-        <span>o haz clic para elegirlas · también puedes pegar (⌘V)</span>
-        <input type="file" id="file" accept="image/*" multiple hidden>
+        <span>o haz clic para elegirlas · también un .zip con fotos · o pegar (⌘V)</span>
+        <input type="file" id="file" accept="image/*,.zip" multiple hidden>
       </div>
       <div class="two">
         <div>
@@ -160,8 +179,8 @@
       <label>¿Con qué vas a cortar?</label>
       <div class="modes" id="modes">
         <label class="mode on"><input type="radio" name="mode" value="scissors" checked><span>Tijeras / guillotina<small>guías tenues para cortar a mano</small></span></label>
-        <label class="mode"><input type="radio" name="mode" value="silhouette4"><span>Silhouette · 4 marcas<small>Cameo 5 Alpha, Pro MK II</small></span></label>
-        <label class="mode"><input type="radio" name="mode" value="silhouette3"><span>Silhouette · 3 marcas<small>Cameo 1–4, Portrait, Curio</small></span></label>
+        <label class="mode"><input type="radio" name="mode" value="silhouette4"><span>Cameo 5 Alpha<small>Silhouette · 4 marcas (también Pro MK II)</small></span></label>
+        <label class="mode"><input type="radio" name="mode" value="silhouette3"><span>Otras Silhouette<small>3 marcas · Cameo 1–4, Portrait, Curio</small></span></label>
         <label class="mode"><input type="radio" name="mode" value="cricut"><span>Cricut<small>Maker, Explore, Joy Xtra</small></span></label>
       </div>
       <label class="toggle" id="guidesRow"><span>Guías de corte impresas <small style="color:var(--muted)">(líneas tenues)</small></span><input type="checkbox" id="guides" checked><span class="track"></span></label>
@@ -192,7 +211,7 @@
         <li><b>Print &amp; Cut</b>: marcas de registro activas; largo, grosor e inset en <b>0</b> (Studio usa sus mínimos: 5 mm / 1 mm / 10 mm, que son los impresos).</li>
         <li>Hoja en el tapete, esquina superior izquierda, y <b>Enviar</b>. Guarda el proyecto como <code>.studio3</code>: sirve para siempre con este tamaño y hoja.</li>
       </ol>
-      <p>Portrait: máximo 8.5" de ancho (Carta / A4). Cameo: todas las hojas con tapete 12 × 24.</p>
+      <p>Portrait: máximo 8.5" de ancho (Carta / A4). Cameo: todas las hojas con tapete 12 × 24. ¿Primera vez? Corre antes la <a href="calib.html" target="_blank">hoja de calibración</a>.</p>
     </details>
     <details id="helpCri" hidden>
       <summary>Cómo cortarlo en Cricut Design Space</summary>
@@ -267,9 +286,37 @@ fileEl.addEventListener('change', () => { addFiles(fileEl.files); fileEl.value =
 drop.addEventListener('drop', e => addFiles(e.dataTransfer.files));
 document.addEventListener('paste', e => { const fs = [...(e.clipboardData?.items || [])].filter(i => i.type.startsWith('image/')).map(i => i.getAsFile()); if (fs.length) addFiles(fs); });
 let seq = 0;
-function addFiles(list) {
+// ZIP sin librerías: se lee el directorio central y cada entrada se infla con
+// DecompressionStream('deflate-raw'). Sólo se toman imágenes; se ignoran carpetas y __MACOSX.
+async function unzipImages(file) {
+  const buf = new Uint8Array(await file.arrayBuffer()), dv = new DataView(buf.buffer);
+  let eocd = buf.length - 22; while (eocd >= 0 && dv.getUint32(eocd, true) !== 0x06054b50) eocd--;
+  if (eocd < 0) return [];
+  const count = dv.getUint16(eocd + 10, true); let off = dv.getUint32(eocd + 16, true); const out = [];
+  for (let i = 0; i < count; i++) {
+    if (dv.getUint32(off, true) !== 0x02014b50) break;
+    const method = dv.getUint16(off + 10, true), csize = dv.getUint32(off + 20, true), nlen = dv.getUint16(off + 28, true), elen = dv.getUint16(off + 30, true), clen = dv.getUint16(off + 32, true), lho = dv.getUint32(off + 42, true);
+    const name = new TextDecoder().decode(buf.subarray(off + 46, off + 46 + nlen)); off += 46 + nlen + elen + clen;
+    const base = name.split('/').pop(); if (!base || name.startsWith('__MACOSX') || base.startsWith('.') || !/\.(png|jpe?g|webp|gif|bmp)$/i.test(base)) continue;
+    const dataStart = lho + 30 + dv.getUint16(lho + 26, true) + dv.getUint16(lho + 28, true);
+    const raw = buf.subarray(dataStart, dataStart + csize);
+    let bytes = raw;
+    if (method === 8) bytes = new Uint8Array(await new Response(new Blob([raw]).stream().pipeThrough(new DecompressionStream('deflate-raw'))).arrayBuffer());
+    else if (method !== 0) continue;
+    const ext = base.split('.').pop().toLowerCase(), type = ext === 'jpg' ? 'image/jpeg' : 'image/' + ext;
+    out.push(new File([bytes], base, { type }));
+  }
+  return out;
+}
+async function addFiles(list) {
+  const files = [];
   for (const f of list) {
-    if (!f || !/^image\//.test(f.type)) continue;
+    if (!f) continue;
+    if (/\.zip$/i.test(f.name) || f.type === 'application/zip' || f.type === 'application/x-zip-compressed') { try { files.push(...await unzipImages(f)); } catch (e) { console.warn('zip', e); } }
+    else files.push(f);
+  }
+  for (const f of files) {
+    if (!/^image\//.test(f.type)) continue;
     const img = new Image();
     img.onload = () => { items.push({ id: 'i' + (++seq), img, name: f.name || 'pegada', qty: 1, sizeKey: 'global', zoom: 1, cx: .5, cy: .5 }); URL.revokeObjectURL(img.src); update(); };
     img.src = URL.createObjectURL(f);
