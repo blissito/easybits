@@ -25,8 +25,9 @@
   h1 { font-size: 1.35rem; margin: 0; letter-spacing: -.01em; }
   h1 small { font-weight: 500; color: var(--muted); font-size: .85rem; margin-left: 8px; }
   p.sub { margin: 4px 0 16px; color: var(--muted); font-size: .92rem; }
-  .app { display: grid; grid-template-columns: minmax(300px, 420px) 1fr; gap: 20px; max-width: 1240px; margin-inline: auto; align-items: start; }
-  @media (max-width: 860px) { .app { grid-template-columns: 1fr; } }
+  .app { display: grid; grid-template-columns: minmax(260px, 340px) minmax(260px, 320px) 1fr; gap: 16px; max-width: 1400px; margin-inline: auto; align-items: start; }
+  @media (max-width: 1100px) { .app { grid-template-columns: minmax(280px, 1fr) 1.4fr; } .col2 { grid-column: 1; } .out { grid-column: 2; grid-row: 1 / span 2; } }
+  @media (max-width: 860px) { .app { grid-template-columns: 1fr; } .out { grid-column: 1; grid-row: auto; } }
   .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; }
   .card + .card { margin-top: 14px; }
   .step { display: flex; align-items: center; gap: 10px; margin: 0 0 10px; font-weight: 650; font-size: .98rem; }
@@ -97,6 +98,9 @@
     p.sub { margin-bottom: 10px; font-size: .86rem; }
     .app { flex: 1; min-height: 0; grid-template-rows: minmax(0, 1fr); align-items: stretch; width: 100%; }
     .app > div { min-height: 0; overflow-y: auto; padding-right: 4px; scrollbar-width: thin; }
+    .col1 { display: flex; flex-direction: column; overflow: hidden; }
+    .card.imgs { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+    .card.imgs .items { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: thin; padding-right: 2px; }
     .out { position: static; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
     .out details { overflow-y: auto; flex: 0 1 auto; }
     .sheetwrap { flex: 1; min-height: 0; padding: 10px; display: flex; align-items: center; justify-content: center; overflow: hidden; }
@@ -142,8 +146,8 @@
 <p class="sub">Sube tus imágenes, di cuántas quieres de cada una y descarga la hoja. Todo pasa en tu navegador: nada se sube a ningún servidor. <a href="calib.html" style="color:var(--accent-ink)">Hoja de calibración para plóter →</a></p>
 
 <div class="app">
-  <div>
-    <section class="card">
+  <div class="col1">
+    <section class="card imgs">
       <div class="step"><b>1</b> Imágenes</div>
       <div class="drop" id="drop" tabindex="0" role="button">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4"/><path d="m7 9 5-5 5 5"/><path d="M5 20h14"/></svg>
@@ -151,6 +155,13 @@
         <span>o haz clic para elegirlas · también un .zip con fotos · o pegar (⌘V)</span>
         <input type="file" id="file" accept="image/*,.zip" multiple hidden>
       </div>
+      <div class="items" id="items"></div>
+    </section>
+  </div>
+
+  <div class="col2">
+    <section class="card">
+      <div class="step"><b>2</b> Pieza</div>
       <div class="two">
         <div>
           <label>Tamaño de cada pieza</label>
@@ -170,11 +181,10 @@
         <div id="chWrap"><label>Alto (cm)</label><input type="number" id="ch" min="0.5" max="30" step="0.1" value="5"></div>
       </div>
       <div id="radiusRow" hidden><label>Radio de esquina (mm)</label><input type="number" id="radius" min="0.5" max="30" step="0.5" value="3"></div>
-      <div class="items" id="items"></div>
     </section>
 
     <section class="card">
-      <div class="step"><b>2</b> Hoja y corte</div>
+      <div class="step"><b>3</b> Hoja y corte</div>
       <label>Hoja</label>
       <select id="sheet"></select>
       <label>¿Con qué vas a cortar?</label>
@@ -192,7 +202,7 @@
   </div>
 
   <section class="card out">
-    <div class="step"><b>3</b> Descargar</div>
+    <div class="step"><b>4</b> Descargar</div>
     <div class="sheetwrap"><canvas id="preview"></canvas></div>
     <div class="pager">
       <span id="pageInfo">Sin imágenes todavía</span>
