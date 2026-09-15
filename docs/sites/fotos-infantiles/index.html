@@ -138,21 +138,24 @@
   .toggle input:focus-visible + .track { outline: 2px solid #7c5cff; outline-offset: 2px; }
 
   /* Una sola pantalla: nada de scroll vertical cuando hay altura suficiente. */
-  /* Pie: anuncio discreto de EasyBits (una línea, sin tapar la herramienta). */
+  /* Pie: anuncio discreto que rota entre Denik, Formmy y EasyBits (una línea, sin tapar la herramienta). */
   .ad { display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap;
     margin-top: 18px; padding: 8px 14px; border-top: 1px solid #8883; font-size: .82rem; opacity: .78;
-    color: inherit; text-decoration: none; transition: opacity .2s; }
+    color: inherit; text-decoration: none; transition: opacity .25s, transform .25s; --c: #5158F6; }
   .ad:hover { opacity: 1; }
+  .ad.swap { opacity: 0; transform: translateY(4px); }
   .ad svg { width: 22px; height: 22px; flex: none; }
-  .ad .bit { transform-box: fill-box; transform-origin: 50% 100%; animation: bit-hop 4.5s ease-in-out infinite; }
+  .ad b, .ad .cta { color: var(--c); }
+  .ad .cta { font-weight: 600; white-space: nowrap; }
+  .ad .pulse { transform-box: fill-box; transform-origin: center; animation: ad-pulse 2.4s ease-in-out infinite; }
+  .ad .dot:nth-child(2) { animation-delay: .2s; } .ad .dot:nth-child(3) { animation-delay: .4s; }
+  .ad .dot { transform-box: fill-box; transform-origin: center; animation: ad-bounce 1.2s ease-in-out infinite; }
+  .ad .bit { transform-box: fill-box; transform-origin: 50% 100%; animation: ad-hop 3s ease-in-out infinite; }
   .ad .bit:nth-child(2) { animation-delay: .15s; } .ad .bit:nth-child(3) { animation-delay: .3s; }
-  @keyframes bit-hop { 0%, 78%, 100% { transform: translateY(0) scaleY(1); } 84% { transform: translateY(0) scaleY(.8); } 90% { transform: translateY(-5px) scaleY(1.05); } 96% { transform: translateY(0) scaleY(1); } }
-  .ad .words { display: inline-grid; text-align: left; }
-  .ad .words span { grid-area: 1/1; animation: word-cycle 12s infinite; opacity: 0; color: #7c3aed; font-weight: 600; }
-  .ad .words span:nth-child(2) { animation-delay: 4s; } .ad .words span:nth-child(3) { animation-delay: 8s; }
-  @keyframes word-cycle { 0%, 2% { opacity: 0; transform: translateY(6px); } 6%, 30% { opacity: 1; transform: none; } 34%, 100% { opacity: 0; transform: translateY(-6px); } }
-  .ad .cta { color: #7c3aed; font-weight: 600; white-space: nowrap; }
-  @media (prefers-reduced-motion: reduce) { .ad .bit, .ad .words span { animation: none; } .ad .words span { opacity: 1; } .ad .words span:not(:first-child) { display: none; } }
+  @keyframes ad-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.35); } }
+  @keyframes ad-bounce { 0%, 60%, 100% { transform: translateY(0); } 30% { transform: translateY(-3px); } }
+  @keyframes ad-hop { 0%, 70%, 100% { transform: translateY(0) scaleY(1); } 78% { transform: scaleY(.8); } 86% { transform: translateY(-5px) scaleY(1.05); } 94% { transform: none; } }
+  @media (prefers-reduced-motion: reduce) { .ad .pulse, .ad .dot, .ad .bit { animation: none; } }
   @media print { .ad { display: none; } }
 
   @media (min-width: 900px) and (min-height: 620px) {
@@ -260,16 +263,7 @@
   </div>
 </div>
 
-<a class="ad" href="https://www.easybits.cloud/?utm_source=fotos-infantiles&utm_medium=footer" target="_blank" rel="noopener">
-  <svg viewBox="0 0 24 24" aria-hidden="true">
-    <rect class="bit" x="2"  y="10" width="6" height="12" rx="1.5" fill="#7c3aed"/>
-    <rect class="bit" x="9"  y="6"  width="6" height="16" rx="1.5" fill="#fbbf24"/>
-    <rect class="bit" x="16" y="2"  width="6" height="20" rx="1.5" fill="#7c3aed"/>
-  </svg>
-  <span>Esta herramienta se hizo con <b>EasyBits</b>: con IA crea</span>
-  <span class="words"><span>sitios como este</span><span>documentos y presentaciones</span><span>agentes que trabajan por ti</span></span>
-  <span class="cta">Pruébalo gratis →</span>
-</a>
+<a class="ad" id="ad" target="_blank" rel="noopener"></a>
 
 <script>
 const DPI = 300;
@@ -518,6 +512,35 @@ colsEl.addEventListener('change', () => { setStageAspect(); requestAnimationFram
 sizeEl.addEventListener('change', () => { syncCols(); setStageAspect(); requestAnimationFrame(drawCrop); });
 syncCols();
 window.addEventListener('resize', drawCrop);
+
+// Pie publicitario: rota entre los tres productos de la casa cada 7 s (se pausa con el
+// cursor encima). Cada tarjeta trae su color, su icono animado y su liga con UTM.
+const ADS = [
+  { c: '#5158F6', url: 'https://www.denik.me', name: 'Denik', text: 'agenda en línea: tus clientes reservan solos, tú cobras y recuerdas', cta: 'Pruébalo gratis →',
+    svg: '<rect x="3" y="4" width="18" height="17" rx="2.5" fill="none" stroke="#5158F6" stroke-width="1.8"/><path d="M3 9h18M8 2v4M16 2v4" stroke="#5158F6" stroke-width="1.8" stroke-linecap="round"/><circle class="pulse" cx="12" cy="15" r="2.2" fill="#5158F6"/>' },
+  { c: '#7A79D6', url: 'https://www.formmy.app', name: 'Formmy', text: 'chatbots con IA y formularios para tu sitio web, listos en minutos', cta: 'Créalo gratis →',
+    svg: '<path d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v8a2.5 2.5 0 0 1-2.5 2.5H10l-4.5 4v-4A2.5 2.5 0 0 1 4 13.5z" fill="none" stroke="#7A79D6" stroke-width="1.8" stroke-linejoin="round"/><g fill="#7A79D6"><circle class="dot" cx="8.5" cy="9.5" r="1.3"/><circle class="dot" cx="12" cy="9.5" r="1.3"/><circle class="dot" cx="15.5" cy="9.5" r="1.3"/></g>' },
+  { c: '#7c3aed', url: 'https://www.easybits.cloud', name: 'EasyBits', text: 'con IA crea sitios como este, documentos y agentes que trabajan por ti', cta: 'Pruébalo gratis →',
+    svg: '<rect class="bit" x="2" y="10" width="6" height="12" rx="1.5" fill="#7c3aed"/><rect class="bit" x="9" y="6" width="6" height="16" rx="1.5" fill="#fbbf24"/><rect class="bit" x="16" y="2" width="6" height="20" rx="1.5" fill="#7c3aed"/>' }
+];
+const adEl = document.getElementById('ad');
+let adI = Math.floor(Math.random()*ADS.length), adPaused = false;
+function showAd(i) {
+  const a = ADS[i];
+  adEl.style.setProperty('--c', a.c);
+  adEl.href = a.url + '/?utm_source=fotos-infantiles&utm_medium=footer';
+  adEl.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true">' + a.svg + '</svg>'
+    + '<span><b>' + a.name + '</b> · ' + a.text + '</span><span class="cta">' + a.cta + '</span>';
+}
+showAd(adI);
+adEl.addEventListener('mouseenter', () => adPaused = true);
+adEl.addEventListener('mouseleave', () => adPaused = false);
+setInterval(() => {
+  if (adPaused || document.hidden) return;
+  adEl.classList.add('swap');
+  setTimeout(() => { adI = (adI + 1) % ADS.length; showAd(adI); adEl.classList.remove('swap'); }, 260);
+}, 7000);
+
 
 stage.addEventListener('pointerdown', e => {
   if (!img) return;
