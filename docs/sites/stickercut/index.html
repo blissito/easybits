@@ -48,7 +48,8 @@
 
   .items { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
   .item { display: grid; grid-template-columns: 56px 1fr auto; gap: 10px; align-items: center; padding: 8px; border: 1px solid var(--line); border-radius: 10px; }
-  .item .thumb { width: 56px; height: 56px; border-radius: 8px; object-fit: cover; background: #eee; cursor: pointer; border: 1px solid var(--line); }
+  .item .tbox { width: 56px; height: 56px; display: grid; place-items: center; border-radius: 8px; background: #f4efea; cursor: pointer; border: 1px solid var(--line); overflow: hidden; }
+  .item .thumb { max-width: 54px; max-height: 54px; width: auto; height: auto; display: block; }
   .item .name { font-size: .82rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .item .meta { font-size: .78rem; color: var(--muted); display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 4px; }
   .item .meta select { width: auto; padding: 3px 6px; font-size: .78rem; }
@@ -351,7 +352,7 @@ function renderItems() {
   for (const it of items) {
     const el = document.createElement('div'); el.className = 'item';
     const sz = sizeOf(it);
-    el.innerHTML = `<canvas class="thumb" width="112" height="112" title="Encuadrar"></canvas>
+    el.innerHTML = `<div class="tbox" title="Encuadrar"><canvas class="thumb" width="112" height="112"></canvas></div>
       <div><div class="name">${it.name.replace(/[<>&]/g, '')}</div>
         <div class="meta"><select class="isize"><option value="global">Tamaño general</option>${SIZES.filter(s => s.k !== 'custom').map(s => `<option value="${s.k}" ${it.sizeKey === s.k ? 'selected' : ''}>${s.label}</option>`).join('')}</select><span>${sz.w / 10} × ${sz.h / 10} cm</span></div></div>
       <div class="side"><button class="x" title="Quitar">×</button><span class="qty"><button class="dec">−</button><input type="number" min="1" max="500" value="${it.qty}"><button class="inc">+</button></span></div>`;
@@ -359,7 +360,7 @@ function renderItems() {
     // Miniatura con el mismo encuadre que saldrá impreso (proporción de la pieza).
     const ar = sz.w / sz.h, tw = ar >= 1 ? 112 : Math.round(112 * ar), thh = ar >= 1 ? Math.round(112 / ar) : 112;
     th.width = tw; th.height = thh; drawItem(it, tx, 0, 0, tw, thh);
-    th.addEventListener('click', () => openCrop(it));
+    el.querySelector('.tbox').addEventListener('click', () => openCrop(it));
     el.querySelector('.isize').addEventListener('change', e => { it.sizeKey = e.target.value; update(); });
     const q = el.querySelector('.qty input');
     el.querySelector('.dec').addEventListener('click', () => { it.qty = Math.max(1, it.qty - 1); update(); });
