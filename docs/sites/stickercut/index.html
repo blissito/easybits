@@ -208,7 +208,7 @@
     <div class="step"><b>4</b> Descargar</div>
     <div class="sheetwrap"><canvas id="preview"></canvas></div>
     <div class="pager">
-      <span id="pageInfo">Sin imágenes todavía</span><span id="legend" hidden style="font-size:.78rem">· <span style="color:#b8452a">- - -</span> línea de corte (sólo en pantalla)</span>
+      <span id="pageInfo">Sin imágenes todavía</span><span id="legend" hidden style="font-size:.78rem">· <span style="color:#b8452a">- - -</span> línea de corte (en pantalla; impresa sólo como guía tenue en modo tijeras)</span>
       <span class="nav"><button id="prevPage" disabled>‹</button><button id="nextPage" disabled>›</button></span>
     </div>
     <div class="summary" id="summary"></div>
@@ -501,7 +501,7 @@ function drawPreview() {
     return;
   }
   // En pantalla se marca la línea de corte (punteada); en los archivos no va.
-  const c = renderPageCanvas(pages[pageIdx], { outline: mode !== 'scissors' });
+  const c = renderPageCanvas(pages[pageIdx], { outline: true });
   prevC.width = c.width / 2; prevC.height = c.height / 2;
   prevC.getContext('2d').drawImage(c, 0, 0, prevC.width, prevC.height);
 }
@@ -515,7 +515,7 @@ function updateSummary() {
   const sil = mode.startsWith('silhouette'), cri = mode === 'cricut';
   $('dlDxf').hidden = !sil; $('dlCricut').hidden = !cri;
   $('helpSil').hidden = !sil; $('helpCri').hidden = !cri;
-  $('legend').hidden = mode === 'scissors' || !pages.length; $('guidesRow').hidden = mode !== 'scissors'; $('gapRow').hidden = mode === 'scissors';
+  $('legend').hidden = !pages.length; $('guidesRow').hidden = mode !== 'scissors'; $('gapRow').hidden = mode === 'scissors';
   $('modeHint').textContent = sil ? 'La hoja se imprime con marcas de registro y las piezas separadas; las líneas de corte no se imprimen, van en el DXF.'
     : cri ? `Cricut recorta sólo dentro de un área de 19.2 × 25.2 cm (7.55 × 9.94"); el PNG sale transparente con la separación elegida. Sólo impresoras inkjet.`
     : 'Las piezas van pegadas en bloque para cortar con pocos tijeretazos; las guías se imprimen tenues.';
