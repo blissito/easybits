@@ -229,7 +229,7 @@
   <div class="crop">
     <h3>Encuadrar <span id="cropName" style="color:var(--muted);font-weight:500"></span></h3>
     <div id="stage"><canvas id="crop"></canvas></div>
-    <label>Zoom <span id="zv"></span></label>
+    <label>Zoom <span id="zv"></span> <small style="color:var(--muted)">— mínimo = imagen completa; acerca para recortar</small></label>
     <input type="range" id="zoom" min="0.2" max="4" step="0.01" value="1">
     <div class="row"><button id="cropCancel">Cancelar</button><button class="primary" id="cropOk">Listo</button></div>
   </div>
@@ -259,7 +259,7 @@ const sizeEl = $('size'), shapeEl = $('shape'), sheetEl = $('sheet'), guidesEl =
 for (const s of SIZES) sizeEl.add(new Option(s.label, s.k));
 for (const [k, s] of Object.entries(SC.SHEETS)) sheetEl.add(new Option(s.label, k));
 sheetEl.value = localStorage.getItem('sc.sheet') || 'carta';
-sizeEl.value = localStorage.getItem('sc.size') || '5x5';
+sizeEl.value = localStorage.getItem('sc.size2') || 'fit'; // default: la pieza toma la proporción de la imagen
 
 // ---------- Estado ----------
 let items = [];       // { id, img, name, qty, sizeKey ('global' | k), zoom, cx, cy }
@@ -321,7 +321,8 @@ async function addFiles(list) {
   for (const f of files) {
     if (!/^image\//.test(f.type)) continue;
     const img = new Image();
-    img.onload = () => { items.push({ id: 'i' + (++seq), img, name: f.name || 'pegada', qty: 1, sizeKey: 'global', zoom: 1, cx: .5, cy: .5 }); URL.revokeObjectURL(img.src); update(); };
+    // zoom 0 = "imagen completa" (se resuelve a contain al dibujar).
+    img.onload = () => { items.push({ id: 'i' + (++seq), img, name: f.name || 'pegada', qty: 1, sizeKey: 'global', zoom: 0, cx: .5, cy: .5 }); URL.revokeObjectURL(img.src); update(); };
     img.src = URL.createObjectURL(f);
   }
 }
@@ -331,7 +332,8 @@ function coverScale(it, w, h) { return Math.max(w / it.img.width, h / it.img.hei
 function containZoom(it, w, h) { return Math.min(w / it.img.width, h / it.img.height) / coverScale(it, w, h); }
 // Dibuja la imagen del item dentro del rect (x,y,w,h) del ctx según su zoom/centro.
 function drawItem(it, ctx, x, y, w, h) {
-  const s = coverScale(it, w, h) * it.zoom, iw = it.img.width * s, ih = it.img.height * s;
+  const z = it.zoom || containZoom(it, w, h); // 0 = imagen completa dentro de la pieza
+  const s = coverScale(it, w, h) * z, iw = it.img.width * s, ih = it.img.height * s;
   let dx = x + w / 2 - it.cx * iw, dy = y + h / 2 - it.cy * ih;
   // Si la imagen llena la celda, no se permiten huecos; si es más chica (zoom < 1), va centrada.
   if (iw >= w) dx = Math.min(x, Math.max(x + w - iw, dx)); else dx = x + (w - iw) / 2;
@@ -378,7 +380,7 @@ function openCrop(it) {
   const W = Math.min(520, window.innerWidth * .86), H = Math.min(W / ar, window.innerHeight * .6);
   stage.style.width = Math.round(H * ar) + 'px'; stage.style.height = Math.round(H) + 'px';
   cropC.width = Math.round(H * ar * 2); cropC.height = Math.round(H * 2);
-  zoomEl.min = containZoom(it, cropC.width, cropC.height).toFixed(3); zoomEl.value = it.zoom;
+  zoomEl.min = containZoom(it, cropC.width, cropC.height).toFixed(3); zoomEl.value = it.zoom || zoomEl.min;
   dlg.showModal(); drawCrop();
 }
 function drawCrop() {
@@ -394,7 +396,7 @@ zoomEl.addEventListener('input', drawCrop);
 stage.addEventListener('pointerdown', e => { drag = { x: e.clientX, y: e.clientY, cx: editing.cx, cy: editing.cy }; stage.classList.add('dragging'); stage.setPointerCapture(e.pointerId); });
 stage.addEventListener('pointermove', e => {
   if (!drag || !editing) return;
-  const it = editing, s = coverScale(it, cropC.width, cropC.height) * it.zoom, k = cropC.width / stage.clientWidth;
+  const it = editing, s = coverScale(it, cropC.width, cropC.height) * (it.zoom || containZoom(it, cropC.width, cropC.height)), k = cropC.width / stage.clientWidth;
   it.cx = drag.cx - (e.clientX - drag.x) * k / (it.img.width * s);
   it.cy = drag.cy - (e.clientY - drag.y) * k / (it.img.height * s);
   drawCrop();
@@ -452,7 +454,7 @@ function updateSummary() {
     : 'Las piezas van pegadas en bloque para cortar con pocos tijeretazos; las guías se imprimen tenues.';
 }
 function update() {
-  localStorage.setItem('sc.sheet', sheetEl.value); localStorage.setItem('sc.size', sizeEl.value); localStorage.setItem('sc.mode', mode);
+  localStorage.setItem('sc.sheet', sheetEl.value); localStorage.setItem('sc.size2', sizeEl.value); localStorage.setItem('sc.mode', mode);
   const fitAny = sizeEl.value === 'fit' || items.some(it => it.sizeKey === 'fit');
   $('customRow').hidden = !(sizeEl.value === 'custom' || fitAny); $('chWrap').hidden = sizeEl.value !== 'custom' && fitAny; $('radiusRow').hidden = shapeEl.value !== 'rounded';
   for (const o of sheetEl.options) o.hidden = !sheetAllowed(o.value);
