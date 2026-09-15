@@ -1,0 +1,467 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>StickerCut — hojas de stickers y fotos listas para imprimir y cortar</title>
+<meta name="description" content="Sube varias imágenes, elige cuántas de cada una y descarga la hoja lista para imprimir (Carta, A4, Oficio, Legal, papel foto) y el archivo de corte para Silhouette o Cricut. Gratis, sin registro, todo en tu navegador.">
+<meta property="og:title" content="StickerCut — imprime y corta tus stickers y fotos">
+<meta property="og:description" content="Varias imágenes → hoja lista para imprimir + archivo de corte para Silhouette / Cricut. Gratis y sin registro.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://www.easybits.cloud/s/rayo-creciente/">
+<meta property="og:image" content="https://www.easybits.cloud/s/rayo-creciente/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="StickerCut — imprime y corta tus stickers y fotos">
+<meta name="twitter:description" content="Varias imágenes → hoja lista para imprimir + archivo de corte para Silhouette / Cricut.">
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebApplication","name":"StickerCut","applicationCategory":"DesignApplication","operatingSystem":"Web","offers":{"@type":"Offer","price":"0","priceCurrency":"MXN"},"inLanguage":"es-MX","description":"Arma hojas de stickers y fotos infantiles listas para imprimir y cortar con tijera, Silhouette o Cricut.","url":"https://www.easybits.cloud/s/rayo-creciente/"}
+</script>
+<style>
+  :root { --ink: #2b2420; --muted: #7a6f68; --line: #e8ded6; --paper: #fffaf5; --card: #fff; --accent: #ff7a59; --accent-ink: #b8452a; --soft: #fff1ea; }
+  * { box-sizing: border-box; min-width: 0; }
+  [hidden] { display: none !important; }
+  html { color-scheme: light; }
+  body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; margin: 0; background: var(--paper); color: var(--ink); padding: 18px 20px 28px; }
+  h1 { font-size: 1.35rem; margin: 0; letter-spacing: -.01em; }
+  h1 small { font-weight: 500; color: var(--muted); font-size: .85rem; margin-left: 8px; }
+  p.sub { margin: 4px 0 16px; color: var(--muted); font-size: .92rem; }
+  .app { display: grid; grid-template-columns: minmax(300px, 420px) 1fr; gap: 20px; max-width: 1240px; margin-inline: auto; align-items: start; }
+  @media (max-width: 860px) { .app { grid-template-columns: 1fr; } }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px; }
+  .card + .card { margin-top: 14px; }
+  .step { display: flex; align-items: center; gap: 10px; margin: 0 0 10px; font-weight: 650; font-size: .98rem; }
+  .step b { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: var(--accent); color: #fff; font-size: .8rem; }
+  label { display: block; font-size: .82rem; color: var(--muted); margin: 10px 0 4px; }
+  select, input[type=number], input[type=text] { font: inherit; font-size: .92rem; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: #fff; color: var(--ink); width: 100%; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  button { font: inherit; font-size: .92rem; padding: 10px 14px; border-radius: 10px; border: 1px solid var(--line); background: #fff; color: var(--ink); cursor: pointer; display: inline-flex; align-items: center; gap: 8px; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button.primary:hover { filter: brightness(.96); }
+  button:disabled { opacity: .45; cursor: default; }
+  button svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+  .drop { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; text-align: center; padding: 22px 16px; border: 1.5px dashed #d9c9bd; border-radius: 12px; cursor: pointer; background: var(--soft); transition: border-color .15s, background .15s; }
+  .drop:hover, .drop.over { border-color: var(--accent); background: #ffe9df; }
+  .drop svg { width: 24px; height: 24px; stroke: var(--accent-ink); fill: none; stroke-width: 1.6; }
+  .drop strong { font-size: .95rem; }
+  .drop span { font-size: .8rem; color: var(--muted); }
+
+  .items { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+  .item { display: grid; grid-template-columns: 56px 1fr auto; gap: 10px; align-items: center; padding: 8px; border: 1px solid var(--line); border-radius: 10px; }
+  .item .thumb { width: 56px; height: 56px; border-radius: 8px; object-fit: cover; background: #eee; cursor: pointer; border: 1px solid var(--line); }
+  .item .name { font-size: .82rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .item .meta { font-size: .78rem; color: var(--muted); display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 4px; }
+  .item .meta select { width: auto; padding: 3px 6px; font-size: .78rem; }
+  .qty { display: inline-flex; align-items: center; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .qty button { border: 0; border-radius: 0; padding: 6px 10px; font-size: 1rem; line-height: 1; }
+  .qty input { width: 44px; border: 0; text-align: center; padding: 6px 0; font-size: .9rem; -moz-appearance: textfield; }
+  .qty input::-webkit-inner-spin-button { -webkit-appearance: none; }
+  .item .x { border: 0; background: transparent; color: var(--muted); padding: 4px 6px; font-size: 1.1rem; }
+  .item .x:hover { color: var(--accent-ink); }
+  .item .side { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+
+  .modes { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .mode { display: flex; gap: 10px; align-items: center; padding: 10px; border: 1.5px solid var(--line); border-radius: 10px; cursor: pointer; font-size: .86rem; }
+  .mode input { accent-color: var(--accent); margin: 0; }
+  .mode.on { border-color: var(--accent); background: var(--soft); }
+  .mode small { display: block; color: var(--muted); font-size: .74rem; }
+  .hint { font-size: .8rem; color: var(--muted); margin: 8px 0 0; line-height: 1.45; }
+  .toggle { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 12px 0 0; padding: 10px 12px; font-size: .85rem; border: 1px solid var(--line); border-radius: 10px; cursor: pointer; }
+  .toggle input { position: absolute; opacity: 0; width: 0; height: 0; }
+  .toggle .track { flex: none; width: 40px; height: 22px; border-radius: 999px; background: #d9d1cb; position: relative; transition: background .18s; }
+  .toggle .track::after { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.25); transition: transform .18s; }
+  .toggle input:checked + .track { background: var(--accent); }
+  .toggle input:checked + .track::after { transform: translateX(18px); }
+
+  .out { position: sticky; top: 14px; }
+  .sheetwrap { background: #ece4dc; border-radius: 12px; padding: 14px; display: grid; place-items: center; min-height: 320px; }
+  #preview { max-width: 100%; max-height: 74vh; box-shadow: 0 8px 28px rgba(60,40,20,.18); background: #fff; display: block; }
+  .pager { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 10px; font-size: .85rem; color: var(--muted); }
+  .pager .nav { display: flex; gap: 6px; }
+  .pager button { padding: 6px 10px; }
+  .summary { font-size: .85rem; margin-top: 10px; }
+  .summary b { color: var(--accent-ink); }
+  .actions { display: flex; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
+  details { margin-top: 12px; font-size: .86rem; }
+  details summary { cursor: pointer; font-weight: 600; }
+  details ol { padding-left: 20px; line-height: 1.5; }
+  details code { background: #f4efea; padding: 1px 5px; border-radius: 4px; }
+
+  /* Modal de encuadre */
+  dialog { border: 0; border-radius: 16px; padding: 0; max-width: min(92vw, 560px); width: 100%; box-shadow: 0 20px 60px rgba(0,0,0,.3); }
+  dialog::backdrop { background: rgba(43,36,32,.45); }
+  .crop { padding: 16px; }
+  .crop h3 { margin: 0 0 10px; font-size: 1rem; }
+  #stage { position: relative; width: 100%; background: #222; border-radius: 10px; overflow: hidden; touch-action: none; cursor: grab; margin-inline: auto; }
+  #stage.dragging { cursor: grabbing; }
+  #stage canvas { display: block; width: 100%; height: 100%; }
+  .crop input[type=range] { width: 100%; accent-color: var(--accent); }
+  .crop .row { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+
+  /* Pie: anuncio discreto que rota entre Denik, Formmy y EasyBits. */
+  .ad { display: flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap; max-width: 1240px; margin: 22px auto 0; padding: 10px 14px 0; border-top: 1px solid var(--line); font-size: .82rem; opacity: .8; color: inherit; text-decoration: none; transition: opacity .25s, transform .25s; --c: #5158F6; }
+  .ad:hover { opacity: 1; }
+  .ad.swap { opacity: 0; transform: translateY(4px); }
+  .ad svg { width: 22px; height: 22px; flex: none; }
+  .ad b, .ad .cta { color: var(--c); }
+  .ad .cta { font-weight: 600; white-space: nowrap; }
+  .ad .pulse { transform-box: fill-box; transform-origin: center; animation: ad-pulse 2.4s ease-in-out infinite; }
+  .ad .dot { transform-box: fill-box; transform-origin: center; animation: ad-bounce 1.2s ease-in-out infinite; }
+  .ad .dot:nth-child(2) { animation-delay: .2s; } .ad .dot:nth-child(3) { animation-delay: .4s; }
+  .ad .bit { transform-box: fill-box; transform-origin: 50% 100%; animation: ad-hop 3s ease-in-out infinite; }
+  .ad .bit:nth-child(2) { animation-delay: .15s; } .ad .bit:nth-child(3) { animation-delay: .3s; }
+  @keyframes ad-pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.35); } }
+  @keyframes ad-bounce { 0%, 60%, 100% { transform: translateY(0); } 30% { transform: translateY(-3px); } }
+  @keyframes ad-hop { 0%, 70%, 100% { transform: translateY(0) scaleY(1); } 78% { transform: scaleY(.8); } 86% { transform: translateY(-5px) scaleY(1.05); } 94% { transform: none; } }
+  @media (prefers-reduced-motion: reduce) { .ad .pulse, .ad .dot, .ad .bit { animation: none; } }
+  @media print { .ad { display: none; } }
+</style>
+</head>
+<body>
+<h1>StickerCut <small>hojas de stickers y fotos, listas para imprimir y cortar</small></h1>
+<p class="sub">Sube tus imágenes, di cuántas quieres de cada una y descarga la hoja. Todo pasa en tu navegador: nada se sube a ningún servidor.</p>
+
+<div class="app">
+  <div>
+    <section class="card">
+      <div class="step"><b>1</b> Imágenes</div>
+      <div class="drop" id="drop" tabindex="0" role="button">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4"/><path d="m7 9 5-5 5 5"/><path d="M5 20h14"/></svg>
+        <strong>Arrastra tus imágenes aquí</strong>
+        <span>o haz clic para elegirlas · también puedes pegar (⌘V)</span>
+        <input type="file" id="file" accept="image/*" multiple hidden>
+      </div>
+      <div class="two">
+        <div>
+          <label>Tamaño de cada pieza</label>
+          <select id="size"></select>
+        </div>
+        <div>
+          <label>Forma</label>
+          <select id="shape">
+            <option value="rect">Rectángulo</option>
+            <option value="rounded">Esquinas redondeadas</option>
+            <option value="circle">Círculo</option>
+          </select>
+        </div>
+      </div>
+      <div class="two" id="customRow" hidden>
+        <div><label>Ancho (cm)</label><input type="number" id="cw" min="0.5" max="30" step="0.1" value="5"></div>
+        <div><label>Alto (cm)</label><input type="number" id="ch" min="0.5" max="30" step="0.1" value="5"></div>
+      </div>
+      <div id="radiusRow" hidden><label>Radio de esquina (mm)</label><input type="number" id="radius" min="0.5" max="30" step="0.5" value="3"></div>
+      <div class="items" id="items"></div>
+    </section>
+
+    <section class="card">
+      <div class="step"><b>2</b> Hoja y corte</div>
+      <label>Hoja</label>
+      <select id="sheet"></select>
+      <label>¿Con qué vas a cortar?</label>
+      <div class="modes" id="modes">
+        <label class="mode on"><input type="radio" name="mode" value="scissors" checked><span>Tijeras / guillotina<small>guías tenues para cortar a mano</small></span></label>
+        <label class="mode"><input type="radio" name="mode" value="silhouette4"><span>Silhouette · 4 marcas<small>Cameo 5 Alpha, Pro MK II</small></span></label>
+        <label class="mode"><input type="radio" name="mode" value="silhouette3"><span>Silhouette · 3 marcas<small>Cameo 1–4, Portrait, Curio</small></span></label>
+        <label class="mode"><input type="radio" name="mode" value="cricut"><span>Cricut<small>Maker, Explore, Joy Xtra</small></span></label>
+      </div>
+      <label class="toggle" id="guidesRow"><span>Guías de corte impresas <small style="color:var(--muted)">(líneas tenues)</small></span><input type="checkbox" id="guides" checked><span class="track"></span></label>
+      <p class="hint" id="modeHint"></p>
+    </section>
+  </div>
+
+  <section class="card out">
+    <div class="step"><b>3</b> Descargar</div>
+    <div class="sheetwrap"><canvas id="preview"></canvas></div>
+    <div class="pager">
+      <span id="pageInfo">Sin imágenes todavía</span>
+      <span class="nav"><button id="prevPage" disabled>‹</button><button id="nextPage" disabled>›</button></span>
+    </div>
+    <div class="summary" id="summary"></div>
+    <div class="actions">
+      <button class="primary" id="dlPdf" disabled><svg viewBox="0 0 24 24"><path d="M12 4v11"/><path d="m7 11 5 5 5-5"/><path d="M5 20h14"/></svg>PDF para imprimir</button>
+      <button id="print" disabled title="Imprimir"><svg viewBox="0 0 24 24"><path d="M7 9V4h10v5"/><path d="M7 19H5a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2"/><path d="M7 15h10v5H7z"/></svg>Imprimir</button>
+      <button id="dlDxf" disabled hidden><svg viewBox="0 0 24 24"><path d="M4 4h16v16H4z"/><path d="M8 8h8v8H8z"/></svg>Corte Silhouette (DXF)</button>
+      <button id="dlCricut" disabled hidden><svg viewBox="0 0 24 24"><path d="M4 4h16v16H4z"/><path d="M8 8h8v8H8z"/></svg>PNG para Cricut</button>
+    </div>
+    <details id="helpSil" hidden>
+      <summary>Cómo cortarlo en Silhouette Studio (una sola vez por tamaño)</summary>
+      <ol>
+        <li>Imprime el PDF desde Vista Previa / Acrobat al <b>100 %</b> (no "ajustar a página").</li>
+        <li>Conecta la máquina y abre Studio. <b>Preferences → Import</b>: "DXF Open" = <b>As-is</b>.</li>
+        <li>Abre el <code>.dxf</code>. En <b>Page Setup</b> pon la hoja exacta (Carta = 8.5 × 11 in) y orientación vertical; el rectángulo gris debe coincidir con la hoja, luego bórralo.</li>
+        <li><b>Print &amp; Cut</b>: marcas de registro activas; largo, grosor e inset en <b>0</b> (Studio usa sus mínimos: 5 mm / 1 mm / 10 mm, que son los impresos).</li>
+        <li>Hoja en el tapete, esquina superior izquierda, y <b>Enviar</b>. Guarda el proyecto como <code>.studio3</code>: sirve para siempre con este tamaño y hoja.</li>
+      </ol>
+      <p>Portrait: máximo 8.5" de ancho (Carta / A4). Cameo: todas las hojas con tapete 12 × 24.</p>
+    </details>
+    <details id="helpCri" hidden>
+      <summary>Cómo cortarlo en Cricut Design Space</summary>
+      <ol>
+        <li>Sube el PNG en <b>Upload → Image</b> como imagen compleja; conserva el fondo transparente.</li>
+        <li>Al colocarlo en el lienzo, fija el <b>ancho exacto</b> que dice la nota bajo el botón (si no, Design Space lo escala).</li>
+        <li>Selecciona la imagen → <b>Print Then Cut</b>. Cricut imprime su propio marco negro e imprime la hoja desde Design Space (impresora <b>inkjet</b>).</li>
+        <li>Coloca la hoja en el tapete y corta: cada isla se corta por separado.</li>
+      </ol>
+    </details>
+  </section>
+</div>
+
+<dialog id="cropDlg">
+  <div class="crop">
+    <h3>Encuadrar <span id="cropName" style="color:var(--muted);font-weight:500"></span></h3>
+    <div id="stage"><canvas id="crop"></canvas></div>
+    <label>Zoom <span id="zv"></span></label>
+    <input type="range" id="zoom" min="0.2" max="4" step="0.01" value="1">
+    <div class="row"><button id="cropCancel">Cancelar</button><button class="primary" id="cropOk">Listo</button></div>
+  </div>
+</dialog>
+
+<a class="ad" id="ad" target="_blank" rel="noopener"></a>
+
+<script src="engine.js"></script>
+<script>
+// ---------- Catálogo de tamaños (cm) ----------
+const SIZES = [
+  { k: '2.5x3', label: 'Infantil MX 2.5 × 3 cm', w: 25, h: 30 },
+  { k: '2x2', label: 'Cuadrada 2 × 2 cm', w: 20, h: 20 },
+  { k: '3x3', label: 'Cuadrada 3 × 3 cm', w: 30, h: 30 },
+  { k: '3x4', label: 'Carnet 3 × 4 cm', w: 30, h: 40 },
+  { k: '3.5x4.5', label: 'Visa/ICAO 3.5 × 4.5 cm', w: 35, h: 45 },
+  { k: '4x4', label: 'Sticker 4 × 4 cm', w: 40, h: 40 },
+  { k: '5x5', label: 'Sticker 5 × 5 cm', w: 50, h: 50 },
+  { k: '6x6', label: 'Sticker 6 × 6 cm', w: 60, h: 60 },
+  { k: '5x7', label: 'Sticker 5 × 7 cm', w: 50, h: 70 },
+  { k: '7.5x10', label: 'Foto 7.5 × 10 cm', w: 75, h: 100 },
+  { k: 'custom', label: 'Personalizado…' },
+];
+const $ = id => document.getElementById(id);
+const sizeEl = $('size'), shapeEl = $('shape'), sheetEl = $('sheet'), guidesEl = $('guides'), radiusEl = $('radius'), cwEl = $('cw'), chEl = $('ch');
+for (const s of SIZES) sizeEl.add(new Option(s.label, s.k));
+for (const [k, s] of Object.entries(SC.SHEETS)) sheetEl.add(new Option(s.label, k));
+sheetEl.value = localStorage.getItem('sc.sheet') || 'carta';
+sizeEl.value = localStorage.getItem('sc.size') || '5x5';
+
+// ---------- Estado ----------
+let items = [];       // { id, img, name, qty, sizeKey ('global' | k), zoom, cx, cy }
+let pages = [], missing = 0, pageIdx = 0;
+let mode = localStorage.getItem('sc.mode') || 'scissors';
+document.querySelector(`input[name=mode][value=${mode}]`).checked = true;
+
+function globalSize() {
+  if (sizeEl.value === 'custom') return { w: Math.max(5, Number(cwEl.value) * 10 || 50), h: Math.max(5, Number(chEl.value) * 10 || 50) };
+  const s = SIZES.find(s => s.k === sizeEl.value); return { w: s.w, h: s.h };
+}
+function sizeOf(it) {
+  if (it.sizeKey === 'global') return globalSize();
+  const s = SIZES.find(s => s.k === it.sizeKey); return s ? { w: s.w, h: s.h } : globalSize();
+}
+function radiusMm() { return shapeEl.value === 'rounded' ? Math.max(0.5, Number(radiusEl.value) || 3) : 0; }
+
+// ---------- Carga de imágenes ----------
+const drop = $('drop'), fileEl = $('file');
+drop.addEventListener('click', () => fileEl.click());
+drop.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileEl.click(); } });
+fileEl.addEventListener('change', () => { addFiles(fileEl.files); fileEl.value = ''; });
+['dragenter', 'dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('over'); }));
+['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('over'); }));
+drop.addEventListener('drop', e => addFiles(e.dataTransfer.files));
+document.addEventListener('paste', e => { const fs = [...(e.clipboardData?.items || [])].filter(i => i.type.startsWith('image/')).map(i => i.getAsFile()); if (fs.length) addFiles(fs); });
+let seq = 0;
+function addFiles(list) {
+  for (const f of list) {
+    if (!f || !/^image\//.test(f.type)) continue;
+    const img = new Image();
+    img.onload = () => { items.push({ id: 'i' + (++seq), img, name: f.name || 'pegada', qty: 1, sizeKey: 'global', zoom: 1, cx: .5, cy: .5 }); URL.revokeObjectURL(img.src); update(); };
+    img.src = URL.createObjectURL(f);
+  }
+}
+
+// ---------- Encuadre: cover con zoom y centro normalizado (independiente del tamaño del canvas) ----------
+function coverScale(it, w, h) { return Math.max(w / it.img.width, h / it.img.height); }
+function containZoom(it, w, h) { return Math.min(w / it.img.width, h / it.img.height) / coverScale(it, w, h); }
+// Dibuja la imagen del item dentro del rect (x,y,w,h) del ctx según su zoom/centro.
+function drawItem(it, ctx, x, y, w, h) {
+  const s = coverScale(it, w, h) * it.zoom, iw = it.img.width * s, ih = it.img.height * s;
+  let dx = x + w / 2 - it.cx * iw, dy = y + h / 2 - it.cy * ih;
+  // Si la imagen llena la celda, no se permiten huecos; si es más chica (zoom < 1), va centrada.
+  if (iw >= w) dx = Math.min(x, Math.max(x + w - iw, dx)); else dx = x + (w - iw) / 2;
+  if (ih >= h) dy = Math.min(y, Math.max(y + h - ih, dy)); else dy = y + (h - ih) / 2;
+  ctx.fillStyle = '#fff'; ctx.fillRect(x, y, w, h);
+  ctx.drawImage(it.img, dx, dy, iw, ih);
+  return { dx, dy, iw, ih };
+}
+function drawTile(cell, ctx, x, y, w, h) { drawItem(cell.item, ctx, x, y, w, h); }
+
+// ---------- Lista de items ----------
+const itemsEl = $('items');
+function renderItems() {
+  itemsEl.innerHTML = '';
+  for (const it of items) {
+    const el = document.createElement('div'); el.className = 'item';
+    const sz = sizeOf(it);
+    el.innerHTML = `<canvas class="thumb" width="112" height="112" title="Encuadrar"></canvas>
+      <div><div class="name">${it.name.replace(/[<>&]/g, '')}</div>
+        <div class="meta"><select class="isize"><option value="global">Tamaño general</option>${SIZES.filter(s => s.k !== 'custom').map(s => `<option value="${s.k}" ${it.sizeKey === s.k ? 'selected' : ''}>${s.label}</option>`).join('')}</select><span>${sz.w / 10} × ${sz.h / 10} cm</span></div></div>
+      <div class="side"><button class="x" title="Quitar">×</button><span class="qty"><button class="dec">−</button><input type="number" min="1" max="500" value="${it.qty}"><button class="inc">+</button></span></div>`;
+    const th = el.querySelector('.thumb'), tx = th.getContext('2d');
+    // Miniatura con el mismo encuadre que saldrá impreso (proporción de la pieza).
+    const ar = sz.w / sz.h, tw = ar >= 1 ? 112 : Math.round(112 * ar), thh = ar >= 1 ? Math.round(112 / ar) : 112;
+    th.width = tw; th.height = thh; drawItem(it, tx, 0, 0, tw, thh);
+    th.addEventListener('click', () => openCrop(it));
+    el.querySelector('.isize').addEventListener('change', e => { it.sizeKey = e.target.value; update(); });
+    const q = el.querySelector('.qty input');
+    el.querySelector('.dec').addEventListener('click', () => { it.qty = Math.max(1, it.qty - 1); update(); });
+    el.querySelector('.inc').addEventListener('click', () => { it.qty = Math.min(500, it.qty + 1); update(); });
+    q.addEventListener('change', () => { it.qty = Math.min(500, Math.max(1, Number(q.value) || 1)); update(); });
+    el.querySelector('.x').addEventListener('click', () => { items = items.filter(o => o !== it); update(); });
+    itemsEl.appendChild(el);
+  }
+}
+
+// ---------- Modal de encuadre ----------
+const dlg = $('cropDlg'), stage = $('stage'), cropC = $('crop'), cropX = cropC.getContext('2d'), zoomEl = $('zoom');
+let editing = null, backup = null, drag = null;
+function openCrop(it) {
+  editing = it; backup = { zoom: it.zoom, cx: it.cx, cy: it.cy };
+  $('cropName').textContent = it.name;
+  const sz = sizeOf(it), ar = sz.w / sz.h;
+  const W = Math.min(520, window.innerWidth * .86), H = Math.min(W / ar, window.innerHeight * .6);
+  stage.style.width = Math.round(H * ar) + 'px'; stage.style.height = Math.round(H) + 'px';
+  cropC.width = Math.round(H * ar * 2); cropC.height = Math.round(H * 2);
+  zoomEl.min = containZoom(it, cropC.width, cropC.height).toFixed(3); zoomEl.value = it.zoom;
+  dlg.showModal(); drawCrop();
+}
+function drawCrop() {
+  const it = editing; if (!it) return;
+  it.zoom = Math.max(Number(zoomEl.min), Number(zoomEl.value));
+  cropX.fillStyle = '#222'; cropX.fillRect(0, 0, cropC.width, cropC.height);
+  const r = drawItem(it, cropX, 0, 0, cropC.width, cropC.height);
+  // Re-derivar el centro tras el clamp para que el arrastre no acumule fuera de rango.
+  it.cx = (cropC.width / 2 - r.dx) / r.iw; it.cy = (cropC.height / 2 - r.dy) / r.ih;
+  $('zv').textContent = it.zoom.toFixed(2) + '×';
+}
+zoomEl.addEventListener('input', drawCrop);
+stage.addEventListener('pointerdown', e => { drag = { x: e.clientX, y: e.clientY, cx: editing.cx, cy: editing.cy }; stage.classList.add('dragging'); stage.setPointerCapture(e.pointerId); });
+stage.addEventListener('pointermove', e => {
+  if (!drag || !editing) return;
+  const it = editing, s = coverScale(it, cropC.width, cropC.height) * it.zoom, k = cropC.width / stage.clientWidth;
+  it.cx = drag.cx - (e.clientX - drag.x) * k / (it.img.width * s);
+  it.cy = drag.cy - (e.clientY - drag.y) * k / (it.img.height * s);
+  drawCrop();
+});
+stage.addEventListener('pointerup', () => { drag = null; stage.classList.remove('dragging'); });
+$('cropOk').addEventListener('click', () => { dlg.close(); editing = null; update(); });
+$('cropCancel').addEventListener('click', () => { Object.assign(editing, backup); dlg.close(); editing = null; });
+dlg.addEventListener('cancel', () => { Object.assign(editing, backup); editing = null; });
+
+// ---------- Layout + previsualización ----------
+const prevC = $('preview');
+function currentMode() { return SC.CUT_MODES[mode]; }
+function sheetAllowed(k) {
+  const s = SC.SHEETS[k], m = currentMode();
+  if (m.area) return ['carta', 'a4', 'legal'].includes(k); // Cricut: los papeles que ofrece Design Space
+  return true;
+}
+function compute() {
+  const shape = shapeEl.value, radius = radiusMm();
+  const list = items.map(it => { const sz = sizeOf(it); return { ...it, w: sz.w, h: sz.h, shape, radius, item: it }; });
+  // layout() usa {id,w,h,qty,shape,radius}; la celda referencia a `item` → aquí el objeto es el propio wrapper.
+  const r = SC.layout(list.map(o => ({ id: o.id, w: o.w, h: o.h, qty: o.qty, shape, radius, src: o.item })), sheetEl.value, mode);
+  for (const p of r.pages) for (const c of p.cells) c.item = c.item.src;
+  pages = r.pages; missing = r.missing;
+  if (pageIdx >= pages.length) pageIdx = Math.max(0, pages.length - 1);
+}
+function renderPageCanvas(page, opts = {}) {
+  return SC.renderPage(page, { drawTile, marks: currentMode().marks, guides: mode === 'scissors' && guidesEl.checked, ...opts });
+}
+function drawPreview() {
+  const sheet = SC.SHEETS[sheetEl.value];
+  if (!pages.length) {
+    prevC.width = SC.mm2px(sheet.w) / 4; prevC.height = SC.mm2px(sheet.h) / 4;
+    const x = prevC.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, prevC.width, prevC.height);
+    if (currentMode().marks) { x.save(); x.scale(.25, .25); SC.drawMarks(x, sheet, currentMode().marks); x.restore(); }
+    return;
+  }
+  const c = renderPageCanvas(pages[pageIdx]);
+  prevC.width = c.width / 2; prevC.height = c.height / 2;
+  prevC.getContext('2d').drawImage(c, 0, 0, prevC.width, prevC.height);
+}
+function updateSummary() {
+  const total = items.reduce((a, it) => a + it.qty, 0), placed = total - missing;
+  const per = pages[0] ? pages[0].grid.cols * pages[0].grid.rows : 0;
+  $('pageInfo').textContent = pages.length ? `Hoja ${pageIdx + 1} de ${pages.length}` : (items.length ? 'No cabe ninguna pieza en esta hoja' : 'Sin imágenes todavía');
+  $('prevPage').disabled = pageIdx <= 0; $('nextPage').disabled = pageIdx >= pages.length - 1;
+  $('summary').innerHTML = items.length ? `<b>${placed}</b> pieza${placed === 1 ? '' : 's'} en <b>${pages.length}</b> hoja${pages.length === 1 ? '' : 's'}${per ? ` · caben ${per} por hoja` : ''}${missing ? ` · <span style="color:#b8452a">${missing} no caben (pieza más grande que el área útil)</span>` : ''}` : '';
+  const has = pages.length > 0;
+  $('dlPdf').disabled = $('print').disabled = $('dlDxf').disabled = $('dlCricut').disabled = !has;
+  const sil = mode.startsWith('silhouette'), cri = mode === 'cricut';
+  $('dlDxf').hidden = !sil; $('dlCricut').hidden = !cri;
+  $('helpSil').hidden = !sil; $('helpCri').hidden = !cri;
+  $('guidesRow').hidden = mode !== 'scissors';
+  $('modeHint').textContent = sil ? 'La hoja se imprime con marcas de registro y las piezas separadas 1.25 mm; las líneas de corte no se imprimen, van en el DXF.'
+    : cri ? `Cricut recorta sólo dentro de un área de 19.2 × 25.2 cm (7.55 × 9.94"); el PNG sale transparente con 2 mm entre piezas. Sólo impresoras inkjet.`
+    : 'Las piezas van pegadas en bloque para cortar con pocos tijeretazos; las guías se imprimen tenues.';
+}
+function update() {
+  localStorage.setItem('sc.sheet', sheetEl.value); localStorage.setItem('sc.size', sizeEl.value); localStorage.setItem('sc.mode', mode);
+  $('customRow').hidden = sizeEl.value !== 'custom'; $('radiusRow').hidden = shapeEl.value !== 'rounded';
+  for (const o of sheetEl.options) o.hidden = !sheetAllowed(o.value);
+  if (!sheetAllowed(sheetEl.value)) sheetEl.value = 'carta';
+  compute(); renderItems(); drawPreview(); updateSummary();
+}
+[sizeEl, shapeEl, sheetEl, guidesEl, radiusEl, cwEl, chEl].forEach(el => el.addEventListener('change', update));
+[radiusEl, cwEl, chEl].forEach(el => el.addEventListener('input', update));
+$('modes').addEventListener('change', e => { mode = e.target.value; document.querySelectorAll('.mode').forEach(l => l.classList.toggle('on', l.querySelector('input').checked)); pageIdx = 0; update(); });
+$('prevPage').addEventListener('click', () => { pageIdx--; drawPreview(); updateSummary(); });
+$('nextPage').addEventListener('click', () => { pageIdx++; drawPreview(); updateSummary(); });
+
+// ---------- Exportar ----------
+const sheetFile = () => SC.SHEETS[sheetEl.value].file;
+async function buildPDF() { return SC.toPDF(pages.map(p => renderPageCanvas(p)), SC.SHEETS[sheetEl.value]); }
+$('dlPdf').addEventListener('click', async () => SC.download(await buildPDF(), `stickercut-${sheetFile()}.pdf`));
+$('print').addEventListener('click', async () => { const url = URL.createObjectURL(await buildPDF()); window.open(url, '_blank'); });
+$('dlDxf').addEventListener('click', () => {
+  // Una plantilla por tamaño de pieza: todas las hojas de ese tamaño comparten celdas.
+  const seen = new Set();
+  for (const p of pages) {
+    const c = p.cells[0], key = `${c.w}x${c.h}-${c.shape}`;
+    if (seen.has(key)) continue; seen.add(key);
+    // La plantilla lleva la rejilla COMPLETA (no sólo las celdas ocupadas) para que sirva siempre.
+    const full = { ...p, cells: [] };
+    const g = p.grid, gap = currentMode().gap;
+    for (let r = 0; r < g.rows; r++) for (let col = 0; col < g.cols; col++) full.cells.push({ x: g.x0 + col * (c.w + gap), y: g.y0 + r * (c.h + gap), w: c.w, h: c.h, shape: c.shape, radius: c.radius });
+    SC.download(SC.toDXF(full), `stickercut-corte-${sheetFile()}-${c.w / 10}x${c.h / 10}cm-${c.shape}.dxf`);
+  }
+});
+$('dlCricut').addEventListener('click', async () => {
+  const m = currentMode(), sheet = SC.SHEETS[sheetEl.value];
+  const aw = SC.mm2px(Math.min(sheet.w, m.area.w)), ah = SC.mm2px(Math.min(sheet.h, m.area.h));
+  const ax = Math.round((SC.mm2px(sheet.w) - aw) / 2), ay = Math.round((SC.mm2px(sheet.h) - ah) / 2);
+  for (let i = 0; i < pages.length; i++) {
+    const full = renderPageCanvas(pages[i], { transparent: true, marks: 0, guides: false });
+    const c = document.createElement('canvas'); c.width = aw; c.height = ah;
+    c.getContext('2d').drawImage(full, ax, ay, aw, ah, 0, 0, aw, ah);
+    SC.download(await SC.toPNG(c), `stickercut-cricut-${sheetFile()}-${i + 1}.png`);
+  }
+  alert(`En Design Space fija el ancho de la imagen en ${(Math.min(sheet.w, m.area.w) / 25.4).toFixed(2)} in (${(Math.min(sheet.w, m.area.w) / 10).toFixed(1)} cm).`);
+});
+
+update();
+
+// ---------- Pie publicitario (rota entre los tres productos) ----------
+const ADS = [
+  { c: '#5158F6', url: 'https://www.denik.me', name: 'Denik', text: 'agenda en línea: tus clientes reservan solos, tú cobras y recuerdas', cta: 'Pruébalo gratis →',
+    svg: '<rect x="3" y="4" width="18" height="17" rx="2.5" fill="none" stroke="#5158F6" stroke-width="1.8"/><path d="M3 9h18M8 2v4M16 2v4" stroke="#5158F6" stroke-width="1.8" stroke-linecap="round"/><circle class="pulse" cx="12" cy="15" r="2.2" fill="#5158F6"/>' },
+  { c: '#7A79D6', url: 'https://www.formmy.app', name: 'Formmy', text: 'chatbots con IA y formularios para tu sitio web, listos en minutos', cta: 'Créalo gratis →',
+    svg: '<path d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v8a2.5 2.5 0 0 1-2.5 2.5H10l-4.5 4v-4A2.5 2.5 0 0 1 4 13.5z" fill="none" stroke="#7A79D6" stroke-width="1.8" stroke-linejoin="round"/><g fill="#7A79D6"><circle class="dot" cx="8.5" cy="9.5" r="1.3"/><circle class="dot" cx="12" cy="9.5" r="1.3"/><circle class="dot" cx="15.5" cy="9.5" r="1.3"/></g>' },
+  { c: '#7c3aed', url: 'https://www.easybits.cloud', name: 'EasyBits', text: 'con IA crea sitios como este, documentos y agentes que trabajan por ti', cta: 'Pruébalo gratis →',
+    svg: '<rect class="bit" x="2" y="10" width="6" height="12" rx="1.5" fill="#7c3aed"/><rect class="bit" x="9" y="6" width="6" height="16" rx="1.5" fill="#fbbf24"/><rect class="bit" x="16" y="2" width="6" height="20" rx="1.5" fill="#7c3aed"/>' }
+];
+const adEl = $('ad'); let adI = Math.floor(Math.random() * ADS.length), adPaused = false;
+function showAd(i) { const a = ADS[i]; adEl.style.setProperty('--c', a.c); adEl.href = a.url + '/?utm_source=stickercut&utm_medium=footer'; adEl.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true">' + a.svg + '</svg><span><b>' + a.name + '</b> · ' + a.text + '</span><span class="cta">' + a.cta + '</span>'; }
+showAd(adI);
+adEl.addEventListener('mouseenter', () => adPaused = true); adEl.addEventListener('mouseleave', () => adPaused = false);
+setInterval(() => { if (adPaused || document.hidden) return; adEl.classList.add('swap'); setTimeout(() => { adI = (adI + 1) % ADS.length; showAd(adI); adEl.classList.remove('swap'); }, 260); }, 7000);
+</script>
+</body>
+</html>
