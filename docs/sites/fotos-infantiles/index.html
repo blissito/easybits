@@ -208,6 +208,8 @@
       <option value="6,4">Papel foto 6 × 4" (10 × 15 cm)</option>
       <option value="8.5,11">Carta 8.5 × 11"</option>
       <option value="8.27,11.69">A4 21 × 29.7 cm</option>
+      <option value="8.5,13.39">Oficio MX 21.6 × 34 cm</option>
+      <option value="8.5,14">Legal US 8.5 × 14"</option>
     </select>
     <label class="toggle">
       <span>Guías de corte <small style="opacity:.6">(líneas tenues + ticks al margen)</small></span>
@@ -249,7 +251,10 @@ function sheetPx() { const s = sheetIn(); return { w: Math.round(s.w*DPI), h: Ma
 const SHEETS = {
   '6,4':        { big: false, label: '4 × 6 pulg / 10 × 15 cm', file: '6x4',  orient: 'Horizontal' },
   '8.5,11':     { big: true,  label: 'Carta (8.5 × 11 pulg)',   file: 'carta', orient: 'Vertical' },
-  '8.27,11.69': { big: true,  label: 'A4 (21 × 29.7 cm)',       file: 'a4',    orient: 'Vertical' }
+  '8.27,11.69': { big: true,  label: 'A4 (21 × 29.7 cm)',       file: 'a4',    orient: 'Vertical' },
+  // Oficio mexicano (21.6 × 34 cm) no es el Legal gringo (8.5 × 14"): 1.5 cm menos de alto.
+  '8.5,13.39':  { big: true,  label: 'Oficio (21.6 × 34 cm)',    file: 'oficio', orient: 'Vertical' },
+  '8.5,14':     { big: true,  label: 'Legal (8.5 × 14 pulg)',    file: 'legal',  orient: 'Vertical' }
 };
 const sheetDef = () => SHEETS[sheetEl.value] || SHEETS['6,4'];
 const isLetter = () => sheetDef().big;
