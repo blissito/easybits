@@ -54,6 +54,7 @@
   .item .name { font-size: .82rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .item .meta { font-size: .78rem; color: var(--muted); display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 4px; }
   .item .meta select { width: auto; padding: 3px 6px; font-size: .78rem; }
+  .item .own input { width: 52px; padding: 3px 4px; font-size: .78rem; }
   .qty { display: inline-flex; align-items: center; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
   .qty button { border: 0; border-radius: 0; padding: 6px 10px; font-size: 1rem; line-height: 1; }
   .qty input { width: 44px; border: 0; text-align: center; padding: 6px 0; font-size: .9rem; -moz-appearance: textfield; }
@@ -289,17 +290,20 @@ const fitWidth = () => Math.max(5, Math.round((Number(cwEl.value) || 5) * 10));
 // 'fit': la pieza toma la proporción de la imagen (logos, stickers ya recortados) y
 // sólo se fija el ancho; así no se recorta nada. Cada imagen forma su propio grupo.
 function sizeFor(key, it) {
+  // Medida propia del item: ancho (y alto) en mm guardados en it.cw / it.ch.
+  const own = it && it.sizeKey === 'custom' && key === 'custom';
   if (it && shapeEl.value === 'contour') {
-    const base = key === 'fit' || key === 'custom' ? fitWidth() : (SIZES.find(s => s.k === key) || { w: 50 }).w;
+    const base = own ? (it.cw || 50) : key === 'fit' || key === 'custom' ? fitWidth() : (SIZES.find(s => s.k === key) || { w: 50 }).w;
     const ct = contourOf(it, base);
     if (ct) {
       const ar = ct.bbox.w / ct.bbox.h;
       if (key === 'fit') return { w: base, h: Math.max(5, Math.round(base / ar)) };
-      const fixed = sizeFor(key, null); // cabe dentro del tamaño fijo, conservando proporción
+      const fixed = own ? { w: it.cw || 50, h: it.ch || 50 } : sizeFor(key, null); // cabe dentro del tamaño fijo, conservando proporción
       const sc = Math.min(fixed.w / ct.bbox.w, fixed.h / ct.bbox.h);
       return { w: Math.max(5, Math.round(ct.bbox.w * sc)), h: Math.max(5, Math.round(ct.bbox.h * sc)) };
     }
   }
+  if (own) return { w: it.cw || 50, h: it.ch || 50 };
   if (key === 'fit' && it) return { w: fitWidth(), h: Math.max(5, Math.round(fitWidth() * it.img.height / it.img.width)) };
   if (key === 'custom' || key === 'fit') return { w: fitWidth(), h: Math.max(5, Number(chEl.value) * 10 || 50) };
   const s = SIZES.find(s => s.k === key); return s ? { w: s.w, h: s.h } : { w: 50, h: 50 };
@@ -415,7 +419,7 @@ function renderItems() {
     const sz = sizeOf(it);
     el.innerHTML = `<div class="tbox" title="Encuadrar"><canvas class="thumb" width="112" height="112"></canvas></div>
       <div><div class="name">${it.name.replace(/[<>&]/g, '')}</div>
-        <div class="meta"><select class="isize"><option value="global">Tamaño general</option>${SIZES.filter(s => s.k !== 'custom').map(s => `<option value="${s.k}" ${it.sizeKey === s.k ? 'selected' : ''}>${s.label}</option>`).join('')}</select><span>${sz.w / 10} × ${sz.h / 10} cm${shapeEl.value === 'contour' ? (it._contour ? ' · silueta' : ' · <em title="La imagen no tiene fondo transparente">rectángulo (sin transparencia)</em>') : ''}</span></div></div>
+        <div class="meta"><select class="isize"><option value="global">Tamaño general</option>${SIZES.map(s => `<option value="${s.k}" ${it.sizeKey === s.k ? 'selected' : ''}>${s.k === 'custom' ? 'Medida propia…' : s.label}</option>`).join('')}</select>${it.sizeKey === 'custom' ? `<span class="own"><input type="number" class="ow" min="0.5" max="30" step="0.1" value="${(it.cw || 50) / 10}" title="Ancho cm"> × <input type="number" class="oh" min="0.5" max="30" step="0.1" value="${(it.ch || 50) / 10}" title="Alto cm"> cm</span>` : ''}<span>${sz.w / 10} × ${sz.h / 10} cm${shapeEl.value === 'contour' ? (it._contour ? ' · silueta' : ' · <em title="La imagen no tiene fondo transparente">rectángulo (sin transparencia)</em>') : ''}</span></div></div>
       <div class="side"><button class="x" title="Quitar">×</button><span class="qty"><button class="dec">−</button><input type="number" min="1" max="500" value="${it.qty}"><button class="inc">+</button></span></div>`;
     const th = el.querySelector('.thumb'), tx = th.getContext('2d');
     // Miniatura con el mismo encuadre que saldrá impreso (proporción de la pieza).
@@ -425,6 +429,7 @@ function renderItems() {
     else drawItem(it, tx, 0, 0, tw, thh);
     el.querySelector('.tbox').addEventListener('click', () => openCrop(it));
     el.querySelector('.isize').addEventListener('change', e => { it.sizeKey = e.target.value; update(); });
+    el.querySelectorAll('.own input').forEach(inp => inp.addEventListener('change', () => { it.cw = Math.round((Number(el.querySelector('.ow').value) || 5) * 10); it.ch = Math.round((Number(el.querySelector('.oh').value) || 5) * 10); update(); }));
     const q = el.querySelector('.qty input');
     el.querySelector('.dec').addEventListener('click', () => { it.qty = Math.max(1, it.qty - 1); update(); });
     el.querySelector('.inc').addEventListener('click', () => setQty(it, it.qty + 1));
