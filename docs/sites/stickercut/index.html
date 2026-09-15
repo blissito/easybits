@@ -170,7 +170,7 @@
 </head>
 <body>
 <h1>StickerCut <small>hojas de stickers y fotos infantiles listas para imprimir y cortar (tijeras, Silhouette, Cricut)</small></h1>
-<p class="sub">Sube tus imágenes, di cuántas quieres de cada una y descarga la hoja. Todo pasa en tu navegador: nada se sube a ningún servidor. <a href="calib.html" style="color:var(--accent-ink)">Hoja de calibración para plóter →</a></p>
+<p class="sub">Sube tus imágenes, di cuántas quieres de cada una y descarga la hoja. Todo pasa en tu navegador: nada se sube a ningún servidor. <a href="calib.html" target="_blank" rel="noopener" style="color:var(--accent-ink)">Hoja de calibración para plóter →</a></p>
 
 <div class="app">
   <div class="col1">
@@ -183,6 +183,7 @@
         <input type="file" id="file" accept="image/*,.zip" multiple hidden>
       </div>
       <div class="items" id="items"></div>
+      <button id="clearAll" class="x" style="align-self:flex-end;margin-top:6px;font-size:.78rem;color:var(--muted);border:0;background:none" hidden>Quitar todas</button>
     </section>
   </div>
 
@@ -358,6 +359,32 @@ fileEl.addEventListener('change', () => { addFiles(fileEl.files); fileEl.value =
 ['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('over'); }));
 drop.addEventListener('drop', e => addFiles(e.dataTransfer.files));
 document.addEventListener('paste', e => { const fs = [...(e.clipboardData?.items || [])].filter(i => i.type.startsWith('image/')).map(i => i.getAsFile()); if (fs.length) addFiles(fs); });
+// ---------- Persistencia local (IndexedDB): las imágenes y su configuración sobreviven
+// a recargas y a salir a la hoja de calibración. Nada sale del navegador.
+const DB = { name: 'stickercut', store: 'items' };
+function idb() { return new Promise((res, rej) => { const r = indexedDB.open(DB.name, 1); r.onupgradeneeded = () => r.result.createObjectStore(DB.store); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); }); }
+let saveT = null;
+function scheduleSave() { clearTimeout(saveT); saveT = setTimeout(saveItems, 400); }
+async function saveItems() {
+  try {
+    const rows = [];
+    for (const it of items) {
+      if (!it.blob) { const c = document.createElement('canvas'); c.width = it.img.width; c.height = it.img.height; c.getContext('2d').drawImage(it.img, 0, 0); it.blob = await new Promise(r => c.toBlob(r, 'image/png')); }
+      rows.push({ name: it.name, qty: it.qty, sizeKey: it.sizeKey, cw: it.cw, ch: it.ch, zoom: it.zoom, cx: it.cx, cy: it.cy, blob: it.blob });
+    }
+    const db = await idb(); const tx = db.transaction(DB.store, 'readwrite'); tx.objectStore(DB.store).put(rows, 'items'); tx.oncomplete = () => db.close();
+  } catch (e) { console.warn('save', e); }
+}
+async function restoreItems() {
+  try {
+    const db = await idb(); const rows = await new Promise((res, rej) => { const r = db.transaction(DB.store).objectStore(DB.store).get('items'); r.onsuccess = () => res(r.result || []); r.onerror = () => rej(r.error); }); db.close();
+    for (const row of rows) {
+      const img = new Image(); img.src = URL.createObjectURL(row.blob); await img.decode(); URL.revokeObjectURL(img.src);
+      items.push({ id: 'i' + (++seq), img, blob: row.blob, name: row.name, qty: row.qty, sizeKey: row.sizeKey, cw: row.cw, ch: row.ch, zoom: row.zoom, cx: row.cx, cy: row.cy });
+    }
+    if (rows.length) update();
+  } catch (e) { console.warn('restore', e); }
+}
 let seq = 0;
 // ZIP sin librerías: se lee el directorio central y cada entrada se infla con
 // DecompressionStream('deflate-raw'). Sólo se toman imágenes; se ignoran carpetas y __MACOSX.
@@ -392,7 +419,7 @@ async function addFiles(list) {
     if (!/^image\//.test(f.type)) continue;
     const img = new Image();
     // zoom 0 = "imagen completa" (se resuelve a contain al dibujar).
-    img.onload = () => { items.push({ id: 'i' + (++seq), img, name: f.name || 'pegada', qty: 1, sizeKey: 'global', zoom: 0, cx: .5, cy: .5 }); URL.revokeObjectURL(img.src); update(); };
+    img.onload = () => { items.push({ id: 'i' + (++seq), img, blob: f, name: f.name || 'pegada', qty: 1, sizeKey: 'global', zoom: 0, cx: .5, cy: .5 }); URL.revokeObjectURL(img.src); update(); };
     img.src = URL.createObjectURL(f);
   }
 }
@@ -568,7 +595,7 @@ function updateSummary() {
   const sil = mode.startsWith('silhouette'), cri = mode === 'cricut';
   $('dlDxf').hidden = !sil; $('dlCricut').hidden = !cri;
   $('helpSil').hidden = !sil; $('helpCri').hidden = !cri;
-  $('legend').hidden = !pages.length || !guidesEl.checked; $('gapRow').hidden = mode === 'scissors';
+  $('legend').hidden = !pages.length || !guidesEl.checked; $('clearAll').hidden = !items.length; $('gapRow').hidden = mode === 'scissors';
   $('modeHint').textContent = sil ? 'La hoja se imprime con marcas de registro y las piezas separadas; las líneas de corte no se imprimen, van en el DXF.'
     : cri ? `Cricut recorta sólo dentro de un área de 19.2 × 25.2 cm (7.55 × 9.94"); el PNG sale transparente con la separación elegida. Sólo impresoras inkjet.`
     : 'Las piezas van pegadas en bloque para cortar con pocos tijeretazos.';
@@ -579,11 +606,12 @@ function update() {
   $('customRow').hidden = !(sizeEl.value === 'custom' || fitAny); $('chWrap').hidden = sizeEl.value !== 'custom' && fitAny; $('radiusRow').hidden = shapeEl.value !== 'rounded'; $('borderRow').hidden = shapeEl.value !== 'contour';
   for (const o of sheetEl.options) o.hidden = !sheetAllowed(o.value);
   if (!sheetAllowed(sheetEl.value)) sheetEl.value = 'carta';
-  compute(); renderItems(); drawPreview(); updateSummary();
+  compute(); renderItems(); drawPreview(); updateSummary(); scheduleSave();
 }
 [sizeEl, shapeEl, sheetEl, gapEl, guidesEl, radiusEl, borderEl, cwEl, chEl, $('oneSheet')].forEach(el => el.addEventListener('change', () => { full = false; update(); }));
 [radiusEl, borderEl, cwEl, chEl].forEach(el => el.addEventListener('input', update));
 $('modes').addEventListener('change', e => { mode = e.target.value; document.querySelectorAll('.mode').forEach(l => l.classList.toggle('on', l.querySelector('input').checked)); pageIdx = 0; update(); });
+$('clearAll').addEventListener('click', () => { items = []; update(); });
 $('prevPage').addEventListener('click', () => { pageIdx--; drawPreview(); updateSummary(); });
 $('nextPage').addEventListener('click', () => { pageIdx++; drawPreview(); updateSummary(); });
 
@@ -610,7 +638,7 @@ $('dlCricut').addEventListener('click', async () => {
   alert(`En Design Space fija el ancho de la imagen en ${(Math.min(sheet.w, m.area.w) / 25.4).toFixed(2)} in (${(Math.min(sheet.w, m.area.w) / 10).toFixed(1)} cm).`);
 });
 
-update();
+update(); restoreItems();
 
 // ---------- Pie publicitario (rota entre los tres productos) ----------
 const ADS = [
