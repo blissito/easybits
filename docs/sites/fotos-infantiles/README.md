@@ -65,7 +65,7 @@ Un `new Date()` crudo se guarda como string y Prisma revienta con P2023
   en la rejilla. No se puede dibujar `img` con un `srcRect` directo a cada celda:
   en modo contain eso estira la foto a la celda y se pierde el relleno blanco.
 
-- **Modo planilla (`fit2` / `fit3`, "proporción de la foto"; el número sólo fija las columnas iniciales).** Los otros tamaños son cm
+- **Modo planilla (`fit3`, "proporción de la foto").** Los otros tamaños son cm
   exactos y recortan; éste NO respeta medidas: la celda toma el aspect ratio de la
   foto y crece para llenar la hoja, así entra completa sin franjas blancas. El
   usuario elige **columnas** (2–5, `#cols`, visible sólo en este modo) y las

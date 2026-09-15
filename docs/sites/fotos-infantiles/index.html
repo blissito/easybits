@@ -188,10 +188,10 @@
     <label>Tamaño de foto</label>
     <select id="size">
       <option value="2.5,3">Infantil MX 2.5 × 3 cm</option>
+      <option value="2,2">Cuadrada 2 × 2 cm</option>
       <option value="3,3">Cuadrada 3 × 3 cm</option>
       <option value="3,4">Carnet 3 × 4 cm</option>
       <option value="3.5,4.5">Visa/ICAO 3.5 × 4.5 cm</option>
-      <option value="fit2">Planilla 2 × 2 (proporción de la foto)</option>
       <option value="fit3">Planilla 3 × 3 (proporción de la foto)</option>
     </select>
     <div id="colsRow" hidden>
@@ -277,10 +277,7 @@ let img = null, original = null, offX = 0, offY = 0, drag = null;
 // Modo planilla: la celda no es un tamaño fijo, toma la proporción de la foto y
 // crece lo más posible para llenar una rejilla 3×3 en la hoja elegida. Así la
 // foto entra completa sin franjas blancas (a costa de no medir 3×4 cm exactos).
-function isFit() { return /^fit\d$/.test(sizeEl.value); }
-// Columnas por defecto de la planilla elegida (fit2 → 2, fit3 → 3); el usuario
-// puede cambiarlas después en el selector de columnas.
-function fitDefaultCols() { return Number(sizeEl.value.slice(3)) || 3; }
+function isFit() { return sizeEl.value === 'fit3'; }
 // Las columnas las elige el usuario; las filas son las que quepan con esa altura,
 // para no desperdiciar hoja (antes eran 3×3 fijas y sobraba una franja grande).
 function fitCols() { return Math.max(1, Number(colsEl.value) || 3); }
@@ -484,10 +481,7 @@ guidesEl.addEventListener('change', drawSheet);
 sheetEl.addEventListener('change', () => { setStageAspect(); requestAnimationFrame(drawCrop); });
 function syncCols() { colsRow.hidden = !isFit(); }
 colsEl.addEventListener('change', () => { setStageAspect(); requestAnimationFrame(drawCrop); });
-sizeEl.addEventListener('change', () => {
-  if (isFit()) colsEl.value = String(fitDefaultCols());
-  syncCols(); setStageAspect(); requestAnimationFrame(drawCrop);
-});
+sizeEl.addEventListener('change', () => { syncCols(); setStageAspect(); requestAnimationFrame(drawCrop); });
 syncCols();
 window.addEventListener('resize', drawCrop);
 
