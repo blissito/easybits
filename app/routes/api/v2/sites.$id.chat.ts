@@ -55,7 +55,11 @@ export async function action({ request, params }: Route.ActionArgs) {
             {
               groupId: siteGroupId(site.id),
               sender: "sitios",
-              text,
+              // La selección va EN el texto (no solo en el system append): en una
+              // sesión caliente el appendSystemPrompt por turno no siempre llega.
+              text: selection
+                ? `[Elemento seleccionado en la vista previa: <${selection.tag} data-eb-id="${selection.id}">. Modifica SOLO ese nodo.]\n${text}`
+                : text,
               appendSystemPrompt: siteTurnPrompt(site, selection),
             },
             {
