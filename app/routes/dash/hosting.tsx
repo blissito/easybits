@@ -158,9 +158,21 @@ export const action = async ({ request }: Route.ActionArgs) => {
  * sufijo. Manda el dominio, que es como la persona piensa en su sitio.
  */
 function title(machine: any) {
-  if (machine.domains?.[0]) return machine.domains[0];
+  const main = mainDomain(machine);
+  if (main) return main;
   const name = machine.name ?? "";
   return !name || /^sb_[0-9a-f-]{8}/i.test(name) ? "Sitio sin dominio" : name;
+}
+
+/**
+ * El dominio con el que se presenta el sitio: el apex antes que `www.` y antes
+ * que cualquier subdominio (un tenant como `fresnnyy.` no es el nombre del
+ * sitio). Sin esto la tarjeta mostraba el primer dominio que se dio de alta.
+ */
+function mainDomain(machine: any): string | undefined {
+  const domains: string[] = machine.domains ?? [];
+  const rank = (d: string) => (d.startsWith("www.") ? 1 : 0) + d.split(".").length * 2;
+  return [...domains].sort((a, b) => rank(a) - rank(b))[0];
 }
 
 /** El id, recortado: sirve para hablar con soporte, no para leerlo entero. */
@@ -276,9 +288,8 @@ function MachineCard({
   // su respuesta PISABA el detalle → el panel se quedaba en "Cargando…" y
   // nunca mostraba lo recién guardado.
   const [detail, setDetail] = useState<any>(null);
-  const address = machine.domains?.[0]
-    ? `https://${machine.domains[0]}`
-    : machine.url;
+  const main = mainDomain(machine);
+  const address = main ? `https://${main}` : machine.url;
 
   const loadDetail = () =>
     fetcher.submit(

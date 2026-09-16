@@ -28,6 +28,7 @@ import {
   resumeSandbox,
   suspendSandboxRaw,
   type SandboxRecord,
+  SandboxHostError,
 } from "./sandboxOperations";
 import {
   getActivePlanSubscription,
@@ -690,6 +691,12 @@ export async function releasePermanent(
   try {
     await destroySandbox(ctx, sandboxId, { asOperator: true });
   } catch (e) {
+    // 404 del host = la VM ya no existe (máquina "fantasma": fila sin caja
+    // detrás, p. ej. tras un reboot del fierro). No hay nada que destruir; lo
+    // que importa es cerrar la fila y el cobro, que ya se detuvo arriba.
+    if (e instanceof SandboxHostError && e.status === 404) {
+      console.warn(`[hosting] ${sandboxId} ya no existe en el host; se cierra la fila como destroyed`);
+    } else
     fail(502, "MachineDestroyFailed",
       `No pudimos destruir la máquina en el host: ${e instanceof Error ? e.message : String(e)}. El cobro ya se detuvo; reintenta el borrado.`);
   }
