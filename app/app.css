@@ -461,3 +461,7 @@ body::selection {
 .w-md-editor-toolbar {
   border-bottom: 1px solid black !important;
 }
+
+/* Páginas de pantalla completa en móvil (editor de sitios) esconden el botón
+   hamburguesa: tapaba el "Enviar" del chat. La página pone la clase en <body>. */
+body.hide-mobile-menu .mobile-menu-btn { display: none; }

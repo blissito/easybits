@@ -75,6 +75,13 @@ export default function SiteEditor() {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const checkout = params.get("checkout");
 
+  // En móvil el editor ocupa toda la pantalla: fuera el botón hamburguesa (estorbaba
+  // sobre "Enviar"); el "←" del header ya lleva a la lista.
+  useEffect(() => {
+    document.body.classList.add("hide-mobile-menu");
+    return () => document.body.classList.remove("hide-mobile-menu");
+  }, []);
+
   // Historial persistido (FleetAgentMessage bajo site:<id>).
   useEffect(() => {
     fetch(`/api/v2/sites/${site.id}/chat`)

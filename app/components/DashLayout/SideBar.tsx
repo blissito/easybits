@@ -29,7 +29,7 @@ export const SideBar = ({
 }) => {
   return (
     <>
-      <section className="fixed right-4 bottom-16 z-20 block md:hidden  ">
+      <section className="mobile-menu-btn fixed right-4 bottom-16 z-20 block md:hidden">
         <FoldMenu />
       </section>
       <SideBarWeb isAdmin={isAdmin} unreadCount={unreadCount} />
