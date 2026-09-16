@@ -12,9 +12,11 @@ import { requireScope } from "~/.server/apiAuth";
 import { createFleetAgent } from "./fleetAgentOperations";
 import { createWebsite } from "./operations";
 import { buyMachine } from "./machineOperations";
-import { launchApp } from "./releaseOperations";
+import { launchApp, setRunspec } from "./releaseOperations";
+import { exposeSandboxPort } from "./sandboxOperations";
 
 export const BUILDER_NAME = "Sitios Builder";
+const DEFAULT_RUNSPEC = { appDir: "/app", buildCommand: "(npm ci || npm install) && npm run build --if-present", startCommand: "npm start", port: 3000 };
 export type SiteKind = "static" | "webapp";
 
 const BUILDER_SYSTEM = [
@@ -126,14 +128,18 @@ export async function createSite(
     return { site };
   }
   const bought = await buyMachine(ctx, { tier: opts.tier ?? "micro", template: "node", name });
+  const sandboxId = "machine" in bought && bought.machine ? bought.machine.sandboxId : null;
   const site = await db.site.create({
-    data: {
-      ownerId: ctx.user.id,
-      kind: "webapp",
-      name,
-      sandboxId: "machine" in bought && bought.machine ? bought.machine.sandboxId : null,
-    },
+    data: { ownerId: ctx.user.id, kind: "webapp", name, sandboxId },
   });
+  // Runspec por default desde el día cero: sin él `restart_machine` falla y el
+  // agente pierde un turno descubriéndolo (pasó en la primera prueba).
+  if (sandboxId) {
+    await setRunspec(ctx, sandboxId, DEFAULT_RUNSPEC).catch(() => {});
+    // El puerto se expone desde ya: la vista previa es la URL pública de la caja y
+    // `restart_machine` no expone nada (solo launch_app lo hacía).
+    await exposeSandboxPort(ctx, sandboxId, DEFAULT_RUNSPEC.port).catch(() => {});
+  }
   return { site, checkoutUrl: "checkoutUrl" in bought ? bought.checkoutUrl : undefined };
 }
 
