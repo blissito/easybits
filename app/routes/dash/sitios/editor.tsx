@@ -57,6 +57,8 @@ export default function SiteEditor() {
   const [selection, setSelection] = useState<Selection>(null);
   const [tokens, setTokens] = useState<{ remaining: number; limit: number } | null>(null);
   const [attached, setAttached] = useState<Attached | null>(null);
+  // Móvil: una columna a la vez (chat | vista previa). En desktop van lado a lado.
+  const [mobileTab, setMobileTab] = useState<"chat" | "preview">("chat");
   const [previewKey, setPreviewKey] = useState(0);
   const bodyRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -194,9 +196,9 @@ export default function SiteEditor() {
   const actionError = fetcher.data && "error" in fetcher.data ? fetcher.data.error : null;
 
   return (
-    <div className="fixed inset-0 md:pl-28 pt-16 flex bg-gray-50">
+    <div className="fixed inset-0 md:pl-28 pt-16 flex bg-gray-50 overflow-hidden">
       {/* Chat */}
-      <aside className="w-full max-w-sm flex flex-col border-r-2 border-black bg-white">
+      <aside className={`${mobileTab === "chat" ? "flex" : "hidden"} md:flex w-full md:max-w-sm flex-col md:border-r-2 border-black bg-white min-w-0`}>
         <header className="px-4 py-3 border-b-2 border-black flex items-center gap-2">
           <Link to="/dash/sitios" className="text-gray-400 hover:text-black">←</Link>
           <div className="min-w-0 flex-1">
@@ -255,7 +257,7 @@ export default function SiteEditor() {
           </div>
         )}
         <form
-          className="p-3 border-t-2 border-black flex gap-2"
+          className="p-3 pb-16 md:pb-3 border-t-2 border-black flex gap-2"
           onSubmit={(e) => { e.preventDefault(); void send(input); }}
           onDragOver={(e) => e.preventDefault()}
           onDrop={(e) => { e.preventDefault(); attachFile(e.dataTransfer.files?.[0]); }}
@@ -277,8 +279,8 @@ export default function SiteEditor() {
       </aside>
 
       {/* Preview */}
-      <main className="flex-1 flex flex-col min-w-0">
-        <div className="px-4 py-2 border-b-2 border-black bg-white flex items-center gap-3 text-sm">
+      <main className={`${mobileTab === "preview" ? "flex" : "hidden"} md:flex flex-1 flex-col min-w-0`}>
+        <div className="px-4 py-2 border-b-2 border-black bg-white flex items-center gap-3 text-sm overflow-x-auto whitespace-nowrap">
           <span className="font-mono text-xs text-gray-500 truncate flex-1">{site.url ?? "sin publicar"}</span>
           {site.url && (
             <a href={site.url} target="_blank" rel="noreferrer" className="text-brand-500 font-bold">Abrir ↗</a>
@@ -316,11 +318,20 @@ export default function SiteEditor() {
             </fetcher.Form>
           </div>
         ) : previewUrl ? (
-          <iframe key={previewKey} ref={iframeRef} src={previewUrl} title="Vista previa" className="flex-1 w-full bg-white" />
+          <iframe key={previewKey} ref={iframeRef} src={previewUrl} title="Vista previa" className="flex-1 w-full bg-white pb-12 md:pb-0" />
         ) : (
           <div className="flex-1 flex items-center justify-center text-gray-400 text-sm">Sin vista previa todavía</div>
         )}
       </main>
+      {/* Pestañas móvil */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-30 grid grid-cols-2 border-t-2 border-black bg-white">
+        {(["chat", "preview"] as const).map((t) => (
+          <button key={t} type="button" onClick={() => { setMobileTab(t); if (t === "preview") setPreviewKey((k) => k + 1); }}
+            className={`py-3 text-sm font-bold ${mobileTab === t ? "bg-black text-white" : "text-gray-600"}`}>
+            {t === "chat" ? "Chat" : "Vista previa"}
+          </button>
+        ))}
+      </nav>
     </div>
   );
 }
