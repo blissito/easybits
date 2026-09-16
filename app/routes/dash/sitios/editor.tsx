@@ -58,7 +58,9 @@ export default function SiteEditor() {
     fetch(`/api/v2/sites/${site.id}/chat`)
       .then((r) => (r.ok ? r.json() : { messages: [] }))
       .then((d: { messages?: Array<{ role: string; text: string }> }) =>
-        setMsgs((d.messages ?? []).map((m) => ({ role: m.role === "user" ? "user" : "bot", text: m.text })))
+        // No pisar un turno que ya arrancó (el primer prompt se manda antes de
+        // que llegue el historial).
+        setMsgs((cur) => (cur.length ? cur : (d.messages ?? []).map((m) => ({ role: m.role === "user" ? "user" : "bot", text: m.text }))))
       )
       .catch(() => {});
   }, [site.id]);
@@ -89,9 +91,9 @@ export default function SiteEditor() {
       setMsgs((m) => [...m, { role: "user", text: sel ? `[${sel.id}] ${text}` : text }, { role: "bot", text: "", tools: [] }]);
       const patch = (fn: (prev: Msg) => Msg) =>
         setMsgs((m) => {
-          const n = [...m];
-          n[n.length - 1] = fn(n[n.length - 1]);
-          return n;
+          const last = m[m.length - 1];
+          if (!last || last.role !== "bot") return m;
+          return [...m.slice(0, -1), fn(last)];
         });
       try {
         const res = await fetch(`/api/v2/sites/${site.id}/chat`, {
