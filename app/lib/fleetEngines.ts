@@ -159,6 +159,18 @@ export const FLEET_ENGINES: FleetEngine[] = [
     secret: { name: "OPENAI_API_KEY", kind: "apiKey", placeholder: "sk-..." },
     billing: "byok",
   },
+  {
+    id: "gemini",
+    label: "Ghosty · Gemini",
+    model: "Gemini 3",
+    provider: "google",
+    // Sin template en el host todavía (spike: Gemini CLI vs Antigravity CLI). Se lista
+    // para que el selector lo muestre como "próximamente"; engineCreatable() = false.
+    template: "gemini-worker",
+    models: [{ id: "gemini-3-pro", label: "Gemini 3 Pro", ready: false }],
+    secret: { name: "GEMINI_API_KEY", kind: "apiKey", placeholder: "AIza..." },
+    billing: "byok",
+  },
 ];
 
 /**
