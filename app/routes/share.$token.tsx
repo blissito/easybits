@@ -29,7 +29,7 @@ function errorPage(reason: string) {
 }
 
 function dashPathFor(resourceType: string, resourceId: string): string {
-  if (resourceType === "landing") return `/dash/landings4/${resourceId}`;
+  if (resourceType === "landing") return `/dash/sitios`;
   return `/dash/documents/${resourceId}`;
 }
 
@@ -41,7 +41,7 @@ function pdfPathFor(
 ): string {
   if (resourceType === "landing") {
     // Landings v4 don't have a built-in PDF endpoint yet; for now route to the editor.
-    return `/dash/landings4/${resourceId}`;
+    return `/dash/sitios`;
   }
   const disp = inline ? "&inline=1" : "";
   return `/api/v2/documents/${resourceId}/pdf?token=${encodeURIComponent(token)}${disp}`;

@@ -13,7 +13,7 @@ type CreateChoice = "documento" | "presentacion" | "landing" | "archivo";
 const CREATE_ROUTES: Record<CreateChoice, string> = {
   documento: "/dash/documents/new",
   presentacion: "/dash/presentations/new",
-  landing: "/dash/landings3/new",
+  landing: "/dash/sitios/new",
   archivo: "/dash/developer/files",
 };
 

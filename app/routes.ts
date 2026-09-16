@@ -103,29 +103,11 @@ export default [
         route(":id", "routes/dash/presentations/editor.tsx"),
       ]),
       // Landings
-      ...prefix("landings", [
-        index("routes/dash/landings/list.tsx"),
-        route("new", "routes/dash/landings/new.tsx"),
-        route(":id", "routes/dash/landings/editor.tsx"),
-      ]),
       // Landings v2
-      ...prefix("landings2", [
-        index("routes/dash/landings2/list.tsx"),
-        route("new", "routes/dash/landings2/new.tsx"),
-        route(":id", "routes/dash/landings2/editor.tsx"),
-      ]),
       // Landings v3
-      ...prefix("landings3", [
-        index("routes/dash/landings3/list.tsx"),
-        route("new", "routes/dash/landings3/new.tsx"),
-        route(":id", "routes/dash/landings3/editor.tsx"),
-      ]),
       // Landings v4
-      ...prefix("landings4", [
-        index("routes/dash/landings4/list.tsx"),
-        route("new", "routes/dash/landings4/new.tsx"),
-        route(":id", "routes/dash/landings4/editor.tsx"),
-      ]),
+      // Landings v1–v4 se retiraron (2026-09-16): la única superficie es /dash/sitios.
+      // Los sitios ya publicados siguen sirviéndose por /s/:slug (Website).
       // Sitios: creador de sitios (static + webapp) — chat + preview + publicar
       ...prefix("sitios", [
         index("routes/dash/sitios/list.tsx"),
