@@ -4,7 +4,8 @@ import { getUserOrNull } from "~/.server/getters";
 import type { AuthContext } from "~/.server/apiAuth";
 import { withAdmitRetry } from "~/.server/core/fleetAdmitHold";
 import { routeMessage, FleetAgentAtCapacity } from "~/.server/core/fleetAgentOperations";
-import { ensureBuilderAgent, getSite, siteGroupId, siteTurnPrompt } from "~/.server/core/siteOperations";
+import { ensureBuilderAgent, getSite, siteGroupId, siteTurnPrompt, siteEngineFor } from "~/.server/core/siteOperations";
+import { engineIsMetered } from "~/lib/fleetEngines";
 import { checkLLMTokenLimit } from "~/.server/llmTokenLimit";
 
 // Chat del creador de sitios. Auth = sesión del dueño (el token del builder NUNCA
@@ -18,29 +19,32 @@ async function ctxFor(request: Request) {
 
 export async function loader({ request, params }: Route.LoaderArgs) {
   const ctx = await ctxFor(request);
-  await getSite(ctx, params.id!);
-  const builder = await ensureBuilderAgent(ctx);
+  const site = await getSite(ctx, params.id!);
+  const engine = siteEngineFor(site);
+  const builder = await ensureBuilderAgent(ctx, engine.id);
   const rows = await db.fleetAgentMessage.findMany({
     where: { fleetAgentId: builder.id, groupId: siteGroupId(params.id!) },
     orderBy: { createdAt: "asc" },
     take: 200,
     select: { role: true, text: true, createdAt: true },
   });
-  const lim = await checkLLMTokenLimit(ctx.user.id);
-  return Response.json({ messages: rows, tokens: { remaining: lim.remaining, limit: lim.limit } });
+  // Saldo solo aplica al motor medido; BYOK paga a su proveedor.
+  const lim = engineIsMetered(engine) ? await checkLLMTokenLimit(ctx.user.id) : null;
+  return Response.json({ messages: rows, tokens: lim ? { remaining: lim.remaining, limit: lim.limit } : null });
 }
 
 export async function action({ request, params }: Route.ActionArgs) {
   const ctx = await ctxFor(request);
   const site = await getSite(ctx, params.id!);
-  const builder = await ensureBuilderAgent(ctx);
+  const engine = siteEngineFor(site);
+  const builder = await ensureBuilderAgent(ctx, engine.id);
   const body = await request.json().catch(() => ({}));
   const text = typeof body?.text === "string" ? body.text.trim() : "";
   if (!text) return Response.json({ error: "text required" }, { status: 400 });
   // Gate ANTES del turno: sin saldo el proxy medido responde 402 dentro del worker,
   // pero para entonces ya se pagó un cold-spawn. Mejor cortar aquí con un mensaje claro.
-  const lim = await checkLLMTokenLimit(ctx.user.id);
-  if (lim.remaining <= 0) {
+  const lim = engineIsMetered(engine) ? await checkLLMTokenLimit(ctx.user.id) : null;
+  if (lim && lim.remaining <= 0) {
     return Response.json(
       { error: "insufficient_quota", message: "Sin tokens LLM. Recarga un pack o sube de plan para seguir construyendo." },
       { status: 402 }

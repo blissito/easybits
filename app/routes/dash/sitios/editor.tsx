@@ -3,7 +3,7 @@ import { Link, data, useFetcher, useLoaderData, useSearchParams } from "react-ro
 import { Streamdown } from "streamdown";
 import { getUserOrRedirect } from "~/.server/getters";
 import type { AuthContext } from "~/.server/apiAuth";
-import { attachNewestMachine, deleteSite, getSite, publishSite } from "~/.server/core/siteOperations";
+import { attachNewestMachine, deleteSite, getSite, publishSite, siteEngineFor } from "~/.server/core/siteOperations";
 import type { Route } from "./+types/editor";
 
 export const meta = () => [{ title: "Sitio — EasyBits" }, { name: "robots", content: "noindex" }];
@@ -11,7 +11,7 @@ export const meta = () => [{ title: "Sitio — EasyBits" }, { name: "robots", co
 export const loader = async ({ request, params }: Route.LoaderArgs) => {
   const user = await getUserOrRedirect(request);
   const site = await getSite({ user, scopes: ["READ"] } as AuthContext, params.id!);
-  return { site };
+  return { site, engineLabel: siteEngineFor(site).label.replace(/^Ghosty · /, "") };
 };
 
 export const action = async ({ request, params }: Route.ActionArgs) => {
@@ -59,7 +59,7 @@ function fmtTokens(n: number) {
 type Selection = { id: string; tag: string } | null;
 
 export default function SiteEditor() {
-  const { site } = useLoaderData<typeof loader>();
+  const { site, engineLabel } = useLoaderData<typeof loader>();
   const [params, setParams] = useSearchParams();
   const fetcher = useFetcher<typeof action>();
   const [msgs, setMsgs] = useState<Msg[]>([]);
@@ -214,7 +214,7 @@ export default function SiteEditor() {
           <Link to="/dash/sitios" className="text-gray-400 hover:text-black">←</Link>
           <div className="min-w-0 flex-1">
             <p className="font-bold truncate">{site.name}</p>
-            <p className="text-[11px] text-gray-400">{site.kind === "webapp" ? "Web app" : "Sitio estático"}</p>
+            <p className="text-[11px] text-gray-400">{site.kind === "webapp" ? "Web app" : "Sitio estático"} · {engineLabel}</p>
           </div>
           {tokens && (
             <Link to="/dash/packs" title="Tokens LLM disponibles en tu cuenta"

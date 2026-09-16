@@ -830,6 +830,7 @@ model Site {
   name       String
   websiteId  String?  @db.ObjectId // static
   sandboxId  String?  // webapp (host id, ver Sandbox.sandboxId)
+  engine     String?  // id de FLEET_ENGINES que lo construye; null = "easybits" (medido)
   deletedAt  DateTime?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt

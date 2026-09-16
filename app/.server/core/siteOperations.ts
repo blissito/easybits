@@ -11,17 +11,44 @@ import type { AuthContext } from "~/.server/apiAuth";
 import { requireScope } from "~/.server/apiAuth";
 import { createFleetAgent, recycleFleetAgentBoxes } from "./fleetAgentOperations";
 import { checkLLMTokenLimit, recargarLLMTokens } from "~/.server/llmTokenLimit";
+import { createSecret, listSecrets } from "./secretOperations";
+import { FLEET_ENGINES, getEngine, engineCreatable, engineIsMetered, type FleetEngine } from "~/lib/fleetEngines";
 import { createWebsite } from "./operations";
 import { buyMachine } from "./machineOperations";
 import { launchApp, setRunspec } from "./releaseOperations";
 import { exposeSandboxPort } from "./sandboxOperations";
 
 export const BUILDER_NAME = "Sitios Builder";
-// Motor del builder: `easybits` = ghosty-gc contra el proxy medido (/api/v2/llm/v1),
-// que YA descuenta del bucket de tokens LLM del dueño y responde 402 sin saldo. Con
-// claude-worker (OAuth Max de la casa) el usuario construía gratis.
-const BUILDER_ENGINE = "easybits";
+// Motor por default: `easybits` = ghosty-gc contra el proxy medido (/api/v2/llm/v1),
+// que YA descuenta del bucket de tokens LLM del dueño y responde 402 sin saldo. Los
+// demás motores (claude/deepseek/codex) son BYOK: la llave del dueño, del vault.
+export const DEFAULT_SITE_ENGINE = "easybits";
 const BUILDER_TEMPLATE = "ghosty-gc";
+
+/** Motor de un sitio (null → default medido). */
+export function siteEngineFor(site: { engine?: string | null }): FleetEngine {
+  return getEngine(site.engine ?? DEFAULT_SITE_ENGINE) ?? getEngine(DEFAULT_SITE_ENGINE)!;
+}
+
+/** Un builder POR MOTOR por cuenta. El de easybits conserva el nombre original. */
+function builderNameFor(engineId: string) {
+  return engineId === DEFAULT_SITE_ENGINE ? BUILDER_NAME : `${BUILDER_NAME} · ${engineId}`;
+}
+
+/** Para el selector: motores + si su llave ya está en el vault (sin exponer nombres). */
+export async function engineChoicesFor(userId: string) {
+  const owned = new Set((await listSecrets(userId)).map((s) => s.name));
+  return FLEET_ENGINES.map((e) => ({
+    id: e.id,
+    label: e.label.replace(/^Ghosty · /, ""),
+    model: e.model,
+    metered: engineIsMetered(e),
+    creatable: engineCreatable(e),
+    needsSecret: !!e.secret && !owned.has(e.secret.name),
+    secretPlaceholder: e.secret?.placeholder ?? "",
+    secretKind: e.secret?.kind ?? null,
+  }));
+}
 // Regalo de arranque: una cuenta SIN saldo (Byte post-promo) recibe tokens al crear
 // su primer sitio, una sola vez por cuenta (sello en metadata.sitesStarterGrantAt).
 export const SITES_STARTER_TOKENS = 500_000;
@@ -39,35 +66,44 @@ function siteGroupId(siteId: string) {
   return `site:${siteId}`;
 }
 
-/** El builder de la cuenta; se crea al primer sitio (lazy, uno por dueño). */
-export async function ensureBuilderAgent(ctx: AuthContext) {
+/** El builder de la cuenta para un motor; se crea al primer sitio (lazy). */
+export async function ensureBuilderAgent(ctx: AuthContext, engineId: string = DEFAULT_SITE_ENGINE) {
+  const engine = getEngine(engineId) ?? getEngine(DEFAULT_SITE_ENGINE)!;
   const existing = await db.fleetAgent.findFirst({
-    where: { ownerId: ctx.user.id, name: BUILDER_NAME },
+    where: { ownerId: ctx.user.id, name: builderNameFor(engine.id) },
     select: { id: true, token: true, workerTemplate: true, persona: true },
   });
   if (existing) {
-    // Builder nacido antes del motor medido (claude-worker): se migra en sitio y se
-    // recicla su caja (el env es spawn-baked; la VM viva seguiría con el motor viejo).
-    if (existing.workerTemplate !== BUILDER_TEMPLATE) {
+    // Builder easybits nacido antes del motor medido (claude-worker): se migra en sitio
+    // y se recicla su caja (el env es spawn-baked; la VM viva seguiría con el motor viejo).
+    if (engine.id === DEFAULT_SITE_ENGINE && existing.workerTemplate !== BUILDER_TEMPLATE) {
       const persona = (existing.persona as { env?: Record<string, string> } | null) ?? {};
       await db.fleetAgent.update({
         where: { id: existing.id },
         data: {
           workerTemplate: BUILDER_TEMPLATE,
-          persona: { ...persona, env: { ...(persona.env ?? {}), GHOSTY_LLM: BUILDER_ENGINE } },
+          persona: { ...persona, env: { ...(persona.env ?? {}), GHOSTY_LLM: DEFAULT_SITE_ENGINE } },
         },
       });
       await recycleFleetAgentBoxes({ id: existing.id, ownerId: ctx.user.id }).catch(() => {});
     }
     return { id: existing.id, token: existing.token };
   }
-  const created = await createFleetAgent(ctx, {
-    name: BUILDER_NAME,
-    systemPrompt: BUILDER_SYSTEM,
-    engine: BUILDER_ENGINE,
+  // Mismo patrón que el form de /dash/flota: template + env del motor + modelo default;
+  // la credencial la resuelve el spawn por nombre canónico (solo OAuth se persiste).
+  const env: Record<string, string> = {
+    ...(engine.env ?? {}),
     // Buckets: sitios (Website + Files), sandbox (archivos/exec en la caja) y
     // hosting (launch_app/restart_machine). Sin lo demás: es un constructor.
-    env: { EASYBITS_TOOL_GROUP: "scripting,sitios,sandbox,hosting" },
+    EASYBITS_TOOL_GROUP: "scripting,sitios,sandbox,hosting",
+  };
+  if (engine.modelEnv && engine.defaultModel) env[engine.modelEnv] = engine.defaultModel;
+  const created = await createFleetAgent(ctx, {
+    name: builderNameFor(engine.id),
+    systemPrompt: BUILDER_SYSTEM,
+    workerTemplate: engine.template,
+    env,
+    oauthSecretName: engine.secret?.kind === "oauth" ? engine.secret.name : undefined,
     idleSuspendMin: 2,
   });
   return { id: created.id, token: created.token };
@@ -155,23 +191,36 @@ function sandboxUrl(sandboxId: string, port: number) {
  */
 export async function createSite(
   ctx: AuthContext,
-  opts: { kind: SiteKind; name: string; tier?: string }
+  opts: { kind: SiteKind; name: string; tier?: string; engine?: string; secretValue?: string }
 ): Promise<{ site: { id: string }; checkoutUrl?: string }> {
   requireScope(ctx, "WRITE");
   const name = opts.name.trim() || "Mi sitio";
-  await ensureBuilderAgent(ctx);
-  await grantStarterTokensIfNeeded(ctx.user.id).catch(() => {});
+  const engine = getEngine(opts.engine ?? DEFAULT_SITE_ENGINE) ?? getEngine(DEFAULT_SITE_ENGINE)!;
+  if (!engineCreatable(engine)) throw new Response("Ese motor aún no está disponible", { status: 400 });
+  // "Si la llave no está, que te la pida": BYOK guarda la credencial en el vault del
+  // dueño con su nombre canónico; el spawn del worker la lee de ahí.
+  if (engine.secret) {
+    const owned = (await listSecrets(ctx.user.id)).some((s) => s.name === engine.secret!.name);
+    if (!owned) {
+      const val = (opts.secretValue ?? "").trim();
+      if (!val) throw new Response(`Falta la llave de ${engine.label.replace(/^Ghosty · /, "")}`, { status: 400 });
+      await createSecret(ctx.user.id, { name: engine.secret.name, value: val });
+    }
+  }
+  await ensureBuilderAgent(ctx, engine.id);
+  // El regalo solo tiene sentido en el motor medido: BYOK no gasta tokens de la cuenta.
+  if (engineIsMetered(engine)) await grantStarterTokensIfNeeded(ctx.user.id).catch(() => {});
   if (opts.kind === "static") {
     const website = await createWebsite(ctx, { name });
     const site = await db.site.create({
-      data: { ownerId: ctx.user.id, kind: "static", name, websiteId: website.id },
+      data: { ownerId: ctx.user.id, kind: "static", name, websiteId: website.id, engine: engine.id },
     });
     return { site };
   }
   const bought = await buyMachine(ctx, { tier: opts.tier ?? "micro", template: "node", name });
   const sandboxId = "machine" in bought && bought.machine ? bought.machine.sandboxId : null;
   const site = await db.site.create({
-    data: { ownerId: ctx.user.id, kind: "webapp", name, sandboxId },
+    data: { ownerId: ctx.user.id, kind: "webapp", name, sandboxId, engine: engine.id },
   });
   // Runspec por default desde el día cero: sin él `restart_machine` falla y el
   // agente pierde un turno descubriéndolo (pasó en la primera prueba).
