@@ -46,10 +46,13 @@ export async function ensureBuilderAgent(ctx: AuthContext) {
   return { id: created.id, token: created.token };
 }
 
+// Prisma+Mongo: un campo AUSENTE (fila creada sin `deletedAt`) NO matchea `null`.
+const NOT_DELETED = { OR: [{ deletedAt: null }, { deletedAt: { isSet: false } }] };
+
 export async function listSites(ctx: AuthContext) {
   requireScope(ctx, "READ");
   const rows = await db.site.findMany({
-    where: { ownerId: ctx.user.id, deletedAt: null },
+    where: { ownerId: ctx.user.id, ...NOT_DELETED },
     orderBy: { createdAt: "desc" },
   });
   const websites = await db.website.findMany({
@@ -62,7 +65,7 @@ export async function listSites(ctx: AuthContext) {
 
 export async function getSite(ctx: AuthContext, id: string) {
   requireScope(ctx, "READ");
-  const site = await db.site.findFirst({ where: { id, ownerId: ctx.user.id, deletedAt: null } });
+  const site = await db.site.findFirst({ where: { id, ownerId: ctx.user.id, ...NOT_DELETED } });
   if (!site) throw new Response("Site not found", { status: 404 });
   const website = site.websiteId
     ? await db.website.findUnique({ where: { id: site.websiteId }, select: { id: true, slug: true, subdomainEnabled: true } })
@@ -139,7 +142,7 @@ export async function attachNewestMachine(ctx: AuthContext, siteId: string) {
   requireScope(ctx, "WRITE");
   const site = await getSite(ctx, siteId);
   if (site.sandboxId) return site;
-  const taken = (await db.site.findMany({ where: { ownerId: ctx.user.id, sandboxId: { not: null } }, select: { sandboxId: true } }))
+  const taken = (await db.site.findMany({ where: { ownerId: ctx.user.id, sandboxId: { isSet: true } }, select: { sandboxId: true } }))
     .map((s) => s.sandboxId as string);
   const box = await db.sandbox.findFirst({
     where: { ownerId: ctx.user.id, persistent: true, status: { notIn: ["destroyed", "pending_deletion"] }, sandboxId: { notIn: taken } },
