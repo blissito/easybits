@@ -126,6 +126,12 @@ export default [
         route("new", "routes/dash/landings4/new.tsx"),
         route(":id", "routes/dash/landings4/editor.tsx"),
       ]),
+      // Sitios: creador de sitios (static + webapp) — chat + preview + publicar
+      ...prefix("sitios", [
+        index("routes/dash/sitios/list.tsx"),
+        route("new", "routes/dash/sitios/new.tsx"),
+        route(":id", "routes/dash/sitios/editor.tsx"),
+      ]),
       // Documents
       ...prefix("documents", [
         index("routes/dash/documents/list.tsx"),
@@ -506,6 +512,8 @@ export default [
 
   // Collab (Yjs) — the collab-svc box calls these server-to-server (Bearer COLLAB_SECRET):
   // auth gate for a room + Yjs binary state persistence (externalized to storage).
+  // Chat del creador de sitios (sesión del dueño; SSE)
+  route("api/v2/sites/:id/chat", "routes/api/v2/sites.$id.chat.ts"),
   route("api/v2/collab/authenticate", "routes/api/v2/collab.authenticate.ts"),
   route("api/v2/collab/:docId/state", "routes/api/v2/collab.$docId.state.ts"),
   // Simple (server-less) document editor — instant seed, no Hocuspocus box. The

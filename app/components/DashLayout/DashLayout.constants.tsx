@@ -92,8 +92,8 @@ export const ITEMS = {
               <path d="M9 21V9" />
             </svg>
           ),
-          path: "/dash/landings4",
-          title: "Landings",
+          path: "/dash/sitios",
+          title: "Sitios",
         },
         {
           icon: (

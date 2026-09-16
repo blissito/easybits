@@ -75,6 +75,9 @@ export async function loader({ params, request }: Route.LoaderArgs) {
   // When our own OG screenshotter is loading this page to take a picture, we
   // don't want to recursively trigger another screenshot job.
   const isOgBot = new URL(request.url).searchParams.has("__og");
+  // Vista previa del creador de sitios: inyecta el picker (hover/click sobre
+  // data-eb-id → postMessage al editor). Solo HTML raíz, solo con ?eb_edit=1.
+  const isEdit = new URL(request.url).searchParams.get("eb_edit") === "1";
 
   // El estado se filtra EN LA CONSULTA, no después.
   //
@@ -194,7 +197,8 @@ export async function loader({ params, request }: Route.LoaderArgs) {
     const withBase = isRootIndex
       ? injectBaseTag(html, `/s/${website.slug}/`)
       : html;
-    const patched = injectMetaTags(withBase, { title, url: canonical, logoUrl: ogImage });
+    let patched = injectMetaTags(withBase, { title, url: canonical, logoUrl: ogImage });
+    if (isEdit) patched = patched.replace(/<\/body>/i, `<script src="/eb-picker.js"></script></body>`);
     return new Response(patched, {
       headers: {
         "Content-Type": contentType,

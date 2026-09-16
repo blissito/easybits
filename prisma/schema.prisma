@@ -265,6 +265,7 @@ model User {
   machineReleases      MachineRelease[]
   sandboxBackups       SandboxBackup[]
   fleetAgents          FleetAgent[]
+  sites                Site[]
 }
 
 model Secret {
@@ -811,6 +812,27 @@ model PresentationStyle {
   ownerId       String   @db.ObjectId
   owner         User     @relation(fields: [ownerId], references: [id])
   createdAt     DateTime @default(now())
+
+  @@index([ownerId])
+}
+
+// Un "sitio" del creador de sitios (/dash/sitios): la unidad que el usuario ve y
+// paga. Dos productos sobre UNA superficie (chat + preview + publicar):
+//  - static: HTML plano en CDN → apunta a un Website (incluido en el plan).
+//  - webapp: código en una caja permanente → apunta a un Sandbox (cobra la máquina).
+// El contenido NO vive aquí (Files / la caja); la conversación tampoco: la persiste
+// FleetAgentMessage bajo groupId `site:<id>` del builder del dueño.
+model Site {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  ownerId    String   @db.ObjectId
+  owner      User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  kind       String   // "static" | "webapp"
+  name       String
+  websiteId  String?  @db.ObjectId // static
+  sandboxId  String?  // webapp (host id, ver Sandbox.sandboxId)
+  deletedAt  DateTime?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   @@index([ownerId])
 }
