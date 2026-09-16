@@ -37,7 +37,14 @@ export const action = async ({ request, params }: Route.ActionArgs) => {
   }
 };
 
-type Msg = { role: "user" | "bot"; text: string; tools?: string[] };
+type Msg = { role: "user" | "bot"; text: string; tools?: string[]; imageUrl?: string; quota?: boolean };
+type Attached = { base64: string; ext: string; url: string; name: string };
+
+function fmtTokens(n: number) {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${Math.round(n / 1_000)}K`;
+  return String(n);
+}
 type Selection = { id: string; tag: string } | null;
 
 export default function SiteEditor() {
@@ -48,6 +55,8 @@ export default function SiteEditor() {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [selection, setSelection] = useState<Selection>(null);
+  const [tokens, setTokens] = useState<{ remaining: number; limit: number } | null>(null);
+  const [attached, setAttached] = useState<Attached | null>(null);
   const [previewKey, setPreviewKey] = useState(0);
   const bodyRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -57,11 +66,12 @@ export default function SiteEditor() {
   useEffect(() => {
     fetch(`/api/v2/sites/${site.id}/chat`)
       .then((r) => (r.ok ? r.json() : { messages: [] }))
-      .then((d: { messages?: Array<{ role: string; text: string }> }) =>
+      .then((d: { messages?: Array<{ role: string; text: string }>; tokens?: { remaining: number; limit: number } }) => {
+        if (d.tokens) setTokens(d.tokens);
         // No pisar un turno que ya arrancó (el primer prompt se manda antes de
         // que llegue el historial).
-        setMsgs((cur) => (cur.length ? cur : (d.messages ?? []).map((m) => ({ role: m.role === "user" ? "user" : "bot", text: m.text }))))
-      )
+        setMsgs((cur) => (cur.length ? cur : (d.messages ?? []).map((m) => ({ role: m.role === "user" ? "user" : "bot", text: m.text }))));
+      })
       .catch(() => {});
   }, [site.id]);
 
@@ -80,15 +90,39 @@ export default function SiteEditor() {
     return () => window.removeEventListener("message", onMsg);
   }, []);
 
+  // Imagen adjunta (mockup/referencia): drop, paste o botón. Solo png/jpg/webp, ≤5 MB.
+  const attachFile = useCallback((file: File | null | undefined) => {
+    if (!file) return;
+    const ext = (file.type.split("/")[1] || "").replace("jpeg", "jpg");
+    if (!/^(png|jpg|webp)$/.test(ext) || file.size > 5 * 1024 * 1024) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const url = String(reader.result);
+      setAttached({ base64: url.split(",")[1] ?? "", ext, url, name: file.name });
+    };
+    reader.readAsDataURL(file);
+  }, []);
+  useEffect(() => {
+    const onPaste = (e: ClipboardEvent) => {
+      const f = Array.from(e.clipboardData?.files ?? []).find((x) => x.type.startsWith("image/"));
+      if (f) { e.preventDefault(); attachFile(f); }
+    };
+    document.addEventListener("paste", onPaste);
+    return () => document.removeEventListener("paste", onPaste);
+  }, [attachFile]);
+
   const send = useCallback(
     async (text: string) => {
       text = text.trim();
-      if (!text || busy) return;
+      if ((!text && !attached) || busy) return;
+      if (!text) text = "Usa esta imagen como referencia para el sitio.";
       setBusy(true);
       setInput("");
       const sel = selection;
+      const img = attached;
       setSelection(null);
-      setMsgs((m) => [...m, { role: "user", text: sel ? `[${sel.id}] ${text}` : text }, { role: "bot", text: "", tools: [] }]);
+      setAttached(null);
+      setMsgs((m) => [...m, { role: "user", text: sel ? `[${sel.id}] ${text}` : text, imageUrl: img?.url }, { role: "bot", text: "", tools: [] }]);
       const patch = (fn: (prev: Msg) => Msg) =>
         setMsgs((m) => {
           const last = m[m.length - 1];
@@ -99,10 +133,16 @@ export default function SiteEditor() {
         const res = await fetch(`/api/v2/sites/${site.id}/chat`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text, selection: sel }),
+          body: JSON.stringify({ text, selection: sel, image: img ? { base64: img.base64, ext: img.ext } : undefined }),
         });
+        if (res.status === 402) {
+          setTokens((t) => (t ? { ...t, remaining: 0 } : { remaining: 0, limit: 0 }));
+          patch((p) => ({ ...p, quota: true, text: "Se acabaron tus tokens LLM." }));
+          return;
+        }
         if (!res.ok || !res.body) {
-          patch((p) => ({ ...p, text: `⚠️ Error ${res.status}` }));
+          const err = await res.json().catch(() => null);
+          patch((p) => ({ ...p, text: `⚠️ ${err?.message || `Error ${res.status}`}` }));
           return;
         }
         const reader = res.body.getReader();
@@ -132,9 +172,11 @@ export default function SiteEditor() {
       } finally {
         setBusy(false);
         setPreviewKey((k) => k + 1);
+        // Saldo fresco tras el turno (el proxy medido ya descontó).
+        fetch(`/api/v2/sites/${site.id}/chat`).then((r) => (r.ok ? r.json() : null)).then((d) => d?.tokens && setTokens(d.tokens)).catch(() => {});
       }
     },
-    [busy, selection, site.id]
+    [busy, selection, attached, site.id]
   );
 
   // Primer mensaje que llegó desde /new por la URL: se manda solo y se limpia.
@@ -161,6 +203,12 @@ export default function SiteEditor() {
             <p className="font-bold truncate">{site.name}</p>
             <p className="text-[11px] text-gray-400">{site.kind === "webapp" ? "Web app" : "Sitio estático"}</p>
           </div>
+          {tokens && (
+            <Link to="/dash/packs" title="Tokens LLM disponibles en tu cuenta"
+              className={`text-[10px] font-bold px-2 py-1 rounded-lg border-2 ${tokens.remaining > 0 ? "border-gray-200 text-gray-500" : "border-red-300 bg-red-50 text-red-600"}`}>
+              {fmtTokens(tokens.remaining)} tokens
+            </Link>
+          )}
         </header>
         <div ref={bodyRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
           {msgs.length === 0 && (
@@ -175,9 +223,18 @@ export default function SiteEditor() {
                       <p className="text-[10px] text-gray-400 mb-1 font-mono">{m.tools.join(" · ")}</p>
                     )}
                     {m.text ? <Streamdown>{m.text}</Streamdown> : <span className="text-gray-400">construyendo…</span>}
+                    {m.quota && (
+                      <div className="mt-2 flex gap-2">
+                        <Link to="/dash/packs" className="px-3 py-1 rounded-lg bg-black text-white text-xs font-bold">Recargar</Link>
+                        <Link to="/planes" className="px-3 py-1 rounded-lg border-2 border-black text-xs font-bold">Subir de plan</Link>
+                      </div>
+                    )}
                   </>
                 ) : (
-                  m.text
+                  <>
+                    {m.imageUrl && <img src={m.imageUrl} alt="" className="max-h-40 rounded-lg mb-2 border border-white/30" />}
+                    {m.text}
+                  </>
                 )}
               </div>
             </div>
@@ -190,14 +247,30 @@ export default function SiteEditor() {
             <button type="button" className="ml-auto text-gray-400 hover:text-black" onClick={() => setSelection(null)}>✕</button>
           </div>
         )}
-        <form className="p-3 border-t-2 border-black flex gap-2" onSubmit={(e) => { e.preventDefault(); void send(input); }}>
+        {attached && (
+          <div className="px-4 py-2 text-xs bg-gray-50 border-t-2 border-gray-200 flex items-center gap-2">
+            <img src={attached.url} alt="" className="h-10 w-10 object-cover rounded border border-gray-300" />
+            <span className="truncate text-gray-600">{attached.name}</span>
+            <button type="button" className="ml-auto text-gray-400 hover:text-black" onClick={() => setAttached(null)}>✕</button>
+          </div>
+        )}
+        <form
+          className="p-3 border-t-2 border-black flex gap-2"
+          onSubmit={(e) => { e.preventDefault(); void send(input); }}
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={(e) => { e.preventDefault(); attachFile(e.dataTransfer.files?.[0]); }}
+        >
+          <label className="px-2 flex items-center border-2 border-black rounded-xl cursor-pointer text-gray-500 hover:text-black" title="Adjuntar imagen o mockup (o pega/arrastra)">
+            🖼
+            <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={(e) => { attachFile(e.target.files?.[0]); e.target.value = ""; }} />
+          </label>
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder={selection ? "¿Qué cambio en ese elemento?" : "Escribe un cambio…"}
+            placeholder={attached ? "¿Qué hago con esta imagen?" : selection ? "¿Qué cambio en ese elemento?" : "Escribe un cambio… (arrastra un mockup)"}
             className="flex-1 px-4 py-2.5 border-2 border-black rounded-xl text-sm focus:outline-none"
           />
-          <button type="submit" disabled={busy || !input.trim()} className="px-4 py-2 rounded-xl bg-black text-white text-sm font-bold disabled:opacity-40">
+          <button type="submit" disabled={busy || (!input.trim() && !attached)} className="px-4 py-2 rounded-xl bg-black text-white text-sm font-bold disabled:opacity-40">
             {busy ? "…" : "Enviar"}
           </button>
         </form>

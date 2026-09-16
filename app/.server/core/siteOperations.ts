@@ -9,13 +9,22 @@
 import { db } from "~/.server/db";
 import type { AuthContext } from "~/.server/apiAuth";
 import { requireScope } from "~/.server/apiAuth";
-import { createFleetAgent } from "./fleetAgentOperations";
+import { createFleetAgent, recycleFleetAgentBoxes } from "./fleetAgentOperations";
+import { checkLLMTokenLimit, recargarLLMTokens } from "~/.server/llmTokenLimit";
 import { createWebsite } from "./operations";
 import { buyMachine } from "./machineOperations";
 import { launchApp, setRunspec } from "./releaseOperations";
 import { exposeSandboxPort } from "./sandboxOperations";
 
 export const BUILDER_NAME = "Sitios Builder";
+// Motor del builder: `easybits` = ghosty-gc contra el proxy medido (/api/v2/llm/v1),
+// que YA descuenta del bucket de tokens LLM del dueño y responde 402 sin saldo. Con
+// claude-worker (OAuth Max de la casa) el usuario construía gratis.
+const BUILDER_ENGINE = "easybits";
+const BUILDER_TEMPLATE = "ghosty-gc";
+// Regalo de arranque: una cuenta SIN saldo (Byte post-promo) recibe tokens al crear
+// su primer sitio, una sola vez por cuenta (sello en metadata.sitesStarterGrantAt).
+export const SITES_STARTER_TOKENS = 500_000;
 const DEFAULT_RUNSPEC = { appDir: "/app", buildCommand: "(npm ci || npm install) && npm run build --if-present", startCommand: "npm start", port: 3000 };
 export type SiteKind = "static" | "webapp";
 
@@ -34,18 +43,49 @@ function siteGroupId(siteId: string) {
 export async function ensureBuilderAgent(ctx: AuthContext) {
   const existing = await db.fleetAgent.findFirst({
     where: { ownerId: ctx.user.id, name: BUILDER_NAME },
-    select: { id: true, token: true },
+    select: { id: true, token: true, workerTemplate: true, persona: true },
   });
-  if (existing) return existing;
+  if (existing) {
+    // Builder nacido antes del motor medido (claude-worker): se migra en sitio y se
+    // recicla su caja (el env es spawn-baked; la VM viva seguiría con el motor viejo).
+    if (existing.workerTemplate !== BUILDER_TEMPLATE) {
+      const persona = (existing.persona as { env?: Record<string, string> } | null) ?? {};
+      await db.fleetAgent.update({
+        where: { id: existing.id },
+        data: {
+          workerTemplate: BUILDER_TEMPLATE,
+          persona: { ...persona, env: { ...(persona.env ?? {}), GHOSTY_LLM: BUILDER_ENGINE } },
+        },
+      });
+      await recycleFleetAgentBoxes({ id: existing.id, ownerId: ctx.user.id }).catch(() => {});
+    }
+    return { id: existing.id, token: existing.token };
+  }
   const created = await createFleetAgent(ctx, {
     name: BUILDER_NAME,
     systemPrompt: BUILDER_SYSTEM,
+    engine: BUILDER_ENGINE,
     // Buckets: sitios (Website + Files), sandbox (archivos/exec en la caja) y
     // hosting (launch_app/restart_machine). Sin lo demás: es un constructor.
     env: { EASYBITS_TOOL_GROUP: "scripting,sitios,sandbox,hosting" },
     idleSuspendMin: 2,
   });
   return { id: created.id, token: created.token };
+}
+
+/** Regalo de arranque para cuentas sin saldo, una vez por cuenta. Devuelve si se otorgó. */
+export async function grantStarterTokensIfNeeded(userId: string): Promise<boolean> {
+  const lim = await checkLLMTokenLimit(userId);
+  if (lim.remaining > 0) return false;
+  // El sello es la propia fila de auditoría (User.metadata es un tipo compuesto
+  // cerrado en Prisma; no admite campos nuevos sin migración).
+  const already = await db.aiGenerationLog.findFirst({ where: { userId, type: "sites.starter_grant" }, select: { id: true } });
+  if (already) return false;
+  await db.aiGenerationLog.create({
+    data: { userId, type: "sites.starter_grant", product: "compute", cost: 1, outputTokens: SITES_STARTER_TOKENS },
+  });
+  await recargarLLMTokens(userId, SITES_STARTER_TOKENS);
+  return true;
 }
 
 // Prisma+Mongo: un campo AUSENTE (fila creada sin `deletedAt`) NO matchea `null`.
@@ -120,6 +160,7 @@ export async function createSite(
   requireScope(ctx, "WRITE");
   const name = opts.name.trim() || "Mi sitio";
   await ensureBuilderAgent(ctx);
+  await grantStarterTokensIfNeeded(ctx.user.id).catch(() => {});
   if (opts.kind === "static") {
     const website = await createWebsite(ctx, { name });
     const site = await db.site.create({

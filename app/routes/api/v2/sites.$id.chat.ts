@@ -5,6 +5,7 @@ import type { AuthContext } from "~/.server/apiAuth";
 import { withAdmitRetry } from "~/.server/core/fleetAdmitHold";
 import { routeMessage, FleetAgentAtCapacity } from "~/.server/core/fleetAgentOperations";
 import { ensureBuilderAgent, getSite, siteGroupId, siteTurnPrompt } from "~/.server/core/siteOperations";
+import { checkLLMTokenLimit } from "~/.server/llmTokenLimit";
 
 // Chat del creador de sitios. Auth = sesión del dueño (el token del builder NUNCA
 // baja al browser). Mismo SSE que fleet-agents/:id/message-stream: `chunk`,
@@ -25,7 +26,8 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     take: 200,
     select: { role: true, text: true, createdAt: true },
   });
-  return Response.json({ messages: rows });
+  const lim = await checkLLMTokenLimit(ctx.user.id);
+  return Response.json({ messages: rows, tokens: { remaining: lim.remaining, limit: lim.limit } });
 }
 
 export async function action({ request, params }: Route.ActionArgs) {
@@ -35,11 +37,27 @@ export async function action({ request, params }: Route.ActionArgs) {
   const body = await request.json().catch(() => ({}));
   const text = typeof body?.text === "string" ? body.text.trim() : "";
   if (!text) return Response.json({ error: "text required" }, { status: 400 });
+  // Gate ANTES del turno: sin saldo el proxy medido responde 402 dentro del worker,
+  // pero para entonces ya se pagó un cold-spawn. Mejor cortar aquí con un mensaje claro.
+  const lim = await checkLLMTokenLimit(ctx.user.id);
+  if (lim.remaining <= 0) {
+    return Response.json(
+      { error: "insufficient_quota", message: "Sin tokens LLM. Recarga un pack o sube de plan para seguir construyendo." },
+      { status: 402 }
+    );
+  }
   const selection =
     body?.selection && typeof body.selection.id === "string" && typeof body.selection.tag === "string"
       ? { id: body.selection.id.slice(0, 80), tag: body.selection.tag.slice(0, 20) }
       : null;
 
+  const image =
+    body?.image && typeof body.image.base64 === "string" && /^(png|jpg|jpeg|webp)$/.test(body.image.ext ?? "")
+      ? { base64: body.image.base64 as string, ext: body.image.ext as string }
+      : undefined;
+  if (image && image.base64.length > 7_000_000) {
+    return Response.json({ error: "image_too_large", message: "La imagen supera 5 MB." }, { status: 413 });
+  }
   const encoder = new TextEncoder();
   const sse = (obj: unknown) => encoder.encode(`data: ${JSON.stringify(obj)}\n\n`);
   const stream = new ReadableStream<Uint8Array>({
@@ -57,9 +75,14 @@ export async function action({ request, params }: Route.ActionArgs) {
               sender: "sitios",
               // La selección va EN el texto (no solo en el system append): en una
               // sesión caliente el appendSystemPrompt por turno no siempre llega.
-              text: selection
-                ? `[Elemento seleccionado en la vista previa: <${selection.tag} data-eb-id="${selection.id}">. Modifica SOLO ese nodo.]\n${text}`
-                : text,
+              text: [
+                selection
+                  ? `[Elemento seleccionado en la vista previa: <${selection.tag} data-eb-id="${selection.id}">. Modifica SOLO ese nodo.]`
+                  : "",
+                image ? "[El usuario adjuntó una imagen (mockup/referencia): mírala antes de responder y úsala como guía visual.]" : "",
+                text,
+              ].filter(Boolean).join("\n"),
+              image,
               appendSystemPrompt: siteTurnPrompt(site, selection),
             },
             {
