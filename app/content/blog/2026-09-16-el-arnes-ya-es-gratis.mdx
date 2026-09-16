@@ -1,0 +1,61 @@
+---
+title: "El arnés ya es gratis. Lo que cuesta es la caja donde vive"
+description: "YC acaba de decir que el arnés importa más que el modelo: los mismos pesos pasan de 30% a 95% en ARC-AGI cambiando solo el andamiaje. Cierto. Pero los mejores arneses ya son open source, y Codex ya corre con Claude adentro. Cuando el modelo y el arnés son commodity, lo único que queda por vender es dónde corre y por dónde entra."
+date: "2026-09-16"
+author: "Equipo Easybits"
+tags: ["agentes", "arnés", "infraestructura", "build in public", "opinión"]
+featuredImage: "/blog/assets/blog-arnes-gratis-caja-cover.png"
+published: true
+---
+
+# El arnés ya es gratis. Lo que cuesta es la caja donde vive
+
+Hace nueve días Y Combinator publicó una mesa con un título que suena a provocación: *el arnés importa más que el modelo*. El dato con el que abren no es marginal: los mismos pesos que sacan 30% en ARC-AGI-3 sacan 95.5% con un arnés mejor, sin tocar el modelo. Nada de prompt engineering: tools, memoria, permisos, verificación y un loop que se corrige solo.
+
+Llevamos meses diciendo lo mismo con otras palabras: *el cerebro es commodity, el arnés es la diferenciación*. Así que podríamos darnos la razón y cerrar el post aquí. Pero la misma semana pasaron dos cosas que cambian la conclusión.
+
+## Los mejores arneses son open source
+
+Los tres que presentó YC —Prime Agent, QM (el que usa el propio staff de YC en legal, contabilidad e ingeniería) y OpenJarvis— están publicados. Codex, opencode y Claude Code llevan meses en GitHub. Hay un catálogo mantenido con decenas de arneses comparables.
+
+Si el arnés es el 65% del rendimiento y cualquiera puede clonar uno excelente, entonces el arnés **tampoco** es donde se cobra. Es demasiado bueno y demasiado gratis.
+
+## Codex ya corre con Claude adentro
+
+La segunda señal es más discreta. En `config.toml` de Codex hay un bloque `model_providers`: le apuntas a cualquier endpoint que hable Responses API y tenga tool use —Anthropic, Gemini, Bedrock, un modelo local— y Codex sigue siendo Codex.
+
+Léelo como decisión de negocio: el fabricante del modelo más caro del mundo prefiere que uses **su arnés con el modelo de la competencia** a que uses el arnés de la competencia con su modelo. El punto de captura se movió. Ya no está en los pesos; está en el andamiaje. Y el andamiaje, como vimos arriba, ya se regala.
+
+## Qué queda cuando todo es commodity
+
+Modelo intercambiable. Arnés abierto. Chat de equipo gratis (Slack Code se incluyó sin costo en cualquier plan el mes pasado). Cuando todas las capas de arriba se vuelven gratis o equivalentes, la pregunta útil no es *"cuál arnés"* sino:
+
+1. **¿Dónde corre?** Un arnés bueno necesita una máquina real: sistema de archivos, procesos, red, tiempo. No un request de 30 segundos.
+2. **¿Sobrevive entre turnos?** La memoria procedural, los archivos a medio hacer, las sesiones abiertas de un MCP: todo eso vive en disco, no en el prompt.
+3. **¿Por dónde entra?** WhatsApp, un widget, un canal de Slack, una llamada HTTP. El arnés no trae canales.
+4. **¿Quién cobra y en qué moneda?** Para un equipo en México, la diferencia entre pagar en pesos con factura o en dólares con tarjeta corporativa es la diferencia entre comprar o no comprar.
+
+Ninguna de esas cuatro las resuelve un arnés, por bueno que sea. Las resuelve la caja.
+
+## Nuestros números, no los de la mesa
+
+Esto es lo que medimos en producción con agentes que corren en su propia microVM:
+
+- **Arranque en frío**: ~12 segundos hasta que el agente responde con sus tools cargadas.
+- **Despertar de una caja dormida**: 700–950 ms. La conversación sigue donde iba, con su disco y su memoria.
+- **Caja dormida**: no consume CPU. El cliente paga cuando el agente trabaja.
+- **Cambiar de motor**: el mismo agente corre sobre un worker Claude o uno Codex sin tocar su configuración, sus canales ni su memoria. El arnés es un parámetro.
+
+Con esos números, la tesis de YC no nos contradice: nos deja el lugar exacto. Si el arnés es intercambiable, lo que vendemos es *tu arnés, ya encendido, con memoria y canales, en pesos*.
+
+## Lo que no vamos a hacer
+
+No vamos a competir en calidad de arnés contra Prime Agent ni contra QM. Perderíamos, y además no hace falta: los usamos. Tampoco vamos a construir otra sala de chat donde los agentes son miembros; Slack ya la regaló.
+
+Lo que sí: que cualquier arnés que exista hoy —o el que salga el mes que entra— se encienda en una caja propia en segundos, con los canales conectados, y que la factura llegue en pesos.
+
+El arnés importa más que el modelo. De acuerdo. Y la caja importa más que el arnés, porque es lo único de la pila que no se regala.
+
+---
+
+*Referencias: mesa "Why The Harness Matters More Than The Model" (YC Paper Club, 7 sep 2026); documentación de `model_providers` en Codex CLI; anuncio de Slack Code (21 ago 2026). Los tiempos de arranque y despertar son mediciones propias en producción.*
