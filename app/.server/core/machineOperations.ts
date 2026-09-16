@@ -657,7 +657,13 @@ export async function releasePermanent(
 ): Promise<{ ok: true; destroyed: true; backupId?: string }> {
   requireScope(ctx, "DELETE");
   const row = await db.sandbox.findUnique({ where: { sandboxId } });
-  if (!row || row.ownerId !== ctx.user.id || row.status === "destroyed") {
+  // Misma regla que getPermanent: el dueño o quien tenga delegación "machines"
+  // sobre su cuenta. Sin esto el operador veía la máquina del cliente en su
+  // lista pero al borrarla recibía 404.
+  const mine =
+    !!row &&
+    (row.ownerId === ctx.user.id || (await can(ctx, row.ownerId, SCOPES.MACHINES)));
+  if (!row || !mine || row.status === "destroyed") {
     fail(404, "MachineNotFound", "Sandbox no encontrado.");
   }
   // Stop the meter immediately — the owner asked to release it. Two billing
