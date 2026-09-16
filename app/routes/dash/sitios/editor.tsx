@@ -40,6 +40,17 @@ export const action = async ({ request, params }: Route.ActionArgs) => {
 type Msg = { role: "user" | "bot"; text: string; tools?: string[]; imageUrl?: string; quota?: boolean };
 type Attached = { base64: string; ext: string; url: string; name: string };
 
+// Tools del turno agrupadas y contraídas: "3 búsquedas · 2 acciones" en vez de una
+// lista cruda de nombres internos (tool_search_tool_bm25, mcp_easybits_run_tool…).
+function summarizeTools(tools: string[]) {
+  const counts = new Map<string, number>();
+  for (const t of tools) {
+    const label = /search|discover/.test(t) ? "búsqueda" : /read|list|get/.test(t) ? "lectura" : "acción";
+    counts.set(label, (counts.get(label) ?? 0) + 1);
+  }
+  return [...counts].map(([k, n]) => `${n} ${k}${n === 1 ? "" : k === "acción" ? "es" : "s"}`).join(" · ");
+}
+
 function fmtTokens(n: number) {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${Math.round(n / 1_000)}K`;
@@ -222,7 +233,10 @@ export default function SiteEditor() {
                 {m.role === "bot" ? (
                   <>
                     {m.tools && m.tools.length > 0 && (
-                      <p className="text-[10px] text-gray-400 mb-1 font-mono">{m.tools.join(" · ")}</p>
+                      <details className="text-[10px] text-gray-400 mb-1">
+                        <summary className="cursor-pointer select-none">⚙ {summarizeTools(m.tools)}</summary>
+                        <p className="font-mono mt-1 break-all">{m.tools.join(" · ")}</p>
+                      </details>
                     )}
                     {m.text ? <Streamdown>{m.text}</Streamdown> : <span className="text-gray-400">construyendo…</span>}
                     {m.quota && (
