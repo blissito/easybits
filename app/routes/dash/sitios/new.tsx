@@ -3,7 +3,8 @@ import { Form, redirect, useNavigation, useActionData, useLoaderData } from "rea
 import { BrutalButton } from "~/components/common/BrutalButton";
 import { getUserOrRedirect } from "~/.server/getters";
 import type { AuthContext } from "~/.server/apiAuth";
-import { createSite, engineChoicesFor, DEFAULT_SITE_ENGINE, type SiteKind } from "~/.server/core/siteOperations";
+import { createSite, engineChoicesFor, type SiteKind } from "~/.server/core/siteOperations";
+import { DEFAULT_SITE_ENGINE } from "~/lib/fleetEngines";
 import { HOSTING_CATALOG } from "~/lib/hostingCatalog";
 import type { Route } from "./+types/new";
 

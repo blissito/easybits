@@ -12,7 +12,7 @@ import { requireScope } from "~/.server/apiAuth";
 import { createFleetAgent, recycleFleetAgentBoxes } from "./fleetAgentOperations";
 import { checkLLMTokenLimit, recargarLLMTokens } from "~/.server/llmTokenLimit";
 import { createSecret, listSecrets } from "./secretOperations";
-import { FLEET_ENGINES, getEngine, engineCreatable, engineIsMetered, type FleetEngine } from "~/lib/fleetEngines";
+import { FLEET_ENGINES, DEFAULT_SITE_ENGINE, getEngine, engineCreatable, engineIsMetered, type FleetEngine } from "~/lib/fleetEngines";
 import { createWebsite } from "./operations";
 import { buyMachine } from "./machineOperations";
 import { launchApp, setRunspec } from "./releaseOperations";
@@ -22,7 +22,6 @@ export const BUILDER_NAME = "Sitios Builder";
 // Motor por default: `easybits` = ghosty-gc contra el proxy medido (/api/v2/llm/v1),
 // que YA descuenta del bucket de tokens LLM del dueño y responde 402 sin saldo. Los
 // demás motores (claude/deepseek/codex) son BYOK: la llave del dueño, del vault.
-export const DEFAULT_SITE_ENGINE = "easybits";
 const BUILDER_TEMPLATE = "ghosty-gc";
 
 /** Motor de un sitio (null → default medido). */

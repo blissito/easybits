@@ -169,6 +169,8 @@ export const engineIsMetered = (engine?: { billing?: "byok" | "metered" } | null
   engine?.billing === "metered";
 
 export const DEFAULT_ENGINE_ID = "claude";
+/** Motor por default del creador de sitios (medido: tokens de la cuenta). */
+export const DEFAULT_SITE_ENGINE = "easybits";
 
 export const getEngine = (id?: string): FleetEngine | undefined =>
   FLEET_ENGINES.find((e) => e.id === id);
