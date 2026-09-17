@@ -11,18 +11,32 @@ export const meta = () => [
   ...getBasicMetaTags({
     title: "eve (Vercel) en microVMs — backend nativo de sandboxes | EasyBits",
     description:
-      "Corre tus agentes eve en microVMs Firecracker con @easybits.cloud/eve-sandbox: el contrato SandboxBackend completo — prewarm, sesiones durables, política de red por caja — en MXN y con plan gratuito.",
+      "Corre tus agentes eve (el framework de Vercel) en máquinas virtuales de EasyBits: una por sesión, aislada, que duerme entre turnos y despierta en un segundo. Cambias una línea en agent/sandbox.ts. En MXN, con plan gratuito.",
     url: "https://www.easybits.cloud/eve",
+    image: "https://www.easybits.cloud/blog/assets/blog-eve-easybits-policy.png",
   }),
+  { name: "keywords", content: "eve, Vercel eve, SandboxBackend, eve sandbox, agentes IA, microVM, Firecracker, EasyBits" },
+  { tagName: "link", rel: "alternate", hrefLang: "es", href: "https://www.easybits.cloud/eve" },
   { tagName: "link", rel: "canonical", href: "https://www.easybits.cloud/eve" },
 ];
 
-const JSON_LD = productJsonLd({
-  name: "EasyBits para eve",
-  description:
-    "SandboxBackend nativo para eve (Vercel): cada sesión de agente en su propia microVM Firecracker, con snapshot, suspend/resume y egress por caja.",
-  path: "/eve",
-});
+const JSON_LD = {
+  ...productJsonLd({
+    name: "EasyBits para eve (Vercel)",
+    description:
+      "Backend de sandboxes para eve, el framework de agentes de Vercel: cada sesión corre en su propia máquina virtual Firecracker, con imagen reusable, suspend/resume y política de red por caja. Plan gratuito; servidor eve 24/7 desde $49 MXN/mes.",
+    path: "/eve",
+    priceMxn: 0,
+  }),
+  image: "https://www.easybits.cloud/blog/assets/blog-eve-easybits-cover.png",
+  isRelatedTo: {
+    "@type": "SoftwareApplication",
+    name: "eve",
+    url: "https://eve.dev",
+    applicationCategory: "DeveloperApplication",
+  },
+  softwareRequirements: "Node.js >= 24, npm package @easybits.cloud/eve-sandbox",
+};
 
 export default function Eve({ loaderData }: Route.ComponentProps) {
   return (
