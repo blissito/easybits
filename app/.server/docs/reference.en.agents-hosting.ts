@@ -504,7 +504,7 @@ export default defineSandbox({
   backend: easybits(),                 // reads EASYBITS_API_KEY
   async bootstrap({ use }) {
     const s = await use();
-    await s.run({ command: "npm i -g typescript" });
+    await s.run({ command: "git clone https://github.com/your-org/tools /workspace/tools && cd /workspace/tools && npm ci" });
   },
 });
 \`\`\`

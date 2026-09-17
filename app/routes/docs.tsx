@@ -3123,7 +3123,7 @@ export default defineSandbox({
   backend: easybits(),                 // lee EASYBITS_API_KEY
   async bootstrap({ use }) {
     const s = await use();
-    await s.run({ command: "npm i -g typescript" });
+    await s.run({ command: "git clone https://github.com/tu-org/herramientas /workspace/tools && cd /workspace/tools && npm ci" });
   },
 });`} />
             <p className="text-gray-600 mb-4 text-sm">
