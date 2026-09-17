@@ -96,6 +96,27 @@ export default function Eve({ loaderData }: Route.ComponentProps) {
               image: "/blog/assets/blog-eve-easybits-snapshot.png",
             },
             {
+              title: "El run sobrevive a la máquina",
+              body: (
+                <>
+                  Con{" "}
+                  <a className="underline" href="https://www.npmjs.com/package/@easybits.cloud/eve-world" target="_blank" rel="noopener noreferrer">
+                    @easybits.cloud/eve-world
+                  </a>{" "}
+                  el estado de eve (runs, pasos, hooks, streams) vive en EasyBits DB en vez del disco del
+                  servidor. Lo probamos en producción: matamos la máquina a mitad de un run de 8 pasos y otra
+                  máquina lo retomó en el paso 3, sin repetir los anteriores, 59 segundos después.
+                </>
+              ),
+              bullets: [
+                "Una línea en agent.ts: experimental.workflow.world",
+                "La máquina eve-nitro nace ya conectada: sin token que pegar",
+                "Port del world oficial de Postgres a libSQL, misma línea de versiones que eve",
+                "Sin EasyBits sigue funcionando: apunta a cualquier libSQL o cae al disco local",
+              ],
+              image: "/blog/assets/blog-eve-easybits-snapshot.png",
+            },
+            {
               title: "Tú decides a qué se conecta cada máquina",
               body: "Desde tu código de eve puedes limitar la salida a internet de una sesión: sólo a los dominios que autorices, o a ninguno. Se cambia en caliente, se conserva al dormir, y lo que no está en la lista simplemente no sale.",
               bullets: [

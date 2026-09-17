@@ -69,6 +69,19 @@ curl -s -X POST "$B/sandboxes/$SB/expose" "${H[@]}" -d '{"port":3000}'
 
 El template `eve-nitro` trae Node 24, pnpm y el CLI de eve; `/data` es persistente y la URL pública proxea `/eve/` y `/.well-known/workflow/` sin configurar nada. El servidor corre ahí; cada agente que atiende recibe su propia microVM por el backend de arriba.
 
+## 5. El run sobrevive a la máquina
+
+Por default eve guarda el estado de cada run en el disco del servidor. Con [`@easybits.cloud/eve-world`](https://www.npmjs.com/package/@easybits.cloud/eve-world) ese estado (runs, pasos, hooks, streams y la cola de entregas) vive en EasyBits DB:
+
+```ts
+// agent.ts
+export default {
+  experimental: { workflow: { world: "@easybits.cloud/eve-world" } },
+};
+```
+
+La máquina `eve-nitro` nace con `EASYBITS_DB_URL` ya puesto: no hay token que pegar. Lo medimos en producción con un run de 8 pasos: destruimos la máquina a mitad del paso 2; una máquina nueva con la misma base arrancó, retomó en el paso 3 sin repetir los anteriores —59 segundos después de la muerte de la primera— y terminó el run. Es un port del world oficial de Postgres a libSQL, en la misma línea de versiones que eve.
+
 ## Empieza hoy
 
 Instala el paquete, cambia `agent/sandbox.ts` y corre `eve build`. La página del producto está en [/eve](/eve), la referencia en [/docs/eve.md](/docs/eve.md) y tu propio agente puede configurarlo con `npx skills add https://www.easybits.cloud --skill easybits-eve`. El plan gratuito incluye una caja.
