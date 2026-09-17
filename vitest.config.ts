@@ -9,6 +9,7 @@ export default defineConfig({
     setupFiles: ["./test/setup.ts"],
     // Los *.spec.ts son tests de Playwright (corren con `npm run e2e`),
     // no de vitest. Excluirlos para no fallar el unit suite.
-    exclude: [...configDefaults.exclude, "**/*.spec.ts"],
+    // Los paquetes con deps propias (eve-world) se prueban en su carpeta; la raíz no las instala.
+    exclude: [...configDefaults.exclude, "**/*.spec.ts", "packages/eve-world/**"],
   },
 });
