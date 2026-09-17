@@ -86,7 +86,7 @@ export default function Eve({ loaderData }: Route.ComponentProps) {
               <a className="underline text-brand-500" href="/hosting">
                 hosting
               </a>
-              , desde $49/mes. English tutorial:{" "}
+              , desde $49 MXN/mes. English tutorial:{" "}
               <a className="underline text-brand-500" href="/blog/agentes-eve-en-easybits?lang=en">
                 Run your eve agents on EasyBits
               </a>
