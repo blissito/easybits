@@ -1,0 +1,42 @@
+{
+  "name": "@easybits.cloud/eve-sandbox",
+  "version": "0.0.1",
+  "description": "EasyBits SandboxBackend for eve (Vercel) — run eve agents' sandboxes on EasyBits Firecracker microVMs",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": ["dist"],
+  "keywords": ["easybits", "eve", "vercel", "sandbox", "firecracker", "ai-agents"],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/blissito/easybits",
+    "directory": "packages/eve-sandbox"
+  },
+  "license": "MIT",
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "publishConfig": { "access": "public" },
+  "peerDependencies": {
+    "eve": ">=0.58.0"
+  },
+  "dependencies": {
+    "@easybits.cloud/sdk": "^0.34.3"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "ai": "^7.0.105",
+    "eve": "0.58.1",
+    "tsup": "^8.0.0",
+    "typescript": "^5.7.0"
+  }
+}
