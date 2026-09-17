@@ -51,24 +51,26 @@ Options: `easybits({ apiKey, baseUrl, template: "node", timeoutSeconds, workingD
 ## 2. Self-hosting the eve server on EasyBits
 
 Use the `eve-nitro` template (Node 24, pnpm, `eve` CLI, git/curl/tar; `/data` is a persistent
-4 GB volume and the working directory; port 3000):
+4 GB volume and the working directory; port 3000). Four calls: create the box, `eve init` the
+app inside it (or clone yours) and install both packages, start the server, expose the port:
 
 ```bash
 B=https://www.easybits.cloud/api/v2
 H=(-H "Authorization: Bearer $EASYBITS_API_KEY" -H "Content-Type: application/json")
 SB=$(curl -s -X POST "$B/sandboxes" "${H[@]}" -d '{"template":"eve-nitro","timeoutSeconds":3600,"suspendOnIdle":true,"hardTtlSeconds":2592000}' | jq -r .sandboxId)
-curl -s -X POST "$B/sandboxes/$SB/exec" "${H[@]}" -d '{"command":"cd /data && git clone <repo> app && cd app && pnpm i && eve build","timeoutSeconds":600}'
+curl -s -X POST "$B/sandboxes/$SB/exec" "${H[@]}" -d '{"command":"cd /data && eve init app && cd app && pnpm add @easybits.cloud/eve-sandbox @easybits.cloud/eve-world && eve build","timeoutSeconds":600}'
 curl -s -X POST "$B/sandboxes/$SB/bg"   "${H[@]}" -d '{"command":"exec eve start","cwd":"/data/app","env":{"EASYBITS_API_KEY":"<key>"}}'
 curl -s -X POST "$B/sandboxes/$SB/expose" "${H[@]}" -d '{"port":3000}'      # → { url }
 ```
+
+`EASYBITS_DB_URL` is already in the `eve-nitro` box's environment; do not pass it in `env`.
 
 The public URL proxies every path, so `/eve/` and `/.well-known/workflow/` reach Nitro with no
 extra config. Keep the project and `.eve/.workflow-data` under `/data` so runs survive
 suspend/resume; declare a `bootstrap` that restarts `eve start` on every wake.
 
 Durable state: eve's default world stores runs on disk (`.eve/.workflow-data`). For state that
-outlives the box use `@workflow/world-postgres` (plain Postgres, install it in the box or in a
-second one) — the world package must match eve's `@workflow/*` line.
+outlives the box use `@easybits.cloud/eve-world` (section 3).
 
 ## 3. Durable state: `@easybits.cloud/eve-world`
 

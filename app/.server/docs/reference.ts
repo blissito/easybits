@@ -1794,18 +1794,27 @@ Opciones: \`easybits({ apiKey, baseUrl, template: "node", timeoutSeconds, workin
 
 Template \`eve-nitro\`: Node 24, pnpm, \`eve\` CLI, git/curl/tar; \`/data\` es un volumen persistente de 4 GB y el directorio de trabajo; puerto 3000.
 
+Cuatro llamadas: crear la caja, crear la app dentro con \`eve init\` (o clona la tuya si ya existe) e instalar los dos paquetes, arrancar el servidor, exponer el puerto. Antes define la base y los headers en bash:
+
 \`\`\`bash
+B=https://www.easybits.cloud/api/v2; H=(-H "Authorization: Bearer $EASYBITS_API_KEY" -H "Content-Type: application/json")
 SB=$(curl -s -X POST "$B/sandboxes" "\${H[@]}" -d '{"template":"eve-nitro","timeoutSeconds":3600,"suspendOnIdle":true,"hardTtlSeconds":2592000}' | jq -r .sandboxId)
-curl -s -X POST "$B/sandboxes/$SB/exec" "\${H[@]}" -d '{"command":"cd /data && git clone <repo> app && cd app && pnpm i && eve build","timeoutSeconds":600}'
+curl -s -X POST "$B/sandboxes/$SB/exec" "\${H[@]}" -d '{"command":"cd /data && eve init app && cd app && pnpm add @easybits.cloud/eve-sandbox @easybits.cloud/eve-world && eve build","timeoutSeconds":600}'
 curl -s -X POST "$B/sandboxes/$SB/bg"   "\${H[@]}" -d '{"command":"exec eve start","cwd":"/data/app","env":{"EASYBITS_API_KEY":"<key>"}}'
 curl -s -X POST "$B/sandboxes/$SB/expose" "\${H[@]}" -d '{"port":3000}'   # → { url }
 \`\`\`
 
-La URL pública proxea todo el path: \`/eve/\` y \`/.well-known/workflow/\` llegan a Nitro sin configurar nada. Proyecto y \`.eve/.workflow-data\` van bajo \`/data\` para sobrevivir suspend/resume; declara un \`bootstrap\` que relance \`eve start\` en cada despertar. El estado durable de eve vive por default en disco; para que sobreviva a la caja usa \`@workflow/world-postgres\` (Postgres normal, en la misma caja o en otra) de la misma línea \`@workflow/*\` que tu eve.
+\`EASYBITS_DB_URL\` ya viene en el entorno de la caja \`eve-nitro\`; no hay que pasarlo en \`env\`.
+
+La URL pública proxea todo el path: \`/eve/\` y \`/.well-known/workflow/\` llegan a Nitro sin configurar nada. Proyecto y \`.eve/.workflow-data\` van bajo \`/data\` para sobrevivir suspend/resume; declara un \`bootstrap\` que relance \`eve start\` en cada despertar. El estado durable de eve vive por default en disco; para que sobreviva a la caja usa \`@easybits.cloud/eve-world\` (sección 3).
 
 ### 3. Estado durable en EasyBits DB (\`@easybits.cloud/eve-world\`)
 
 Por default eve guarda sus runs, steps, hooks y streams en el disco de la caja (\`.eve/.workflow-data\`). \`@easybits.cloud/eve-world\` es un **World** del Workflow SDK sobre libSQL: el mismo estado vive en EasyBits DB, así que la caja del servidor se puede destruir y recrear sin perder un run a medias. Es un port 1:1 de \`@workflow/world-postgres\` (cola de entregas por lease en tabla) para \`@workflow/world@5.0.0-beta.35\`, la línea que pinea eve 0.58.1.
+
+\`\`\`bash
+npm i @easybits.cloud/eve-world   # pnpm add en eve-nitro
+\`\`\`
 
 \`\`\`ts
 // agent.ts

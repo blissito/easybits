@@ -59,18 +59,25 @@ Only the domains you authorize for that box, or none (`"deny-all"`). Change it l
 
 ## 4. The eve server fits in a box too
 
+Four calls: create the box, create the app inside it with `eve init` (or clone yours) and install both packages, start the server, expose the port. First the base URL and headers:
+
 ```bash
+B=https://www.easybits.cloud/api/v2; H=(-H "Authorization: Bearer $EASYBITS_API_KEY" -H "Content-Type: application/json")
 SB=$(curl -s -X POST "$B/sandboxes" "${H[@]}" -d '{"template":"eve-nitro","timeoutSeconds":3600,"suspendOnIdle":true}' | jq -r .sandboxId)
-curl -s -X POST "$B/sandboxes/$SB/exec" "${H[@]}" -d '{"command":"cd /data && git clone <repo> app && cd app && pnpm i && eve build","timeoutSeconds":600}'
+curl -s -X POST "$B/sandboxes/$SB/exec" "${H[@]}" -d '{"command":"cd /data && eve init app && cd app && pnpm add @easybits.cloud/eve-sandbox @easybits.cloud/eve-world && eve build","timeoutSeconds":600}'
 curl -s -X POST "$B/sandboxes/$SB/bg"   "${H[@]}" -d '{"command":"exec eve start","cwd":"/data/app","env":{"EASYBITS_API_KEY":"<key>"}}'
 curl -s -X POST "$B/sandboxes/$SB/expose" "${H[@]}" -d '{"port":3000}'
 ```
 
-The `eve-nitro` template ships Node 24, pnpm and the eve CLI; `/data` is persistent and the public URL proxies `/eve/` and `/.well-known/workflow/` with no configuration. The server runs there; every agent it serves gets its own microVM through the backend above.
+`EASYBITS_DB_URL` is already in the box's environment; no need to pass it in `env`. The `eve-nitro` template ships Node 24, pnpm and the eve CLI; `/data` is persistent and the public URL proxies `/eve/` and `/.well-known/workflow/` with no configuration. The server runs there; every agent it serves gets its own microVM through the backend above.
 
 ## 5. The run survives the machine
 
 By default eve keeps each run's state on the server's disk. With [`@easybits.cloud/eve-world`](https://www.npmjs.com/package/@easybits.cloud/eve-world) that state (runs, steps, hooks, streams and the delivery queue) lives in EasyBits DB:
+
+```bash
+npm i @easybits.cloud/eve-world
+```
 
 ```ts
 // agent.ts
