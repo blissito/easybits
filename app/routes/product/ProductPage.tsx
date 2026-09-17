@@ -21,8 +21,8 @@ import type { User } from "@prisma/client";
 
 export type ProductBento = {
   title: string;
-  body: string;
-  bullets: string[];
+  body: ReactNode;
+  bullets: ReactNode[];
   image: string;
 };
 
@@ -31,7 +31,7 @@ export type ProductPageData = {
   kicker: string;
   title: string;
   highlight: string;
-  subtitle: string;
+  subtitle: ReactNode;
   /** Línea de prueba social/específica bajo el CTA. */
   proof: string;
   bentos: ProductBento[];

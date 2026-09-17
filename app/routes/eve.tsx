@@ -34,44 +34,61 @@ export default function Eve({ loaderData }: Route.ComponentProps) {
       <ProductPage
         user={loaderData.user}
         data={{
-          kicker: "eve (Vercel) · @easybits.cloud/eve-sandbox",
+          kicker: "Para agentes hechos con eve, el framework de Vercel",
           title: "Tus agentes eve",
           highlight: "en microVMs de verdad",
-          subtitle:
-            "Un SandboxBackend nativo para eve: 100 % del contrato, sin tocar tu agente. Cambias una línea en agent/sandbox.ts y cada sesión corre en su propia máquina Firecracker, en tu cuenta, en MXN.",
+          subtitle: (
+            <>
+              eve deja que tú elijas dónde ejecuta código tu agente (
+              <a className="underline" href="https://eve.dev/docs/sandbox" target="_blank" rel="noopener noreferrer">
+                docs de eve: Sandbox
+              </a>
+              ). Con una línea en <code>agent/sandbox.ts</code>, cada sesión corre en su propia máquina
+              virtual en EasyBits: aislada, con root e internet, en tu cuenta y en pesos mexicanos.
+            </>
+          ),
           proof:
-            "Snapshot de prewarm reusado en 0.2 s · fork por sesión ~7 s · resume ~1 s · Node 24 · npm i @easybits.cloud/eve-sandbox",
+            "Arranque de una sesión ~7 s · despertar ~1 s · el entorno preparado se reusa en cada build · npm i @easybits.cloud/eve-sandbox",
           bentos: [
             {
-              title: "prewarm() se vuelve un snapshot copy-on-write",
-              body: "eve corre tu bootstrap y tus seed files una vez; nosotros lo congelamos como imagen con nombre. Cada build siguiente lo reusa en vez de reconstruirlo.",
+              title: "El entorno se prepara una vez y se reusa siempre",
+              body: (
+                <>
+                  Cuando corres <code>eve build</code>, eve instala lo que tu agente necesita (su{" "}
+                  <a className="underline" href="https://eve.dev/docs/sandbox" target="_blank" rel="noopener noreferrer">
+                    bootstrap
+                  </a>
+                  ). Nosotros guardamos ese resultado como una imagen lista. Los builds siguientes no vuelven a
+                  instalar nada: reusan la imagen en 0.2 s.
+                </>
+              ),
               bullets: [
-                "Snapshot eve:<templateKey>:<hash>, idempotente por build",
-                "Reuso medido en 0.2 s; captura fresca en ~11 s",
-                "Los seeds ($HOME/.agents/skills/…) se resuelven dentro de la caja",
-                "Sin template (templateKey null): caja fresca del template base",
+                "Una imagen por versión de tu agente; si no cambia, no se reconstruye",
+                "Primera captura ~11 s; reuso medido en 0.2 s",
+                "Los archivos que eve siembra (skills, configuración) ya vienen dentro",
+                "Si tu agente no necesita preparación, arranca de una máquina limpia",
               ],
               image: "/blog/assets/blog-eve-easybits-cover.png",
             },
             {
-              title: "Sesiones durables: fork, siesta y reattach",
-              body: "create() es un fork del snapshot. Entre turnos la caja duerme con snapshot de la VM y despierta en un segundo; eve la reabre por sandboxId con el disco intacto.",
+              title: "Cada sesión tiene su máquina, y la conserva entre turnos",
+              body: "Cuando alguien le habla a tu agente, EasyBits levanta una copia de esa imagen sólo para esa conversación. Entre un mensaje y el siguiente la máquina duerme; al volver despierta en un segundo con todo como lo dejó.",
               bullets: [
-                "stop() / shutdown() = suspend; delete() = destroy",
-                "run() y spawn() con streams reales y kill() al grupo de procesos",
-                "Archivos: texto, binario, rangos de líneas; rutas ancladas en /workspace",
-                "El estado durable de eve sigue en tu server; la caja sólo ejecuta",
+                "Aislamiento real: lo que rompa una sesión no toca a las demás",
+                "Duerme y despierta sin perder archivos ni procesos instalados",
+                "Comandos con salida en vivo; puedes matar un proceso y todo lo que abrió",
+                "Cuando la sesión termina, eve la borra y dejas de pagar",
               ],
               image: "/blog/assets/blog-eve-easybits-snapshot.png",
             },
             {
-              title: "Política de red por caja y el servidor eve hospedado",
-              body: "setNetworkPolicy sale a los dominios que tú autorices para esa caja, o a ninguno. Se cambia en caliente, se conserva al dormir, y lo que no está en la lista no sale. El servidor eve también cabe en una caja: template eve-nitro con /data persistente y URL pública.",
+              title: "Tú decides a qué se conecta cada máquina",
+              body: "Desde tu código de eve puedes limitar la salida a internet de una sesión: sólo a los dominios que autorices, o a ninguno. Se cambia en caliente, se conserva al dormir, y lo que no está en la lista simplemente no sale.",
               bullets: [
-                "allow-all · deny-all · allow-list por dominio (\"registry.npmjs.org\")",
-                "La misma política por REST, SDK y tools MCP",
-                "eve-nitro: Node 24, pnpm, eve CLI, puerto 3000 expuesto con TLS",
-                "Docs y skill easybits-eve para que tu agente lo configure solo",
+                "Todo abierto, todo cerrado, o una lista de dominios exactos",
+                "La misma regla se puede poner desde la API, el SDK o las tools MCP",
+                "El servidor eve también puede vivir en una máquina de EasyBits, con URL pública",
+                "Tu propio agente puede configurarlo con la skill easybits-eve",
               ],
               image: "/blog/assets/blog-eve-easybits-policy.png",
             },
