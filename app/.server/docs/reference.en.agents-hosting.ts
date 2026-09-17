@@ -391,7 +391,7 @@ Source: exactly ONE of the three.
 MCP: \`launch_app({ repo | archiveUrl | sandboxId, tier?, port?, dataPaths?, domain? })\`
 REST: \`POST /machines/launch\` · SDK: \`eb.machines.launch({ … })\`
 
-Defaults: \`tier: "micro"\` (nano is 256MB — it does NOT survive a Node build), \`template: "node"\` (Node 22 + npm; \`ubuntu\` does NOT ship Node), \`appDir: "/app"\`, \`buildCommand: "(npm ci || npm install) && npm run build"\`, \`startCommand: "npm start"\`, \`port: 3000\`.
+Defaults: \`tier: "micro"\` (nano is 256MB — it does NOT survive a Node build), \`template: "node"\` (Node 24 + npm/pnpm; \`ubuntu\` does NOT ship Node), \`appDir: "/app"\`, \`buildCommand: "(npm ci || npm install) && npm run build"\`, \`startCommand: "npm start"\`, \`port: 3000\`.
 
 **App variables (non-secret)** go in \`env\`: \`{ PORT: "4000", API_URL: "…" }\`. They are exported before the build and before start; vault secrets win by name. Keys must be shell identifiers (\`A-Z_0-9\`).
 

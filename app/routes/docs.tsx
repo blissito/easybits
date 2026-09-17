@@ -3231,7 +3231,7 @@ await eb.machines.launch({ archiveUrl: up.url, domain: "tienda.com" });` },
 
             <h3 className="text-lg font-bold mb-3 mt-8">Configurar la app: variables y arranque</h3>
             <p className="text-gray-600 text-sm mb-3">
-              Defaults: <code className="bg-gray-100 px-1 rounded">template: "node"</code> (Node 22 + npm; <code className="bg-gray-100 px-1 rounded">ubuntu</code> <strong>no</strong> trae Node), <code className="bg-gray-100 px-1 rounded">appDir: "/app"</code>, <code className="bg-gray-100 px-1 rounded">port: 3000</code>, build <code className="bg-gray-100 px-1 rounded">npm ci && npm run build</code>, arranque <code className="bg-gray-100 px-1 rounded">npm start</code>. Las variables <strong>no secretas</strong> (PORT, URLs, ids) van en <code className="bg-gray-100 px-1 rounded">env</code>: se exportan antes del build y del arranque, y los secretos de la bóveda ganan por nombre.
+              Defaults: <code className="bg-gray-100 px-1 rounded">template: "node"</code> (Node 24 + npm/pnpm; <code className="bg-gray-100 px-1 rounded">ubuntu</code> <strong>no</strong> trae Node), <code className="bg-gray-100 px-1 rounded">appDir: "/app"</code>, <code className="bg-gray-100 px-1 rounded">port: 3000</code>, build <code className="bg-gray-100 px-1 rounded">npm ci && npm run build</code>, arranque <code className="bg-gray-100 px-1 rounded">npm start</code>. Las variables <strong>no secretas</strong> (PORT, URLs, ids) van en <code className="bg-gray-100 px-1 rounded">env</code>: se exportan antes del build y del arranque, y los secretos de la bóveda ganan por nombre.
             </p>
             <TabbedCode
               tabs={[

@@ -44,7 +44,7 @@ the platform, not by you):
 |---|---|---|
 | `ubuntu` | base | Full Linux. Install packages, compile, run servers. |
 | `python` | base | Python runtime; each run-code is a fresh process. |
-| `node` | base | Node 22 runtime; each run-code is a fresh process. |
+| `node` | base | Node 24 + typescript, tsx, pnpm, git and python3; each run-code is a fresh process. |
 | `bun` | base | Bun runtime. |
 | `dev-box` | base | Clean work box (git, curl, build-essential, Node 22); the recommended one for SSH. |
 | `code-interpreter` | base | Python + persistent Jupyter kernel (sandbox_run_cell): variables and charts survive between cells. |

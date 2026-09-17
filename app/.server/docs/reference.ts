@@ -1313,7 +1313,7 @@ Fuente: exactamente UNA de las tres.
 MCP: \`launch_app({ repo | archiveUrl | sandboxId, tier?, port?, dataPaths?, domain? })\`
 REST: \`POST /machines/launch\` · SDK: \`eb.machines.launch({ … })\`
 
-Defaults: \`tier: "micro"\` (nano son 256MB — NO aguanta un build de Node), \`template: "node"\` (Node 22 + npm; \`ubuntu\` NO trae Node), \`appDir: "/app"\`, \`buildCommand: "(npm ci || npm install) && npm run build"\`, \`startCommand: "npm start"\`, \`port: 3000\`.
+Defaults: \`tier: "micro"\` (nano son 256MB — NO aguanta un build de Node), \`template: "node"\` (Node 24 + npm/pnpm; \`ubuntu\` NO trae Node), \`appDir: "/app"\`, \`buildCommand: "(npm ci || npm install) && npm run build"\`, \`startCommand: "npm start"\`, \`port: 3000\`.
 
 **Variables de la app (no secretas)** van en \`env\`: \`{ PORT: "4000", API_URL: "…" }\`. Se exportan antes del build y del arranque; los secretos de la bóveda ganan por nombre. Las llaves deben ser identificadores de shell (\`A-Z_0-9\`).
 

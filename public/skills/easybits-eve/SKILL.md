@@ -76,7 +76,7 @@ second one) — the world package must match eve's `@workflow/*` line.
 
 ## Rules
 
-- **Node ≥ 24** for eve and for this backend; `eve-nitro` ships it, a plain `node` box (Node 22) does not.
+- **Node ≥ 24** for eve and for this backend; both `eve-nitro` and the `node` template ship Node 24 (plus typescript, tsx, pnpm).
 - Every eve agent session is a box in the user's account: it counts toward their concurrent
   sandbox budget. Tell the user when they hit `SandboxLimitReached`.
 - Snapshots `eve:*` are the templates; do not delete them while an eve deployment uses them.

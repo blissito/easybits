@@ -28,7 +28,7 @@ export interface TemplateInfo {
 export const TEMPLATE_CATALOG: Record<SandboxTemplate, TemplateInfo> = {
   ubuntu: { kind: "base", summary: "Linux completo. Instalar paquetes, compilar, correr servidores.", summaryEn: "Full Linux. Install packages, compile, run servers." },
   python: { kind: "base", summary: "Runtime Python; cada run-code es un proceso fresco.", summaryEn: "Python runtime; each run-code is a fresh process." },
-  node: { kind: "base", summary: "Runtime Node 22; cada run-code es un proceso fresco.", summaryEn: "Node 22 runtime; each run-code is a fresh process." },
+  node: { kind: "base", summary: "Node 24 + typescript, tsx, pnpm, git y python3; cada run-code es un proceso fresco.", summaryEn: "Node 24 + typescript, tsx, pnpm, git and python3; each run-code is a fresh process." },
   bun: { kind: "base", summary: "Runtime Bun.", summaryEn: "Bun runtime." },
   "dev-box": { kind: "base", summary: "Caja de trabajo limpia (git, curl, build-essential, Node 22); la recomendada para SSH.", summaryEn: "Clean work box (git, curl, build-essential, Node 22); the recommended one for SSH." },
   "code-interpreter": { kind: "base", summary: "Python + kernel Jupyter persistente (sandbox_run_cell): variables y gráficas sobreviven entre celdas.", summaryEn: "Python + persistent Jupyter kernel (sandbox_run_cell): variables and charts survive between cells." },
