@@ -22,7 +22,7 @@ import type { User } from "@prisma/client";
 export type ProductBento = {
   title: string;
   body: ReactNode;
-  bullets: ReactNode[];
+  bullets: string[];
   image: string;
 };
 
