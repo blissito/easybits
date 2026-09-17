@@ -18,7 +18,10 @@ if (!NO_FORK) {
 console.log("1. prewarm");
 const pre = await backend.prewarm({
   templateKey: templateKey!,
-  seedFiles: [{ path: "seed.txt", content: "hola desde seed\n" }],
+  seedFiles: [
+    { path: "seed.txt", content: "hola desde seed\n" },
+    { path: "$HOME/.agents/skills/demo/SKILL.md", content: "# demo\n" },
+  ],
   bootstrap: async ({ use }) => {
     const s = await use();
     const r = await s.run({ command: "node -v && echo bootstrapped > marker.txt" });
@@ -47,12 +50,14 @@ if (!NO_FORK) {
 const marker = await s.readTextFile({ path: "marker.txt" });
 const seed = await s.readTextFile({ path: "seed.txt" });
 if (marker?.trim() !== "bootstrapped" || seed?.trim() !== "hola desde seed") throw new Error(`snapshot state missing: ${marker} / ${seed}`);
-console.log("  estado del bootstrap presente ✓");
+const skill = await s.readTextFile({ path: "$HOME/.agents/skills/demo/SKILL.md" });
+if (skill?.trim() !== "# demo") throw new Error(`seed $HOME no llegó: ${skill}`);
+console.log("  estado del bootstrap + seed $HOME presentes ✓");
 }
 
 await s.writeTextFile({ path: "deep/dir/a.txt", content: "l1\nl2\nl3\n" });
 const l2 = await s.readTextFile({ path: "deep/dir/a.txt", startLine: 2, endLine: 2 });
-if (l2 !== "l2") throw new Error(`line range wrong: ${JSON.stringify(l2)}`);
+if (l2 !== "l2\n") throw new Error(`line range wrong: ${JSON.stringify(l2)}`);
 const missing = await s.readTextFile({ path: "nope.txt" });
 if (missing !== null) throw new Error("missing file should be null");
 await s.writeBinaryFile({ path: "bin.dat", content: new Uint8Array([0, 255, 10, 13]) });
@@ -89,7 +94,7 @@ console.log("4. stop (suspend) + reattach");
 const state = await h.captureState();
 await h.stop();
 const h2 = await backend.create({ templateKey, sessionKey, existingMetadata: state.metadata, runtimeContext: { appRoot: process.cwd() } });
-const again = await h2.session.readTextFile({ path: "bin.dat" });
+const again = await h2.session.readBinaryFile({ path: "bin.dat" });
 if (again === null) throw new Error("state lost after reattach");
 const st = await h2.captureState();
 if (st.metadata.sandboxId !== state.metadata.sandboxId) throw new Error("reattach opened a different box");
@@ -99,6 +104,6 @@ console.log("5. delete + limpiar snapshot");
 await h2.delete();
 const eb = new EasybitsClient({ apiKey: process.env.EASYBITS_API_KEY! });
 for (const snap of await eb.sandboxes.snapshots.list()) {
-  if (snap.name === `eve:${templateKey}`) await eb.sandboxes.snapshots.delete(snap.snapshotId);
+  if (snap.name?.startsWith(`eve:${templateKey}:`)) await eb.sandboxes.snapshots.delete(snap.snapshotId);
 }
 console.log("OK");

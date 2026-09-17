@@ -18,6 +18,7 @@
  * Todo pasa por la REST API pública vía `@easybits.cloud/sdk`; el paquete
  * nunca habla con un fierro directo.
  */
+import { createHash } from "node:crypto";
 import { dirname } from "node:path";
 import { EasybitsClient, EasybitsError, type Sandbox, type SandboxTemplate, type SnapshotRecord } from "@easybits.cloud/sdk";
 import type {
@@ -54,8 +55,16 @@ export interface EasybitsBackendOptions {
   runTimeoutSeconds?: number;
   /** Metadata extra que se pega a cada caja (además de los tags de eve). */
   metadata?: Record<string, string>;
-  /** Intervalo de poll de procesos `spawn()` en ms. Default 500. */
+  /** Intervalo inicial de poll de procesos `spawn()` en ms (backoff ×1.5 hasta 1s). Default 150. */
   spawnPollMs?: number;
+  /**
+   * Inactividad tras la cual la caja de sesión se SUSPENDE (no se destruye).
+   * eve deja la caja viva entre turnos; sin esto, el TTL la mataría y el
+   * siguiente turno arrancaría en una caja vacía. Default 600.
+   */
+  idleTtlSeconds?: number;
+  /** Plazo tras el cual una caja dormida sí se destruye. Default 7 días. */
+  hardTtlSeconds?: number;
 }
 
 type ResolvedOptions = Required<Omit<EasybitsBackendOptions, "apiKey" | "baseUrl">> & {
@@ -74,7 +83,9 @@ function resolveOptions(o: EasybitsBackendOptions): ResolvedOptions {
     workingDirectory: o.workingDirectory ?? DEFAULT_WORKDIR,
     runTimeoutSeconds: o.runTimeoutSeconds ?? 600,
     metadata: o.metadata ?? {},
-    spawnPollMs: o.spawnPollMs ?? 500,
+    spawnPollMs: o.spawnPollMs ?? 150,
+    idleTtlSeconds: o.idleTtlSeconds ?? 600,
+    hardTtlSeconds: o.hardTtlSeconds ?? 7 * 24 * 3600,
   };
 }
 
@@ -83,7 +94,10 @@ export function easybits(options: EasybitsBackendOptions = {}): SandboxBackend {
   const opts = resolveOptions(options);
   const eb = new EasybitsClient({ apiKey: opts.apiKey, baseUrl: opts.baseUrl });
 
-  const snapshotName = (templateKey: string) => SNAPSHOT_PREFIX + templateKey;
+  // El nombre lleva un hash de las opciones que cambian la imagen: cambiar
+  // `template` no debe reusar un snapshot bootstrapeado sobre otra base.
+  const optionsHash = createHash("sha256").update(JSON.stringify({ template: opts.template })).digest("hex").slice(0, 8);
+  const snapshotName = (templateKey: string) => `${SNAPSHOT_PREFIX}${templateKey}:${optionsHash}`;
 
   async function findSnapshot(templateKey: string) {
     const list = await eb.sandboxes.snapshots.list();
@@ -159,6 +173,13 @@ export function easybits(options: EasybitsBackendOptions = {}): SandboxBackend {
         });
       }
       await box.waitUntilReady();
+      // Sin esto el TTL destruiría la caja entre turnos y el siguiente
+      // `create` con `existingMetadata` la encontraría muerta.
+      await box.setIdlePolicy({
+        suspendOnIdle: true,
+        idleTtlSeconds: opts.idleTtlSeconds,
+        hardTtlSeconds: opts.hardTtlSeconds,
+      });
     }
     const live: Sandbox = box;
 
@@ -198,8 +219,14 @@ async function reattach(eb: EasybitsClient, meta?: Record<string, unknown>): Pro
     if (e instanceof EasybitsError && e.status === 404) return undefined;
     throw e;
   }
-  if (box.status === "suspended") await box.resume();
-  if (box.status === "stopped" || box.status === "lost" || box.status === "error") return undefined;
+  if (box.status === "lost" || box.status === "error") return undefined;
+  if (box.status === "suspended") {
+    try {
+      await box.resume();
+    } catch (e) {
+      throw new Error(`@easybits.cloud/eve-sandbox: no se pudo reanudar la caja ${id}: ${(e as Error).message}`);
+    }
+  }
   await box.waitUntilReady();
   return box;
 }
@@ -226,11 +253,19 @@ async function openSession(box: Sandbox, id: string, opts: ResolvedOptions): Pro
   const workdir = opts.workingDirectory;
   const knownDirs = new Set<string>();
 
-  const resolvePath = (p: string) => (p.startsWith("/") ? p : `${workdir}/${p}`.replace(/\/+/g, "/"));
+  // eve manda rutas `$HOME/.agents/skills/…` (seeds de skills); se resuelven
+  // contra el HOME real de la caja, una vez por sesión.
+  const homeProbe = await box.exec('printf %s "$HOME"', { timeoutSeconds: 30 });
+  const home = homeProbe.exitCode === 0 && homeProbe.stdout.trim() ? homeProbe.stdout.trim() : "/root";
+
+  const resolvePath = (p: string) => {
+    if (p === "$HOME" || p.startsWith("$HOME/")) p = home + p.slice("$HOME".length);
+    return (p.startsWith("/") ? p : `${workdir}/${p}`).replace(/\/+/g, "/");
+  };
 
   async function ensureDir(dir: string) {
     if (knownDirs.has(dir)) return;
-    await box.exec(`mkdir -p ${shellQuote(dir)}`, { timeoutSeconds: 30 });
+    await box.exec(`mkdir -p -- ${shellQuote(dir)}`, { timeoutSeconds: 30 });
     knownDirs.add(dir);
   }
   await ensureDir(workdir);
@@ -251,21 +286,27 @@ async function openSession(box: Sandbox, id: string, opts: ResolvedOptions): Pro
     await box.files.write(abs, Buffer.from(bytes).toString("base64"), { encoding: "base64" });
   }
 
-  async function run(o: SandboxRunOptions) {
-    const r = await box.exec(o.command, {
-      cwd: o.workingDirectory ?? workdir,
-      env: o.env,
-      timeoutSeconds: opts.runTimeoutSeconds,
-    });
-    return { exitCode: r.exitCode, stdout: r.stdout, stderr: r.stderr };
-  }
+  // Como eve en Docker: login shell para que PATH/perfil apliquen.
+  const loginShell = (command: string) => `bash -lc ${shellQuote(command)}`;
 
   async function spawn(o: SandboxSpawnOptions): Promise<SandboxProcess> {
-    const { execId } = await box.execBackground(o.command, {
+    const { execId } = await box.execBackground(loginShell(o.command), {
       cwd: o.workingDirectory ?? workdir,
       env: o.env,
     });
     return pollingProcess(box, execId, opts.spawnPollMs, o.abortSignal);
+  }
+
+  // `run` sobre `spawn` (como eve): sin el tope de 600s del exec síncrono y
+  // con abortSignal.
+  async function run(o: SandboxRunOptions) {
+    const p = await spawn(o);
+    const [stdout, stderr, { exitCode }] = await Promise.all([
+      streamToString(p.stdout),
+      streamToString(p.stderr),
+      p.wait(),
+    ]);
+    return { exitCode, stdout, stderr };
   }
 
   return {
@@ -279,10 +320,10 @@ async function openSession(box: Sandbox, id: string, opts: ResolvedOptions): Pro
     },
     readBinaryFile: async ({ path }) => readBytes(path),
     readTextFile: async ({ path, encoding, startLine, endLine }) => {
+      validateLineRange(startLine, endLine);
       const b = await readBytes(path);
       if (!b) return null;
-      const text = Buffer.from(b).toString((encoding ?? "utf-8") as BufferEncoding);
-      return sliceLines(text, startLine, endLine);
+      return sliceLines(decodeText(b, encoding ?? "utf-8"), startLine, endLine);
     },
     writeFile: async ({ path, content }) => writeBytes(path, await streamToBytes(content)),
     writeBinaryFile: async ({ path, content }) => writeBytes(path, content),
@@ -292,11 +333,11 @@ async function openSession(box: Sandbox, id: string, opts: ResolvedOptions): Pro
     // 404) ante un path inexistente, y `force` debe ignorarlo en silencio.
     removePath: async (o) => {
       const flags = `-${o.recursive ? "r" : ""}${o.force ? "f" : ""}`.replace(/^-$/, "");
-      const r = await box.exec(`rm ${flags} ${shellQuote(resolvePath(o.path))}`, { timeoutSeconds: 60 });
+      const r = await box.exec(`rm ${flags} -- ${shellQuote(resolvePath(o.path))}`, { timeoutSeconds: 60 });
       if (r.exitCode !== 0) throw new Error(`removePath ${o.path}: ${r.stderr.trim() || `exit ${r.exitCode}`}`);
     },
-    // La microVM sale por un firewall de egress fijo del fierro; no hay
-    // política por dominio en vivo. Solo aceptamos lo que ya es verdad.
+    // El egress lo fija el firewall del fierro, no la sesión: "allow-all" es
+    // lo único que ya es verdad, y aceptarlo no cambia nada.
     setNetworkPolicy: async (policy: SandboxNetworkPolicy) => {
       if (policy === "allow-all") return;
       throw new Error(
@@ -308,27 +349,46 @@ async function openSession(box: Sandbox, id: string, opts: ResolvedOptions): Pro
 
 /**
  * Proceso `spawn()` sobre `/bg`: el host guarda stdout/stderr acumulados y
- * aquí se emiten los deltas por poll. No es streaming en tiempo real, pero
- * `wait()`/`kill()` son exactos (el kill señala al grupo de procesos).
+ * aquí se emiten los deltas por poll (150ms → ×1.5 → 1s). No es streaming en
+ * tiempo real, pero `wait()`/`kill()` son exactos (el kill señala al grupo).
  */
 function pollingProcess(box: Sandbox, execId: string, pollMs: number, signal?: AbortSignal): SandboxProcess {
-  let sentOut = 0;
-  let sentErr = 0;
+  let prevOut = "";
+  let prevErr = "";
+  let aborted = false;
   let outCtl!: ReadableStreamDefaultController<Uint8Array>;
   let errCtl!: ReadableStreamDefaultController<Uint8Array>;
   const stdout = new ReadableStream<Uint8Array>({ start: (c) => { outCtl = c; } });
   const stderr = new ReadableStream<Uint8Array>({ start: (c) => { errCtl = c; } });
   const enc = new TextEncoder();
+  let wake: (() => void) | undefined;
+
+  // El buffer del agente recorta por arriba al pasar 1MB: si lo acumulado ya no
+  // empieza por lo emitido, se manda entero (mejor duplicar que callar).
+  const emit = (ctl: ReadableStreamDefaultController<Uint8Array>, prev: string, cur: string) => {
+    if (cur === prev) return prev;
+    ctl.enqueue(enc.encode(cur.startsWith(prev) ? cur.slice(prev.length) : cur));
+    return cur;
+  };
 
   const done = (async () => {
+    let delay = pollMs;
     try {
       for (;;) {
         const s = await box.bgStatus(execId);
-        if (s.stdout.length > sentOut) { outCtl.enqueue(enc.encode(s.stdout.slice(sentOut))); sentOut = s.stdout.length; }
-        if (s.stderr.length > sentErr) { errCtl.enqueue(enc.encode(s.stderr.slice(sentErr))); sentErr = s.stderr.length; }
+        prevOut = emit(outCtl, prevOut, s.stdout);
+        prevErr = emit(errCtl, prevErr, s.stderr);
         if (s.status === "exited") return { exitCode: s.exitCode ?? -1 };
-        await sleep(pollMs);
+        if (aborted) return { exitCode: -1 };
+        await new Promise<void>((r) => { wake = r; setTimeout(r, delay); });
+        wake = undefined;
+        if (aborted) return { exitCode: -1 };
+        delay = Math.min(1000, delay * 1.5);
       }
+    } catch (e) {
+      outCtl.error(e);
+      errCtl.error(e);
+      throw e;
     } finally {
       try { outCtl.close(); } catch {}
       try { errCtl.close(); } catch {}
@@ -336,6 +396,8 @@ function pollingProcess(box: Sandbox, execId: string, pollMs: number, signal?: A
   })();
 
   const kill = async () => {
+    aborted = true;
+    wake?.();
     await box.bgKill(execId).catch(ignore404);
   };
   signal?.addEventListener("abort", () => void kill(), { once: true });
@@ -366,11 +428,24 @@ async function streamToBytes(s: ReadableStream<Uint8Array>): Promise<Uint8Array>
   return new Uint8Array(Buffer.concat(chunks));
 }
 
-/** Rango 1-based inclusivo; `endLine` pasado de EOF devuelve hasta el final. */
+function validateLineRange(start?: number, end?: number) {
+  if (start !== undefined && (!Number.isInteger(start) || start < 1)) throw new Error("startLine must be a positive integer (1-based).");
+  if (end !== undefined && (!Number.isInteger(end) || end < 1)) throw new Error("endLine must be a positive integer (1-based).");
+  if (start !== undefined && end !== undefined && start > end) throw new Error("startLine must not be greater than endLine.");
+}
+
+/** Rango 1-based inclusivo que conserva los finales de línea (\n y \r\n); `endLine` pasado de EOF devuelve hasta el final. */
 function sliceLines(text: string, start?: number, end?: number) {
   if (start === undefined && end === undefined) return text;
-  const lines = text.split("\n");
-  const from = Math.max(1, start ?? 1) - 1;
-  const to = end === undefined ? lines.length : Math.min(lines.length, end);
-  return lines.slice(from, to).join("\n");
+  const lines = text.match(/[^\r\n]*(?:\r\n|\r|\n)|[^\r\n]+$/g) ?? [];
+  return lines.slice((start ?? 1) - 1, end ?? lines.length).join("");
+}
+
+function decodeText(b: Uint8Array, encoding: string) {
+  if (encoding === "utf-8" || encoding === "utf8") return new TextDecoder("utf-8", { fatal: true }).decode(b);
+  return Buffer.from(b).toString(encoding as BufferEncoding);
+}
+
+async function streamToString(s: ReadableStream<Uint8Array>) {
+  return new TextDecoder().decode(await streamToBytes(s));
 }
