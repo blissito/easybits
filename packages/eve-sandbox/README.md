@@ -2,6 +2,11 @@
 
 Run your [eve](https://eve.dev) agents' sandboxes on [EasyBits](https://www.easybits.cloud) Firecracker microVMs — persistent, snapshot-backed, billed in MXN.
 
+## Requirements
+
+- **Node.js ≥ 24** — eve itself requires it (`engines.node >= 24`); this package inherits the requirement. On EasyBits, the `eve-nitro` template ships Node 24.
+- An EasyBits API key with `WRITE` scope (creating boxes, snapshots and forks). Add `DELETE` if eve should be able to delete snapshots.
+
 ```bash
 npm i @easybits.cloud/eve-sandbox
 ```
