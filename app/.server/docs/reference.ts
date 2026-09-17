@@ -12,7 +12,7 @@ const WEBHOOK_EVENTS_MD = WEBHOOK_EVENTS.map(
 // Catálogo de tiers en Markdown, derivado de la fuente única (hostingCatalog).
 // Un tier nuevo aparece aquí sin editar prosa a mano.
 const fmtRam = (mb: number) => (mb >= 1024 ? `${mb / 1024}GB` : `${mb}MB`);
-const HOSTING_TIERS_MD = SELLABLE_TIERS.map((k) => {
+export const HOSTING_TIERS_MD = SELLABLE_TIERS.map((k) => {
   const t = HOSTING_CATALOG[k];
   const res = t.priceReserved != null ? ` (reserved $${t.priceReserved.toLocaleString("en-US")})` : "";
   return `- ${t.key} ${t.vcpus}/${fmtRam(t.memoryMb)}/${fmtRam(t.diskMb)} → $${t.priceShared.toLocaleString("en-US")}${res}`;
@@ -243,6 +243,79 @@ Ops: \`replace\` · \`remove\` · \`insert\` with \`pos\`: \`append\`/\`prepend\
 Returns \`{ applied: string[], failed: [{ nodeId, reason }] }\` — it never fails silently. \`reason\` ∈ \`missing\` | \`ambiguous\` (two nodes share the id — editing the wrong one is worse than not editing) | \`unparseable\` | \`root\` | \`void\` | \`empty\`. A patch that doesn't apply leaves the document untouched.
 Ids are deterministic by position, so re-stamping is idempotent and an outline you already fetched stays valid.
 MCP: \`get_node_outline\`, \`patch_node\`
+`,
+
+  web: `## Web — Internet para tus agentes
+
+Buscar en Google, leer cualquier página aunque bloquee bots (IPs residenciales, JS resuelto), extraer registros con esquema de sitios conocidos y rastrear un sitio completo. Disponible por REST, SDK y MCP (toolset \`web\`: \`web_search\`, \`web_fetch\`, \`web_extract\`, \`web_extract_status\`, \`web_crawl\`).
+
+**Se mide en consultas, no en créditos.** 1 consulta = 1 página leída, 1 búsqueda, 1 registro extraído — y en un rastreo, cada página que lee (máx. 20 por llamada). Tienes 50 al registrarte; los packs Web ($99 MXN → 400, $999 MXN → 10,000) están en \`/dash/packs?tab=web\`, valen para cualquier plan y **no caducan**. Sin saldo → \`402\` con \`{ error, code, requiredCost, available, buy }\` (\`buy\` es la URL absoluta para comprar: pásasela al usuario).
+
+**\`country\` es opcional** y son 2 letras (ISO 3166-1): \`mx\` México · \`us\` Estados Unidos · \`es\` España · \`ar\` Argentina · \`co\` Colombia · \`cl\` Chile · \`pe\` Perú · \`br\` Brasil. Sirve para ver el sitio como un usuario de ese país (precios en MXN, stock local, resultados de Google localizados). Si lo omites, el proveedor elige. En \`web_extract\` con \`google_maps\` va en MAYÚSCULAS dentro del input (\`country: "MX"\`).
+
+### Buscar
+\`POST /web/search\`
+Body: \`{ query, engine?: "google"|"bing"|"yandex"|"duckduckgo", country? }\`
+Returns: \`{ query, engine, results: { organic: [{ title, link, description }], … } }\` (orgánicos, negocios locales, knowledge panel)
+1 consulta. Úsalo para encontrar la URL correcta y luego léela con \`/web/fetch\`.
+SDK: \`eb.webSearch({ query, country? })\` · MCP: \`web_search({ query, country? })\`
+
+\`\`\`bash
+curl -X POST https://www.easybits.cloud/api/v2/web/search \\
+  -H "Authorization: Bearer $EASYBITS_API_KEY" -H "Content-Type: application/json" \\
+  -d '{"query":"ubiquiti u6 mesh precio","country":"mx"}'
+\`\`\`
+
+### Leer una página
+\`POST /web/fetch\`
+Body: \`{ url, country?, asMarkdown?, onlyMainContent? }\`
+Returns: \`{ url, statusCode, format: "html"|"markdown", body }\`
+1 consulta. El cuerpo se recorta a 200 KB. \`asMarkdown: true\` devuelve markdown; \`onlyMainContent: true\` quita nav, footer, iconos y "skip to content" — lo normal cuando vas a LEER la página.
+SDK: \`eb.webFetch({ url, asMarkdown, onlyMainContent })\` · MCP: \`web_fetch({ url, asMarkdown })\`
+
+\`\`\`bash
+curl -X POST https://www.easybits.cloud/api/v2/web/fetch \\
+  -H "Authorization: Bearer $EASYBITS_API_KEY" -H "Content-Type: application/json" \\
+  -d '{"url":"https://www.amazon.com.mx/dp/B09YRZYB29","country":"mx","asMarkdown":true,"onlyMainContent":true}'
+\`\`\`
+
+### Extraer registros con esquema
+\`POST /web/extract\`
+Body: \`{ source?, datasetId?, input, limit? }\`
+- \`source\`: \`google_maps\` | \`mercadolibre\` | \`amazon_product\` | \`amazon_reviews\` | \`google_shopping\` | \`instagram_profiles\` | \`instagram_posts\` | \`tiktok_profiles\` | \`tiktok_posts\` | \`facebook_page_posts\` | \`facebook_marketplace\` | \`youtube_channels\` | \`youtube_videos\` | \`linkedin_company\` | \`linkedin_person\` | \`linkedin_jobs\` | \`indeed_jobs\` | \`trustpilot\` | \`inmuebles24\` | \`reddit_posts\`
+- \`datasetId\`: para fuentes fuera de la lista (catálogo de +1,000)
+- \`input\`: \`google_maps\` → \`[{ keyword, country: "MX" }]\` · \`mercadolibre\` → \`{ query, page? }\` · resto → \`[{ url }]\`
+- \`limit\`: registros máximos por input (default 20, máx 200)
+Returns: \`202 { jobId, status: "running", source }\`. \`mercadolibre\` responde al instante: \`200 { jobId, status: "done", records: [{ title, price, url, seller, … }], total }\`.
+Cobra 1 consulta POR REGISTRO devuelto, una sola vez, al recogerlos. Disparar el job no cuesta; un job que falla no cobra.
+SDK: \`eb.webExtract(...)\` / \`eb.webExtractAndWait(...)\` (poll cada 15 s) · MCP: \`web_extract({ source, input, limit })\`
+
+### Estado de un extract
+\`GET /web/extract/:jobId\`
+Returns: \`{ jobId, status: "running"|"done"|"error", records?, total? }\`
+Gratis mientras corre. Volver a pedir un job ya cobrado no cobra de nuevo. Los jobs con esquema tardan 30-120 s: haz poll cada ~15 s.
+MCP: \`web_extract_status({ jobId })\` → \`{ status, items, total }\`
+
+\`\`\`bash
+curl -X POST https://www.easybits.cloud/api/v2/web/extract \\
+  -H "Authorization: Bearer $EASYBITS_API_KEY" -H "Content-Type: application/json" \\
+  -d '{"source":"google_maps","input":[{"keyword":"dentista Polanco CDMX","country":"MX"}],"limit":20}'
+# → 202 { "jobId": "…", "status": "running" }
+curl https://www.easybits.cloud/api/v2/web/extract/$JOB_ID -H "Authorization: Bearer $EASYBITS_API_KEY"
+# → { "status": "done", "records": [ … ], "total": 20 }
+\`\`\`
+
+### Rastrear un sitio
+\`POST /web/crawl\`
+Body: \`{ url, maxPages?, onlyMainContent?, country? }\`
+Returns: \`{ startUrl, pages: [{ url, markdown }], pending: [ … ] }\`
+Lee la URL de inicio y sigue sus links internos (mismo dominio) hasta \`maxPages\` (1-20, default 10). 1 consulta por página realmente leída. \`pending\` son los links vistos y no visitados: pásale uno a otra llamada para continuar. \`onlyMainContent\` recomendado para RAG.
+MCP: \`web_crawl({ url, maxPages })\`
+
+### Errores propios de web
+- \`402\` sin consultas → \`{ code, requiredCost, available, buy }\`
+- \`429\` \`UPSTREAM_COOLDOWN\` (\`Retry-After: 60\`): el proveedor enfrió esa query; es temporal, reintenta después
+- \`502\` error del proveedor · \`503\` servicio no configurado
 `,
 
   sharing: `## Sharing
@@ -2180,14 +2253,41 @@ async function sectionContent(key: string): Promise<string> {
   }
 }
 
+export type DocsLocale = "es" | "en";
+
+// Secciones con traducción. Las generadas (tool-groups, all-mcp-tools) se reusan en EN:
+// los nombres de tools son el contrato. Cualquier otra cae al ES con un aviso.
+export const EN_SECTION_KEYS = ["about", "quickstart", "web", "agents", "hosting", "databases", "files", "errors", "tool-groups"] as const;
+
+const HEADER_EN = `# EasyBits API Reference
+
+> The cloud for AI agents: sandboxes, web, files, SQL databases, documents, hosting and
+> WhatsApp — from one MCP, priced in MXN. Start with the \`about\` section.
+
+Sections in English: ${EN_SECTION_KEYS.join(", ")}. The rest is in Spanish at https://www.easybits.cloud/docs/<section>.md.
+
+---
+
+`;
+
+async function sectionContentLocalized(key: string, locale: DocsLocale): Promise<string> {
+  if (locale !== "en" || GENERATED.has(key)) return sectionContent(key);
+  const en = (await import("./reference.en")).SECTIONS_EN[key];
+  if (en) return en;
+  return `> This section is only available in Spanish for now.\n\n` + (await sectionContent(key));
+}
+
 /**
  * Una sección, o el documento completo.
  *
  * La clave se resuelve sin distinguir mayúsculas PERO conservando la clave real: antes
  * hacía `section.toLowerCase()` contra un objeto con la clave `videoProjects`, así que esa
  * sección era inalcanzable — pedirla devolvía "Unknown section".
+ *
+ * `locale: "en"` devuelve la traducción cuando existe (EN_SECTION_KEYS); el documento
+ * completo en inglés lleva SÓLO las secciones traducidas.
  */
-export async function getDocsMarkdown(section?: string): Promise<string> {
+export async function getDocsMarkdown(section?: string, locale: DocsLocale = "es"): Promise<string> {
   if (section) {
     const key =
       SECTION_KEYS.find((k) => k === section) ??
@@ -2195,7 +2295,11 @@ export async function getDocsMarkdown(section?: string): Promise<string> {
     if (!key) {
       return `Unknown section "${section}". Available sections: ${SECTION_KEYS.join(", ")}`;
     }
-    return sectionContent(key);
+    return sectionContentLocalized(key, locale);
+  }
+  if (locale === "en") {
+    const parts = await Promise.all(EN_SECTION_KEYS.map((k) => sectionContentLocalized(k, "en")));
+    return HEADER_EN + parts.join("\n---\n\n");
   }
   const parts = await Promise.all(SECTION_KEYS.map(sectionContent));
   return HEADER + parts.join("\n---\n\n");

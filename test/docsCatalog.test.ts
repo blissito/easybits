@@ -90,7 +90,7 @@ describe("el índice no puede volver a ser un volcado", () => {
     // Servía 111 KB (~28k tokens). Un agente que pregunta "¿me sirve?" no debería pagar
     // más contexto por el documento que por la respuesta.
     const { loader } = await import("~/routes/llms.txt");
-    const body = await (await (loader as () => Promise<Response>)()).text();
+    const body = await (await loader({ request: new Request("https://www.easybits.cloud/llms.txt") } as any)).text();
     expect(body.length).toBeLessThan(8_000);
     // Y debe seguir respondiendo la pregunta en la parte de arriba.
     const head = body.slice(0, 1_000);
@@ -99,7 +99,7 @@ describe("el índice no puede volver a ser un volcado", () => {
 
   it("enlaza cada sección para que se carguen sueltas", async () => {
     const { loader } = await import("~/routes/llms.txt");
-    const body = await (await (loader as () => Promise<Response>)()).text();
+    const body = await (await loader({ request: new Request("https://www.easybits.cloud/llms.txt") } as any)).text();
     for (const key of VALID_SECTIONS) expect(body).toContain(`/llms/${key}.txt`);
   });
 });

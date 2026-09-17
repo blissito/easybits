@@ -5,12 +5,13 @@ import { Footer } from "~/components/common/Footer";
 import { PLANS, formatPrice, effectivePrice } from "~/lib/plans";
 import { CodeBlock } from "~/components/mdx/CodeBlock";
 import { useState, type ReactNode } from "react";
+import { SkillsInstall } from "~/components/docs/SkillsInstall";
 
 export const meta = () =>
   getBasicMetaTags({
-    title: "EasyBits para Developers — La nube para expertos IA",
+    title: "EasyBits para Developers — La nube para agentes de IA",
     description:
-      "Sandboxes, web, archivos, bases de datos y hosting desde un SDK tipado, una REST API v2 y un solo endpoint MCP. Precios en MXN.",
+      "Sandboxes, web, archivos, bases de datos, documentos y hosting desde una REST API v2, un SDK tipado y un endpoint MCP. Tu agente lo instala solo: npx skills add https://easybits.cloud. Precios en MXN.",
   });
 
 const LANG_MAP: Record<string, string> = {
@@ -79,28 +80,27 @@ export default function DevelopersPage() {
       <div className="bg-white border-b-2 border-black">
         <div className="max-w-6xl mx-auto px-6 py-20 md:py-28">
           <h1 className="text-4xl md:text-6xl font-bold max-w-3xl leading-tight">
-            La infra de archivos que{" "}
+            La nube que{" "}
             <span className="bg-yellow-300 px-2 -rotate-1 inline-block">
               tus agentes ya saben usar
             </span>
           </h1>
           <p className="text-xl md:text-2xl text-gray-600 mt-6 max-w-2xl">
-            Un SDK tipado, una REST API v2 y un endpoint MCP. La misma
-            plataforma desde los tres: microVMs, web, archivos, bases de datos
-            y hosting — sin wrappers y sin prompting.
+            Sandboxes, web, archivos, bases de datos, documentos y hosting desde
+            una REST API v2, un SDK tipado y un endpoint MCP. En MXN.
           </p>
           <div className="mt-8 flex flex-wrap gap-4">
-            <Link
-              to="/docs"
+            <a
+              href="#instalar"
               className="bg-black text-white px-8 py-3 rounded-xl font-bold border-2 border-black hover:translate-y-[-2px] transition-transform text-lg"
             >
-              Leer los Docs
-            </Link>
+              Instálalo en tu agente
+            </a>
             <Link
-              to="/login"
+              to="/docs"
               className="bg-white text-black px-8 py-3 rounded-xl font-bold border-2 border-black hover:translate-y-[-2px] transition-transform text-lg"
             >
-              Empezar Gratis
+              Leer los Docs
             </Link>
           </div>
         </div>
@@ -113,7 +113,7 @@ export default function DevelopersPage() {
             3 líneas, no 30
           </h2>
           <p className="text-center text-gray-500 mb-12 max-w-xl mx-auto">
-            Sube un archivo con el SDK tipado o con curl. Sin configurar buckets, regiones ni credenciales de cloud.
+            Una caja con root e internet, y una app en producción, con el SDK tipado o con curl. Sin configurar VPCs, imágenes ni credenciales de cloud.
           </p>
           <div className="grid md:grid-cols-2 gap-8">
             <div>
@@ -130,22 +130,23 @@ export default function DevelopersPage() {
                     code: `import { EasybitsClient } from "@easybits.cloud/sdk";
 
 const eb = new EasybitsClient({ apiKey });
-const { file, putUrl } = await eb.uploadFile({
-  fileName: "photo.jpg",
-  contentType: "image/jpeg",
-  size: buffer.length,
-});
-await fetch(putUrl, { method: "PUT", body: buffer });`,
+const sb = await eb.sandboxes.create({ template: "node", suspendOnIdle: true });
+const { stdout } = await sb.exec("node -v");
+
+// De un repo a una URL pública, con release de recuperación
+const { url } = await eb.machines.launch({ repo: "https://github.com/tu/app.git" });`,
                   },
                   {
                     label: "cURL",
-                    code: `# 1. Crear registro y obtener URL presignada
-curl -X POST https://api.easybits.cloud/v2/files \\
-  -H "Authorization: Bearer eb_..." \\
-  -d '{"fileName":"photo.jpg","contentType":"image/jpeg","size":48120}'
+                    code: `# 1. Una caja con root e internet
+curl -X POST https://www.easybits.cloud/api/v2/sandboxes \\
+  -H "Authorization: Bearer $EASYBITS_API_KEY" -H "Content-Type: application/json" \\
+  -d '{"template":"node","suspendOnIdle":true}'
 
-# 2. Subir el archivo
-curl -X PUT "<putUrl>" --data-binary @photo.jpg`,
+# 2. Una app en producción en una llamada
+curl -X POST https://www.easybits.cloud/api/v2/machines/launch \\
+  -H "Authorization: Bearer $EASYBITS_API_KEY" -H "Content-Type: application/json" \\
+  -d '{"repo":"https://github.com/tu/app.git"}'`,
                   },
                 ]}
               />
@@ -154,29 +155,28 @@ curl -X PUT "<putUrl>" --data-binary @photo.jpg`,
             <div>
               <h3 className="text-sm font-bold text-gray-500 uppercase mb-3 flex items-center gap-2">
                 <span className="bg-red-200 text-red-900 text-xs px-2 py-0.5 rounded-full font-bold">
-                  AWS S3
+                  Cloud tradicional
                 </span>
                 30+ líneas de setup
               </h3>
               <div className="border-2 border-black rounded-xl overflow-hidden">
                 <CodeBlock bare language="typescript">
-                  {`import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
-import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+                  {`import { EC2Client, RunInstancesCommand } from "@aws-sdk/client-ec2";
 
-const client = new S3Client({
+const ec2 = new EC2Client({
   region: "us-east-1",
   credentials: {
     accessKeyId: process.env.AWS_ACCESS_KEY_ID,
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
   },
 });
-const command = new PutObjectCommand({
-  Bucket: "my-bucket",
-  Key: "photo.jpg",
-  ContentType: "image/jpeg",
-});
-const url = await getSignedUrl(client, command);
-// + DB record, access control, CDN config, ...`}
+await ec2.send(new RunInstancesCommand({
+  ImageId: "ami-…", InstanceType: "t3.micro",
+  MinCount: 1, MaxCount: 1,
+  SecurityGroupIds: ["sg-…"], SubnetId: "subnet-…",
+}));
+// + esperar el boot, SSH, instalar Node, clonar, build,
+// + reverse proxy, TLS, systemd, backups, monitoreo...`}
                 </CodeBlock>
               </div>
             </div>
@@ -184,90 +184,77 @@ const url = await getSignedUrl(client, command);
         </div>
       </div>
 
-      {/* MCP Section — before features, it's the main differentiator */}
-      <div className="bg-yellow-50 border-b-2 border-black">
+      {/* Skills + MCP — before features, it's the main differentiator */}
+      <div id="instalar" className="bg-yellow-50 border-b-2 border-black scroll-mt-16">
         <div className="max-w-6xl mx-auto px-6 py-16">
-          <div className="grid md:grid-cols-2 gap-12 items-center">
+          <div className="grid md:grid-cols-2 gap-12 items-start">
             <div>
               <h2 className="text-2xl md:text-3xl font-bold mb-4">
                 Tu agente ya sabe usarlo
               </h2>
               <p className="text-lg text-gray-600 mb-4">
-                <strong>Ghosty Code v0.0.4+ ya trae EasyBits preinstalado.</strong> Cero
-                configuración — solo tu API key.
+                <strong>No configures nada a mano.</strong> Tu agente de código instala
+                los skills de EasyBits y aprende solo cuándo usar REST, SDK o MCP.
               </p>
               <p className="text-base text-gray-500 mb-6">
-                ¿Claude, Cursor, ChatGPT o cualquier otro cliente MCP? Un comando y
-                listo. Tu agente ejecuta código, lee la web, guarda archivos y
-                despliega apps de forma nativa — sin prompting, sin wrappers.
+                Claude Code, Cursor, Codex, Ghosty Code, Goose o cualquier cliente MCP.
+                Sin prompting, sin wrappers.
               </p>
               <div className="space-y-3 text-sm text-gray-700">
                 <div className="flex items-start gap-2">
                   <span className="text-green-600 font-bold mt-0.5">✓</span>
-                  <span>Subir, descargar, optimizar, transformar imágenes</span>
+                  <span>Un sandbox con root e internet que duerme y despierta en menos de un segundo</span>
                 </div>
                 <div className="flex items-start gap-2">
                   <span className="text-green-600 font-bold mt-0.5">✓</span>
-                  <span>Compartir con links temporales y permisos granulares</span>
+                  <span>Web sin bloqueos: buscar, leer cualquier página, extraer registros</span>
                 </div>
                 <div className="flex items-start gap-2">
                   <span className="text-green-600 font-bold mt-0.5">✓</span>
-                  <span>Búsqueda semántica con lenguaje natural</span>
+                  <span>Archivos por CDN y una base SQL por cliente</span>
                 </div>
                 <div className="flex items-start gap-2">
                   <span className="text-green-600 font-bold mt-0.5">✓</span>
-                  <span>Webhooks, sitios estáticos, bulk operations</span>
+                  <span>Una app en producción, con release de recuperación, en una sola llamada</span>
                 </div>
               </div>
             </div>
             <div>
-              <TabbedCode
-                tabs={[
-                  {
-                    label: "SDK",
-                    code: `// Tu agente optimiza una imagen en 2 líneas
-const { file, originalSize, optimizedSize } =
-  await eb.optimizeImage({ fileId, format: "webp" });
-
-// Genera un link temporal para compartir
-const { url } = await eb.generateShareToken({
-  fileId: file.id,
-  expiresIn: 3600,
-});`,
-                  },
-                  {
-                    label: "cURL",
-                    code: `# Optimizar imagen a WebP
-curl -X POST https://api.easybits.cloud/v2/images/optimize \\
-  -H "Authorization: Bearer eb_..." \\
-  -d '{"fileId":"file_abc","format":"webp"}'
-
-# Generar link temporal (1 hora)
-curl -X POST https://api.easybits.cloud/v2/share-tokens \\
-  -H "Authorization: Bearer eb_..." \\
-  -d '{"fileId":"file_abc","expiresIn":3600}'`,
-                  },
-                ]}
-              />
-              <div className="mt-4 border-2 border-black rounded-xl overflow-hidden">
-                <div className="flex items-center justify-between bg-gray-800 px-4 py-2">
-                  <span className="text-white font-medium text-sm">Ghosty Code</span>
-                  <span className="text-gray-400 text-xs uppercase font-mono">bash</span>
-                </div>
-                <CodeBlock bare language="bash">
-                  {`export EASYBITS_API_KEY=eb_sk_live_YOUR_KEY
-ghosty`}
-                </CodeBlock>
-              </div>
-              <div className="mt-4 border-2 border-black rounded-xl overflow-hidden">
-                <div className="flex items-center justify-between bg-gray-800 px-4 py-2">
-                  <span className="text-white font-medium text-sm">MCP Setup (otros clientes)</span>
-                  <span className="text-gray-400 text-xs uppercase font-mono">bash</span>
-                </div>
-                <CodeBlock bare language="bash">
-                  {`ghosty mcp add easybits --url "https://www.easybits.cloud/api/mcp/core"
-ghosty mcp login easybits`}
-                </CodeBlock>
+              <SkillsInstall compact />
+              <div className="mt-4">
+                <TabbedCode
+                  tabs={[
+                    {
+                      label: "Claude Code",
+                      code: `claude mcp add easybits -- npx -y @easybits.cloud/mcp \\
+  --key $EASYBITS_API_KEY --tools core,sandbox`,
+                    },
+                    {
+                      label: "Ghosty Code",
+                      code: `# Trae EasyBits preinstalado
+export EASYBITS_API_KEY=eb_sk_live_YOUR_KEY
+ghosty`,
+                    },
+                    {
+                      label: "Cursor / Codex",
+                      code: `{
+  "mcpServers": {
+    "easybits": {
+      "type": "streamable-http",
+      "url": "https://www.easybits.cloud/api/mcp/core,sandbox",
+      "headers": { "Authorization": "Bearer $EASYBITS_API_KEY" }
+    }
+  }
+}`,
+                    },
+                    {
+                      label: "Claude.ai",
+                      code: `# Settings → Connectors → Add custom connector
+https://www.easybits.cloud/api/mcp/core
+# OAuth 2.1: sin API key`,
+                    },
+                  ]}
+                />
               </div>
             </div>
           </div>
@@ -285,34 +272,34 @@ ghosty mcp login easybits`}
           </p>
           <div className="grid md:grid-cols-3 gap-6">
             <FeatureCard
+              title="Sandboxes"
+              description="MicroVMs Firecracker con root e internet. exec, procesos en background, snapshots y forks copy-on-write, URL pública por puerto."
+              badge="POST /v2/sandboxes"
+            />
+            <FeatureCard
+              title="Web"
+              description="Buscar en Google, leer cualquier página aunque bloquee bots, extraer registros con esquema (Maps, Mercado Libre, Amazon) y rastrear sitios."
+              badge="POST /v2/web/*"
+            />
+            <FeatureCard
+              title="Hosting"
+              description="De un repo, un zip o una caja a una URL pública con TLS, release de recuperación y backups diarios. Una llamada."
+              badge="POST /v2/machines/launch"
+            />
+            <FeatureCard
+              title="Bases de datos"
+              description="SQLite-as-a-service: una base aislada por cliente o por app, con query, batch e import masivo."
+              badge="POST /v2/databases"
+            />
+            <FeatureCard
               title="Archivos"
-              description="Archivos de hasta 5 GB. URLs presignadas, acceso público o privado, metadata custom."
+              description="Hasta 5 GB por archivo, CDN, versiones, links temporales, webhooks firmados y transformación de imágenes."
               badge="POST /v2/files"
             />
             <FeatureCard
-              title="Imágenes"
-              description="Optimiza a WebP/AVIF, redimensiona, rota, recorta y aplica grayscale. El original no se modifica."
-              badge="POST /v2/images/*"
-            />
-            <FeatureCard
-              title="Búsqueda Semántica"
-              description="Busca archivos con lenguaje natural. Powered by tu propia API key de Anthropic u OpenAI."
-              badge="POST /v2/search"
-            />
-            <FeatureCard
-              title="Sharing"
-              description="Links temporales con expiración configurable. Permisos granulares por usuario y archivo."
-              badge="POST /v2/share-tokens"
-            />
-            <FeatureCard
-              title="Webhooks"
-              description="Notificaciones en tiempo real con HMAC signing. Auto-pause tras 5 fallos consecutivos."
-              badge="POST /v2/webhooks"
-            />
-            <FeatureCard
-              title="Sitios Estáticos"
-              description="Despliega HTML/CSS/JS en tu-slug.easybits.cloud. Ideal para landing pages y demos."
-              badge="POST /v2/websites"
+              title="Agentes"
+              description="Agentes persistentes en su propia microVM (ghosty-lite, goose, claude-code) y una flota en WhatsApp, Teams y web."
+              badge="POST /v2/agents"
             />
           </div>
         </div>
@@ -361,15 +348,16 @@ ghosty mcp login easybits`}
       <div className="bg-black text-white">
         <div className="max-w-6xl mx-auto px-6 py-16 text-center">
           <h2 className="text-2xl md:text-3xl font-bold mb-4">
-            Tu agente puede empezar a subir archivos en 2 minutos
+            Tu agente puede tener su primera caja en 2 minutos
           </h2>
           <p className="text-gray-400 mb-8 max-w-xl mx-auto">
-            Crea una cuenta, genera tu API key y conecta el SDK o el MCP server.
+            Crea una cuenta, genera tu API key y dile a tu agente{" "}
+            <code className="font-mono text-white">npx skills add https://easybits.cloud</code>.
             Sin tarjeta de crédito.
           </p>
           <div className="flex flex-wrap justify-center gap-4">
             <Link
-              to="/dash/developer"
+              to="/dash/developer/setup"
               className="bg-white text-black px-8 py-3 rounded-xl font-bold border-2 border-white hover:translate-y-[-2px] transition-transform text-lg inline-block"
             >
               Empezar Gratis

@@ -7,6 +7,7 @@ import {
   redirect,
   Scripts,
   ScrollRestoration,
+  useLocation,
 } from "react-router";
 
 import type { Route } from "./+types/root";
@@ -48,8 +49,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
   useGoogleTM();
   useHotjar();
   useTagManager();
+  // /en/* son las páginas en inglés (docs): el lang sale de la URL, no del loader, para que
+  // sea idéntico en SSR e hidratación.
+  const location = useLocation();
+  const lang = location.pathname.startsWith("/en/") ? "en" : "es";
   return (
-    <html lang="es" suppressHydrationWarning>
+    <html lang={lang} suppressHydrationWarning>
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />

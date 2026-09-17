@@ -87,7 +87,7 @@ describe("well-known de Agent Readiness", () => {
     const res = catalogLoader();
     expect(res.headers.get("Content-Type")).toMatch(/application\/linkset\+json; profile=/);
     const body = await res.json();
-    expect(body.linkset[0].item[0]["service-desc"][0].href).toMatch(/tools\.json$/);
+    expect(body.linkset[0].item[0]["service-desc"][0].href).toMatch(/openapi\.yaml$/);
   });
   it("la tarjeta MCP apunta al endpoint del producto", async () => {
     const card = await cardLoader().json();
@@ -105,13 +105,13 @@ describe("well-known de Agent Readiness", () => {
 
 describe("/docs/<sección>.md", () => {
   it("/docs.md es la referencia completa", async () => {
-    const res = await mdLoader({ params: {} } as any);
+    const res = await mdLoader({ request: new Request("https://www.easybits.cloud/docs.md"), params: {} } as any);
     expect(res.status).toBe(200);
     expect(await res.text()).toMatch(/^# EasyBits API Reference/);
   });
 
   it.each(VALID_SECTIONS)("sirve %s como markdown", async (s) => {
-    const res = await mdLoader({ params: { section: s } } as any);
+    const res = await mdLoader({ request: new Request(`https://www.easybits.cloud/docs/${s}.md`), params: { section: s } } as any);
     expect(res.status).toBe(200);
     expect(res.headers.get("Content-Type")).toMatch(/text\/markdown/);
   });
@@ -121,14 +121,41 @@ describe("/docs/<sección>.md", () => {
     const ids = [...tsx.matchAll(/<section id="([a-z0-9-]+)"/g)].map((m) => m[1]);
     expect(ids.length).toBeGreaterThan(20);
     for (const id of ids) {
-      const res = await mdLoader({ params: { section: id } } as any);
+      const res = await mdLoader({ request: new Request(`https://www.easybits.cloud/docs/${id}.md`), params: { section: id } } as any);
       expect(res.status, `/docs/${id}.md`).toBe(200);
     }
     for (const target of Object.values(DOCS_SECTION_ALIAS)) expect(VALID_SECTIONS).toContain(target);
   });
 
+  it("/en/docs/<s>.md devuelve inglés para las traducidas y avisa en las demás", async () => {
+    const en = await mdLoader({ request: new Request("https://www.easybits.cloud/en/docs/agents.md"), params: { section: "agents" } } as any);
+    expect((await en.text()).split("\n")[0]).toMatch(/^## Agents/);
+    const es = await mdLoader({ request: new Request("https://www.easybits.cloud/en/docs/flota.md"), params: { section: "flota" } } as any);
+    expect(await es.text()).toMatch(/^> This section is only available in Spanish/);
+    const full = await mdLoader({ request: new Request("https://www.easybits.cloud/en/docs.md"), params: {} } as any);
+    expect(await full.text()).toMatch(/^# EasyBits API Reference\n\n> The cloud for AI agents/);
+  });
+
+  it("paridad ES/EN: mismos fences, endpoints y tools en cada sección traducida", async () => {
+    const { EN_SECTION_KEYS } = await import("../app/.server/docs/reference");
+    const { getDocsMarkdown } = await import("../app/.server/docs/reference");
+    const sig = (md: string) => ({
+      fences: (md.match(/^```/gm) ?? []).length,
+      endpoints: new Set([...md.matchAll(/`(GET|POST|PUT|PATCH|DELETE) \/[^`]+`/g)].map((m) => m[0])),
+      tools: new Set([...md.matchAll(/`([a-z_]+)\(/g)].map((m) => m[1])),
+    });
+    for (const s of EN_SECTION_KEYS) {
+      if (s === "tool-groups") continue;
+      const a = sig(await getDocsMarkdown(s, "es"));
+      const b = sig(await getDocsMarkdown(s, "en"));
+      expect(b.fences, `${s}: fences`).toBe(a.fences);
+      expect([...b.endpoints].sort(), `${s}: endpoints`).toEqual([...a.endpoints].sort());
+      expect([...b.tools].sort(), `${s}: tools`).toEqual([...a.tools].sort());
+    }
+  });
+
   it("404 real para una sección inventada", async () => {
-    expect((await mdLoader({ params: { section: "nope" } } as any)).status).toBe(404);
+    expect((await mdLoader({ request: new Request("https://www.easybits.cloud/docs/nope.md"), params: { section: "nope" } } as any)).status).toBe(404);
   });
 });
 

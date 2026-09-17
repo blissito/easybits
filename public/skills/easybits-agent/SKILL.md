@@ -5,7 +5,7 @@ license: MIT
 compatibility: Needs curl or any HTTP client, network access to https://www.easybits.cloud and an EasyBits API key
 metadata:
   author: easybits
-  version: "1.0"
+  version: "1.1"
 ---
 
 # Create and talk to an EasyBits agent
@@ -26,6 +26,7 @@ H=(-H "Authorization: Bearer $EASYBITS_API_KEY" -H "Content-Type: application/js
 | User asks | Do |
 |---|---|
 | "create an agent" | `POST $B/agents` `{ "template": "ghosty-lite", "env": {}, "name": "…" }` → `{ agentId, sandboxId, agentUrl, status: "building" }` |
+| "give it an identity / persona / system prompt" | `env.SYSTEM_PROMPT` at creation, written with `references/identity.md` (house structure, ≤3,000 chars, never names the model) |
 | "use my Anthropic / DeepSeek key" | same, with `env: { "GHOSTY_PROVIDER": "anthropic", "GHOSTY_MODEL": "claude-haiku-4-5", "ANTHROPIC_API_KEY": "…" }` (goose: `GOOSE_PROVIDER`/`GOOSE_MODEL`) |
 | "use my Claude subscription" | `env: { "CLAUDE_CODE_OAUTH_TOKEN": "<from claude setup-token>" }` → provider `claude-acp`, flat rate |
 | "give it these files" | `seedFiles: [{ "name": "guia.md", "contentBase64": "…" }]` at creation (flattened into `/data/workspace`) |
@@ -53,7 +54,24 @@ H=(-H "Authorization: Bearer $EASYBITS_API_KEY" -H "Content-Type: application/js
 
 Reference: `https://www.easybits.cloud/docs/agents.md` (section "Agentes persistentes").
 
-## After changes
+## Verify (never end on "it should work")
 
-Give the user `agentId` and `agentUrl`, and suggest a first message: "Send it *¿qué
-archivos tienes en /data/workspace?*".
+`POST $B/agents/$ID/try` `{ "text": "…", "session"?: "…", "reset"?: true }` → `{ text, error, session }`
+is one full turn as plain text, no stream, 180 s max. `session` keeps memory between calls;
+`reset: true` starts fresh. `409 turno_en_curso` = a turn is already running in that session,
+wait and retry once.
+
+| You changed | Ask it |
+|---|---|
+| identity / `SYSTEM_PROMPT` | "¿Quién eres y cómo te ves?" with `reset: true` |
+| seed files | "¿Qué archivos tienes en /data/workspace?" |
+| a skill | one request the skill should cover |
+| an MCP server | one action that needs it (e.g. "lista los servicios de la agenda") |
+| the brain / model | "¿Qué modelo eres?" (it must NOT reveal one it was not told) |
+
+```bash
+curl -s -X POST "$B/agents/$ID/try" "${H[@]}" -d '{"text":"¿Quién eres y cómo te ves?","reset":true}'
+```
+
+Then tell the user in one line what changed and **what the agent answered**, with
+`agentId` and `agentUrl`.

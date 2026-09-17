@@ -261,6 +261,8 @@ export class BlogSEOService {
       { path: "/developers", priority: "0.8", changefreq: "monthly" },
       { path: "/funcionalidades", priority: "0.8", changefreq: "monthly" },
       { path: "/docs", priority: "0.7", changefreq: "monthly" },
+      { path: "/docs/api", priority: "0.6", changefreq: "monthly" },
+      { path: "/en/docs", priority: "0.6", changefreq: "monthly" },
       { path: "/aprende", priority: "0.8", changefreq: "weekly" },
       { path: "/aprende/arranca", priority: "0.8", changefreq: "weekly" },
       { path: "/aprende/agente-en-produccion", priority: "0.7", changefreq: "weekly" },

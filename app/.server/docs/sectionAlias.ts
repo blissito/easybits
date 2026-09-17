@@ -6,7 +6,6 @@ export const DOCS_SECTION_ALIAS: Record<string, string> = {
   "ghosty-code": "quickstart",
   cowork: "quickstart",
   "video-projects": "videoProjects",
-  web: "about",
   forms: "files",
   payments: "account",
   email: "account",

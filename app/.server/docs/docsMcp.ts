@@ -1,6 +1,7 @@
 // Lógica del MCP de docs (/mcp/docs). Vive en .server para que la ruta sólo exporte loader/action.
 import MiniSearch from "minisearch";
-import { getDocsMarkdown, VALID_SECTIONS } from "./reference";
+import { getDocsMarkdown, VALID_SECTIONS, EN_SECTION_KEYS } from "./reference";
+import openapiYaml from "../../../public/openapi.yaml?raw";
 
 const PROTOCOL = "2025-06-18";
 const SITE = "https://www.easybits.cloud";
@@ -19,7 +20,16 @@ export const TOOLS = [
   {
     name: "read_doc",
     description: "Devuelve una sección completa de la documentación en markdown, por su clave (p. ej. «agents», «hosting», «files»). Usa list_docs para ver las claves.",
-    inputSchema: { type: "object", properties: { section: { type: "string" } }, required: ["section"] },
+    inputSchema: {
+      type: "object",
+      properties: { section: { type: "string" }, locale: { type: "string", enum: ["es", "en"], description: "en sólo para: " + EN_SECTION_KEYS.join(", ") } },
+      required: ["section"],
+    },
+  },
+  {
+    name: "openapi",
+    description: "Devuelve la especificación OpenAPI 3.1 de la REST API v2 de EasyBits (YAML). Fuente de verdad de paths, cuerpos y respuestas.",
+    inputSchema: { type: "object", properties: {} },
   },
   {
     name: "list_docs",
@@ -107,8 +117,10 @@ export async function callTool(name: string, args: Record<string, unknown>): Pro
       const raw = String(args.section ?? "").replace(/\.md$/, "");
       const key = VALID_SECTIONS.find((s) => s.toLowerCase() === raw.toLowerCase());
       if (!key) return { text: `No existe «${raw}». Usa list_docs para ver las claves.`, isError: true };
-      return { text: await getDocsMarkdown(key) };
+      return { text: await getDocsMarkdown(key, args.locale === "en" ? "en" : "es") };
     }
+    case "openapi":
+      return { text: openapiYaml };
     case "list_docs": {
       const { titles } = await buildIndex();
       return { text: VALID_SECTIONS.map((s) => `- \`${s}\` — ${titles.get(s) ?? s}: ${SITE}/docs/${s}.md`).join("\n") };

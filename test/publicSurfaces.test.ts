@@ -117,6 +117,13 @@ describe("posicionamiento", () => {
     join(process.cwd(), "packages/mcp/package.json"),
   ];
 
+  it("/developers no vende archivos ni apunta a un host inexistente", () => {
+    const src = readFileSync(join(ROUTES_DIR, "developers.tsx"), "utf8");
+    expect(src).not.toMatch(/infra de archivos/i);
+    expect(src).not.toMatch(/api\.easybits\.cloud/);
+    expect(src).toMatch(/npx skills add https:\/\/easybits\.cloud/);
+  });
+
   it("no queda el posicionamiento viejo de almacenamiento de archivos", () => {
     const offenders: string[] = [];
     for (const file of files) {

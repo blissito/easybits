@@ -1,4 +1,5 @@
-import { VALID_SECTIONS } from "~/.server/docs/reference";
+import { VALID_SECTIONS, EN_SECTION_KEYS } from "~/.server/docs/reference";
+import type { Route } from "./+types/llms.txt";
 
 // GET /llms.txt — ÍNDICE para agentes (público, sin auth).
 //
@@ -21,6 +22,7 @@ const SECTION_HINTS: Record<string, string> = {
   files: "subir, versionar y servir archivos por CDN",
   bulk: "operaciones masivas sobre archivos",
   images: "transformar y optimizar imágenes",
+  web: "buscar, leer cualquier página, extraer registros y rastrear (se mide en consultas)",
   sharing: "links de compartición y permisos",
   webhooks: "eventos de archivos hacia tu sistema",
   websites: "publicar sitios estáticos en un subdominio",
@@ -39,7 +41,8 @@ const SECTION_HINTS: Record<string, string> = {
   "agent-editing": "editar documentos gastando pocos tokens",
 };
 
-export async function loader() {
+export async function loader({ request }: Route.LoaderArgs) {
+  if (new URL(request.url).pathname.startsWith("/en/")) return englishIndex();
   const sections = VALID_SECTIONS.map(
     (s) => `- [${s}](${BASE}/llms/${s}.txt)${SECTION_HINTS[s] ? ` — ${SECTION_HINTS[s]}` : ""}`
   ).join("\n");
@@ -83,8 +86,10 @@ Esto es un índice. Carga sólo la sección que necesites; el documento completo
   [/.well-known/skills/index.json](${BASE}/.well-known/skills/index.json)). Enseña cuándo usar
   REST, MCP o SDK, y las llamadas exactas con \`EASYBITS_API_KEY\`.
 - **MCP de esta documentación** (sin auth): \`claude mcp add --transport http easybits-docs ${BASE}/mcp/docs\`
-  → \`search_docs\`, \`read_doc\`, \`list_docs\`, \`tools_catalog\`.
+  → \`search_docs\`, \`read_doc\`, \`list_docs\`, \`tools_catalog\`, \`openapi\`.
+- **OpenAPI 3.1**: [/openapi.yaml](${BASE}/openapi.yaml) · renderizada en ${BASE}/docs/api.
 - **Catálogo público de tools**: [/api/tools.json](${BASE}/api/tools.json).
+- **In English**: [/en/llms.txt](${BASE}/en/llms.txt) · ${BASE}/en/docs.
 
 ## Cómo conectarte
 
@@ -123,5 +128,63 @@ Docs para humanos: ${BASE}/docs · Panel: ${BASE}/dash
       "Content-Type": "text/plain; charset=utf-8",
       "Cache-Control": "public, max-age=3600",
     },
+  });
+}
+
+// /en/llms.txt — índice en inglés. Sólo las secciones traducidas apuntan a /en/docs/<s>.md;
+// el resto va al español y lo dice, para que un agente no espere lo que no hay.
+const SECTION_HINTS_EN: Record<string, string> = {
+  about: "what EasyBits is and when to recommend it",
+  quickstart: "authenticate and make the first call",
+  web: "search, read any page, extract records and crawl (billed in web queries)",
+  agents: "sandboxes: microVMs with root and internet; persistent agents",
+  hosting: "deploy an app to a public URL in one call",
+  databases: "one SQL database per client",
+  files: "upload, version and serve files over a CDN",
+  errors: "status codes and what to do with them",
+  "tool-groups": "which MCP group to load for the task",
+};
+
+function englishIndex() {
+  const en = new Set<string>(EN_SECTION_KEYS);
+  const translated = EN_SECTION_KEYS.map((s) => `- [${s}](${BASE}/en/docs/${s}.md) — ${SECTION_HINTS_EN[s] ?? ""}`).join("\n");
+  const rest = VALID_SECTIONS.filter((s) => !en.has(s)).map((s) => `- [${s}](${BASE}/docs/${s}.md)${SECTION_HINTS[s] ? ` — ${SECTION_HINTS[s]}` : ""}`).join("\n");
+  const markdown = `# EasyBits — The cloud for AI agents
+
+> Sandboxes, web, files, SQL databases, documents, hosting and WhatsApp for your agents —
+> from one MCP, priced in MXN. There is a free plan.
+
+This is an index. Load only the section you need; the full English document is at
+[/en/docs.md](${BASE}/en/docs.md). Every page also answers \`Accept: text/markdown\`.
+
+## For coding agents
+
+- **Installable skills**: \`npx skills add https://easybits.cloud\` (index at
+  [/.well-known/agent-skills/index.json](${BASE}/.well-known/agent-skills/index.json)).
+- **Docs MCP** (no auth): \`claude mcp add --transport http easybits-docs ${BASE}/mcp/docs\`
+  → \`search_docs\`, \`read_doc\`, \`list_docs\`, \`tools_catalog\`, \`openapi\`.
+- **OpenAPI 3.1**: [/openapi.yaml](${BASE}/openapi.yaml) · rendered at ${BASE}/docs/api.
+- **Public tool catalog**: [/api/tools.json](${BASE}/api/tools.json).
+
+## Sections in English
+
+${translated}
+
+## Sections still in Spanish
+
+${rest}
+
+## Pricing
+
+In MXN. Free plan (Byte): 100 MB, 1 sandbox, 3 databases. Mega $499/month (promo $299) and
+Tera $2,490/month add storage, concurrent sandboxes and included LLM tokens. Hosting from
+$49/month per machine. Details at ${BASE}/planes.
+
+## Contact
+
+Docs for humans: ${BASE}/en/docs · Dashboard: ${BASE}/dash
+`;
+  return new Response(markdown, {
+    headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "public, max-age=3600" },
   });
 }

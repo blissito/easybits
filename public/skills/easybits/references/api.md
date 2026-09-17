@@ -3,7 +3,8 @@
 Base: `B=https://www.easybits.cloud/api/v2` · Auth: `Authorization: Bearer $EASYBITS_API_KEY` ·
 JSON bodies unless noted. Full reference per topic: `https://www.easybits.cloud/docs/<section>.md`
 (sections: `quickstart`, `agents`, `hosting`, `files`, `databases`, `documents`, `flota`,
-`errors`, `all-mcp-tools`…). Public tool catalog: `https://www.easybits.cloud/api/tools.json`.
+`errors`, `all-mcp-tools`…; English: `/en/docs/<section>.md`). OpenAPI 3.1: `https://www.easybits.cloud/openapi.yaml`.
+Public tool catalog: `https://www.easybits.cloud/api/tools.json`.
 
 ```bash
 B=https://www.easybits.cloud/api/v2

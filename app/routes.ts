@@ -47,6 +47,13 @@ export default [
   route("/docs.md", "routes/docs.$section.md.ts", { id: "docs-md-full" }),
   route("/docs/:section.md", "routes/docs.$section.md.ts"),
   route("/docs", "routes/docs.tsx"),
+  // Referencia OpenAPI (Scalar por CDN). La spec es estática: /openapi.yaml en public/.
+  route("/docs/api", "routes/docs.api.tsx"),
+  // Docs en inglés ("lo que vende"): página desde markdown + gemelos .md + índice.
+  route("/en/docs", "routes/en.docs.tsx"),
+  route("/en/docs.md", "routes/docs.$section.md.ts", { id: "en-docs-md-full" }),
+  route("/en/docs/:section.md", "routes/docs.$section.md.ts", { id: "en-docs-md" }),
+  route("/en/llms.txt", "routes/llms.txt.ts", { id: "en-llms" }),
   // MCP de la documentación (JSON-RPC sin auth): search_docs / read_doc / list_docs / tools_catalog.
   route("/mcp/docs", "routes/mcp.docs.ts"),
   route("/status", "routes/status.tsx"),
@@ -246,6 +253,8 @@ export default [
     route("calls/:id/destroy", "routes/api/v2/calls.$id.destroy.ts"),
     route("agents/:id", "routes/api/v2/agent.ts"),
     route("agents/:id/message", "routes/api/v2/agent-message.ts"),
+    // Un turno a texto, sin stream: el "Probar" del panel por token (verificación desde la API).
+    route("agents/:id/try", "routes/api/v2/agent-try.ts"),
     route("agents/:id/lost", "routes/api/v2/agent-lost.ts"),
     route("agents/:id/revive", "routes/api/v2/agent-revive.ts"),
     route("agents/:id/extend", "routes/api/v2/agent-extend.ts"),

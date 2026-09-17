@@ -37,6 +37,9 @@ export const meta = ({ data }: Route.MetaArgs) => [
     description: `Referencia completa de EasyBits: REST API v2, SDK y MCP con ${data?.toolCount ?? 200} tools para agentes — sandboxes, web, archivos, bases de datos, documentos, hosting y WhatsApp.`,
   }),
   { tagName: "link", rel: "canonical", href: "https://www.easybits.cloud/docs" },
+  { tagName: "link", rel: "alternate", hreflang: "es", href: "https://www.easybits.cloud/docs" },
+  { tagName: "link", rel: "alternate", hreflang: "en", href: "https://www.easybits.cloud/en/docs" },
+  { tagName: "link", rel: "alternate", type: "text/markdown", href: "https://www.easybits.cloud/docs.md" },
 ];
 
 const SECTIONS = [
@@ -366,6 +369,10 @@ export default function DocsPage({ loaderData }: Route.ComponentProps) {
           <h2 className="font-bold text-xs uppercase text-gray-500 mb-3">
             API Reference
           </h2>
+          <div className="mb-3 flex flex-wrap gap-1.5 text-[11px]">
+            <Link to="/docs/api" className="rounded-full border-2 border-black px-2 py-0.5 font-bold hover:bg-brand-500 hover:text-white">OpenAPI</Link>
+            <Link to="/en/docs" className="rounded-full border-2 border-black px-2 py-0.5 font-bold hover:bg-brand-500 hover:text-white">English</Link>
+          </div>
           <nav className="space-y-1">
             {SECTIONS.map((s) => (
               <a

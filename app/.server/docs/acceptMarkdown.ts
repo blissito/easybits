@@ -20,12 +20,14 @@ export async function markdownForRequest(request: Request): Promise<Response | n
   if (request.method !== "GET" && request.method !== "HEAD") return null;
   if (!prefersMarkdown(request.headers.get("accept"))) return null;
   const { pathname } = new URL(request.url);
+  const locale = pathname.startsWith("/en/") ? "en" : "es";
+  const path = pathname.replace(/^\/en/, "");
   let body: string | null = null;
-  if (pathname === "/docs") body = await getDocsMarkdown();
+  if (path === "/docs") body = await getDocsMarkdown(undefined, locale);
   else {
-    const m = pathname.match(/^\/docs\/([a-z0-9-]+)$/i);
+    const m = path.match(/^\/docs\/([a-z0-9-]+)$/i);
     const key = m ? resolveDocsSection(m[1]) : null;
-    if (key) body = await getDocsMarkdown(key);
+    if (key) body = await getDocsMarkdown(key, locale);
   }
   if (body === null) return null;
   return new Response(request.method === "HEAD" ? null : body, {

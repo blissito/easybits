@@ -1,11 +1,11 @@
 ---
 name: easybits-docs
-description: Read the EasyBits documentation from an agent without scraping - every section as raw markdown, llms.txt, the docs MCP server (search_docs, read_doc, list_docs, tools_catalog) and the public tool catalog. Use when the user asks how something works in EasyBits or easybits.cloud, or before calling its API or MCP.
+description: Read the EasyBits documentation from an agent without scraping - every section as raw markdown (Spanish and English), llms.txt, the OpenAPI 3.1 spec, the docs MCP server (search_docs, read_doc, list_docs, tools_catalog, openapi) and the public tool catalog. Use when the user asks how something works in EasyBits or easybits.cloud, or before calling its API or MCP.
 license: MIT
 compatibility: Network access to https://www.easybits.cloud
 metadata:
   author: easybits
-  version: "1.0"
+  version: "1.1"
 ---
 
 # Read the EasyBits docs
@@ -20,12 +20,15 @@ has a machine-readable twin.
 | The map of every section (one line each) | `https://www.easybits.cloud/llms.txt` |
 | Everything at once (~100 KB) | `https://www.easybits.cloud/llms-full.txt` |
 | One section as markdown | `https://www.easybits.cloud/docs/<section>.md` (e.g. `agents`, `hosting`, `files`, `databases`, `web`, `documents`, `flota`, `errors`) |
-| The docs page when you only have its HTML URL | `GET https://www.easybits.cloud/docs` with `Accept: text/markdown` |
+| The same in English | `https://www.easybits.cloud/en/docs/<section>.md` for `about`, `quickstart`, `web`, `agents`, `hosting`, `databases`, `files`, `errors`, `tool-groups` (index: `/en/llms.txt`) |
+| The docs page when you only have its HTML URL | `GET https://www.easybits.cloud/docs` (or `/en/docs`) with `Accept: text/markdown` |
+| The REST API contract | `https://www.easybits.cloud/openapi.yaml` (OpenAPI 3.1; rendered with Try it at `/docs/api`) |
 | What the MCP can do, without an account | `https://www.easybits.cloud/api/tools.json` |
 | Full tool catalog and groups as markdown | `/docs/all-mcp-tools.md` and `/docs/tool-groups.md` |
 
-Docs are in Spanish; JSON field names, tool names and endpoints are the contract and never
-change with the language.
+Docs are written in Spanish; the sections that sell (`about`, `quickstart`, `web`, `agents`,
+`hosting`, `databases`, `files`, `errors`) also exist in English. JSON field names, tool names
+and endpoints are the contract and never change with the language.
 
 ## Use the MCP server when you can
 
@@ -34,9 +37,10 @@ change with the language.
 
 - `search_docs { query }` — lexical search by heading and text, up to 8 fragments with the
   section and its `.md` URL. Call this first.
-- `read_doc { section }` — a whole section as markdown.
+- `read_doc { section, locale? }` — a whole section as markdown (`locale: "en"` for the translated ones).
 - `list_docs {}` — every section with its title and URL.
 - `tools_catalog { group? }` — the product MCP's tools (name, description, group).
+- `openapi {}` — the OpenAPI YAML.
 
 Claude Code: `claude mcp add --transport http easybits-docs https://www.easybits.cloud/mcp/docs`.
 
