@@ -8,6 +8,7 @@ packages
 !packages/mcp/package.json
 !packages/sdk/package.json
 !packages/eve-sandbox/package.json
+!packages/eve-world/package.json
 cli
 services
 test

@@ -106,6 +106,7 @@ describe("tools mencionadas existen", () => {
     "packages/sdk/README.md",
     "packages/mcp/README.md",
     "packages/eve-sandbox/README.md",
+    "packages/eve-world/README.md",
     ...walk(join(ROOT, "public/skills")).filter((f) => f.endsWith(".md")).map((f) => f.replace(ROOT + "/", "")),
     ...walk(join(ROOT, "app/.server/docs")).filter((f) => /reference.*\.ts$/.test(f)).map((f) => f.replace(ROOT + "/", "")),
   ];

@@ -36,7 +36,7 @@ const BLOCKS: Record<string, () => string> = {
   "tool-groups": () =>
     ["| Grupo | Qué incluye |", "|---|---|", ...TOOL_GROUPS.map((g) => `| \`${g.key}\` | ${g.description} |`)].join("\n"),
   packages: () =>
-    ["mcp", "sdk", "eve-sandbox"]
+    ["mcp", "sdk", "eve-sandbox", "eve-world"]
       .map(pkgVersion)
       .map((p) => `- \`${p.name}@${p.version}\``)
       .join("\n"),

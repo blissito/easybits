@@ -70,6 +70,10 @@ Durable state: eve's default world stores runs on disk (`.eve/.workflow-data`). 
 outlives the box use `@workflow/world-postgres` (plain Postgres, install it in the box or in a
 second one) — the world package must match eve's `@workflow/*` line.
 
+## 3. Durable state: `@easybits.cloud/eve-world`
+
+`npm i @easybits.cloud/eve-world` and set `experimental.workflow.world: "@easybits.cloud/eve-world"` in `agent.ts`. An `eve-nitro` box is born with `EASYBITS_DB_URL` (one DB per box, created on first use, no token). Outside EasyBits use `WORKFLOW_LIBSQL_URL`/`WORKFLOW_LIBSQL_AUTH_TOKEN`; no env → `world-local`. Not implemented: `events.createBatch`, `queueBatch`, `runs.cancelMany`, analytics.
+
 ## Rules
 
 - **Node ≥ 24** for eve and for this backend; `eve-nitro` ships it, a plain `node` box (Node 22) does not.
@@ -82,6 +86,7 @@ second one) — the world package must match eve's `@workflow/*` line.
 - `@easybits.cloud/mcp@0.3.7`
 - `@easybits.cloud/sdk@0.34.7`
 - `@easybits.cloud/eve-sandbox@0.0.6`
+- `@easybits.cloud/eve-world@0.1.0`
 <!-- /generated -->
 
 ## Verify

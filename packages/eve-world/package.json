@@ -1,0 +1,44 @@
+{
+  "name": "@easybits.cloud/eve-world",
+  "version": "0.1.0",
+  "description": "Workflow SDK World backed by libSQL / sqld (EasyBits DB) for hosted eve servers",
+  "type": "module",
+  "license": "MIT",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./schema": {
+      "types": "./dist/drizzle/schema.d.ts",
+      "default": "./dist/drizzle/schema.js"
+    }
+  },
+  "files": ["dist", "README.md"],
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "smoke": "tsx scripts/smoke.ts"
+  },
+  "peerDependencies": {
+    "@workflow/world": "5.0.0-beta.35"
+  },
+  "dependencies": {
+    "@libsql/client": "^0.18.0",
+    "@workflow/errors": "5.0.0-beta.21",
+    "cbor-x": "^1.6.0",
+    "drizzle-orm": "^0.45.2",
+    "ulid": "~3.0.1",
+    "zod": "~4.5.4"
+  },
+  "devDependencies": {
+    "@types/node": "^22.19.0",
+    "@workflow/world": "5.0.0-beta.35",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0",
+    "vitest": "^3.2.0"
+  }
+}

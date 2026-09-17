@@ -18,6 +18,7 @@
     // en su carpeta): en un clon limpio o en CI fallan con "Cannot find module".
     "cli/**/*",
     "packages/eve-sandbox/**/*",
+    "packages/eve-world/**/*",
     "packages/email-generator/**/*"
   ],
   "compilerOptions": {

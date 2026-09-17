@@ -932,6 +932,7 @@ export async function createSandbox(
     Math.max(params.timeoutSeconds ?? DEFAULT_TIMEOUT_S, 30),
     plan.maxSandboxTtlSeconds
   );
+  const env = withTemplateEnv(params.template, params.env);
   const rec = await callHost<SandboxRecord>(
     "POST",
     "/v1/sandbox",
@@ -944,7 +945,7 @@ export async function createSandbox(
       maxTtlSeconds: plan.maxSandboxTtlSeconds,
       suspendOnIdle: params.suspendOnIdle,
       hardTtlSeconds: params.hardTtlSeconds,
-      env: params.env,
+      env,
       ...resources,
     },
     ctx.user.id
@@ -962,6 +963,22 @@ export async function createSandbox(
     startedAt: rec.createdAt ? new Date(rec.createdAt) : undefined,
   });
   return rec;
+}
+
+// Env que un template necesita para nacer "conectado" sin que el usuario pegue nada.
+// eve-nitro: el estado durable de eve (`@easybits.cloud/eve-world`) vive en EasyBits DB
+// vía el passthrough del mesh — la caja no lleva token, el daemon deriva el namespace
+// del owner por su IP. Una base por caja (`eve-<id>`), creada al primer uso. La barra
+// final es obligatoria: el cliente hrana resuelve rutas relativas y sin ella pisa el
+// último segmento. El world cae a `world-local` si el env falta (correr fuera de EasyBits).
+export const MESH_DB_PASSTHROUGH = "http://172.20.0.1:8090/v1/db";
+function withTemplateEnv(
+  template: SandboxTemplate,
+  env?: Record<string, string>
+): Record<string, string> | undefined {
+  if (template !== "eve-nitro" || env?.EASYBITS_DB_URL) return env;
+  const id = randomBytes(6).toString("hex");
+  return { ...(env ?? {}), EASYBITS_DB_URL: `${MESH_DB_PASSTHROUGH}/eve-${id}/` };
 }
 
 // Lower-level create for ALWAYS-ON machines (hosting product). Bypasses the

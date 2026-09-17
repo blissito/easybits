@@ -533,5 +533,20 @@ curl -s -X POST "$B/sandboxes/$SB/expose" "\${H[@]}" -d '{"port":3000}'   # → 
 
 The public URL proxies every path: \`/eve/\` and \`/.well-known/workflow/\` reach Nitro with no extra config. Keep the project and \`.eve/.workflow-data\` under \`/data\` so runs survive suspend/resume; declare a \`bootstrap\` that restarts \`eve start\` on every wake. eve's durable state lives on disk by default; to outlive the box use \`@workflow/world-postgres\` (plain Postgres, in the same box or another) from the same \`@workflow/*\` line as your eve.
 
+### 3. Durable state in EasyBits DB (\`@easybits.cloud/eve-world\`)
+
+By default eve keeps its runs, steps, hooks and streams on the box's disk (\`.eve/.workflow-data\`). \`@easybits.cloud/eve-world\` is a Workflow SDK **World** on libSQL: the same state lives in EasyBits DB, so the server box can be destroyed and recreated without losing a run in flight. It is a 1:1 port of \`@workflow/world-postgres\` (delivery queue with per-message leases in a table) for \`@workflow/world@5.0.0-beta.35\`, the line eve 0.58.1 pins.
+
+\`\`\`ts
+// agent.ts
+export default {
+  experimental: { workflow: { world: "@easybits.cloud/eve-world" } },
+};
+\`\`\`
+
+**No token to paste.** An \`eve-nitro\` box is born with \`EASYBITS_DB_URL\` already set (one \`eve-<id>\` database per box, created on first use; access is resolved by the host from the box's identity). Outside EasyBits, \`WORKFLOW_LIBSQL_URL\` + \`WORKFLOW_LIBSQL_AUTH_TOKEN\` point at any libSQL/Turso; with no env it falls back to \`world-local\`. \`WORKFLOW_SERVICE_URL\` is only needed with several workers (default: the server itself on localhost).
+
+Not implemented (optional in the contract): \`events.createBatch\`, \`queueBatch\`, \`runs.cancelMany\`, analytics.
+
 MCP: \`sandbox_create({ template: "eve-nitro", … })\` · skill: \`npx skills add https://www.easybits.cloud --skill easybits-eve\`.
 `;

@@ -1803,6 +1803,21 @@ curl -s -X POST "$B/sandboxes/$SB/expose" "\${H[@]}" -d '{"port":3000}'   # → 
 
 La URL pública proxea todo el path: \`/eve/\` y \`/.well-known/workflow/\` llegan a Nitro sin configurar nada. Proyecto y \`.eve/.workflow-data\` van bajo \`/data\` para sobrevivir suspend/resume; declara un \`bootstrap\` que relance \`eve start\` en cada despertar. El estado durable de eve vive por default en disco; para que sobreviva a la caja usa \`@workflow/world-postgres\` (Postgres normal, en la misma caja o en otra) de la misma línea \`@workflow/*\` que tu eve.
 
+### 3. Estado durable en EasyBits DB (\`@easybits.cloud/eve-world\`)
+
+Por default eve guarda sus runs, steps, hooks y streams en el disco de la caja (\`.eve/.workflow-data\`). \`@easybits.cloud/eve-world\` es un **World** del Workflow SDK sobre libSQL: el mismo estado vive en EasyBits DB, así que la caja del servidor se puede destruir y recrear sin perder un run a medias. Es un port 1:1 de \`@workflow/world-postgres\` (cola de entregas por lease en tabla) para \`@workflow/world@5.0.0-beta.35\`, la línea que pinea eve 0.58.1.
+
+\`\`\`ts
+// agent.ts
+export default {
+  experimental: { workflow: { world: "@easybits.cloud/eve-world" } },
+};
+\`\`\`
+
+**Sin token que pegar.** Una caja \`eve-nitro\` nace con \`EASYBITS_DB_URL\` ya puesto (una base \`eve-<id>\` por caja, creada al primer uso; el acceso lo resuelve el host por la identidad de la caja). Fuera de EasyBits, \`WORKFLOW_LIBSQL_URL\` + \`WORKFLOW_LIBSQL_AUTH_TOKEN\` apuntan a cualquier libSQL/Turso; si no hay env, cae a \`world-local\`. \`WORKFLOW_SERVICE_URL\` sólo hace falta con varios workers (default: el propio servidor en localhost).
+
+No implementado (opcional en el contrato): \`events.createBatch\`, \`queueBatch\`, \`runs.cancelMany\`, analytics.
+
 MCP: \`sandbox_create({ template: "eve-nitro", … })\` · skill: \`npx skills add https://www.easybits.cloud --skill easybits-eve\`.
 `,
   errors: `## Error Codes
