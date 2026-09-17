@@ -1,6 +1,6 @@
 {
   "name": "@easybits.cloud/mcp",
-  "version": "0.3.5",
+  "version": "0.3.7",
   "mcpName": "cloud.easybits/easybits",
   "description": "MCP server for EasyBits — the cloud for AI agents: sandboxes, web, files, SQL databases, documents and app hosting",
   "type": "module",
