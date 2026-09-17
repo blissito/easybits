@@ -130,12 +130,10 @@ describe("el script se comporta como shell, no como texto", () => {
     const script = buildGitScript({ args: "--version", credTag: tag })
       // El script busca en las rutas reales del sistema; aquí se redirigen al
       // temporal para no tocar el /dev/shm de la máquina que corre los tests.
-      .replace(/'\/dev\/shm\//g, `'${tmp}/shm/`)
-      .replace(/'\/run\//g, `'${tmp}/run/`)
-      .replace(/'\/tmp\//g, `'${tmp}/tmp/`)
-      .replace(/'\/dev\/shm'/g, `'${tmp}/shm'`)
-      .replace(/'\/run'/g, `'${tmp}/run'`)
-      .replace(/'\/tmp'/g, `'${tmp}/tmp'`)
+      // Una sola pasada: en Linux `tmp` vive bajo /tmp y una cadena de replaces
+      // volvía a pisar lo ya reescrito ('/tmp/ebgit-x/…' → roto).
+      .replace(/'(\/dev\/shm|\/run|\/tmp)(\/?)/g, (_m, base: string, slash: string) =>
+        `'${tmp}/${({ "/dev/shm": "shm", "/run": "run", "/tmp": "tmp" } as Record<string, string>)[base]}${slash}`)
       // No se instala git ni se corre git en un test.
       .replace(/^command -v git .*$/m, "true")
       .replace(/^GIT_TERMINAL_PROMPT=0 git .*$/m, [
