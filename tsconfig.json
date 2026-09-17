@@ -13,7 +13,12 @@
     // raíz NO instala. Incluirlos hacía que `npm run typecheck` fallara en
     // cualquier clon limpio con "Cannot find module 'tsup'", un error que no
     // dice nada de la app.
-    "packages/*/tsup.config.ts"
+    "packages/*/tsup.config.ts",
+    // Paquetes con dependencias propias que la raíz no instala (se typechequean
+    // en su carpeta): en un clon limpio o en CI fallan con "Cannot find module".
+    "cli/**/*",
+    "packages/eve-sandbox/**/*",
+    "packages/email-generator/**/*"
   ],
   "compilerOptions": {
     "lib": ["DOM", "DOM.Iterable", "ES2022"],

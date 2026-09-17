@@ -74,6 +74,12 @@ for (const rel of FILES) {
   try {
     text = readFileSync(path, "utf8");
   } catch {
+    // En la imagen de Docker no viajan los READMEs de packages/ (.dockerignore); ahí
+    // sólo importan openapi.yaml y las skills. En modo check (CI/local) sí es error.
+    if (write) {
+      console.log(`docs-sync: omitido ${rel} (no está en este árbol)`);
+      continue;
+    }
     console.error(`docs-sync: no existe ${rel}`);
     process.exitCode = 1;
     continue;
