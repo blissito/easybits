@@ -16,7 +16,10 @@
       "default": "./dist/drizzle/schema.js"
     }
   },
-  "files": ["dist", "README.md"],
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit",
@@ -40,5 +43,22 @@
     "tsx": "^4.20.0",
     "typescript": "^5.9.0",
     "vitest": "^3.2.0"
-  }
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/blissito/easybits",
+    "directory": "packages/eve-world"
+  },
+  "keywords": [
+    "easybits",
+    "eve",
+    "vercel",
+    "workflow",
+    "world",
+    "libsql",
+    "turso"
+  ]
 }
