@@ -1,6 +1,6 @@
 {
   "name": "@easybits.cloud/eve-sandbox",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "EasyBits SandboxBackend for eve (Vercel) — run eve agents' sandboxes on EasyBits Firecracker microVMs",
   "type": "module",
   "main": "./dist/index.js",
