@@ -3237,7 +3237,11 @@ export type SandboxTemplate =
   | "chat-openai"
   | "chat-anthropic"
   | "code-interpreter"
-  | "livekit-svc";
+  | "livekit-svc"
+  | "dev-box"
+  | "eve-nitro"
+  // El catálogo del host crece sin republicar el SDK; cualquier string vale.
+  | (string & {});
 
 export type SandboxStatus =
   | "starting"

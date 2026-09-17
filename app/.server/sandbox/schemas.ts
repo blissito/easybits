@@ -16,6 +16,8 @@ export const SANDBOX_TEMPLATES = [
   "code-interpreter", "desktop-ghosty", "computer-ghosty", "computer-ghosty-gemini",
   "livekit-svc", "whisper-svc", "kokoro-svc", "voice-svc", "render-svc", "collab-svc",
   "hyperframes-svc",
+  // eve (Vercel) self-hosted: Node 24 + pnpm + eve CLI, /data persistente, :3000.
+  "eve-nitro",
 ] as const;
 
 export type SandboxTemplate = (typeof SANDBOX_TEMPLATES)[number];
