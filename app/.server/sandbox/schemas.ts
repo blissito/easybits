@@ -40,6 +40,12 @@ export const SandboxCreateBody = z.object({
   hardTtlSeconds: z.number().int().min(60).optional(),
 });
 
+export const SandboxIdleBody = z.object({
+  suspendOnIdle: z.boolean(),
+  idleTtlSeconds: z.number().int().min(60).optional(),
+  hardTtlSeconds: z.number().int().min(60).optional(),
+});
+
 // ── Hosting (always-on machines) ──────────────────────────────────────────
 // Fuente única: deriva del catálogo (TIER_ORDER en app/lib/hostingCatalog.ts).
 // Un tier nuevo en el catálogo queda validado aquí sin tocar nada más.

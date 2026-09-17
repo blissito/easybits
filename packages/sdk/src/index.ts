@@ -2669,6 +2669,20 @@ export class Sandbox {
     return this.post("/resume");
   }
   /**
+   * Siesta por inactividad: con `suspendOnIdle: true`, al vencer el TTL la caja
+   * se SUSPENDE (snapshot, resume ~1s, estado intacto) en vez de destruirse;
+   * `idleTtlSeconds` re-arma el reloj desde ahora y `hardTtlSeconds` es el plazo
+   * tras el cual se destruye aunque duerma. Para sesiones largas con pausas
+   * (un agente entre turnos). `suspendOnIdle: false` vuelve al esquema efímero.
+   */
+  setIdlePolicy(policy: {
+    suspendOnIdle: boolean;
+    idleTtlSeconds?: number;
+    hardTtlSeconds?: number;
+  }): Promise<SandboxRecord> {
+    return this.post("/idle", policy);
+  }
+  /**
    * Declara el script que corre CADA VEZ que la caja despierta, antes de que el
    * agente reciba su primer mensaje.
    *

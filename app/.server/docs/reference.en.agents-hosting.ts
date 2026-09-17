@@ -285,6 +285,7 @@ Flow: \`domain-add\` → create the DNS record given in \`dns\` → \`domain-ver
 - \`sandbox_status({ sandboxId })\` — state (starting/running/stopped/error/lost/suspended)
 - \`sandbox_extend({ sandboxId, extendSeconds? })\` — extend the TTL (max per plan: Byte 1h · Mega 4h · Tera 24h)
 - \`sandbox_suspend({ sandboxId })\` — snapshot to disk; pauses the TTL while suspended
+- \`sandbox_set_idle({ sandboxId, suspendOnIdle, idleTtlSeconds?, hardTtlSeconds? })\` — when the TTL elapses the box is SUSPENDED instead of destroyed (long sessions with quiet periods)
 - \`sandbox_resume({ sandboxId })\` — restore from snapshot; restores the remaining TTL (no sandbox_extend needed)
 - \`sandbox_destroy({ sandboxId })\` — destroy and release
 

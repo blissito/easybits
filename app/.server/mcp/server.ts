@@ -118,6 +118,7 @@ import {
   destroySandbox,
   extendSandbox,
   suspendSandbox,
+  setSandboxIdlePolicy,
   resumeSandbox,
   snapshotSandbox,
   listSnapshots,
@@ -2176,6 +2177,22 @@ How to embed safely (the only reliable rule):
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await suspendSandbox(ctx, params.sandboxId);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "sandbox_set_idle",
+    "Change the idle policy of an EXISTING sandbox. suspendOnIdle=true: when the TTL elapses the box is SUSPENDED (snapshot, resume ~1s, state kept) instead of destroyed; idleTtlSeconds re-arms the idle clock from now; hardTtlSeconds (optional) is the deadline after which it is destroyed even while asleep. Use it for long-lived sessions that must survive quiet periods (an agent between turns). suspendOnIdle=false returns it to the ephemeral scheme (409 if the TTL already elapsed — extend first).",
+    {
+      sandboxId: z.string().describe("Sandbox ID"),
+      suspendOnIdle: z.boolean(),
+      idleTtlSeconds: z.number().int().min(60).optional().describe("Required when suspendOnIdle=true"),
+      hardTtlSeconds: z.number().int().min(60).optional(),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { sandboxId, ...policy } = params;
+      return ok(await setSandboxIdlePolicy(ctx, sandboxId, policy));
     })
   );
 

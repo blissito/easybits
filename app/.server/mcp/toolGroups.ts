@@ -456,6 +456,7 @@ export const SANDBOX_ALLOWLIST = new Set<string>([
   "sandbox_extend",
   "sandbox_suspend",
   "sandbox_resume",
+  "sandbox_set_idle",
   "sandbox_snapshot",
   "sandbox_fork",
   "list_snapshots",

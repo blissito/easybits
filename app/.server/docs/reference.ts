@@ -1018,6 +1018,7 @@ Flujo: \`domain-add\` → crea el registro DNS que indica \`dns\` → \`domain-v
 - \`sandbox_status({ sandboxId })\` — estado (starting/running/stopped/error/lost/suspended)
 - \`sandbox_extend({ sandboxId, extendSeconds? })\` — extender TTL (máx según plan: Byte 1h · Mega 4h · Tera 24h)
 - \`sandbox_suspend({ sandboxId })\` — snapshot a disco; pausa el TTL mientras está suspendido
+- \`sandbox_set_idle({ sandboxId, suspendOnIdle, idleTtlSeconds?, hardTtlSeconds? })\` — al vencer el TTL la caja se SUSPENDE en vez de destruirse (sesiones largas con pausas)
 - \`sandbox_resume({ sandboxId })\` — restaurar desde snapshot; restaura el TTL restante (no hace falta sandbox_extend)
 - \`sandbox_destroy({ sandboxId })\` — destruir y liberar
 

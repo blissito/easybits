@@ -9,11 +9,13 @@ import {
   SandboxLogsBody,
   SandboxRuntimeBody,
   SandboxApplyPatchBody,
+  SandboxIdleBody,
 } from "~/.server/sandbox/schemas";
 import {
   extendSandbox,
   suspendSandbox,
   resumeSandbox,
+  setSandboxIdlePolicy,
   snapshotSandbox,
   forkSandbox,
   execCommand,
@@ -104,6 +106,11 @@ async function dispatch(
       return Response.json(await suspendSandbox(ctx, id));
     case "resume":
       return Response.json(await resumeSandbox(ctx, id));
+    case "idle": {
+      const p = SandboxIdleBody.safeParse(body);
+      if (!p.success) return Response.json({ error: "Invalid body", issues: p.error.issues }, { status: 400 });
+      return Response.json(await setSandboxIdlePolicy(ctx, id, p.data));
+    }
     // El script que el HOST corre cada vez que la caja despierta. `script: ""`
     // lo apaga. Nunca metas una credencial aquí: la receta viaja en el metadata
     // de la caja, que se publica en los listados.

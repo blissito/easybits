@@ -1207,6 +1207,33 @@ export async function extendSandbox(
 // Snapshot the sandbox to disk and free its CPU/IP. The TTL is PAUSED while
 // suspended — the host saves the remaining lifetime and restores it on resume,
 // so no extendSandbox call is needed afterward. Resume with resumeSandbox.
+/**
+ * Siesta por inactividad en una caja YA creada: al vencer el TTL el reaper la
+ * DUERME (snapshot, resume ~1s) en vez de destruirla; `hardTtlSeconds` es el
+ * plazo, contado desde ahora, tras el cual sí se destruye aunque duerma.
+ * `suspendOnIdle:false` la devuelve al esquema efímero (el host rechaza con
+ * 409 si el TTL ya venció — antes extend o persist).
+ */
+export async function setSandboxIdlePolicy(
+  ctx: AuthContext,
+  sandboxId: string,
+  params: { suspendOnIdle: boolean; idleTtlSeconds?: number; hardTtlSeconds?: number }
+): Promise<SandboxRecord> {
+  requireScope(ctx, "WRITE");
+  if (params.suspendOnIdle && !params.idleTtlSeconds) {
+    throw new Response(
+      JSON.stringify({ error: "BadRequest", message: "idleTtlSeconds required when suspendOnIdle is true" }),
+      { status: 400, headers: { "content-type": "application/json" } }
+    );
+  }
+  return callHost<SandboxRecord>(
+    "POST",
+    `/v1/sandbox/${sandboxId}/idle`,
+    params,
+    await effectiveOwnerId(ctx, sandboxId)
+  );
+}
+
 export async function suspendSandbox(
   ctx: AuthContext,
   sandboxId: string,
