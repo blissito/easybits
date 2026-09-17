@@ -163,7 +163,34 @@ export function createQueue(config: ResolvedConfig, drizzle: Drizzle, deliverOve
     }
   }
 
+  // El worker de cola arranca antes de que el HTTP de eve escuche: la primera
+  // entrega daba ECONNREFUSED (reintentaba sola, pero ensuciaba el arranque).
+  // Esperamos el health del servicio antes del primer claim; si nunca llega
+  // (p. ej. WORKFLOW_SERVICE_URL apunta a otro proceso que aún no existe),
+  // seguimos tras el tope y dejamos que el reintento normal haga su trabajo.
+  async function waitForService(maxMs = 30_000) {
+    if (deliverOverride) return; // entrega in-process: no hay HTTP que esperar
+    let url: string;
+    try {
+      url = `${resolveServiceUrl()}/eve/v1/health`;
+    } catch {
+      return;
+    }
+    const deadline = Date.now() + maxMs;
+    while (!closing && Date.now() < deadline) {
+      try {
+        const r = await nodeHttpFetch(url, { method: 'GET', agents: httpAgents, headersTimeoutMs: 2_000, bodyTimeoutMs: 2_000 });
+        await r.text().catch(() => {});
+        if (r.ok) return;
+      } catch {
+        // aún no escucha
+      }
+      await sleep(250, wake.signal).catch(() => {});
+    }
+  }
+
   async function runLoop() {
+    await waitForService();
     while (running && !closing) {
       let claimed = false;
       if (inflight.size < config.queueConcurrency) {

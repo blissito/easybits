@@ -872,6 +872,9 @@ export async function createSandbox(
     );
   }
   const resources = { ...SIZE_RESOURCES[size] };
+  // eve-nitro: `eve build` (rolldown, rss ~1.9 GB) se OOM-mata con 2048 MB; medido
+  // en prod 2026-09-17, con 4096 pasa. Piso por template, el caller aún puede subirlo.
+  if (params.template === "eve-nitro" && (resources.memoryMb ?? 0) < 4096) resources.memoryMb = 4096;
   // Explicit override (fleetAgent worker sizing). Sent to the host, which honors
   // memoryMb/vcpus over the template default.
   if (params.memoryMb) resources.memoryMb = params.memoryMb;
