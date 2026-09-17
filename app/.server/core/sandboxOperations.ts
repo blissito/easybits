@@ -672,15 +672,50 @@ export class SandboxHostError extends Error {
 // Para las rutas REST: un 4xx del host se reenvía tal cual al cliente
 // (404 "sandbox not found", 400 "extend would not move expiresAt forward")
 // en vez de morir como 500 "Unexpected Server Error". Los 5xx sí son nuestros.
+//
+// El host envuelve los errores del agente DENTRO de la VM como 502 con el
+// status real en el texto (`agent /files/read → 404: {"error":"open …: no such
+// file"}`). Un archivo que no existe debe llegar al cliente como 404, no como
+// 500 "Unexpected Server Error": el SDK y los adaptadores (eve) devuelven `null`
+// solo ante 404 y reintentan/abortan ante 5xx.
 export function hostErrorResponse(e: unknown): Response | null {
-  if (!(e instanceof SandboxHostError) || e.status >= 500) return null;
+  if (!(e instanceof SandboxHostError)) return null;
+  let status = e.status;
+  let raw = e.body;
+  if (status === 502) {
+    const m = /agent \S+ → (\d{3}): ([\s\S]*)$/.exec(parseHostMessage(raw));
+    if (!m) return null;
+    status = Number(m[1]);
+    raw = m[2].trim();
+  }
+  if (status >= 500) return null;
   let body: unknown;
   try {
-    body = JSON.parse(e.body);
+    body = JSON.parse(raw);
   } catch {
-    body = { error: e.body || `sandbox host → ${e.status}` };
+    body = { error: raw || `sandbox host → ${status}` };
   }
-  return Response.json(body, { status: e.status });
+  return Response.json(body, { status });
+}
+
+/** Envuelve un loader/action de recurso para que un 4xx del host o del agente salga con su status. */
+export function withHostErrors<A extends unknown[], R>(fn: (...args: A) => Promise<R>) {
+  return async (...args: A): Promise<R | Response> => {
+    try {
+      return await fn(...args);
+    } catch (e) {
+      return hostErrorResponse(e) ?? Promise.reject(e);
+    }
+  };
+}
+
+// `{"error":"agent /files/read → 404: …"}` → el texto interior; si no es JSON, tal cual.
+function parseHostMessage(raw: string): string {
+  try {
+    const j = JSON.parse(raw);
+    if (j && typeof j.error === "string") return j.error;
+  } catch {}
+  return raw;
 }
 
 export async function callHost<T>(

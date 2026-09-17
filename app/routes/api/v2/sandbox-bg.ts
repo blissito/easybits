@@ -4,13 +4,14 @@ import { applySandboxRateLimit } from "~/.server/rateLimiter";
 import {
   execBackground,
   execBackgroundList,
+  withHostErrors,
 } from "~/.server/core/sandboxOperations";
 import { computeEnvFor } from "~/.server/compute/gateway";
 
 // GET /api/v2/sandboxes/:id/bg — list background processes → { count, processes }
 // Existe para recuperar un execId perdido: sin esto, un proceso vivo en la caja
 // no tiene forma de ser consultado ni matado.
-export async function loader({ request, params }: Route.LoaderArgs) {
+async function loaderImpl({ request, params }: Route.LoaderArgs) {
   const ctx = requireAuth(await authenticateRequest(request));
   const limited = await applySandboxRateLimit(
     ctx.apiKey?.id ?? ctx.user.id,
@@ -21,7 +22,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 }
 
 // POST /api/v2/sandboxes/:id/bg — start a background command → { execId }
-export async function action({ request, params }: Route.ActionArgs) {
+async function actionImpl({ request, params }: Route.ActionArgs) {
   if (request.method !== "POST") {
     return Response.json({ error: "Method not allowed" }, { status: 405 });
   }
@@ -48,3 +49,6 @@ export async function action({ request, params }: Route.ActionArgs) {
     })
   );
 }
+
+export const loader = withHostErrors(loaderImpl);
+export const action = withHostErrors(actionImpl);

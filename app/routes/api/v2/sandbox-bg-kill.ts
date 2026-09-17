@@ -1,7 +1,9 @@
 import type { Route } from "./+types/sandbox-bg-kill";
 import { authenticateRequest, requireAuth } from "~/.server/apiAuth";
 import { applySandboxRateLimit } from "~/.server/rateLimiter";
-import { execBackgroundKill } from "~/.server/core/sandboxOperations";
+import { execBackgroundKill,
+  withHostErrors,
+} from "~/.server/core/sandboxOperations";
 
 // POST /api/v2/sandboxes/:id/bg/:execId/kill — alias del DELETE.
 //
@@ -9,7 +11,7 @@ import { execBackgroundKill } from "~/.server/core/sandboxOperations";
 // mientras el código solo aceptaba `DELETE .../bg/:execId`: un agente que siguió
 // la documentación recibía un 405 sin pista de por qué. Se acepta también DELETE
 // para que las dos escrituras que circulan funcionen.
-export async function action({ request, params }: Route.ActionArgs) {
+async function actionImpl({ request, params }: Route.ActionArgs) {
   if (request.method !== "POST" && request.method !== "DELETE") {
     return Response.json({ error: "Method not allowed" }, { status: 405 });
   }
@@ -26,3 +28,5 @@ export async function action({ request, params }: Route.ActionArgs) {
     })
   );
 }
+
+export const action = withHostErrors(actionImpl);

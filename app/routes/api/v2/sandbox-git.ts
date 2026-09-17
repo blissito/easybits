@@ -1,3 +1,4 @@
+import { withHostErrors } from "~/.server/core/sandboxOperations";
 import type { Route } from "./+types/sandbox-git";
 import { authenticateRequest, requireAuth } from "~/.server/apiAuth";
 import { applySandboxRateLimit } from "~/.server/rateLimiter";
@@ -18,7 +19,7 @@ import {
 // gitOperations, así que este archivo nunca ve una credencial en claro.
 
 // GET /api/v2/sandboxes/:id/git/:op   (op: status | log)
-export async function loader({ request, params }: Route.LoaderArgs) {
+async function loaderImpl({ request, params }: Route.LoaderArgs) {
   const ctx = requireAuth(await authenticateRequest(request));
   const limited = await applySandboxRateLimit(
     ctx.apiKey?.id ?? ctx.user.id,
@@ -49,7 +50,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 }
 
 // POST /api/v2/sandboxes/:id/git/:op   (op: clone | commit | push | pull | checkout)
-export async function action({ request, params }: Route.ActionArgs) {
+async function actionImpl({ request, params }: Route.ActionArgs) {
   if (request.method !== "POST") {
     return Response.json({ error: "Method not allowed" }, { status: 405 });
   }
@@ -124,3 +125,6 @@ export async function action({ request, params }: Route.ActionArgs) {
       return Response.json({ error: `unknown op '${params.op}'` }, { status: 404 });
   }
 }
+
+export const loader = withHostErrors(loaderImpl);
+export const action = withHostErrors(actionImpl);
