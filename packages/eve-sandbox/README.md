@@ -37,7 +37,7 @@ export default defineSandbox({
 | `run()` | `/exec` (exitCode, stdout, stderr). |
 | `spawn()` | `/bg` background process; stdout/stderr are polled and streamed, `kill()` signals the whole process group. |
 | files | `/files/*` — text, binary, line ranges, missing file → `null`. |
-| `setNetworkPolicy` | only `"allow-all"` (egress is governed by the host firewall, not per session). |
+| `setNetworkPolicy` | per-box egress policy: `"allow-all"`, `"deny-all"` or a per-domain allow-list, resolved to IPs by the host (DNS refresh), persisted and re-applied on resume. `transform` (header injection) is **not supported** and throws. |
 
 Relative paths resolve from `/workspace` (configurable).
 

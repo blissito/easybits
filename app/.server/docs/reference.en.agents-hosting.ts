@@ -510,7 +510,7 @@ export default defineSandbox({
 | \`run\` / \`spawn\` | \`bash -lc\` through \`/bg\`; stdout/stderr as streams, \`kill()\` signals the process group |
 | files | \`/files/*\`; relative paths anchored at \`/workspace\`, \`$HOME/…\` resolved inside the box |
 
-Options: \`easybits({ apiKey, baseUrl, template: "node", timeoutSeconds, workingDirectory, runTimeoutSeconds, idleTtlSeconds, hardTtlSeconds, metadata })\`. \`setNetworkPolicy\` only accepts \`"allow-all"\` (egress is governed by the host firewall). The key needs WRITE scope (create, snapshot, fork) and DELETE if eve should delete snapshots.
+Options: \`easybits({ apiKey, baseUrl, template: "node", timeoutSeconds, workingDirectory, runTimeoutSeconds, idleTtlSeconds, hardTtlSeconds, metadata })\`. \`setNetworkPolicy\` applies a **per-box egress policy** with the same shape eve uses on Vercel: \`"allow-all"\`, \`"deny-all"\` or a per-domain allow-list (\`{ allow: { "api.github.com": [], "*.npmjs.org": [] } }\`; \`"*"\` opens everything). The host resolves it to IPs per microVM with DNS refresh, persists it with the box and re-applies it on resume; it takes effect once the promise resolves, so \`await\` it before the egress you want governed. **Not supported**: \`transform\` (header injection at the firewall) — throws an explicit error; that flow (GitHub checkout without the token entering the box) eve does through its \`defaultBackend\`. Outside eve the same policy lives at \`PUT/GET /sandboxes/:id/network-policy\` · SDK \`sb.setNetworkPolicy(policy)\` · MCP \`sandbox_set_network_policy\`. The key needs WRITE scope (create, snapshot, fork) and DELETE if eve should delete snapshots.
 
 ### 2. The eve server inside a box
 

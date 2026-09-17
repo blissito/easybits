@@ -46,7 +46,7 @@ What happens under the hood (so you can explain it and debug it):
 | files | `/files/*`, relative paths anchored at `/workspace`, `$HOME/...` resolved inside the box |
 
 Options: `easybits({ apiKey, baseUrl, template: "node", timeoutSeconds, workingDirectory: "/workspace", runTimeoutSeconds, idleTtlSeconds: 600, hardTtlSeconds: 7d, metadata })`.
-`setNetworkPolicy` only accepts `"allow-all"` (egress is governed by the host firewall).
+`setNetworkPolicy` applies a **per-box egress policy** with the same shape eve uses on Vercel: `"allow-all"`, `"deny-all"` or a per-domain allow-list (`{ allow: { "api.github.com": [], "*.npmjs.org": [] } }`; `"*"` opens everything). The host resolves it to IPs per microVM with DNS refresh, persists it with the box and re-applies it on resume; it takes effect once the promise resolves, so `await` it before the egress you want governed. **Not supported**: `transform` (header injection at the firewall) — throws an explicit error; that flow (GitHub checkout without the token entering the box) eve does through its `defaultBackend`. Outside eve the same policy lives at `PUT/GET /sandboxes/:id/network-policy` · SDK `sb.setNetworkPolicy(policy)` · MCP `sandbox_set_network_policy`.
 
 ## 2. Self-hosting the eve server on EasyBits
 

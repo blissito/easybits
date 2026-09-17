@@ -1779,7 +1779,7 @@ export default defineSandbox({
 | \`run\` / \`spawn\` | \`bash -lc\` por \`/bg\`; stdout/stderr en streams, \`kill()\` señala al grupo |
 | archivos | \`/files/*\`; rutas relativas ancladas en \`/workspace\`, \`$HOME/…\` se resuelve dentro de la caja |
 
-Opciones: \`easybits({ apiKey, baseUrl, template: "node", timeoutSeconds, workingDirectory, runTimeoutSeconds, idleTtlSeconds, hardTtlSeconds, metadata })\`. \`setNetworkPolicy\` sólo acepta \`"allow-all"\` (el egress lo fija el firewall del fierro). La llave necesita scope WRITE (crear, snapshot, fork) y DELETE si eve debe borrar snapshots.
+Opciones: \`easybits({ apiKey, baseUrl, template: "node", timeoutSeconds, workingDirectory, runTimeoutSeconds, idleTtlSeconds, hardTtlSeconds, metadata })\`. \`setNetworkPolicy\` aplica una **política de egress por caja**, con el mismo shape que eve usa en Vercel: \`"allow-all"\`, \`"deny-all"\` o una allow-list por dominio (\`{ allow: { "api.github.com": [], "*.npmjs.org": [] } }\`; \`"*"\` abre todo). El host la resuelve a IPs por microVM con refresco DNS, la persiste con la caja y la vuelve a aplicar al reanudar; toma efecto cuando la promesa resuelve, así que \`await\` antes del egress que quieres gobernar. **No soportado**: \`transform\` (inyectar headers en el firewall) — lanza error explícito; ese flujo (checkout de GitHub sin que el token entre a la caja) eve lo hace con su \`defaultBackend\`. Fuera de eve, la misma política vive en \`PUT/GET /sandboxes/:id/network-policy\` · SDK \`sb.setNetworkPolicy(policy)\` · MCP \`sandbox_set_network_policy\`. La llave necesita scope WRITE (crear, snapshot, fork) y DELETE si eve debe borrar snapshots.
 
 ### 2. El servidor eve dentro de una caja
 
