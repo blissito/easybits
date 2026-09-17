@@ -80,8 +80,8 @@ second one) — the world package must match eve's `@workflow/*` line.
 
 <!-- generated:packages -->
 - `@easybits.cloud/mcp@0.3.7`
-- `@easybits.cloud/sdk@0.34.4`
-- `@easybits.cloud/eve-sandbox@0.0.3`
+- `@easybits.cloud/sdk@0.34.5`
+- `@easybits.cloud/eve-sandbox@0.0.4`
 <!-- /generated -->
 
 ## Verify
