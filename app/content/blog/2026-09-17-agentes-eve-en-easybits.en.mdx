@@ -11,7 +11,7 @@ published: true
 
 # Run your eve agents in microVMs: the native sandbox backend for Vercel's eve
 
-[eve](https://eve.dev) is Vercel's open-source agent framework: an agent is a directory (instructions, tools, channels, schedules) and every session is a durable Workflow SDK run. When the agent needs to execute code, eve asks a **SandboxBackend** for a box. It ships several (Docker, just-bash, microsandbox, Vercel Sandbox) and keeps the interface public so anyone can write their own.
+[eve](https://eve.dev) is Vercel's open-source agent framework: an agent is a directory (instructions, tools, channels, schedules) and every session is a durable Workflow SDK run. When the agent needs to execute code, eve asks a **SandboxBackend** for a box. It ships several (Docker, just-bash, microsandbox, Vercel Sandbox) and keeps [the interface public](https://eve.dev/docs/sandbox) so anyone can write their own.
 
 `@easybits.cloud/eve-sandbox` is that backend for EasyBits: it covers the full contract, and every session of your agent runs in its own Firecracker microVM, in your account, billed on your plan in Mexican pesos. Change one line; the agent never notices.
 
