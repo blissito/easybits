@@ -51,7 +51,7 @@ When the first message arrives, `create()` **forks** that snapshot (~7 s). Betwe
 ```ts
 const sandbox = await ctx.getSandbox();
 await sandbox.setNetworkPolicy({
-  allow: { "api.github.com": [], "*.npmjs.org": [] },
+  allow: { "api.github.com": [], "registry.npmjs.org": [] },
 });
 ```
 

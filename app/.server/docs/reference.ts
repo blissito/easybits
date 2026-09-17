@@ -929,10 +929,12 @@ Si la respuesta trae \`warning\`, el servicio escucha **sólo en \`127.0.0.1\`**
 **Capa 7 con TLS: HTTP y WebSocket.** El certificado ya está en el edge, así que la misma URL sirve \`https://\` y \`wss://\` — no hace falta cloudflared ni un puerto raw para un WebSocket. Lo que no hace es capa 4 cruda: los puertos 22, 23, 25, 445 y 3389 se rechazan con 400. Para esos usa el forward L4.
 
 ### Política de red por caja (egress)
-\`POST /sandboxes/:id/network-policy\` · Body: \`"allow-all"\` | \`"deny-all"\` | \`{ allow: { "api.github.com": [], "*.npmjs.org": [] } }\` (\`"*"\` abre todo) · \`GET\` para leerla.
+\`POST /sandboxes/:id/network-policy\` · Body: \`"allow-all"\` | \`"deny-all"\` | \`{ allow: { "api.github.com": [], "registry.npmjs.org": [] } }\` (sin comodines; \`"*"\` a secas = allow-all) · \`GET\` para leerla.
 MCP: \`sandbox_set_network_policy({ sandboxId, policy })\` / \`sandbox_get_network_policy\` · SDK: \`sb.setNetworkPolicy(policy)\` / \`sb.getNetworkPolicy()\`
 
 Sólo a los dominios que tú autorices para esa caja, o a ninguno. Lo cambias en caliente por API, se conserva al dormir/despertar, y si un dominio no está en la lista la conexión simplemente no sale. Toma efecto cuando la llamada responde: aplícala **antes** del egress que quieres gobernar. Mismo shape que \`setNetworkPolicy\` de eve / Vercel Sandbox; \`transform\` (inyectar headers en el firewall) no está soportado y se rechaza con 400.
+
+Detalles del contrato: un host que **no resuelve no es error** — aparece en \`unresolved\` y el refresco (cada 60 s) lo reintenta; una IP literal va directo. Sin comodines (\`*.x\` → 422). Con \`deny-all\` no hay DNS; con allow-list el DNS (53) sale sólo a 1.1.1.1 / 8.8.8.8. El alcance es egress a Internet: el mesh interno y los puertos del host por rol siguen vivos. La respuesta trae \`{ policy, mode, resolved: { host: [ip] }, unresolved: [host] }\`. Fork y warmpool nacen \`allow-all\`; el cambio es atómico (no hay ventana abierta).
 
 ### Puertos raw (TCP/UDP)
 \`POST /sandboxes/:id/expose-raw\` · Body: \`{ port, protocol }\` (\`"tcp"\` | \`"udp"\`)
@@ -1786,7 +1788,7 @@ export default defineSandbox({
 | \`run\` / \`spawn\` | \`bash -lc\` por \`/bg\`; stdout/stderr en streams, \`kill()\` señala al grupo |
 | archivos | \`/files/*\`; rutas relativas ancladas en \`/workspace\`, \`$HOME/…\` se resuelve dentro de la caja |
 
-Opciones: \`easybits({ apiKey, baseUrl, template: "node", timeoutSeconds, workingDirectory, runTimeoutSeconds, idleTtlSeconds, hardTtlSeconds, metadata })\`. \`setNetworkPolicy\` aplica una **política de egress por caja**, con el mismo shape que eve usa en Vercel: \`"allow-all"\`, \`"deny-all"\` o una allow-list por dominio (\`{ allow: { "api.github.com": [], "*.npmjs.org": [] } }\`; \`"*"\` abre todo). El host la resuelve a IPs por microVM con refresco DNS, la persiste con la caja y la vuelve a aplicar al reanudar; toma efecto cuando la promesa resuelve, así que \`await\` antes del egress que quieres gobernar. **No soportado**: \`transform\` (inyectar headers en el firewall) — lanza error explícito; ese flujo (checkout de GitHub sin que el token entre a la caja) eve lo hace con su \`defaultBackend\`. Fuera de eve, la misma política vive en \`PUT/GET /sandboxes/:id/network-policy\` · SDK \`sb.setNetworkPolicy(policy)\` · MCP \`sandbox_set_network_policy\`. La llave necesita scope WRITE (crear, snapshot, fork) y DELETE si eve debe borrar snapshots.
+Opciones: \`easybits({ apiKey, baseUrl, template: "node", timeoutSeconds, workingDirectory, runTimeoutSeconds, idleTtlSeconds, hardTtlSeconds, metadata })\`. \`setNetworkPolicy\` aplica una **política de egress por caja**, con el mismo shape que eve usa en Vercel: \`"allow-all"\`, \`"deny-all"\` o una allow-list por dominio (\`{ allow: { "api.github.com": [], "registry.npmjs.org": [] } }\`; \`"*"\` abre todo). El host la resuelve a IPs por microVM con refresco DNS, la persiste con la caja y la vuelve a aplicar al reanudar; toma efecto cuando la promesa resuelve, así que \`await\` antes del egress que quieres gobernar. **No soportado**: \`transform\` (inyectar headers en el firewall) — lanza error explícito; ese flujo (checkout de GitHub sin que el token entre a la caja) eve lo hace con su \`defaultBackend\`. Fuera de eve, la misma política vive en \`PUT/GET /sandboxes/:id/network-policy\` · SDK \`sb.setNetworkPolicy(policy)\` · MCP \`sandbox_set_network_policy\`. La llave necesita scope WRITE (crear, snapshot, fork) y DELETE si eve debe borrar snapshots.
 
 ### 2. El servidor eve dentro de una caja
 

@@ -68,7 +68,7 @@ export default function Eve({ loaderData }: Route.ComponentProps) {
               title: "Política de red por caja y el servidor eve hospedado",
               body: "setNetworkPolicy sale a los dominios que tú autorices para esa caja, o a ninguno. Se cambia en caliente, se conserva al dormir, y lo que no está en la lista no sale. El servidor eve también cabe en una caja: template eve-nitro con /data persistente y URL pública.",
               bullets: [
-                "allow-all · deny-all · allow-list por dominio (\"*.npmjs.org\")",
+                "allow-all · deny-all · allow-list por dominio (\"registry.npmjs.org\")",
                 "La misma política por REST, SDK y tools MCP",
                 "eve-nitro: Node 24, pnpm, eve CLI, puerto 3000 expuesto con TLS",
                 "Docs y skill easybits-eve para que tu agente lo configure solo",

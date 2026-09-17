@@ -2539,7 +2539,7 @@ How to embed safely (the only reliable rule):
 
   server.tool(
     "sandbox_set_network_policy",
-    "Set the EGRESS policy of one box: \"allow-all\", \"deny-all\", or a domain allow-list { allow: { \"api.github.com\": [], \"*.npmjs.org\": [] } } (\"*\" opens everything). Only the domains you authorize for THIS box can be reached, or none; a connection to a domain not on the list simply does not leave the VM. Changes apply live over the API, persist across suspend/resume, and take effect once this call returns — call it BEFORE the egress you want governed. `transform` (header injection at the firewall) is NOT supported and is rejected with a clear error (permanent — do not retry with it). Same shape as eve/@vercel/sandbox setNetworkPolicy.",
+    "Set the EGRESS policy of one box: \"allow-all\", \"deny-all\", or a domain allow-list { allow: { \"api.github.com\": [], \"registry.npmjs.org\": [] } } (hosts exactos o IPs; NO wildcards like *.x — a bare \"*\" means allow-all). Only the domains you authorize for THIS box can be reached, or none; a connection to a domain not on the list simply does not leave the VM. Changes apply live over the API, persist across suspend/resume, and take effect once this call returns — call it BEFORE the egress you want governed. `transform` (header injection at the firewall) is NOT supported and is rejected with a clear error (permanent — do not retry with it). Same shape as eve/@vercel/sandbox setNetworkPolicy.",
     {
       sandboxId: z.string().describe("Sandbox ID"),
       policy: z

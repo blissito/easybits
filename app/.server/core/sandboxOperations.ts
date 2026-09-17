@@ -2061,8 +2061,10 @@ export function parseNetworkPolicy(input: unknown): SandboxNetworkPolicy {
       throw new Error("network policy: `allow` must be an object keyed by domain");
     const out: Record<string, Array<Record<string, never>>> = {};
     for (const [domain, rules] of Object.entries(allow as Record<string, unknown>)) {
-      if (!/^(\*|(\*\.)?[a-z0-9.-]+)$/i.test(domain))
-        throw new Error(`network policy: invalid domain "${domain}"`);
+      if (domain.includes("*") && domain !== "*")
+        throw new Error(`network policy: wildcards are not supported ("${domain}"); list exact hosts or IPs`);
+      if (!/^(\*|[a-z0-9.:-]+)$/i.test(domain))
+        throw new Error(`network policy: invalid host "${domain}"`);
       if (rules !== undefined && !Array.isArray(rules))
         throw new Error(`network policy: rules for "${domain}" must be an array`);
       for (const r of (rules ?? []) as unknown[]) {
@@ -2078,36 +2080,45 @@ export function parseNetworkPolicy(input: unknown): SandboxNetworkPolicy {
   throw new Error('network policy must be "allow-all", "deny-all" or { allow: { "<domain>": [] } }');
 }
 
+// Respuesta del host: `resolved` = IPs vigentes por host; `unresolved` NO es error
+// (el host refresca DNS cada 60 s y lo reintenta).
+export type NetworkPolicyResult = {
+  ok: boolean;
+  policy: SandboxNetworkPolicy;
+  mode?: "allow-all" | "deny-all" | "allow-list";
+  resolved?: Record<string, string[]>;
+  unresolved?: string[];
+  scope?: string;
+};
+
 export async function setSandboxNetworkPolicy(
   ctx: AuthContext,
   sandboxId: string,
   policy: unknown
-): Promise<{ ok: boolean; policy: SandboxNetworkPolicy }> {
+): Promise<NetworkPolicyResult> {
   requireScope(ctx, "WRITE");
   const parsed = parseNetworkPolicy(policy);
-  const res = await callHost<{ ok?: boolean; policy?: SandboxNetworkPolicy }>(
+  const res = await callHost<Partial<NetworkPolicyResult>>(
     "PUT",
     `/v1/sandbox/${sandboxId}/network-policy`,
     parsed,
     await effectiveOwnerId(ctx, sandboxId)
   );
-  return { ok: res.ok ?? true, policy: res.policy ?? parsed };
+  return { ...res, ok: true, policy: res.policy ?? parsed };
 }
 
 export async function getSandboxNetworkPolicy(
   ctx: AuthContext,
   sandboxId: string
-): Promise<{ policy: SandboxNetworkPolicy }> {
+): Promise<NetworkPolicyResult> {
   requireScope(ctx, "READ");
-  const res = await callHost<{ policy?: SandboxNetworkPolicy } | SandboxNetworkPolicy>(
+  const res = await callHost<Partial<NetworkPolicyResult>>(
     "GET",
     `/v1/sandbox/${sandboxId}/network-policy`,
     undefined,
     await effectiveOwnerId(ctx, sandboxId)
   );
-  const policy =
-    res && typeof res === "object" && "policy" in res ? (res as { policy: SandboxNetworkPolicy }).policy : (res as SandboxNetworkPolicy);
-  return { policy: policy ?? "allow-all" };
+  return { ...res, ok: true, policy: res.policy ?? "allow-all" };
 }
 
 // Tear down a raw forward. Same capability gate as expose-raw.

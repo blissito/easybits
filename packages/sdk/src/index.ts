@@ -2898,18 +2898,19 @@ export class Sandbox {
 
   /**
    * Egress policy for THIS box: `"allow-all"`, `"deny-all"` or a domain
-   * allow-list (`{ allow: { "api.github.com": [], "*.npmjs.org": [] } }`).
+   * allow-list (`{ allow: { "api.github.com": [], "registry.npmjs.org": [] } }`).
    * Only the domains you authorize can be reached, or none; a connection to a
    * domain not on the list simply does not leave the VM. Applies live, persists
    * across suspend/resume, and is in force once the promise resolves — await it
-   * before the egress you want governed. `transform` is not supported (400).
+   * before the egress you want governed. Exact hosts or IPs only (no wildcards);
+   * `transform` is not supported (400).
    */
-  setNetworkPolicy(policy: SandboxNetworkPolicy): Promise<{ ok: boolean; policy: SandboxNetworkPolicy }> {
+  setNetworkPolicy(policy: SandboxNetworkPolicy): Promise<NetworkPolicyResult> {
     return this.post("/network-policy", { policy });
   }
 
   /** Current egress policy (`"allow-all"` when none was set). */
-  getNetworkPolicy(): Promise<{ policy: SandboxNetworkPolicy }> {
+  getNetworkPolicy(): Promise<NetworkPolicyResult> {
     return this.req(`${this.base()}/network-policy`);
   }
 
@@ -3518,6 +3519,19 @@ export type SandboxNetworkPolicy =
   | "allow-all"
   | "deny-all"
   | { allow: Record<string, Array<Record<string, never>>> };
+
+/**
+ * What the host answers. `resolved` = current IPs per host; `unresolved` is
+ * NOT an error — DNS is refreshed every 60 s and retried.
+ */
+export interface NetworkPolicyResult {
+  ok: boolean;
+  policy: SandboxNetworkPolicy;
+  mode?: "allow-all" | "deny-all" | "allow-list";
+  resolved?: Record<string, string[]>;
+  unresolved?: string[];
+  scope?: string;
+}
 
 export interface RawForward {
   hostPort: number; // from the pool (49000-49999); NOT stable across rebuilds
