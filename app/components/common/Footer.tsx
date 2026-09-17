@@ -24,7 +24,7 @@ export const Footer = () => {
               className="bg-brand-500 w-full h-full  text-3xl md:text-5xl lg:text-[80px] font-medium "
               id="CotizaTuAgenteHome"
             >
-              Calcula tu costo
+              Empieza gratis
             </motion.button>
           </div>
         </Link>

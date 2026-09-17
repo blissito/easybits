@@ -97,36 +97,12 @@ export default function Eve({ loaderData }: Route.ComponentProps) {
           ctaTo: "/blog/agentes-eve-en-easybits",
           priceLine: (
             <>
-              Referencia del lado de eve:{" "}
-              <a className="underline text-brand-500" href="https://eve.dev/docs/sandbox" target="_blank" rel="noopener noreferrer">
-                eve.dev/docs/sandbox
-              </a>{" "}
-              (contrato SandboxBackend) y{" "}
-              <a className="underline text-brand-500" href="https://github.com/vercel/eve" target="_blank" rel="noopener noreferrer">
-                github.com/vercel/eve
-              </a>
-              . Del lado nuestro:{" "}
-              <a className="underline text-brand-500" href="/docs/eve.md">
-                /docs/eve.md
-              </a>{" "}
-              y{" "}
-              <a className="underline text-brand-500" href="https://www.npmjs.com/package/@easybits.cloud/eve-sandbox" target="_blank" rel="noopener noreferrer">
-                npm @easybits.cloud/eve-sandbox
-              </a>
-              .
-              <br />
-              <br />
-              El plan gratuito incluye una caja: suficiente para correr tu primer agente
-              eve. Los planes de pago suben las cajas concurrentes y el tiempo de vida.
-              Para el servidor eve 24/7, eso es{" "}
+              El plan gratuito incluye una caja. Los de pago suben las cajas concurrentes.
+              El servidor eve 24/7 es{" "}
               <a className="underline text-brand-500" href="/hosting">
                 hosting
               </a>
-              , desde $49 MXN/mes. English tutorial:{" "}
-              <a className="underline text-brand-500" href="/blog/agentes-eve-en-easybits?lang=en">
-                Run your eve agents on EasyBits
-              </a>
-              .
+              , desde $49 MXN/mes.
             </>
           ),
         }}
