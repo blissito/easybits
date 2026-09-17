@@ -273,6 +273,7 @@ export class BlogSEOService {
       { path: "/web", priority: "0.9", changefreq: "monthly" },
       { path: "/flota", priority: "0.9", changefreq: "monthly" },
       { path: "/bases-de-datos", priority: "0.8", changefreq: "monthly" },
+      { path: "/eve", priority: "0.9", changefreq: "monthly" },
       { path: "/mcp/apps", priority: "0.6", changefreq: "monthly" },
       { path: "/brand", priority: "0.4", changefreq: "yearly" },
       { path: "/status", priority: "0.4", changefreq: "weekly" },

@@ -1,0 +1,74 @@
+---
+title: "Corre tus agentes eve en microVMs: el backend nativo para Vercel eve"
+description: "eve es el framework de agentes de Vercel. Con @easybits.cloud/eve-sandbox cada sesión corre en su propia microVM Firecracker: prewarm como snapshot, fork por sesión, siesta entre turnos y política de red por caja. Tutorial de principio a fin."
+date: "2026-09-17"
+author: "Equipo Easybits"
+tags: ["eve", "vercel", "agentes", "sandboxes", "tutorial"]
+kind: "tutorial"
+featured: true
+featuredImage: "/blog/assets/blog-eve-easybits-cover.png"
+published: true
+---
+
+# Corre tus agentes eve en microVMs: el backend nativo para Vercel eve
+
+[eve](https://eve.dev) es el framework open-source de agentes de Vercel: un agente es un directorio (instrucciones, tools, canales, schedules) y cada sesión es un run durable del Workflow SDK. Cuando el agente necesita ejecutar código, eve le pide una caja a un **SandboxBackend**. Trae varios (Docker, just-bash, microsandbox, Vercel Sandbox) y deja la interfaz pública para que alguien más escriba el suyo.
+
+`@easybits.cloud/eve-sandbox` es ese backend para EasyBits: cubre el contrato completo y cada sesión de tu agente corre en su propia microVM Firecracker, en tu cuenta, cobrada con tu plan en pesos. Cambias una línea y el agente no se entera.
+
+## 1. Instala y apunta el sandbox
+
+```bash
+npm i @easybits.cloud/eve-sandbox   # Node ≥ 24, lo exige eve
+export EASYBITS_API_KEY=eb_...       # scope WRITE
+```
+
+```ts
+// agent/sandbox.ts
+import { defineSandbox } from "eve/sandbox";
+import { easybits } from "@easybits.cloud/eve-sandbox";
+
+export default defineSandbox({
+  backend: easybits(),
+  async bootstrap({ use }) {
+    const s = await use();
+    await s.run({ command: "npm i -g typescript" });
+  },
+});
+```
+
+## 2. `eve build`: el bootstrap se vuelve un snapshot
+
+![Un molde y las cajas que salen de él](/blog/assets/blog-eve-easybits-snapshot.png)
+
+En el build, eve llama `prewarm()`. Levantamos una caja `node`, escribimos tus seed files, corremos tu `bootstrap()` y congelamos el resultado como snapshot copy-on-write con nombre `eve:<templateKey>:<hash>`. El siguiente build lo encuentra y no reconstruye nada: medido, 0.2 s contra ~11 s la primera vez.
+
+Cuando llega el primer mensaje, `create()` hace un **fork** de ese snapshot (~7 s). Entre turnos la caja duerme con snapshot de la VM completa y despierta en ~1 s; eve la reabre por `sandboxId` con el disco tal cual lo dejó. `stop()` y `shutdown()` son suspend; `delete()` destruye. `run()` y `spawn()` corren en login shell con stdout y stderr en streams, y `kill()` señala al grupo de procesos entero.
+
+## 3. Política de red por caja
+
+![Una compuerta que deja pasar sólo algunos haces](/blog/assets/blog-eve-easybits-policy.png)
+
+```ts
+const sandbox = await ctx.getSandbox();
+await sandbox.setNetworkPolicy({
+  allow: { "api.github.com": [], "*.npmjs.org": [] },
+});
+```
+
+Sólo a los dominios que tú autorices para esa caja, o a ninguno (`"deny-all"`). Lo cambias en caliente por API, se conserva al dormir y despertar, y si un dominio no está en la lista la conexión simplemente no sale. Es el mismo shape que usa eve en Vercel Sandbox, así que el código de tu agente no cambia. Lo único que no hacemos es `transform` (inyectar headers en el firewall): lanza un error claro en vez de fingir.
+
+## 4. El servidor eve también cabe en una caja
+
+```bash
+SB=$(curl -s -X POST "$B/sandboxes" "${H[@]}" -d '{"template":"eve-nitro","timeoutSeconds":3600,"suspendOnIdle":true}' | jq -r .sandboxId)
+curl -s -X POST "$B/sandboxes/$SB/exec" "${H[@]}" -d '{"command":"cd /data && git clone <repo> app && cd app && pnpm i && eve build","timeoutSeconds":600}'
+curl -s -X POST "$B/sandboxes/$SB/bg"   "${H[@]}" -d '{"command":"exec eve start","cwd":"/data/app","env":{"EASYBITS_API_KEY":"<key>"}}'
+curl -s -X POST "$B/sandboxes/$SB/expose" "${H[@]}" -d '{"port":3000}'
+```
+
+El template `eve-nitro` trae Node 24, pnpm y el CLI de eve; `/data` es persistente y la URL pública proxea `/eve/` y `/.well-known/workflow/` sin configurar nada. El servidor corre ahí; cada agente que atiende recibe su propia microVM por el backend de arriba.
+
+## Empieza hoy
+
+Instala el paquete, cambia `agent/sandbox.ts` y corre `eve build`. La página del producto está en [/eve](/eve), la referencia en [/docs/eve.md](/docs/eve.md) y tu propio agente puede configurarlo con `npx skills add https://www.easybits.cloud --skill easybits-eve`. El plan gratuito incluye una caja.

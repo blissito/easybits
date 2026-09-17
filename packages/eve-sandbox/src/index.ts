@@ -13,6 +13,7 @@
  *                           `templateKey: null`). Con `existingMetadata`
  *                           reattacha la caja anterior (resume si dormía).
  *   stop()/shutdown()     → suspend (snapshot Firecracker, resume ~1s).
+ *   setNetworkPolicy()    → PUT /sandboxes/:id/network-policy (allow-all/deny-all/allow-list).
  *   delete()              → destroy.
  *
  * Todo pasa por la REST API pública vía `@easybits.cloud/sdk`; el paquete
@@ -336,13 +337,20 @@ async function openSession(box: Sandbox, id: string, opts: ResolvedOptions): Pro
       const r = await box.exec(`rm ${flags} -- ${shellQuote(resolvePath(o.path))}`, { timeoutSeconds: 60 });
       if (r.exitCode !== 0) throw new Error(`removePath ${o.path}: ${r.stderr.trim() || `exit ${r.exitCode}`}`);
     },
-    // El egress lo fija el firewall del fierro, no la sesión: "allow-all" es
-    // lo único que ya es verdad, y aceptarlo no cambia nada.
+    // Política de egress POR CAJA (mismo shape que Vercel Sandbox). `transform`
+    // (headers inyectados en el firewall) no existe en EasyBits: se rechaza aquí
+    // con un error claro en vez de un 400 opaco del servidor.
     setNetworkPolicy: async (policy: SandboxNetworkPolicy) => {
-      if (policy === "allow-all") return;
-      throw new Error(
-        `@easybits.cloud/eve-sandbox: setNetworkPolicy solo soporta "allow-all" (recibido ${JSON.stringify(policy)})`,
-      );
+      if (typeof policy === "object" && policy && "allow" in policy) {
+        for (const rules of Object.values(policy.allow ?? {})) {
+          if (Array.isArray(rules) && rules.some((r) => r && typeof r === "object" && "transform" in r)) {
+            throw new Error(
+              "@easybits.cloud/eve-sandbox: setNetworkPolicy no soporta `transform` (inyección de headers); usa allow-all, deny-all o una allow-list por dominio",
+            );
+          }
+        }
+      }
+      await box.setNetworkPolicy(policy as Parameters<Sandbox["setNetworkPolicy"]>[0]);
     },
   };
 }

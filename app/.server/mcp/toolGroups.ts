@@ -476,6 +476,8 @@ export const SANDBOX_ALLOWLIST = new Set<string>([
   "sandbox_expose_port",
   "sandbox_expose_raw_port",
   "sandbox_unexpose_raw_port",
+  "sandbox_set_network_policy",
+  "sandbox_get_network_policy",
   "sandbox_ssh_enable",
   "sandbox_ssh_disable",
   "sandbox_domain_add",

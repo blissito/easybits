@@ -2896,6 +2896,23 @@ export class Sandbox {
     return this.post("/expose-raw", { port, protocol });
   }
 
+  /**
+   * Egress policy for THIS box: `"allow-all"`, `"deny-all"` or a domain
+   * allow-list (`{ allow: { "api.github.com": [], "*.npmjs.org": [] } }`).
+   * Only the domains you authorize can be reached, or none; a connection to a
+   * domain not on the list simply does not leave the VM. Applies live, persists
+   * across suspend/resume, and is in force once the promise resolves — await it
+   * before the egress you want governed. `transform` is not supported (400).
+   */
+  setNetworkPolicy(policy: SandboxNetworkPolicy): Promise<{ ok: boolean; policy: SandboxNetworkPolicy }> {
+    return this.post("/network-policy", { policy });
+  }
+
+  /** Current egress policy (`"allow-all"` when none was set). */
+  getNetworkPolicy(): Promise<{ policy: SandboxNetworkPolicy }> {
+    return this.req(`${this.base()}/network-policy`);
+  }
+
   /** Tear down a raw TCP/UDP forward. */
   unexposeRawPort(port: number, protocol: "tcp" | "udp" = "tcp"): Promise<{ ok: boolean }> {
     return this.post("/unexpose-raw", { port, protocol });
@@ -3495,6 +3512,12 @@ export interface ExposedPort {
   host: string;
   port: number;
 }
+
+/** Egress policy of a box — same shape as eve / @vercel/sandbox. */
+export type SandboxNetworkPolicy =
+  | "allow-all"
+  | "deny-all"
+  | { allow: Record<string, Array<Record<string, never>>> };
 
 export interface RawForward {
   hostPort: number; // from the pool (49000-49999); NOT stable across rebuilds

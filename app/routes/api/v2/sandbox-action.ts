@@ -1,6 +1,11 @@
 import type { Route } from "./+types/sandbox-action";
 import { authenticateRequest, requireAuth } from "~/.server/apiAuth";
-import { hostErrorResponse, setSandboxBootstrap } from "~/.server/core/sandboxOperations";
+import {
+  hostErrorResponse,
+  setSandboxBootstrap,
+  getSandboxNetworkPolicy,
+  setSandboxNetworkPolicy,
+} from "~/.server/core/sandboxOperations";
 import { applySandboxRateLimit } from "~/.server/rateLimiter";
 import {
   SandboxExecBody,
@@ -47,13 +52,15 @@ const invalid = (issues: unknown) =>
 // action ∈ extend | suspend | resume | snapshot | fork | exec | run-code |
 //          run-cell | kernel-restart | logs | runtime | apply-patch | expose |
 //          expose-raw | unexpose-raw | ssh-enable | ssh-disable |
-//          domain-add | domain-remove | domain-list | domain-verify
-// GET /api/v2/sandboxes/:id/logs?unit=&lines=&since=&grep= — la única acción de lectura.
+//          domain-add | domain-remove | domain-list | domain-verify | network-policy
+// GET /api/v2/sandboxes/:id/logs?unit=&lines=&since=&grep= y GET .../network-policy — las acciones de lectura.
 // Sin este loader un GET a cualquier acción reventaba con "Unexpected Server Error" (ruta
 // sin loader), que obligaba a ir por `journalctl` vía exec. Las demás acciones: 405 con la
 // pista de que son POST.
 export async function loader({ request, params }: Route.LoaderArgs) {
   const ctx = requireAuth(await authenticateRequest(request));
+  if (params.action === "network-policy")
+    return Response.json(await getSandboxNetworkPolicy(ctx, params.id!));
   if (params.action !== "logs") {
     return Response.json(
       { error: `Method not allowed: /${params.action} es POST` },
@@ -212,6 +219,18 @@ async function dispatch(
     }
     case "ssh-disable":
       return Response.json(await disableSandboxSsh(ctx, id));
+    // Egress por caja. Body = la política tal cual ("allow-all" | "deny-all" |
+    // { allow }) o envuelta en { policy }. `transform` se rechaza con 400.
+    case "network-policy": {
+      const policy = body && typeof body === "object" && "policy" in body ? body.policy : body;
+      try {
+        return Response.json(await setSandboxNetworkPolicy(ctx, id, policy));
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        if (msg.startsWith("network policy")) return Response.json({ error: msg }, { status: 400 });
+        throw e;
+      }
+    }
     // Ticket corto para abrir el túnel. Lo pide el CLI en cada conexión: el borde
     // no puede validar una API key sin base de datos, así que firma la app.
     case "ssh-ticket":

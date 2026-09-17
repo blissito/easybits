@@ -59,8 +59,8 @@ easybits({
 
 <!-- generated:packages -->
 - `@easybits.cloud/mcp@0.3.7`
-- `@easybits.cloud/sdk@0.34.5`
-- `@easybits.cloud/eve-sandbox@0.0.4`
+- `@easybits.cloud/sdk@0.34.6`
+- `@easybits.cloud/eve-sandbox@0.0.5`
 <!-- /generated -->
 
 ## Self-hosting eve on EasyBits

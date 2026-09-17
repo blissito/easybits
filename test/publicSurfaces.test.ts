@@ -26,6 +26,7 @@ const PILLAR_PAGES = [
   "/web",
   "/flota",
   "/bases-de-datos",
+  "/eve",
 ];
 
 describe("robots.txt", () => {

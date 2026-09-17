@@ -112,6 +112,7 @@ All actions (the enum is derived from the server, see `openapi.yaml`):
 - `domain-remove`
 - `domain-list`
 - `domain-verify`
+- `network-policy`
 <!-- /generated -->
 
 - `idle`: `{ suspendOnIdle, idleTtlSeconds?, hardTtlSeconds? }` — change the idle policy of an

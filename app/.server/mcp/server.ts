@@ -139,6 +139,8 @@ import {
   exposeSandboxPort,
   exposeSandboxRawPort,
   unexposeSandboxRawPort,
+  setSandboxNetworkPolicy,
+  getSandboxNetworkPolicy,
   enableSandboxSsh,
   disableSandboxSsh,
   addSandboxDomain,
@@ -356,6 +358,8 @@ const SANDBOX_TOOL_KIND: Record<string, "create" | "op"> = {
   sandbox_ssh_enable: "op",
   sandbox_ssh_disable: "op",
   sandbox_unexpose_raw_port: "op",
+  sandbox_set_network_policy: "op",
+  sandbox_get_network_policy: "op",
   sandbox_domain_add: "op",
   sandbox_domain_remove: "op",
   sandbox_domain_list: "op",
@@ -2529,6 +2533,37 @@ How to embed safely (the only reliable rule):
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await unexposeSandboxRawPort(ctx, params.sandboxId, params.port, params.protocol);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "sandbox_set_network_policy",
+    "Set the EGRESS policy of one box: \"allow-all\", \"deny-all\", or a domain allow-list { allow: { \"api.github.com\": [], \"*.npmjs.org\": [] } } (\"*\" opens everything). Only the domains you authorize for THIS box can be reached, or none; a connection to a domain not on the list simply does not leave the VM. Changes apply live over the API, persist across suspend/resume, and take effect once this call returns — call it BEFORE the egress you want governed. `transform` (header injection at the firewall) is NOT supported and is rejected with a clear error (permanent — do not retry with it). Same shape as eve/@vercel/sandbox setNetworkPolicy.",
+    {
+      sandboxId: z.string().describe("Sandbox ID"),
+      policy: z
+        .union([
+          z.literal("allow-all"),
+          z.literal("deny-all"),
+          z.object({ allow: z.record(z.string(), z.array(z.object({}).passthrough())) }),
+        ])
+        .describe('"allow-all" | "deny-all" | { allow: { "<domain>": [] } }'),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await setSandboxNetworkPolicy(ctx, params.sandboxId, params.policy);
+      return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  server.tool(
+    "sandbox_get_network_policy",
+    "Read the current egress policy of a box (\"allow-all\" when none was set).",
+    { sandboxId: z.string().describe("Sandbox ID") },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const result = await getSandboxNetworkPolicy(ctx, params.sandboxId);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     })
   );

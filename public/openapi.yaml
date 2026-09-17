@@ -355,6 +355,7 @@ paths:
           - domain-remove
           - domain-list
           - domain-verify
+          - network-policy
           # /generated
     post:
       tags: [Sandboxes]

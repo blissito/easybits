@@ -719,7 +719,7 @@ function parseHostMessage(raw: string): string {
 }
 
 export async function callHost<T>(
-  method: "GET" | "POST" | "DELETE" | "PATCH",
+  method: "GET" | "POST" | "PUT" | "DELETE" | "PATCH",
   path: string,
   body?: unknown,
   ownerId?: string,
@@ -2041,6 +2041,73 @@ function rethrowNoSshForTemplate(e: unknown): never {
       `este template no expone ese puerto (SSH sólo en templates que lo declaran; dev-box es la caja recomendada para entrar por ssh). Respuesta definitiva: no reintentes. Detalle: ${msg}`
     );
   throw e instanceof Error ? e : new Error(msg);
+}
+
+// ── Política de egress por caja ──────────────────────────────────────────
+// Mismo shape que eve/@vercel/sandbox: "allow-all" | "deny-all" | { allow: { dominio: [] } }.
+// El host la resuelve a IPs por microVM (refresco DNS), la persiste y la vuelve a
+// aplicar al reanudar. `transform` (inyectar headers en el firewall) NO existe aquí:
+// se rechaza antes de llegar al host para que el error sea explícito y no un 400 opaco.
+export type SandboxNetworkPolicy =
+  | "allow-all"
+  | "deny-all"
+  | { allow: Record<string, Array<Record<string, never>>> };
+
+export function parseNetworkPolicy(input: unknown): SandboxNetworkPolicy {
+  if (input === "allow-all" || input === "deny-all") return input;
+  if (input && typeof input === "object" && "allow" in input) {
+    const allow = (input as { allow: unknown }).allow;
+    if (!allow || typeof allow !== "object" || Array.isArray(allow))
+      throw new Error("network policy: `allow` must be an object keyed by domain");
+    const out: Record<string, Array<Record<string, never>>> = {};
+    for (const [domain, rules] of Object.entries(allow as Record<string, unknown>)) {
+      if (!/^(\*|(\*\.)?[a-z0-9.-]+)$/i.test(domain))
+        throw new Error(`network policy: invalid domain "${domain}"`);
+      if (rules !== undefined && !Array.isArray(rules))
+        throw new Error(`network policy: rules for "${domain}" must be an array`);
+      for (const r of (rules ?? []) as unknown[]) {
+        if (r && typeof r === "object" && "transform" in (r as object))
+          throw new Error(
+            "network policy: `transform` (header injection at the firewall) is not supported; use allow-all, deny-all or a domain allow-list"
+          );
+      }
+      out[domain] = [];
+    }
+    return { allow: out };
+  }
+  throw new Error('network policy must be "allow-all", "deny-all" or { allow: { "<domain>": [] } }');
+}
+
+export async function setSandboxNetworkPolicy(
+  ctx: AuthContext,
+  sandboxId: string,
+  policy: unknown
+): Promise<{ ok: boolean; policy: SandboxNetworkPolicy }> {
+  requireScope(ctx, "WRITE");
+  const parsed = parseNetworkPolicy(policy);
+  const res = await callHost<{ ok?: boolean; policy?: SandboxNetworkPolicy }>(
+    "PUT",
+    `/v1/sandbox/${sandboxId}/network-policy`,
+    parsed,
+    await effectiveOwnerId(ctx, sandboxId)
+  );
+  return { ok: res.ok ?? true, policy: res.policy ?? parsed };
+}
+
+export async function getSandboxNetworkPolicy(
+  ctx: AuthContext,
+  sandboxId: string
+): Promise<{ policy: SandboxNetworkPolicy }> {
+  requireScope(ctx, "READ");
+  const res = await callHost<{ policy?: SandboxNetworkPolicy } | SandboxNetworkPolicy>(
+    "GET",
+    `/v1/sandbox/${sandboxId}/network-policy`,
+    undefined,
+    await effectiveOwnerId(ctx, sandboxId)
+  );
+  const policy =
+    res && typeof res === "object" && "policy" in res ? (res as { policy: SandboxNetworkPolicy }).policy : (res as SandboxNetworkPolicy);
+  return { policy: policy ?? "allow-all" };
 }
 
 // Tear down a raw forward. Same capability gate as expose-raw.

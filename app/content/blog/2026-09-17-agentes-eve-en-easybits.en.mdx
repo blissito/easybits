@@ -1,0 +1,73 @@
+---
+title: "Run your eve agents in microVMs: the native sandbox backend for Vercel's eve"
+description: "eve is Vercel's agent framework. With @easybits.cloud/eve-sandbox every session runs in its own Firecracker microVM: prewarm as a snapshot, fork per session, sleep between turns and a per-box network policy. End-to-end tutorial."
+date: "2026-09-17"
+author: "Easybits Team"
+tags: ["eve", "vercel", "agents", "sandboxes", "tutorial"]
+kind: "tutorial"
+featuredImage: "/blog/assets/blog-eve-easybits-cover.png"
+published: true
+---
+
+# Run your eve agents in microVMs: the native sandbox backend for Vercel's eve
+
+[eve](https://eve.dev) is Vercel's open-source agent framework: an agent is a directory (instructions, tools, channels, schedules) and every session is a durable Workflow SDK run. When the agent needs to execute code, eve asks a **SandboxBackend** for a box. It ships several (Docker, just-bash, microsandbox, Vercel Sandbox) and keeps the interface public so anyone can write their own.
+
+`@easybits.cloud/eve-sandbox` is that backend for EasyBits: it covers the full contract, and every session of your agent runs in its own Firecracker microVM, in your account, billed on your plan in Mexican pesos. Change one line; the agent never notices.
+
+## 1. Install and point the sandbox at it
+
+```bash
+npm i @easybits.cloud/eve-sandbox   # Node ≥ 24, eve requires it
+export EASYBITS_API_KEY=eb_...       # WRITE scope
+```
+
+```ts
+// agent/sandbox.ts
+import { defineSandbox } from "eve/sandbox";
+import { easybits } from "@easybits.cloud/eve-sandbox";
+
+export default defineSandbox({
+  backend: easybits(),
+  async bootstrap({ use }) {
+    const s = await use();
+    await s.run({ command: "npm i -g typescript" });
+  },
+});
+```
+
+## 2. `eve build`: your bootstrap becomes a snapshot
+
+![A mold and the boxes cast from it](/blog/assets/blog-eve-easybits-snapshot.png)
+
+At build time eve calls `prewarm()`. We boot a `node` box, write your seed files, run your `bootstrap()` and freeze the result as a copy-on-write snapshot named `eve:<templateKey>:<hash>`. The next build finds it and rebuilds nothing: measured, 0.2 s versus ~11 s the first time.
+
+When the first message arrives, `create()` **forks** that snapshot (~7 s). Between turns the box sleeps with a full-VM snapshot and wakes in ~1 s; eve reopens it by `sandboxId` with the disk exactly as it left it. `stop()` and `shutdown()` are suspend; `delete()` destroys. `run()` and `spawn()` execute in a login shell with stdout and stderr as streams, and `kill()` signals the whole process group.
+
+## 3. Per-box network policy
+
+![A gate that lets only some beams through](/blog/assets/blog-eve-easybits-policy.png)
+
+```ts
+const sandbox = await ctx.getSandbox();
+await sandbox.setNetworkPolicy({
+  allow: { "api.github.com": [], "*.npmjs.org": [] },
+});
+```
+
+Only the domains you authorize for that box, or none (`"deny-all"`). Change it live over the API, it survives sleep and wake, and if a domain is not on the list the connection simply does not leave the VM. It is the same shape eve uses on Vercel Sandbox, so your agent code does not change. The one thing we do not do is `transform` (header injection at the firewall): it throws a clear error instead of pretending.
+
+## 4. The eve server fits in a box too
+
+```bash
+SB=$(curl -s -X POST "$B/sandboxes" "${H[@]}" -d '{"template":"eve-nitro","timeoutSeconds":3600,"suspendOnIdle":true}' | jq -r .sandboxId)
+curl -s -X POST "$B/sandboxes/$SB/exec" "${H[@]}" -d '{"command":"cd /data && git clone <repo> app && cd app && pnpm i && eve build","timeoutSeconds":600}'
+curl -s -X POST "$B/sandboxes/$SB/bg"   "${H[@]}" -d '{"command":"exec eve start","cwd":"/data/app","env":{"EASYBITS_API_KEY":"<key>"}}'
+curl -s -X POST "$B/sandboxes/$SB/expose" "${H[@]}" -d '{"port":3000}'
+```
+
+The `eve-nitro` template ships Node 24, pnpm and the eve CLI; `/data` is persistent and the public URL proxies `/eve/` and `/.well-known/workflow/` with no configuration. The server runs there; every agent it serves gets its own microVM through the backend above.
+
+## Start today
+
+Install the package, change `agent/sandbox.ts` and run `eve build`. The product page is at [/eve](/eve), the reference at [/en/docs/eve.md](/en/docs/eve.md), and your own agent can set it up with `npx skills add https://www.easybits.cloud --skill easybits-eve`. The free plan includes one box.

@@ -191,6 +191,12 @@ If the response carries a \`warning\`, the service is listening **only on \`127.
 
 **Layer 7 with TLS: HTTP and WebSocket.** The certificate is already at the edge, so the same URL serves \`https://\` and \`wss://\` — no cloudflared or raw port needed for a WebSocket. What it does not do is raw layer 4: ports 22, 23, 25, 445 and 3389 are rejected with 400. For those use the L4 forward.
 
+### Per-box network policy (egress)
+\`POST /sandboxes/:id/network-policy\` · Body: \`"allow-all"\` | \`"deny-all"\` | \`{ allow: { "api.github.com": [], "*.npmjs.org": [] } }\` (\`"*"\` opens everything) · \`GET\` reads it back.
+MCP: \`sandbox_set_network_policy({ sandboxId, policy })\` / \`sandbox_get_network_policy\` · SDK: \`sb.setNetworkPolicy(policy)\` / \`sb.getNetworkPolicy()\`
+
+Only the domains you authorize for that box, or none. Change it live over the API, it survives suspend/resume, and if a domain is not on the list the connection simply does not leave the VM. It is in force once the call returns: apply it **before** the egress you want governed. Same shape as eve / Vercel Sandbox \`setNetworkPolicy\`; \`transform\` (header injection at the firewall) is not supported and is rejected with 400.
+
 ### Raw ports (TCP/UDP)
 \`POST /sandboxes/:id/expose-raw\` · Body: \`{ port, protocol }\` (\`"tcp"\` | \`"udp"\`)
 MCP: \`sandbox_expose_raw_port({ sandboxId, port, protocol })\` · SDK: \`sb.exposeRawPort(port, protocol)\`

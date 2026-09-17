@@ -36,6 +36,7 @@ export default [
   route("/web", "routes/web.tsx"),
   route("/flota", "routes/flota.tsx"),
   route("/bases-de-datos", "routes/bases-de-datos.tsx"),
+  route("/eve", "routes/eve.tsx"),
   route("/cuanto-cuesta-mi-agente", "routes/cuanto-cuesta-mi-agente.tsx"),
   route("/calculadora", "routes/calculadora.ts"),
   route("/developers", "routes/developers.tsx"),

@@ -704,6 +704,7 @@ Configure via MCP tool \`set_ai_key\` or dashboard. Supports ANTHROPIC and OPENA
 | \`sb.setIdlePolicy({ suspendOnIdle, idleTtlSeconds?, hardTtlSeconds? })\` | Siesta al vencer el TTL en una caja YA creada, en vez de destruirse |
 | \`sb.exposePort(port)\` | URL pública \`sb-<id>-<port>.sandboxes.easybits.cloud\` con TLS (HTTP + WebSocket \`wss://\`) |
 | \`sb.exposeRawPort(port, proto)\` | Forward TCP/UDP crudo; devuelve \`endpoint\` \`host:hostPort\` |
+| \`sb.setNetworkPolicy(policy)\` | Egress por caja: \`allow-all\` / \`deny-all\` / allow-list por dominio; se conserva al dormir |
 | \`sb.enableSsh(keys)\` | SSH a la caja: inyecta llave + abre el 22; devuelve el comando \`ssh\` |
 | \`sb.addDomain(domain, port)\` | Dominio propio + TLS automático; devuelve el registro DNS exacto (apex → A, subdominio → CNAME) |
 | \`sb.verifyDomain(domain)\` | Confirma que el dominio ya resuelve y sirve por HTTPS |
@@ -926,6 +927,12 @@ Retorna URL HTTPS pública (viva mientras el sandbox exista).
 Si la respuesta trae \`warning\`, el servicio escucha **sólo en \`127.0.0.1\`** dentro de la caja: la URL queda publicada pero devolverá 502 hasta que bindees a \`0.0.0.0\` (o \`::\`). El proxy dialea la IP del guest, así que un bind a loopback es inalcanzable por diseño — igual que en Docker, Fly o Cloud Run.
 
 **Capa 7 con TLS: HTTP y WebSocket.** El certificado ya está en el edge, así que la misma URL sirve \`https://\` y \`wss://\` — no hace falta cloudflared ni un puerto raw para un WebSocket. Lo que no hace es capa 4 cruda: los puertos 22, 23, 25, 445 y 3389 se rechazan con 400. Para esos usa el forward L4.
+
+### Política de red por caja (egress)
+\`POST /sandboxes/:id/network-policy\` · Body: \`"allow-all"\` | \`"deny-all"\` | \`{ allow: { "api.github.com": [], "*.npmjs.org": [] } }\` (\`"*"\` abre todo) · \`GET\` para leerla.
+MCP: \`sandbox_set_network_policy({ sandboxId, policy })\` / \`sandbox_get_network_policy\` · SDK: \`sb.setNetworkPolicy(policy)\` / \`sb.getNetworkPolicy()\`
+
+Sólo a los dominios que tú autorices para esa caja, o a ninguno. Lo cambias en caliente por API, se conserva al dormir/despertar, y si un dominio no está en la lista la conexión simplemente no sale. Toma efecto cuando la llamada responde: aplícala **antes** del egress que quieres gobernar. Mismo shape que \`setNetworkPolicy\` de eve / Vercel Sandbox; \`transform\` (inyectar headers en el firewall) no está soportado y se rechaza con 400.
 
 ### Puertos raw (TCP/UDP)
 \`POST /sandboxes/:id/expose-raw\` · Body: \`{ port, protocol }\` (\`"tcp"\` | \`"udp"\`)
