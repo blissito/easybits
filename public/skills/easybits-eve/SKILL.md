@@ -38,7 +38,7 @@ What happens under the hood (so you can explain it and debug it):
 
 | eve | EasyBits |
 |---|---|
-| `prewarm` at build time | temporary box + seed files + `bootstrap()` → copy-on-write **snapshot** named `eve:<templateKey>:<hash>`; reused on later builds (0.2 s) |
+| `prewarm` (runs on `eve start`, **not** on `eve build`) | temporary box + seed files + `bootstrap()` → copy-on-write **snapshot** named `eve:<templateKey>:<hash>`. `eve build` only compiles (~10 s); first `eve start` logs `easybits: snapshot snap_… listo`, later ones `reusado` (start ~3 s) |
 | `create()` | fork of that snapshot (~7 s), or a fresh box from `template` when eve sends no template |
 | between turns | the box stays alive with `suspendOnIdle` (idle 600 s → suspend, resume ~1 s); reattached by `sandboxId` |
 | `stop()` / `shutdown()` | suspend · `delete()` | destroy |
@@ -51,30 +51,66 @@ Options: `easybits({ apiKey, baseUrl, template: "node", timeoutSeconds, workingD
 ## 2. Self-hosting the eve server on EasyBits
 
 Use the `eve-nitro` template (Node 24, pnpm, `eve` CLI, git/curl/tar; `/data` is a persistent
-4 GB volume and the working directory; port 3000). Four calls: create the box, `eve init` the
-app inside it (or clone yours) and install both packages, start the server, expose the port:
+4 GB volume and the working directory; port 3000). Six steps: create the box, `eve init` the
+app inside it (or clone yours) and install the packages, pick a model, set auth, start the
+server, expose the port:
 
 ```bash
 B=https://www.easybits.cloud/api/v2
 H=(-H "Authorization: Bearer $EASYBITS_API_KEY" -H "Content-Type: application/json")
 SB=$(curl -s -X POST "$B/sandboxes" "${H[@]}" -d '{"template":"eve-nitro","timeoutSeconds":3600,"suspendOnIdle":true,"hardTtlSeconds":2592000}' | jq -r .sandboxId)
-curl -s -X POST "$B/sandboxes/$SB/exec" "${H[@]}" -d '{"command":"cd /data && eve init app && cd app && pnpm add @easybits.cloud/eve-sandbox @easybits.cloud/eve-world && eve build","timeoutSeconds":600}'
-curl -s -X POST "$B/sandboxes/$SB/bg"   "${H[@]}" -d '{"command":"exec eve start","cwd":"/data/app","env":{"EASYBITS_API_KEY":"<key>"}}'
+curl -s -X POST "$B/sandboxes/$SB/exec" "${H[@]}" -d '{"command":"cd /data && eve init app && cd app && pnpm add @easybits.cloud/eve-sandbox @easybits.cloud/eve-world @ai-sdk/anthropic && eve build","timeoutSeconds":600}'
+```
+
+**Model outside Vercel.** The scaffold targets Vercel's AI Gateway (`model: "anthropic/claude-sonnet-5"` string) and fails without `AI_GATEWAY_API_KEY` ("AI Gateway received no credentials"). Pass a model object from any AI SDK provider instead, in `agent/agent.ts`:
+
+```ts
+import { defineAgent } from "eve";
+import { anthropic } from "@ai-sdk/anthropic";
+export default defineAgent({
+  model: anthropic("claude-sonnet-5"),   // reads ANTHROPIC_API_KEY
+  experimental: { workflow: { world: "@easybits.cloud/eve-world" } },
+});
+```
+
+**Server auth.** In production the HTTP API requires auth (scaffold: `vercelOidc()/localDev()/placeholderAuth()` → public URL answers `401 Authorization is required for this route`). Edit `agent/channels/eve.ts`:
+
+```ts
+import { eveChannel } from "eve/channels/eve";
+import { httpBasic, localDev } from "eve/channels/auth";
+export default eveChannel({
+  auth: [localDev(), httpBasic({ username: "eve", password: process.env.EVE_PASSWORD! })],
+});
+```
+
+Start (full env: `EASYBITS_API_KEY`, `ANTHROPIC_API_KEY` or your provider's, `EVE_PASSWORD`, `PORT=3000`) and expose:
+
+```bash
+curl -s -X POST "$B/sandboxes/$SB/bg"   "${H[@]}" -d '{"command":"exec eve start","cwd":"/data/app","env":{"EASYBITS_API_KEY":"<key>","ANTHROPIC_API_KEY":"<key>","EVE_PASSWORD":"<pass>","PORT":"3000"}}'
 curl -s -X POST "$B/sandboxes/$SB/expose" "${H[@]}" -d '{"port":3000}'      # → { url }
 ```
 
-`EASYBITS_DB_URL` is already in the `eve-nitro` box's environment; do not pass it in `env`.
+`EASYBITS_DB_URL` is already in the environment of an `eve-nitro` box created with `POST /sandboxes`; do not pass it in `env`. A box made by **forking a snapshot** does NOT have it: pass it in the `/bg` `env`, and reuse the SAME value to resume runs after destroying the server.
 
 The public URL proxies every path, so `/eve/` and `/.well-known/workflow/` reach Nitro with no
-extra config. Keep the project and `.eve/.workflow-data` under `/data` so runs survive
+extra config — but eve enforces the auth you declared: call it with `-u eve:$EVE_PASSWORD`.
+Keep the project and `.eve/.workflow-data` under `/data` so runs survive
 suspend/resume; declare a `bootstrap` that restarts `eve start` on every wake.
+
+Talk to the server (`$URL` from `/expose`):
+
+```bash
+curl -s -u eve:$EVE_PASSWORD -X POST "$URL/eve/v1/session" -H "Content-Type: application/json" -d '{"message":"hi"}'   # → { sessionId }
+curl -s -u eve:$EVE_PASSWORD "$URL/eve/v1/session/$SESSION/stream"                                                    # NDJSON; message.completed = reply
+curl -s -u eve:$EVE_PASSWORD -X POST "$URL/eve/v1/session/$SESSION" -H "Content-Type: application/json" -d '{"message":"go on"}'
+```
 
 Durable state: eve's default world stores runs on disk (`.eve/.workflow-data`). For state that
 outlives the box use `@easybits.cloud/eve-world` (section 3).
 
 ## 3. Durable state: `@easybits.cloud/eve-world`
 
-`npm i @easybits.cloud/eve-world` and set `experimental.workflow.world: "@easybits.cloud/eve-world"` in `agent.ts`. An `eve-nitro` box is born with `EASYBITS_DB_URL` (one DB per box, created on first use, no token). Outside EasyBits use `WORKFLOW_LIBSQL_URL`/`WORKFLOW_LIBSQL_AUTH_TOKEN`; no env → `world-local`. Not implemented: `events.createBatch`, `queueBatch`, `runs.cancelMany`, analytics.
+`npm i @easybits.cloud/eve-world` and set `experimental.workflow.world: "@easybits.cloud/eve-world"` in `defineAgent({...})` in `agent/agent.ts` (snippet above). An `eve-nitro` box created with `POST /sandboxes` is born with `EASYBITS_DB_URL` (one DB per box, created on first use, no token); a fork-from-snapshot box is not — pass the same value in `env`. Measured: runs AND chat sessions survive destroying the server (new box from snapshot answering 75 s later with the conversation intact). Outside EasyBits use `WORKFLOW_LIBSQL_URL`/`WORKFLOW_LIBSQL_AUTH_TOKEN`; no env → `world-local`. Not implemented: `events.createBatch`, `queueBatch`, `runs.cancelMany`, analytics.
 
 ## Rules
 
@@ -94,5 +130,5 @@ outlives the box use `@easybits.cloud/eve-world` (section 3).
 ## Verify
 
 `npx tsx -e 'import("@easybits.cloud/eve-sandbox").then(m=>console.log(Object.keys(m)))'` prints
-`easybits`; then `eve build` must log `easybits: snapshot … listo` on the first run and `reusado`
+`easybits`; then `eve start` (not `eve build`, which only compiles) must log `easybits: snapshot … listo` on the first run and `reusado`
 on the second.

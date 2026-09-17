@@ -36,11 +36,11 @@ export default defineSandbox({
 });
 ```
 
-## 2. `eve build`: your bootstrap becomes a snapshot
+## 2. `eve start`: your bootstrap becomes a snapshot
 
 ![A mold and the boxes cast from it](/blog/assets/blog-eve-easybits-snapshot.png)
 
-At build time eve calls `prewarm()`. We boot a `node` box, write your seed files, run your `bootstrap()` and freeze the result as a copy-on-write snapshot named `eve:<templateKey>:<hash>`. The next build finds it and rebuilds nothing: measured, 0.2 s versus ~11 s the first time.
+`eve build` only compiles (~10 s). It is on the first `eve start` that eve calls `prewarm()`: we boot a `node` box, write your seed files, run your `bootstrap()` and freeze the result as a copy-on-write snapshot named `eve:<templateKey>:<hash>` (log: `easybits: snapshot snap_… listo`). The next start finds it and rebuilds nothing (`reusado`): measured, ~3 s versus ~11 s the first time.
 
 When the first message arrives, `create()` **forks** that snapshot (~7 s). Between turns the box sleeps with a full-VM snapshot and wakes in ~1 s; eve reopens it by `sandboxId` with the disk exactly as it left it. `stop()` and `shutdown()` are suspend; `delete()` destroys. `run()` and `spawn()` execute in a login shell with stdout and stderr as streams, and `kill()` signals the whole process group.
 
@@ -59,17 +59,53 @@ Only the domains you authorize for that box, or none (`"deny-all"`). Change it l
 
 ## 4. The eve server fits in a box too
 
-Four calls: create the box, create the app inside it with `eve init` (or clone yours) and install both packages, start the server, expose the port. First the base URL and headers:
+Six steps: create the box, create the app inside it with `eve init` (or clone yours) and install the packages, pick a model, set auth, start the server, expose the port. First the base URL and headers:
 
 ```bash
 B=https://www.easybits.cloud/api/v2; H=(-H "Authorization: Bearer $EASYBITS_API_KEY" -H "Content-Type: application/json")
 SB=$(curl -s -X POST "$B/sandboxes" "${H[@]}" -d '{"template":"eve-nitro","timeoutSeconds":3600,"suspendOnIdle":true}' | jq -r .sandboxId)
-curl -s -X POST "$B/sandboxes/$SB/exec" "${H[@]}" -d '{"command":"cd /data && eve init app && cd app && pnpm add @easybits.cloud/eve-sandbox @easybits.cloud/eve-world && eve build","timeoutSeconds":600}'
-curl -s -X POST "$B/sandboxes/$SB/bg"   "${H[@]}" -d '{"command":"exec eve start","cwd":"/data/app","env":{"EASYBITS_API_KEY":"<key>"}}'
+curl -s -X POST "$B/sandboxes/$SB/exec" "${H[@]}" -d '{"command":"cd /data && eve init app && cd app && pnpm add @easybits.cloud/eve-sandbox @easybits.cloud/eve-world @ai-sdk/anthropic && eve build","timeoutSeconds":600}'
+```
+
+The `eve init` scaffold targets Vercel's AI Gateway (`model: "anthropic/claude-sonnet-5"` as a string) and without `AI_GATEWAY_API_KEY` it fails with *"AI Gateway received no credentials"*. Outside Vercel the model goes in as an object from any AI SDK provider, in `agent/agent.ts`:
+
+```ts
+import { defineAgent } from "eve";
+import { anthropic } from "@ai-sdk/anthropic";
+
+export default defineAgent({
+  model: anthropic("claude-sonnet-5"),   // reads ANTHROPIC_API_KEY
+  experimental: { workflow: { world: "@easybits.cloud/eve-world" } },
+});
+```
+
+And in production eve requires auth on its HTTP API: with the scaffold (`vercelOidc()`/`localDev()`/`placeholderAuth()`) the public URL answers `401 Authorization is required for this route`. Edit `agent/channels/eve.ts`:
+
+```ts
+import { eveChannel } from "eve/channels/eve";
+import { httpBasic, localDev } from "eve/channels/auth";
+
+export default eveChannel({
+  auth: [localDev(), httpBasic({ username: "eve", password: process.env.EVE_PASSWORD! })],
+});
+```
+
+Now start and expose:
+
+```bash
+curl -s -X POST "$B/sandboxes/$SB/bg"   "${H[@]}" -d '{"command":"exec eve start","cwd":"/data/app","env":{"EASYBITS_API_KEY":"<key>","ANTHROPIC_API_KEY":"<key>","EVE_PASSWORD":"<pass>","PORT":"3000"}}'
 curl -s -X POST "$B/sandboxes/$SB/expose" "${H[@]}" -d '{"port":3000}'
 ```
 
-`EASYBITS_DB_URL` is already in the box's environment; no need to pass it in `env`. The `eve-nitro` template ships Node 24, pnpm and the eve CLI; `/data` is persistent and the public URL proxies `/eve/` and `/.well-known/workflow/` with no configuration. The server runs there; every agent it serves gets its own microVM through the backend above.
+`EASYBITS_DB_URL` is already in the environment of a box created with `POST /sandboxes`; no need to pass it in `env`. The `eve-nitro` template ships Node 24, pnpm and the eve CLI; `/data` is persistent and the public URL proxies `/eve/` and `/.well-known/workflow/` with no configuration — but eve enforces the auth you declared, so every call goes with `-u eve:$EVE_PASSWORD`. The server runs there; every agent it serves gets its own microVM through the backend above.
+
+Talking to it is three calls: creating a session returns `{ sessionId }`, the stream is NDJSON of events (`message.completed` carries the reply) and the same id accepts further messages:
+
+```bash
+curl -s -u eve:$EVE_PASSWORD -X POST "$URL/eve/v1/session" -H "Content-Type: application/json" -d '{"message":"hi, what can you do?"}'
+curl -s -u eve:$EVE_PASSWORD "$URL/eve/v1/session/$SESSION/stream"
+curl -s -u eve:$EVE_PASSWORD -X POST "$URL/eve/v1/session/$SESSION" -H "Content-Type: application/json" -d '{"message":"go on"}'
+```
 
 ## 5. The run survives the machine
 
@@ -80,14 +116,12 @@ npm i @easybits.cloud/eve-world
 ```
 
 ```ts
-// agent.ts
-export default {
-  experimental: { workflow: { world: "@easybits.cloud/eve-world" } },
-};
+// agent/agent.ts — the same defineAgent from section 4
+experimental: { workflow: { world: "@easybits.cloud/eve-world" } },
 ```
 
-An `eve-nitro` box is born with `EASYBITS_DB_URL` already set: no token to paste. We measured it in production with an 8-step run: we destroyed the box halfway through step 2; a fresh box on the same database started, resumed at step 3 without repeating the earlier ones — 59 seconds after the first box died — and finished the run. It is a port of the official Postgres world to libSQL, on the same version line as eve.
+An `eve-nitro` box created with `POST /sandboxes` is born with `EASYBITS_DB_URL` already set: no token to paste (a box made by forking a snapshot does not get it: pass it in `env`, with the same value if you want to resume runs). We measured it in production with an 8-step run: we destroyed the box halfway through step 2; a fresh box on the same database started, resumed at step 3 without repeating the earlier ones — 59 seconds after the first box died — and finished the run. The chat session survives too: server destroyed at 21:05:07, another one from the snapshot answering at 21:06:22 with the whole conversation's memory. It is a port of the official Postgres world to libSQL, on the same version line as eve.
 
 ## Start today
 
-Install the package, change `agent/sandbox.ts` and run `eve build`. The product page is at [/eve](/eve), the reference at [/en/docs/eve.md](/en/docs/eve.md), and your own agent can set it up with `npx skills add https://www.easybits.cloud --skill easybits-eve`. The free plan includes one box.
+Install the package, change `agent/sandbox.ts` and run `eve build` then `eve start`. The product page is at [/eve](/eve), the reference at [/en/docs/eve.md](/en/docs/eve.md), and your own agent can set it up with `npx skills add https://www.easybits.cloud --skill easybits-eve`. The free plan includes one box.

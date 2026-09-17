@@ -29,7 +29,7 @@ export default defineSandbox({
 
 | eve | EasyBits |
 |---|---|
-| `prewarm(templateKey)` at build time | temporary box + seed files + `bootstrap()` → copy-on-write **snapshot** named `eve:<templateKey>`. Idempotent: an existing snapshot is reused. |
+| `prewarm(templateKey)` — eve calls it on `eve start`, not on `eve build` (which only compiles) | temporary box + seed files + `bootstrap()` → copy-on-write **snapshot** named `eve:<templateKey>`. Idempotent: the first start logs `easybits: snapshot … listo`, later ones `reusado`. |
 | `create()` | **fork** of that snapshot (boots in seconds). With `templateKey: null`, a fresh box from `template`. |
 | `create()` with persisted state | reattaches the same box (resumes it if it was suspended). |
 | `stop()` / `shutdown()` | **suspend** — Firecracker snapshot, resumes in ~1s, disk and memory intact. |
