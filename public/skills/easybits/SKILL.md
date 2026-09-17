@@ -1,6 +1,11 @@
 ---
 name: easybits
 description: Use EasyBits cloud (easybits.cloud) from a coding agent - run code in a Firecracker sandbox, search and read the web, store and serve files on a CDN, create SQL databases, produce PDF documents, and deploy an app to a public URL, through the MCP server, the REST API v2 or the typed SDK with the user's API key. Use when the user mentions EasyBits, Easybits, easybits.cloud, wants their agent to have a sandbox, web access, file storage, a database or hosting, or asks to deploy an app to EasyBits.
+license: MIT
+compatibility: Needs curl or any HTTP client, network access to https://www.easybits.cloud and an EasyBits API key
+metadata:
+  author: easybits
+  version: "1.1"
 ---
 
 # Use EasyBits from a coding agent
@@ -49,7 +54,9 @@ Do not load the MCP just to make one call: a `curl` is cheaper than a tool catal
 | "what tools does EasyBits have?" | `GET https://www.easybits.cloud/api/tools.json` (no auth) |
 | "how does X work in EasyBits?" | Read `https://www.easybits.cloud/docs/<section>.md` or `https://www.easybits.cloud/llms.txt` (index) |
 
-Read `references/api.md` for exact request/response shapes before calling.
+Read `references/api.md` for exact request/response shapes before calling. Task-specific skills
+from the same publisher go deeper: `easybits-sandbox` (boxes), `easybits-agent` (persistent
+agents you talk to), `easybits-mcp` (the MCP server), `easybits-docs` (reading the docs).
 
 ## Rules
 

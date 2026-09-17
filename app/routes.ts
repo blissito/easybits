@@ -44,6 +44,7 @@ export default [
   route("/mcp/apps", "routes/mcp-apps.tsx"),
   route("/mcp/apps/:appName", "routes/mcp-apps-demo.tsx"),
   // Cada sección de /docs en markdown crudo (agent-first). Declarada ANTES de /docs.
+  route("/docs.md", "routes/docs.$section.md.ts", { id: "docs-md-full" }),
   route("/docs/:section.md", "routes/docs.$section.md.ts"),
   route("/docs", "routes/docs.tsx"),
   // MCP de la documentación (JSON-RPC sin auth): search_docs / read_doc / list_docs / tools_catalog.
@@ -525,6 +526,10 @@ export default [
   route("/oauth/token", "routes/api/oauth/token.ts"),
 
   // Skills instalables: `npx skills add https://easybits.cloud` (RFC 8615). Alias agent-skills.
+  // RFC 9727 y SEP-2127: catálogo de APIs y tarjeta del MCP (Agent Readiness).
+  route("/.well-known/api-catalog", "routes/api/wellknown/api-catalog.ts"),
+  route("/.well-known/mcp-server-card", "routes/api/wellknown/mcp-server-card.ts"),
+  route("/.well-known/mcp/server-card.json", "routes/api/wellknown/mcp-server-card.ts", { id: "mcp-server-card-cf" }),
   route("/.well-known/skills/*", "routes/api/wellknown/skills.ts"),
   route("/.well-known/agent-skills/*", "routes/api/wellknown/skills.ts", { id: "agent-skills" }),
   route("/.well-known/*", "components/common/NoContent.tsx"),

@@ -1,7 +1,7 @@
 {
   "name": "@easybits.cloud/sdk",
   "version": "0.34.1",
-  "description": "Typed HTTP client for the EasyBits cloud for AI agents \u2014 sandboxes, web, files, SQL databases, documents and app hosting",
+  "description": "Typed HTTP client for the EasyBits cloud for AI agents — sandboxes, web, files, SQL databases, documents and app hosting",
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
@@ -14,7 +14,8 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "skills"
   ],
   "keywords": [
     "easybits",
@@ -26,7 +27,9 @@
     "agentic",
     "mcp",
     "ai-agents",
-    "webhooks"
+    "webhooks",
+    "agent-skills",
+    "skills"
   ],
   "repository": {
     "type": "git",
@@ -37,7 +40,8 @@
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build",
+    "prepack": "rm -rf skills && cp -R ../../public/skills skills && rm -f skills/*.tar.gz skills/index.json skills/index.legacy.json"
   },
   "publishConfig": {
     "access": "public"

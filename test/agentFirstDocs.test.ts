@@ -9,6 +9,10 @@ import { loader as mdLoader } from "../app/routes/docs.$section.md";
 import { DOCS_SECTION_ALIAS } from "../app/.server/docs/sectionAlias";
 import { handle, TOOLS } from "../app/.server/docs/docsMcp";
 import { VALID_SECTIONS } from "../app/.server/docs/reference";
+import { loader as catalogLoader } from "../app/routes/api/wellknown/api-catalog";
+import { loader as cardLoader } from "../app/routes/api/wellknown/mcp-server-card";
+import { markdownForRequest } from "../app/.server/docs/acceptMarkdown";
+import { execFileSync } from "node:child_process";
 
 const SKILLS_DIR = join(__dirname, "../public/skills");
 
@@ -28,6 +32,29 @@ describe("skills por well-known", () => {
     // Un `: ` dentro del valor hace que el parser YAML de Claude descarte la skill en silencio.
     expect(description).not.toMatch(/:\s/);
     expect(description).toMatch(/Use when/);
+    // agentskills.io: licencia, compatibilidad y metadata.version (el packer lo exige).
+    expect(fm).toMatch(/^license: /m);
+    expect(fm).toMatch(/^compatibility: /m);
+    expect(fm).toMatch(/^\s+version: "/m);
+    expect(md.split("\n").length).toBeLessThan(500);
+  });
+
+  it("el packer valida y produce un índice v0.2.0 con digest (se EJECUTA, no se lee)", () => {
+    const out = execFileSync("npx", ["tsx", "scripts/skills-pack.mts", "--write"], { cwd: join(__dirname, ".."), encoding: "utf8" });
+    expect(out).toMatch(/skills: \d+ ok/);
+    const idx = JSON.parse(readFileSync(join(SKILLS_DIR, "index.json"), "utf8"));
+    expect(idx.$schema).toBe("https://schemas.agentskills.io/discovery/0.2.0/schema.json");
+    for (const s of idx.skills) {
+      expect(s.digest).toMatch(/^sha256:[0-9a-f]{64}$/);
+      expect(["skill-md", "archive"]).toContain(s.type);
+      expect(s.url).toMatch(/^https:\/\/www\.easybits\.cloud\/skills\//);
+    }
+    // El digest del archive es el del tar servido: un tar no reproducible rompería `skills update`.
+    const { createHash } = require("node:crypto") as typeof import("node:crypto");
+    const eb = idx.skills.find((x: any) => x.name === "easybits");
+    expect(eb.type).toBe("archive");
+    const tar = readFileSync(join(SKILLS_DIR, "easybits.tar.gz"));
+    expect("sha256:" + createHash("sha256").update(tar).digest("hex")).toBe(eb.digest);
   });
 
   it("index.json lista el skill con sus archivos", () => {
@@ -40,17 +67,49 @@ describe("skills por well-known", () => {
   });
 
   it("el loader sirve index.json, cada archivo con su content-type, y 404 en lo que no existe", async () => {
-    const idx = skillsLoader({ params: { "*": "index.json" } } as any) as Response;
+    const req = (path: string) => ({ request: new Request(`https://www.easybits.cloud${path}`), params: { "*": path.split("/").slice(3).join("/") } }) as any;
+    const idx = skillsLoader(req("/.well-known/skills/index.json")) as Response;
     expect(idx.status).toBe(200);
-    expect((await idx.json()).skills.length).toBeGreaterThan(0);
-    const md = skillsLoader({ params: { "*": "easybits/SKILL.md" } } as any) as Response;
+    const legacy = await idx.json();
+    expect(legacy.skills.length).toBeGreaterThan(0);
+    expect(legacy.skills[0].files).toContain("SKILL.md"); // legacy = files[]
+    const md = skillsLoader(req("/.well-known/skills/easybits/SKILL.md")) as Response;
     expect(md.headers.get("Content-Type")).toMatch(/text\/markdown/);
     expect(await md.text()).toMatch(/^---\nname: easybits/);
-    expect((skillsLoader({ params: { "*": "nope/SKILL.md" } } as any) as Response).status).toBe(404);
+    expect((skillsLoader(req("/.well-known/skills/nope/SKILL.md")) as Response).status).toBe(404);
+    // El alias agent-skills sirve los mismos archivos.
+    expect((skillsLoader(req("/.well-known/agent-skills/easybits-docs/SKILL.md")) as Response).status).toBe(200);
+  });
+});
+
+describe("well-known de Agent Readiness", () => {
+  it("api-catalog es un linkset RFC 9727", async () => {
+    const res = catalogLoader();
+    expect(res.headers.get("Content-Type")).toMatch(/application\/linkset\+json; profile=/);
+    const body = await res.json();
+    expect(body.linkset[0].item[0]["service-desc"][0].href).toMatch(/tools\.json$/);
+  });
+  it("la tarjeta MCP apunta al endpoint del producto", async () => {
+    const card = await cardLoader().json();
+    expect(card.$schema).toMatch(/server-card\.schema\.json$/);
+    expect(card.remotes[0].url).toBe("https://www.easybits.cloud/api/mcp");
+  });
+  it("Accept: text/markdown en /docs devuelve markdown; sin Accept, nada", async () => {
+    const md = await markdownForRequest(new Request("https://www.easybits.cloud/docs", { headers: { accept: "text/markdown" } }));
+    expect(md?.headers.get("Content-Type")).toMatch(/text\/markdown/);
+    expect(md?.headers.get("Vary")).toBe("Accept");
+    expect(await markdownForRequest(new Request("https://www.easybits.cloud/docs", { headers: { accept: "text/html,*/*;q=0.8" } }))).toBeNull();
+    expect(await markdownForRequest(new Request("https://www.easybits.cloud/planes", { headers: { accept: "text/markdown" } }))).toBeNull();
   });
 });
 
 describe("/docs/<sección>.md", () => {
+  it("/docs.md es la referencia completa", async () => {
+    const res = await mdLoader({ params: {} } as any);
+    expect(res.status).toBe(200);
+    expect(await res.text()).toMatch(/^# EasyBits API Reference/);
+  });
+
   it.each(VALID_SECTIONS)("sirve %s como markdown", async (s) => {
     const res = await mdLoader({ params: { section: s } } as any);
     expect(res.status).toBe(200);

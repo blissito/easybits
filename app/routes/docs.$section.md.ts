@@ -7,18 +7,19 @@ import { resolveDocsSection } from "~/.server/docs/sectionAlias";
 // «Copiar markdown / Abrir en Claude» de /docs apunta aquí.
 
 export async function loader({ params }: Route.LoaderArgs) {
-  const key = resolveDocsSection(params.section ?? "");
+  const headers = {
+    "Content-Type": "text/markdown; charset=utf-8",
+    "Cache-Control": "public, max-age=3600",
+    "Access-Control-Allow-Origin": "*",
+  };
+  // /docs.md = toda la referencia (el gemelo markdown de la página completa).
+  if (!params.section) return new Response(await getDocsMarkdown(), { headers });
+  const key = resolveDocsSection(params.section);
   if (!key) {
     return new Response(
       `Unknown section "${params.section}".\n\nAvailable:\n${VALID_SECTIONS.map((s) => `- /docs/${s}.md`).join("\n")}\n`,
       { status: 404, headers: { "Content-Type": "text/plain; charset=utf-8" } }
     );
   }
-  return new Response(await getDocsMarkdown(key), {
-    headers: {
-      "Content-Type": "text/markdown; charset=utf-8",
-      "Cache-Control": "public, max-age=3600",
-      "Access-Control-Allow-Origin": "*",
-    },
-  });
+  return new Response(await getDocsMarkdown(key), { headers });
 }

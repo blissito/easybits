@@ -24,6 +24,13 @@ export const loader = async () => {
   return { toolCount: catalog.length, groupCounts };
 };
 
+// El gemelo markdown de esta página (/docs.md) y que la caché distinga por Accept:
+// con `Accept: text/markdown` entry.server contesta el markdown en esta misma URL.
+export const headers: Route.HeadersFunction = () => ({
+  Vary: "Accept",
+  Link: '<https://www.easybits.cloud/docs.md>; rel="alternate"; type="text/markdown"',
+});
+
 export const meta = ({ data }: Route.MetaArgs) => [
   ...getBasicMetaTags({
     title: "EasyBits API Docs — La nube para expertos IA",

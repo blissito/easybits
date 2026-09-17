@@ -3,7 +3,7 @@
 // Sólo `loader`: la lógica vive en ~/.server/docs/skillsWellKnown (un export extra aquí
 // mete ~/.server en el bundle del cliente y rompe el build).
 import type { Route } from "./+types/skills";
-import { skillsIndex, skillFile } from "~/.server/docs/skillsWellKnown";
+import { skillsIndex, skillFile, skillsIndexV2 } from "~/.server/docs/skillsWellKnown";
 
 const TYPES: Record<string, string> = {
   md: "text/markdown",
@@ -13,10 +13,16 @@ const TYPES: Record<string, string> = {
   txt: "text/plain",
 };
 
-export function loader({ params }: Route.LoaderArgs) {
+export function loader({ request, params }: Route.LoaderArgs) {
   const rest = (params["*"] ?? "").replace(/^\/+/, "");
   const cache = { "Cache-Control": "public, max-age=600", "Access-Control-Allow-Origin": "*" };
   if (rest === "index.json" || rest === "") {
+    // /.well-known/agent-skills → v0.2.0 con digest (si el prebuild lo generó);
+    // /.well-known/skills → legacy `files[]`, fallback del CLI de Vercel y de clientes viejos.
+    const v2 = new URL(request.url).pathname.startsWith("/.well-known/agent-skills");
+    if (v2 && skillsIndexV2) {
+      return new Response(skillsIndexV2, { headers: { ...cache, "Content-Type": "application/json; charset=utf-8" } });
+    }
     return Response.json({ skills: skillsIndex() }, { headers: cache });
   }
   const m = rest.match(/^([a-z0-9-]+)\/(.+)$/);

@@ -27,3 +27,10 @@ videos/*/renders
 videos/*/voces/*/*.mp3
 videos/*/assets/bgm/*.mp3
 videos/*/node_modules
+
+# Generado por scripts/skills-pack.mts en prebuild (índice v0.2.0 y tarballs)
+public/skills/index.json
+public/skills/index.legacy.json
+public/skills/*.tar.gz
+packages/mcp/skills/
+packages/sdk/skills/

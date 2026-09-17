@@ -9,6 +9,11 @@ import { ItemList } from "./ItemList";
 import { Invite } from "./Invite";
 import { Assets } from "./Assets";
 import type { Route } from "./+types/home";
+
+/** RFC 9727: la raíz anuncia dónde está el catálogo de APIs (Agent Readiness). */
+export const headers: Route.HeadersFunction = () => ({
+  Link: '</.well-known/api-catalog>; rel="api-catalog"',
+});
 import type { User } from "@prisma/client";
 import getBasicMetaTags from "~/utils/getBasicMetaTags";
 import { Steps } from "./Steps";

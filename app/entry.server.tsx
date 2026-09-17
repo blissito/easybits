@@ -7,6 +7,7 @@ import { isbot } from "isbot";
 import type { RenderToPipeableStreamOptions } from "react-dom/server";
 import { renderToPipeableStream } from "react-dom/server";
 import { handleSubdomainWebsite } from "~/.server/subdomainWebsite";
+import { markdownForRequest } from "~/.server/docs/acceptMarkdown";
 
 // Process-level safety net (covers BOTH `react-router dev` and prod `server.mjs`):
 // a single unhandled rejection — e.g. a Mongo "write conflict" from concurrent
@@ -48,6 +49,10 @@ export default async function handleRequest(
   // Intercept subdomain website requests before React rendering
   const subdomainResponse = await handleSubdomainWebsite(request);
   if (subdomainResponse) return subdomainResponse;
+
+  // `Accept: text/markdown` en /docs → el markdown en la misma URL (agent-first).
+  const md = await markdownForRequest(request);
+  if (md) return md;
 
   return new Promise((resolve, reject) => {
     let shellRendered = false;

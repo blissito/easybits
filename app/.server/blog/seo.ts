@@ -329,6 +329,8 @@ ${sitemapEntries.join("\n")}
   static generateRobotsTxt(): string {
     return `User-agent: *
 Allow: /
+# Content Signals (contentsignals.org): sí a búsqueda y a respuestas con RAG; no a entrenar.
+Content-Signal: search=yes, ai-input=yes, ai-train=no
 Disallow: /dash/
 Disallow: /api/
 Disallow: /oauth/
