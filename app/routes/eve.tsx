@@ -97,8 +97,9 @@ export default function Eve({ loaderData }: Route.ComponentProps) {
           ctaTo: "/blog/agentes-eve-en-easybits",
           priceLine: (
             <>
-              El plan gratuito incluye una caja. Los de pago suben las cajas concurrentes.
-              El servidor eve 24/7 es{" "}
+              Gratis: una máquina, suficiente para tu primer agente. Con un plan de pago tu
+              agente puede atender varias conversaciones a la vez, cada una en su máquina.
+              Si además quieres el servidor eve encendido las 24 horas, eso es{" "}
               <a className="underline text-brand-500" href="/hosting">
                 hosting
               </a>
