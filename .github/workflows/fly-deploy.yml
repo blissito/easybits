@@ -9,6 +9,26 @@ on:
   # recuperar de un deploy a medias o para medir el pipeline).
   workflow_dispatch:
 jobs:
+  # Vigilancia de desfase (typecheck, vitest, bloques generados, skills). Corre EN
+  # PARALELO y NO bloquea el deploy (decisión deliberada): un rojo se ve en Actions,
+  # no detiene prod. Para convertirlo en gate: `needs: verify` en deploy.
+  verify:
+    name: Verify (typecheck, tests, docs)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run check:docs
+      - run: npm run check:skills
+      - run: npx vitest run
+        env:
+          CI: "true"
+
   deploy:
     name: Deploy app
     runs-on: ubuntu-latest

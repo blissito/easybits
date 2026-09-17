@@ -387,9 +387,71 @@ await eb.sandboxes.snapshots.list();
 await eb.sandboxes.snapshots.delete(snap.snapshotId);
 ```
 
-Templates: `code-interpreter` (Python + Jupyter kernel + numpy/pandas/matplotlib),
-`ubuntu`, `node`, `bun`, and more. Use `eb.listTemplates()` for the catalog.
+### Sleep / wake (survive quiet periods)
+
+Without `suspendOnIdle`, the box is **destroyed** when `timeoutSeconds` (default
+300 s) elapses. For anything you will talk to later, sleep it instead: a
+suspended box is a Firecracker snapshot, resumes in ~1 s and keeps disk and memory.
+
+```ts
+// At creation
+const sbx = await eb.sandboxes.create({ template: "node", timeoutSeconds: 600, suspendOnIdle: true });
+
+// Or on an existing box (e.g. one you created without it)
+await sbx.setIdlePolicy({ suspendOnIdle: true, idleTtlSeconds: 600, hardTtlSeconds: 7 * 24 * 3600 });
+
+await sbx.suspend();   // sleep now; TTL is paused
+await sbx.resume();    // wake; the remaining lifetime is restored
+```
+
+### Templates
+
+Use `eb.listTemplates()` for the live catalog with required env. Kinds: `base`
+(run code), `agent` (ready-made agent), `service` (platform boxes started with
+`service_start`), `internal` (fleet workers created by the platform).
+
+<!-- generated:templates-en -->
+| Template | Kind | Description |
+|---|---|---|
+| `ubuntu` | base | Full Linux. Install packages, compile, run servers. |
+| `python` | base | Python runtime; each run-code is a fresh process. |
+| `node` | base | Node 22 runtime; each run-code is a fresh process. |
+| `bun` | base | Bun runtime. |
+| `dev-box` | base | Clean work box (git, curl, build-essential, Node 22); the recommended one for SSH. |
+| `code-interpreter` | base | Python + persistent Jupyter kernel (sandbox_run_cell): variables and charts survive between cells. |
+| `eve-nitro` | base | Self-hosted eve (Vercel) server: Node 24, pnpm, eve CLI; persistent /data, port 3000. |
+| `node-agent` | agent | Node + Claude Agent SDK pre-baked (agent_run). |
+| `claude-code` | agent | Claude Agent SDK loop; per-token billing. |
+| `goose` | agent | goose (AAIF), coding agent with native ACP. |
+| `ghostyclaw` | agent | Always-on Ghosty daemon (WhatsApp, Slack, Telegram) with Docker and admin-api. |
+| `ghosty-lite` | agent | Lightweight Rust ACP agent, multi-provider; your EasyBits key can be its brain. |
+| `open-ghosty` | agent | Ghosty on open models, SSE web chat. |
+| `lang-ghosty` | agent | Ghosty on LangChain, SSE web chat. |
+| `rust-ghosty` | agent | DeepSeek-first Ghosty (CodeWhale/Rust) with SSE web chat and WhatsApp. |
+| `ghosty-gc` | agent | Ghosty for teams (GTeams): threads, artifacts, collaborative editor. |
+| `ghosty-chat` | agent | Persistent Ghosty chat (Express + SSE). |
+| `cagent-ghosty` | agent | Ghosty on cagent (Docker), SSE web chat. |
+| `openclaw` | agent | OpenClaw, always-on personal AI. |
+| `chat-openai` | agent | Persistent Express+SSE chat on OpenAI; create it with agent_create. |
+| `chat-anthropic` | agent | Persistent Express+SSE chat on Anthropic; create it with agent_create. |
+| `ghosty-studio` | agent | Ghosty Studio: agent control plane inside a box. |
+| `desktop-ghosty` | agent | Linux desktop with Ghosty (noVNC). |
+| `computer-ghosty` | agent | Computer-use with XFCE desktop + public noVNC. |
+| `computer-ghosty-gemini` | agent | Computer-use on Gemini. |
+| `livekit-svc` | service | Video call room + HD recording (Studio). |
+| `whisper-svc` | service | whisper STT; part of the voice box. |
+| `kokoro-svc` | service | kokoro TTS; part of the voice box. |
+| `voice-svc` | service | Voice (STT + TTS) for the fleet; service_start('voice'). |
+| `render-svc` | service | Chromium for PDF/PNG/audits; service_start('render'). |
+| `collab-svc` | service | GTeams collaborative editor (Yjs). |
+| `hyperframes-svc` | service | HyperFrames video rendering. |
+| `claude-worker` | internal | Fleet worker (Claude). Created by the platform. |
+| `codex-worker` | internal | Fleet worker (Codex). Created by the platform. |
+<!-- /generated -->
+
 For one-off snippets without persistent state, use `sbx.runCode(code, { lang })`.
+Building agents with [eve](https://eve.dev)? `@easybits.cloud/eve-sandbox` turns
+these boxes into eve's `SandboxBackend`.
 
 ## Fleet Agents
 

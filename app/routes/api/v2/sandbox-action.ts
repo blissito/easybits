@@ -10,6 +10,8 @@ import {
   SandboxRuntimeBody,
   SandboxApplyPatchBody,
   SandboxIdleBody,
+  SANDBOX_ACTIONS,
+  type SandboxAction,
 } from "~/.server/sandbox/schemas";
 import {
   extendSandbox,
@@ -99,7 +101,12 @@ async function dispatch(
   action: string | undefined,
   body: any
 ): Promise<Response> {
-  switch (action) {
+  // Fuente única de acciones: SANDBOX_ACTIONS (schemas.ts). Un `case` nuevo sin
+  // añadirlo ahí no compila; OpenAPI se cruza contra la misma lista en el test.
+  if (!(SANDBOX_ACTIONS as readonly string[]).includes(action ?? "")) {
+    return Response.json({ error: `unknown action '${action}'` }, { status: 404 });
+  }
+  switch (action as SandboxAction) {
     case "extend":
       return Response.json(await extendSandbox(ctx, id, body.extendSeconds));
     case "suspend":
@@ -225,10 +232,9 @@ async function dispatch(
       if (typeof body.domain !== "string" || !body.domain.trim())
         return Response.json({ error: "domain required" }, { status: 400 });
       return Response.json(await verifySandboxDomain(ctx, body.domain));
-    default:
-      return Response.json(
-        { error: `unknown action '${action}'` },
-        { status: 404 }
-      );
+    default: {
+      const _exhaustive: never = action as never;
+      return _exhaustive;
+    }
   }
 }

@@ -55,6 +55,14 @@ easybits({
 });
 ```
 
+## Versions
+
+<!-- generated:packages -->
+- `@easybits.cloud/mcp@0.3.7`
+- `@easybits.cloud/sdk@0.34.4`
+- `@easybits.cloud/eve-sandbox@0.0.3`
+<!-- /generated -->
+
 ## Self-hosting eve on EasyBits
 
 The eve server itself can run in an EasyBits box (template `eve-nitro`: Node 24, pnpm, eve CLI), with `.eve/.workflow-data` on the persistent `/data` volume and a public HTTPS URL via `expose_port`. Each agent session then gets its own microVM through this backend.

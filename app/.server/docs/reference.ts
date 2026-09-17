@@ -2,6 +2,7 @@
 
 import { HOSTING_CATALOG, SELLABLE_TIERS } from "../../lib/hostingCatalog";
 import { WEBHOOK_EVENTS, WEBHOOK_EVENT_DOCS } from "../webhooks";
+import { templatesMarkdownTable } from "../sandbox/templateCatalog";
 
 // Lista de eventos de webhook, derivada de la fuente única (`webhooks.ts`). Escrita a
 // mano se quedó atrás: faltaban `workspace.*` y `broadcast.sent`.
@@ -699,6 +700,8 @@ Configure via MCP tool \`set_ai_key\` or dashboard. Supports ANTHROPIC and OPENA
 | \`machines.backups(id)\` | Backups diarios de datos (7 días, incluidos) |
 | \`machines.backup(id)\` | Toma un backup ahora |
 | \`sb.exec(cmd)\` | Corre un comando dentro de la caja |
+| \`sb.suspend()\` / \`sb.resume()\` | Dormir ahora (snapshot, pausa el TTL) / despertar |
+| \`sb.setIdlePolicy({ suspendOnIdle, idleTtlSeconds?, hardTtlSeconds? })\` | Siesta al vencer el TTL en una caja YA creada, en vez de destruirse |
 | \`sb.exposePort(port)\` | URL pública \`sb-<id>-<port>.sandboxes.easybits.cloud\` con TLS (HTTP + WebSocket \`wss://\`) |
 | \`sb.exposeRawPort(port, proto)\` | Forward TCP/UDP crudo; devuelve \`endpoint\` \`host:hostPort\` |
 | \`sb.enableSsh(keys)\` | SSH a la caja: inyecta llave + abre el 22; devuelve el comando \`ssh\` |
@@ -737,7 +740,9 @@ Si prefieres el control paso a paso (o ya tienes la caja armada), el camino larg
 MicroVMs Firecracker para correr agentes y código aislado. Las herramientas viven en el grupo MCP \`sandbox\` (el catálogo completo está en /api/tools.json).
 
 ### Templates
-\`code-interpreter\` (Python + kernel Jupyter persistente), \`python\` / \`node\` / \`bun\` (runtimes base), \`ubuntu\` (Linux completo), \`rust-ghosty\` (Ghosty DeepSeek-first + WhatsApp), \`claude-code\` (Claude Agent SDK loop), \`ghosty-lite\` (agente ACP ligero en Rust, multi-provider; ver Agentes) y \`goose\` (goose de la AAIF, ACP nativo), \`computer-ghosty\` (computer-use con escritorio), \`livekit-svc\` (sala de videollamada + grabación HD → ver sección Studio), \`ghostyclaw\` / \`openclaw\` (daemons always-on).
+Catálogo derivado del servidor (\`templates_list\` da el detalle con el env que pide cada uno). \`base\` = correr código; \`agente\` = agente listo; \`servicio\` = cajas de plataforma (se crean con \`service_start\`); \`interno\` = workers de flota que crea la plataforma.
+
+${templatesMarkdownTable("es")}
 
 ### Crear sandbox
 \`POST /sandboxes\`
@@ -761,6 +766,13 @@ es una llamada aparte sobre la caja ya creada — ver *Bootstrap al reanudar*.
 Para cualquier caja que aloje un agente al que le vas a escribir MÁS TARDE —un agente ACP, un
 bot— \`suspendOnIdle\` no es opcional: sin él la pierdes y su URL deja de servir, porque el
 sandboxId de la nueva es otro.
+
+### Siesta en una caja YA creada
+\`POST /sandboxes/:id/idle\`
+Body: \`{ suspendOnIdle, idleTtlSeconds?, hardTtlSeconds? }\`
+MCP: \`sandbox_set_idle({ sandboxId, suspendOnIdle, idleTtlSeconds?, hardTtlSeconds? })\` · SDK: \`sbx.setIdlePolicy({...})\`
+
+Para una caja que creaste sin \`suspendOnIdle\` (o que otro sistema creó por ti, como una sesión de eve): con \`suspendOnIdle: true\` el reaper la DUERME al vencer el TTL en vez de destruirla; \`idleTtlSeconds\` re-arma el reloj desde ahora y \`hardTtlSeconds\` es el plazo tras el cual se destruye aunque duerma. \`suspendOnIdle: false\` la devuelve al esquema efímero (409 si el TTL ya venció: primero \`extend\`).
 
 ### Ejecutar comando
 \`POST /sandboxes/:id/exec\`
@@ -1734,6 +1746,56 @@ const { file } = await eb.renderVideoProject(p.id); // → { fileId, url, render
 \`\`\`
 `,
 
+  eve: `## eve (Vercel) sobre EasyBits
+
+[eve](https://eve.dev) es el framework open-source de Vercel para agentes: un agente es un directorio (instrucciones, tools, canales, schedules) y cada sesión es un run durable del Workflow SDK. Cuando un agente necesita ejecutar código, eve le pide una caja a un **SandboxBackend**. \`@easybits.cloud/eve-sandbox\` es ese backend para EasyBits: cada sesión de agente corre en su propia microVM, en tu cuenta, cobrada con tu plan.
+
+### 1. Sandboxes para agentes eve
+
+\`\`\`bash
+npm i @easybits.cloud/eve-sandbox   # Node ≥ 24 (lo exige eve)
+\`\`\`
+
+\`\`\`ts
+// agent/sandbox.ts
+import { defineSandbox } from "eve/sandbox";
+import { easybits } from "@easybits.cloud/eve-sandbox";
+
+export default defineSandbox({
+  backend: easybits(),                 // lee EASYBITS_API_KEY
+  async bootstrap({ use }) {
+    const s = await use();
+    await s.run({ command: "npm i -g typescript" });
+  },
+});
+\`\`\`
+
+| eve | EasyBits |
+|---|---|
+| \`prewarm\` en build | caja temporal + seeds + \`bootstrap()\` → **snapshot** copy-on-write \`eve:<templateKey>:<hash>\`; se reusa en builds siguientes (0.2 s) |
+| \`create()\` | fork del snapshot (~7 s), o caja fresca del \`template\` si eve no manda template |
+| entre turnos | la caja sigue viva con siesta (\`idleTtlSeconds\` 600 → suspend, resume ~1 s) y se reattacha por \`sandboxId\` |
+| \`stop()\` / \`shutdown()\` · \`delete()\` | suspend · destroy |
+| \`run\` / \`spawn\` | \`bash -lc\` por \`/bg\`; stdout/stderr en streams, \`kill()\` señala al grupo |
+| archivos | \`/files/*\`; rutas relativas ancladas en \`/workspace\`, \`$HOME/…\` se resuelve dentro de la caja |
+
+Opciones: \`easybits({ apiKey, baseUrl, template: "node", timeoutSeconds, workingDirectory, runTimeoutSeconds, idleTtlSeconds, hardTtlSeconds, metadata })\`. \`setNetworkPolicy\` sólo acepta \`"allow-all"\` (el egress lo fija el firewall del fierro). La llave necesita scope WRITE (crear, snapshot, fork) y DELETE si eve debe borrar snapshots.
+
+### 2. El servidor eve dentro de una caja
+
+Template \`eve-nitro\`: Node 24, pnpm, \`eve\` CLI, git/curl/tar; \`/data\` es un volumen persistente de 4 GB y el directorio de trabajo; puerto 3000.
+
+\`\`\`bash
+SB=$(curl -s -X POST "$B/sandboxes" "\${H[@]}" -d '{"template":"eve-nitro","timeoutSeconds":3600,"suspendOnIdle":true,"hardTtlSeconds":2592000}' | jq -r .sandboxId)
+curl -s -X POST "$B/sandboxes/$SB/exec" "\${H[@]}" -d '{"command":"cd /data && git clone <repo> app && cd app && pnpm i && eve build","timeoutSeconds":600}'
+curl -s -X POST "$B/sandboxes/$SB/bg"   "\${H[@]}" -d '{"command":"exec eve start","cwd":"/data/app","env":{"EASYBITS_API_KEY":"<key>"}}'
+curl -s -X POST "$B/sandboxes/$SB/expose" "\${H[@]}" -d '{"port":3000}'   # → { url }
+\`\`\`
+
+La URL pública proxea todo el path: \`/eve/\` y \`/.well-known/workflow/\` llegan a Nitro sin configurar nada. Proyecto y \`.eve/.workflow-data\` van bajo \`/data\` para sobrevivir suspend/resume; declara un \`bootstrap\` que relance \`eve start\` en cada despertar. El estado durable de eve vive por default en disco; para que sobreviva a la caja usa \`@workflow/world-postgres\` (Postgres normal, en la misma caja o en otra) de la misma línea \`@workflow/*\` que tu eve.
+
+MCP: \`sandbox_create({ template: "eve-nitro", … })\` · skill: \`npx skills add https://www.easybits.cloud --skill easybits-eve\`.
+`,
   errors: `## Error Codes
 
 | Status | Meaning |
@@ -1904,7 +1966,7 @@ This guide defines the mandatory layout rules for document pages. Follow these r
 
   "presentation-design": `## Presentation Slide Design Guide
 
-This guide defines the mandatory layout rules for presentation slides. Follow these rules when using set_slide_html, add_slide, or create_presentation with custom HTML.
+This guide defines the mandatory layout rules for presentation slides. Follow these rules when using set_page_html, add_page, or create_document (format slide-16-9) with custom HTML.
 
 ### Slide Skeleton (960×540px, 16:9)
 
@@ -2097,12 +2159,14 @@ For charts/funnels/flows, use inline SVG inside a \`.diagram\` container:
 
 ### Workflow
 
-1. \`create_presentation({ name, prompt })\` — create presentation
-2. \`add_slide({ presentationId, html })\` — add slides one by one following this guide
-3. \`get_slide_html({ presentationId, slideId })\` — read a slide's HTML
-4. \`set_slide_html({ presentationId, slideId, html })\` — edit a slide's HTML
-5. \`deploy_presentation({ presentationId })\` — publish to www.easybits.cloud/s/{slug}/
-6. \`get_presentation_pdf({ presentationId })\` — export as PDF
+Presentations are documents with the \`slide-16-9\` format (1920×1080); there is no separate presentation tool family.
+
+1. \`create_document({ name, format: { preset: "slide-16-9" } })\` — create the deck
+2. \`add_page({ documentId, html })\` — add slides one by one following this guide
+3. \`get_page_html({ documentId, sectionId })\` — read a slide's HTML
+4. \`set_page_html({ documentId, sectionId, html })\` — edit a slide's HTML
+5. \`deploy_document({ documentId })\` — publish to www.easybits.cloud/s/{slug}/
+6. \`get_document_pdf({ documentId })\` — export as PDF
 `,
 
   // Generada del servidor MCP real (ver toolCatalog.ts). Antes era una tabla a mano
@@ -2258,7 +2322,7 @@ export type DocsLocale = "es" | "en";
 
 // Secciones con traducción. Las generadas (tool-groups, all-mcp-tools) se reusan en EN:
 // los nombres de tools son el contrato. Cualquier otra cae al ES con un aviso.
-export const EN_SECTION_KEYS = ["about", "quickstart", "web", "agents", "hosting", "databases", "files", "errors", "tool-groups"] as const;
+export const EN_SECTION_KEYS = ["about", "quickstart", "web", "agents", "eve", "hosting", "databases", "files", "errors", "tool-groups"] as const;
 
 const HEADER_EN = `# EasyBits API Reference
 

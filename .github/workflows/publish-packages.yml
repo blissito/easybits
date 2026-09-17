@@ -82,6 +82,22 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
+      # Node 24: eve lo exige en `engines` y npm lo respeta al instalar devDependencies.
+      - name: Publish eve-sandbox
+        if: ${{ !inputs.dry_run }}
+        working-directory: packages/eve-sandbox
+        run: |
+          npm ci --engine-strict=false
+          NAME=$(node -p "require('./package.json').name")
+          VERSION=$(node -p "require('./package.json').version")
+          if npm view "$NAME@$VERSION" version >/dev/null 2>&1; then
+            echo "$NAME@$VERSION ya está publicado — se salta."
+          else
+            npm publish
+          fi
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
       - name: Publish CLI
         if: ${{ !inputs.dry_run }}
         working-directory: cli

@@ -16,6 +16,7 @@ test-results
 scripts
 # El packer de skills corre en prebuild dentro de la imagen (index v0.2.0 + tar.gz).
 !scripts/skills-pack.mts
+!scripts/docs-sync.mts
 stripe-onboarding-visible.png
 *.tsbuildinfo
 *.log

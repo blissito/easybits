@@ -5,9 +5,11 @@
   "scripts": {
     "postinstall": "patch-package",
     "dev": "react-router dev",
-    "prebuild": "npx tsx scripts/skills-pack.mts --write",
+    "prebuild": "npx tsx scripts/docs-sync.mts --write && npx tsx scripts/skills-pack.mts --write",
     "build": "react-router build",
     "check:skills": "npx tsx scripts/skills-pack.mts",
+    "check:docs": "npx tsx scripts/docs-sync.mts",
+    "docs:sync": "npx tsx scripts/docs-sync.mts --write",
     "skills:pack": "npx tsx scripts/skills-pack.mts --write",
     "skills:publish": "npm run check:skills && git subtree push --prefix public/skills git@github.com:blissito/easybits-skills.git main",
     "start": "cross-env NODE_ENV=production node server.mjs ./build/server/index.js",

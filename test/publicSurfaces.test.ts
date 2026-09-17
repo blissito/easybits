@@ -113,6 +113,7 @@ describe("posicionamiento", () => {
     join(process.cwd(), "README.md"),
     join(process.cwd(), "packages/sdk/README.md"),
     join(process.cwd(), "packages/mcp/README.md"),
+    join(process.cwd(), "packages/eve-sandbox/README.md"),
     join(process.cwd(), "packages/sdk/package.json"),
     join(process.cwd(), "packages/mcp/package.json"),
   ];

@@ -2,8 +2,9 @@
 // las escriben reference.en.core.ts y reference.en.agents-hosting.ts; aquí sólo se indexan.
 // `hosting` interpola el catálogo de tiers igual que el ES (misma fuente única).
 import { EN_ABOUT, EN_QUICKSTART, EN_FILES, EN_WEB, EN_DATABASES, EN_ERRORS } from "./reference.en.core";
-import { EN_AGENTS, EN_HOSTING } from "./reference.en.agents-hosting";
+import { EN_AGENTS, EN_HOSTING, EN_EVE } from "./reference.en.agents-hosting";
 import { HOSTING_TIERS_MD } from "./reference";
+import { templatesMarkdownTable } from "../sandbox/templateCatalog";
 
 export const SECTIONS_EN: Record<string, string> = {
   about: EN_ABOUT,
@@ -12,6 +13,7 @@ export const SECTIONS_EN: Record<string, string> = {
   web: EN_WEB,
   databases: EN_DATABASES,
   errors: EN_ERRORS,
-  agents: EN_AGENTS,
+  agents: EN_AGENTS.replace("__TEMPLATES_MD_EN__", templatesMarkdownTable("en")),
   hosting: EN_HOSTING.replace("__HOSTING_TIERS_MD__", HOSTING_TIERS_MD),
+  eve: EN_EVE,
 };

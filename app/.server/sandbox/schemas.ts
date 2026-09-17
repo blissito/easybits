@@ -22,6 +22,18 @@ export const SANDBOX_TEMPLATES = [
 
 export type SandboxTemplate = (typeof SANDBOX_TEMPLATES)[number];
 
+// Acciones de POST /api/v2/sandboxes/:id/:action. Fuente única: el switch de
+// sandbox-action.ts se tipa contra esto y test/docsDrift exige que el enum
+// `{action}` de public/openapi.yaml sea idéntico.
+export const SANDBOX_ACTIONS = [
+  "extend", "suspend", "resume", "idle", "bootstrap", "snapshot", "fork",
+  "exec", "run-code", "run-cell", "kernel-restart", "logs", "runtime", "apply-patch",
+  "expose", "expose-raw", "unexpose-raw",
+  "ssh-enable", "ssh-disable", "ssh-ticket",
+  "domain-add", "domain-remove", "domain-list", "domain-verify",
+] as const;
+export type SandboxAction = (typeof SANDBOX_ACTIONS)[number];
+
 export const SandboxCreateBody = z.object({
   template: z.enum(SANDBOX_TEMPLATES),
   timeoutSeconds: z.number().int().min(30).max(MAX_SANDBOX_TTL_SECONDS).optional(),

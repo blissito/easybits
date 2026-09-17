@@ -328,15 +328,47 @@ paths:
         required: true
         schema:
           type: string
-          enum: [extend, suspend, resume, snapshot, fork, expose, bootstrap]
+          # Derivado de SANDBOX_ACTIONS (app/.server/sandbox/schemas.ts) por scripts/docs-sync.mts.
+          enum:
+          # generated:actions-yaml
+          - extend
+          - suspend
+          - resume
+          - idle
+          - bootstrap
+          - snapshot
+          - fork
+          - exec
+          - run-code
+          - run-cell
+          - kernel-restart
+          - logs
+          - runtime
+          - apply-patch
+          - expose
+          - expose-raw
+          - unexpose-raw
+          - ssh-enable
+          - ssh-disable
+          - ssh-ticket
+          - domain-add
+          - domain-remove
+          - domain-list
+          - domain-verify
+          # /generated
     post:
       tags: [Sandboxes]
       operationId: sandboxAction
       summary: Acción sobre la caja
       description: |
         `extend` `{extendSeconds?}` · `suspend` (snapshot, pausa el TTL) · `resume` ·
+        `idle` `{suspendOnIdle, idleTtlSeconds?, hardTtlSeconds?}` (siesta en caja YA creada: al
+        vencer el TTL se suspende en vez de destruirse) ·
         `snapshot` `{name?}` · `fork` `{count?, name?, metadata?, timeoutSeconds?}` ·
-        `expose` `{port}` (URL pública HTTPS/WSS) · `bootstrap` `{script, mode?, timeoutSeconds?}`
+        `expose` `{port}` (URL pública HTTPS/WSS) · `expose-raw`/`unexpose-raw` `{port, protocol?}` (TCP/UDP crudo) ·
+        `run-cell` `{code, lang?}` (kernel Jupyter persistente, template code-interpreter) · `kernel-restart` ·
+        `logs` · `runtime` · `apply-patch` `{patch}` · `ssh-enable`/`ssh-disable`/`ssh-ticket` ·
+        `domain-add`/`domain-remove`/`domain-list`/`domain-verify` `{domain, port?}` · `bootstrap` `{script, mode?, timeoutSeconds?}`
         (script que el HOST corre en cada despertar; `script: ""` lo apaga; nunca metas
         credenciales, viaja en el metadata).
       requestBody:
@@ -355,6 +387,14 @@ paths:
                 port: { type: integer }
                 script: { type: string }
                 mode: { type: string, enum: [async, blocking] }
+                suspendOnIdle: { type: boolean, description: "`idle`: dormir al vencer el TTL en vez de destruir." }
+                idleTtlSeconds: { type: integer, minimum: 60, description: "`idle`: re-arma el reloj de inactividad desde ahora. Obligatorio con suspendOnIdle=true." }
+                hardTtlSeconds: { type: integer, minimum: 60, description: "`idle`: plazo tras el cual se destruye aunque duerma." }
+                protocol: { type: string, enum: [tcp, udp], description: "`expose-raw` / `unexpose-raw`." }
+                domain: { type: string, description: "`domain-add` / `domain-remove` / `domain-verify`." }
+                lang: { type: string, enum: [python, node, bash], description: "`run-cell` / `run-code`." }
+                code: { type: string, description: "`run-cell`." }
+                patch: { type: string, description: "`apply-patch`: diff unificado." }
       responses:
         "200":
           description: Resultado de la acción.
@@ -1965,7 +2005,44 @@ components:
       properties:
         template:
           type: string
-          description: "`ubuntu`, `python`, `node`, `bun`, `code-interpreter`, `claude-code`, `ghosty-lite`, `goose`, …"
+          # Derivado de SANDBOX_TEMPLATES por scripts/docs-sync.mts (npm run docs:sync).
+          enum:
+          # generated:templates-yaml
+          - ubuntu
+          - python
+          - node
+          - bun
+          - dev-box
+          - code-interpreter
+          - eve-nitro
+          - node-agent
+          - claude-code
+          - goose
+          - ghostyclaw
+          - ghosty-lite
+          - open-ghosty
+          - lang-ghosty
+          - rust-ghosty
+          - ghosty-gc
+          - ghosty-chat
+          - cagent-ghosty
+          - openclaw
+          - chat-openai
+          - chat-anthropic
+          - ghosty-studio
+          - desktop-ghosty
+          - computer-ghosty
+          - computer-ghosty-gemini
+          - livekit-svc
+          - whisper-svc
+          - kokoro-svc
+          - voice-svc
+          - render-svc
+          - collab-svc
+          - hyperframes-svc
+          - claude-worker
+          - codex-worker
+          # /generated
         timeoutSeconds:
           type: integer
           minimum: 30

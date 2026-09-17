@@ -70,8 +70,17 @@ describe("skills por well-known", () => {
     const req = (path: string) => ({ request: new Request(`https://www.easybits.cloud${path}`), params: { "*": path.split("/").slice(3).join("/") } }) as any;
     const idx = skillsLoader(req("/.well-known/skills/index.json")) as Response;
     expect(idx.status).toBe(200);
-    const legacy = await idx.json();
-    expect(legacy.skills.length).toBeGreaterThan(0);
+    expect(idx.headers.get("Cache-Control")).toBe("public, max-age=60");
+    const body = await idx.json();
+    expect(body.skills.length).toBeGreaterThan(0);
+    // Con el índice generado (prebuild) es v0.2.0 con digest en AMBAS rutas; sin él, legacy.
+    if (body.$schema) {
+      expect(body.$schema).toBe("https://schemas.agentskills.io/discovery/0.2.0/schema.json");
+      expect(body.skills[0].digest).toMatch(/^sha256:[a-f0-9]{64}$/);
+    } else {
+      expect(body.skills[0].files).toContain("SKILL.md");
+    }
+    const legacy = await (skillsLoader(req("/.well-known/skills/index.legacy.json")) as Response).json();
     expect(legacy.skills[0].files).toContain("SKILL.md"); // legacy = files[]
     const md = skillsLoader(req("/.well-known/skills/easybits/SKILL.md")) as Response;
     expect(md.headers.get("Content-Type")).toMatch(/text\/markdown/);

@@ -21,7 +21,16 @@ export const loader = async () => {
     if (t.group) acc[t.group] = (acc[t.group] ?? 0) + 1;
     return acc;
   }, {});
-  return { toolCount: catalog.length, groupCounts };
+  // Grupos y templates vienen del servidor: la página nunca escribe listas ni conteos a mano.
+  const { TOOL_GROUPS } = await import("~/.server/mcp/toolGroups");
+  const { TEMPLATE_CATALOG, KIND_LABEL, publicTemplates } = await import("~/.server/sandbox/templateCatalog");
+  const groups = TOOL_GROUPS.map((g) => ({ key: g.key, count: g.key === "all" ? catalog.length : g.toolCount ?? null, description: g.description }));
+  const templates = publicTemplates(["base", "agent", "service"]).map((t) => ({
+    name: t,
+    kind: KIND_LABEL[TEMPLATE_CATALOG[t].kind].es,
+    summary: TEMPLATE_CATALOG[t].summary,
+  }));
+  return { toolCount: catalog.length, groupCounts, groups, templates };
 };
 
 // El gemelo markdown de esta página (/docs.md) y que la caché distinga por Accept:
@@ -64,6 +73,7 @@ const SECTIONS = [
   { id: "ghosty-lite", label: "Ghosty Lite" },
   { id: "flota", label: "Flota" },
   { id: "agentes-en-tu-app", label: "Agentes en tu app" },
+  { id: "eve", label: "eve (Vercel)" },
   { id: "hosting", label: "Sandboxes permanentes" },
   { id: "databases", label: "Bases de datos" },
   { id: "secrets", label: "Secretos" },
@@ -78,7 +88,7 @@ const SECTIONS = [
 const NEW_SECTIONS = new Set<string>(["agentes-en-tu-app", "ghosty-lite", "flota", "video-projects", "calls", "secrets", "images", "web"]);
 
 export default function DocsPage({ loaderData }: Route.ComponentProps) {
-  const { toolCount, groupCounts } = loaderData;
+  const { toolCount, groupCounts, groups, templates } = loaderData;
   const location = useLocation();
 
   // Estado inicial DETERMINISTA (igual en server y cliente) para no causar un
@@ -1833,41 +1843,13 @@ console.log(website.url); // https://my-docs.easybits.cloud`}
                   </tr>
                 </thead>
                 <tbody>
-                  <tr className="border-t border-gray-200">
-                    <td className="px-4 py-2 font-mono text-xs font-bold">code-interpreter</td>
-                    <td className="px-4 py-2"><span className="text-xs bg-green-100 px-2 py-0.5 rounded">sandbox</span></td>
-                    <td className="px-4 py-2 text-xs text-gray-600">Python con kernel Jupyter persistente. Variables, imports y gráficas sobreviven entre celdas</td>
-                  </tr>
-                  <tr className="border-t border-gray-200 bg-gray-50">
-                    <td className="px-4 py-2 font-mono text-xs font-bold">python / node / bun</td>
-                    <td className="px-4 py-2"><span className="text-xs bg-green-100 px-2 py-0.5 rounded">sandbox</span></td>
-                    <td className="px-4 py-2 text-xs text-gray-600">Runtimes base. Cada <code className="bg-gray-100 px-1 rounded">sandbox_run_code</code> ejecuta un proceso fresco</td>
-                  </tr>
-                  <tr className="border-t border-gray-200">
-                    <td className="px-4 py-2 font-mono text-xs font-bold">ubuntu</td>
-                    <td className="px-4 py-2"><span className="text-xs bg-green-100 px-2 py-0.5 rounded">sandbox</span></td>
-                    <td className="px-4 py-2 text-xs text-gray-600">Linux completo. Ideal para instalar paquetes, compilar, o correr servidores</td>
-                  </tr>
-                  <tr className="border-t border-gray-200 bg-gray-50">
-                    <td className="px-4 py-2 font-mono text-xs font-bold">rust-ghosty</td>
-                    <td className="px-4 py-2"><span className="text-xs bg-purple-100 px-2 py-0.5 rounded">agente</span></td>
-                    <td className="px-4 py-2 text-xs text-gray-600">Ghosty: cerebro CodeWhale/Rust DeepSeek-first con canales web SSE y WhatsApp</td>
-                  </tr>
-                  <tr className="border-t border-gray-200">
-                    <td className="px-4 py-2 font-mono text-xs font-bold">claude-code</td>
-                    <td className="px-4 py-2"><span className="text-xs bg-purple-100 px-2 py-0.5 rounded">agente</span></td>
-                    <td className="px-4 py-2 text-xs text-gray-600">Claude Agent SDK loop. Modelo Sonnet 4.6, billing por token</td>
-                  </tr>
-                  <tr className="border-t border-gray-200 bg-gray-50">
-                    <td className="px-4 py-2 font-mono text-xs font-bold">computer-ghosty</td>
-                    <td className="px-4 py-2"><span className="text-xs bg-purple-100 px-2 py-0.5 rounded">agente</span></td>
-                    <td className="px-4 py-2 text-xs text-gray-600">Computer-use con escritorio Linux XFCE + terminal noVNC público</td>
-                  </tr>
-                  <tr className="border-t border-gray-200">
-                    <td className="px-4 py-2 font-mono text-xs font-bold">ghostyclaw / openclaw</td>
-                    <td className="px-4 py-2"><span className="text-xs bg-purple-100 px-2 py-0.5 rounded">agente</span></td>
-                    <td className="px-4 py-2 text-xs text-gray-600">Daemons always-on para WhatsApp, Slack, Telegram</td>
-                  </tr>
+                  {templates.map((t, i) => (
+                    <tr key={t.name} className={i % 2 ? "border-t border-gray-200 bg-gray-50" : "border-t border-gray-200"}>
+                      <td className="px-4 py-2 font-mono text-xs font-bold">{t.name}</td>
+                      <td className="px-4 py-2"><span className={`text-xs px-2 py-0.5 rounded ${t.kind === "agente" ? "bg-purple-100" : t.kind === "servicio" ? "bg-amber-100" : "bg-green-100"}`}>{t.kind}</span></td>
+                      <td className="px-4 py-2 text-xs text-gray-600">{t.summary}</td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
@@ -2287,6 +2269,7 @@ sandbox_git_log({ sandboxId, dir, limit?, cursor? })` },
                 ["sandbox_extend", "sandboxId, extendSeconds", "Extender TTL del sandbox"],
                 ["sandbox_suspend", "sandboxId", "Snapshot a disco y liberar CPU (pausa el TTL)"],
                 ["sandbox_resume", "sandboxId", "Restaurar desde snapshot (restaura el TTL restante)"],
+                ["sandbox_set_idle", "sandboxId, suspendOnIdle, idleTtlSeconds", "Siesta en una caja YA creada: al vencer el TTL se suspende en vez de destruirse"],
                 ["sandbox_exec", "sandboxId, command", "Ejecutar comando (sync, 60s por defecto, tope 600s)"],
                 ["sandbox_exec_background", "sandboxId, command", "Ejecutar comando en background"],
                 ["sandbox_exec_list", "sandboxId", "Listar procesos en background (recupera un execId perdido)"],
@@ -3128,6 +3111,26 @@ await cfg({ action: "set-prompt", groupId: "mi-app", systemPrompt: "Aquí hablas
           </section>
 
           {/* Sandboxes permanentes (hosting) */}
+          <section id="eve" className="mb-16">
+            <h2 className="text-2xl font-bold mb-4">eve (Vercel) sobre EasyBits</h2>
+            <p className="text-gray-600 mb-4 text-sm">
+              <a href="https://eve.dev" className="underline">eve</a> es el framework open-source de Vercel para agentes: un agente es un directorio y cada sesión es un run durable. Cuando un agente necesita ejecutar código, eve le pide una caja a un <strong>SandboxBackend</strong>. <code className="bg-gray-100 px-1 rounded">@easybits.cloud/eve-sandbox</code> es ese backend: cada sesión de agente corre en su propia microVM, en tu cuenta. Requiere Node ≥ 24.
+            </p>
+            <CodeExample title="agent/sandbox.ts" code={`import { defineSandbox } from "eve/sandbox";
+import { easybits } from "@easybits.cloud/eve-sandbox";
+
+export default defineSandbox({
+  backend: easybits(),                 // lee EASYBITS_API_KEY
+  async bootstrap({ use }) {
+    const s = await use();
+    await s.run({ command: "npm i -g typescript" });
+  },
+});`} />
+            <p className="text-gray-600 mb-4 text-sm">
+              <code className="bg-gray-100 px-1 rounded">prewarm</code> se convierte en un snapshot copy-on-write (<code className="bg-gray-100 px-1 rounded">eve:&lt;templateKey&gt;</code>) que se reusa en cada build; cada sesión es un fork de ese snapshot (~7 s) que entre turnos duerme con <code className="bg-gray-100 px-1 rounded">sandbox_set_idle</code> y despierta en ~1 s. Para hospedar el <strong>servidor</strong> eve usa el template <code className="bg-gray-100 px-1 rounded">eve-nitro</code> (Node 24, pnpm, eve CLI, <code className="bg-gray-100 px-1 rounded">/data</code> persistente, puerto 3000) y expón el 3000. Guía completa: <a href="/docs/eve.md" className="underline">/docs/eve.md</a> · skill <code className="bg-gray-100 px-1 rounded">easybits-eve</code>.
+            </p>
+          </section>
+
           <section id="hosting" className="mb-16">
             <h2 className="text-2xl font-bold mb-4">Sandboxes permanentes</h2>
             <p className="text-gray-600 mb-4 text-sm">
@@ -3864,21 +3867,10 @@ console.log(\`\${stats.storage.usedGB}/\${stats.storage.maxGB} GB\`);`}
                   </tr>
                 </thead>
                 <tbody>
-                  {[
-                    ["core", "12", "Archivos, DB, documentos, cotizaciones, estadísticas (default)"],
-                    ["sandbox", "22", "MicroVMs Firecracker: crear, ejecutar, exponer puertos, agentes persistentes y one-shot"],
-                    ["fleet", "3", "Agentes de la flota: listar, leer config y aplicar acciones de /capabilities"],
-                    ["files", "~37", "Todas las ops de archivos: bulk, sharing, permisos, webhooks, imágenes, AI keys"],
-                    ["docs", "~33", "Documentos: generación AI, refine, screenshots, structured docs"],
-                    ["sites", "~8", "Sitios web: CRUD, upload, deploy"],
-                    ["brand", "~8", "Brand kits, plantillas, temas"],
-                    ["payments", "2", "Links de pago con MercadoPago (BYO): create_payment_link, list_payment_links"],
-                    ["email", "6", "Email transaccional + contactos + broadcasts (send_email, add_contact, create_broadcast…)"],
-                    ["all", "~104", "Todo (incluye slides y agentes)"],
-                  ].map(([group, count, desc]) => (
+                  {groups.map(({ key: group, count, description: desc }) => (
                     <tr key={group} className="border-t border-gray-200">
                       <td className="px-4 py-2 font-mono font-bold">{group}</td>
-                      <td className="px-4 py-2">{count}</td>
+                      <td className="px-4 py-2">{count ?? "—"}</td>
                       <td className="px-4 py-2 text-gray-600">{desc}</td>
                     </tr>
                   ))}

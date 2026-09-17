@@ -6,6 +6,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const calls: Array<{ method: string; path: string; body?: any }> = [];
 vi.mock("~/.server/core/sandboxOperations", () => ({
+  // Las rutas envuelven loader/action para mapear errores del host; aquí es identidad.
+  withHostErrors: (fn: any) => fn,
   execBackground: vi.fn(async (_ctx: any, id: string, params: any) => {
     calls.push({ method: "start", path: id, body: params });
     return { execId: "bg_abc", status: "running" };

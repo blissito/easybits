@@ -12,7 +12,8 @@ describe("sandbox schemas (fuente única de validación REST)", () => {
     expect(SandboxCreateBody.safeParse({ template: "windows" }).success).toBe(false);
     const ok = SandboxCreateBody.safeParse({ template: "python", timeoutSeconds: 300 });
     expect(ok.success).toBe(true);
-    // Regresión: los 17 templates canónicos (incl. variantes ghosty) deben pasar.
+    // Regresión: todo SANDBOX_TEMPLATES (incl. variantes ghosty) debe pasar; el catálogo
+    // completo se cruza en test/docsDrift.test.ts.
     expect(SandboxCreateBody.safeParse({ template: "ghosty-lite" }).success).toBe(true);
     expect(SandboxCreateBody.safeParse({ template: "cagent-ghosty" }).success).toBe(true);
   });

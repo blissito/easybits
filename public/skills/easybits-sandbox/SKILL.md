@@ -5,7 +5,7 @@ license: MIT
 compatibility: Needs curl or any HTTP client, network access to https://www.easybits.cloud and an EasyBits API key
 metadata:
   author: easybits
-  version: "1.0"
+  version: "1.1"
 ---
 
 # Drive an EasyBits sandbox
@@ -32,12 +32,51 @@ H=(-H "Authorization: Bearer $EASYBITS_API_KEY" -H "Content-Type: application/js
 | "put this file in the box / read that file" | `POST $B/sandboxes/$SB/files/write` `{ "path", "content" }` · `…/files/read` `{ "path" }` · `…/files/list` |
 | "make it reachable" | `POST $B/sandboxes/$SB/expose` `{ "port": 3000 }` → `{ url }` (HTTPS and WebSocket) |
 | "clone the repo in there" | `exec` with `git clone …` (public), or the git tools with `$secret:GH_TOKEN` for private repos |
-| "keep it alive / it must survive" | create with `suspendOnIdle: true`; `POST …/bootstrap` `{ "script": "…" }` for idempotent work on every wake |
+| "keep it alive / it must survive" | create with `suspendOnIdle: true`; on an existing box `POST $B/sandboxes/$SB/idle` `{ "suspendOnIdle": true, "idleTtlSeconds": 600 }`; `POST …/bootstrap` `{ "script": "…" }` for idempotent work on every wake |
 | "snapshot / try variants in parallel" | `POST $B/sandboxes/$SB/snapshot`, `POST $B/sandboxes/$SB/fork` → child `sandboxId` (copy-on-write) |
 | "destroy it" | `DELETE $B/sandboxes/$SB` |
 
-Templates: `node` (Node 22), `python`, `bun`, `ubuntu` (no Node), `code-interpreter`
-(Python + persistent Jupyter kernel: `POST …/run-cell`), `claude-code`, `ghosty-lite`, `goose`.
+Templates (`base` = run code, `agent` = ready-made agent; internal/service kinds are created by
+the platform, not by you):
+
+<!-- generated:templates-en -->
+| Template | Kind | Description |
+|---|---|---|
+| `ubuntu` | base | Full Linux. Install packages, compile, run servers. |
+| `python` | base | Python runtime; each run-code is a fresh process. |
+| `node` | base | Node 22 runtime; each run-code is a fresh process. |
+| `bun` | base | Bun runtime. |
+| `dev-box` | base | Clean work box (git, curl, build-essential, Node 22); the recommended one for SSH. |
+| `code-interpreter` | base | Python + persistent Jupyter kernel (sandbox_run_cell): variables and charts survive between cells. |
+| `eve-nitro` | base | Self-hosted eve (Vercel) server: Node 24, pnpm, eve CLI; persistent /data, port 3000. |
+| `node-agent` | agent | Node + Claude Agent SDK pre-baked (agent_run). |
+| `claude-code` | agent | Claude Agent SDK loop; per-token billing. |
+| `goose` | agent | goose (AAIF), coding agent with native ACP. |
+| `ghostyclaw` | agent | Always-on Ghosty daemon (WhatsApp, Slack, Telegram) with Docker and admin-api. |
+| `ghosty-lite` | agent | Lightweight Rust ACP agent, multi-provider; your EasyBits key can be its brain. |
+| `open-ghosty` | agent | Ghosty on open models, SSE web chat. |
+| `lang-ghosty` | agent | Ghosty on LangChain, SSE web chat. |
+| `rust-ghosty` | agent | DeepSeek-first Ghosty (CodeWhale/Rust) with SSE web chat and WhatsApp. |
+| `ghosty-gc` | agent | Ghosty for teams (GTeams): threads, artifacts, collaborative editor. |
+| `ghosty-chat` | agent | Persistent Ghosty chat (Express + SSE). |
+| `cagent-ghosty` | agent | Ghosty on cagent (Docker), SSE web chat. |
+| `openclaw` | agent | OpenClaw, always-on personal AI. |
+| `chat-openai` | agent | Persistent Express+SSE chat on OpenAI; create it with agent_create. |
+| `chat-anthropic` | agent | Persistent Express+SSE chat on Anthropic; create it with agent_create. |
+| `ghosty-studio` | agent | Ghosty Studio: agent control plane inside a box. |
+| `desktop-ghosty` | agent | Linux desktop with Ghosty (noVNC). |
+| `computer-ghosty` | agent | Computer-use with XFCE desktop + public noVNC. |
+| `computer-ghosty-gemini` | agent | Computer-use on Gemini. |
+| `livekit-svc` | service | Video call room + HD recording (Studio). |
+| `whisper-svc` | service | whisper STT; part of the voice box. |
+| `kokoro-svc` | service | kokoro TTS; part of the voice box. |
+| `voice-svc` | service | Voice (STT + TTS) for the fleet; service_start('voice'). |
+| `render-svc` | service | Chromium for PDF/PNG/audits; service_start('render'). |
+| `collab-svc` | service | GTeams collaborative editor (Yjs). |
+| `hyperframes-svc` | service | HyperFrames video rendering. |
+| `claude-worker` | internal | Fleet worker (Claude). Created by the platform. |
+| `codex-worker` | internal | Fleet worker (Codex). Created by the platform. |
+<!-- /generated -->
 
 ## Rules
 

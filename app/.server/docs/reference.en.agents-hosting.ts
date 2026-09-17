@@ -4,7 +4,9 @@ export const EN_AGENTS = `## Agents & Sandboxes
 Firecracker microVMs for running agents and isolated code. The tools live in the \`sandbox\` MCP group (the full catalog is at /api/tools.json).
 
 ### Templates
-\`code-interpreter\` (Python + persistent Jupyter kernel), \`python\` / \`node\` / \`bun\` (base runtimes), \`ubuntu\` (full Linux), \`rust-ghosty\` (DeepSeek-first Ghosty + WhatsApp), \`claude-code\` (Claude Agent SDK loop), \`ghosty-lite\` (lightweight ACP agent in Rust, multi-provider; see Agents) and \`goose\` (AAIF's goose, native ACP), \`computer-ghosty\` (computer-use with a desktop), \`livekit-svc\` (video-call room + HD recording → see the Studio section), \`ghostyclaw\` / \`openclaw\` (always-on daemons).
+Catalog derived from the server (\`templates_list\` gives the detail and the env each one needs). \`base\` = run code; \`agent\` = ready-made agent; \`service\` = platform boxes (started with \`service_start\`); \`internal\` = fleet workers created by the platform.
+
+__TEMPLATES_MD_EN__
 
 ### Create a sandbox
 \`POST /sandboxes\`
@@ -28,6 +30,13 @@ it is a separate call on the already-created box — see *Bootstrap on resume*.
 For any box hosting an agent you are going to write to LATER —an ACP agent, a bot—
 \`suspendOnIdle\` is not optional: without it you lose the box and its URL stops serving, because the
 new box's sandboxId is a different one.
+
+### Idle policy on an EXISTING box
+\`POST /sandboxes/:id/idle\`
+Body: \`{ suspendOnIdle, idleTtlSeconds?, hardTtlSeconds? }\`
+MCP: \`sandbox_set_idle({ sandboxId, suspendOnIdle, idleTtlSeconds?, hardTtlSeconds? })\` · SDK: \`sbx.setIdlePolicy({...})\`
+
+For a box you created without \`suspendOnIdle\` (or one another system created for you, like an eve session): with \`suspendOnIdle: true\` the reaper SUSPENDS it when the TTL elapses instead of destroying it; \`idleTtlSeconds\` re-arms the clock from now and \`hardTtlSeconds\` is the deadline after which it is destroyed even while asleep. \`suspendOnIdle: false\` returns it to the ephemeral scheme (409 if the TTL already elapsed: \`extend\` first).
 
 ### Run a command
 \`POST /sandboxes/:id/exec\`
@@ -466,4 +475,55 @@ Every deploy publishes a release, so history and rollback keep working the same 
 
 ### Dashboard (UI)
 They are also managed from \`/dash/hosting\`: each site with its status and its address, and when you open one, four tabs — **Domains** (with the DNS record to create and whether it resolves yet), **Versions** (with one-click rollback), **Variables** and **Log** (the last lines of the log). From there you can also pause and cancel.
+`;
+
+export const EN_EVE = `## eve (Vercel) on EasyBits
+
+[eve](https://eve.dev) is Vercel's open-source agent framework: an agent is a directory (instructions, tools, channels, schedules) and every session is a durable Workflow SDK run. When an agent needs to execute code, eve asks a **SandboxBackend** for a box. \`@easybits.cloud/eve-sandbox\` is that backend for EasyBits: every agent session runs in its own microVM, in your account, on your plan.
+
+### 1. Sandboxes for eve agents
+
+\`\`\`bash
+npm i @easybits.cloud/eve-sandbox   # Node ≥ 24 (eve requires it)
+\`\`\`
+
+\`\`\`ts
+// agent/sandbox.ts
+import { defineSandbox } from "eve/sandbox";
+import { easybits } from "@easybits.cloud/eve-sandbox";
+
+export default defineSandbox({
+  backend: easybits(),                 // reads EASYBITS_API_KEY
+  async bootstrap({ use }) {
+    const s = await use();
+    await s.run({ command: "npm i -g typescript" });
+  },
+});
+\`\`\`
+
+| eve | EasyBits |
+|---|---|
+| \`prewarm\` at build time | temporary box + seed files + \`bootstrap()\` → copy-on-write **snapshot** \`eve:<templateKey>:<hash>\`; reused on later builds (0.2 s) |
+| \`create()\` | fork of that snapshot (~7 s), or a fresh box from \`template\` when eve sends none |
+| between turns | the box stays alive with an idle policy (\`idleTtlSeconds\` 600 → suspend, resume ~1 s) and is reattached by \`sandboxId\` |
+| \`stop()\` / \`shutdown()\` · \`delete()\` | suspend · destroy |
+| \`run\` / \`spawn\` | \`bash -lc\` through \`/bg\`; stdout/stderr as streams, \`kill()\` signals the process group |
+| files | \`/files/*\`; relative paths anchored at \`/workspace\`, \`$HOME/…\` resolved inside the box |
+
+Options: \`easybits({ apiKey, baseUrl, template: "node", timeoutSeconds, workingDirectory, runTimeoutSeconds, idleTtlSeconds, hardTtlSeconds, metadata })\`. \`setNetworkPolicy\` only accepts \`"allow-all"\` (egress is governed by the host firewall). The key needs WRITE scope (create, snapshot, fork) and DELETE if eve should delete snapshots.
+
+### 2. The eve server inside a box
+
+Template \`eve-nitro\`: Node 24, pnpm, \`eve\` CLI, git/curl/tar; \`/data\` is a persistent 4 GB volume and the working directory; port 3000.
+
+\`\`\`bash
+SB=$(curl -s -X POST "$B/sandboxes" "\${H[@]}" -d '{"template":"eve-nitro","timeoutSeconds":3600,"suspendOnIdle":true,"hardTtlSeconds":2592000}' | jq -r .sandboxId)
+curl -s -X POST "$B/sandboxes/$SB/exec" "\${H[@]}" -d '{"command":"cd /data && git clone <repo> app && cd app && pnpm i && eve build","timeoutSeconds":600}'
+curl -s -X POST "$B/sandboxes/$SB/bg"   "\${H[@]}" -d '{"command":"exec eve start","cwd":"/data/app","env":{"EASYBITS_API_KEY":"<key>"}}'
+curl -s -X POST "$B/sandboxes/$SB/expose" "\${H[@]}" -d '{"port":3000}'   # → { url }
+\`\`\`
+
+The public URL proxies every path: \`/eve/\` and \`/.well-known/workflow/\` reach Nitro with no extra config. Keep the project and \`.eve/.workflow-data\` under \`/data\` so runs survive suspend/resume; declare a \`bootstrap\` that restarts \`eve start\` on every wake. eve's durable state lives on disk by default; to outlive the box use \`@workflow/world-postgres\` (plain Postgres, in the same box or another) from the same \`@workflow/*\` line as your eve.
+
+MCP: \`sandbox_create({ template: "eve-nitro", … })\` · skill: \`npx skills add https://www.easybits.cloud --skill easybits-eve\`.
 `;
