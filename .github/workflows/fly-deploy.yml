@@ -22,6 +22,8 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      # Los `./+types/*` de React Router se generan; sin esto typecheck falla en limpio.
+      - run: npx react-router typegen
       - run: npm run typecheck
       - run: npm run check:docs
       - run: npm run check:skills

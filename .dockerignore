@@ -3,6 +3,11 @@ build
 node_modules
 .git
 packages
+# Los package.json de los paquetes npm son fuente de versión para la server card MCP
+# y para los bloques generados de docs (scripts/docs-sync.mts).
+!packages/mcp/package.json
+!packages/sdk/package.json
+!packages/eve-sandbox/package.json
 cli
 services
 test
