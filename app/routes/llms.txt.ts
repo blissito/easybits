@@ -50,7 +50,8 @@ export async function loader() {
 > desde un solo MCP, en pesos mexicanos. Hay plan gratuito.
 
 Esto es un índice. Carga sólo la sección que necesites; el documento completo está en
-[/llms-full.txt](${BASE}/llms-full.txt) y pesa ~100 KB.
+[/llms-full.txt](${BASE}/llms-full.txt) y pesa ~100 KB. Cada sección también existe en
+\`${BASE}/docs/<section>.md\`.
 
 ## Qué puede hacer tu agente
 
@@ -75,6 +76,15 @@ Esto es un índice. Carga sólo la sección que necesites; el documento completo
 
 - [Academia](${BASE}/aprende.md) — 3 rutas; cada lección en Markdown con navegación y un
   prompt "hazlo con tu agente". Progreso verificado por uso real: \`get_learning_progress\`.
+
+## Para agentes de código
+
+- **Skills instalables**: \`npx skills add https://easybits.cloud\` (índice en
+  [/.well-known/skills/index.json](${BASE}/.well-known/skills/index.json)). Enseña cuándo usar
+  REST, MCP o SDK, y las llamadas exactas con \`EASYBITS_API_KEY\`.
+- **MCP de esta documentación** (sin auth): \`claude mcp add --transport http easybits-docs ${BASE}/mcp/docs\`
+  → \`search_docs\`, \`read_doc\`, \`list_docs\`, \`tools_catalog\`.
+- **Catálogo público de tools**: [/api/tools.json](${BASE}/api/tools.json).
 
 ## Cómo conectarte
 

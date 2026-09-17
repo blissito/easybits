@@ -1,6 +1,7 @@
 import { CodeBlock } from "~/components/mdx/CodeBlock";
 import { useState } from "react";
 import { Link } from "react-router";
+import { SkillsInstall } from "~/components/docs/SkillsInstall";
 
 const tabs = ["MCP", "REST API", "CLI"] as const;
 type Tab = (typeof tabs)[number];
@@ -24,6 +25,12 @@ export default function SetupPage() {
         </p>
       </div>
 
+      {/* Primero: que su agente se instale los skills solo */}
+      <div className="mb-8">
+        <SkillsInstall compact />
+      </div>
+
+      <h3 className="text-sm font-bold uppercase tracking-wide mb-3">O conéctalo a mano</h3>
       {/* Tabs — neobrutalism pill buttons */}
       <div className="flex gap-2 mb-6">
         {tabs.map((tab) => (

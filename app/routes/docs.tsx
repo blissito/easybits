@@ -3,6 +3,8 @@ import type { Route } from "./+types/docs";
 import getBasicMetaTags from "~/utils/getBasicMetaTags";
 import { useState, useEffect, useRef } from "react";
 import { CodeBlock } from "~/components/mdx/CodeBlock";
+import { PageActions } from "~/components/docs/PageActions";
+import { SkillsInstall } from "~/components/docs/SkillsInstall";
 import { FLEET_BOX, HOSTING_CATALOG, SELLABLE_TIERS } from "~/lib/hostingCatalog";
 
 // Formato humano de specs de un tier (MB → GB/MB legible).
@@ -387,16 +389,22 @@ export default function DocsPage({ loaderData }: Route.ComponentProps) {
           <section id="quickstart" className="mb-16">
             <h1 className="text-3xl font-bold mb-2">Documentación de la API</h1>
             <p className="text-gray-500 mb-4 text-sm">Sandboxes, web, archivos, bases de datos, documentos y hosting para agentes de IA</p>
+            <div className="mb-6">
+              <SkillsInstall />
+            </div>
+            <div className="mb-6">
+              <PageActions section={activeSection} />
+            </div>
             <p className="text-gray-600 mb-4">
               URL base: <code className="bg-gray-100 px-2 py-0.5 rounded font-mono text-sm">https://www.easybits.cloud/api/v2</code>
             </p>
             <div className="mb-6 bg-blue-50 border-2 border-blue-300 rounded-xl p-4 text-sm">
-              <strong>3 formas de integrarte:</strong> REST API (abajo),{" "}
+              <strong>Otras formas de integrarte:</strong> REST API (abajo),{" "}
               <a href="#sdk" className="underline font-medium">SDK tipado</a> ({`npm i @easybits.cloud/sdk`}), o{" "}
               <a href="https://www.npmjs.com/package/@easybits.cloud/mcp" className="underline font-medium" target="_blank" rel="noreferrer">servidor MCP</a> ({toolCount} herramientas para agentes; por defecto solo el grupo core).
             </div>
 
-            <h2 className="text-xl font-bold mb-4">Inicio rápido</h2>
+            <h2 className="text-xl font-bold mb-4">Inicio rápido a mano</h2>
             <ol className="list-decimal list-inside space-y-3 text-gray-700 mb-6">
               <li>Crea una cuenta en <Link to="/login" className="underline font-medium">easybits.cloud</Link></li>
               <li>Ve al <Link to="/dash/developer" className="underline font-medium">Dashboard de Desarrollador</Link> y crea una API key</li>

@@ -177,6 +177,7 @@ export default function McpPage() {
           <li>• Puedes cambiar de toolset en cualquier momento — sólo elimina el connector en Claude.ai y añádelo de nuevo con la URL actualizada.</li>
           <li>• Si tu cliente no soporta OAuth (Claude Code, Cursor, etc.), usa el setup por <a href="/dash/developer/setup" className="underline">API key</a>.</li>
           <li>• Este connector también funciona en cualquier otro cliente MCP que soporte OAuth 2.1 + DCR (Cowork, etc.).</li>
+          <li>• ¿Tu agente tiene terminal (Claude Code, Cursor, Codex)? Mejor que se instale los skills: <span className="font-mono text-xs bg-gray-100 px-1.5 py-0.5 rounded">npx skills add https://easybits.cloud</span> — ver <a href="/dash/developer/setup" className="underline">Setup</a>.</li>
         </ul>
       </section>
     </div>

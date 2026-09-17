@@ -43,7 +43,11 @@ export default [
   route("/mcp", "routes/mcp-page.tsx"),
   route("/mcp/apps", "routes/mcp-apps.tsx"),
   route("/mcp/apps/:appName", "routes/mcp-apps-demo.tsx"),
+  // Cada sección de /docs en markdown crudo (agent-first). Declarada ANTES de /docs.
+  route("/docs/:section.md", "routes/docs.$section.md.ts"),
   route("/docs", "routes/docs.tsx"),
+  // MCP de la documentación (JSON-RPC sin auth): search_docs / read_doc / list_docs / tools_catalog.
+  route("/mcp/docs", "routes/mcp.docs.ts"),
   route("/status", "routes/status.tsx"),
   route("/blog", "routes/blog.tsx"),
   route("/aprende.md", "routes/aprende.md.ts", { id: "aprende-md-index" }),
@@ -520,6 +524,9 @@ export default [
   route("/oauth/authorize", "routes/api/oauth/authorize.ts"),
   route("/oauth/token", "routes/api/oauth/token.ts"),
 
+  // Skills instalables: `npx skills add https://easybits.cloud` (RFC 8615). Alias agent-skills.
+  route("/.well-known/skills/*", "routes/api/wellknown/skills.ts"),
+  route("/.well-known/agent-skills/*", "routes/api/wellknown/skills.ts", { id: "agent-skills" }),
   route("/.well-known/*", "components/common/NoContent.tsx"),
   route("experiment", "components/experimental/multiple_livekit_test.tsx"),
   route("webinar", "routes/webinar/webinar.tsx"),
