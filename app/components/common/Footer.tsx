@@ -14,7 +14,7 @@ export const Footer = () => {
         <div className="h-full max-w-7xl border-x-[1px] border-x-white/20 mx-auto"></div>
       </div>
       <div className="border-y-[1px] border-y-white/20 h-20 md:h-40 w-full  ">
-        <Link to="/calculadora">
+        <Link to="/login">
           <div className="h-full max-w-7xl border-x-[1px] border-x-white/20 mx-auto px-4 md:px-[5%] xl:px-0">
             <motion.button
               initial={{ borderRadius: "0px" }}
