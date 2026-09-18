@@ -211,15 +211,19 @@ export default function Eve({ loaderData }: Route.ComponentProps) {
           ctaTo: "/blog/agentes-eve-en-easybits",
           priceLine: (
             <>
-              <strong>Gratis</strong>: tu servidor eve se queda donde está y las sesiones corren en
-              EasyBits, una conversación a la vez (una máquina, sesiones de 1 h). <strong>Servidor eve
-              hospedado en EasyBits + estado durable (eve-world)</strong>: desde Mega, $499 MXN/mes (2
-              máquinas: el servidor y una sesión) o Tera, $2,490 MXN/mes (5 máquinas). Si sólo quieres el
-              servidor eve encendido las 24 horas, eso es{" "}
+              <strong>Gratis</strong> para empezar: tu servidor eve se queda donde está y las sesiones
+              corren en EasyBits, una a la vez. <strong>Servidor hospedado + estado durable</strong>:
+              desde $499 MXN/mes (Mega) o $2,490 MXN/mes (Tera). Sólo el servidor encendido 24 h:{" "}
               <a className="underline text-brand-500" href="/hosting">
                 hosting
-              </a>
-              , desde $49 MXN/mes.
+              </a>{" "}
+              desde $49 MXN/mes.
+              <span className="block mt-6 text-base md:text-lg">
+                Pregúntale a tu agente de código:
+              </span>
+              <code className="block mt-2 font-mono text-sm md:text-base bg-black text-white rounded-xl px-4 py-3 w-fit mx-auto">
+                npx skills add https://easybits.cloud
+              </code>
             </>
           ),
         }}
