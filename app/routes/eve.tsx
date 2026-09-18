@@ -213,7 +213,7 @@ export default function Eve({ loaderData }: Route.ComponentProps) {
             <>
               <strong>Gratis</strong> para empezar: tu servidor eve se queda donde está y las sesiones
               corren en EasyBits, una a la vez. <strong>Servidor hospedado + estado durable</strong>:
-              desde $499 MXN/mes (Mega) o $2,490 MXN/mes (Tera). Sólo el servidor encendido 24 h:{" "}
+              desde $499 MXN/mes (Mega); puedes añadir sandboxes extra por $299 MXN/mes cada uno. Sólo el servidor encendido 24 h:{" "}
               <a className="underline text-brand-500" href="/hosting">
                 hosting
               </a>{" "}
