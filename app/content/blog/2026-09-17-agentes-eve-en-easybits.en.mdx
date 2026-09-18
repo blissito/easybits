@@ -93,11 +93,12 @@ export default eveChannel({
 Now start and expose:
 
 ```bash
-curl -s -X POST "$B/sandboxes/$SB/bg"   "${H[@]}" -d '{"command":"exec eve start","cwd":"/data/app","env":{"EASYBITS_API_KEY":"<key>","ANTHROPIC_API_KEY":"<key>","EVE_PASSWORD":"<pass>","PORT":"3000"}}'
+DB=$(curl -s "$B/sandboxes/$SB" "${H[@]}" | jq -r .metadata.eve_db_url)
+curl -s -X POST "$B/sandboxes/$SB/bg"   "${H[@]}" -d '{"command":"exec eve start","cwd":"/data/app","env":{"EASYBITS_API_KEY":"<key>","ANTHROPIC_API_KEY":"<key>","EVE_PASSWORD":"<pass>","PORT":"3000","EASYBITS_DB_URL":"'$DB'"}}'
 curl -s -X POST "$B/sandboxes/$SB/expose" "${H[@]}" -d '{"port":3000}'
 ```
 
-`EASYBITS_DB_URL` is already in the environment of a box created with `POST /sandboxes`; no need to pass it in `env`. The `eve-nitro` template ships Node 24, pnpm and the eve CLI; `/data` is persistent and the public URL proxies `/eve/` and `/.well-known/workflow/` with no configuration — but eve enforces the auth you declared, so every call goes with `-u eve:$EVE_PASSWORD`. The server runs there; every agent it serves gets its own microVM through the backend above.
+EasyBits generates `EASYBITS_DB_URL` when the box is created and leaves it in `metadata.eve_db_url`; you pass it in the `/bg` `env` (without it eve silently falls back to the box's disk). The `eve-nitro` template ships Node 24, pnpm and the eve CLI; `/data` is persistent and the public URL proxies `/eve/` and `/.well-known/workflow/` with no configuration — but eve enforces the auth you declared, so every call goes with `-u eve:$EVE_PASSWORD`. The server runs there; every agent it serves gets its own microVM through the backend above.
 
 Talking to it is three calls: creating a session returns `{ sessionId }`, the stream is NDJSON of events (`message.completed` carries the reply) and the same id accepts further messages:
 
@@ -120,7 +121,7 @@ npm i @easybits.cloud/eve-world
 experimental: { workflow: { world: "@easybits.cloud/eve-world" } },
 ```
 
-An `eve-nitro` box created with `POST /sandboxes` is born with `EASYBITS_DB_URL` already set: no token to paste (a box made by forking a snapshot does not get it: pass it in `env`, with the same value if you want to resume runs). We measured it in production with an 8-step run: we destroyed the box halfway through step 2; a fresh box on the same database started, resumed at step 3 without repeating the earlier ones — 59 seconds after the first box died — and finished the run. The chat session survives too: server destroyed at 21:05:07, another one from the snapshot answering at 21:06:22 with the whole conversation's memory. It is a port of the official Postgres world to libSQL, on the same version line as eve.
+When the `eve-nitro` box is created with `POST /sandboxes`, EasyBits generates its database URL and leaves it in `metadata.eve_db_url`: no token to paste. Pass it in the `/bg` `env` as `EASYBITS_DB_URL` on any box (created or forked from a snapshot), with the same value if you want to resume runs. We measured it in production with an 8-step run: we destroyed the box halfway through step 2; a fresh box on the same database started, resumed at step 3 without repeating the earlier ones — 59 seconds after the first box died — and finished the run. The chat session survives too: server destroyed at 21:05:07, another one from the snapshot answering at 21:06:22 with the whole conversation's memory. It is a port of the official Postgres world to libSQL, on the same version line as eve.
 
 ## Start today
 
