@@ -1,4 +1,6 @@
 import type { Route } from "./+types/eve";
+import { useEffect, useState } from "react";
+import { codeToHtml } from "shiki";
 import getBasicMetaTags from "~/utils/getBasicMetaTags";
 import { ProductPage, productJsonLd } from "./product/ProductPage";
 import { productLoader } from "./product/loader";
@@ -41,10 +43,33 @@ const JSON_LD = {
 // Bloque de código mínimo para los bentos: la landing debe enseñar la configuración
 // real, no describirla. Sin dependencias de CodeMirror; el copy exacto vive en /docs.
 function Snippet({ title, code }: { title: string; code: string }) {
+  const src = code.trim();
+  // Resaltado con shiki en el cliente (misma librería que el blog). Mientras
+  // carga se muestra el texto plano para que el layout no brinque.
+  const [html, setHtml] = useState("");
+  useEffect(() => {
+    let cancelled = false;
+    codeToHtml(src, { lang: "ts", theme: "github-dark" })
+      .then((r) => {
+        if (!cancelled) setHtml(r);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [src]);
+  const preClass = "px-3 py-3 text-xs md:text-sm font-mono leading-relaxed overflow-x-auto whitespace-pre";
   return (
     <div className="mt-4 rounded-xl border-2 border-black bg-[#0b0b0f] text-[#e8e8ee] shadow-[6px_6px_0_#000] overflow-hidden">
       <div className="px-3 py-1.5 text-xs font-mono text-[#fbbf24] border-b border-white/10">{title}</div>
-      <pre className="px-3 py-3 text-xs md:text-sm font-mono leading-relaxed overflow-x-auto whitespace-pre">{code.trim()}</pre>
+      {html ? (
+        <div
+          className="[&_pre]:px-3 [&_pre]:py-3 [&_pre]:text-xs md:[&_pre]:text-sm [&_pre]:font-mono [&_pre]:leading-relaxed [&_pre]:overflow-x-auto [&_pre]:whitespace-pre [&_pre]:!bg-transparent [&_pre]:!m-0"
+          dangerouslySetInnerHTML={{ __html: html }}
+        />
+      ) : (
+        <pre className={preClass}>{src}</pre>
+      )}
     </div>
   );
 }
