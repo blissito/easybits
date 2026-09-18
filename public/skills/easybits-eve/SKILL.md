@@ -5,7 +5,7 @@ license: MIT
 compatibility: Node.js 24 or newer (eve requires it), pnpm or npm, an EasyBits API key with WRITE scope (DELETE if eve should delete derived templates)
 metadata:
   author: easybits
-  version: "1.0"
+  version: "1.1"
 ---
 
 # eve on EasyBits

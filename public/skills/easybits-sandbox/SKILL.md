@@ -5,7 +5,7 @@ license: MIT
 compatibility: Needs curl or any HTTP client, network access to https://www.easybits.cloud and an EasyBits API key
 metadata:
   author: easybits
-  version: "1.1"
+  version: "1.2"
 ---
 
 # Drive an EasyBits sandbox
@@ -25,11 +25,11 @@ H=(-H "Authorization: Bearer $EASYBITS_API_KEY" -H "Content-Type: application/js
 
 | User asks | Do |
 |---|---|
-| "give me a box / run this in isolation" | `POST $B/sandboxes` `{ "template": "node", "suspendOnIdle": true, "timeoutSeconds": 3600 }` → `sandboxId` |
+| "give me a box / run this in isolation" | `POST $B/sandboxes` `{ "template": "node", "suspendOnIdle": true, "timeoutSeconds": 3600 }` → `sandboxId` (born `starting`; poll `GET $B/sandboxes/$SB` until `status: "running"` before anything else) |
 | "run this command" | `POST $B/sandboxes/$SB/exec` `{ "command": "…" }` (sync, 60 s default, 600 s max) |
 | "start a dev server / a build / anything long" | `POST $B/sandboxes/$SB/bg` `{ "command": "exec npm run dev" }` → `execId`; poll `GET …/bg/$EXEC`; **kill** with `DELETE …/bg/$EXEC` |
 | "run this Python / JS snippet" | `POST $B/sandboxes/$SB/run-code` `{ "code": "…", "lang": "python" }` |
-| "put this file in the box / read that file" | `POST $B/sandboxes/$SB/files/write` `{ "path", "content" }` · `…/files/read` `{ "path" }` · `…/files/list` |
+| "put this file in the box / read that file" | `POST $B/sandboxes/$SB/files/write` `{ "path", "content", "encoding"?: "base64" }` → `{ ok, bytes }` (e.g. `-d "$(jq -n --rawfile c file.ts '{path:"/data/app/file.ts",content:$c}')"`) · `…/files/read` `{ "path" }` · `…/files/list` |
 | "make it reachable" | `POST $B/sandboxes/$SB/expose` `{ "port": 3000 }` → `{ url }` (HTTPS and WebSocket) |
 | "clone the repo in there" | `exec` with `git clone …` (public), or the git tools with `$secret:GH_TOKEN` for private repos |
 | "keep it alive / it must survive" | create with `suspendOnIdle: true`; on an existing box `POST $B/sandboxes/$SB/idle` `{ "suspendOnIdle": true, "idleTtlSeconds": 600 }`; `POST …/bootstrap` `{ "script": "…" }` for idempotent work on every wake |
@@ -91,8 +91,16 @@ the platform, not by you):
   If something must happen on every wake, declare it in `/bootstrap` (idempotent: `checkout -B`,
   `ln -sfn`). Never put a credential in that script: it shows in listings.
 - **Build inside the box.** Native modules compiled on the user's Mac crash on Linux.
+- **Wait for `status: "running"`.** A box is created in `starting`; `exec`/`bg`/`files` on it
+  answer `409 { "error": "SandboxNotReady", "status": "starting" }`. Poll
+  `until [ "$(curl -s $B/sandboxes/$SB "${H[@]}" | jq -r .status)" = running ]; do sleep 2; done`.
+- **`exec` starts in `/`, not in the volume.** `/data` (eve-nitro) or `/app` persist, but they
+  are not the cwd: pass `cwd` or `cd` explicitly.
 - **Do not retry `404`/`409`.** `404` = wrong id or not yours; `409` = state conflict (e.g.
-  suspended while a turn runs). Read `GET $B/sandboxes/$SB` and decide.
+  suspended while a turn runs, or `SandboxNotReady` above). Read `GET $B/sandboxes/$SB` and decide.
+- **eve-nitro:** pnpm 12 blocks build scripts → `pnpm add … --allow-build=cbor-extract` (or
+  `npm i`); `eve build` validates the sandbox backend, so pass `env: { "EASYBITS_API_KEY": … }`
+  to that `exec`. Full recipe: skill `easybits-eve`.
 - Rate limits: 10 creates/min, 120 ops/min. Max TTL by plan: Byte 1 h, Mega 4 h, Tera 24 h.
 - Never print the API key.
 

@@ -60,13 +60,20 @@ Body: `{ template, timeoutSeconds?, suspendOnIdle?, hardTtlSeconds?, persistent?
 expires. For anything you will talk to later, always send it.
 
 ```bash
-curl -s -X POST "$B/sandboxes" "${H[@]}" \
-  -d '{"template":"node","timeoutSeconds":3600,"suspendOnIdle":true}'
+SB=$(curl -s -X POST "$B/sandboxes" "${H[@]}" \
+  -d '{"template":"node","timeoutSeconds":3600,"suspendOnIdle":true}' | jq -r .sandboxId)
+until [ "$(curl -s "$B/sandboxes/$SB" "${H[@]}" | jq -r .status)" = running ]; do sleep 2; done
 ```
+
+The box is created in `status: "starting"`; `exec`, `bg` and `files/*` on it answer
+`409 { "error": "SandboxNotReady", "status": "starting" }` until it is `running` (~2-5 s).
 
 ### POST /sandboxes/{id}/exec
 Body: `{ command, cwd?, timeoutSeconds?, env? }` → `{ stdout, stderr, exitCode }`. Synchronous,
-60 s default, 600 s max. Do not put `nohup … &` here: the shell dies with the response.
+60 s default, 600 s max. Do not put `nohup … &` here: the shell dies with the response. The cwd
+is `/` unless you pass `cwd` (persistent volumes like `/data` are not the default). On
+`eve-nitro`: `pnpm add … --allow-build=cbor-extract` (pnpm 12 blocks build scripts) and
+`eve build` needs `env: { "EASYBITS_API_KEY": … }`.
 
 ```bash
 curl -s -X POST "$B/sandboxes/$SB/exec" "${H[@]}" -d '{"command":"node -v && ls /data/work"}'
@@ -81,8 +88,10 @@ Write the command as `exec <program>` so your process replaces the shell. **Kill
 Body: `{ code, lang?, timeoutSeconds? }` → `{ stdout, stderr, exitCode }`.
 
 ### Files inside the box: POST /sandboxes/{id}/files/{write|read|list|delete|move|mkdir}
-`write`: `{ path, content }` (text) · `read`: `{ path }` → `{ content }` · `list`: `{ path }`.
-Working dir is `/data/work`.
+`write`: `{ path, content, encoding?: "base64" }` → `{ ok, bytes }` (text by default; e.g.
+`-d "$(jq -n --rawfile c agent.ts '{path:"/data/app/agent/agent.ts",content:$c}')"`) · `read`:
+`{ path }` → `{ content }` · `list`: `{ path }`. Use absolute paths: relative ones resolve
+against `/workspace` on `node`, and `exec` starts in `/`.
 
 ### Lifecycle: POST /sandboxes/{id}/{action}
 All actions (the enum is derived from the server, see `openapi.yaml`):

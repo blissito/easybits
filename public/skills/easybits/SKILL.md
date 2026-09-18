@@ -5,7 +5,7 @@ license: MIT
 compatibility: Needs curl or any HTTP client, network access to https://www.easybits.cloud and an EasyBits API key
 metadata:
   author: easybits
-  version: "1.3"
+  version: "1.4"
 ---
 
 # Use EasyBits from a coding agent
@@ -43,7 +43,7 @@ Do not load the MCP just to make one call: a `curl` is cheaper than a tool catal
 
 | User asks | Do |
 |---|---|
-| "run this code / give my agent a machine" | `POST /sandboxes` with `{ template, suspendOnIdle: true, timeoutSeconds }`, then `POST /sandboxes/:id/exec` |
+| "run this code / give my agent a machine" | `POST /sandboxes` with `{ template, suspendOnIdle: true, timeoutSeconds }`, poll `GET /sandboxes/:id` until `status: "running"` (else `409 SandboxNotReady`), then `POST /sandboxes/:id/exec`; files go in with `POST /sandboxes/:id/files/write` `{ path, content }` |
 | "run a build / a dev server / something long" | `POST /sandboxes/:id/bg` (background), poll `GET /sandboxes/:id/bg/:execId`, and **kill it when done** |
 | "search the web / read this page even if it blocks bots" | `POST /web/search` · `POST /web/fetch` (costs web queries; `402` = the user must buy a pack) |
 | "extract listings from Maps / Mercado Libre / Amazon" | `POST /web/extract` → job, poll `GET /web/extract/:jobId` |
@@ -67,7 +67,8 @@ agents you talk to), `easybits-mcp` (the MCP server), `easybits-docs` (reading t
 - **Read before write.** `GET` a resource before `PATCH`. Send only the fields the user asked
   to change.
 - **Do not retry a `401`, `402`, `404` or `409`.** They are answers, not glitches: wrong key,
-  no balance, wrong id, conflicting state. Tell the user and stop.
+  no balance, wrong id, conflicting state. Tell the user and stop. The one `409` worth waiting
+  on is `SandboxNotReady` (box still `starting`): poll `GET /sandboxes/:id` until `running`.
 - **Do not retry a `{ noop: true }`.** The server is telling you nothing changed.
 - **Prefer `launch_app` over hand-chaining** create → deploy → expose → domain. Done by hand,
   the step that gets skipped is the release, and a machine without a release cannot be rebuilt.

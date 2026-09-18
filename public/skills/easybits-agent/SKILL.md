@@ -5,7 +5,7 @@ license: MIT
 compatibility: Needs curl or any HTTP client, network access to https://www.easybits.cloud and an EasyBits API key
 metadata:
   author: easybits
-  version: "1.1"
+  version: "1.2"
 ---
 
 # Create and talk to an EasyBits agent
@@ -35,7 +35,7 @@ H=(-H "Authorization: Bearer $EASYBITS_API_KEY" -H "Content-Type: application/js
 | "send it a message" | `POST $B/agents/$ID/message` `{ "content": "…" }` → SSE `chunk`… `usage`, `done` |
 | "connect my editor (Zed, VS Code, JetBrains)" | create with `env.ACP_AGENT_TOKEN`, then `npx ghosty-acp wss://acp-$ID.sandboxes.easybits.cloud/acp?token=$ACP_AGENT_TOKEN` |
 | "it stopped answering" | `POST $B/agents/$ID/revive` (wait for the response, 10-60 s; do not retry). `/message` does it alone when the agent is `lost` |
-| "what did it write?" | `POST $B/sandboxes/$SANDBOX/exec` `{ "command": "ls /data" }` — the machine is the user's |
+| "what did it write?" | `POST $B/sandboxes/$SANDBOX/exec` `{ "command": "ls /data" }` — the machine is the user's (`409 SandboxNotReady` while the box is still `starting`: wait for `running`) |
 | "destroy it" | `DELETE $B/agents/$ID` |
 
 ## Rules
