@@ -1606,7 +1606,10 @@ export const FLEET_ARTIFACT_VERSION = 1;
 // 10.3-12.0 s (boot completo). Mientras el host no arranque un derivado tan rápido
 // como el base, nacer del artifact es MÁS lento → apagado por default. Con
 // FLEET_ARTIFACT=on se captura y se usa; apagado no captura ni consulta nada.
-export const fleetArtifactEnabled = () => (process.env.FLEET_ARTIFACT || "").toLowerCase() === "on";
+// Por agente: `persona.env.FLEET_ARTIFACT=on` (probar en UN agente sin tocar la flota).
+export const fleetArtifactEnabled = (fleetAgent?: { persona?: unknown }) =>
+  (process.env.FLEET_ARTIFACT || "").toLowerCase() === "on" ||
+  ((fleetAgent?.persona as Persona | undefined)?.env?.FLEET_ARTIFACT || "").toLowerCase() === "on";
 export type FleetArtifact = { derivedId: string; hash: string; at: string; templateVersion?: string };
 
 export function fleetArtifactKey(fleetAgentId: string): string {
@@ -1924,7 +1927,7 @@ async function spawnVm(ctx: AuthContext, fleetAgent: SpawnEnvAgent & { name: str
   // Con artifact NO se mandan seedFiles (ya viven en el derivado). Si el host dice que
   // el derivado no sirve (404/409/410) se descarta y se cae al spawn normal, que a su
   // vez lo re-captura (pendingArtifactCapture → captureFleetArtifact en pickOrSpawn).
-  const useArtifact = fleetArtifactEnabled();
+  const useArtifact = fleetArtifactEnabled(fleetAgent);
   const hash = fleetArtifactHash(fleetAgent);
   // Se lee FRESCO de la DB, no de la fila del turno: un drop en esta misma colocación
   // (hijo derivado que no arrancó) debe verse en el reintento inmediato.
