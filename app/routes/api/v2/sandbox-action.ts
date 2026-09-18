@@ -16,6 +16,7 @@ import {
   SandboxApplyPatchBody,
   SandboxIdleBody,
   SANDBOX_ACTIONS,
+  TemplateSnapshotBody,
   type SandboxAction,
 } from "~/.server/sandbox/schemas";
 import {
@@ -24,6 +25,7 @@ import {
   resumeSandbox,
   setSandboxIdlePolicy,
   snapshotSandbox,
+  createTemplateSnapshot,
   forkSandbox,
   execCommand,
   runCode,
@@ -138,6 +140,13 @@ async function dispatch(
       );
     case "snapshot":
       return Response.json(await snapshotSandbox(ctx, id, { name: body.name }));
+    // Plantilla derivada: captura el delta de disco de la caja (bootstrap hecho)
+    // bajo (key, hash); idempotente. Luego POST /sandboxes con templateKey+templateHash.
+    case "template-snapshot": {
+      const p = TemplateSnapshotBody.safeParse(body);
+      if (!p.success) return Response.json({ error: "Invalid body", issues: p.error.issues }, { status: 400 });
+      return Response.json(await createTemplateSnapshot(ctx, id, p.data));
+    }
     case "fork":
       return Response.json(
         await forkSandbox(ctx, {

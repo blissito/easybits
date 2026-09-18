@@ -1995,6 +1995,31 @@ export class EasybitsClient {
         delete: (snapshotId: string): Promise<{ ok: boolean }> =>
           req(`/snapshots/${snapshotId}`, { method: "DELETE" }),
       },
+      /**
+       * Derived templates: a prepared box captured ONCE with `sb.templateSnapshot()`
+       * as a reusable template keyed by (key, hash). `create({ templateKey,
+       * templateHash })` then boots boxes with that bootstrap already done.
+       */
+      templateSnapshots: {
+        /** List the caller's derived templates. */
+        list: async (): Promise<DerivedTemplateRecord[]> => {
+          const { items } = await req<{ items: DerivedTemplateRecord[] }>("/template-snapshots");
+          return items;
+        },
+        /**
+         * Get one by (key, hash) or by derivedId. Throws EasybitsError 404
+         * (`DerivedTemplateNotProvisioned`) when the pair is not prepared yet.
+         */
+        get: (ref: { key: string; hash: string } | { derivedId: string }): Promise<DerivedTemplateRecord> =>
+          "derivedId" in ref
+            ? req(`/template-snapshots/${encodeURIComponent(ref.derivedId)}`)
+            : req(
+                `/template-snapshots?key=${encodeURIComponent(ref.key)}&hash=${encodeURIComponent(ref.hash)}`,
+              ),
+        /** Delete a derived template (409 `DerivedTemplateInUse` while children are alive). */
+        delete: (derivedId: string): Promise<{ ok: boolean }> =>
+          req(`/template-snapshots/${encodeURIComponent(derivedId)}`, { method: "DELETE" }),
+      },
     };
   }
 
@@ -2721,6 +2746,17 @@ export class Sandbox {
     return this.post("/snapshot", { name });
   }
   /**
+   * Capture this PREPARED running box (deps installed, seeds, bootstrap done)
+   * once as a DERIVED TEMPLATE keyed by (key, hash). Later
+   * `eb.sandboxes.create({ templateKey, templateHash })` boots boxes with that
+   * bootstrap already done in the time of a normal create (~24 ms + boot).
+   * Idempotent: an existing (key, hash) returns `reused: true` without touching
+   * the box. Secrets are scrubbed from the template — pass each child its `env`.
+   */
+  templateSnapshot(opts: { key: string; hash: string; name?: string }): Promise<DerivedTemplateRecord> {
+    return this.post("/template-snapshot", opts);
+  }
+  /**
    * Snapshot this box, then boot N copy-on-write children from that image
    * (Morph-style "branch"). Each child is an independent ephemeral sandbox with
    * its own IP. Returns the child handles (still starting — await waitUntilReady).
@@ -3284,10 +3320,27 @@ export type SandboxStatus =
   | "suspended";
 
 export interface CreateSandboxParams {
-  template: SandboxTemplate;
+  /** Base template. Optional when creating from a derived template (it knows its base). */
+  template?: SandboxTemplate;
   timeoutSeconds?: number;
   name?: string;
   metadata?: Record<string, string>;
+  /** Environment for the box. A derived-template child never inherits its source's env. */
+  env?: Record<string, string>;
+  /** VM size class (default "s"); gated by plan. */
+  size?: "s" | "m" | "l" | "xl";
+  /** Suspend (not destroy) on idle; destroy at hardTtlSeconds. */
+  suspendOnIdle?: boolean;
+  hardTtlSeconds?: number;
+  /**
+   * Boot from a DERIVED template (see `Sandbox.templateSnapshot`) by content key.
+   * 404 `DerivedTemplateNotProvisioned` if the pair is not prepared; 409
+   * `DerivedTemplateStale` if the base template was rebaked since the capture.
+   */
+  templateKey?: string;
+  templateHash?: string;
+  /** Alternative to templateKey+templateHash: the derivedId (dt_…). */
+  derivedTemplate?: string;
   /** Wait until status is "running" before returning (default true). */
   waitForReady?: boolean;
 }
@@ -3321,6 +3374,30 @@ export interface SnapshotRecord {
   hasMem: boolean;
   sizeBytes: number;
   createdAt: string;
+}
+
+/**
+ * A derived template: the disk delta of a prepared box, captured with
+ * `Sandbox.templateSnapshot()` under a content key (key, hash).
+ */
+export interface DerivedTemplateRecord {
+  derivedId: string;
+  key: string;
+  hash: string;
+  name?: string;
+  ownerId: string;
+  sourceId: string;
+  baseTemplate: string;
+  templateVersion?: string;
+  vcpus?: number;
+  memMb?: number;
+  cpuMode?: string;
+  volumes?: { name: string; mountPath: string }[];
+  sizeBytes: number;
+  createdAt: string;
+  lastUsedAt?: string;
+  /** true when (key, hash) already existed and the box was not touched. */
+  reused?: boolean;
 }
 
 export interface ForkOptions {

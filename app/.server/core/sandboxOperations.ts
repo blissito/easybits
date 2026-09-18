@@ -831,7 +831,7 @@ const SIZE_ORDER = ["s", "m", "l", "xl"] as const;
 export async function createSandbox(
   ctx: AuthContext,
   params: {
-    template: SandboxTemplate;
+    template?: SandboxTemplate;
     timeoutSeconds?: number;
     name?: string;
     metadata?: Record<string, string>;
@@ -847,6 +847,12 @@ export async function createSandbox(
     memoryMb?: number;
     vcpus?: number;
     env?: Record<string, string>;
+    // Plantilla derivada (template-snapshot): nacer con el bootstrap ya hecho. Por
+    // id (`derivedTemplate`) o por clave de contenido (`templateKey`+`templateHash`).
+    // Con esto `template` es opcional (el host toma el base del derivado).
+    derivedTemplate?: string;
+    templateKey?: string;
+    templateHash?: string;
     // Clasificación para la telemetría de ciclo de vida (SandboxSession). NO se
     // reenvía al host: solo etiqueta el intervalo para poder desglosar el uso por
     // tipo de caja. Lo pone el caller porque el template no basta (claude-worker
@@ -856,6 +862,22 @@ export async function createSandbox(
 ): Promise<SandboxRecord> {
   requireScope(ctx, "WRITE");
   const plan = PLANS[getUserPlan(ctx.user)];
+
+  // Derivado: resuelve el template base desde el catálogo (para gates/telemetría);
+  // si el par no está en DB el host decide (404 DerivedTemplateNotProvisioned).
+  const derived = resolveDerivedParams(params);
+  if (derived && !params.template) {
+    const row = await db.derivedTemplate
+      .findFirst({ where: { ownerId: ctx.user.id, ...derived }, select: { template: true } })
+      .catch(() => null);
+    if (row) params = { ...params, template: row.template as SandboxTemplate };
+  }
+  if (!params.template && !derived) {
+    throw new Response(
+      JSON.stringify({ error: "TemplateRequired", message: "Indica `template`, o `derivedTemplate`, o `templateKey`+`templateHash`." }),
+      { status: 400, headers: { "content-type": "application/json" } }
+    );
+  }
 
   // Gate de tamaño por plan (aplica también a persistentes — una VM grande
   // cuesta independientemente del reaper). "s" siempre permitido.
@@ -935,7 +957,7 @@ export async function createSandbox(
     Math.max(params.timeoutSeconds ?? DEFAULT_TIMEOUT_S, 30),
     plan.maxSandboxTtlSeconds
   );
-  const env = withTemplateEnv(params.template, params.env);
+  const env = params.template ? withTemplateEnv(params.template, params.env) : params.env;
   // ⚠️ Medido 2026-09-17: el `env` de creación NO llega a /exec ni /bg en templates
   // base (el host sólo lo aplica a las units de los templates agente). Hasta que el
   // host lo exponga, el valor viaja también en metadata para que el usuario lo lea
@@ -958,16 +980,19 @@ export async function createSandbox(
       hardTtlSeconds: params.hardTtlSeconds,
       env,
       ...resources,
+      ...(derived ?? {}),
     },
     ctx.user.id
-  );
+  ).catch((e) => {
+    throw derivedTemplateError(e) ?? e;
+  });
   // Telemetría de ciclo de vida: abre el intervalo de esta caja. Fire-and-forget
   // — openSandboxSession se auto-cachea, nunca puede tumbar un spawn.
   void openSandboxSession({
     ownerId: ctx.user.id,
     sandboxId: rec.sandboxId,
     kind: params.kind ?? "sandbox",
-    template: params.template,
+    template: params.template ?? rec.template,
     memMb: resources.memoryMb,
     vcpus: resources.vcpus,
     persistent,
@@ -1409,6 +1434,210 @@ export async function resumeSandbox(
   );
   void markSandboxResumed(sandboxId);
   return rec;
+}
+
+// ─────────────── plantillas derivadas (template-snapshot) ───────────────
+//
+// Una plantilla derivada es el delta de disco de una caja YA preparada (npm
+// install, seeds, skills…) capturado en el host con clave de contenido
+// (key, hash). Desde entonces cada create con ese par nace con el bootstrap
+// hecho, en el tiempo de un create normal (~9 ms de dmsetup + boot ~1.9 s), sin
+// copiar GB por hijo. Idempotente por (owner, key, hash). Sin credenciales dentro
+// (el host hace scrub); el `env` lo pone cada hijo. Contrato: sandbox-host
+// docs/derived-templates.md.
+
+export interface DerivedTemplateRecord {
+  derivedId: string;
+  key: string;
+  hash: string;
+  name?: string;
+  ownerId: string;
+  sourceId: string;
+  baseTemplate: string;
+  templateVersion?: string;
+  vcpus?: number;
+  memMb?: number;
+  cpuMode?: string;
+  volumes?: { name: string; mountPath: string }[];
+  sizeBytes: number;
+  createdAt: string;
+  lastUsedAt?: string;
+  /** true si ya existía para (key, hash) y no se tocó la caja. */
+  reused?: boolean;
+}
+
+export const DERIVED_KEY_RE = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/;
+
+function resolveDerivedParams(p: {
+  derivedTemplate?: string;
+  templateKey?: string;
+  templateHash?: string;
+}): { derivedTemplate: string } | { templateKey: string; templateHash: string } | null {
+  if (p.derivedTemplate) return { derivedTemplate: p.derivedTemplate };
+  if (p.templateKey || p.templateHash) {
+    if (!p.templateKey || !p.templateHash) {
+      throw new Response(
+        JSON.stringify({ error: "InvalidDerivedTemplate", message: "templateKey y templateHash van juntos." }),
+        { status: 400, headers: { "content-type": "application/json" } }
+      );
+    }
+    return { templateKey: p.templateKey, templateHash: p.templateHash };
+  }
+  return null;
+}
+
+// Los errores de derivado del host salen como Response JSON con su status (mismo
+// estilo que SandboxLimitReached) para que REST/SDK/MCP los distingan sin parsear
+// texto: 404 DerivedTemplateNotProvisioned → el consumidor hace prewarm; 409
+// DerivedTemplateStale → el base se rehorneó, volver a capturar; 409
+// DerivedTemplateInUse → hay hijos vivos.
+const DERIVED_ERRORS = new Set([
+  "DerivedTemplateNotProvisioned",
+  "DerivedTemplateStale",
+  "DerivedTemplateInUse",
+  "DerivedTemplateUnsupported",
+]);
+function derivedTemplateError(e: unknown): Response | null {
+  if (!(e instanceof SandboxHostError)) return null;
+  let body: any;
+  try {
+    body = JSON.parse(e.body);
+  } catch {
+    return null;
+  }
+  if (!body || typeof body.error !== "string" || !DERIVED_ERRORS.has(body.error)) return null;
+  return new Response(JSON.stringify(body), {
+    status: e.status,
+    headers: { "content-type": "application/json" },
+  });
+}
+
+function assertDerivedKey(v: string, field: string) {
+  if (!DERIVED_KEY_RE.test(v)) {
+    throw new Response(
+      JSON.stringify({
+        error: "InvalidDerivedTemplate",
+        message: `${field} inválido: [A-Za-z0-9][A-Za-z0-9._:-]{0,127}`,
+      }),
+      { status: 400, headers: { "content-type": "application/json" } }
+    );
+  }
+}
+
+// Owner de un derivado por su id (fila DerivedTemplate): owner / delegado
+// MACHINES / si no hay fila el caller (el host responde 404 si no es suyo).
+async function effectiveDerivedOwnerId(ctx: AuthContext, derivedId: string): Promise<string> {
+  const row = await db.derivedTemplate.findUnique({ where: { derivedId }, select: { ownerId: true } });
+  if (!row) return ctx.user.id;
+  if (row.ownerId === ctx.user.id) return row.ownerId;
+  if (await can(ctx, row.ownerId, SCOPES.MACHINES)) return row.ownerId;
+  throw new Response(
+    JSON.stringify({ error: "DerivedTemplateNotFound", message: "Plantilla derivada no encontrada." }),
+    { status: 404, headers: { "content-type": "application/json" } }
+  );
+}
+
+// Captura el delta de una caja RUNNING como plantilla derivada (key, hash). La caja
+// sigue viva (pausa de ~la copia). Idempotente: si el par ya existe, `reused: true`.
+export async function createTemplateSnapshot(
+  ctx: AuthContext,
+  sandboxId: string,
+  opts: { key: string; hash: string; name?: string }
+): Promise<DerivedTemplateRecord> {
+  requireScope(ctx, "WRITE");
+  assertDerivedKey(opts.key, "key");
+  assertDerivedKey(opts.hash, "hash");
+  const ownerId = await effectiveOwnerId(ctx, sandboxId);
+  const meta = await callHost<DerivedTemplateRecord>(
+    "POST",
+    `/v1/sandbox/${sandboxId}/template-snapshot`,
+    { key: opts.key, hash: opts.hash, name: opts.name },
+    ownerId,
+    300_000
+  ).catch((e) => {
+    throw derivedTemplateError(e) ?? e;
+  });
+  await db.derivedTemplate
+    .upsert({
+      where: { derivedId: meta.derivedId },
+      create: {
+        ownerId,
+        derivedId: meta.derivedId,
+        key: meta.key,
+        hash: meta.hash,
+        name: opts.name,
+        template: meta.baseTemplate,
+        sourceId: meta.sourceId,
+        sizeBytes: BigInt(Math.round(meta.sizeBytes ?? 0)),
+      },
+      update: { sizeBytes: BigInt(Math.round(meta.sizeBytes ?? 0)), status: "available" },
+    })
+    .catch(() => {});
+  return meta;
+}
+
+// ¿Existe el derivado? Por (key, hash) o por id. Lanza Response 404
+// `DerivedTemplateNotProvisioned` si no: es la comprobación barata antes de
+// decidir si hay que bootstrapear.
+export async function getTemplateSnapshot(
+  ctx: AuthContext,
+  ref: { key: string; hash: string } | { derivedId: string }
+): Promise<DerivedTemplateRecord> {
+  requireScope(ctx, "READ");
+  if ("derivedId" in ref) {
+    const ownerId = await effectiveDerivedOwnerId(ctx, ref.derivedId);
+    return callHost<DerivedTemplateRecord>(
+      "GET",
+      `/v1/template-snapshot/${encodeURIComponent(ref.derivedId)}`,
+      undefined,
+      ownerId
+    ).catch((e) => {
+      throw derivedTemplateError(e) ?? e;
+    });
+  }
+  assertDerivedKey(ref.key, "key");
+  assertDerivedKey(ref.hash, "hash");
+  return callHost<DerivedTemplateRecord>(
+    "GET",
+    `/v1/template-snapshot?key=${encodeURIComponent(ref.key)}&hash=${encodeURIComponent(ref.hash)}`,
+    undefined,
+    ctx.user.id
+  ).catch((e) => {
+    throw derivedTemplateError(e) ?? e;
+  });
+}
+
+// Lista del owner. Fuente: el host (verdad sobre qué existe en disco); la fila DB
+// es catálogo. Se reconcilia: filas sin derivado en el host se marcan stale.
+export async function listTemplateSnapshots(ctx: AuthContext): Promise<DerivedTemplateRecord[]> {
+  requireScope(ctx, "READ");
+  const res = await callHost<DerivedTemplateRecord[] | { items?: DerivedTemplateRecord[] }>(
+    "GET",
+    "/v1/template-snapshot",
+    undefined,
+    ctx.user.id
+  );
+  const items = Array.isArray(res) ? res : res?.items ?? [];
+  return items.sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
+}
+
+// Borra el derivado (host + catálogo). 409 DerivedTemplateInUse si hay hijos vivos.
+export async function deleteTemplateSnapshot(
+  ctx: AuthContext,
+  derivedId: string
+): Promise<{ ok: boolean }> {
+  requireScope(ctx, "DELETE");
+  const ownerId = await effectiveDerivedOwnerId(ctx, derivedId);
+  const res = await callHost<{ ok: boolean }>(
+    "DELETE",
+    `/v1/template-snapshot/${encodeURIComponent(derivedId)}`,
+    undefined,
+    ownerId
+  ).catch((e) => {
+    throw derivedTemplateError(e) ?? e;
+  });
+  await db.derivedTemplate.deleteMany({ where: { derivedId } }).catch(() => {});
+  return res;
 }
 
 // ─────────────── snapshot + fork (copy-on-write clone) ───────────────
@@ -3250,6 +3479,10 @@ export async function createAgent(
      * una caja recreada vuelva con las mismas tools.
      */
     mcpServers?: AcpMcpServer[];
+    /** Nacer desde una plantilla derivada (template-snapshot). Ver createSandbox. */
+    derivedTemplate?: string;
+    templateKey?: string;
+    templateHash?: string;
   }
 ): Promise<CreatedAgent> {
   requireScope(ctx, "WRITE");
@@ -3470,6 +3703,9 @@ export async function createAgent(
   if (isAcp && !env.ACP_AGENT_TOKEN) env.ACP_AGENT_TOKEN = embedToken;
   const sb = await createSandbox(ctx, {
     template: params.template,
+    derivedTemplate: params.derivedTemplate,
+    templateKey: params.templateKey,
+    templateHash: params.templateHash,
     timeoutSeconds: isAcp ? ACP_IDLE_SECONDS : params.timeoutSeconds,
     name: params.name,
     memoryMb: params.memoryMb,

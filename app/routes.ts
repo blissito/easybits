@@ -320,6 +320,9 @@ export default [
     // Snapshots catalog (copy-on-write clone sources) — backs eb.sandboxes.snapshots.*
     route("snapshots", "routes/api/v2/snapshots-collection.ts"),
     route("snapshots/:id", "routes/api/v2/snapshot-item.ts"),
+    // Plantillas derivadas (template-snapshot) — backs eb.sandboxes.templateSnapshots.*
+    route("template-snapshots", "routes/api/v2/template-snapshots-collection.ts"),
+    route("template-snapshots/:id", "routes/api/v2/template-snapshot-item.ts"),
     // Always-on hosting (máquinas permanentes) — backs eb.machines.*
     route("machines/tiers", "routes/api/v2/machines-tiers.ts"),
     route("machines", "routes/api/v2/machines-collection.ts"),

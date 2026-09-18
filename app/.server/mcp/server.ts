@@ -123,6 +123,9 @@ import {
   snapshotSandbox,
   listSnapshots,
   deleteSnapshot,
+  createTemplateSnapshot,
+  listTemplateSnapshots,
+  deleteTemplateSnapshot,
   forkSandbox,
   execCommand,
   runCode,
@@ -345,6 +348,9 @@ const SANDBOX_TOOL_KIND: Record<string, "create" | "op"> = {
   sandbox_resume: "op",
   sandbox_exec: "op",
   sandbox_run_code: "op",
+  sandbox_template_snapshot: "op",
+  sandbox_list_template_snapshots: "op",
+  sandbox_delete_template_snapshot: "op",
   sandbox_run_cell: "op",
   sandbox_kernel_restart: "op",
   sandbox_files_write: "op",
@@ -1664,11 +1670,15 @@ How to embed safely (the only reliable rule):
       // Enum derivado de SANDBOX_TEMPLATES (misma fuente que el validador REST):
       // hardcodearlo aquí dejó fuera templates reales — ghosty-studio, el único
       // con SSH, no se podía crear por MCP aunque REST sí lo aceptaba.
-      template: z.enum(SANDBOX_TEMPLATES).describe("Base image template. 'code-interpreter' = Python with a persistent Jupyter kernel (use sandbox_run_cell — state survives between cells, matplotlib charts as images). 'node-agent' = node + Claude SDK pre-baked (agent_run). 'goose' = Block's coding agent. 'ghostyclaw' = long-lived Ghosty runtime (nanoclaw daemon + Docker + admin-api, always-on). 'openclaw' = OpenClaw personal AI. 'chat-openai' / 'chat-anthropic' = persistent Express+SSE chat runtime — use agent_create instead of sandbox_create for these. 'dev-box' = clean work box (git, curl, build-essential, Node 22) and the recommended one for SSH (sandbox_ssh_enable). Call templates_list for the full catalog."),
+      template: z.enum(SANDBOX_TEMPLATES).optional().describe("Base image template (optional when templateKey/derivedTemplate is given: the derived template knows its base). 'code-interpreter' = Python with a persistent Jupyter kernel (use sandbox_run_cell — state survives between cells, matplotlib charts as images). 'node-agent' = node + Claude SDK pre-baked (agent_run). 'goose' = Block's coding agent. 'ghostyclaw' = long-lived Ghosty runtime (nanoclaw daemon + Docker + admin-api, always-on). 'openclaw' = OpenClaw personal AI. 'chat-openai' / 'chat-anthropic' = persistent Express+SSE chat runtime — use agent_create instead of sandbox_create for these. 'dev-box' = clean work box (git, curl, build-essential, Node 22) and the recommended one for SSH (sandbox_ssh_enable). Call templates_list for the full catalog."),
       timeoutSeconds: z.number().int().min(30).max(MAX_SANDBOX_TTL_SECONDS).optional().describe("Auto-destroy after N seconds (default 300). Max depends on your plan: Byte 3600 (1h) · Mega 14400 (4h) · Tera 86400 (24h)"),
       name: z.string().max(64).optional().describe("Optional human-friendly label"),
       metadata: z.record(z.string()).optional().describe("Optional key-value tags"),
       size: z.enum(["s", "m", "l", "xl"]).optional().describe("VM size class (default s). s=1vCPU/512MB · m=2/2GB+4GB disk · l=4/4GB+12GB disk · xl=8/8GB+24GB disk. Bigger needed for heavy installs/builds (vite/RRv7). Gated by plan."),
+      templateKey: z.string().optional().describe("Boot from a DERIVED template captured with sandbox_template_snapshot: its content key (with templateHash). The box is born with that bootstrap already done (~24 ms create + boot). 404 DerivedTemplateNotProvisioned if the pair does not exist → prepare a box and capture it; 409 DerivedTemplateStale if the base template was rebaked → capture again."),
+      templateHash: z.string().optional().describe("Content hash paired with templateKey"),
+      derivedTemplate: z.string().optional().describe("Alternative to templateKey+templateHash: the derivedId (dt_…) returned by sandbox_template_snapshot"),
+      env: z.record(z.string()).optional().describe("Environment for the box. A derived-template child NEVER inherits the env of its source (secrets are scrubbed) — pass what it needs here."),
     },
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
@@ -2271,6 +2281,49 @@ How to embed safely (the only reliable rule):
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await deleteSnapshot(ctx, params.snapshotId);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+    })
+  );
+
+  // ── Plantillas derivadas (template-snapshot) ──
+  server.tool(
+    "sandbox_template_snapshot",
+    "Capture a PREPARED running sandbox (deps installed, seeds written, bootstrap done) ONCE as a reusable DERIVED TEMPLATE keyed by (key, hash), without stopping it. From then on sandbox_create with the same templateKey+templateHash boots a box with that bootstrap already done, in the time of a normal create (~24 ms + boot) — no snapshot-fork, no re-install. Idempotent: if (key, hash) already exists it returns reused:true and does not touch the box. Put in `hash` a digest of what determines the bootstrap (base template, deps manifest, seeds, skills) — NEVER prompts or credentials: secrets are scrubbed from the template and each child gets its own `env`. The base template being rebaked makes it stale (409 DerivedTemplateStale on create → capture again). Unused for 30 days → auto-deleted. Returns { derivedId, key, hash, baseTemplate, sizeBytes, reused }.",
+    {
+      sandboxId: z.string().describe("Running sandbox to capture"),
+      key: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/).describe("Content key, e.g. 'eve:agent-main' or 'fleet:6a55'"),
+      hash: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/).describe("Content hash (sha256 of what defines the bootstrap)"),
+      name: z.string().max(64).optional().describe("Human label"),
+    },
+    { idempotentHint: true, openWorldHint: false },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { sandboxId, ...rest } = params;
+      return ok(await createTemplateSnapshot(ctx, sandboxId, rest));
+    })
+  );
+
+  server.tool(
+    "sandbox_list_template_snapshots",
+    "List your derived templates (captured with sandbox_template_snapshot): derivedId, key, hash, baseTemplate, sizeBytes, createdAt, lastUsedAt. Check here whether a (key, hash) pair is already prepared before bootstrapping a box.",
+    {},
+    { readOnlyHint: true, openWorldHint: false },
+    wrapHandler(async (_params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const items = await listTemplateSnapshots(ctx);
+      return ok(paginate(items, { total: items.length }));
+    })
+  );
+
+  server.tool(
+    "sandbox_delete_template_snapshot",
+    "Delete a derived template by derivedId. Fails with 409 DerivedTemplateInUse while children created from it are alive (starting/running/suspended) — destroy them first. Does not affect the source box.",
+    {
+      derivedId: z.string().describe("Derived template id (dt_…)"),
+    },
+    { destructiveHint: true, idempotentHint: true, openWorldHint: false },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      return ok(await deleteTemplateSnapshot(ctx, params.derivedId));
     })
   );
 

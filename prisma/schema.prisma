@@ -262,6 +262,7 @@ model User {
   computeKeys          ComputeKey[]
   sandboxes            Sandbox[]
   sandboxSnapshots     SandboxSnapshot[]
+  derivedTemplates     DerivedTemplate[]
   machineReleases      MachineRelease[]
   sandboxBackups       SandboxBackup[]
   fleetAgents          FleetAgent[]
@@ -1591,6 +1592,29 @@ model SandboxSnapshot {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
+  @@index([ownerId])
+}
+
+// Plantilla derivada (`template-snapshot`): el delta de disco de una caja ya
+// preparada (bootstrap hecho) capturado en el host con clave de contenido
+// (key, hash). Cada create con ese par nace con el bootstrap listo (~9 ms de
+// dmsetup + boot). Catálogo del owner; los archivos viven en el host.
+model DerivedTemplate {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  ownerId   String   @db.ObjectId
+  owner     User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  derivedId String   @unique // host handle ("dt_…")
+  key       String
+  hash      String
+  name      String?
+  template  String   // template base del que deriva
+  sourceId  String?  // caja de la que se capturó
+  sizeBytes BigInt   @default(0)
+  status    String   @default("available") // available | stale | deleting
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([ownerId, key, hash])
   @@index([ownerId])
 }
 

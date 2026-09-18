@@ -26,7 +26,7 @@ export type SandboxTemplate = (typeof SANDBOX_TEMPLATES)[number];
 // sandbox-action.ts se tipa contra esto y test/docsDrift exige que el enum
 // `{action}` de public/openapi.yaml sea idéntico.
 export const SANDBOX_ACTIONS = [
-  "extend", "suspend", "resume", "idle", "bootstrap", "snapshot", "fork",
+  "extend", "suspend", "resume", "idle", "bootstrap", "snapshot", "fork", "template-snapshot",
   "exec", "run-code", "run-cell", "kernel-restart", "logs", "runtime", "apply-patch",
   "expose", "expose-raw", "unexpose-raw",
   "ssh-enable", "ssh-disable", "ssh-ticket",
@@ -35,8 +35,19 @@ export const SANDBOX_ACTIONS = [
 ] as const;
 export type SandboxAction = (typeof SANDBOX_ACTIONS)[number];
 
+const DERIVED_KEY = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/);
+
 export const SandboxCreateBody = z.object({
-  template: z.enum(SANDBOX_TEMPLATES),
+  // Opcional cuando se crea desde una plantilla derivada (el host toma el base).
+  template: z.enum(SANDBOX_TEMPLATES).optional(),
+  // Plantilla derivada (template-snapshot): por id o por (key, hash). El hijo nace
+  // con el bootstrap hecho. 404 DerivedTemplateNotProvisioned / 409 DerivedTemplateStale.
+  derivedTemplate: z.string().optional(),
+  templateKey: DERIVED_KEY.optional(),
+  templateHash: DERIVED_KEY.optional(),
+  // Env del hijo (/etc/sandbox-env/env + env_file de la unit). Un derivado nunca
+  // hereda el env de su origen: aquí va lo que la caja necesita.
+  env: z.record(z.string()).optional(),
   timeoutSeconds: z.number().int().min(30).max(MAX_SANDBOX_TTL_SECONDS).optional(),
   name: z.string().max(64).optional(),
   metadata: z.record(z.string()).optional(),
@@ -51,6 +62,14 @@ export const SandboxCreateBody = z.object({
   // wake barato (team boxes de Ghosty). Se reenvía verbatim al host.
   suspendOnIdle: z.boolean().optional(),
   hardTtlSeconds: z.number().int().min(60).optional(),
+}).refine((b) => b.template || b.derivedTemplate || (b.templateKey && b.templateHash), {
+  message: "Indica template, o derivedTemplate, o templateKey+templateHash",
+});
+
+export const TemplateSnapshotBody = z.object({
+  key: DERIVED_KEY,
+  hash: DERIVED_KEY,
+  name: z.string().max(64).optional(),
 });
 
 export const SandboxIdleBody = z.object({
