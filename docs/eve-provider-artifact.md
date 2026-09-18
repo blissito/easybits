@@ -21,19 +21,25 @@ create acepta `derivedTemplate` o `{templateKey, templateHash}`.
 - `GET /v1/sandbox/{id}` devuelve `derivedFrom` → un `resume` puede comprobar que el artifact
   sigue vivo (si el derivado fue GC-eado, 410 `DerivedTemplateGone`, nuevo).
 
-## 2. `@easybits.cloud/eve-sandbox` — provider listo para #3271
-Mantener el `SandboxBackend` actual (eve ≤ 0.59) y añadir en el mismo paquete
-`easybitsProvider()` con el contrato nuevo, exportado bajo `./provider` para no romper:
-
-- `prepare(input)` → caja temporal + seeds + bootstrap → `template-snapshot {key, hash}` →
-  devuelve el **artifact del host** tal cual (JSON). Idempotente por el host.
-- `start(context, artifact, options)` → `POST /v1/sandbox { artifact, env: options.env,
-  networkPolicy: options.networkPolicy }` → `state = { sandboxId }`. Sin `existingMetadata`:
-  el reattach es responsabilidad de `resume`.
-- `resume(context, artifact, state)` → `GET /v1/sandbox/{sandboxId}`; suspendida → resume;
-  perdida → `start` de nuevo con el mismo artifact (mismo bootstrap, disco nuevo).
-- Sesión (run/spawn/files/network) sin cambios: ya es la misma implementación.
-- Cuando #3271 mergee: bump mayor, README con las dos formas, y el issue upstream ofrece esto.
+## 2. `@easybits.cloud/eve-sandbox` — provider para #3271 (IMPLEMENTADO, `./provider`)
+Contrato REAL del PR (rama `spike/dockerfile-sandbox-local`, commit `61efc255`), distinto de lo
+que suponía este doc antes:
+- `prepare(ctx)` NO recibe bootstrap ni key/hash: recibe `ctx.resources` (workspace/skills con
+  `targetPath`), `ctx.files` y `ctx.log`. El setup del usuario es la opción `prepare(sandbox)`
+  del `environment()`. Nuestro `prepare` = caja temporal + recursos en `/workspace` y
+  `$HOME/.agents/skills` + `prepare(sandbox)` → **plantilla derivada** (`templateSnapshot`,
+  key `eve:<resources.source.key>`, hash = template + keys de recursos + `prepare.toString()`).
+  Artifact = `{ derivedId, key, hash, template, version }`.
+- `start(ctx, options, artifact)` → `{ handle, state }`; `create({templateKey, templateHash})`
+  + `env` (a `/etc/profile.d`) + `networkPolicy`; state = `{ sandboxId, sessionName, generation, version }`.
+- `resume(ctx, artifact, state)` → sólo handle. eve dicta FALLAR si el estado nativo se perdió;
+  implementamos `recreateOnLoss` (default true) que re-crea desde el artifact; `false` lanza.
+- Handle = `{ sandbox, onSessionStop, onRuntimeShutdown, onSessionDelete }` (no stop/shutdown/delete).
+- `SandboxTemplateNotProvisionedError` lleva `providerName`; se exporta desde `eve/sandbox/provider`.
+- Medido (`scripts/smoke-provider.ts`): prepare 8.2 s (derivado 12 MB), prepare#2 0.3 s reusado,
+  start 5.0 s, suspend+resume 4.9 s misma caja, delete OK.
+- No cubierto aún: `ctx.files` (Dockerfile), montajes `/eve/resources`, `transform`/`forwardURL`,
+  y el `env` de `open()` se pierde si `resume` tuvo que re-crear.
 
 ## 3. Flota EasyBits — misma separación
 `spawnVm` hoy hornea persona + credenciales del motor + `FLEET_TOKEN` en el env del spawn y
