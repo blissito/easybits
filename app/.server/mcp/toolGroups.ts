@@ -105,7 +105,7 @@ export const TOOL_GROUPS: ToolGroup[] = [
   {
     key: "sites",
     label: "Websites",
-    description: "Solo tools de websites (crear, deployar archivos, inject HTML).",
+    description: "Solo tools de websites (crear, deployar archivos, inject HTML, dominios propios).",
   },
   {
     key: "brand",
@@ -292,6 +292,8 @@ export const CORE_ALLOWLIST = new Set<string>([
   "list_websites",
   "create_website",
   "delete_website",
+  "list_domains",
+  "set_domain_website",
   "transform_image",
   "create_or_edit_image",
   "edit_image",
@@ -717,6 +719,7 @@ export const DB_ALLOWLIST = new Set<string>([
 export const SITIOS_ALLOWLIST = new Set<string>([
   "list_websites", "create_website", "delete_website",
   "deploy_website_file", "upload_website_file", "list_website_files", "inject_html",
+  "list_domains", "add_domain", "verify_domain", "set_domain_website", "delete_domain",
   "get_file", "list_files", "upload_file",
 ]);
 

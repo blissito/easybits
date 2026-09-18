@@ -134,7 +134,7 @@ export async function listSites(ctx: AuthContext) {
   });
   const websites = await db.website.findMany({
     where: { id: { in: rows.map((r) => r.websiteId).filter(Boolean) as string[] } },
-    select: { id: true, slug: true, subdomainEnabled: true },
+    select: { id: true, slug: true, subdomainEnabled: true, apexOf: { select: { domain: true, verified: true } } },
   });
   const bySite = Object.fromEntries(websites.map((w) => [w.id, w]));
   return rows.map((r) => ({ ...r, url: publicUrl(r, r.websiteId ? bySite[r.websiteId] : null) }));
@@ -145,7 +145,10 @@ export async function getSite(ctx: AuthContext, id: string) {
   const site = await db.site.findFirst({ where: { id, ownerId: ctx.user.id, ...NOT_DELETED } });
   if (!site) throw new Response("Site not found", { status: 404 });
   const website = site.websiteId
-    ? await db.website.findUnique({ where: { id: site.websiteId }, select: { id: true, slug: true, subdomainEnabled: true } })
+    ? await db.website.findUnique({
+        where: { id: site.websiteId },
+        select: { id: true, slug: true, subdomainEnabled: true, apexOf: { select: { domain: true, verified: true } } },
+      })
     : null;
   const sandbox = site.sandboxId
     ? await db.sandbox.findUnique({ where: { sandboxId: site.sandboxId }, select: { status: true, runspec: true, currentReleaseId: true } })
@@ -154,11 +157,17 @@ export async function getSite(ctx: AuthContext, id: string) {
 }
 
 type Row = { kind: string; sandboxId: string | null };
-type Web = { slug: string; subdomainEnabled: boolean } | null;
+type Web = {
+  slug: string;
+  subdomainEnabled: boolean;
+  apexOf?: { domain: string; verified: boolean }[];
+} | null;
 
-/** URL pública del sitio (lo que se comparte). */
+/** URL pública del sitio (lo que se comparte). Dominio propio gana si el sitio es su apex. */
 function publicUrl(site: Row, website: Web) {
   if (site.kind === "static" && website) {
+    const apex = website.apexOf?.find((d) => d.verified);
+    if (apex) return `https://${apex.domain}`;
     return website.subdomainEnabled
       ? `https://${website.slug}.easybits.cloud`
       : `https://www.easybits.cloud/s/${website.slug}/`;

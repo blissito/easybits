@@ -450,6 +450,7 @@ export default [
     route("learn/progress", "routes/api/v2/learn.progress.ts"),
     route("domains", "routes/api/v2/domains.ts"),
     route("domains/:domainId/verify", "routes/api/v2/domain-verify.ts"),
+    route("domains/:domainId/apex", "routes/api/v2/domain-apex.ts"),
     route("themes", "routes/api/v2/themes.ts"),
     route("brand-kits", "routes/api/v2/brand-kits.ts"),
     route("brand-kits/:id", "routes/api/v2/brand-kit.ts"),

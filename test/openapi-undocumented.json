@@ -106,8 +106,6 @@
   "/api/v2/generation-packs",
   "/api/v2/sandbox-reservations",
   "/api/v2/learn/progress",
-  "/api/v2/domains",
-  "/api/v2/domains/:domainId/verify",
   "/api/v2/themes",
   "/api/v2/brand-kits",
   "/api/v2/brand-kits/:id",

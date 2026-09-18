@@ -658,6 +658,8 @@ model Website {
   customDomainId String?       @db.ObjectId
   customDomain   CustomDomain? @relation(fields: [customDomainId], references: [id])
   subdomainEnabled Boolean     @default(false)
+  /// Dominios custom de los que este sitio es el apex (midominio.com / www).
+  apexOf         CustomDomain[] @relation("DomainApex")
   /** Ad-hoc per-site metadata: ogImageUrl (cached screenshot), description, etc. */
   metadata       Json?
   deletedAt      DateTime?
@@ -706,6 +708,9 @@ model CustomDomain {
   verified  Boolean   @default(false)
   txtToken  String
   websites  Website[]
+  /// Sitio servido en el dominio raíz (midominio.com y www.midominio.com). Null = sin apex.
+  apexWebsiteId String?  @db.ObjectId
+  apexWebsite   Website? @relation("DomainApex", fields: [apexWebsiteId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
 

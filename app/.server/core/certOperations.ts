@@ -51,10 +51,15 @@ async function getValidHostnames(): Promise<Set<string>> {
   // Verified custom domains → *.domain
   const customDomains = await db.customDomain.findMany({
     where: { verified: true },
-    select: { domain: true },
+    select: { domain: true, apexWebsiteId: true },
   });
   for (const d of customDomains) {
     valid.add(`*.${d.domain}`);
+    // El wildcard NO cubre el apex ni www: se emiten aparte al asignar un sitio raíz.
+    if (d.apexWebsiteId) {
+      valid.add(d.domain);
+      valid.add(`www.${d.domain}`);
+    }
   }
 
   // Legacy user domains → host.domain

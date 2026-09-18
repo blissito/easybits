@@ -80,9 +80,10 @@ export async function removeCustomDomain(domainId: string, userId: string) {
     data: { customDomainId: null },
   });
 
-  // Remove Fly cert
+  // Remove Fly certs (wildcard + apex/www si los había)
   try {
     await removeHost(`*.${domain.domain}`);
+    if (domain.apexWebsiteId) await removeApexCerts(domain.domain);
   } catch (e) {
     console.error("Failed to remove cert:", e);
   }
@@ -90,10 +91,67 @@ export async function removeCustomDomain(domainId: string, userId: string) {
   return db.customDomain.delete({ where: { id: domainId } });
 }
 
+export function apexHostnames(domain: string): [string, string] {
+  return [domain, `www.${domain}`];
+}
+
+async function createApexCerts(domain: string) {
+  if (!process.env.FLY_API_TOKEN) return;
+  for (const h of apexHostnames(domain)) await createHost(h);
+}
+
+async function removeApexCerts(domain: string) {
+  if (!process.env.FLY_API_TOKEN) return;
+  for (const h of apexHostnames(domain)) await removeHost(h);
+}
+
+/**
+ * Asigna (o quita, con websiteId=null) el sitio que se sirve en el dominio raíz
+ * (midominio.com y www.midominio.com). La ruta <slug>.<dominio> no cambia.
+ */
+export async function setDomainApex(
+  domainId: string,
+  userId: string,
+  websiteId: string | null
+) {
+  const domain = await db.customDomain.findFirst({
+    where: { id: domainId, ownerId: userId },
+  });
+  if (!domain) throw new Error("Domain not found");
+  if (!domain.verified) throw new Error("Domain not verified yet");
+
+  if (websiteId) {
+    const website = await db.website.findFirst({
+      where: { id: websiteId, ownerId: userId, status: { not: "DELETED" } },
+      select: { id: true },
+    });
+    if (!website) throw new Error("Website not found");
+  }
+
+  const updated = await db.customDomain.update({
+    where: { id: domainId },
+    data: { apexWebsiteId: websiteId },
+    include: { apexWebsite: { select: { id: true, name: true, slug: true } } },
+  });
+
+  // Certs no fatales: si fallan, el siguiente set los reintenta.
+  try {
+    if (websiteId) await createApexCerts(domain.domain);
+    else if (domain.apexWebsiteId) await removeApexCerts(domain.domain);
+  } catch (e) {
+    console.error("[setDomainApex] cert error:", e);
+  }
+
+  return updated;
+}
+
 export async function listCustomDomains(userId: string) {
   return db.customDomain.findMany({
     where: { ownerId: userId },
-    include: { websites: { select: { id: true, name: true, slug: true } } },
+    include: {
+      websites: { select: { id: true, name: true, slug: true } },
+      apexWebsite: { select: { id: true, name: true, slug: true } },
+    },
     orderBy: { createdAt: "desc" },
   });
 }

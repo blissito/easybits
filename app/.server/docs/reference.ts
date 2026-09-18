@@ -504,6 +504,27 @@ Routing details: \`/s/<slug>/\` serves \`index.html\`; a path with no extension 
 
 Images: download third-party images and upload them (\`upload_website_file\`, or \`deploy_website_file\` with \`encoding: "base64"\` if <1MB). Never hotlink Flickr/Unsplash from a published site.
 
+### Custom domains (your own domain, automatic HTTPS)
+Two ways to serve a website on a domain you own:
+
+- **Subdomain**: \`<slug>.midominio.com\` — every website of the account is reachable by its slug, no linking needed.
+- **Root domain**: \`midominio.com\` (and \`www.midominio.com\`, which 301-redirects to the root) — exactly one website per domain, assigned with \`set_domain_website\`.
+
+Flow: \`add_domain\` → add DNS → \`verify_domain\` → (optional) \`set_domain_website\`.
+
+| DNS record | Name | Value | Needed for |
+|---|---|---|---|
+| TXT | \`_easybits-verify.midominio.com\` | the \`txtToken\` returned by \`add_domain\` | verification |
+| CNAME | \`*.midominio.com\` | \`easybits.fly.dev\` | subdomains |
+| A | \`midominio.com\` | \`66.241.125.82\` | root domain |
+| AAAA | \`midominio.com\` | \`2a09:8280:1::5c:8bf9:0\` | root domain |
+| CNAME | \`www.midominio.com\` | \`easybits.fly.dev\` | root domain |
+
+Certificates are issued on Fly automatically (wildcard on verify; root + www when a site is assigned). They can take a few minutes after DNS propagates.
+
+REST: \`GET/POST/DELETE /domains\`, \`POST /domains/:domainId/verify\`, \`POST /domains/:domainId/apex\` \`{ websiteId | null }\`.
+MCP: \`list_domains\`, \`add_domain\`, \`verify_domain\`, \`set_domain_website\`, \`delete_domain\`.
+
 ### List websites
 \`GET /websites\`
 Returns: \`{ items: Website[] }\`

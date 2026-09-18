@@ -7,7 +7,11 @@ import {
   verifyCustomDomain,
   removeCustomDomain,
   listCustomDomains,
+  setDomainApex,
 } from "~/.server/core/customDomainOperations";
+import { listWebsites } from "~/.server/core/operations";
+import type { AuthContext } from "~/.server/apiAuth";
+import { FLY_EDGE_IPS } from "~/lib/fly_certs/edge_ips";
 import type { Route } from "./+types/domains";
 
 export const meta = () => [
@@ -18,7 +22,11 @@ export const meta = () => [
 export const loader = async ({ request }: Route.LoaderArgs) => {
   const user = await getUserOrRedirect(request);
   const domains = await listCustomDomains(user.id);
-  return { domains };
+  const { items: websites } = await listWebsites(
+    { user, scopes: ["READ"] } as unknown as AuthContext,
+    { limit: 200 }
+  );
+  return { domains, websites: websites.map((w) => ({ id: w.id, name: w.name, slug: w.slug })) };
 };
 
 export const action = async ({ request }: Route.ActionArgs) => {
@@ -37,6 +45,12 @@ export const action = async ({ request }: Route.ActionArgs) => {
       await verifyCustomDomain(domainId, user.id);
       return { ok: true };
     }
+    if (intent === "set-apex") {
+      const domainId = form.get("domainId") as string;
+      const websiteId = (form.get("websiteId") as string) || null;
+      await setDomainApex(domainId, user.id, websiteId);
+      return { ok: true };
+    }
     if (intent === "remove") {
       const domainId = form.get("domainId") as string;
       await removeCustomDomain(domainId, user.id);
@@ -49,7 +63,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
 };
 
 export default function DomainsPage() {
-  const { domains } = useLoaderData<typeof loader>();
+  const { domains, websites } = useLoaderData<typeof loader>();
   const fetcher = useFetcher();
   const [newDomain, setNewDomain] = useState("");
 
@@ -64,7 +78,7 @@ export default function DomainsPage() {
     <div className="max-w-3xl">
       <h2 className="text-2xl font-black mb-1">Custom Domains</h2>
       <p className="text-sm text-gray-500 mb-6">
-        Publica landings y presentaciones en tu propio dominio (slug.tudominio.com)
+        Publica sitios en tu propio dominio: en subdominios (slug.tudominio.com) o en el dominio raíz (tudominio.com)
       </p>
 
       {actionError && (
@@ -156,13 +170,65 @@ export default function DomainsPage() {
                       <span className="font-mono text-xs bg-gray-200 px-2 py-0.5 rounded">CNAME</span>
                       <span className="font-mono text-xs">*.{d.domain}</span>
                       <span className="text-gray-400 mx-1">&rarr;</span>
-                      <span className="font-mono text-xs">easybits.fly.dev</span>
+                      <span className="font-mono text-xs">{FLY_EDGE_IPS.cnameTarget}</span>
+                    </div>
+                    <p className="text-xs text-gray-500 pt-1">Solo si vas a usar el dominio raíz:</p>
+                    <div className="flex gap-2">
+                      <span className="font-mono text-xs bg-gray-200 px-2 py-0.5 rounded">A</span>
+                      <span className="font-mono text-xs">{d.domain}</span>
+                      <span className="text-gray-400 mx-1">&rarr;</span>
+                      <span className="font-mono text-xs">{FLY_EDGE_IPS.v4}</span>
+                    </div>
+                    <div className="flex gap-2">
+                      <span className="font-mono text-xs bg-gray-200 px-2 py-0.5 rounded">AAAA</span>
+                      <span className="font-mono text-xs">{d.domain}</span>
+                      <span className="text-gray-400 mx-1">&rarr;</span>
+                      <span className="font-mono text-xs">{FLY_EDGE_IPS.v6}</span>
                     </div>
                   </div>
                   <p className="text-xs text-gray-500 mt-2">
                     Despues de agregar los registros, haz clic en "Verificar". La propagacion DNS puede tardar hasta 48h.
                   </p>
                 </div>
+              )}
+
+              {/* Sitio en el dominio raíz */}
+              {d.verified && (
+                <fetcher.Form method="post" className="mt-2 flex flex-wrap items-center gap-2 text-sm">
+                  <input type="hidden" name="intent" value="set-apex" />
+                  <input type="hidden" name="domainId" value={d.id} />
+                  <label className="text-xs font-bold text-gray-500">Sitio en {d.domain} y www:</label>
+                  <select
+                    name="websiteId"
+                    defaultValue={d.apexWebsite?.id ?? ""}
+                    className="border-2 border-black rounded-lg px-2 py-1 text-xs font-bold bg-white"
+                  >
+                    <option value="">— ninguno —</option>
+                    {websites.map((w) => (
+                      <option key={w.id} value={w.id}>
+                        {w.name} ({w.slug})
+                      </option>
+                    ))}
+                  </select>
+                  <BrutalButton type="submit" disabled={isSubmitting} size="chip">
+                    Guardar
+                  </BrutalButton>
+                  {d.apexWebsite && (
+                    <a
+                      href={`https://${d.domain}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-xs font-mono underline"
+                    >
+                      https://{d.domain}
+                    </a>
+                  )}
+                </fetcher.Form>
+              )}
+              {d.verified && !d.apexWebsite && (
+                <p className="text-xs text-gray-500 mt-1">
+                  Para el dominio raíz necesitas los registros A/AAAA hacia {FLY_EDGE_IPS.v4} / {FLY_EDGE_IPS.v6} y CNAME www &rarr; {FLY_EDGE_IPS.cnameTarget}.
+                </p>
               )}
 
               {/* Linked websites */}

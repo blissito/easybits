@@ -44,6 +44,8 @@ tags:
     description: Flota elástica de agentes multicanal (WhatsApp, WABA, web).
   - name: Webhooks
     description: Avisos HTTP firmados con HMAC.
+  - name: Domains
+    description: Dominios propios para sitios (subdominios y dominio raíz).
   - name: Account
     description: Identidad, uso y saldo de tokens LLM.
   - name: Docs
@@ -1799,6 +1801,120 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  # ───────────────────────── Domains ─────────────────────────
+  /api/v2/domains:
+    get:
+      tags: [Domains]
+      operationId: listDomains
+      summary: Listar dominios propios
+      description: "Cada dominio trae `websites` (sitios accesibles en `<slug>.<dominio>`) y `apexWebsite` (sitio servido en el dominio raíz y www, o null)."
+      responses:
+        "200":
+          description: Dominios.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  domains:
+                    type: array
+                    items: { $ref: "#/components/schemas/CustomDomain" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    post:
+      tags: [Domains]
+      operationId: addDomain
+      summary: Registrar dominio propio
+      description: "Devuelve `txtToken`. DNS: TXT `_easybits-verify.<dominio>` = txtToken; CNAME `*.<dominio>` → easybits.fly.dev. Para el dominio raíz además A `<dominio>` → 66.241.125.82, AAAA → 2a09:8280:1::5c:8bf9:0 y CNAME `www` → easybits.fly.dev. Luego verificar."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [domain]
+              properties:
+                domain: { type: string, example: midominio.com }
+      responses:
+        "201":
+          description: Dominio pendiente de verificación.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  domain: { $ref: "#/components/schemas/CustomDomain" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    delete:
+      tags: [Domains]
+      operationId: deleteDomain
+      summary: Eliminar dominio propio
+      description: Desvincula sus sitios y borra los certificados.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [domainId]
+              properties:
+                domainId: { type: string }
+      responses:
+        "200":
+          description: Eliminado.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Ok" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /api/v2/domains/{domainId}/verify:
+    parameters:
+      - $ref: "#/components/parameters/domainId"
+    post:
+      tags: [Domains]
+      operationId: verifyDomain
+      summary: Verificar dominio (TXT) y emitir certificado wildcard
+      responses:
+        "200":
+          description: Dominio verificado.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  domain: { $ref: "#/components/schemas/CustomDomain" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /api/v2/domains/{domainId}/apex:
+    parameters:
+      - $ref: "#/components/parameters/domainId"
+    post:
+      tags: [Domains]
+      operationId: setDomainWebsite
+      summary: Sitio servido en el dominio raíz (y www)
+      description: "Asigna el website que responde en `<dominio>`; `www.<dominio>` redirige 301 al raíz. `websiteId: null` lo quita. La ruta `<slug>.<dominio>` no cambia. Emite certificados para el raíz y www."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                websiteId: { type: string, nullable: true }
+      responses:
+        "200":
+          description: Dominio con `apexWebsite` actualizado.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  domain: { $ref: "#/components/schemas/CustomDomain" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
   # ───────────────────────── Account ─────────────────────────
   /api/v2/me:
     get:
@@ -1956,6 +2072,11 @@ components:
       schema: { type: string }
     webhookId:
       name: webhookId
+      in: path
+      required: true
+      schema: { type: string }
+    domainId:
+      name: domainId
       in: path
       required: true
       schema: { type: string }
@@ -2384,6 +2505,32 @@ components:
             mimeType: { type: string }
         mediaUrl: { type: string }
         denikApiKey: { type: string }
+    CustomDomain:
+      type: object
+      properties:
+        id: { type: string }
+        domain: { type: string, example: midominio.com }
+        verified: { type: boolean }
+        txtToken: { type: string, description: "Valor del TXT en `_easybits-verify.<dominio>`." }
+        apexWebsiteId: { type: string, nullable: true }
+        apexWebsite:
+          type: object
+          nullable: true
+          description: Sitio servido en el dominio raíz y www.
+          properties:
+            id: { type: string }
+            name: { type: string }
+            slug: { type: string }
+        websites:
+          type: array
+          description: Sitios accesibles en `<slug>.<dominio>`.
+          items:
+            type: object
+            properties:
+              id: { type: string }
+              name: { type: string }
+              slug: { type: string }
+        createdAt: { type: string, format: date-time }
     Webhook:
       type: object
       properties:

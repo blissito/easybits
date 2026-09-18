@@ -80,6 +80,13 @@ import {
   revokePermission,
   listWebsiteFiles,
 } from "../core/operations";
+import {
+  addCustomDomain,
+  verifyCustomDomain,
+  removeCustomDomain,
+  listCustomDomains,
+  setDomainApex,
+} from "../core/customDomainOperations";
 import { getDocsMarkdown, VALID_SECTIONS } from "../docs/reference";
 import {
   listWebhooks,
@@ -5610,6 +5617,63 @@ function registerSiteTools(server: McpServer) {
       };
     })
   );
+  // --- Custom domain tools (sitios en tu propio dominio) ---
+
+  server.tool(
+    "list_domains",
+    "List your custom domains. Returns { items, nextCursor, hasMore, total }. Each item has `verified`, `txtToken` (TXT value for verification), `websites` (sites reachable at <slug>.<domain>) and `apexWebsite` (the site served at the root domain and www, or null).",
+    {},
+    wrapHandler(async (_params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const items = await listCustomDomains(ctx.user.id);
+      return ok(paginate(items, { nextCursor: null, total: items.length }));
+    })
+  );
+
+  server.tool(
+    "add_domain",
+    "Register a custom domain (e.g. `midominio.com`). Returns `{ domain }` with `txtToken`. DNS the user must add: TXT `_easybits-verify.<domain>` = txtToken; CNAME `*.<domain>` → easybits.fly.dev. To use the ROOT domain too: A `<domain>` → 66.241.125.82, AAAA → 2a09:8280:1::5c:8bf9:0, CNAME `www` → easybits.fly.dev. Then call `verify_domain`.",
+    { domain: z.string().describe("Root domain, without protocol (midominio.com)") },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      return ok({ domain: await addCustomDomain(ctx.user.id, params.domain) });
+    })
+  );
+
+  server.tool(
+    "verify_domain",
+    "Verify a custom domain by checking its TXT record and issue the wildcard certificate. Returns `{ domain }` with `verified: true`, or an error saying which record is missing.",
+    { domainId: z.string().describe("The domain ID (from list_domains)") },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      return ok({ domain: await verifyCustomDomain(params.domainId, ctx.user.id) });
+    })
+  );
+
+  server.tool(
+    "set_domain_website",
+    "Point a verified custom domain's ROOT (midominio.com, and www → 301 to it) at one of your websites. Pass `websiteId: null` to unassign. Subdomain routing (<slug>.<domain>) keeps working regardless. Requires A/AAAA records on the root domain (see add_domain). Returns `{ domain }` with `apexWebsite`.",
+    {
+      domainId: z.string().describe("The domain ID (from list_domains)"),
+      websiteId: z.string().nullable().describe("Website ID to serve at the root domain, or null to unassign"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      return ok({ domain: await setDomainApex(params.domainId, ctx.user.id, params.websiteId) });
+    })
+  );
+
+  server.tool(
+    "delete_domain",
+    "Remove a custom domain: unlinks its websites and deletes its certificates. Returns `{ ok: true }`.",
+    { domainId: z.string().describe("The domain ID to remove") },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      await removeCustomDomain(params.domainId, ctx.user.id);
+      return ok({ ok: true });
+    })
+  );
+
   // --- Website File Upload Tool ---
 
   server.tool(
