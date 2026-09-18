@@ -1601,15 +1601,18 @@ async function reclaimAccountCapacity(
 // modelo, prompt — va en cada create y en cada resume). El artifact se guarda en
 // `FleetAgent.metadata.artifact` y se re-captura sólo cuando cambia su hash.
 export const FLEET_ARTIFACT_VERSION = 1;
-// Interruptor. Medido en prod 2026-09-18 (claude-worker, 2048 MB): create normal
-// createdAt→running 3.2-4.1 s (el host sirve el base pre-horneado) vs hijo derivado
-// 10.3-12.0 s (boot completo). Mientras el host no arranque un derivado tan rápido
-// como el base, nacer del artifact es MÁS lento → apagado por default. Con
-// FLEET_ARTIFACT=on se captura y se usa; apagado no captura ni consulta nada.
-// Por agente: `persona.env.FLEET_ARTIFACT=on` (probar en UN agente sin tocar la flota).
-export const fleetArtifactEnabled = (fleetAgent?: { persona?: unknown }) =>
-  (process.env.FLEET_ARTIFACT || "").toLowerCase() === "on" ||
-  ((fleetAgent?.persona as Persona | undefined)?.env?.FLEET_ARTIFACT || "").toLowerCase() === "on";
+// Interruptor. Historia: el 2026-09-18 el hijo derivado tardaba 10-12 s (el host copiaba
+// el volumen /data ENTERO por hijo, 5.5 s); con volúmenes sparse (sandbox-host 59a09e2)
+// el hijo mide 1.8-1.9 s createdAt→running, igual que el create normal (1.4-2.1 s), y
+// además hereda /data (skills, seeds) sin re-sembrarlos. → ENCENDIDO por default.
+// Apagar globalmente: FLEET_ARTIFACT=off; por agente: `persona.env.FLEET_ARTIFACT=off`.
+export const fleetArtifactEnabled = (fleetAgent?: { persona?: unknown }) => {
+  const g = (process.env.FLEET_ARTIFACT || "").toLowerCase();
+  const p = ((fleetAgent?.persona as Persona | undefined)?.env?.FLEET_ARTIFACT || "").toLowerCase();
+  if (p === "off") return false;
+  if (p === "on") return true;
+  return g !== "off";
+};
 export type FleetArtifact = { derivedId: string; hash: string; at: string; templateVersion?: string };
 
 export function fleetArtifactKey(fleetAgentId: string): string {
