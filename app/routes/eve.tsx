@@ -123,8 +123,8 @@ export default function Eve({ loaderData }: Route.ComponentProps) {
               <a className="underline" href="https://eve.dev/docs/sandbox" target="_blank" rel="noopener noreferrer">
                 docs de eve: Sandbox
               </a>
-              ). Una línea en <code>agent/sandbox.ts</code> y cada sesión corre en su propia máquina
-              virtual en EasyBits, aislada, con root e internet, mientras tu servidor sigue en Vercel o en
+              ). Una línea en <code>agent/sandbox.ts</code> y cada sesión corre en su propio sandbox
+              en EasyBits, aislado, con root e internet, mientras tu servidor sigue en Vercel o en
               tu laptop. Gratis para empezar, en pesos mexicanos.
             </>
           ),
@@ -141,7 +141,7 @@ export default function Eve({ loaderData }: Route.ComponentProps) {
                   <a className="underline" href="https://eve.dev/docs/sandbox" target="_blank" rel="noopener noreferrer">
                     bootstrap
                   </a>
-                  ) en una máquina temporal y nosotros guardamos el resultado como imagen; los arranques
+                  ) en un sandbox temporal y nosotros guardamos el resultado como imagen; los arranques
                   siguientes reusan la imagen en 0.2 s.
                   <Snippet title="npm i @easybits.cloud/eve-sandbox" code={SNIPPET_SANDBOX} />
                 </>
@@ -155,8 +155,8 @@ export default function Eve({ loaderData }: Route.ComponentProps) {
               image: "/blog/assets/blog-eve-easybits-cover.png",
             },
             {
-              title: "Cada sesión tiene su máquina, y la conserva entre turnos",
-              body: "Cuando alguien le habla a tu agente, EasyBits levanta una copia de esa imagen sólo para esa conversación. Entre un mensaje y el siguiente la máquina duerme; al volver despierta en un segundo con todo como lo dejó.",
+              title: "Cada sesión tiene su sandbox, y la conserva entre turnos",
+              body: "Cuando alguien le habla a tu agente, EasyBits levanta una copia de esa imagen sólo para esa conversación. Entre un mensaje y el siguiente el sandbox duerme; al volver despierta en un segundo con todo como lo dejó.",
               bullets: [
                 "Aislamiento real: lo que rompa una sesión no toca a las demás",
                 "Duerme y despierta sin perder archivos ni procesos instalados",
@@ -166,29 +166,29 @@ export default function Eve({ loaderData }: Route.ComponentProps) {
               image: "/blog/assets/blog-eve-easybits-snapshot.png",
             },
             {
-              title: "El run sobrevive a la máquina (servidor hospedado, Mega+)",
+              title: "El run sobrevive al sandbox (servidor hospedado, Mega+)",
               body: (
                 <>
-                  Si además hospedas el servidor eve en una máquina de EasyBits, con{" "}
+                  Si además hospedas el servidor eve en un sandbox de EasyBits, con{" "}
                   <a className="underline" href="https://www.npmjs.com/package/@easybits.cloud/eve-world" target="_blank" rel="noopener noreferrer">
                     @easybits.cloud/eve-world
                   </a>{" "}
                   el estado de eve (runs, pasos, hooks, streams) vive en EasyBits DB en vez del disco del
-                  servidor. Lo probamos en producción: matamos la máquina a mitad de un run de 8 pasos y otra
-                  máquina lo retomó en el paso 3, sin repetir los anteriores, 59 segundos después.
+                  servidor. Lo probamos en producción: matamos el sandbox a mitad de un run de 8 pasos y otra
+                  sandbox lo retomó en el paso 3, sin repetir los anteriores, 59 segundos después.
                   <Snippet title="npm i @easybits.cloud/eve-world" code={SNIPPET_WORLD} />
                 </>
               ),
               bullets: [
                 "Una línea en agent.ts: experimental.workflow.world",
-                "Sin token: la máquina eve-nitro nace con EASYBITS_DB_URL en su entorno (sólo desde dentro de EasyBits)",
+                "Sin token: el sandbox eve-nitro nace con EASYBITS_DB_URL en su entorno (sólo desde dentro de EasyBits)",
                 "Port del world oficial de Postgres a libSQL, misma línea de versiones que eve",
                 "Sin EasyBits sigue funcionando: apunta a cualquier libSQL o cae al disco local",
               ],
               image: "/blog/assets/blog-eve-easybits-snapshot.png",
             },
             {
-              title: "Tú decides a qué se conecta cada máquina",
+              title: "Tú decides a qué se conecta cada sandbox",
               body: (
                 <>
                   Desde tu código de eve puedes limitar la salida a internet de una sesión: sólo a los dominios
@@ -200,7 +200,7 @@ export default function Eve({ loaderData }: Route.ComponentProps) {
               bullets: [
                 "Todo abierto, todo cerrado, o una lista de dominios exactos",
                 "La misma regla se puede poner desde la API, el SDK o las tools MCP",
-                "El servidor eve también puede vivir en una máquina de EasyBits, con URL pública",
+                "El servidor eve también puede vivir en un sandbox de EasyBits, con URL pública",
                 "Tu propio agente puede configurarlo con la skill easybits-eve",
               ],
               image: "/blog/assets/blog-eve-easybits-policy.png",
