@@ -1,7 +1,7 @@
 /**
  * Smoke test del backend contra la nube REAL (crea/destruye cajas y un
- * snapshot). Ejercita el contrato de eve de punta a punta:
- *   prewarm → create (fork) → run/spawn/files → stop → reattach → delete.
+ * plantilla derivada). Ejercita el contrato de eve de punta a punta:
+ *   prewarm (template-snapshot) → create (desde derivado) → run/spawn/files → stop → reattach → delete.
  *
  *   EASYBITS_API_KEY=… npx tsx scripts/smoke.ts
  */
@@ -40,7 +40,7 @@ t("prewarm#2", t0);
 }
 
 t0 = Date.now();
-console.log("3. create (fork del snapshot)");
+console.log("3. create (desde plantilla derivada)");
 const sessionKey = `sess-${Date.now().toString(36)}`;
 const h = await backend.create({ templateKey, sessionKey, tags: { agent: "smoke" }, runtimeContext: { appRoot: process.cwd() } });
 t("create", t0);
@@ -100,10 +100,10 @@ const st = await h2.captureState();
 if (st.metadata.sandboxId !== state.metadata.sandboxId) throw new Error("reattach opened a different box");
 t("suspend+resume", t0); console.log("  misma caja, estado intacto ✓");
 
-console.log("5. delete + limpiar snapshot");
+console.log("5. delete + limpiar plantilla derivada");
 await h2.delete();
 const eb = new EasybitsClient({ apiKey: process.env.EASYBITS_API_KEY! });
-for (const snap of await eb.sandboxes.snapshots.list()) {
-  if (snap.name?.startsWith(`eve:${templateKey}:`)) await eb.sandboxes.snapshots.delete(snap.snapshotId);
+for (const dt of await eb.sandboxes.templateSnapshots.list()) {
+  if (templateKey && dt.key === `eve:${templateKey}`) await eb.sandboxes.templateSnapshots.delete(dt.derivedId);
 }
 console.log("OK");
