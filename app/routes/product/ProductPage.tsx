@@ -133,7 +133,8 @@ export const productJsonLd = ({
   name,
   description,
   url: `https://www.easybits.cloud${path}`,
-  brand: { "@type": "Organization", "@id": "https://www.easybits.cloud/#org" },
+  // name inline: Google no sigue @id entre páginas, sin él la marca queda vacía.
+  brand: { "@type": "Organization", "@id": "https://www.easybits.cloud/#org", name: "EasyBits" },
   ...(priceMxn !== undefined && {
     offers: {
       "@type": "Offer",

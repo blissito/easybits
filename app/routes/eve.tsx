@@ -36,8 +36,9 @@ const JSON_LD = {
     name: "eve",
     url: "https://eve.dev",
     applicationCategory: "DeveloperApplication",
+    // softwareRequirements es propiedad de SoftwareApplication, no de Product.
+    softwareRequirements: "Node.js >= 24, npm package @easybits.cloud/eve-sandbox",
   },
-  softwareRequirements: "Node.js >= 24, npm package @easybits.cloud/eve-sandbox",
 };
 
 // Bloque de código mínimo para los bentos: la landing debe enseñar la configuración
