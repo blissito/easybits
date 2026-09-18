@@ -936,6 +936,14 @@ export async function createSandbox(
     plan.maxSandboxTtlSeconds
   );
   const env = withTemplateEnv(params.template, params.env);
+  // ⚠️ Medido 2026-09-17: el `env` de creación NO llega a /exec ni /bg en templates
+  // base (el host sólo lo aplica a las units de los templates agente). Hasta que el
+  // host lo exponga, el valor viaja también en metadata para que el usuario lo lea
+  // (GET /sandboxes/:id) y lo pase en el env del /bg de `eve start`.
+  const metadata =
+    env?.EASYBITS_DB_URL && params.template === "eve-nitro"
+      ? { ...(params.metadata ?? {}), eve_db_url: env.EASYBITS_DB_URL }
+      : params.metadata;
   const rec = await callHost<SandboxRecord>(
     "POST",
     "/v1/sandbox",
@@ -943,7 +951,7 @@ export async function createSandbox(
       template: params.template,
       timeoutSeconds: timeout,
       name: params.name,
-      metadata: params.metadata,
+      metadata,
       persistent,
       maxTtlSeconds: plan.maxSandboxTtlSeconds,
       suspendOnIdle: params.suspendOnIdle,
