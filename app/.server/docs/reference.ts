@@ -700,7 +700,7 @@ Configure via MCP tool \`set_ai_key\` or dashboard. Supports ANTHROPIC and OPENA
 | \`machines.backups(id)\` | Backups diarios de datos (7 días, incluidos) |
 | \`machines.backup(id)\` | Toma un backup ahora |
 | \`sb.exec(cmd)\` | Corre un comando dentro de la caja |
-| \`sb.suspend()\` / \`sb.resume()\` | Dormir ahora (snapshot, pausa el TTL) / despertar |
+| \`sb.suspend()\` / \`sb.resume({ env? })\` | Dormir ahora (snapshot, pausa el TTL) / despertar; \`env\` reescribe el entorno de la caja al despertar (rotar una llave sin destruirla) |
 | \`sb.setIdlePolicy({ suspendOnIdle, idleTtlSeconds?, hardTtlSeconds? })\` | Siesta al vencer el TTL en una caja YA creada, en vez de destruirse |
 | \`sb.exposePort(port)\` | URL pública \`sb-<id>-<port>.sandboxes.easybits.cloud\` con TLS (HTTP + WebSocket \`wss://\`) |
 | \`sb.exposeRawPort(port, proto)\` | Forward TCP/UDP crudo; devuelve \`endpoint\` \`host:hostPort\` |

@@ -120,8 +120,12 @@ async function dispatch(
       return Response.json(await extendSandbox(ctx, id, body.extendSeconds));
     case "suspend":
       return Response.json(await suspendSandbox(ctx, id));
-    case "resume":
-      return Response.json(await resumeSandbox(ctx, id));
+    // `env` opcional: el host reescribe /etc/sandbox-env/env (+ env_file de la unit) al
+    // despertar; útil para rotar una credencial o cambiar config sin destruir la caja.
+    case "resume": {
+      const env = body && typeof body === "object" && body.env && typeof body.env === "object" ? (body.env as Record<string, string>) : undefined;
+      return Response.json(await resumeSandbox(ctx, id, env ? { env } : {}));
+    }
     case "idle": {
       const p = SandboxIdleBody.safeParse(body);
       if (!p.success) return Response.json({ error: "Invalid body", issues: p.error.issues }, { status: 400 });

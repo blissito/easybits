@@ -2690,8 +2690,14 @@ export class Sandbox {
   }
   /** Restore a suspended sandbox; the remaining lifetime is restored and the
    *  auto-destroy timer re-armed (no extend needed). */
-  resume(): Promise<SandboxRecord> {
-    return this.post("/resume");
+  /**
+   * Wake a suspended box. Pass `env` to rewrite its environment on wake
+   * (shell, /exec, /bg and the template's unit) — e.g. rotate a credential
+   * without destroying the box. A running process keeps its old environ
+   * until it restarts.
+   */
+  resume(opts: { env?: Record<string, string> } = {}): Promise<SandboxRecord> {
+    return this.post("/resume", opts.env ? { env: opts.env } : {});
   }
   /**
    * Siesta por inactividad: con `suspendOnIdle: true`, al vencer el TTL la caja

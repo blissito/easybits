@@ -363,7 +363,7 @@ paths:
       operationId: sandboxAction
       summary: Acción sobre la caja
       description: |
-        `extend` `{extendSeconds?}` · `suspend` (snapshot, pausa el TTL) · `resume` ·
+        `extend` `{extendSeconds?}` · `suspend` (snapshot, pausa el TTL) · `resume` `{env?}` (reescribe el entorno al despertar) ·
         `idle` `{suspendOnIdle, idleTtlSeconds?, hardTtlSeconds?}` (siesta en caja YA creada: al
         vencer el TTL se suspende en vez de destruirse) ·
         `snapshot` `{name?}` · `fork` `{count?, name?, metadata?, timeoutSeconds?}` ·
