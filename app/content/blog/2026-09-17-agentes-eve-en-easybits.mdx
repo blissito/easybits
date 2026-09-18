@@ -23,12 +23,17 @@ Hay dos formas de usarlo, y conviene elegir antes de empezar:
 
 ## Ruta 1 — Gratis, sin mover tu servidor
 
-### 1. Instala y apunta el sandbox
+### 1. Crea el proyecto e instala el backend
+
+Necesitas Node ≥ 24 en tu máquina (lo exige eve). Si ya tienes un proyecto eve, salta al `pnpm add`:
 
 ```bash
-npm i @easybits.cloud/eve-sandbox   # Node ≥ 24, lo exige eve
-export EASYBITS_API_KEY=eb_...       # scope WRITE (y DELETE si eve debe borrar cajas y plantillas)
+npx eve init app && cd app          # scaffold de eve (o tu proyecto existente)
+pnpm add @easybits.cloud/eve-sandbox --allow-build=cbor-extract   # o: npm i @easybits.cloud/eve-sandbox
+export EASYBITS_API_KEY=eb_...      # scope WRITE (y DELETE si eve debe borrar cajas y plantillas)
 ```
+
+pnpm 12 bloquea los scripts de build de dependencias y sin ese flag `pnpm add` falla con `ERR_PNPM_IGNORED_BUILDS: cbor-extract@2.2.2`; con npm no hace falta.
 
 ```ts
 // agent/sandbox.ts
@@ -44,19 +49,44 @@ export default defineSandbox({
 });
 ```
 
-### 2. Arranca el servidor donde ya está
+### 2. Elige el modelo
 
-Nada más cambia. Con `EASYBITS_API_KEY` en el entorno, `eve dev` en tu laptop o `eve start` en Vercel (o en cualquier Node 24) siguen igual: el servidor corre ahí y cada sesión que necesite código pide su caja a EasyBits. Validado con eve 0.58.1 y 0.59.1.
+El scaffold de `eve init` (eve 0.59.1) apunta al AI Gateway de Vercel: `model: "openai/gpt-5.6-luna-fast"` como string en `agent/agent.ts`, que sin `AI_GATEWAY_API_KEY` falla con *"AI Gateway received no credentials"*. Fuera de Vercel cambia a un proveedor directo del AI SDK:
 
-### 3. Qué pasa por debajo
+```bash
+pnpm add @ai-sdk/anthropic
+```
+
+```ts
+// agent/agent.ts
+import { defineAgent } from "eve";
+import { anthropic } from "@ai-sdk/anthropic";
+
+export default defineAgent({
+  model: anthropic("claude-sonnet-5"),   // lee ANTHROPIC_API_KEY
+});
+```
+
+### 3. Compila y arranca el servidor donde ya está
+
+Con `EASYBITS_API_KEY` en el entorno, en tu laptop:
+
+```bash
+eve build          # obligatorio antes de `eve start`; valida el backend, por eso necesita EASYBITS_API_KEY
+eve dev --no-ui    # sesión local sin auth
+```
+
+`eve start` en local responde `401` incluso desde localhost (el `localDev()` del scaffold se ignora en producción): para probar en tu máquina usa `eve dev --no-ui`, o declara `httpBasic` como en la ruta 2. `eve dev` y `eve start` calculan hashes de plantilla distintos, así que la primera vez verás el prewarm dos veces (una por comando); no es un error. En Vercel (o cualquier Node 24) `eve start` sigue igual: el servidor corre ahí y cada sesión que necesite código pide su caja a EasyBits. Validado con eve 0.58.1 y 0.59.1.
+
+### 4. Qué pasa por debajo
 
 ![Un molde y las cajas que salen de él](/blog/assets/blog-eve-easybits-snapshot.png)
 
-`eve build` sólo compila (~10 s). Es en el primer `eve start` cuando eve llama `prewarm()`: levantamos una caja temporal `node`, escribimos tus seed files, corremos tu `bootstrap()`, capturamos el resultado como **plantilla derivada** con clave `eve:<templateKey>` + hash de las opciones (`POST /sandboxes/:id/template-snapshot`, 12-22 MB; log: `easybits: plantilla dt_… lista`) y destruimos la caja temporal. El siguiente arranque encuentra la plantilla y no reconstruye nada (`reusada`): medido, 0.3 s contra 8.6 s la primera vez. Si no la usas en 30 días se borra sola.
+`eve build` compila y valida el backend (~10 s), pero no crea cajas. Es en el primer `eve start` (o `eve dev`) cuando eve llama `prewarm()`: levantamos una caja temporal `node`, escribimos tus seed files, corremos tu `bootstrap()`, capturamos el resultado como **plantilla derivada** con clave `eve:<templateKey>` + hash de las opciones (`POST /sandboxes/:id/template-snapshot`, 12-22 MB; log: `easybits: plantilla dt_… lista`) y destruimos la caja temporal. El siguiente arranque encuentra la plantilla y no reconstruye nada (`reusada`): medido, 0.3 s contra 8.6 s la primera vez. Si no la usas en 30 días se borra sola.
 
 Cuando llega el primer mensaje, `create()` pide una caja desde esa plantilla (`POST /sandboxes` con `templateKey` + `templateHash`): nace con el bootstrap ya hecho, sin fork ni copia por hija, en ~4 s. Entre turnos la caja duerme con snapshot de la VM completa y despierta en ~1 s; eve la reabre por `sandboxId` con el disco tal cual lo dejó. `stop()` y `shutdown()` son suspend; `delete()` destruye. `run()` y `spawn()` corren en login shell con stdout y stderr en streams, y `kill()` señala al grupo de procesos entero.
 
-### 4. Política de red por caja
+### 5. Política de red por caja
 
 ![Una compuerta que deja pasar sólo algunos haces](/blog/assets/blog-eve-easybits-policy.png)
 
@@ -86,14 +116,22 @@ Aquí el servidor eve corre en una caja `eve-nitro` y cada sesión en su caja hi
 ```bash
 B=https://www.easybits.cloud/api/v2; H=(-H "Authorization: Bearer $EASYBITS_API_KEY" -H "Content-Type: application/json")
 SB=$(curl -s -X POST "$B/sandboxes" "${H[@]}" -d '{"template":"eve-nitro","timeoutSeconds":3600,"suspendOnIdle":true}' | jq -r .sandboxId)
-curl -s -X POST "$B/sandboxes/$SB/exec" "${H[@]}" -d '{"command":"cd /data && eve init app && cd app && pnpm add @easybits.cloud/eve-sandbox @easybits.cloud/eve-world @ai-sdk/anthropic && eve build","timeoutSeconds":600}'
+until [ "$(curl -s "$B/sandboxes/$SB" "${H[@]}" | jq -r .status)" = running ]; do sleep 2; done   # exec sobre una caja `starting` → 409 SandboxNotReady
+curl -s -X POST "$B/sandboxes/$SB/exec" "${H[@]}" -d '{"command":"cd /data && eve init app && cd app && pnpm add eve@latest @easybits.cloud/eve-sandbox @easybits.cloud/eve-world @ai-sdk/anthropic --allow-build=cbor-extract","timeoutSeconds":600}'
 ```
 
-El template `eve-nitro` trae Node 24, pnpm y el CLI de eve; `/data` es persistente. El `agent/sandbox.ts` es el mismo de la ruta 1.
+El template `eve-nitro` trae Node 24, pnpm y el CLI de eve (0.58.1; `pnpm add eve@latest` lo sube a 0.59.1 en el proyecto). `/data` es el volumen persistente, pero no el directorio de trabajo: `exec` arranca en `/`, por eso cada comando hace `cd /data` explícito. El flag `--allow-build=cbor-extract` es obligatorio con pnpm 12: sin él `pnpm add` falla con `ERR_PNPM_IGNORED_BUILDS` y nada de lo encadenado corre.
+
+Los archivos del agente se escriben con el endpoint de archivos del REST v2 (`POST /sandboxes/:id/files/write`, contenido en texto o `"encoding":"base64"`). Así sube `agent/sandbox.ts` (el mismo de la ruta 1); `agent/agent.ts` y `agent/channels/eve.ts` de los pasos 2 y 3 van igual:
+
+```bash
+curl -s -X POST "$B/sandboxes/$SB/files/write" "${H[@]}" \
+  -d "$(jq -n --rawfile c agent/sandbox.ts '{path:"/data/app/agent/sandbox.ts",content:$c}')"   # → { ok, bytes }
+```
 
 ### 2. Elige el modelo
 
-El scaffold de `eve init` apunta al AI Gateway de Vercel (`model: "anthropic/claude-sonnet-5"` como string) y sin `AI_GATEWAY_API_KEY` falla con *"AI Gateway received no credentials"*. Fuera de Vercel el modelo va como objeto de cualquier proveedor del AI SDK, en `agent/agent.ts`:
+Igual que en la ruta 1: el scaffold apunta al AI Gateway de Vercel (`model: "openai/gpt-5.6-luna-fast"` como string) y sin `AI_GATEWAY_API_KEY` falla con *"AI Gateway received no credentials"*. Fuera de Vercel el modelo va como objeto de un proveedor directo del AI SDK (`@ai-sdk/anthropic` ya quedó instalado en el paso 1), en `agent/agent.ts`:
 
 ```ts
 import { defineAgent } from "eve";
@@ -118,9 +156,12 @@ export default eveChannel({
 });
 ```
 
-### 4. Arranca y expón
+### 4. Compila, arranca y expón
+
+`eve build` valida el backend al compilar, así que necesita `EASYBITS_API_KEY` en el `env` del exec (sin él: `@easybits.cloud/eve-sandbox: falta apiKey`). No crea cajas: la plantilla del `prewarm` se captura en el primer `eve start`.
 
 ```bash
+curl -s -X POST "$B/sandboxes/$SB/exec" "${H[@]}" -d '{"command":"cd /data/app && eve build","timeoutSeconds":300,"env":{"EASYBITS_API_KEY":"<key>"}}'
 curl -s -X POST "$B/sandboxes/$SB/bg"   "${H[@]}" -d '{"command":"exec eve start","cwd":"/data/app","env":{"EASYBITS_API_KEY":"<key>","ANTHROPIC_API_KEY":"<key>","EVE_PASSWORD":"<pass>","PORT":"3000"}}'
 curl -s -X POST "$B/sandboxes/$SB/expose" "${H[@]}" -d '{"port":3000}'
 ```
@@ -145,4 +186,4 @@ Lo medimos en producción con un run de 8 pasos: destruimos la máquina a mitad 
 
 ## Empieza hoy
 
-Ruta 1: instala el paquete, cambia `agent/sandbox.ts` y corre `eve build` y `eve start` donde ya lo corrías; gratis, una conversación a la vez. Ruta 2: sube a Mega y sigue los seis pasos. La página del producto está en [/eve](/eve), la referencia en [/docs/eve.md](/docs/eve.md) y tu propio agente puede configurarlo con `npx skills add https://www.easybits.cloud --skill easybits-eve`.
+Ruta 1: crea el proyecto, instala el paquete, cambia `agent/sandbox.ts` y `agent/agent.ts`, y corre `eve build` y `eve dev`/`eve start` donde ya lo corrías; gratis, una conversación a la vez. Ruta 2: sube a Mega y sigue los seis pasos. La página del producto está en [/eve](/eve), la referencia en [/docs/eve.md](/docs/eve.md) y tu propio agente puede configurarlo con `npx skills add https://www.easybits.cloud --skill easybits-eve`.

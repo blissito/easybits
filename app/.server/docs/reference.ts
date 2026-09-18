@@ -1816,8 +1816,11 @@ const { file } = await eb.renderVideoProject(p.id); // → { fileId, url, render
 
 ### 1. Ruta gratis: sandboxes para agentes eve, servidor donde ya está
 
+Requiere Node ≥ 24 en la máquina (lo exige eve). Crea el proyecto (o usa el tuyo), instala el backend y un proveedor de modelo directo:
+
 \`\`\`bash
-npm i @easybits.cloud/eve-sandbox   # Node ≥ 24 (lo exige eve)
+npx eve init app && cd app
+pnpm add @easybits.cloud/eve-sandbox @ai-sdk/anthropic --allow-build=cbor-extract   # o: npm i … (pnpm 12 bloquea el build de cbor-extract; sin el flag: ERR_PNPM_IGNORED_BUILDS)
 \`\`\`
 
 \`\`\`ts
@@ -1845,21 +1848,30 @@ export default defineSandbox({
 
 Opciones: \`easybits({ apiKey, baseUrl, template: "node", timeoutSeconds, workingDirectory, runTimeoutSeconds, idleTtlSeconds, hardTtlSeconds, metadata })\`. \`setNetworkPolicy\` aplica una **política de egress por caja**, con el mismo shape que eve usa en Vercel: \`"allow-all"\`, \`"deny-all"\` o una allow-list por dominio (\`{ allow: { "api.github.com": [], "registry.npmjs.org": [] } }\`; \`"*"\` abre todo). El host la resuelve a IPs por microVM con refresco DNS, la persiste con la caja y la vuelve a aplicar al reanudar; toma efecto cuando la promesa resuelve, así que \`await\` antes del egress que quieres gobernar. **No soportado**: \`transform\` (inyectar headers en el firewall) — lanza error explícito; ese flujo (checkout de GitHub sin que el token entre a la caja) eve lo hace con su \`defaultBackend\`. Fuera de eve, la misma política vive en \`PUT/GET /sandboxes/:id/network-policy\` · SDK \`sb.setNetworkPolicy(policy)\` · MCP \`sandbox_set_network_policy\`. La llave necesita scope WRITE (crear, capturar la plantilla) y DELETE si eve debe borrar plantillas derivadas.
 
-Con eso basta: \`eve dev\` local o \`eve start\` en Vercel (o cualquier Node 24) con \`EASYBITS_API_KEY\` en el entorno. El prewarm usa una caja temporal que se destruye al capturar la plantilla (no ocupa cupo después); luego una caja hija por sesión, que duerme cuando no habla. Validado con eve 0.58.1 y 0.59.1. En Byte, una conversación a la vez: la siguiente recibe \`SandboxLimitReached\` hasta que eve borre la anterior o subas a Mega.
+**Modelo.** El scaffold de \`eve init\` (eve 0.59.1) usa el AI Gateway de Vercel — \`model: "openai/gpt-5.6-luna-fast"\` como string en \`agent/agent.ts\` — y sin \`AI_GATEWAY_API_KEY\` falla con *"AI Gateway received no credentials"*. Fuera de Vercel cambia a un proveedor directo: \`model: anthropic("claude-sonnet-5")\` (\`import { anthropic } from "@ai-sdk/anthropic"\`, lee \`ANTHROPIC_API_KEY\`).
+
+**Arrancar.** \`eve build\` es obligatorio antes de \`eve start\` y necesita \`EASYBITS_API_KEY\` en el entorno (valida el backend; sin ella: \`@easybits.cloud/eve-sandbox: falta apiKey\`). En local, \`eve start\` responde \`401\` incluso desde localhost (\`localDev()\` se ignora en producción): la sesión local entra con \`eve dev --no-ui\`, o con \`httpBasic\` como en la sección 2. \`eve dev\` y \`eve start\` calculan hashes de plantilla distintos → la primera vez el prewarm corre dos veces (no es error). En Vercel (o cualquier Node 24) \`eve start\` con \`EASYBITS_API_KEY\` en el entorno. El prewarm usa una caja temporal que se destruye al capturar la plantilla (no ocupa cupo después); luego una caja hija por sesión, que duerme cuando no habla. Validado con eve 0.58.1 y 0.59.1. En Byte, una conversación a la vez: la siguiente recibe \`SandboxLimitReached\` hasta que eve borre la anterior o subas a Mega.
 
 ### 2. Ruta hospedada (Mega+): el servidor eve dentro de una caja
 
-Template \`eve-nitro\`: Node 24, pnpm, \`eve\` CLI, git/curl/tar; \`/data\` es un volumen persistente de 4 GB y el directorio de trabajo; puerto 3000.
+Template \`eve-nitro\`: Node 24, pnpm, \`eve\` CLI 0.58.1 (\`pnpm add eve@latest\` lo sube a 0.59.1 en el proyecto), git/curl/tar; \`/data\` es un volumen persistente de 4 GB (**no** el directorio de trabajo: \`exec\` arranca en \`/\`, haz \`cd /data\` explícito); puerto 3000.
 
-Seis pasos: crear la caja, crear la app dentro con \`eve init\` (o clona la tuya si ya existe) e instalar los dos paquetes, elegir modelo, poner auth, arrancar el servidor, exponer el puerto. Antes define la base y los headers en bash:
+Seis pasos: crear la caja, crear la app dentro con \`eve init\` (o clona la tuya si ya existe) e instalar los paquetes, elegir modelo, poner auth, compilar y arrancar el servidor, exponer el puerto. Antes define la base y los headers en bash. Una caja recién creada está en \`starting\`: \`exec\`/\`bg\` sobre ella responden \`409 SandboxNotReady\`, espera a \`status=running\`. pnpm 12 bloquea el script de build de \`cbor-extract\`: sin \`--allow-build=cbor-extract\` el \`pnpm add\` falla con \`ERR_PNPM_IGNORED_BUILDS\`.
 
 \`\`\`bash
 B=https://www.easybits.cloud/api/v2; H=(-H "Authorization: Bearer $EASYBITS_API_KEY" -H "Content-Type: application/json")
-SB=$(curl -s -X POST "$B/sandboxes" "\${H[@]}" -d '{"template":"eve-nitro","timeoutSeconds":3600,"suspendOnIdle":true,"hardTtlSeconds":2592000}' | jq -r .sandboxId)
-curl -s -X POST "$B/sandboxes/$SB/exec" "\${H[@]}" -d '{"command":"cd /data && eve init app && cd app && pnpm add @easybits.cloud/eve-sandbox @easybits.cloud/eve-world @ai-sdk/anthropic && eve build","timeoutSeconds":600}'
+SB=$(curl -s -X POST "$B/sandboxes" "\${H[@]}" -d '{"template":"eve-nitro","timeoutSeconds":3600,"suspendOnIdle":true}' | jq -r .sandboxId)
+until [ "$(curl -s "$B/sandboxes/$SB" "\${H[@]}" | jq -r .status)" = running ]; do sleep 2; done
+curl -s -X POST "$B/sandboxes/$SB/exec" "\${H[@]}" -d '{"command":"cd /data && eve init app && cd app && pnpm add eve@latest @easybits.cloud/eve-sandbox @easybits.cloud/eve-world @ai-sdk/anthropic --allow-build=cbor-extract","timeoutSeconds":600}'
 \`\`\`
 
-**Modelo fuera de Vercel.** El scaffold de \`eve init\` apunta al AI Gateway de Vercel (\`model: "anthropic/claude-sonnet-5"\` como string) y sin \`AI_GATEWAY_API_KEY\` falla con *"AI Gateway received no credentials"*. En EasyBits pasa el modelo como objeto de cualquier proveedor del AI SDK — aquí Anthropic — y su llave en el env de \`eve start\`:
+**Escribir archivos en la caja.** \`POST /sandboxes/:id/files/write\` con \`{ path, content, encoding? }\` (texto, o \`"base64"\`); responde \`{ ok, bytes }\`. Así suben \`agent/sandbox.ts\` (el de la sección 1), \`agent/agent.ts\` y \`agent/channels/eve.ts\`:
+
+\`\`\`bash
+curl -s -X POST "$B/sandboxes/$SB/files/write" "\${H[@]}" -d "$(jq -n --rawfile c agent/sandbox.ts '{path:"/data/app/agent/sandbox.ts",content:$c}')"
+\`\`\`
+
+**Modelo fuera de Vercel.** El scaffold de \`eve init\` apunta al AI Gateway de Vercel (\`model: "openai/gpt-5.6-luna-fast"\` como string) y sin \`AI_GATEWAY_API_KEY\` falla con *"AI Gateway received no credentials"*. En EasyBits pasa el modelo como objeto de un proveedor directo del AI SDK — aquí Anthropic — y su llave en el env de \`eve start\`:
 
 \`\`\`ts
 // agent/agent.ts
@@ -1884,9 +1896,10 @@ export default eveChannel({
 });
 \`\`\`
 
-Arranca y expón. \`eve build\` sólo compiló; la plantilla derivada del \`prewarm\` se captura en este primer \`eve start\` (log \`easybits: plantilla dt_… lista\`; en arranques siguientes \`reusada\`):
+Compila, arranca y expón. \`eve build\` valida el backend, así que necesita \`EASYBITS_API_KEY\` en el \`env\` del exec (sin ella: \`falta apiKey\`); no crea cajas — la plantilla derivada del \`prewarm\` se captura en este primer \`eve start\` (log \`easybits: plantilla dt_… lista\`; en arranques siguientes \`reusada\`):
 
 \`\`\`bash
+curl -s -X POST "$B/sandboxes/$SB/exec" "\${H[@]}" -d '{"command":"cd /data/app && eve build","timeoutSeconds":300,"env":{"EASYBITS_API_KEY":"<key>"}}'
 curl -s -X POST "$B/sandboxes/$SB/bg"   "\${H[@]}" -d '{"command":"exec eve start","cwd":"/data/app","env":{"EASYBITS_API_KEY":"<key>","ANTHROPIC_API_KEY":"<key>","EVE_PASSWORD":"<pass>","PORT":"3000"}}'
 curl -s -X POST "$B/sandboxes/$SB/expose" "\${H[@]}" -d '{"port":3000}'   # → { url }
 \`\`\`
