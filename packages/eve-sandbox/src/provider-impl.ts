@@ -4,7 +4,7 @@
  * eve (`scripts/smoke-provider.ts`). Ver `provider.ts` para el mapeo.
  */
 import { createHash } from "node:crypto";
-import { EasybitsClient, EasybitsError, type Sandbox, type SnapshotRecord } from "@easybits.cloud/sdk";
+import { EasybitsClient, EasybitsError, type Sandbox } from "@easybits.cloud/sdk";
 import type { SandboxNetworkPolicy, SandboxSession } from "eve/sandbox";
 // `MutableNetworkSandboxSession`/`SandboxEnvironment` los exporta el PR desde
 // `eve/sandbox`; el eve instalado (0.59) no los tiene, así que se toman de la
@@ -20,7 +20,7 @@ import type {
 } from "eve/sandbox/provider";
 import {
   BACKEND_NAME,
-  SNAPSHOT_PREFIX,
+  derivedTemplateRef,
   ignore404,
   openSession,
   reattach,
@@ -54,7 +54,7 @@ export interface EasybitsOpenOptions {
 export type EasybitsPreparedArtifact = {
   readonly hash: string;
   readonly key: string;
-  readonly snapshotId: string;
+  readonly derivedId: string;
   readonly template: string;
   readonly version: typeof ARTIFACT_VERSION;
 };
@@ -92,27 +92,27 @@ export function createEasybitsProvider(options: EasybitsEnvironmentOptions = {})
 
   const hashOf = (value: unknown) => createHash("sha256").update(stableSerialize(value)).digest("hex");
 
-  async function findSnapshot(name: string) {
-    const list = await eb.sandboxes.snapshots.list();
-    return list
-      .filter((s: SnapshotRecord) => s.name === name)
-      .sort((a: SnapshotRecord, b: SnapshotRecord) => (a.createdAt < b.createdAt ? 1 : -1))[0];
-  }
-
+  // Caja de sesión desde la plantilla DERIVADA (mismo camino que `create` del
+  // backend legacy): nace con el bootstrap hecho, sin fork ni snapshot.
   async function forkSession(artifact: EasybitsPreparedArtifact, sessionName: string, sessionId: string) {
-    let children: Sandbox[];
+    let box: Sandbox;
     try {
-      children = await eb.sandboxes.forkFromSnapshot(artifact.snapshotId, {
-        count: 1,
+      box = await eb.sandboxes.create({
+        template: opts.template,
+        templateKey: artifact.key,
+        templateHash: artifact.hash,
+        timeoutSeconds: opts.timeoutSeconds,
         name: sessionName,
         metadata: { ...opts.metadata, eve_session: sessionId, eve_template: artifact.key },
-        timeoutSeconds: opts.timeoutSeconds,
+        waitForReady: false,
       });
     } catch (e) {
-      if (e instanceof EasybitsError && e.status === 404) throw new TemplateNotProvisionedError(artifact.snapshotId);
+      // 404 = par (key, hash) no preparado; 409 = base rehorneada, plantilla stale.
+      if (e instanceof EasybitsError && (e.status === 404 || e.status === 409)) {
+        throw new TemplateNotProvisionedError(`${artifact.key}:${artifact.hash}`);
+      }
       throw e;
     }
-    const box = children[0];
     await box.waitUntilReady();
     // Sin esto el TTL destruiría la caja entre turnos.
     await box.setIdlePolicy({
@@ -142,27 +142,26 @@ export function createEasybitsProvider(options: EasybitsEnvironmentOptions = {})
   return {
     async prepare(context) {
       const log = context.log ?? (() => {});
-      const key = resourceKey(context.resources);
       // Lo que cambia la imagen: base, recursos (por key) y el código del prepare.
-      const hash = hashOf({
+      const { key, hash } = derivedTemplateRef(resourceKey(context.resources), {
         prepare: prepare?.toString(),
         resources: { skills: context.resources.skills?.key, workspace: context.resources.workspace?.key },
         template: opts.template,
         version: ARTIFACT_VERSION,
-      }).slice(0, 16);
-      const name = `${SNAPSHOT_PREFIX}${key}:${hash}`;
-      const artifactOf = (snapshotId: string): EasybitsPreparedArtifact => ({
+      });
+      const name = `${key}:${hash}`;
+      const artifactOf = (derivedId: string): EasybitsPreparedArtifact => ({
         hash,
         key,
-        snapshotId,
+        derivedId,
         template: opts.template,
         version: ARTIFACT_VERSION,
       });
 
-      const existing = await findSnapshot(name);
+      const existing = await eb.sandboxes.templateSnapshots.get({ key, hash }).catch(ignore404);
       if (existing) {
-        log(`easybits: snapshot ${existing.snapshotId} reusado (${name})`);
-        return artifactOf(existing.snapshotId);
+        log(`easybits: plantilla derivada ${existing.derivedId} reusada (${name})`);
+        return artifactOf(existing.derivedId);
       }
 
       log(`easybits: creando caja ${opts.template} para preparar ${name}`);
@@ -182,12 +181,12 @@ export function createEasybitsProvider(options: EasybitsEnvironmentOptions = {})
           })),
         );
         if (prepare) await prepare(session);
-        log("easybits: capturando snapshot");
-        const snap = await box.snapshot(name);
-        log(`easybits: snapshot ${snap.snapshotId} listo`);
-        return artifactOf(snap.snapshotId);
+        log("easybits: capturando plantilla derivada");
+        const dt = await box.templateSnapshot({ key, hash, name: `eve ${key}`.slice(0, 64) });
+        log(`easybits: plantilla ${dt.derivedId} lista (${Math.round(dt.sizeBytes / 1048576)} MB${dt.reused ? ", reusada" : ""})`);
+        return artifactOf(dt.derivedId);
       } finally {
-        // El estado vive en el snapshot; la caja de build sobra.
+        // El estado vive en la plantilla; la caja de build sobra.
         await box.destroy().catch(() => {});
       }
     },
@@ -268,12 +267,12 @@ function requireArtifact(value: SandboxPreparedArtifact): EasybitsPreparedArtifa
   const a = value as Record<string, unknown> | null;
   if (
     typeof a !== "object" || a === null || Array.isArray(a) ||
-    typeof a.snapshotId !== "string" || typeof a.key !== "string" ||
+    typeof a.derivedId !== "string" || typeof a.key !== "string" ||
     typeof a.hash !== "string" || typeof a.template !== "string" || a.version !== ARTIFACT_VERSION
   ) {
     throw new Error("Invalid prepared EasyBits sandbox artifact.");
   }
-  return { hash: a.hash, key: a.key, snapshotId: a.snapshotId, template: a.template, version: ARTIFACT_VERSION };
+  return { hash: a.hash, key: a.key, derivedId: a.derivedId, template: a.template, version: ARTIFACT_VERSION };
 }
 
 function requireState(s: unknown): EasybitsSessionState {

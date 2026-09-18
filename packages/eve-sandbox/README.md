@@ -79,9 +79,9 @@ export default defineSandbox(() =>
 
 | eve (#3271) | EasyBits |
 |---|---|
-| `prepare(ctx)` — on `eve build` | temporary box + workspace/skills resources written to `/workspace` and `$HOME/.agents/skills` + your `prepare(sandbox)` → snapshot `eve:<resourcesKey>:<hash>` (hash of template, resource keys and `prepare` source). Idempotent by name. Artifact: `{ snapshotId, key, hash, template, version }`. |
-| `start(ctx, options, artifact)` | fork of the snapshot; `options.env` is baked into `/etc/profile.d` (commands run in a login shell); `options.networkPolicy` applied on the host. State: `{ sandboxId, sessionName, generation, version }`. |
-| `resume(ctx, artifact, state)` | `GET` by id (suspended → resume). If the box is gone, it is looked up by `sessionName`; if that fails too, the artifact is forked again (`recreateOnLoss: true`, default — the `env` from `open()` is lost since it lived on the lost disk). `recreateOnLoss: false` throws instead, as the eve docs prescribe. |
+| `prepare(ctx)` — on `eve build` | temporary box + workspace/skills resources written to `/workspace` and `$HOME/.agents/skills` + your `prepare(sandbox)` → **derived template** (`templateSnapshot`) keyed `eve:<resourcesKey>` + hash of template, resource keys and `prepare` source. Idempotent on the host (measured: 8.2 s first time, 0.3 s reused). Artifact: `{ derivedId, key, hash, template, version }`. |
+| `start(ctx, options, artifact)` | `create({ templateKey, templateHash })` — the box boots with the bootstrap already done (~5 s to running); `options.env` is baked into `/etc/profile.d` (commands run in a login shell); `options.networkPolicy` applied on the host. State: `{ sandboxId, sessionName, generation, version }`. 404/409 → `SandboxTemplateNotProvisionedError`. |
+| `resume(ctx, artifact, state)` | `GET` by id (suspended → resume, ~5 s). If the box is gone, it is looked up by `sessionName`; if that fails too, a new box is created from the same artifact (`recreateOnLoss: true`, default — the `env` from `open()` is lost since it lived on the lost disk). `recreateOnLoss: false` throws instead, as the eve docs prescribe. |
 | `onSessionStop` / `onRuntimeShutdown` | suspend. |
 | `onSessionDelete` | destroy. |
 | session (`run`, `spawn`, files, `removePath`, `setNetworkPolicy`) | same implementation as the backend above. |

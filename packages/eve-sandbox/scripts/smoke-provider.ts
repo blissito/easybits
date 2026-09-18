@@ -45,20 +45,22 @@ console.log("  artifact:", JSON.stringify(artifact)); t("prepare", t0);
 t0 = Date.now();
 console.log("2. prepare otra vez (debe reusar)");
 const artifact2 = await provider.prepare(prepareCtx);
-if (artifact2.snapshotId !== artifact.snapshotId) throw new Error("second prepare did not reuse snapshot");
+if (artifact2.derivedId !== artifact.derivedId) throw new Error("second prepare did not reuse template");
 t("prepare#2", t0);
 
 t0 = Date.now();
-console.log("3. start (fork + env + networkPolicy)");
+console.log("3. start (create desde plantilla + env + networkPolicy)");
 const { handle, state } = await provider.start(sessionCtx, { env: { FOO: "bar baz" }, networkPolicy: "allow-all" }, artifact);
 console.log("  state:", JSON.stringify(state)); t("start", t0);
 const s = handle.sandbox;
 
-const marker = await s.readTextFile({ path: "marker.txt" });
-const seed = await s.readTextFile({ path: "seed.txt" });
-const skill = await s.readTextFile({ path: "$HOME/.agents/skills/demo/SKILL.md" });
-if (marker?.trim() !== "prepared" || seed?.trim() !== "hola desde seed" || skill?.trim() !== "# demo") throw new Error(`snapshot state missing: ${marker}/${seed}/${skill}`);
-console.log("  prepare + workspace + skills presentes ✓");
+{
+  const marker = await s.readTextFile({ path: "marker.txt" });
+  const seed = await s.readTextFile({ path: "seed.txt" });
+  const skill = await s.readTextFile({ path: "$HOME/.agents/skills/demo/SKILL.md" });
+  if (marker?.trim() !== "prepared" || seed?.trim() !== "hola desde seed" || skill?.trim() !== "# demo") throw new Error(`snapshot state missing: ${marker}/${seed}/${skill}`);
+  console.log("  prepare + workspace + skills presentes ✓");
+}
 const r = await s.run({ command: "pwd && echo \"$FOO\"" });
 if (r.exitCode !== 0 || !r.stdout.includes("/workspace") || !r.stdout.includes("bar baz")) throw new Error(`run/env wrong: ${JSON.stringify(r)}`);
 console.log("  run cwd + env de open() ✓");
@@ -74,12 +76,14 @@ const env2 = await h2.sandbox.run({ command: "echo \"$FOO\"" });
 if (!env2.stdout.includes("bar baz")) throw new Error("env lost after resume");
 t("suspend+resume", t0); console.log("  misma caja, estado + env intactos ✓");
 
-console.log("5. onSessionDelete + limpiar snapshot");
+console.log("5. onSessionDelete + limpiar plantilla");
 await h2.onSessionDelete();
 const eb = new EasybitsClient({ apiKey: process.env.EASYBITS_API_KEY! });
-for (const snap of await eb.sandboxes.snapshots.list()) {
-  if (snap.name?.startsWith(`eve:${resourcesKey}:`)) { await eb.sandboxes.snapshots.delete(snap.snapshotId); console.log("  snapshot borrado", snap.snapshotId); }
-}
+// Borrar plantillas exige scope DELETE; con una key WRITE se avisa y queda (12 MB).
+await eb.sandboxes.templateSnapshots
+  .delete(artifact.derivedId)
+  .then(() => console.log("  plantilla borrada", artifact.derivedId))
+  .catch((e) => console.log(`  ⚠ plantilla ${artifact.derivedId} NO borrada (${e.status ?? e.message}): bórrala con una key DELETE`));
 const leftover = (await eb.sandboxes.list()).filter((b) => b.name === state.sessionName && b.status !== "lost");
 if (leftover.length) throw new Error(`caja no borrada: ${leftover.map((b) => b.sandboxId)}`);
 console.log("OK");

@@ -9,13 +9,16 @@
  *
  * Mapeo:
  *   prepare(ctx)   → caja temporal + workspace/skills + `prepare(sandbox)` →
- *                    snapshot CoW `eve:<key>:<hash>` (idempotente por nombre).
- *                    artifact = { snapshotId, key, hash, template, version }.
- *   start(ctx, options, artifact) → fork del snapshot; `env` se hornea en
+ *                    plantilla DERIVADA (`templateSnapshot`) con clave de contenido
+ *                    (key `eve:<resourcesKey>`, hash de lo que cambia la imagen);
+ *                    idempotente en el host.
+ *                    artifact = { derivedId, key, hash, template, version }.
+ *   start(ctx, options, artifact) → `create({ templateKey, templateHash })`
+ *                    (nace con el bootstrap hecho); `env` se hornea en
  *                    /etc/profile.d (login shell) y `networkPolicy` se aplica
  *                    al host. state = { sandboxId, sessionName, generation, version }.
  *   resume(ctx, artifact, state) → GET por id; dormida → resume; perdida →
- *                    busca por `sessionName`; si tampoco existe, re-forkea el
+ *                    busca por `sessionName`; si tampoco existe, re-crea desde el
  *                    mismo artifact (disco nuevo; `recreateOnLoss:false` lanza).
  *   stop/shutdown  → suspend · delete → destroy.
  *
