@@ -181,7 +181,7 @@ export default function Eve({ loaderData }: Route.ComponentProps) {
               ),
               bullets: [
                 "Una línea en agent.ts: experimental.workflow.world",
-                "Sin token: EasyBits te da la URL de la base al crear la máquina eve-nitro (sólo desde dentro de EasyBits)",
+                "Sin token: la máquina eve-nitro nace con EASYBITS_DB_URL en su entorno (sólo desde dentro de EasyBits)",
                 "Port del world oficial de Postgres a libSQL, misma línea de versiones que eve",
                 "Sin EasyBits sigue funcionando: apunta a cualquier libSQL o cae al disco local",
               ],

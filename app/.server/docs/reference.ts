@@ -1886,12 +1886,11 @@ export default eveChannel({
 Arranca y expón. \`eve build\` sólo compiló; la plantilla derivada del \`prewarm\` se captura en este primer \`eve start\` (log \`easybits: plantilla dt_… lista\`; en arranques siguientes \`reusada\`):
 
 \`\`\`bash
-DB=$(curl -s "$B/sandboxes/$SB" "\${H[@]}" | jq -r .metadata.eve_db_url)   # EasyBits la genera al crear la caja
-curl -s -X POST "$B/sandboxes/$SB/bg"   "\${H[@]}" -d '{"command":"exec eve start","cwd":"/data/app","env":{"EASYBITS_API_KEY":"<key>","ANTHROPIC_API_KEY":"<key>","EVE_PASSWORD":"<pass>","PORT":"3000","EASYBITS_DB_URL":"'$DB'"}}'
+curl -s -X POST "$B/sandboxes/$SB/bg"   "\${H[@]}" -d '{"command":"exec eve start","cwd":"/data/app","env":{"EASYBITS_API_KEY":"<key>","ANTHROPIC_API_KEY":"<key>","EVE_PASSWORD":"<pass>","PORT":"3000"}}'
 curl -s -X POST "$B/sandboxes/$SB/expose" "\${H[@]}" -d '{"port":3000}'   # → { url }
 \`\`\`
 
-\`EASYBITS_DB_URL\` NO llega solo al shell: EasyBits genera el valor al crear la caja y lo deja en \`metadata.eve_db_url\` (visible en la respuesta de \`POST /sandboxes\` y en \`GET /sandboxes/:id\`); tú lo pasas en el \`env\` del \`/bg\`. Sin él, eve cae a \`world-local\` (disco de la caja) sin avisar (sección 3).
+La caja \`eve-nitro\` nace con \`EASYBITS_DB_URL\` en su entorno (sin token): llega al shell, a \`/exec\` y a \`/bg\` sin que lo pases. Sólo hay que ponerlo a mano en el \`env\` del \`/bg\` en dos casos: caja creada por fork/snapshot, o para retomar runs en una caja nueva — con el **mismo** valor, que puedes leer en \`metadata.eve_db_url\` (\`GET /sandboxes/:id\`). Sin él, eve cae a \`world-local\` (disco de la caja) sin avisar (sección 3).
 
 La URL pública proxea todo el path (\`/eve/\` y \`/.well-known/workflow/\` llegan a Nitro sin configurar nada), pero eve pide la auth que declaraste: cada llamada va con \`-u eve:$EVE_PASSWORD\`. Proyecto y \`.eve/.workflow-data\` van bajo \`/data\` para sobrevivir suspend/resume; declara un \`bootstrap\` que relance \`eve start\` en cada despertar. El estado durable de eve vive por default en disco; para que sobreviva a la caja usa \`@easybits.cloud/eve-world\` (sección 3).
 
@@ -1921,7 +1920,7 @@ export default defineAgent({
 });
 \`\`\`
 
-**Sin token que pegar.** Al crear una caja \`eve-nitro\` con \`POST /sandboxes\`, EasyBits genera la URL de su base (\`eve-<id>\`, creada al primer uso; el acceso lo resuelve el host por la identidad de la caja, la URL no lleva credencial) y la deja en \`metadata.eve_db_url\`. ⚠️ El \`env\` de creación NO llega al shell, así que en **cualquier** caja (creada o fork de snapshot) pásalo en el \`env\` del \`/bg\` como \`EASYBITS_DB_URL\` — y para retomar runs tras destruir el servidor, con el **mismo** valor. Env completo de \`eve start\`: \`EASYBITS_API_KEY\`, \`ANTHROPIC_API_KEY\` (o el de tu proveedor), \`EVE_PASSWORD\`, \`PORT=3000\` y, si aplica, \`EASYBITS_DB_URL\`. Medido en producción: un run de 8 pasos retomó en el paso 3 en una máquina nueva 59 s después de destruir la primera, y la **sesión de chat** también sobrevive — servidor destruido a las 21:05:07, otro desde snapshot respondiendo a las 21:06:22 con toda la memoria de la conversación. Fuera de EasyBits, \`WORKFLOW_LIBSQL_URL\` + \`WORKFLOW_LIBSQL_AUTH_TOKEN\` apuntan a cualquier libSQL/Turso; si no hay env, cae a \`world-local\`. \`WORKFLOW_SERVICE_URL\` sólo hace falta con varios workers (default: el propio servidor en localhost).
+**Sin token que pegar.** Al crear una caja \`eve-nitro\` con \`POST /sandboxes\`, EasyBits genera la URL de su base (\`eve-<id>\`, creada al primer uso; el acceso lo resuelve el host por la identidad de la caja, la URL no lleva credencial) y la deja en \`metadata.eve_db_url\`. La caja nace con \`EASYBITS_DB_URL\` ya en su entorno; sólo tienes que pasarlo a mano en el \`env\` del \`/bg\` en dos casos: caja creada por fork/snapshot, o para retomar runs en una caja nueva — con el **mismo** valor (\`metadata.eve_db_url\`). Env completo de \`eve start\`: \`EASYBITS_API_KEY\`, \`ANTHROPIC_API_KEY\` (o el de tu proveedor), \`EVE_PASSWORD\`, \`PORT=3000\` y, si aplica, \`EASYBITS_DB_URL\`. Medido en producción: un run de 8 pasos retomó en el paso 3 en una máquina nueva 59 s después de destruir la primera, y la **sesión de chat** también sobrevive — servidor destruido a las 21:05:07, otro desde snapshot respondiendo a las 21:06:22 con toda la memoria de la conversación. Fuera de EasyBits, \`WORKFLOW_LIBSQL_URL\` + \`WORKFLOW_LIBSQL_AUTH_TOKEN\` apuntan a cualquier libSQL/Turso; si no hay env, cae a \`world-local\`. \`WORKFLOW_SERVICE_URL\` sólo hace falta con varios workers (default: el propio servidor en localhost).
 
 No implementado (opcional en el contrato): \`events.createBatch\`, \`queueBatch\`, \`runs.cancelMany\`, analytics.
 

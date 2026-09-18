@@ -120,12 +120,11 @@ export default eveChannel({
 ### 4. Start and expose
 
 ```bash
-DB=$(curl -s "$B/sandboxes/$SB" "${H[@]}" | jq -r .metadata.eve_db_url)
-curl -s -X POST "$B/sandboxes/$SB/bg"   "${H[@]}" -d '{"command":"exec eve start","cwd":"/data/app","env":{"EASYBITS_API_KEY":"<key>","ANTHROPIC_API_KEY":"<key>","EVE_PASSWORD":"<pass>","PORT":"3000","EASYBITS_DB_URL":"'$DB'"}}'
+curl -s -X POST "$B/sandboxes/$SB/bg"   "${H[@]}" -d '{"command":"exec eve start","cwd":"/data/app","env":{"EASYBITS_API_KEY":"<key>","ANTHROPIC_API_KEY":"<key>","EVE_PASSWORD":"<pass>","PORT":"3000"}}'
 curl -s -X POST "$B/sandboxes/$SB/expose" "${H[@]}" -d '{"port":3000}'
 ```
 
-EasyBits generates `EASYBITS_DB_URL` when the box is created and leaves it in `metadata.eve_db_url`; you pass it in the `/bg` `env` (without it eve silently falls back to the box's disk). The public URL proxies `/eve/` and `/.well-known/workflow/` with no configuration, but eve enforces the auth you declared, so every call goes with `-u eve:$EVE_PASSWORD`.
+The `eve-nitro` box is born with `EASYBITS_DB_URL` in its environment (no token); you only pass it by hand in the `/bg` `env` when the box comes from a fork/snapshot or to resume runs on a new box (same value, readable in `metadata.eve_db_url`). Without it eve silently falls back to the box's disk. The public URL proxies `/eve/` and `/.well-known/workflow/` with no configuration, but eve enforces the auth you declared, so every call goes with `-u eve:$EVE_PASSWORD`.
 
 ### 5. Talk to it
 
