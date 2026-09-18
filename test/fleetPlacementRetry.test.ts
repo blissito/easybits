@@ -102,6 +102,11 @@ vi.mock("~/.server/core/sandboxOperations", () => ({
   readFile: vi.fn(),
   writeFile: vi.fn(),
   listSandboxes: vi.fn(async () => []),
+  createTemplateSnapshot: vi.fn(),
+  deleteTemplateSnapshot: vi.fn(),
+  // Sin fleetAgent completo el env recomputado nunca coincide con el horneado; el
+  // despertar con env se resuelve como un resume normal para este test.
+  refreshAgentEnv: (ctx: unknown, agent: any) => resumeSandbox(ctx, agent.sandboxId),
 }));
 // restoreConversation va envuelto en .catch() en el caller; sin storage devuelve
 // false y no estorba, pero lo neutralizamos para no salir a la red.

@@ -9,8 +9,9 @@
 //     coherent. FleetAgentRoute is the sticky map; FleetAgentMessage is the durable log.
 //   - Branding/OAuth: fleetAgent.persona.env is injected into every worker spawn, so
 //     the owner's Max-account OAuth + persona power the whole fleetAgent.
-import { randomBytes, randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { db } from "~/.server/db";
+import type { Prisma } from "@prisma/client";
 import type { AuthContext } from "~/.server/apiAuth";
 import type { SandboxTemplate } from "~/.server/core/sandboxOperations";
 import {
@@ -23,6 +24,9 @@ import {
   readFile,
   writeFile,
   listSandboxes,
+  createTemplateSnapshot,
+  deleteTemplateSnapshot,
+  refreshAgentEnv,
 } from "~/.server/core/sandboxOperations";
 import { getSecretValue } from "~/.server/core/secretOperations";
 import { ensureWorkerTokens } from "~/.server/core/fleetTokens";
@@ -1585,31 +1589,141 @@ async function reclaimAccountCapacity(
   }
 }
 
-// Spawn a fresh VM for the fleetAgent, branded from persona, RAM-gated.
+// ── Artifact por FleetAgent (plantilla derivada del host) ─────────────────────
+//
+// Separación eve-style: ARTIFACT (disco: template + seeds sembrados, capturado UNA vez
+// como template-snapshot) ≠ OPEN OPTIONS (env: credencial del motor, FLEET_TOKEN,
+// modelo, prompt — va en cada create y en cada resume). El artifact se guarda en
+// `FleetAgent.metadata.artifact` y se re-captura sólo cuando cambia su hash.
+export const FLEET_ARTIFACT_VERSION = 1;
+export type FleetArtifact = { derivedId: string; hash: string; at: string; templateVersion?: string };
 
-async function spawnVm(ctx: AuthContext, fleetAgent: { id: string; ownerId: string; name: string | null; workerTemplate: string; persona: unknown; vmMemMb: number; maxVms: number; oauthSecretName: string | null; engineSecretName?: string | null; token: string; idleSuspendMin: number }) {
-  // ── Account sandbox budget (la fuente de verdad, consistente con el HUD) ──
-  // El plan da `concurrentSandboxes` y las reservas (add-ons) suman. TODAS las
-  // sandboxes del owner en el host consumen este budget — workers de CUALQUIER
-  // canal, llamadas livekit, custom, permanentes — no solo los de este fleetAgent. Por
-  // eso contamos vía listSandboxes (todo el host del owner), no db.agent. El fleetAgent
-  // NO puede pasarse de aquí: el "X/N sandboxes" del HUD es real, no solo display.
-  // (pickHost sigue como gate FÍSICO de RAM; este es el gate LÓGICO de plan.)
-  const snapshot = await buildCapacitySnapshot(ctx, fleetAgent);
-  const decision = admit(snapshot);
-  if (!decision.ok) {
-    // La negación era invisible: no había forma de diagnosticar en producción por qué
-    // un agente no arrancaba.
-    auditLog("admit.deny", { fleetAgentId: fleetAgent.id, reason: decision.reason, snapshot });
-    throw new FleetAgentAtCapacity(decision.detail, decision.reason);
+export function fleetArtifactKey(fleetAgentId: string): string {
+  return `fleet:${fleetAgentId}`;
+}
+
+const sha256 = (s: string) => createHash("sha256").update(s).digest("hex");
+
+/**
+ * Huella de lo que determina el DISCO de un worker recién nacido: template, seeds
+ * (contenido) y manifiesto de skills encendidos. NO entra el prompt, ni el modelo, ni
+ * credenciales — eso viaja por env y cambiarlo no debe tirar el artifact.
+ * `templateVersion`: el host no la expone en /v1/templates; si el base se rehornea el
+ * host responde 409 DerivedTemplateStale y el artifact se descarta (spawnVm).
+ */
+export function fleetArtifactHash(
+  fleetAgent: { workerTemplate: string; persona?: unknown; skills?: unknown },
+  opts: { templateVersion?: string } = {}
+): string {
+  const persona = (fleetAgent.persona ?? {}) as Persona;
+  const seeds = (persona.seedFiles ?? [])
+    .map((f) => ({ name: f.name ?? "", sha: sha256(f.contentBase64 ?? "") }))
+    .sort((a, b) => (a.name + a.sha).localeCompare(b.name + b.sha));
+  const skills = fleetSkills(fleetAgent)
+    .filter((s) => s.enabled !== false)
+    .map((s) => ({ id: s.id, name: s.name, files: [...(s.files ?? [])] }))
+    .sort((a, b) => a.id.localeCompare(b.id));
+  return sha256(
+    JSON.stringify({
+      v: FLEET_ARTIFACT_VERSION,
+      workerTemplate: fleetAgent.workerTemplate,
+      seeds,
+      skills,
+      templateVersion: opts.templateVersion ?? null,
+    })
+  );
+}
+
+export function readFleetArtifact(fleetAgent: { metadata?: unknown } | null | undefined): FleetArtifact | null {
+  const a = (fleetAgent?.metadata as { artifact?: FleetArtifact } | null)?.artifact;
+  return a && typeof a.derivedId === "string" && typeof a.hash === "string" ? a : null;
+}
+
+// Errores del host que significan "este derivado ya no sirve": falta (404), el base se
+// rehorneó (409 Stale) o se borró (410 Gone). Cualquier otro error sube tal cual.
+const DERIVED_DROP_CODES = new Set(["DerivedTemplateNotProvisioned", "DerivedTemplateStale", "DerivedTemplateGone"]);
+async function derivedDropCode(e: unknown): Promise<string | null> {
+  if (!(e instanceof Response)) return null;
+  try {
+    const body = await e.clone().json();
+    return typeof body?.error === "string" && DERIVED_DROP_CODES.has(body.error) ? body.error : null;
+  } catch {
+    return null;
   }
-  // RAM gate, multi-box aware: pick the box with the most free RAM that fits the
-  // VM. null = no box has room → queue. (The host also rejects at create as a
-  // backstop.) Single-box today: pickHost returns the only box.
-  const target = await pickHost(fleetAgent.vmMemMb);
-  if (!target) {
-    throw new FleetAgentAtCapacity(`no box has ${fleetAgent.vmMemMb}MB free`, "ram");
-  }
+}
+
+// Cajas nacidas SIN artifact (spawn normal) cuyo disco hay que capturar en cuanto
+// estén running y ANTES de restaurar una conversación o mandar un /message — si no,
+// el snapshot se llevaría el transcript de un hilo. agentId → hash a capturar.
+const pendingArtifactCapture = new Map<string, string>();
+
+async function setFleetArtifact(fleetAgentId: string, artifact: FleetArtifact | null) {
+  const row = await db.fleetAgent.findUnique({ where: { id: fleetAgentId }, select: { metadata: true } });
+  const meta = { ...((row?.metadata as Record<string, unknown> | null) ?? {}) };
+  if (artifact) meta.artifact = artifact;
+  else delete meta.artifact;
+  await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { metadata: meta as Prisma.InputJsonValue } });
+}
+
+// Captura el template-snapshot de una caja recién nacida y lo sella en el FleetAgent.
+// Bajo lock por agente: dos spawns fríos concurrentes no capturan dos veces (el host
+// además es idempotente por (key, hash)). Nunca falla el turno: el caller lo envuelve.
+async function captureFleetArtifact(ctx: AuthContext, fleetAgent: PoolRow, vm: AgentRow): Promise<void> {
+  const hash = pendingArtifactCapture.get(vm.id);
+  if (!hash) return;
+  pendingArtifactCapture.delete(vm.id);
+  await withLock(`artifact:${fleetAgent.id}`, async () => {
+    const fresh = await db.fleetAgent.findUnique({ where: { id: fleetAgent.id }, select: { metadata: true } });
+    const current = readFleetArtifact(fresh);
+    if (current?.hash === hash) return; // otro spawn concurrente ya lo capturó
+    const t0 = Date.now();
+    const meta = await createTemplateSnapshot(ctx, vm.sandboxId, {
+      key: fleetArtifactKey(fleetAgent.id),
+      hash,
+      name: fleetAgent.name ?? undefined,
+    });
+    await setFleetArtifact(fleetAgent.id, {
+      derivedId: meta.derivedId,
+      hash,
+      at: new Date().toISOString(),
+      templateVersion: meta.templateVersion,
+    });
+    auditLog("artifact.capture", {
+      fleetAgent: fleetAgent.id,
+      derivedId: meta.derivedId,
+      hash,
+      ms: Date.now() - t0,
+      reused: meta.reused ?? false,
+      sizeBytes: meta.sizeBytes,
+    });
+    // Cambió el hash (seeds/skills): el derivado viejo sobra. 409 InUse si aún tiene
+    // hijos vivos → se queda; el próximo cambio de hash vuelve a intentar.
+    if (current && current.derivedId !== meta.derivedId) {
+      await deleteTemplateSnapshot(ctx, current.derivedId).catch((e) =>
+        auditLog("artifact.delete_old.skip", { fleetAgent: fleetAgent.id, derivedId: current.derivedId, error: String(e) })
+      );
+    }
+  });
+}
+
+type SpawnEnvAgent = {
+  id: string;
+  ownerId: string;
+  workerTemplate: string;
+  persona: unknown;
+  oauthSecretName: string | null;
+  engineSecretName?: string | null;
+  token: string;
+};
+
+/**
+ * Env del worker = las "open options" del agente: persona.env + credencial del motor +
+ * FLEET_TOKEN + modelo/effort/sesión por default. Se usa en el spawn Y al despertar
+ * (ensureRunning): si cambió respecto al horneado (spawnEnvHash), el resume lo
+ * reescribe y reinicia la unit — rotar credencial / cambiar ANTHROPIC_MODEL o
+ * SYSTEM_PROMPT aplica sin reciclar la caja.
+ */
+export async function buildSpawnEnv(ctx: AuthContext, fleetAgent: SpawnEnvAgent): Promise<Record<string, string>> {
   const persona = (fleetAgent.persona ?? {}) as Persona;
   const env = { ...(persona.env ?? {}) };
   // Credencial del MOTOR, para cualquier proveedor. La env var la dicta el motor del
@@ -1673,13 +1787,104 @@ async function spawnVm(ctx: AuthContext, fleetAgent: { id: string; ownerId: stri
       env[k] = env[k].replace(/[\r\n]+/g, " ").replace(/[ \t]{2,}/g, " ").trim();
     }
   }
+  return env;
+}
+
+export const spawnEnvHash = (env: Record<string, string>) =>
+  sha256(JSON.stringify(Object.keys(env).sort().map((k) => [k, env[k]])));
+
+// Cajas adoptadas de otro agente: al despertar hay que sembrar los seeds del agente
+// nuevo y barrer los workspaces del anterior (mismo dueño, pero otra persona).
+const pendingAdoptSeed = new Set<string>();
+
+/**
+ * Techo de la CUENTA: adopta la VM SUSPENDIDA menos-reciente de OTRO FleetAgent del
+ * mismo dueño con el mismo `workerTemplate`. Desata sus rutas (su memoria ya se respaldó
+ * al suspender), la re-etiqueta a este agente y borra `spawnEnvHash` para que
+ * ensureRunning la despierte con el env nuevo. null si no hay candidata.
+ */
+async function adoptSiblingVm(ctx: AuthContext, fleetAgent: PoolRow): Promise<AgentRow | null> {
+  if ((process.env.FLEET_CROSS_RECLAIM || "").toLowerCase() === "off") return null;
+  const victim = await db.agent.findFirst({
+    where: {
+      ownerId: ctx.user.id,
+      status: "suspended",
+      template: fleetAgent.workerTemplate,
+      fleetAgentId: { not: fleetAgent.id },
+      id: { notIn: [...busyVms] },
+    },
+    orderBy: { lastMessageAt: "asc" },
+  });
+  if (!victim?.fleetAgentId) return null;
+  const routes = await db.fleetAgentRoute.updateMany({
+    where: { agentId: victim.id },
+    data: { agentId: null, detachedAt: new Date() },
+  });
+  const row = await db.agent.update({
+    where: { id: victim.id },
+    data: { fleetAgentId: fleetAgent.id, lastMessageAt: new Date(), spawnEnvHash: null },
+  });
+  pendingAdoptSeed.add(row.id);
+  auditLog("adopt", {
+    fleetAgent: fleetAgent.id,
+    fromFleetAgent: victim.fleetAgentId,
+    agentId: victim.id,
+    sandboxId: victim.sandboxId,
+    routes: routes.count,
+  });
+  return row;
+}
+
+// Deja una caja adoptada como si fuera propia: workspaces del agente anterior fuera,
+// seeds del nuevo dentro. Best-effort, nunca falla el turno.
+async function reseedAdoptedVm(ctx: AuthContext, fleetAgent: PoolRow, vm: AgentRow): Promise<void> {
+  if (!pendingAdoptSeed.delete(vm.id)) return;
+  const persona = (fleetAgent.persona ?? {}) as Persona;
+  await execCommand(ctx, vm.sandboxId, {
+    command: "rm -rf /data/workspaces/* /data/workspace/* /root/.claude/projects/-data-workspaces-* 2>/dev/null; mkdir -p /data/workspace",
+    timeoutSeconds: 30,
+  }).catch((e) => console.error(`fleet adopt: wipe ${vm.sandboxId} failed:`, e));
+  for (const f of persona.seedFiles ?? []) {
+    const safe = (f.name || "archivo").replace(/[/\\]/g, "_").replace(/^\.+/, "").slice(0, 120) || "archivo";
+    await writeFile(ctx, vm.sandboxId, { path: `/data/workspace/${safe}`, content: f.contentBase64, encoding: "base64" }).catch(
+      (e) => console.error(`fleet adopt: seed "${safe}" failed:`, e)
+    );
+  }
+}
+
+// Spawn a fresh VM for the fleetAgent, branded from persona, RAM-gated.
+
+async function spawnVm(ctx: AuthContext, fleetAgent: SpawnEnvAgent & { name: string | null; vmMemMb: number; maxVms: number; idleSuspendMin: number; skills?: unknown; metadata?: unknown }) {
+  // ── Account sandbox budget (la fuente de verdad, consistente con el HUD) ──
+  // El plan da `concurrentSandboxes` y las reservas (add-ons) suman. TODAS las
+  // sandboxes del owner en el host consumen este budget — workers de CUALQUIER
+  // canal, llamadas livekit, custom, permanentes — no solo los de este fleetAgent. Por
+  // eso contamos vía listSandboxes (todo el host del owner), no db.agent. El fleetAgent
+  // NO puede pasarse de aquí: el "X/N sandboxes" del HUD es real, no solo display.
+  // (pickHost sigue como gate FÍSICO de RAM; este es el gate LÓGICO de plan.)
+  const snapshot = await buildCapacitySnapshot(ctx, fleetAgent);
+  const decision = admit(snapshot);
+  if (!decision.ok) {
+    // La negación era invisible: no había forma de diagnosticar en producción por qué
+    // un agente no arrancaba.
+    auditLog("admit.deny", { fleetAgentId: fleetAgent.id, reason: decision.reason, snapshot });
+    throw new FleetAgentAtCapacity(decision.detail, decision.reason);
+  }
+  // RAM gate, multi-box aware: pick the box with the most free RAM that fits the
+  // VM. null = no box has room → queue. (The host also rejects at create as a
+  // backstop.) Single-box today: pickHost returns the only box.
+  const target = await pickHost(fleetAgent.vmMemMb);
+  if (!target) {
+    throw new FleetAgentAtCapacity(`no box has ${fleetAgent.vmMemMb}MB free`, "ram");
+  }
+  const persona = (fleetAgent.persona ?? {}) as Persona;
+  const env = await buildSpawnEnv(ctx, fleetAgent);
   // TODO(multi-box): target.url must drive createSandbox/callHost; today it uses
   // the single SANDBOX_HOST_URL, so target is recorded but not yet routed.
-  const created = await createAgent(ctx, {
+  const common = {
     template: fleetAgent.workerTemplate as SandboxTemplate,
     env,
     name: persona.name ?? `${fleetAgent.name ?? "fleetAgent"}-worker`,
-    seedFiles: persona.seedFiles,
     memoryMb: fleetAgent.vmMemMb, // size the VM per the channel's config (e.g. 512MB)
     vcpus: fleetAgent.vmMemMb <= 512 ? 1 : 2,
     // ── Red de seguridad: siesta NATIVA del daemon ────────────────────────────
@@ -1699,8 +1904,34 @@ async function spawnVm(ctx: AuthContext, fleetAgent: { id: string; ownerId: stri
     // host DESTRUÍA la VM a los 30 min (DEFAULT_TIMEOUT_S) sin respaldo alguno.
     suspendOnIdle: true,
     timeoutSeconds: (fleetAgent.idleSuspendMin + 5) * 60,
-  });
-  auditLog("spawn", { fleetAgent: fleetAgent.id, agentId: created.agentId, memMb: fleetAgent.vmMemMb, box: target.url });
+  };
+  // ── Artifact: nacer desde la plantilla derivada si la hay y sigue vigente ──
+  // Con artifact NO se mandan seedFiles (ya viven en el derivado). Si el host dice que
+  // el derivado no sirve (404/409/410) se descarta y se cae al spawn normal, que a su
+  // vez lo re-captura (pendingArtifactCapture → captureFleetArtifact en pickOrSpawn).
+  const hash = fleetArtifactHash(fleetAgent);
+  const artifact = readFleetArtifact(fleetAgent);
+  let created: Awaited<ReturnType<typeof createAgent>> | null = null;
+  let derivedFrom: string | null = null;
+  if (artifact && artifact.hash === hash) {
+    try {
+      created = await createAgent(ctx, { ...common, derivedTemplate: artifact.derivedId });
+      derivedFrom = artifact.derivedId;
+    } catch (e) {
+      const code = await derivedDropCode(e);
+      if (!code) throw e;
+      auditLog("artifact.drop", { fleetAgent: fleetAgent.id, derivedId: artifact.derivedId, code });
+      await setFleetArtifact(fleetAgent.id, null).catch(() => {});
+    }
+  } else if (artifact) {
+    // Hash distinto (cambiaron seeds/skills): el viejo se borra tras capturar el nuevo.
+    auditLog("artifact.stale", { fleetAgent: fleetAgent.id, derivedId: artifact.derivedId, from: artifact.hash, to: hash });
+  }
+  if (!created) {
+    created = await createAgent(ctx, { ...common, seedFiles: persona.seedFiles });
+    pendingArtifactCapture.set(created.agentId, hash);
+  }
+  auditLog("spawn", { fleetAgent: fleetAgent.id, agentId: created.agentId, memMb: fleetAgent.vmMemMb, box: target.url, derivedFrom });
   // Telemetría: createSandbox ya abrió el intervalo, pero NO podía saber a qué
   // FleetAgent pertenece (el fleetAgentId se sella justo abajo, después de crear).
   // Este back-fill es lo que permite desglosar el uso por agente en el reporte.
@@ -1715,16 +1946,29 @@ async function spawnVm(ctx: AuthContext, fleetAgent: { id: string; ownerId: stri
   // parallel, not serialized behind each other's ~boot time).
   return db.agent.update({
     where: { id: created.agentId },
-    data: { fleetAgentId: fleetAgent.id, lastMessageAt: new Date(), host: target.url },
+    data: { fleetAgentId: fleetAgent.id, lastMessageAt: new Date(), host: target.url, spawnEnvHash: spawnEnvHash(env) },
   });
 }
 
 type PoolRow = Awaited<ReturnType<typeof db.fleetAgent.findUniqueOrThrow>>;
 type AgentRow = NonNullable<Awaited<ReturnType<typeof db.agent.findUnique>>>;
 
-async function ensureRunning(ctx: AuthContext, agent: AgentRow): Promise<AgentRow | null> {
+async function ensureRunning(ctx: AuthContext, agent: AgentRow, fleetAgent?: SpawnEnvAgent): Promise<AgentRow | null> {
   if (agent.status === "running") return agent;
   if (agent.status === "suspended") {
+    // Env por resume: el env horneado sólo manda mientras la caja está running. Al
+    // despertar se recomputa (buildSpawnEnv) y, si difiere del último aplicado
+    // (spawnEnvHash), el resume lo reescribe y reinicia la unit (refreshAgentEnv).
+    // Así rotar la credencial del motor o cambiar ANTHROPIC_MODEL / SYSTEM_PROMPT en
+    // persona.env aplica sin reciclar. Sin cambios = resume caliente de siempre.
+    let freshEnv: Record<string, string> | null = null;
+    if (fleetAgent) {
+      const env = await buildSpawnEnv(ctx, fleetAgent).catch((e) => {
+        console.error(`fleet ensureRunning: buildSpawnEnv ${fleetAgent.id} failed, resume sin env:`, e);
+        return null;
+      });
+      if (env && spawnEnvHash(env) !== agent.spawnEnvHash) freshEnv = env;
+    }
     // Una caja suspendida puede haberse EVAPORADO del fierro (rebake, restart del
     // host, barrido) sin que su fila se entere: el snapshot ya no existe y el
     // resume responde 404. Sin este catch la excepción sube por una ruta que NO
@@ -1736,7 +1980,22 @@ async function ensureRunning(ctx: AuthContext, agent: AgentRow): Promise<AgentRo
     // Con self-heal: `lost` + rutas desatadas → el caller cold-spawnea una VM
     // limpia y el turno sale, sin que el usuario vuelva a escribir.
     try {
-      await resumeSandbox(ctx, agent.sandboxId);
+      if (freshEnv) {
+        const t0 = Date.now();
+        try {
+          await refreshAgentEnv(ctx, agent, freshEnv);
+          auditLog("resume.env", { agentId: agent.id, fleetAgent: fleetAgent?.id, ms: Date.now() - t0 });
+        } catch (e) {
+          if (isBoxDeadError(e)) throw e;
+          // Env incompleto (400) o reinicio fallido: mejor la caja con su env viejo que
+          // un turno perdido. El hash NO se sella → se reintenta al próximo despertar.
+          console.error(`fleet ensureRunning: refreshAgentEnv ${agent.sandboxId} failed, resume sin env:`, e);
+          freshEnv = null;
+          await resumeSandbox(ctx, agent.sandboxId);
+        }
+      } else {
+        await resumeSandbox(ctx, agent.sandboxId);
+      }
     } catch (e) {
       if (!isBoxDeadError(e)) throw e;
       console.error(`fleet ensureRunning: resume ${agent.sandboxId} → caja perdida, self-heal:`, e);
@@ -1746,7 +2005,10 @@ async function ensureRunning(ctx: AuthContext, agent: AgentRow): Promise<AgentRo
         .catch(() => {});
       return null; // caller restaura sobre una VM fresca
     }
-    await db.agent.update({ where: { id: agent.id }, data: { status: "running" } });
+    await db.agent.update({
+      where: { id: agent.id },
+      data: { status: "running", ...(freshEnv ? { spawnEnvHash: spawnEnvHash(freshEnv) } : {}) },
+    });
     return waitAgentRunning(agent.id);
   }
   if (agent.status === "building") return waitAgentRunning(agent.id);
@@ -1912,14 +2174,20 @@ async function reserveVm(ctx: AuthContext, fleetAgent: PoolRow, groupId: string)
           // una caja de servicio, y ahí el desalojo intra-fleet no encuentra víctima —
           // era el bug que dejaba a un agente nuevo sin arrancar para siempre.
           //
-          // Aquí NO se puede adoptar la caja ajena: una VM trae horneado su
-          // `workerTemplate` y el env de SU motor (persona, prompt, credencial), así que
-          // una caja `claude-worker` no sirve para un `codex-worker`. Hay que DESTRUIRLA
-          // y spawnear la propia (~12s en frío), que es justo lo que compra el reintento.
-          const reclaimed = await reclaimAccountCapacity(ctx, fleetAgent.id);
-          if (!reclaimed) throw e;
-          // Un solo reintento: si vuelve a fallar es back-pressure real, no un bug.
-          target = await spawnVm(ctx, fleetAgent);
+          // Desde que el env se reescribe al despertar (ensureRunning + refreshAgentEnv),
+          // el env horneado de la caja ajena ya NO importa: una VM dormida de OTRO agente
+          // del dueño con el MISMO workerTemplate se ADOPTA (resume ~1s + reinicio de la
+          // unit con el env del agente nuevo) en vez de destruirla y pagar un cold boot.
+          // Distinto template (claude-worker ≠ codex-worker) sí exige destruir y spawnear.
+          const adopted = await adoptSiblingVm(ctx, fleetAgent);
+          if (adopted) {
+            target = adopted;
+          } else {
+            const reclaimed = await reclaimAccountCapacity(ctx, fleetAgent.id);
+            if (!reclaimed) throw e;
+            // Un solo reintento: si vuelve a fallar es back-pressure real, no un bug.
+            target = await spawnVm(ctx, fleetAgent);
+          }
         } else {
           throw e; // "ram": ningún fierro tiene sitio; desalojar aquí no ayuda.
         }
@@ -2287,7 +2555,7 @@ export async function pickOrSpawn(ctx: AuthContext, fleetAgent: PoolRow, groupId
     const res = await reserveVm(ctx, fleetAgent, groupId);
     const reserved = await db.agent.findUniqueOrThrow({ where: { id: res.agentId } });
     const wasBuilding = reserved.status === "building";
-    const vm = await ensureRunning(ctx, reserved); // waits for boot/resume — in PARALLEL across groups
+    const vm = await ensureRunning(ctx, reserved, fleetAgent); // waits for boot/resume — in PARALLEL across groups
     if (!vm) {
       if (attempt >= MAX_PLACE_ATTEMPTS) {
         throw new Error(`fleetAgent worker ${res.agentId} failed to start`);
@@ -2299,6 +2567,15 @@ export async function pickOrSpawn(ctx: AuthContext, fleetAgent: PoolRow, groupId
     // El booleano de `restoreConversation` se tiraba a la basura, y era justo el dato
     // que dice si el MODELO se acuerda de algo: `false` = no había blob que restaurar,
     // así que el worker arranca en blanco aunque el historial siga entero en la DB.
+    // Artifact: capturar el disco limpio ANTES del restore/mensaje (si esta caja nació
+    // sin derivado). Se espera a propósito —fire-and-forget correría en paralelo con la
+    // escritura del transcript y el snapshot se lo llevaría— pero nunca falla el turno.
+    if (pendingAdoptSeed.has(vm.id)) await reseedAdoptedVm(ctx, fleetAgent, vm);
+    if (pendingArtifactCapture.has(vm.id)) {
+      await captureFleetArtifact(ctx, fleetAgent, vm).catch((e) =>
+        auditLog("artifact.capture.fail", { fleetAgent: fleetAgent.id, agentId: vm.id, error: String(e) })
+      );
+    }
     let memoryFresh = false;
     if (res.needsRestore) {
       const restored = await restoreConversation(ctx, vm, fleetAgent.id, res.sessionUuid).catch((e) => {
