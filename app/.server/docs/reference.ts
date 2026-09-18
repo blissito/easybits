@@ -747,8 +747,9 @@ ${templatesMarkdownTable("es")}
 
 ### Crear sandbox
 \`POST /sandboxes\`
-Body: \`{ template, timeoutSeconds?, name?, suspendOnIdle?, hardTtlSeconds?, persistent?, size? }\`
-MCP: \`sandbox_create({ template, timeoutSeconds?, suspendOnIdle?, hardTtlSeconds? })\`
+Body: \`{ template, timeoutSeconds?, name?, env?, metadata?, suspendOnIdle?, hardTtlSeconds?, persistent?, size? }\`
+(o \`templateKey\`+\`templateHash\` / \`derivedTemplate\` en lugar de \`template\` — ver *Plantillas derivadas*).
+MCP: \`sandbox_create({ template, timeoutSeconds?, env?, suspendOnIdle?, hardTtlSeconds? })\`
 
 ⚠️ **Sin \`suspendOnIdle\`, al vencer \`timeoutSeconds\` la caja se DESTRUYE — no se duerme.**
 Y si omites \`timeoutSeconds\` el default son **300 s**: cinco minutos y la caja ya no existe.
@@ -761,7 +762,7 @@ Es la diferencia entre "mi agente sigue ahí mañana" y un 404 sin explicación.
   que lleve 72 h suspendido.
 - \`persistent: true\` — la caja salta el reaper por antigüedad (para always-on).
 
-El body no lleva más campos que esos. Lo que una caja hace **al despertar** no se declara aquí:
+\`env\` llega al guest entero (shell de login, \`/exec\`, \`/bg\` y la unit del template). Lo que una caja hace **al despertar** no se declara aquí:
 es una llamada aparte sobre la caja ya creada — ver *Bootstrap al reanudar*.
 
 Para cualquier caja que aloje un agente al que le vas a escribir MÁS TARDE —un agente ACP, un
@@ -849,8 +850,8 @@ caliente, una skill instalada entra en vigor en el siguiente despertar, sola.
 
 **Qué es.** Preparas UNA caja (\`npm install\`, seeds, skills, config) y la capturas como
 plantilla derivada bajo una clave de contenido \`(key, hash)\`. Desde entonces cada caja creada
-con ese par **nace con el bootstrap hecho**, en el tiempo de un create normal (~24 ms de create
-+ boot), sin fork ni copia de GB por hijo: el host guarda sólo el delta de disco (decenas de MB)
+con ese par **nace con el bootstrap hecho**, en el tiempo de un create normal (medido: captura
+~0.5-1 s; create desde la derivada ~0.6 s + boot ~2 s), sin fork ni copia de GB por hijo: el host guarda sólo el delta de disco (decenas de MB)
 y lo monta debajo de cada hija como copy-on-write.
 
 **Cuándo.** Cuando el mismo bootstrap se repite: un agente por conversación, un sandbox por
@@ -1836,7 +1837,7 @@ export default defineSandbox({
 | eve | EasyBits |
 |---|---|
 | \`prewarm\` (corre en \`eve start\`, **no** en \`eve build\`) | caja temporal + seeds + \`bootstrap()\` → **plantilla derivada** (\`template-snapshot\`, clave \`eve:<templateKey>\` + hash de las opciones). Idempotente en el host: el primer \`eve start\` loguea \`easybits: plantilla dt_… lista\` y los siguientes \`reusada\` |
-| \`create()\` | \`POST /sandboxes\` con \`templateKey\`+\`templateHash\`: la caja nace con el bootstrap hecho (~24 ms de create + boot ~2 s), o caja fresca del \`template\` si eve no manda template. 404 \`DerivedTemplateNotProvisioned\` / 409 \`DerivedTemplateStale\` → \`SandboxTemplateNotProvisionedError\` (eve vuelve a hacer prewarm) |
+| \`create()\` | \`POST /sandboxes\` con \`templateKey\`+\`templateHash\`: la caja nace con el bootstrap hecho (~0.6 s de create + boot ~2 s; sesión lista en ~4 s), o caja fresca del \`template\` si eve no manda template. 404 \`DerivedTemplateNotProvisioned\` / 409 \`DerivedTemplateStale\` → \`SandboxTemplateNotProvisionedError\` (eve vuelve a hacer prewarm) |
 | entre turnos | la caja sigue viva con siesta (\`idleTtlSeconds\` 600 → suspend, resume ~1 s) y se reattacha por \`sandboxId\` |
 | \`stop()\` / \`shutdown()\` · \`delete()\` | suspend · destroy |
 | \`run\` / \`spawn\` | \`bash -lc\` por \`/bg\`; stdout/stderr en streams, \`kill()\` señala al grupo |

@@ -129,7 +129,7 @@ export default function Eve({ loaderData }: Route.ComponentProps) {
             </>
           ),
           proof:
-            "Arranque de una sesión ~7 s · despertar ~1 s · el entorno preparado se reusa en cada build · npm i @easybits.cloud/eve-sandbox",
+            "Arranque de una sesión ~4 s · despertar ~1 s · el entorno preparado se reusa en cada arranque (0.3 s) · npm i @easybits.cloud/eve-sandbox",
           bentos: [
             {
               title: "Una línea, y tu servidor no se mueve",
@@ -142,13 +142,13 @@ export default function Eve({ loaderData }: Route.ComponentProps) {
                     bootstrap
                   </a>
                   ) en un sandbox temporal y nosotros guardamos el resultado como imagen; los arranques
-                  siguientes reusan la imagen en 0.2 s.
+                  siguientes reusan la imagen en 0.3 s.
                   <Snippet title="npm i @easybits.cloud/eve-sandbox" code={SNIPPET_SANDBOX} />
                 </>
               ),
               bullets: [
                 "Gratis para empezar: una conversación a la vez, sesiones de 1 h",
-                "Una imagen por versión de tu agente; primera captura ~11 s, reuso medido en 0.2 s",
+                "Una imagen por versión de tu agente; primera captura 8.6 s, reuso medido en 0.3 s",
                 "Los archivos que eve siembra (skills, configuración) ya vienen dentro",
                 "Validado con eve 0.58.1 y 0.59.1",
               ],

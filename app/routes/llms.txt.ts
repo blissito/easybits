@@ -60,7 +60,8 @@ Esto es un índice. Carga sólo la sección que necesites; el documento completo
 ## Qué puede hacer tu agente
 
 - **Sandboxes** — una microVM Firecracker por agente: ejecuta código con root e internet,
-  la duerme y la despierta en menos de un segundo.
+  la duerme y la despierta en menos de un segundo. Plantillas derivadas (\`template-snapshot\`:
+  captura un bootstrap una vez y cada caja nace con él hecho) y política de red por caja.
 - **Web** — buscar en Google/Bing desde 195 países, leer cualquier página aunque bloquee
   bots, y extraer registros con esquema (Maps, Mercado Libre, Amazon, Instagram y 1,000+
   fuentes). Se cobra por consulta.

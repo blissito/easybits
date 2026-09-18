@@ -27,7 +27,7 @@ Hay dos formas de usarlo, y conviene elegir antes de empezar:
 
 ```bash
 npm i @easybits.cloud/eve-sandbox   # Node ≥ 24, lo exige eve
-export EASYBITS_API_KEY=eb_...       # scope WRITE (y DELETE si eve debe borrar snapshots)
+export EASYBITS_API_KEY=eb_...       # scope WRITE (y DELETE si eve debe borrar cajas y plantillas)
 ```
 
 ```ts
@@ -52,9 +52,9 @@ Nada más cambia. Con `EASYBITS_API_KEY` en el entorno, `eve dev` en tu laptop o
 
 ![Un molde y las cajas que salen de él](/blog/assets/blog-eve-easybits-snapshot.png)
 
-`eve build` sólo compila (~10 s). Es en el primer `eve start` cuando eve llama `prewarm()`: levantamos una caja temporal `node`, escribimos tus seed files, corremos tu `bootstrap()`, congelamos el resultado como snapshot copy-on-write con nombre `eve:<templateKey>:<hash>` (log: `easybits: snapshot snap_… listo`) y destruimos la caja temporal. El siguiente arranque encuentra el snapshot y no reconstruye nada (`reusado`): medido, ~3 s contra ~11 s la primera vez.
+`eve build` sólo compila (~10 s). Es en el primer `eve start` cuando eve llama `prewarm()`: levantamos una caja temporal `node`, escribimos tus seed files, corremos tu `bootstrap()`, capturamos el resultado como **plantilla derivada** con clave `eve:<templateKey>` + hash de las opciones (`POST /sandboxes/:id/template-snapshot`, 12-22 MB; log: `easybits: plantilla dt_… lista`) y destruimos la caja temporal. El siguiente arranque encuentra la plantilla y no reconstruye nada (`reusada`): medido, 0.3 s contra 8.6 s la primera vez. Si no la usas en 30 días se borra sola.
 
-Cuando llega el primer mensaje, `create()` hace un **fork** de ese snapshot (~7 s): una caja hija para esa sesión. Entre turnos la caja duerme con snapshot de la VM completa y despierta en ~1 s; eve la reabre por `sandboxId` con el disco tal cual lo dejó. `stop()` y `shutdown()` son suspend; `delete()` destruye. `run()` y `spawn()` corren en login shell con stdout y stderr en streams, y `kill()` señala al grupo de procesos entero.
+Cuando llega el primer mensaje, `create()` pide una caja desde esa plantilla (`POST /sandboxes` con `templateKey` + `templateHash`): nace con el bootstrap ya hecho, sin fork ni copia por hija, en ~4 s. Entre turnos la caja duerme con snapshot de la VM completa y despierta en ~1 s; eve la reabre por `sandboxId` con el disco tal cual lo dejó. `stop()` y `shutdown()` son suspend; `delete()` destruye. `run()` y `spawn()` corren en login shell con stdout y stderr en streams, y `kill()` señala al grupo de procesos entero.
 
 ### 4. Política de red por caja
 
@@ -73,7 +73,7 @@ Sólo a los dominios que tú autorices para esa caja, o a ninguno (`"deny-all"`)
 
 - **Una caja concurrente**: una conversación a la vez. La caja dormida de una sesión anterior también cuenta hasta que eve la borra.
 - **Sesiones de 1 hora** y tamaño `s`.
-- El prewarm usa una caja temporal que se destruye al capturar el snapshot, así que no ocupa tu cupo después.
+- El prewarm usa una caja temporal que se destruye al capturar la plantilla, así que no ocupa tu cupo después.
 
 Cuando tu agente atienda varias conversaciones a la vez, o necesite sesiones más largas o más grandes, pasa a **Mega ($499 MXN/mes, 2 cajas, sesiones de 4 h)** o **Tera ($2,490 MXN/mes, 5 cajas, 24 h)**. Mega es también el mínimo para la ruta 2.
 

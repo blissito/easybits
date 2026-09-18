@@ -48,7 +48,7 @@ What happens under the hood (so you can explain it and debug it):
 | eve | EasyBits |
 |---|---|
 | `prewarm` (runs on `eve start`, **not** on `eve build`) | temporary box + seed files + `bootstrap()` → **derived template** (`POST /sandboxes/:id/template-snapshot`, key `eve:<templateKey>` + hash of the options; idempotent on the host). `eve build` only compiles (~10 s); first `eve start` logs `easybits: plantilla dt_… lista`, later ones `reusada` |
-| `create()` | `POST /sandboxes` with `templateKey`+`templateHash`: born with the bootstrap done (~24 ms create + ~2 s boot), or a fresh box from `template` when eve sends no template. 404 `DerivedTemplateNotProvisioned` / 409 `DerivedTemplateStale` → `SandboxTemplateNotProvisionedError` (eve prewarms again) |
+| `create()` | `POST /sandboxes` with `templateKey`+`templateHash`: born with the bootstrap done (~0.6 s create + ~2 s boot; session ready in ~4 s), or a fresh box from `template` when eve sends no template. 404 `DerivedTemplateNotProvisioned` / 409 `DerivedTemplateStale` → `SandboxTemplateNotProvisionedError` (eve prewarms again) |
 | between turns | the box stays alive with `suspendOnIdle` (idle 600 s → suspend, resume ~1 s); reattached by `sandboxId` |
 | `stop()` / `shutdown()` | suspend · `delete()` | destroy |
 | `run` / `spawn` | `bash -lc` via `/bg`; stdout/stderr polled and streamed, `kill()` signals the process group |

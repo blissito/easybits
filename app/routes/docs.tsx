@@ -1928,6 +1928,10 @@ curl -X DELETE https://www.easybits.cloud/api/v2/sandboxes/sb_... \\
                     ["POST", "/sandboxes/:id/extend", "extendSeconds", "Alarga el TTL"],
                     ["POST", "/sandboxes/:id/snapshot", "name", "Congela el disco en una imagen"],
                     ["POST", "/sandboxes/:id/fork", "count, name, metadata, timeoutSeconds", "Clona N hijos copy-on-write"],
+                    ["POST", "/sandboxes/:id/template-snapshot", "key*, hash*, name", "Captura la caja preparada como plantilla derivada (idempotente por key+hash)"],
+                    ["GET", "/template-snapshots", "?key=&hash=", "Lista plantillas derivadas (o resuelve un par)"],
+                    ["DELETE", "/template-snapshots/:id", "—", "Borra una plantilla derivada (409 si tiene hijas vivas)"],
+                    ["POST", "/sandboxes/:id/network-policy", "policy* (allow-all | deny-all | { allow })", "Política de egress por caja"],
                     ["POST", "/sandboxes/:id/logs", "—", "Lee logs"],
                     ["POST", "/sandboxes/:id/apply-patch", "—", "Aplica un patch de archivos"],
                     ["POST", "/sandboxes/:id/ssh-enable", "—", "Habilita SSH (ver arriba)"],
@@ -2000,6 +2004,46 @@ await eb.sandboxes.snapshots.delete(snap.snapshotId);` },
 # delete_snapshot(snapshotId)` },
               ]}
             />
+
+            <h3 className="text-lg font-bold mt-8 mb-3">Plantillas derivadas (template-snapshot)</h3>
+            <p className="text-gray-600 text-sm mb-3">
+              Preparas <strong>una</strong> caja (<code className="bg-gray-100 px-1 rounded">npm install</code>, seeds, skills) y la capturas como plantilla derivada bajo una clave de contenido <code className="bg-gray-100 px-1 rounded">(key, hash)</code>. Desde entonces cada caja creada con ese par <strong>nace con el bootstrap hecho</strong>: sin fork ni copia por hijo, el host guarda sólo el delta de disco (12-22 MB). Medido: captura ~0.5-1 s; create desde la derivada ~0.6 s + boot ~2 s. Es lo que usa <code className="bg-gray-100 px-1 rounded">@easybits.cloud/eve-sandbox</code> para el <code className="bg-gray-100 px-1 rounded">prewarm</code> de eve. Diferencia con snapshot + fork: la derivada es disco solo (sin memoria) y el hijo arranca en frío; el fork ramifica una caja viva con su memoria.
+            </p>
+            <div className="mb-4 bg-blue-50 border-2 border-blue-200 rounded-xl p-4 text-sm">
+              <strong>Nunca metas credenciales en la plantilla</strong>: el host hace scrub de <code className="bg-gray-100 px-1 rounded">/etc/sandbox-env/env</code> y <code className="bg-gray-100 px-1 rounded">/app/secrets.env</code>, y cada hija recibe su propio <code className="bg-gray-100 px-1 rounded">env</code> en el create. Una plantilla sin uso 30 días se borra sola; si el template base se rehornea, el create responde <code className="bg-gray-100 px-1 rounded">409 DerivedTemplateStale</code> y hay que volver a capturar.
+            </div>
+            <TabbedCode
+              tabs={[
+                { label: "SDK", code: `// 1. Preparar UNA caja
+const base = await eb.sandboxes.create({ template: "node" });
+await base.exec("cd /workspace && npm ci");
+
+// 2. Capturarla como plantilla derivada (idempotente por key+hash → reused:true)
+const dt = await base.templateSnapshot({ key: "agente", hash: "3f9c" }); // { derivedId, reused, sizeBytes }
+
+// 3. Hijas: nacen con el bootstrap hecho, cada una con su env
+const child = await eb.sandboxes.create({ templateKey: "agente", templateHash: "3f9c", env: { FOO: "bar" } });
+
+// ¿Ya está preparada? (404 → hay que capturar)
+await eb.sandboxes.templateSnapshots.get({ key: "agente", hash: "3f9c" });
+await eb.sandboxes.templateSnapshots.list();
+await eb.sandboxes.templateSnapshots.delete(dt.derivedId);` },
+                { label: "MCP", code: `# Captura la caja YA preparada:
+# sandbox_template_snapshot(sandboxId, key:"agente", hash:"3f9c")
+
+# Hijas desde la plantilla (template opcional: lo sabe la plantilla):
+# sandbox_create(templateKey:"agente", templateHash:"3f9c", env:{FOO:"bar"})
+
+# Catálogo y limpieza:
+# sandbox_list_template_snapshots()
+# sandbox_delete_template_snapshot(derivedId:"dt_...")` },
+              ]}
+            />
+
+            <h3 className="text-lg font-bold mt-8 mb-3">Política de red por caja (network-policy)</h3>
+            <p className="text-gray-600 text-sm mb-3">
+              Sólo los dominios que autorices para esa caja, o ninguno: <code className="bg-gray-100 px-1 rounded">"allow-all"</code>, <code className="bg-gray-100 px-1 rounded">"deny-all"</code> o una allow-list por dominio (<code className="bg-gray-100 px-1 rounded">{"{ allow: { \"api.github.com\": [], \"registry.npmjs.org\": [] } }"}</code>, sin comodines). El host la resuelve a IPs por microVM con refresco DNS, la persiste con la caja y la vuelve a aplicar al despertar. SDK: <code className="bg-gray-100 px-1 rounded">sb.setNetworkPolicy(policy)</code> · REST: <code className="bg-gray-100 px-1 rounded">POST /sandboxes/:id/network-policy</code> · MCP: <code className="bg-gray-100 px-1 rounded">sandbox_set_network_policy</code>.
+            </p>
 
             <h3 className="text-lg font-bold mt-8 mb-3">Exponer un puerto (URL pública)</h3>
             <p className="text-gray-600 text-sm mb-3">
@@ -3127,7 +3171,7 @@ export default defineSandbox({
   },
 });`} />
             <p className="text-gray-600 mb-4 text-sm">
-              <code className="bg-gray-100 px-1 rounded">prewarm</code> se convierte en un snapshot copy-on-write (<code className="bg-gray-100 px-1 rounded">eve:&lt;templateKey&gt;</code>) que se crea en el primer <code className="bg-gray-100 px-1 rounded">eve start</code> (no en <code className="bg-gray-100 px-1 rounded">eve build</code>, que sólo compila) y se reusa en los arranques siguientes; cada sesión es un fork de ese snapshot (~7 s) que entre turnos duerme con <code className="bg-gray-100 px-1 rounded">sandbox_set_idle</code> y despierta en ~1 s. <code className="bg-gray-100 px-1 rounded">setNetworkPolicy</code> fija el egress <strong>por caja</strong> (<code className="bg-gray-100 px-1 rounded">allow-all</code>, <code className="bg-gray-100 px-1 rounded">deny-all</code> o allow-list por dominio; <code className="bg-gray-100 px-1 rounded">transform</code> no está soportado). Para hospedar el <strong>servidor</strong> eve usa el template <code className="bg-gray-100 px-1 rounded">eve-nitro</code> (Node 24, pnpm, eve CLI, <code className="bg-gray-100 px-1 rounded">/data</code> persistente, puerto 3000) y expón el 3000; en producción eve exige auth en su API HTTP (edita <code className="bg-gray-100 px-1 rounded">agent/channels/eve.ts</code>, p. ej. <code className="bg-gray-100 px-1 rounded">httpBasic</code>) y el modelo va como objeto de un proveedor del AI SDK (<code className="bg-gray-100 px-1 rounded">anthropic("claude-sonnet-5")</code>), no como string del AI Gateway. El estado durable (runs, hooks, streams) puede vivir en EasyBits DB con <code className="bg-gray-100 px-1 rounded">@easybits.cloud/eve-world</code> (la caja nace con <code className="bg-gray-100 px-1 rounded">EASYBITS_DB_URL</code> en su entorno, sin token; sólo se pasa a mano en el env del <code className="bg-gray-100 px-1 rounded">/bg</code> en una caja de fork/snapshot o para retomar runs en una caja nueva, con el mismo valor de <code className="bg-gray-100 px-1 rounded">metadata.eve_db_url</code>). Landing: <a href="/eve" className="underline">/eve</a> · guía completa: <a href="/docs/eve.md" className="underline">/docs/eve.md</a> · skill <code className="bg-gray-100 px-1 rounded">easybits-eve</code>.
+              <code className="bg-gray-100 px-1 rounded">prewarm</code> se convierte en una <strong>plantilla derivada</strong> (<code className="bg-gray-100 px-1 rounded">template-snapshot</code>, clave <code className="bg-gray-100 px-1 rounded">eve:&lt;templateKey&gt;</code> + hash de las opciones, 12-22 MB, se borra sola a los 30 días sin uso) que se captura en el primer <code className="bg-gray-100 px-1 rounded">eve start</code> (no en <code className="bg-gray-100 px-1 rounded">eve build</code>, que sólo compila; medido: 8.6 s la primera vez, 0.3 s reusada) y se reusa en los arranques siguientes; cada sesión nace de esa plantilla con el bootstrap ya hecho (~4 s) y entre turnos duerme con <code className="bg-gray-100 px-1 rounded">sandbox_set_idle</code> y despierta en ~1 s. <code className="bg-gray-100 px-1 rounded">setNetworkPolicy</code> fija el egress <strong>por caja</strong> (<code className="bg-gray-100 px-1 rounded">allow-all</code>, <code className="bg-gray-100 px-1 rounded">deny-all</code> o allow-list por dominio; <code className="bg-gray-100 px-1 rounded">transform</code> no está soportado). Para hospedar el <strong>servidor</strong> eve usa el template <code className="bg-gray-100 px-1 rounded">eve-nitro</code> (Node 24, pnpm, eve CLI, <code className="bg-gray-100 px-1 rounded">/data</code> persistente, puerto 3000) y expón el 3000; en producción eve exige auth en su API HTTP (edita <code className="bg-gray-100 px-1 rounded">agent/channels/eve.ts</code>, p. ej. <code className="bg-gray-100 px-1 rounded">httpBasic</code>) y el modelo va como objeto de un proveedor del AI SDK (<code className="bg-gray-100 px-1 rounded">anthropic("claude-sonnet-5")</code>), no como string del AI Gateway. El estado durable (runs, hooks, streams) puede vivir en EasyBits DB con <code className="bg-gray-100 px-1 rounded">@easybits.cloud/eve-world</code> (la caja nace con <code className="bg-gray-100 px-1 rounded">EASYBITS_DB_URL</code> en su entorno, sin token; sólo se pasa a mano en el env del <code className="bg-gray-100 px-1 rounded">/bg</code> en una caja de fork/snapshot o para retomar runs en una caja nueva, con el mismo valor de <code className="bg-gray-100 px-1 rounded">metadata.eve_db_url</code>). Landing: <a href="/eve" className="underline">/eve</a> · guía completa: <a href="/docs/eve.md" className="underline">/docs/eve.md</a> · skill <code className="bg-gray-100 px-1 rounded">easybits-eve</code>.
             </p>
           </section>
 

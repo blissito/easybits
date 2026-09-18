@@ -68,7 +68,8 @@ export default function Sandboxes({ loaderData }: Route.ComponentProps) {
               bullets: [
                 "Copy-on-write: las hijas no duplican el disco",
                 "Útil para probar N variantes del mismo estado",
-                "Cada hija es un sandbox independiente",
+                "Plantilla derivada: captura el bootstrap una vez (~0.5-1 s) y cada caja nueva nace con él hecho (~0.6 s + boot ~2 s)",
+                "Cada hija es un sandbox independiente, con política de red propia",
                 "Desde el SDK, la REST API o las tools MCP",
               ],
               image: "https://i.imgur.com/R8qvNsB.png",

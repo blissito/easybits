@@ -387,6 +387,43 @@ await eb.sandboxes.snapshots.list();
 await eb.sandboxes.snapshots.delete(snap.snapshotId);
 ```
 
+### Derived templates (template-snapshot)
+
+Prepare **one** box (`npm ci`, seeds, skills), capture it once under a content
+key `(key, hash)`, and every box created with that pair is **born with the
+bootstrap done** — no fork, no per-child copy; the host keeps only the disk delta
+(12-22 MB). Measured: capture ~0.5-1 s, create from the derived template ~0.6 s
++ ~2 s boot. This is what `@easybits.cloud/eve-sandbox` uses for eve's `prewarm`.
+
+```ts
+const base = await eb.sandboxes.create({ template: "node" });
+await base.exec("cd /workspace && npm ci");
+
+// Idempotent per (key, hash): a second call returns reused: true
+const dt = await base.templateSnapshot({ key: "agent", hash: "3f9c" }); // { derivedId, reused, sizeBytes }
+
+// Children never inherit the source env (secrets are scrubbed): pass their own
+const child = await eb.sandboxes.create({ templateKey: "agent", templateHash: "3f9c", env: { FOO: "bar" } });
+
+await eb.sandboxes.templateSnapshots.get({ key: "agent", hash: "3f9c" }); // 404 DerivedTemplateNotProvisioned → capture first
+await eb.sandboxes.templateSnapshots.list();
+await eb.sandboxes.templateSnapshots.delete(dt.derivedId);            // 409 DerivedTemplateInUse while children live
+```
+
+Unused for 30 days, a derived template deletes itself. If the base template is
+rebaked, `create` answers `409 DerivedTemplateStale`: capture again.
+
+### Network policy (per-box egress)
+
+```ts
+await sbx.setNetworkPolicy("deny-all");
+await sbx.setNetworkPolicy({ allow: { "api.github.com": [], "registry.npmjs.org": [] } }); // no wildcards
+await sbx.setNetworkPolicy("allow-all");
+```
+
+Resolved to IPs by the host (DNS refresh), persisted with the box and re-applied
+on resume. `transform` (header injection) is not supported.
+
 ### Sleep / wake (survive quiet periods)
 
 Without `suspendOnIdle`, the box is **destroyed** when `timeoutSeconds` (default

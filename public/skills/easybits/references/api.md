@@ -123,6 +123,14 @@ All actions (the enum is derived from the server, see `openapi.yaml`):
 - `bootstrap`: `{ script, mode?: "async"|"blocking", timeoutSeconds? }` — runs on the host on
   every wake. Idempotent scripts only. Never put a credential in it.
 - `fork`: copy-on-write clone → `{ sandboxId }` of the child.
+- `template-snapshot`: `{ key, hash, name? }` — capture the ALREADY prepared box as a derived
+  template (idempotent per `(key, hash)` → `reused: true`; ~0.5-1 s). Then `POST /sandboxes`
+  `{ templateKey, templateHash, env }` boots with that bootstrap done (~0.6 s + ~2 s boot).
+  `GET /template-snapshots?key=&hash=` → 404 `DerivedTemplateNotProvisioned` = prepare first;
+  `DELETE /template-snapshots/{id}` (409 `DerivedTemplateInUse` while children live). Unused
+  30 days → deleted; base template rebaked → create answers 409 `DerivedTemplateStale`.
+- `network-policy`: `{ policy: "allow-all" | "deny-all" | { allow: { "api.github.com": [] } } }`
+  — per-box egress, no wildcards; persisted with the box and re-applied on resume.
 - `DELETE /sandboxes/{id}` destroys it.
 
 ## Web (billed in web queries; `402` = buy a pack at `/dash/packs?tab=web`)

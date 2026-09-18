@@ -10,8 +10,9 @@ __TEMPLATES_MD_EN__
 
 ### Create a sandbox
 \`POST /sandboxes\`
-Body: \`{ template, timeoutSeconds?, name?, suspendOnIdle?, hardTtlSeconds?, persistent?, size? }\`
-MCP: \`sandbox_create({ template, timeoutSeconds?, suspendOnIdle?, hardTtlSeconds? })\`
+Body: \`{ template, timeoutSeconds?, name?, env?, metadata?, suspendOnIdle?, hardTtlSeconds?, persistent?, size? }\`
+(or \`templateKey\`+\`templateHash\` / \`derivedTemplate\` instead of \`template\` — see *Derived templates*).
+MCP: \`sandbox_create({ template, timeoutSeconds?, env?, suspendOnIdle?, hardTtlSeconds? })\`
 
 ⚠️ **Without \`suspendOnIdle\`, when \`timeoutSeconds\` runs out the box is DESTROYED — it does not go to sleep.**
 And if you omit \`timeoutSeconds\` the default is **300 s**: five minutes and the box is gone.
@@ -24,7 +25,7 @@ That is the difference between "my agent is still there tomorrow" and an unexpla
   anything that has been suspended for 72 h.
 - \`persistent: true\` — the box skips the age-based reaper (for always-on).
 
-The body takes no fields beyond those. What a box does **on wake-up** is not declared here:
+\`env\` reaches the whole guest (login shell, \`/exec\`, \`/bg\` and the template unit). What a box does **on wake-up** is not declared here:
 it is a separate call on the already-created box — see *Bootstrap on resume*.
 
 For any box hosting an agent you are going to write to LATER —an ACP agent, a bot—
@@ -112,7 +113,8 @@ an installed skill takes effect on the next wake-up, by itself.
 
 **What it is.** You prepare ONE box (\`npm install\`, seeds, skills, config) and capture it as a
 derived template under a content key \`(key, hash)\`. From then on every box created with that
-pair **is born with the bootstrap done**, in the time of a normal create (~24 ms create + boot),
+pair **is born with the bootstrap done**, in the time of a normal create (measured: capture ~0.5-1 s;
+create from the derived template ~0.6 s + ~2 s boot),
 no fork and no GBs copied per child: the host keeps only the disk delta (tens of MB) and mounts it
 under each child copy-on-write.
 
@@ -565,7 +567,7 @@ export default defineSandbox({
 | eve | EasyBits |
 |---|---|
 | \`prewarm\` (runs on \`eve start\`, **not** on \`eve build\`) | temporary box + seed files + \`bootstrap()\` → **derived template** (\`template-snapshot\`, key \`eve:<templateKey>\` + hash of the options). Idempotent on the host: the first \`eve start\` logs \`easybits: plantilla dt_… lista\`, later ones \`reusada\` |
-| \`create()\` | \`POST /sandboxes\` with \`templateKey\`+\`templateHash\`: the box is born with the bootstrap done (~24 ms create + ~2 s boot), or a fresh box from \`template\` when eve sends none. 404 \`DerivedTemplateNotProvisioned\` / 409 \`DerivedTemplateStale\` → \`SandboxTemplateNotProvisionedError\` (eve prewarms again) |
+| \`create()\` | \`POST /sandboxes\` with \`templateKey\`+\`templateHash\`: the box is born with the bootstrap done (~0.6 s create + ~2 s boot; session ready in ~4 s), or a fresh box from \`template\` when eve sends none. 404 \`DerivedTemplateNotProvisioned\` / 409 \`DerivedTemplateStale\` → \`SandboxTemplateNotProvisionedError\` (eve prewarms again) |
 | between turns | the box stays alive with an idle policy (\`idleTtlSeconds\` 600 → suspend, resume ~1 s) and is reattached by \`sandboxId\` |
 | \`stop()\` / \`shutdown()\` · \`delete()\` | suspend · destroy |
 | \`run\` / \`spawn\` | \`bash -lc\` through \`/bg\`; stdout/stderr as streams, \`kill()\` signals the process group |

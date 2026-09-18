@@ -35,7 +35,7 @@ Claude.ai / Cowork: add `https://www.easybits.cloud/api/mcp/<groups>` as a custo
 | Group | What it holds |
 |---|---|
 | `core` (default) | files, databases, documents, forms, websites, brand kits |
-| `sandbox` | create/exec/bg/run-code/files/expose/snapshot/fork/bootstrap on microVMs |
+| `sandbox` | create/exec/bg/run-code/files/expose/snapshot/fork/template-snapshot (derived templates)/network-policy/bootstrap on microVMs |
 | `web` | `web_search`, `web_fetch`, `web_extract`, `web_crawl` (billed in web queries) |
 | `hosting` | `launch_app`, `create_machine`, releases, rollback, secrets, logs, domains |
 | `docs` | documents only: `structured_doc`, pages, deploy, PDF |

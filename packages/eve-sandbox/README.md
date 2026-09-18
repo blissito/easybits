@@ -30,7 +30,7 @@ export default defineSandbox({
 | eve | EasyBits |
 |---|---|
 | `prewarm(templateKey)` — eve calls it on `eve start`, not on `eve build` (which only compiles) | temporary box + seed files + `bootstrap()` → **derived template** (`template-snapshot`, key `eve:<templateKey>` + hash of the image options). Idempotent on the host: the first start logs `easybits: plantilla dt_… lista`, later ones `reusada`. The capture itself takes ~0.5 s. |
-| `create()` | `POST /sandboxes` with `templateKey`+`templateHash`: the box is **born with the bootstrap done** (~24 ms create + boot, no fork, no copy per child). With `templateKey: null`, a fresh box from `template`. 404 `DerivedTemplateNotProvisioned` / 409 `DerivedTemplateStale` (base template rebaked) → `SandboxTemplateNotProvisionedError`, so eve prewarms again. |
+| `create()` | `POST /sandboxes` with `templateKey`+`templateHash`: the box is **born with the bootstrap done** (~0.6 s create + ~2 s boot, session ready in ~4 s; no fork, no copy per child). With `templateKey: null`, a fresh box from `template`. 404 `DerivedTemplateNotProvisioned` / 409 `DerivedTemplateStale` (base template rebaked) → `SandboxTemplateNotProvisionedError`, so eve prewarms again. |
 | `create()` with persisted state | reattaches the same box (resumes it if it was suspended). |
 | `stop()` / `shutdown()` | **suspend** — Firecracker snapshot, resumes in ~1s, disk and memory intact. |
 | `delete()` | destroy. |
