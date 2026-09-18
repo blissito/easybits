@@ -39,7 +39,7 @@ Tables are created on first use (`ensureSchema()`, idempotent). No migration CLI
 |---|---|---|
 | `WORKFLOW_LIBSQL_URL` (alias `EASYBITS_DB_URL`) | `file:workflow.db` | `file:…`, `libsql://…`, `http(s)://…`, `ws(s)://…` |
 | `WORKFLOW_LIBSQL_AUTH_TOKEN` (alias `EASYBITS_DB_TOKEN`) | – | JWT for sqld (scoped to one namespace) |
-| `WORKFLOW_SERVICE_URL` | `http://localhost:$PORT` | Base URL where `/.well-known/workflow/v1/flow` is served; the queue POSTs deliveries there |
+| `WORKFLOW_SERVICE_URL` | `http://localhost:$PORT` | Base URL where `/.well-known/workflow/v1/flow` is served; the queue POSTs deliveries there. Before its first claim the worker waits (up to 30 s) for `GET <base>/eve/v1/health` to answer 200, so a custom server should expose that route |
 | `WORKFLOW_CONCURRENCY` | `20` | Messages in flight per process |
 | `WORKFLOW_QUEUE_POLL_MS` | `250` | Queue polling interval |
 | `WORKFLOW_QUEUE_LEASE_MS` | `30000` | Lease on a claimed message (renewed by heartbeat while the delivery runs) |
