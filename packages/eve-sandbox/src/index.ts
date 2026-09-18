@@ -42,6 +42,10 @@ import {
   resolveOptions,
   writeSeedFiles,
   type EasybitsBackendOptions,
+  PREWARM_TTL_SECONDS,
+  prewarmMetadata,
+  sweepOrphanPrewarmBoxes,
+  destroyPrewarmBox,
 } from "./core.js";
 
 export { BACKEND_NAME, type EasybitsBackendOptions } from "./core.js";
@@ -64,12 +68,13 @@ export function easybits(options: EasybitsBackendOptions = {}): SandboxBackend {
       log(`easybits: plantilla derivada ${existing.derivedId} reusada para ${input.templateKey}`);
       return { reused: true };
     }
+    await sweepOrphanPrewarmBoxes(eb, input.templateKey, log);
     log(`easybits: creando caja ${opts.template} para bootstrap de ${input.templateKey}`);
     const box = await eb.sandboxes.create({
       template: opts.template,
-      timeoutSeconds: opts.timeoutSeconds,
+      timeoutSeconds: PREWARM_TTL_SECONDS,
       name: `eve-prewarm-${input.templateKey}`.slice(0, 60),
-      metadata: { ...opts.metadata, eve_template: input.templateKey },
+      metadata: prewarmMetadata(opts, input.templateKey),
     });
     try {
       const session = await openSession(box, input.templateKey, opts);
@@ -83,7 +88,7 @@ export function easybits(options: EasybitsBackendOptions = {}): SandboxBackend {
       return { reused: !!dt.reused };
     } finally {
       // La caja de build no sirve para nada más: el estado vive en la plantilla.
-      await box.destroy().catch(() => {});
+      await destroyPrewarmBox(box, log);
     }
   }
 

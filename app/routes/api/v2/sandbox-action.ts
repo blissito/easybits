@@ -44,6 +44,7 @@ import {
   readLogs,
   runtimeControl,
   applyPatch,
+  withHostErrors,
 } from "~/.server/core/sandboxOperations";
 import { computeEnvFor } from "~/.server/compute/gateway";
 
@@ -59,7 +60,7 @@ const invalid = (issues: unknown) =>
 // Sin este loader un GET a cualquier acción reventaba con "Unexpected Server Error" (ruta
 // sin loader), que obligaba a ir por `journalctl` vía exec. Las demás acciones: 405 con la
 // pista de que son POST.
-export async function loader({ request, params }: Route.LoaderArgs) {
+async function loaderImpl({ request, params }: Route.LoaderArgs) {
   const ctx = requireAuth(await authenticateRequest(request));
   if (params.action === "network-policy")
     return Response.json(await getSandboxNetworkPolicy(ctx, params.id!));
@@ -84,7 +85,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   }
 }
 
-export async function action({ request, params }: Route.ActionArgs) {
+async function actionImpl({ request, params }: Route.ActionArgs) {
   if (request.method !== "POST") {
     return Response.json({ error: "Method not allowed" }, { status: 405 });
   }
@@ -270,3 +271,6 @@ async function dispatch(
     }
   }
 }
+
+export const loader = withHostErrors(loaderImpl);
+export const action = withHostErrors(actionImpl);

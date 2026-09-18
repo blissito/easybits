@@ -8,8 +8,11 @@ Run your [eve](https://eve.dev) agents' sandboxes on [EasyBits](https://www.easy
 - An EasyBits API key with `WRITE` scope (creating boxes, capturing the derived template). Add `DELETE` if eve should be able to delete derived templates.
 
 ```bash
-npm i @easybits.cloud/eve-sandbox
+npx eve init app && cd app                                          # scaffold (or your existing project)
+pnpm add @easybits.cloud/eve-sandbox --allow-build=cbor-extract     # pnpm 12 blocks cbor-extract's build script; npm needs no flag
 ```
+
+Verify the import with a file, not `npx tsx -e` (eve's `createRequire` crashes under `[eval]`): `echo 'import("@easybits.cloud/eve-sandbox").then(m=>console.log(Object.keys(m)))' > check.mjs && node check.mjs` → `[ 'BACKEND_NAME', 'easybits' ]`.
 
 ```ts
 // agent/sandbox.ts
@@ -29,7 +32,7 @@ export default defineSandbox({
 
 | eve | EasyBits |
 |---|---|
-| `prewarm(templateKey)` — eve calls it on `eve start`, not on `eve build` (which only compiles) | temporary box + seed files + `bootstrap()` → **derived template** (`template-snapshot`, key `eve:<templateKey>` + hash of the image options). Idempotent on the host: the first start logs `easybits: plantilla dt_… lista`, later ones `reusada`. The capture itself takes ~0.5 s. |
+| `prewarm(templateKey)` — eve calls it on `eve start`/`eve dev`, not on `eve build` (which compiles and validates the backend, so it needs `EASYBITS_API_KEY`; `eve dev` and `eve start` hash the template differently, so the first time both prewarm) | temporary box + seed files + `bootstrap()` → **derived template** (`template-snapshot`, key `eve:<templateKey>` + hash of the image options). Idempotent on the host: the first start logs `easybits: plantilla dt_… lista`, later ones `reusada`. The capture itself takes ~0.5 s. |
 | `create()` | `POST /sandboxes` with `templateKey`+`templateHash`: the box is **born with the bootstrap done** (~0.6 s create + ~2 s boot, session ready in ~4 s; no fork, no copy per child). With `templateKey: null`, a fresh box from `template`. 404 `DerivedTemplateNotProvisioned` / 409 `DerivedTemplateStale` (base template rebaked) → `SandboxTemplateNotProvisionedError`, so eve prewarms again. |
 | `create()` with persisted state | reattaches the same box (resumes it if it was suspended). |
 | `stop()` / `shutdown()` | **suspend** — Firecracker snapshot, resumes in ~1s, disk and memory intact. |
@@ -40,6 +43,10 @@ export default defineSandbox({
 | `setNetworkPolicy` | per-box egress policy: `"allow-all"`, `"deny-all"` or a per-domain allow-list, resolved to IPs by the host (DNS refresh), persisted and re-applied on resume. `transform` (header injection) is **not supported** and throws. |
 
 Relative paths resolve from `/workspace` (configurable).
+
+The temporary prewarm/prepare box (`eve-prewarm-…`) is destroyed in a `finally` once the template is captured; as belt and braces it is created with a 15-minute TTL (so it expires on its own if the process dies mid-bootstrap), tagged `metadata.eve_prewarm`, and the next prewarm sweeps any orphan for the same template key before creating a new one. A failed destroy is logged instead of swallowed.
+
+Model: the `eve init` scaffold (eve 0.59.1) targets Vercel's AI Gateway (`model: "openai/gpt-5.6-luna-fast"` as a string). Outside Vercel use a direct provider: `pnpm add @ai-sdk/anthropic` and `model: anthropic("claude-sonnet-5")`. Locally, `eve start` answers 401 even from localhost (`localDev()` is ignored in production); use `eve dev --no-ui` or `httpBasic`.
 
 ## Options
 
@@ -95,10 +102,10 @@ Not covered: `ctx.files` (Dockerfile builds — EasyBits boxes start from a temp
 <!-- generated:packages -->
 - `@easybits.cloud/mcp@0.3.7`
 - `@easybits.cloud/sdk@0.35.1`
-- `@easybits.cloud/eve-sandbox@0.1.1`
+- `@easybits.cloud/eve-sandbox@0.1.2`
 - `@easybits.cloud/eve-world@0.1.1`
 <!-- /generated -->
 
 ## Self-hosting eve on EasyBits
 
-The eve server itself can run in an EasyBits box (template `eve-nitro`: Node 24, pnpm, eve CLI), with `.eve/.workflow-data` on the persistent `/data` volume and a public HTTPS URL via `expose_port`. Each agent session then gets its own microVM through this backend.
+The eve server itself can run in an EasyBits box (template `eve-nitro`: Node 24, pnpm, eve CLI 0.58.1 — `pnpm add eve@latest` bumps the project to 0.59.1), with `.eve/.workflow-data` on the persistent `/data` volume and a public HTTPS URL via `expose_port`. Each agent session then gets its own microVM through this backend.

@@ -27,6 +27,10 @@ import {
   resolveOptions,
   writeSeedFiles,
   type EasybitsBackendOptions,
+  PREWARM_TTL_SECONDS,
+  prewarmMetadata,
+  sweepOrphanPrewarmBoxes,
+  destroyPrewarmBox,
 } from "./core.js";
 
 export const PROVIDER_NAME = BACKEND_NAME;
@@ -164,12 +168,13 @@ export function createEasybitsProvider(options: EasybitsEnvironmentOptions = {})
         return artifactOf(existing.derivedId);
       }
 
+      await sweepOrphanPrewarmBoxes(eb, key, log);
       log(`easybits: creando caja ${opts.template} para preparar ${name}`);
       const box = await eb.sandboxes.create({
         template: opts.template,
-        timeoutSeconds: opts.timeoutSeconds,
+        timeoutSeconds: PREWARM_TTL_SECONDS,
         name: `eve-prepare-${key}`.slice(0, 60),
-        metadata: { ...opts.metadata, eve_template: key },
+        metadata: prewarmMetadata(opts, key),
       });
       try {
         const session = await openSession(box, `prepare:${key}`, opts);
@@ -187,7 +192,7 @@ export function createEasybitsProvider(options: EasybitsEnvironmentOptions = {})
         return artifactOf(dt.derivedId);
       } finally {
         // El estado vive en la plantilla; la caja de build sobra.
-        await box.destroy().catch(() => {});
+        await destroyPrewarmBox(box, log);
       }
     },
 

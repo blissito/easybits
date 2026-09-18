@@ -25,4 +25,15 @@ describe("hostErrorResponse", () => {
     const r = hostErrorResponse(new SandboxHostError("GET", "/x", 404, '{"error":"sandbox not found"}'))!;
     expect(r.status).toBe(404);
   });
+  it("503 'not running yet' del host → 409 SandboxNotReady con el status", async () => {
+    const r = hostErrorResponse(
+      new SandboxHostError("POST", "/v1/sandbox/x/exec", 503, '{"error":"sandbox not running yet (status=starting)"}\n')
+    )!;
+    expect(r.status).toBe(409);
+    expect(await r.json()).toMatchObject({ error: "SandboxNotReady", status: "starting" });
+  });
+  it("503 'sandbox not running' del /bg también es SandboxNotReady", async () => {
+    const r = hostErrorResponse(new SandboxHostError("POST", "/x/exec/background", 503, '{"error":"sandbox not running"}'))!;
+    expect(r.status).toBe(409);
+  });
 });

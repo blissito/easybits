@@ -682,6 +682,24 @@ export function hostErrorResponse(e: unknown): Response | null {
   if (!(e instanceof SandboxHostError)) return null;
   let status = e.status;
   let raw = e.body;
+  // Caja recién creada (o dormida) sobre la que ya se pide exec/bg/files: el
+  // host responde 503 "sandbox not running yet (status=starting)". No es un
+  // fallo nuestro sino un estado transitorio del cliente → 409 con el status
+  // para que el llamador espere `status=running` en vez de reintentar a ciegas.
+  if (status === 503) {
+    const m = /sandbox not running(?: yet)?(?: \(status=(\w+)\))?/.exec(parseHostMessage(raw));
+    if (m) {
+      const st = m[1] ?? "starting";
+      return Response.json(
+        {
+          error: "SandboxNotReady",
+          status: st,
+          message: `La caja está en status=${st}; espera a status=running (GET /sandboxes/:id) antes de exec/bg/files.`,
+        },
+        { status: 409 }
+      );
+    }
+  }
   if (status === 502) {
     const m = /agent \S+ → (\d{3}): ([\s\S]*)$/.exec(parseHostMessage(raw));
     if (!m) return null;

@@ -332,3 +332,41 @@ function decodeText(b: Uint8Array, encoding: string) {
 async function streamToString(s: ReadableStream<Uint8Array>) {
   return new TextDecoder().decode(await streamToBytes(s));
 }
+
+// ── Caja temporal de prewarm/prepare ─────────────────────────────────────────
+// Su único producto es la plantilla derivada; después sobra. Tres defensas
+// para que nunca quede viva ocupando cupo:
+//  1. TTL corto propio (no el de las sesiones): si el proceso muere a mitad
+//     del bootstrap (Ctrl-C en `eve dev`, OOM) y el `finally` nunca corre, el
+//     host la destruye solo.
+//  2. Marcada con `metadata.eve_prewarm`: el siguiente prewarm barre las
+//     huérfanas de su misma plantilla antes de crear otra.
+//  3. El destroy del `finally` no se traga en silencio: si falla, se loguea
+//     (queda el TTL como red).
+export const PREWARM_TTL_SECONDS = 900;
+
+export function prewarmMetadata(opts: ResolvedOptions, templateKey: string): Record<string, string> {
+  return { ...opts.metadata, eve_template: templateKey, eve_prewarm: "1" };
+}
+
+export async function sweepOrphanPrewarmBoxes(
+  eb: EasybitsClient,
+  templateKey: string,
+  log: (msg: string) => void,
+): Promise<void> {
+  const boxes = await eb.sandboxes.list().catch(() => [] as Sandbox[]);
+  for (const b of boxes) {
+    if (b.metadata?.eve_prewarm !== "1" || b.metadata?.eve_template !== templateKey) continue;
+    log(`easybits: destruyendo caja de prewarm huérfana ${b.sandboxId}`);
+    await b.destroy().catch(ignore404);
+  }
+}
+
+export async function destroyPrewarmBox(box: Sandbox, log: (msg: string) => void): Promise<void> {
+  try {
+    await box.destroy();
+  } catch (e) {
+    if (e instanceof EasybitsError && e.status === 404) return;
+    log(`easybits: no se pudo destruir la caja de prewarm ${box.sandboxId} (${(e as Error).message}); el host la expira en ${PREWARM_TTL_SECONDS}s`);
+  }
+}
