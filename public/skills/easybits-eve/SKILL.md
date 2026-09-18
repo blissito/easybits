@@ -139,7 +139,7 @@ outlives the box use `@easybits.cloud/eve-world` (section 3).
 <!-- generated:packages -->
 - `@easybits.cloud/mcp@0.3.7`
 - `@easybits.cloud/sdk@0.35.0`
-- `@easybits.cloud/eve-sandbox@0.0.6`
+- `@easybits.cloud/eve-sandbox@0.1.0`
 - `@easybits.cloud/eve-world@0.1.1`
 <!-- /generated -->
 
