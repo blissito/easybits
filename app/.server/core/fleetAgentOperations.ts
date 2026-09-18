@@ -1656,6 +1656,10 @@ async function derivedDropCode(e: unknown): Promise<string | null> {
 // estén running y ANTES de restaurar una conversación o mandar un /message — si no,
 // el snapshot se llevaría el transcript de un hilo. agentId → hash a capturar.
 const pendingArtifactCapture = new Map<string, string>();
+// Cajas nacidas DESDE un derivado (agentId → derivedId). Si una no arranca, el
+// artifact es sospechoso (p.ej. dm del host ocupado): se descarta y se reintenta
+// con spawn normal en vez de dejar al agente sin arrancar hasta que alguien lo note.
+const derivedBorn = new Map<string, string>();
 
 async function setFleetArtifact(fleetAgentId: string, artifact: FleetArtifact | null) {
   const row = await db.fleetAgent.findUnique({ where: { id: fleetAgentId }, select: { metadata: true } });
@@ -1910,13 +1914,18 @@ async function spawnVm(ctx: AuthContext, fleetAgent: SpawnEnvAgent & { name: str
   // el derivado no sirve (404/409/410) se descarta y se cae al spawn normal, que a su
   // vez lo re-captura (pendingArtifactCapture → captureFleetArtifact en pickOrSpawn).
   const hash = fleetArtifactHash(fleetAgent);
-  const artifact = readFleetArtifact(fleetAgent);
+  // Se lee FRESCO de la DB, no de la fila del turno: un drop en esta misma colocación
+  // (hijo derivado que no arrancó) debe verse en el reintento inmediato.
+  const artifact = readFleetArtifact(
+    await db.fleetAgent.findUnique({ where: { id: fleetAgent.id }, select: { metadata: true } }).catch(() => fleetAgent)
+  );
   let created: Awaited<ReturnType<typeof createAgent>> | null = null;
   let derivedFrom: string | null = null;
   if (artifact && artifact.hash === hash) {
     try {
       created = await createAgent(ctx, { ...common, derivedTemplate: artifact.derivedId });
       derivedFrom = artifact.derivedId;
+      derivedBorn.set(created.agentId, artifact.derivedId);
     } catch (e) {
       const code = await derivedDropCode(e);
       if (!code) throw e;
@@ -2555,15 +2564,38 @@ export async function pickOrSpawn(ctx: AuthContext, fleetAgent: PoolRow, groupId
     const res = await reserveVm(ctx, fleetAgent, groupId);
     const reserved = await db.agent.findUniqueOrThrow({ where: { id: res.agentId } });
     const wasBuilding = reserved.status === "building";
-    const vm = await ensureRunning(ctx, reserved, fleetAgent); // waits for boot/resume — in PARALLEL across groups
+    let vm: AgentRow | null = null;
+    let bootError: unknown = null;
+    try {
+      vm = await ensureRunning(ctx, reserved, fleetAgent); // waits for boot/resume — in PARALLEL across groups
+    } catch (e) {
+      bootError = e;
+    }
     if (!vm) {
+      const derivedId = derivedBorn.get(res.agentId);
+      if (derivedId) {
+        // Un hijo del artifact no arrancó (medido en prod 2026-09-18: `dmsetup create
+        // fc-dt-<id>: Device or resource busy` en el 2º hijo). Se descarta el artifact,
+        // se suelta la caja muerta y la siguiente vuelta spawnea normal (y re-captura).
+        derivedBorn.delete(res.agentId);
+        auditLog("artifact.drop", { fleetAgent: fleetAgent.id, derivedId, code: "BootFailed", error: String(bootError ?? reserved.status) });
+        await setFleetArtifact(fleetAgent.id, null).catch(() => {});
+        await markWorkerLost(res.agentId).catch(() => {});
+        await db.fleetAgentRoute
+          .updateMany({ where: { agentId: res.agentId }, data: { agentId: null, detachedAt: new Date() } })
+          .catch(() => {});
+        await destroySandbox(ctx, reserved.sandboxId).catch(() => {});
+      } else if (bootError) {
+        throw bootError;
+      }
       if (attempt >= MAX_PLACE_ATTEMPTS) {
         throw new Error(`fleetAgent worker ${res.agentId} failed to start`);
       }
       // La fila quedó `lost` y la ruta desatada: la siguiente vuelta cold-spawnea.
-      auditLog("place.retry", { groupId, agentId: res.agentId, attempt });
+      auditLog("place.retry", { groupId, agentId: res.agentId, attempt, ...(derivedId ? { reason: "derived-boot-failed" } : {}) });
       continue;
     }
+    derivedBorn.delete(res.agentId);
     // El booleano de `restoreConversation` se tiraba a la basura, y era justo el dato
     // que dice si el MODELO se acuerda de algo: `false` = no había blob que restaurar,
     // así que el worker arranca en blanco aunque el historial siga entero en la DB.

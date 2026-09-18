@@ -51,7 +51,11 @@ const db = {
       Object.assign(a, data);
       return a;
     },
-    updateMany: async () => ({ count: 0 }),
+    updateMany: async ({ where, data }: any) => {
+      const hit = agents.filter((a) => a.id === where.id);
+      for (const a of hit) Object.assign(a, data);
+      return { count: hit.length };
+    },
     delete: async ({ where }: any) => {
       agents = agents.filter((a) => a.id !== where.id);
     },
@@ -271,6 +275,24 @@ describe("spawnVm — decisión de nacer desde el artifact", () => {
     expect(createAgent.mock.calls[1][1].derivedTemplate).toBeUndefined();
     expect(createAgent.mock.calls[1][1].seedFiles).toEqual(base.persona.seedFiles);
     // Se recaptura sobre la caja nueva.
+    expect(fleetAgents.fa1.metadata.artifact.derivedId).toBe("dt_new");
+  });
+
+  it("el hijo del derivado NO arranca: descarta el artifact y reintenta con spawn normal", async () => {
+    fleetAgents.fa1.metadata = { artifact: { derivedId: "dt_bad", hash: fleetArtifactHash(base), at: "x" } };
+    // 1er create (derivado) nace en `error` (p.ej. dmsetup busy); el 2º (normal) running.
+    createAgent.mockImplementationOnce(async (_ctx: unknown, params: any) => {
+      const id = `agent-${++nextAgent}`;
+      agents.push({ id, sandboxId: `sb_${id}`, ownerId: "u1", template: params.template, embedToken: "t", fleetAgentId: null, status: "error", lastMessageAt: new Date() });
+      return { agentId: id, sandboxId: `sb_${id}`, embedToken: "t" };
+    });
+    const placed = await pickOrSpawn(CTX, fleetAgents.fa1, "web-1");
+    expect(placed.vm.status).toBe("running");
+    expect(createAgent).toHaveBeenCalledTimes(2);
+    expect(createAgent.mock.calls[0][1].derivedTemplate).toBe("dt_bad");
+    expect(createAgent.mock.calls[1][1].derivedTemplate).toBeUndefined();
+    expect(agents.find((a) => a.id === "agent-1")!.status).toBe("lost");
+    // Se re-capturó sobre la caja sana.
     expect(fleetAgents.fa1.metadata.artifact.derivedId).toBe("dt_new");
   });
 
