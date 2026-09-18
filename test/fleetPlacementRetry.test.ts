@@ -103,6 +103,7 @@ vi.mock("~/.server/core/sandboxOperations", () => ({
   writeFile: vi.fn(),
   listSandboxes: vi.fn(async () => []),
   createTemplateSnapshot: vi.fn(),
+  getTemplateSnapshot: vi.fn(),
   deleteTemplateSnapshot: vi.fn(),
   // Sin fleetAgent completo el env recomputado nunca coincide con el horneado; el
   // despertar con env se resuelve como un resume normal para este test.

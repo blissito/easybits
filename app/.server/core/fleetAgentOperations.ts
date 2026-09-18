@@ -25,6 +25,7 @@ import {
   writeFile,
   listSandboxes,
   createTemplateSnapshot,
+  getTemplateSnapshot,
   deleteTemplateSnapshot,
   refreshAgentEnv,
 } from "~/.server/core/sandboxOperations";
@@ -1698,11 +1699,14 @@ async function captureFleetArtifact(ctx: AuthContext, fleetAgent: PoolRow, vm: A
     const current = readFleetArtifact(fresh);
     if (current?.hash === hash) return; // otro spawn concurrente ya lo capturó
     const t0 = Date.now();
-    const meta = await createTemplateSnapshot(ctx, vm.sandboxId, {
-      key: fleetArtifactKey(fleetAgent.id),
-      hash,
-      name: fleetAgent.name ?? undefined,
-    });
+    // La captura es POR FIERRO (el POST va al fierro de la caja fuente) y el router aún
+    // no la deduplica: con dos fierros se obtuvieron dos derivedId para la misma
+    // (key, hash). El GET sí es fan-out → si ya existe en cualquier fierro, se reusa.
+    const key = fleetArtifactKey(fleetAgent.id);
+    const existing = await getTemplateSnapshot(ctx, { key, hash }).catch(() => null);
+    const meta =
+      existing ??
+      (await createTemplateSnapshot(ctx, vm.sandboxId, { key, hash, name: fleetAgent.name ?? undefined }));
     await setFleetArtifact(fleetAgent.id, {
       derivedId: meta.derivedId,
       hash,
@@ -1714,7 +1718,7 @@ async function captureFleetArtifact(ctx: AuthContext, fleetAgent: PoolRow, vm: A
       derivedId: meta.derivedId,
       hash,
       ms: Date.now() - t0,
-      reused: meta.reused ?? false,
+      reused: existing ? true : (meta.reused ?? false),
       sizeBytes: meta.sizeBytes,
     });
     // Cambió el hash (seeds/skills): el derivado viejo sobra. 409 InUse si aún tiene

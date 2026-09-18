@@ -129,6 +129,7 @@ vi.mock("~/.server/db", () => ({ db }));
 vi.mock("~/.server/core/sandboxOperations", () => ({
   createAgent: (...a: unknown[]) => createAgent(...a),
   createTemplateSnapshot: (...a: unknown[]) => createTemplateSnapshot(...a),
+  getTemplateSnapshot: vi.fn(async () => { throw new Response("{}", { status: 404 }); }),
   deleteTemplateSnapshot: (...a: unknown[]) => deleteTemplateSnapshot(...a),
   resumeSandbox: (...a: unknown[]) => resumeSandbox(...a),
   refreshAgentEnv: (...a: unknown[]) => refreshAgentEnv(...a),
