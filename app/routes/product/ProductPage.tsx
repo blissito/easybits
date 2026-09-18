@@ -39,6 +39,8 @@ export type ProductPageData = {
   priceLine: ReactNode;
   ctaLabel?: string;
   ctaTo?: string;
+  /** Video de YouTube (id) bajo el hero, 16:9, sin autoplay. */
+  youtubeId?: string;
 };
 
 export const ProductPage = ({
@@ -75,6 +77,21 @@ export const ProductPage = ({
         </div>
         <p className="text-iron/70 text-sm md:text-base mt-6">{proof}</p>
       </header>
+
+      {data.youtubeId && (
+        <section className="px-4 md:px-[5%] max-w-5xl mx-auto -mt-4 mb-16 md:mb-24">
+          <div className="border-2 border-black shadow-[8px_8px_0_#000] bg-black aspect-video overflow-hidden">
+            <iframe
+              className="w-full h-full"
+              src={`https://www.youtube-nocookie.com/embed/${data.youtubeId}?rel=0`}
+              title={`${title} ${highlight}`}
+              loading="lazy"
+              allow="accelerometer; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+              allowFullScreen
+            />
+          </div>
+        </section>
+      )}
 
       {bentos.map((bento, i) => (
         <Bento

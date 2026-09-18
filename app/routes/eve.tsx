@@ -203,6 +203,7 @@ export default function Eve({ loaderData }: Route.ComponentProps) {
               image: "/blog/assets/blog-eve-easybits-policy.png",
             },
           ],
+          youtubeId: "IuQ6laQmjR0",
           ctaLabel: "Leer el tutorial →",
           ctaTo: "/blog/agentes-eve-en-easybits",
           priceLine: (
