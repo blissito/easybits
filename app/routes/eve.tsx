@@ -38,6 +38,46 @@ const JSON_LD = {
   softwareRequirements: "Node.js >= 24, npm package @easybits.cloud/eve-sandbox",
 };
 
+// Bloque de código mínimo para los bentos: la landing debe enseñar la configuración
+// real, no describirla. Sin dependencias de CodeMirror; el copy exacto vive en /docs.
+function Snippet({ title, code }: { title: string; code: string }) {
+  return (
+    <div className="mt-4 rounded-xl border-2 border-black bg-[#0b0b0f] text-[#e8e8ee] shadow-[6px_6px_0_#000] overflow-hidden">
+      <div className="px-3 py-1.5 text-xs font-mono text-[#fbbf24] border-b border-white/10">{title}</div>
+      <pre className="px-3 py-3 text-xs md:text-sm font-mono leading-relaxed overflow-x-auto whitespace-pre">{code.trim()}</pre>
+    </div>
+  );
+}
+
+const SNIPPET_SANDBOX = `
+// agent/sandbox.ts
+import { defineSandbox } from "eve/sandbox";
+import { easybits } from "@easybits.cloud/eve-sandbox";
+
+export default defineSandbox({
+  backend: easybits(),   // lee EASYBITS_API_KEY
+  async bootstrap({ use }) {
+    const s = await use();
+    await s.run({ command: "npm ci" });
+  },
+});`;
+
+const SNIPPET_WORLD = `
+// agent/agent.ts
+import { defineAgent } from "eve";
+import { anthropic } from "@ai-sdk/anthropic";
+
+export default defineAgent({
+  model: anthropic("claude-sonnet-5"),
+  experimental: { workflow: { world: "@easybits.cloud/eve-world" } },
+});`;
+
+const SNIPPET_POLICY = `
+const sandbox = await ctx.getSandbox();
+await sandbox.setNetworkPolicy({
+  allow: { "api.github.com": [], "registry.npmjs.org": [] },
+});`;
+
 export default function Eve({ loaderData }: Route.ComponentProps) {
   return (
     <>
@@ -74,6 +114,7 @@ export default function Eve({ loaderData }: Route.ComponentProps) {
                   </a>
                   ). Nosotros guardamos ese resultado como una imagen lista. Los builds siguientes no vuelven a
                   instalar nada: reusan la imagen en 0.2 s.
+                  <Snippet title="npm i @easybits.cloud/eve-sandbox" code={SNIPPET_SANDBOX} />
                 </>
               ),
               bullets: [
@@ -106,6 +147,7 @@ export default function Eve({ loaderData }: Route.ComponentProps) {
                   el estado de eve (runs, pasos, hooks, streams) vive en EasyBits DB en vez del disco del
                   servidor. Lo probamos en producción: matamos la máquina a mitad de un run de 8 pasos y otra
                   máquina lo retomó en el paso 3, sin repetir los anteriores, 59 segundos después.
+                  <Snippet title="npm i @easybits.cloud/eve-world" code={SNIPPET_WORLD} />
                 </>
               ),
               bullets: [
@@ -118,7 +160,14 @@ export default function Eve({ loaderData }: Route.ComponentProps) {
             },
             {
               title: "Tú decides a qué se conecta cada máquina",
-              body: "Desde tu código de eve puedes limitar la salida a internet de una sesión: sólo a los dominios que autorices, o a ninguno. Se cambia en caliente, se conserva al dormir, y lo que no está en la lista simplemente no sale.",
+              body: (
+                <>
+                  Desde tu código de eve puedes limitar la salida a internet de una sesión: sólo a los dominios
+                  que autorices, o a ninguno. Se cambia en caliente, se conserva al dormir, y lo que no está en la
+                  lista simplemente no sale.
+                  <Snippet title="dentro de una tool o callback de eve" code={SNIPPET_POLICY} />
+                </>
+              ),
               bullets: [
                 "Todo abierto, todo cerrado, o una lista de dominios exactos",
                 "La misma regla se puede poner desde la API, el SDK o las tools MCP",

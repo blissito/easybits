@@ -84,7 +84,7 @@ export const ProductPage = ({
           position={i % 2 === 0 ? "left" : "right"}
           className={i === 0 ? "border-t-2 border-black" : undefined}
         >
-          <p className="text-iron text-xl lg:text-2xl mt-4 mb-4">{bento.body}</p>
+          <div className="text-iron text-xl lg:text-2xl mt-4 mb-4">{bento.body}</div>
           {bento.bullets.map((b) => (
             <ItemList key={b} title={b} />
           ))}
