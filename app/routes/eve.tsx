@@ -219,7 +219,7 @@ export default function Eve({ loaderData }: Route.ComponentProps) {
               </a>{" "}
               desde $49 MXN/mes.
               <span className="block mt-6 text-base md:text-lg">
-                Pregúntale a tu agente de código:
+                Pregúntale a tu agente de código sobre todas las ventajas de usar Easybits:
               </span>
               <code className="block mt-2 font-mono text-sm md:text-base bg-black text-white rounded-xl px-4 py-3 w-fit mx-auto">
                 npx skills add https://easybits.cloud
