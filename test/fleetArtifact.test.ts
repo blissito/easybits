@@ -159,6 +159,7 @@ vi.mock("~/.server/core/sandboxSessions", () => ({
 }));
 
 process.env.SANDBOX_HOST_URL = "http://host.test";
+process.env.FLEET_ARTIFACT = "on";
 vi.stubGlobal(
   "fetch",
   vi.fn(async () => new Response(JSON.stringify({ memUsedMb: 0, memMaxMb: 65536 }), { status: 200 }))
@@ -294,6 +295,18 @@ describe("spawnVm — decisión de nacer desde el artifact", () => {
     expect(agents.find((a) => a.id === "agent-1")!.status).toBe("lost");
     // Se re-capturó sobre la caja sana.
     expect(fleetAgents.fa1.metadata.artifact.derivedId).toBe("dt_new");
+  });
+
+  it("FLEET_ARTIFACT apagado: spawn normal siempre, sin captura ni derivado", async () => {
+    process.env.FLEET_ARTIFACT = "off";
+    try {
+      fleetAgents.fa1.metadata = { artifact: { derivedId: "dt_ok", hash: fleetArtifactHash(base), at: "x" } };
+      await pickOrSpawn(CTX, fleetAgents.fa1, "web-1");
+      expect(createAgent.mock.calls[0][1].derivedTemplate).toBeUndefined();
+      expect(createTemplateSnapshot).not.toHaveBeenCalled();
+    } finally {
+      process.env.FLEET_ARTIFACT = "on";
+    }
   });
 
   it("otro error del host sube tal cual (no se traga)", async () => {
