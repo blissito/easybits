@@ -217,6 +217,11 @@ function isBoxDeadError(e: unknown): boolean {
   const cause = (e as { cause?: { message?: string } })?.cause?.message ?? "";
   const msg = `${e instanceof Error ? e.message : String(e)} ${cause}`;
   if (/agent stream/i.test(msg)) return false; // SSE {type:"error"} = real AI error
+  // 503 CapacityReached al despertar = el fierro no tiene RAM AHORA; la caja y su
+  // snapshot siguen intactos. Marcarla `lost` (como pasaba) la desataba de la ruta y el
+  // reintento spawneaba encima — perdiendo la conversación y pagando un cold boot que
+  // tampoco cabía. Es back-pressure, no una caja muerta (medido en prod 2026-09-18).
+  if (/CapacityReached/.test(msg)) return false;
   return /ECONNREFUSED|ECONNRESET|ETIMEDOUT|EHOSTUNREACH|ENOTFOUND|fetch failed|socket hang up|network|terminated|aborted|502|503|504|\b404\b|not running|vanished|failed to start/i.test(
     msg
   );
@@ -2006,6 +2011,11 @@ async function ensureRunning(ctx: AuthContext, agent: AgentRow, fleetAgent?: Spa
         await resumeSandbox(ctx, agent.sandboxId);
       }
     } catch (e) {
+      // Sin RAM para despertar → cola de admisión (la superficie reintenta con backoff),
+      // no self-heal: la caja sigue dormida y entera.
+      if (/CapacityReached/.test(e instanceof Error ? e.message : String(e))) {
+        throw new FleetAgentAtCapacity(`host RAM cap reached on resume of ${agent.sandboxId}`, "ram");
+      }
       if (!isBoxDeadError(e)) throw e;
       console.error(`fleet ensureRunning: resume ${agent.sandboxId} → caja perdida, self-heal:`, e);
       await markWorkerLost(agent.id);
