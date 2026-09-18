@@ -338,6 +338,7 @@ paths:
           - bootstrap
           - snapshot
           - fork
+          - template-snapshot
           - exec
           - run-code
           - run-cell
@@ -366,6 +367,9 @@ paths:
         `idle` `{suspendOnIdle, idleTtlSeconds?, hardTtlSeconds?}` (siesta en caja YA creada: al
         vencer el TTL se suspende en vez de destruirse) ·
         `snapshot` `{name?}` · `fork` `{count?, name?, metadata?, timeoutSeconds?}` ·
+        `template-snapshot` `{key, hash, name?}` (captura la caja YA preparada como plantilla
+        derivada; idempotente por (key, hash); luego `POST /sandboxes` con `templateKey`+`templateHash`
+        nace con ese bootstrap hecho; 409 `DerivedTemplateStale` si el template base se rehorneó) ·
         `expose` `{port}` (URL pública HTTPS/WSS) · `expose-raw`/`unexpose-raw` `{port, protocol?}` (TCP/UDP crudo) ·
         `run-cell` `{code, lang?}` (kernel Jupyter persistente, template code-interpreter) · `kernel-restart` ·
         `logs` · `runtime` · `apply-patch` `{patch}` · `ssh-enable`/`ssh-disable`/`ssh-ticket` ·
@@ -396,6 +400,8 @@ paths:
                 lang: { type: string, enum: [python, node, bash], description: "`run-cell` / `run-code`." }
                 code: { type: string, description: "`run-cell`." }
                 patch: { type: string, description: "`apply-patch`: diff unificado." }
+                key: { type: string, pattern: "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$", description: "`template-snapshot`: clave de contenido de la plantilla derivada." }
+                hash: { type: string, pattern: "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$", description: "`template-snapshot`: hash de lo que define el bootstrap (nunca prompts ni credenciales)." }
       responses:
         "200":
           description: Resultado de la acción.
@@ -406,6 +412,63 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
         "429": { $ref: "#/components/responses/RateLimited" }
+
+  /api/v2/template-snapshots:
+    get:
+      tags: [Sandboxes]
+      operationId: listTemplateSnapshots
+      summary: Plantillas derivadas
+      description: |
+        Sin query: lista las plantillas derivadas del caller (`{ items }`). Con `?key=&hash=`: el
+        descriptor de esa clave de contenido, o **404 `DerivedTemplateNotProvisioned`** — la
+        comprobación barata antes de decidir si hay que preparar una caja y capturarla.
+      parameters:
+        - { name: key, in: query, schema: { type: string } }
+        - { name: hash, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: Lista o descriptor.
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: object
+                    properties:
+                      items:
+                        type: array
+                        items: { $ref: "#/components/schemas/DerivedTemplate" }
+                  - $ref: "#/components/schemas/DerivedTemplate"
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v2/template-snapshots/{id}:
+    parameters:
+      - $ref: "#/components/parameters/id"
+    get:
+      tags: [Sandboxes]
+      operationId: getTemplateSnapshot
+      summary: Descriptor de una plantilla derivada
+      responses:
+        "200":
+          description: Descriptor.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DerivedTemplate" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [Sandboxes]
+      operationId: deleteTemplateSnapshot
+      summary: Borrar una plantilla derivada
+      description: 409 `DerivedTemplateInUse` `{children}` mientras haya hijos vivos (starting/running/suspended).
+      responses:
+        "200":
+          description: "`{ ok: true }`"
+          content:
+            application/json:
+              schema: { type: object, properties: { ok: { type: boolean } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { description: "DerivedTemplateInUse: hay hijos vivos." }
 
   # ───────────────────────── Web ─────────────────────────
   /api/v2/web/search:
@@ -2002,8 +2065,16 @@ components:
         updatedAt: { type: string, format: date-time }
     SandboxCreate:
       type: object
-      required: [template]
+      # `template` es opcional cuando se crea desde una plantilla derivada
+      # (`derivedTemplate` o `templateKey`+`templateHash`): el host toma su base.
       properties:
+        derivedTemplate: { type: string, description: "Nacer desde una plantilla derivada por id (dt_…)." }
+        templateKey: { type: string, description: "Con templateHash: nacer desde la plantilla derivada con esa clave de contenido. 404 DerivedTemplateNotProvisioned si no existe; 409 DerivedTemplateStale si el base se rehorneó." }
+        templateHash: { type: string }
+        env:
+          type: object
+          additionalProperties: { type: string }
+          description: Env de la caja. Un hijo de plantilla derivada NUNCA hereda el env de su origen (se hace scrub de secretos).
         template:
           type: string
           # Derivado de SANDBOX_TEMPLATES por scripts/docs-sync.mts (npm run docs:sync).
@@ -2059,6 +2130,22 @@ components:
           type: boolean
           description: Al idlear, SUSPENDE (snapshot, despierta en ~0.2 s) en vez de destruir.
         hardTtlSeconds: { type: integer, minimum: 60, description: "Cuándo destruirla de verdad." }
+    DerivedTemplate:
+      type: object
+      description: Delta de disco de una caja preparada, capturado con `template-snapshot` bajo (key, hash).
+      properties:
+        derivedId: { type: string }
+        key: { type: string }
+        hash: { type: string }
+        name: { type: string }
+        ownerId: { type: string }
+        sourceId: { type: string }
+        baseTemplate: { type: string }
+        templateVersion: { type: string }
+        sizeBytes: { type: integer }
+        createdAt: { type: string, format: date-time }
+        lastUsedAt: { type: string, format: date-time }
+        reused: { type: boolean, description: "true si (key, hash) ya existía y no se tocó la caja." }
     Sandbox:
       type: object
       properties:

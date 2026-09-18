@@ -34,6 +34,7 @@ H=(-H "Authorization: Bearer $EASYBITS_API_KEY" -H "Content-Type: application/js
 | "clone the repo in there" | `exec` with `git clone …` (public), or the git tools with `$secret:GH_TOKEN` for private repos |
 | "keep it alive / it must survive" | create with `suspendOnIdle: true`; on an existing box `POST $B/sandboxes/$SB/idle` `{ "suspendOnIdle": true, "idleTtlSeconds": 600 }`; `POST …/bootstrap` `{ "script": "…" }` for idempotent work on every wake |
 | "snapshot / try variants in parallel" | `POST $B/sandboxes/$SB/snapshot`, `POST $B/sandboxes/$SB/fork` → child `sandboxId` (copy-on-write) |
+| "the same setup for every box / boot with deps already installed" | prepare ONE box, then `POST $B/sandboxes/$SB/template-snapshot` `{ "key", "hash" }` (idempotent); from then on `POST $B/sandboxes` `{ "templateKey", "templateHash", "env" }` boots with that bootstrap done (~24 ms + boot). `GET $B/template-snapshots?key=&hash=` → 404 `DerivedTemplateNotProvisioned` means prepare first; 409 `DerivedTemplateStale` on create means capture again. No secrets inside: pass `env` per child |
 | "destroy it" | `DELETE $B/sandboxes/$SB` |
 
 Templates (`base` = run code, `agent` = ready-made agent; internal/service kinds are created by

@@ -108,6 +108,57 @@ curl -X POST https://www.easybits.cloud/api/v2/sandboxes/$SB/bootstrap \\
 This is the piece that turns skills into real memory: in a template without hot reload,
 an installed skill takes effect on the next wake-up, by itself.
 
+### Derived templates (template-snapshot)
+
+**What it is.** You prepare ONE box (\`npm install\`, seeds, skills, config) and capture it as a
+derived template under a content key \`(key, hash)\`. From then on every box created with that
+pair **is born with the bootstrap done**, in the time of a normal create (~24 ms create + boot),
+no fork and no GBs copied per child: the host keeps only the disk delta (tens of MB) and mounts it
+under each child copy-on-write.
+
+**When.** Whenever the same bootstrap repeats: one agent per conversation, one sandbox per eve
+session, N identical workers. If you need to branch a live box with its memory, that is
+\`snapshot\` + \`fork\`; a derived template is disk only, no memory, and the child cold-boots
+(~2 s plus whatever its runtime takes).
+
+**What goes in \`hash\`.** A digest of what determines the bootstrap's content (base template,
+dependency manifest, seeds, skills). **Never** prompts or credentials: the host scrubs secrets
+(\`/etc/sandbox-env/env\`, \`/app/secrets.env\`, the template's \`env_file\`) and each child gets its
+own \`env\` at create. \`key\` and \`hash\` are path components: \`[A-Za-z0-9][A-Za-z0-9._:-]{0,127}\`.
+
+REST:
+\`\`\`bash
+# 1. already prepared? (404 DerivedTemplateNotProvisioned if not)
+curl "https://www.easybits.cloud/api/v2/template-snapshots?key=eve:agent&hash=3f9c" -H "Authorization: Bearer $EB_KEY"
+# 2. prepare a box and capture it (idempotent per (key, hash) → reused:true)
+curl -X POST https://www.easybits.cloud/api/v2/sandboxes/$SB/template-snapshot \\
+  -H "Authorization: Bearer $EB_KEY" -H 'Content-Type: application/json' \\
+  -d '{"key":"eve:agent","hash":"3f9c","name":"agent v3"}'
+# 3. children: born with the bootstrap done (template optional: the derived template knows its base)
+curl -X POST https://www.easybits.cloud/api/v2/sandboxes -H "Authorization: Bearer $EB_KEY" \\
+  -H 'Content-Type: application/json' -d '{"templateKey":"eve:agent","templateHash":"3f9c","env":{"FOO":"bar"}}'
+\`\`\`
+\`GET /template-snapshots\` lists · \`GET/DELETE /template-snapshots/:id\` (409 \`DerivedTemplateInUse\`
+while children are alive). \`derivedTemplate: "dt_…"\` in the create also works, instead of the pair.
+
+MCP: \`sandbox_template_snapshot({ sandboxId, key, hash, name? })\` ·
+\`sandbox_list_template_snapshots()\` · \`sandbox_delete_template_snapshot({ derivedId })\` ·
+\`sandbox_create({ templateKey, templateHash, env })\`.
+
+SDK:
+\`\`\`ts
+const dt = await sb.templateSnapshot({ key: "eve:agent", hash });            // { derivedId, reused, sizeBytes }
+const child = await eb.sandboxes.create({ templateKey: "eve:agent", templateHash: hash, env });
+await eb.sandboxes.templateSnapshots.get({ key, hash });                      // 404 → prepare first
+await eb.sandboxes.templateSnapshots.list(); await eb.sandboxes.templateSnapshots.delete(dt.derivedId);
+\`\`\`
+
+Limits: **no credentials inside** (scrub + per-child \`env\`) · a template **unused for 30 days is
+deleted** automatically · when the base template is **rebaked** the derived one goes *stale*: create
+answers **409 \`DerivedTemplateStale\`** and you capture again with the same pair (or bump the hash
+if it includes the template version) · no deriving from a derived template · needs WRITE scope to
+capture, READ to query, DELETE to delete.
+
 ### Git: make the agent's work outlive the box
 
 A box that sleeps for three days wakes up with three-day-old code, and without a way to
@@ -513,16 +564,16 @@ export default defineSandbox({
 
 | eve | EasyBits |
 |---|---|
-| \`prewarm\` (runs on \`eve start\`, **not** on \`eve build\`) | temporary box + seed files + \`bootstrap()\` → copy-on-write **snapshot** \`eve:<templateKey>:<hash>\`. \`eve build\` only compiles (~10 s); the first \`eve start\` logs \`easybits: snapshot snap_… listo\` and later ones \`reusado\` (start ~3 s) |
-| \`create()\` | fork of that snapshot (~7 s), or a fresh box from \`template\` when eve sends none |
+| \`prewarm\` (runs on \`eve start\`, **not** on \`eve build\`) | temporary box + seed files + \`bootstrap()\` → **derived template** (\`template-snapshot\`, key \`eve:<templateKey>\` + hash of the options). Idempotent on the host: the first \`eve start\` logs \`easybits: plantilla dt_… lista\`, later ones \`reusada\` |
+| \`create()\` | \`POST /sandboxes\` with \`templateKey\`+\`templateHash\`: the box is born with the bootstrap done (~24 ms create + ~2 s boot), or a fresh box from \`template\` when eve sends none. 404 \`DerivedTemplateNotProvisioned\` / 409 \`DerivedTemplateStale\` → \`SandboxTemplateNotProvisionedError\` (eve prewarms again) |
 | between turns | the box stays alive with an idle policy (\`idleTtlSeconds\` 600 → suspend, resume ~1 s) and is reattached by \`sandboxId\` |
 | \`stop()\` / \`shutdown()\` · \`delete()\` | suspend · destroy |
 | \`run\` / \`spawn\` | \`bash -lc\` through \`/bg\`; stdout/stderr as streams, \`kill()\` signals the process group |
 | files | \`/files/*\`; relative paths anchored at \`/workspace\`, \`$HOME/…\` resolved inside the box |
 
-Options: \`easybits({ apiKey, baseUrl, template: "node", timeoutSeconds, workingDirectory, runTimeoutSeconds, idleTtlSeconds, hardTtlSeconds, metadata })\`. \`setNetworkPolicy\` applies a **per-box egress policy** with the same shape eve uses on Vercel: \`"allow-all"\`, \`"deny-all"\` or a per-domain allow-list (\`{ allow: { "api.github.com": [], "registry.npmjs.org": [] } }\`; \`"*"\` opens everything). The host resolves it to IPs per microVM with DNS refresh, persists it with the box and re-applies it on resume; it takes effect once the promise resolves, so \`await\` it before the egress you want governed. **Not supported**: \`transform\` (header injection at the firewall) — throws an explicit error; that flow (GitHub checkout without the token entering the box) eve does through its \`defaultBackend\`. Outside eve the same policy lives at \`PUT/GET /sandboxes/:id/network-policy\` · SDK \`sb.setNetworkPolicy(policy)\` · MCP \`sandbox_set_network_policy\`. The key needs WRITE scope (create, snapshot, fork) and DELETE if eve should delete snapshots.
+Options: \`easybits({ apiKey, baseUrl, template: "node", timeoutSeconds, workingDirectory, runTimeoutSeconds, idleTtlSeconds, hardTtlSeconds, metadata })\`. \`setNetworkPolicy\` applies a **per-box egress policy** with the same shape eve uses on Vercel: \`"allow-all"\`, \`"deny-all"\` or a per-domain allow-list (\`{ allow: { "api.github.com": [], "registry.npmjs.org": [] } }\`; \`"*"\` opens everything). The host resolves it to IPs per microVM with DNS refresh, persists it with the box and re-applies it on resume; it takes effect once the promise resolves, so \`await\` it before the egress you want governed. **Not supported**: \`transform\` (header injection at the firewall) — throws an explicit error; that flow (GitHub checkout without the token entering the box) eve does through its \`defaultBackend\`. Outside eve the same policy lives at \`PUT/GET /sandboxes/:id/network-policy\` · SDK \`sb.setNetworkPolicy(policy)\` · MCP \`sandbox_set_network_policy\`. The key needs WRITE scope (create, capture the template) and DELETE if eve should delete derived templates.
 
-That is all: \`eve dev\` locally or \`eve start\` on Vercel (or any Node 24) with \`EASYBITS_API_KEY\` in the environment. The prewarm uses a temporary box that is destroyed once the snapshot is captured (it takes no quota afterwards); then one child box per session, which sleeps when idle. Validated with eve 0.58.1 and 0.59.1. On Byte, one conversation at a time: the next one gets \`SandboxLimitReached\` until eve deletes the previous box or you upgrade to Mega.
+That is all: \`eve dev\` locally or \`eve start\` on Vercel (or any Node 24) with \`EASYBITS_API_KEY\` in the environment. The prewarm uses a temporary box that is destroyed once the template is captured (it takes no quota afterwards); then one child box per session, which sleeps when idle. Validated with eve 0.58.1 and 0.59.1. On Byte, one conversation at a time: the next one gets \`SandboxLimitReached\` until eve deletes the previous box or you upgrade to Mega.
 
 ### 2. Hosted route (Mega+): the eve server inside a box
 
@@ -561,7 +612,7 @@ export default eveChannel({
 });
 \`\`\`
 
-Start and expose. \`eve build\` only compiled; the \`prewarm\` snapshot is created on this first \`eve start\` (log \`easybits: snapshot snap_… listo\`; later starts say \`reusado\`):
+Start and expose. \`eve build\` only compiled; the \`prewarm\` derived template is captured on this first \`eve start\` (log \`easybits: plantilla dt_… lista\`; later starts say \`reusada\`):
 
 \`\`\`bash
 DB=$(curl -s "$B/sandboxes/$SB" "\${H[@]}" | jq -r .metadata.eve_db_url)   # generated by EasyBits when the box is created

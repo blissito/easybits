@@ -95,6 +95,7 @@ All actions (the enum is derived from the server, see `openapi.yaml`):
 - `bootstrap`
 - `snapshot`
 - `fork`
+- `template-snapshot`
 - `exec`
 - `run-code`
 - `run-cell`

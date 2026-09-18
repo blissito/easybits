@@ -845,6 +845,58 @@ curl -X POST https://www.easybits.cloud/api/v2/sandboxes/$SB/bootstrap \\
 Es la pieza que convierte a las skills en memoria de verdad: en un template sin recarga en
 caliente, una skill instalada entra en vigor en el siguiente despertar, sola.
 
+### Plantillas derivadas (template-snapshot)
+
+**Qué es.** Preparas UNA caja (\`npm install\`, seeds, skills, config) y la capturas como
+plantilla derivada bajo una clave de contenido \`(key, hash)\`. Desde entonces cada caja creada
+con ese par **nace con el bootstrap hecho**, en el tiempo de un create normal (~24 ms de create
++ boot), sin fork ni copia de GB por hijo: el host guarda sólo el delta de disco (decenas de MB)
+y lo monta debajo de cada hija como copy-on-write.
+
+**Cuándo.** Cuando el mismo bootstrap se repite: un agente por conversación, un sandbox por
+sesión de eve, N workers idénticos. Si sólo necesitas ramificar una caja viva con su memoria,
+eso es \`snapshot\` + \`fork\`; la plantilla derivada es disco solo, sin memoria, y el hijo arranca
+en frío (~2 s + lo que tarde su runtime).
+
+**Qué va en el \`hash\`.** Un digest de lo que determina el contenido del bootstrap (template
+base, manifiesto de dependencias, seeds, skills). **Nunca** prompts ni credenciales: el host
+hace *scrub* de secretos (\`/etc/sandbox-env/env\`, \`/app/secrets.env\`, el \`env_file\` del
+template) y cada hija recibe su propio \`env\` en el create. \`key\` y \`hash\` son componentes
+de ruta: \`[A-Za-z0-9][A-Za-z0-9._:-]{0,127}\`.
+
+REST:
+\`\`\`bash
+# 1. ¿ya está preparada? (404 DerivedTemplateNotProvisioned si no)
+curl "https://www.easybits.cloud/api/v2/template-snapshots?key=eve:agente&hash=3f9c" -H "Authorization: Bearer $EB_KEY"
+# 2. preparar una caja y capturarla (idempotente por (key, hash) → reused:true)
+curl -X POST https://www.easybits.cloud/api/v2/sandboxes/$SB/template-snapshot \\
+  -H "Authorization: Bearer $EB_KEY" -H 'Content-Type: application/json' \\
+  -d '{"key":"eve:agente","hash":"3f9c","name":"agente v3"}'
+# 3. hijas: nacen con el bootstrap hecho (template opcional: lo sabe la plantilla)
+curl -X POST https://www.easybits.cloud/api/v2/sandboxes -H "Authorization: Bearer $EB_KEY" \\
+  -H 'Content-Type: application/json' -d '{"templateKey":"eve:agente","templateHash":"3f9c","env":{"FOO":"bar"}}'
+\`\`\`
+\`GET /template-snapshots\` lista · \`GET/DELETE /template-snapshots/:id\` (409 \`DerivedTemplateInUse\`
+mientras haya hijas vivas). También \`derivedTemplate: "dt_…"\` en el create, en lugar del par.
+
+MCP: \`sandbox_template_snapshot({ sandboxId, key, hash, name? })\` ·
+\`sandbox_list_template_snapshots()\` · \`sandbox_delete_template_snapshot({ derivedId })\` ·
+\`sandbox_create({ templateKey, templateHash, env })\`.
+
+SDK:
+\`\`\`ts
+const dt = await sb.templateSnapshot({ key: "eve:agente", hash });           // { derivedId, reused, sizeBytes }
+const child = await eb.sandboxes.create({ templateKey: "eve:agente", templateHash: hash, env });
+await eb.sandboxes.templateSnapshots.get({ key, hash });                      // 404 → hay que preparar
+await eb.sandboxes.templateSnapshots.list(); await eb.sandboxes.templateSnapshots.delete(dt.derivedId);
+\`\`\`
+
+Límites: **sin credenciales dentro** (scrub + \`env\` por hija) · una plantilla **sin uso 30 días
+se borra** sola · cuando el template base se **rehornea**, la plantilla queda *stale*: el create
+responde **409 \`DerivedTemplateStale\`** y hay que volver a capturar con el mismo par (o subir el
+hash si incluye la versión del template) · no se deriva de una derivada · necesita scope WRITE
+para capturar, READ para consultar, DELETE para borrar.
+
 ### Git: que el trabajo del agente sobreviva a la caja
 
 Una caja que duerme tres días despierta con el código de hace tres días, y sin una forma de
@@ -1783,16 +1835,16 @@ export default defineSandbox({
 
 | eve | EasyBits |
 |---|---|
-| \`prewarm\` (corre en \`eve start\`, **no** en \`eve build\`) | caja temporal + seeds + \`bootstrap()\` → **snapshot** copy-on-write \`eve:<templateKey>:<hash>\`. \`eve build\` sólo compila (~10 s); el primer \`eve start\` loguea \`easybits: snapshot snap_… listo\` y los siguientes \`reusado\` (arranque ~3 s) |
-| \`create()\` | fork del snapshot (~7 s), o caja fresca del \`template\` si eve no manda template |
+| \`prewarm\` (corre en \`eve start\`, **no** en \`eve build\`) | caja temporal + seeds + \`bootstrap()\` → **plantilla derivada** (\`template-snapshot\`, clave \`eve:<templateKey>\` + hash de las opciones). Idempotente en el host: el primer \`eve start\` loguea \`easybits: plantilla dt_… lista\` y los siguientes \`reusada\` |
+| \`create()\` | \`POST /sandboxes\` con \`templateKey\`+\`templateHash\`: la caja nace con el bootstrap hecho (~24 ms de create + boot ~2 s), o caja fresca del \`template\` si eve no manda template. 404 \`DerivedTemplateNotProvisioned\` / 409 \`DerivedTemplateStale\` → \`SandboxTemplateNotProvisionedError\` (eve vuelve a hacer prewarm) |
 | entre turnos | la caja sigue viva con siesta (\`idleTtlSeconds\` 600 → suspend, resume ~1 s) y se reattacha por \`sandboxId\` |
 | \`stop()\` / \`shutdown()\` · \`delete()\` | suspend · destroy |
 | \`run\` / \`spawn\` | \`bash -lc\` por \`/bg\`; stdout/stderr en streams, \`kill()\` señala al grupo |
 | archivos | \`/files/*\`; rutas relativas ancladas en \`/workspace\`, \`$HOME/…\` se resuelve dentro de la caja |
 
-Opciones: \`easybits({ apiKey, baseUrl, template: "node", timeoutSeconds, workingDirectory, runTimeoutSeconds, idleTtlSeconds, hardTtlSeconds, metadata })\`. \`setNetworkPolicy\` aplica una **política de egress por caja**, con el mismo shape que eve usa en Vercel: \`"allow-all"\`, \`"deny-all"\` o una allow-list por dominio (\`{ allow: { "api.github.com": [], "registry.npmjs.org": [] } }\`; \`"*"\` abre todo). El host la resuelve a IPs por microVM con refresco DNS, la persiste con la caja y la vuelve a aplicar al reanudar; toma efecto cuando la promesa resuelve, así que \`await\` antes del egress que quieres gobernar. **No soportado**: \`transform\` (inyectar headers en el firewall) — lanza error explícito; ese flujo (checkout de GitHub sin que el token entre a la caja) eve lo hace con su \`defaultBackend\`. Fuera de eve, la misma política vive en \`PUT/GET /sandboxes/:id/network-policy\` · SDK \`sb.setNetworkPolicy(policy)\` · MCP \`sandbox_set_network_policy\`. La llave necesita scope WRITE (crear, snapshot, fork) y DELETE si eve debe borrar snapshots.
+Opciones: \`easybits({ apiKey, baseUrl, template: "node", timeoutSeconds, workingDirectory, runTimeoutSeconds, idleTtlSeconds, hardTtlSeconds, metadata })\`. \`setNetworkPolicy\` aplica una **política de egress por caja**, con el mismo shape que eve usa en Vercel: \`"allow-all"\`, \`"deny-all"\` o una allow-list por dominio (\`{ allow: { "api.github.com": [], "registry.npmjs.org": [] } }\`; \`"*"\` abre todo). El host la resuelve a IPs por microVM con refresco DNS, la persiste con la caja y la vuelve a aplicar al reanudar; toma efecto cuando la promesa resuelve, así que \`await\` antes del egress que quieres gobernar. **No soportado**: \`transform\` (inyectar headers en el firewall) — lanza error explícito; ese flujo (checkout de GitHub sin que el token entre a la caja) eve lo hace con su \`defaultBackend\`. Fuera de eve, la misma política vive en \`PUT/GET /sandboxes/:id/network-policy\` · SDK \`sb.setNetworkPolicy(policy)\` · MCP \`sandbox_set_network_policy\`. La llave necesita scope WRITE (crear, capturar la plantilla) y DELETE si eve debe borrar plantillas derivadas.
 
-Con eso basta: \`eve dev\` local o \`eve start\` en Vercel (o cualquier Node 24) con \`EASYBITS_API_KEY\` en el entorno. El prewarm usa una caja temporal que se destruye al capturar el snapshot (no ocupa cupo después); luego una caja hija por sesión, que duerme cuando no habla. Validado con eve 0.58.1 y 0.59.1. En Byte, una conversación a la vez: la siguiente recibe \`SandboxLimitReached\` hasta que eve borre la anterior o subas a Mega.
+Con eso basta: \`eve dev\` local o \`eve start\` en Vercel (o cualquier Node 24) con \`EASYBITS_API_KEY\` en el entorno. El prewarm usa una caja temporal que se destruye al capturar la plantilla (no ocupa cupo después); luego una caja hija por sesión, que duerme cuando no habla. Validado con eve 0.58.1 y 0.59.1. En Byte, una conversación a la vez: la siguiente recibe \`SandboxLimitReached\` hasta que eve borre la anterior o subas a Mega.
 
 ### 2. Ruta hospedada (Mega+): el servidor eve dentro de una caja
 
@@ -1831,7 +1883,7 @@ export default eveChannel({
 });
 \`\`\`
 
-Arranca y expón. \`eve build\` sólo compiló; el snapshot del \`prewarm\` se crea en este primer \`eve start\` (log \`easybits: snapshot snap_… listo\`; en arranques siguientes \`reusado\`):
+Arranca y expón. \`eve build\` sólo compiló; la plantilla derivada del \`prewarm\` se captura en este primer \`eve start\` (log \`easybits: plantilla dt_… lista\`; en arranques siguientes \`reusada\`):
 
 \`\`\`bash
 DB=$(curl -s "$B/sandboxes/$SB" "\${H[@]}" | jq -r .metadata.eve_db_url)   # EasyBits la genera al crear la caja

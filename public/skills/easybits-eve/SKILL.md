@@ -2,7 +2,7 @@
 name: easybits-eve
 description: Run eve (Vercel's open-source agent framework) on EasyBits - install @easybits.cloud/eve-sandbox as the SandboxBackend so every agent session gets its own Firecracker microVM, and self-host the eve server itself in an eve-nitro box with a public URL. Use when the user builds agents with eve or eve.dev, mentions defineSandbox or a SandboxBackend, wants eve sandboxes that persist between turns, or wants to deploy eve outside Vercel.
 license: MIT
-compatibility: Node.js 24 or newer (eve requires it), pnpm or npm, an EasyBits API key with WRITE scope (DELETE if eve should delete snapshots)
+compatibility: Node.js 24 or newer (eve requires it), pnpm or npm, an EasyBits API key with WRITE scope (DELETE if eve should delete derived templates)
 metadata:
   author: easybits
   version: "1.0"
@@ -47,8 +47,8 @@ What happens under the hood (so you can explain it and debug it):
 
 | eve | EasyBits |
 |---|---|
-| `prewarm` (runs on `eve start`, **not** on `eve build`) | temporary box + seed files + `bootstrap()` → copy-on-write **snapshot** named `eve:<templateKey>:<hash>`. `eve build` only compiles (~10 s); first `eve start` logs `easybits: snapshot snap_… listo`, later ones `reusado` (start ~3 s) |
-| `create()` | fork of that snapshot (~7 s), or a fresh box from `template` when eve sends no template |
+| `prewarm` (runs on `eve start`, **not** on `eve build`) | temporary box + seed files + `bootstrap()` → **derived template** (`POST /sandboxes/:id/template-snapshot`, key `eve:<templateKey>` + hash of the options; idempotent on the host). `eve build` only compiles (~10 s); first `eve start` logs `easybits: plantilla dt_… lista`, later ones `reusada` |
+| `create()` | `POST /sandboxes` with `templateKey`+`templateHash`: born with the bootstrap done (~24 ms create + ~2 s boot), or a fresh box from `template` when eve sends no template. 404 `DerivedTemplateNotProvisioned` / 409 `DerivedTemplateStale` → `SandboxTemplateNotProvisionedError` (eve prewarms again) |
 | between turns | the box stays alive with `suspendOnIdle` (idle 600 s → suspend, resume ~1 s); reattached by `sandboxId` |
 | `stop()` / `shutdown()` | suspend · `delete()` | destroy |
 | `run` / `spawn` | `bash -lc` via `/bg`; stdout/stderr polled and streamed, `kill()` signals the process group |
@@ -59,7 +59,7 @@ Options: `easybits({ apiKey, baseUrl, template: "node", timeoutSeconds, workingD
 
 That is the whole free route: `eve dev` locally or `eve start` on Vercel (or any Node 24) with
 `EASYBITS_API_KEY` in the environment (WRITE scope; DELETE if eve should delete snapshots). The
-prewarm uses a temporary box destroyed once the snapshot is captured (no quota afterwards); then one
+prewarm uses a temporary box destroyed once the template is captured (no quota afterwards); then one
 child box per session, asleep when idle. Validated with eve 0.58.1 and 0.59.1.
 
 ## 2. Hosted route (Mega+): self-hosting the eve server on EasyBits
@@ -139,7 +139,7 @@ outlives the box use `@easybits.cloud/eve-world` (section 3).
 
 <!-- generated:packages -->
 - `@easybits.cloud/mcp@0.3.7`
-- `@easybits.cloud/sdk@0.34.7`
+- `@easybits.cloud/sdk@0.35.0`
 - `@easybits.cloud/eve-sandbox@0.0.6`
 - `@easybits.cloud/eve-world@0.1.1`
 <!-- /generated -->
@@ -147,5 +147,5 @@ outlives the box use `@easybits.cloud/eve-world` (section 3).
 ## Verify
 
 `npx tsx -e 'import("@easybits.cloud/eve-sandbox").then(m=>console.log(Object.keys(m)))'` prints
-`easybits`; then `eve start` (not `eve build`, which only compiles) must log `easybits: snapshot … listo` on the first run and `reusado`
+`easybits`; then `eve start` (not `eve build`, which only compiles) must log `easybits: plantilla … lista` on the first run and `reusada`
 on the second.
