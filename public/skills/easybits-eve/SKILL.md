@@ -14,7 +14,16 @@ eve is a Node server: an agent is a directory (instructions, tools, channels, sc
 every session is a durable run of the Workflow SDK. When an agent needs to execute code, eve asks
 a **SandboxBackend** for a box. `@easybits.cloud/eve-sandbox` is that backend for EasyBits.
 
-## 1. Sandboxes for eve agents (the backend)
+Two routes, pick one first:
+
+1. **Free, without moving the server** (section 1): the eve server stays where it is (Vercel, or the
+   user's laptop with `eve dev`/`eve start`) and only the sessions run on EasyBits. Fits the free
+   Byte plan: 1 concurrent box = one conversation at a time, 1-hour sessions, size `s`.
+2. **Everything on EasyBits** (sections 2-3): the eve server in an `eve-nitro` box + one child box per
+   session = 2 concurrent boxes → needs **Mega** ($499 MXN/month, 2 boxes) or **Tera** ($2,490
+   MXN/month, 5 boxes). `@easybits.cloud/eve-world` only works with the server inside EasyBits.
+
+## 1. Free route: sandboxes for eve agents, server where it already is
 
 ```bash
 npm i @easybits.cloud/eve-sandbox
@@ -48,7 +57,12 @@ What happens under the hood (so you can explain it and debug it):
 Options: `easybits({ apiKey, baseUrl, template: "node", timeoutSeconds, workingDirectory: "/workspace", runTimeoutSeconds, idleTtlSeconds: 600, hardTtlSeconds: 7d, metadata })`.
 `setNetworkPolicy` applies a **per-box egress policy** with the same shape eve uses on Vercel: `"allow-all"`, `"deny-all"` or a per-domain allow-list (`{ allow: { "api.github.com": [], "registry.npmjs.org": [] } }`; `"*"` opens everything). The host resolves it to IPs per microVM with DNS refresh, persists it with the box and re-applies it on resume; it takes effect once the promise resolves, so `await` it before the egress you want governed. **Not supported**: `transform` (header injection at the firewall) — throws an explicit error; that flow (GitHub checkout without the token entering the box) eve does through its `defaultBackend`. Outside eve the same policy lives at `PUT/GET /sandboxes/:id/network-policy` · SDK `sb.setNetworkPolicy(policy)` · MCP `sandbox_set_network_policy`.
 
-## 2. Self-hosting the eve server on EasyBits
+That is the whole free route: `eve dev` locally or `eve start` on Vercel (or any Node 24) with
+`EASYBITS_API_KEY` in the environment (WRITE scope; DELETE if eve should delete snapshots). The
+prewarm uses a temporary box destroyed once the snapshot is captured (no quota afterwards); then one
+child box per session, asleep when idle. Validated with eve 0.58.1 and 0.59.1.
+
+## 2. Hosted route (Mega+): self-hosting the eve server on EasyBits
 
 Use the `eve-nitro` template (Node 24, pnpm, `eve` CLI, git/curl/tar; `/data` is a persistent
 4 GB volume and the working directory; port 3000). Six steps: create the box, `eve init` the
@@ -115,6 +129,8 @@ outlives the box use `@easybits.cloud/eve-world` (section 3).
 
 ## Rules
 
+- **With a free (Byte) account only route 1 works; hosting the eve server needs Mega+** (server box +
+  session box = 2 concurrent boxes, Byte allows 1). Tell the user before creating an `eve-nitro` box.
 - **Node ≥ 24** for eve and for this backend; both `eve-nitro` and the `node` template ship Node 24 (plus typescript, tsx, pnpm).
 - Every eve agent session is a box in the user's account: it counts toward their concurrent
   sandbox budget. Tell the user when they hit `SandboxLimitReached`.

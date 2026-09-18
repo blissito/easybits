@@ -32,7 +32,7 @@ const SECTION_HINTS: Record<string, string> = {
   flota: "agentes en WhatsApp, WABA, web y Teams",
   studio: "grabación y llamadas",
   hosting: "desplegar una app a una URL pública",
-  eve: "correr agentes de eve (Vercel) con cajas EasyBits y hospedar el servidor eve",
+  eve: "correr agentes de eve (Vercel) con cajas EasyBits y hospedar el servidor eve; ruta gratis: tu servidor donde está + sesiones en EasyBits",
   databases: "una base SQL por cliente",
   documents: "PDFs, cotizaciones, carruseles y landings",
   videoProjects: "video animado a MP4",
@@ -74,7 +74,8 @@ Esto es un índice. Carga sólo la sección que necesites; el documento completo
   microVM, con su prompt, sus conectores y su voz.
 - **Voz y video** — transcribir, TTS, subtítulos y video animado a MP4.
 - **eve (Vercel)** — backend nativo de sandboxes (@easybits.cloud/eve-sandbox): el contrato
-  SandboxBackend completo. Landing: [/eve](${BASE}/eve).
+  SandboxBackend completo. Ruta gratis: tu servidor donde está + sesiones en EasyBits.
+  Landing: [/eve](${BASE}/eve).
 - **Pagos y email** — links de MercadoPago (el dinero va directo a tu cuenta) y envíos
   con contactos y bajas automáticas.
 
@@ -142,7 +143,7 @@ const SECTION_HINTS_EN: Record<string, string> = {
   web: "search, read any page, extract records and crawl (billed in web queries)",
   agents: "sandboxes: microVMs with root and internet; persistent agents",
   hosting: "deploy an app to a public URL in one call",
-  eve: "run eve (Vercel) agents on EasyBits boxes and self-host the eve server",
+  eve: "run eve (Vercel) agents on EasyBits boxes and self-host the eve server; free route: your server where it is + sessions on EasyBits",
   databases: "one SQL database per client",
   files: "upload, version and serve files over a CDN",
   errors: "status codes and what to do with them",

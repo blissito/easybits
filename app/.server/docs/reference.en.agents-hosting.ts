@@ -489,7 +489,9 @@ export const EN_EVE = `## eve (Vercel) on EasyBits
 
 [eve](https://eve.dev) is Vercel's open-source agent framework: an agent is a directory (instructions, tools, channels, schedules) and every session is a durable Workflow SDK run. When an agent needs to execute code, eve asks a **SandboxBackend** for a box. \`@easybits.cloud/eve-sandbox\` is that backend for EasyBits: every agent session runs in its own microVM, in your account, on your plan.
 
-### 1. Sandboxes for eve agents
+**Two routes.** (1) **Free, without moving your server**: the eve server stays where it is (Vercel, your laptop with \`eve dev\`/\`eve start\`) and only the sessions run on EasyBits; fits the Byte plan (1 concurrent box = one conversation at a time, 1-hour sessions, size \`s\`). (2) **Everything on EasyBits**: the eve server in an \`eve-nitro\` box + one child box per session = 2 concurrent boxes → requires **Mega** ($499 MXN/month, 2 boxes) or **Tera** ($2,490 MXN/month, 5 boxes). \`@easybits.cloud/eve-world\` (section 3) only works with the server inside EasyBits (the database URL is on the internal network), so it belongs to route 2.
+
+### 1. Free route: sandboxes for eve agents, server where it already is
 
 \`\`\`bash
 npm i @easybits.cloud/eve-sandbox   # Node ≥ 24 (eve requires it)
@@ -520,7 +522,9 @@ export default defineSandbox({
 
 Options: \`easybits({ apiKey, baseUrl, template: "node", timeoutSeconds, workingDirectory, runTimeoutSeconds, idleTtlSeconds, hardTtlSeconds, metadata })\`. \`setNetworkPolicy\` applies a **per-box egress policy** with the same shape eve uses on Vercel: \`"allow-all"\`, \`"deny-all"\` or a per-domain allow-list (\`{ allow: { "api.github.com": [], "registry.npmjs.org": [] } }\`; \`"*"\` opens everything). The host resolves it to IPs per microVM with DNS refresh, persists it with the box and re-applies it on resume; it takes effect once the promise resolves, so \`await\` it before the egress you want governed. **Not supported**: \`transform\` (header injection at the firewall) — throws an explicit error; that flow (GitHub checkout without the token entering the box) eve does through its \`defaultBackend\`. Outside eve the same policy lives at \`PUT/GET /sandboxes/:id/network-policy\` · SDK \`sb.setNetworkPolicy(policy)\` · MCP \`sandbox_set_network_policy\`. The key needs WRITE scope (create, snapshot, fork) and DELETE if eve should delete snapshots.
 
-### 2. The eve server inside a box
+That is all: \`eve dev\` locally or \`eve start\` on Vercel (or any Node 24) with \`EASYBITS_API_KEY\` in the environment. The prewarm uses a temporary box that is destroyed once the snapshot is captured (it takes no quota afterwards); then one child box per session, which sleeps when idle. Validated with eve 0.58.1 and 0.59.1. On Byte, one conversation at a time: the next one gets \`SandboxLimitReached\` until eve deletes the previous box or you upgrade to Mega.
+
+### 2. Hosted route (Mega+): the eve server inside a box
 
 Template \`eve-nitro\`: Node 24, pnpm, \`eve\` CLI, git/curl/tar; \`/data\` is a persistent 4 GB volume and the working directory; port 3000.
 

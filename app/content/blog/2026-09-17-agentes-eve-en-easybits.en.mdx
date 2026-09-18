@@ -1,6 +1,6 @@
 ---
 title: "Run your eve agents in microVMs: the native sandbox backend for Vercel's eve"
-description: "eve is Vercel's agent framework. With @easybits.cloud/eve-sandbox every session runs in its own Firecracker microVM: prewarm as a snapshot, fork per session, sleep between turns and a per-box network policy. End-to-end tutorial."
+description: "eve is Vercel's agent framework. Two routes with @easybits.cloud/eve-sandbox: the free one, where your eve server stays where it is (Vercel or your laptop) and only the sessions run in EasyBits Firecracker microVMs; and the hosted one (Mega+), with the eve server and its durable state inside EasyBits. End-to-end tutorial."
 date: "2026-09-17"
 author: "Easybits Team"
 tags: ["eve", "vercel", "agents", "sandboxes", "tutorial"]
@@ -15,11 +15,18 @@ published: true
 
 `@easybits.cloud/eve-sandbox` is that backend for EasyBits: it covers the full contract, and every session of your agent runs in its own Firecracker microVM, in your account, billed on your plan in Mexican pesos. Change one line; the agent never notices.
 
-## 1. Install and point the sandbox at it
+There are two ways to use it, and it pays to pick one before starting:
+
+- **Route 1 — Free, without moving your server.** The eve server stays where you already run it (Vercel or your laptop) and only the sessions run on EasyBits. Fits the free plan.
+- **Route 2 — Everything on EasyBits.** The eve server also lives in a box, with a public URL and durable state in EasyBits DB. Requires the Mega plan or above.
+
+## Route 1 — Free, without moving your server
+
+### 1. Install and point the sandbox at it
 
 ```bash
 npm i @easybits.cloud/eve-sandbox   # Node ≥ 24, eve requires it
-export EASYBITS_API_KEY=eb_...       # WRITE scope
+export EASYBITS_API_KEY=eb_...       # WRITE scope (and DELETE if eve should delete snapshots)
 ```
 
 ```ts
@@ -36,15 +43,19 @@ export default defineSandbox({
 });
 ```
 
-## 2. `eve start`: your bootstrap becomes a snapshot
+### 2. Start the server where it already is
+
+Nothing else changes. With `EASYBITS_API_KEY` in the environment, `eve dev` on your laptop or `eve start` on Vercel (or any Node 24) keep working as before: the server runs there, and every session that needs code asks EasyBits for its box. Validated with eve 0.58.1 and 0.59.1.
+
+### 3. What happens underneath
 
 ![A mold and the boxes cast from it](/blog/assets/blog-eve-easybits-snapshot.png)
 
-`eve build` only compiles (~10 s). It is on the first `eve start` that eve calls `prewarm()`: we boot a `node` box, write your seed files, run your `bootstrap()` and freeze the result as a copy-on-write snapshot named `eve:<templateKey>:<hash>` (log: `easybits: snapshot snap_… listo`). The next start finds it and rebuilds nothing (`reusado`): measured, ~3 s versus ~11 s the first time.
+`eve build` only compiles (~10 s). It is on the first `eve start` that eve calls `prewarm()`: we boot a temporary `node` box, write your seed files, run your `bootstrap()`, freeze the result as a copy-on-write snapshot named `eve:<templateKey>:<hash>` (log: `easybits: snapshot snap_… listo`) and destroy the temporary box. The next start finds the snapshot and rebuilds nothing (`reusado`): measured, ~3 s versus ~11 s the first time.
 
-When the first message arrives, `create()` **forks** that snapshot (~7 s). Between turns the box sleeps with a full-VM snapshot and wakes in ~1 s; eve reopens it by `sandboxId` with the disk exactly as it left it. `stop()` and `shutdown()` are suspend; `delete()` destroys. `run()` and `spawn()` execute in a login shell with stdout and stderr as streams, and `kill()` signals the whole process group.
+When the first message arrives, `create()` **forks** that snapshot (~7 s): a child box for that session. Between turns the box sleeps with a full-VM snapshot and wakes in ~1 s; eve reopens it by `sandboxId` with the disk exactly as it left it. `stop()` and `shutdown()` are suspend; `delete()` destroys. `run()` and `spawn()` execute in a login shell with stdout and stderr as streams, and `kill()` signals the whole process group.
 
-## 3. Per-box network policy
+### 4. Per-box network policy
 
 ![A gate that lets only some beams through](/blog/assets/blog-eve-easybits-policy.png)
 
@@ -57,15 +68,29 @@ await sandbox.setNetworkPolicy({
 
 Only the domains you authorize for that box, or none (`"deny-all"`). Change it live over the API, it survives sleep and wake, and if a domain is not on the list the connection simply does not leave the VM. It is the same shape eve uses on Vercel Sandbox, so your agent code does not change. The one thing we do not do is `transform` (header injection at the firewall): it throws a clear error instead of pretending.
 
-## 4. The eve server fits in a box too
+### What the free plan (Byte) gives you
 
-Six steps: create the box, create the app inside it with `eve init` (or clone yours) and install the packages, pick a model, set auth, start the server, expose the port. First the base URL and headers:
+- **One concurrent box**: one conversation at a time. A sleeping box from a previous session also counts until eve deletes it.
+- **1-hour sessions** and size `s`.
+- The prewarm uses a temporary box that is destroyed once the snapshot is captured, so it does not occupy your quota afterwards.
+
+When your agent needs to serve several conversations at once, or longer or bigger sessions, move to **Mega ($499 MXN/month, 2 boxes, 4-hour sessions)** or **Tera ($2,490 MXN/month, 5 boxes, 24 hours)**. Mega is also the minimum for route 2.
+
+## Route 2 — Everything on EasyBits (Mega or above)
+
+Here the eve server runs in an `eve-nitro` box and every session in its child box: that is two concurrent boxes at minimum, which is why it does not fit in Byte. In exchange the server has a public URL, its state survives the machine and you need nothing outside EasyBits.
+
+### 1. Create the box and the app inside it
 
 ```bash
 B=https://www.easybits.cloud/api/v2; H=(-H "Authorization: Bearer $EASYBITS_API_KEY" -H "Content-Type: application/json")
 SB=$(curl -s -X POST "$B/sandboxes" "${H[@]}" -d '{"template":"eve-nitro","timeoutSeconds":3600,"suspendOnIdle":true}' | jq -r .sandboxId)
 curl -s -X POST "$B/sandboxes/$SB/exec" "${H[@]}" -d '{"command":"cd /data && eve init app && cd app && pnpm add @easybits.cloud/eve-sandbox @easybits.cloud/eve-world @ai-sdk/anthropic && eve build","timeoutSeconds":600}'
 ```
+
+The `eve-nitro` template ships Node 24, pnpm and the eve CLI; `/data` is persistent. `agent/sandbox.ts` is the same one from route 1.
+
+### 2. Pick the model
 
 The `eve init` scaffold targets Vercel's AI Gateway (`model: "anthropic/claude-sonnet-5"` as a string) and without `AI_GATEWAY_API_KEY` it fails with *"AI Gateway received no credentials"*. Outside Vercel the model goes in as an object from any AI SDK provider, in `agent/agent.ts`:
 
@@ -79,7 +104,9 @@ export default defineAgent({
 });
 ```
 
-And in production eve requires auth on its HTTP API: with the scaffold (`vercelOidc()`/`localDev()`/`placeholderAuth()`) the public URL answers `401 Authorization is required for this route`. Edit `agent/channels/eve.ts`:
+### 3. Set auth on the server
+
+In production eve requires auth on its HTTP API: with the scaffold (`vercelOidc()`/`localDev()`/`placeholderAuth()`) the public URL answers `401 Authorization is required for this route`. Edit `agent/channels/eve.ts`:
 
 ```ts
 import { eveChannel } from "eve/channels/eve";
@@ -90,7 +117,7 @@ export default eveChannel({
 });
 ```
 
-Now start and expose:
+### 4. Start and expose
 
 ```bash
 DB=$(curl -s "$B/sandboxes/$SB" "${H[@]}" | jq -r .metadata.eve_db_url)
@@ -98,9 +125,11 @@ curl -s -X POST "$B/sandboxes/$SB/bg"   "${H[@]}" -d '{"command":"exec eve start
 curl -s -X POST "$B/sandboxes/$SB/expose" "${H[@]}" -d '{"port":3000}'
 ```
 
-EasyBits generates `EASYBITS_DB_URL` when the box is created and leaves it in `metadata.eve_db_url`; you pass it in the `/bg` `env` (without it eve silently falls back to the box's disk). The `eve-nitro` template ships Node 24, pnpm and the eve CLI; `/data` is persistent and the public URL proxies `/eve/` and `/.well-known/workflow/` with no configuration — but eve enforces the auth you declared, so every call goes with `-u eve:$EVE_PASSWORD`. The server runs there; every agent it serves gets its own microVM through the backend above.
+EasyBits generates `EASYBITS_DB_URL` when the box is created and leaves it in `metadata.eve_db_url`; you pass it in the `/bg` `env` (without it eve silently falls back to the box's disk). The public URL proxies `/eve/` and `/.well-known/workflow/` with no configuration, but eve enforces the auth you declared, so every call goes with `-u eve:$EVE_PASSWORD`.
 
-Talking to it is three calls: creating a session returns `{ sessionId }`, the stream is NDJSON of events (`message.completed` carries the reply) and the same id accepts further messages:
+### 5. Talk to it
+
+Three calls: creating a session returns `{ sessionId }`, the stream is NDJSON of events (`message.completed` carries the reply) and the same id accepts further messages:
 
 ```bash
 curl -s -u eve:$EVE_PASSWORD -X POST "$URL/eve/v1/session" -H "Content-Type: application/json" -d '{"message":"hi, what can you do?"}'
@@ -108,21 +137,12 @@ curl -s -u eve:$EVE_PASSWORD "$URL/eve/v1/session/$SESSION/stream"
 curl -s -u eve:$EVE_PASSWORD -X POST "$URL/eve/v1/session/$SESSION" -H "Content-Type: application/json" -d '{"message":"go on"}'
 ```
 
-## 5. The run survives the machine
+### 6. The run survives the machine
 
-By default eve keeps each run's state on the server's disk. With [`@easybits.cloud/eve-world`](https://www.npmjs.com/package/@easybits.cloud/eve-world) that state (runs, steps, hooks, streams and the delivery queue) lives in EasyBits DB:
+By default eve keeps each run's state on the server's disk. With [`@easybits.cloud/eve-world`](https://www.npmjs.com/package/@easybits.cloud/eve-world) (the `world` line in the `defineAgent` from step 2) that state — runs, steps, hooks, streams and the delivery queue — lives in EasyBits DB. It belongs to this route, not the free one: the database URL is on EasyBits' internal network and is only reachable from a box.
 
-```bash
-npm i @easybits.cloud/eve-world
-```
-
-```ts
-// agent/agent.ts — the same defineAgent from section 4
-experimental: { workflow: { world: "@easybits.cloud/eve-world" } },
-```
-
-When the `eve-nitro` box is created with `POST /sandboxes`, EasyBits generates its database URL and leaves it in `metadata.eve_db_url`: no token to paste. Pass it in the `/bg` `env` as `EASYBITS_DB_URL` on any box (created or forked from a snapshot), with the same value if you want to resume runs. We measured it in production with an 8-step run: we destroyed the box halfway through step 2; a fresh box on the same database started, resumed at step 3 without repeating the earlier ones — 59 seconds after the first box died — and finished the run. The chat session survives too: server destroyed at 21:05:07, another one from the snapshot answering at 21:06:22 with the whole conversation's memory. It is a port of the official Postgres world to libSQL, on the same version line as eve.
+We measured it in production with an 8-step run: we destroyed the box halfway through step 2; a fresh box on the same database (the same `EASYBITS_DB_URL`) started, resumed at step 3 without repeating the earlier ones — 59 seconds after the first box died — and finished the run. The chat session survives too: server destroyed at 21:05:07, another one from the snapshot answering at 21:06:22 with the whole conversation's memory. It is a port of the official Postgres world to libSQL, on the same version line as eve.
 
 ## Start today
 
-Install the package, change `agent/sandbox.ts` and run `eve build` then `eve start`. The product page is at [/eve](/eve), the reference at [/en/docs/eve.md](/en/docs/eve.md), and your own agent can set it up with `npx skills add https://www.easybits.cloud --skill easybits-eve`. The free plan includes one box.
+Route 1: install the package, change `agent/sandbox.ts` and run `eve build` then `eve start` wherever you already ran it; free, one conversation at a time. Route 2: upgrade to Mega and follow the six steps. The product page is at [/eve](/eve), the reference at [/en/docs/eve.md](/en/docs/eve.md), and your own agent can set it up with `npx skills add https://www.easybits.cloud --skill easybits-eve`.

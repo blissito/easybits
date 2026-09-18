@@ -13,7 +13,7 @@ export const meta = () => [
   ...getBasicMetaTags({
     title: "eve (Vercel) en microVMs — backend nativo de sandboxes | EasyBits",
     description:
-      "Corre tus agentes eve (el framework de Vercel) en máquinas virtuales de EasyBits: una por sesión, aislada, que duerme entre turnos y despierta en un segundo. Cambias una línea en agent/sandbox.ts. En MXN, con plan gratuito.",
+      "No muevas tu servidor eve (el framework de Vercel): con una línea en agent/sandbox.ts tus sesiones corren en máquinas virtuales de EasyBits, una por sesión, aislada, que duerme entre turnos y despierta en un segundo. Gratis para empezar; servidor hospedado desde Mega. En MXN.",
     url: "https://www.easybits.cloud/eve",
     image: "https://www.easybits.cloud/blog/assets/blog-eve-easybits-policy.png",
   }),
@@ -26,7 +26,7 @@ const JSON_LD = {
   ...productJsonLd({
     name: "EasyBits para eve (Vercel)",
     description:
-      "Backend de sandboxes para eve, el framework de agentes de Vercel: cada sesión corre en su propia máquina virtual Firecracker, con imagen reusable, suspend/resume y política de red por caja. Plan gratuito; servidor eve 24/7 desde $49 MXN/mes.",
+      "Backend de sandboxes para eve, el framework de agentes de Vercel: tu servidor se queda donde está y cada sesión corre en su propia máquina virtual Firecracker, con imagen reusable, suspend/resume y política de red por caja. Gratis para empezar (una conversación a la vez); servidor eve hospedado en EasyBits desde $499 MXN/mes.",
     path: "/eve",
     priceMxn: 0,
   }),
@@ -119,35 +119,38 @@ export default function Eve({ loaderData }: Route.ComponentProps) {
           highlight: "en microVMs de verdad",
           subtitle: (
             <>
-              eve deja que tú elijas dónde ejecuta código tu agente (
+              No muevas tu servidor: eve deja que tú elijas dónde ejecuta código tu agente (
               <a className="underline" href="https://eve.dev/docs/sandbox" target="_blank" rel="noopener noreferrer">
                 docs de eve: Sandbox
               </a>
-              ). Con una línea en <code>agent/sandbox.ts</code>, cada sesión corre en su propia máquina
-              virtual en EasyBits: aislada, con root e internet, en tu cuenta y en pesos mexicanos.
+              ). Una línea en <code>agent/sandbox.ts</code> y cada sesión corre en su propia máquina
+              virtual en EasyBits, aislada, con root e internet, mientras tu servidor sigue en Vercel o en
+              tu laptop. Gratis para empezar, en pesos mexicanos.
             </>
           ),
           proof:
             "Arranque de una sesión ~7 s · despertar ~1 s · el entorno preparado se reusa en cada build · npm i @easybits.cloud/eve-sandbox",
           bentos: [
             {
-              title: "El entorno se prepara una vez y se reusa siempre",
+              title: "Una línea, y tu servidor no se mueve",
               body: (
                 <>
-                  Cuando corres <code>eve build</code>, eve instala lo que tu agente necesita (su{" "}
+                  Instala el paquete, cambia <code>agent/sandbox.ts</code> y sigue corriendo{" "}
+                  <code>eve dev</code> o <code>eve start</code> donde ya lo hacías: Vercel o tu laptop. En el
+                  primer arranque eve prepara lo que tu agente necesita (su{" "}
                   <a className="underline" href="https://eve.dev/docs/sandbox" target="_blank" rel="noopener noreferrer">
                     bootstrap
                   </a>
-                  ). Nosotros guardamos ese resultado como una imagen lista. Los builds siguientes no vuelven a
-                  instalar nada: reusan la imagen en 0.2 s.
+                  ) en una máquina temporal y nosotros guardamos el resultado como imagen; los arranques
+                  siguientes reusan la imagen en 0.2 s.
                   <Snippet title="npm i @easybits.cloud/eve-sandbox" code={SNIPPET_SANDBOX} />
                 </>
               ),
               bullets: [
-                "Una imagen por versión de tu agente; si no cambia, no se reconstruye",
-                "Primera captura ~11 s; reuso medido en 0.2 s",
+                "Gratis para empezar: una conversación a la vez, sesiones de 1 h",
+                "Una imagen por versión de tu agente; primera captura ~11 s, reuso medido en 0.2 s",
                 "Los archivos que eve siembra (skills, configuración) ya vienen dentro",
-                "Si tu agente no necesita preparación, arranca de una máquina limpia",
+                "Validado con eve 0.58.1 y 0.59.1",
               ],
               image: "/blog/assets/blog-eve-easybits-cover.png",
             },
@@ -163,10 +166,10 @@ export default function Eve({ loaderData }: Route.ComponentProps) {
               image: "/blog/assets/blog-eve-easybits-snapshot.png",
             },
             {
-              title: "El run sobrevive a la máquina",
+              title: "El run sobrevive a la máquina (servidor hospedado, Mega+)",
               body: (
                 <>
-                  Con{" "}
+                  Si además hospedas el servidor eve en una máquina de EasyBits, con{" "}
                   <a className="underline" href="https://www.npmjs.com/package/@easybits.cloud/eve-world" target="_blank" rel="noopener noreferrer">
                     @easybits.cloud/eve-world
                   </a>{" "}
@@ -178,7 +181,7 @@ export default function Eve({ loaderData }: Route.ComponentProps) {
               ),
               bullets: [
                 "Una línea en agent.ts: experimental.workflow.world",
-                "Sin token: EasyBits te da la URL de la base al crear la máquina",
+                "Sin token: EasyBits te da la URL de la base al crear la máquina eve-nitro (sólo desde dentro de EasyBits)",
                 "Port del world oficial de Postgres a libSQL, misma línea de versiones que eve",
                 "Sin EasyBits sigue funcionando: apunta a cualquier libSQL o cae al disco local",
               ],
@@ -208,9 +211,11 @@ export default function Eve({ loaderData }: Route.ComponentProps) {
           ctaTo: "/blog/agentes-eve-en-easybits",
           priceLine: (
             <>
-              Gratis: una máquina, suficiente para tu primer agente. Con un plan de pago tu
-              agente puede atender varias conversaciones a la vez, cada una en su máquina.
-              Si además quieres el servidor eve encendido las 24 horas, eso es{" "}
+              <strong>Gratis</strong>: tu servidor eve se queda donde está y las sesiones corren en
+              EasyBits, una conversación a la vez (una máquina, sesiones de 1 h). <strong>Servidor eve
+              hospedado en EasyBits + estado durable (eve-world)</strong>: desde Mega, $499 MXN/mes (2
+              máquinas: el servidor y una sesión) o Tera, $2,490 MXN/mes (5 máquinas). Si sólo quieres el
+              servidor eve encendido las 24 horas, eso es{" "}
               <a className="underline text-brand-500" href="/hosting">
                 hosting
               </a>

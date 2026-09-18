@@ -1759,7 +1759,9 @@ const { file } = await eb.renderVideoProject(p.id); // → { fileId, url, render
 
 [eve](https://eve.dev) es el framework open-source de Vercel para agentes: un agente es un directorio (instrucciones, tools, canales, schedules) y cada sesión es un run durable del Workflow SDK. Cuando un agente necesita ejecutar código, eve le pide una caja a un **SandboxBackend**. \`@easybits.cloud/eve-sandbox\` es ese backend para EasyBits: cada sesión de agente corre en su propia microVM, en tu cuenta, cobrada con tu plan.
 
-### 1. Sandboxes para agentes eve
+**Dos rutas.** (1) **Gratis, sin mover tu servidor**: el servidor eve se queda donde está (Vercel, tu laptop con \`eve dev\`/\`eve start\`) y sólo las sesiones corren en EasyBits; cabe en el plan Byte (1 caja concurrente = una conversación a la vez, sesiones de 1 h, tamaño \`s\`). (2) **Todo en EasyBits**: el servidor eve en una caja \`eve-nitro\` + una caja hija por sesión = 2 cajas concurrentes → requiere **Mega** ($499 MXN/mes, 2 cajas) o **Tera** ($2,490 MXN/mes, 5 cajas). \`@easybits.cloud/eve-world\` (sección 3) sólo funciona con el servidor dentro de EasyBits (la URL de la base es de la red interna), así que es parte de la ruta 2.
+
+### 1. Ruta gratis: sandboxes para agentes eve, servidor donde ya está
 
 \`\`\`bash
 npm i @easybits.cloud/eve-sandbox   # Node ≥ 24 (lo exige eve)
@@ -1790,7 +1792,9 @@ export default defineSandbox({
 
 Opciones: \`easybits({ apiKey, baseUrl, template: "node", timeoutSeconds, workingDirectory, runTimeoutSeconds, idleTtlSeconds, hardTtlSeconds, metadata })\`. \`setNetworkPolicy\` aplica una **política de egress por caja**, con el mismo shape que eve usa en Vercel: \`"allow-all"\`, \`"deny-all"\` o una allow-list por dominio (\`{ allow: { "api.github.com": [], "registry.npmjs.org": [] } }\`; \`"*"\` abre todo). El host la resuelve a IPs por microVM con refresco DNS, la persiste con la caja y la vuelve a aplicar al reanudar; toma efecto cuando la promesa resuelve, así que \`await\` antes del egress que quieres gobernar. **No soportado**: \`transform\` (inyectar headers en el firewall) — lanza error explícito; ese flujo (checkout de GitHub sin que el token entre a la caja) eve lo hace con su \`defaultBackend\`. Fuera de eve, la misma política vive en \`PUT/GET /sandboxes/:id/network-policy\` · SDK \`sb.setNetworkPolicy(policy)\` · MCP \`sandbox_set_network_policy\`. La llave necesita scope WRITE (crear, snapshot, fork) y DELETE si eve debe borrar snapshots.
 
-### 2. El servidor eve dentro de una caja
+Con eso basta: \`eve dev\` local o \`eve start\` en Vercel (o cualquier Node 24) con \`EASYBITS_API_KEY\` en el entorno. El prewarm usa una caja temporal que se destruye al capturar el snapshot (no ocupa cupo después); luego una caja hija por sesión, que duerme cuando no habla. Validado con eve 0.58.1 y 0.59.1. En Byte, una conversación a la vez: la siguiente recibe \`SandboxLimitReached\` hasta que eve borre la anterior o subas a Mega.
+
+### 2. Ruta hospedada (Mega+): el servidor eve dentro de una caja
 
 Template \`eve-nitro\`: Node 24, pnpm, \`eve\` CLI, git/curl/tar; \`/data\` es un volumen persistente de 4 GB y el directorio de trabajo; puerto 3000.
 
