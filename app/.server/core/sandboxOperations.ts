@@ -1421,19 +1421,56 @@ export async function setSandboxTierMetadata(
   );
 }
 
+// `env`: el host lo reescribe en el guest (/etc/sandbox-env/env + env_file de la unit)
+// al despertar, ANTES del bootstrap. ⚠️ Sólo toca ARCHIVOS: el proceso que ya corría
+// dentro del snapshot conserva su environ viejo. Para que un runtime de agente lo
+// lea hay que reiniciar su unit (ver refreshAgentEnv).
 export async function resumeSandbox(
   ctx: AuthContext,
-  sandboxId: string
+  sandboxId: string,
+  opts: { env?: Record<string, string> } = {}
 ): Promise<SandboxRecord> {
   requireScope(ctx, "WRITE");
   const rec = await callHost<SandboxRecord>(
     "POST",
     `/v1/sandbox/${sandboxId}/resume`,
-    {},
+    opts.env ? { env: opts.env } : {},
     await effectiveOwnerId(ctx, sandboxId)
   );
   void markSandboxResumed(sandboxId);
   return rec;
+}
+
+// Despierta una caja de AGENTE con env nuevo y lo hace efectivo: resume con `env`
+// (el host reescribe los archivos) + `agent/start` (reinicia la unit y espera su
+// health). Sin el reinicio el runtime seguiría con el environ congelado en el
+// snapshot. Cuesta el arranque del proceso (~1-3 s) encima del resume, así que el
+// caller sólo debe usarlo cuando el env CAMBIÓ (compara hashes; ver flota).
+export async function refreshAgentEnv(
+  ctx: AuthContext,
+  agent: { sandboxId: string; template: string; embedToken: string; name?: string | null },
+  baseEnv: Record<string, string>
+): Promise<Record<string, string>> {
+  const template = agent.template as SandboxTemplate;
+  const env = await prepareAgentEnv(
+    ctx,
+    { template, env: baseEnv, name: agent.name ?? undefined },
+    agent.embedToken
+  );
+  const tpl = await resolveTemplate(ctx, template);
+  // Mismo contrato que el create: un env incompleto (vault caído → sin credencial del
+  // motor) NO se escribe encima de una caja que funcionaba. Lanza 400; el caller cae
+  // al resume sin env.
+  validateRequiredEnv(tpl, env);
+  await resumeSandbox(ctx, agent.sandboxId, { env });
+  await startAgent(ctx, agent.sandboxId, {
+    env,
+    port: tpl.agent?.port,
+    healthPath: tpl.agent?.health_path,
+    unit: tpl.agent?.unit,
+    envFile: tpl.agent?.env_file,
+  });
+  return env;
 }
 
 // ─────────────── plantillas derivadas (template-snapshot) ───────────────
@@ -3456,41 +3493,22 @@ async function bringUpAgentRuntime(
   return { agentUrl, acpSessionId, acpTransportSessionId, desktopUrl, terminalUrl };
 }
 
-export async function createAgent(
+
+// Env FINAL de una caja de agente: el del caller + lo que el template exige (tokens
+// internos, credenciales del vault, acceso a EasyBits). Se extrajo de createAgent para
+// que un RESUME pueda recomputarlo con el MISMO embedToken de la fila y reescribirlo
+// en el guest (refreshAgentEnv): rotar una credencial o cambiar el modelo ya no exige
+// reciclar la caja. Idempotente: todo lo que mintea consulta el vault primero.
+export async function prepareAgentEnv(
   ctx: AuthContext,
   params: {
     template: SandboxTemplate;
     env: Record<string, string>;
     name?: string;
-    timeoutSeconds?: number;
-    /** Archivos de conocimiento (base64) a sembrar en /data/workspace tras el boot. */
-    seedFiles?: Array<{ name: string; contentBase64: string }>;
-    /** Override explícito de recursos de la VM (fleetAgent worker sizing). */
-    memoryMb?: number;
-    vcpus?: number;
-    // Red de seguridad de siesta: con esto, el timer de `timeoutSeconds` del host
-    // SUSPENDE (snapshot) en vez de DESTRUIR. Lo usan los workers de flota, cuyo
-    // apagado normal lo hace el reaper propio de easybits — si ese latido se para
-    // (deploy, restart, health check caído), esto es lo único que devuelve la RAM.
-    suspendOnIdle?: boolean;
-    /**
-     * ACP (ghosty-lite, goose): MCP servers que el agente monta al abrir su sesión.
-     * Ya normalizados por `normalizeAcpMcpServers`. Se persisten en la fila para que
-     * una caja recreada vuelva con las mismas tools.
-     */
     mcpServers?: AcpMcpServer[];
-    /** Nacer desde una plantilla derivada (template-snapshot). Ver createSandbox. */
-    derivedTemplate?: string;
-    templateKey?: string;
-    templateHash?: string;
-  }
-): Promise<CreatedAgent> {
-  requireScope(ctx, "WRITE");
-
-  // Generate embedToken upfront — also serves as OPENCLAW_GATEWAY_TOKEN for
-  // the openclaw runtime, so easybits can reuse it as Bearer when proxying
-  // /v1/chat/completions without persisting a second per-agent secret.
-  const embedToken = "agt_" + randomBytes(32).toString("hex");
+  },
+  embedToken: string
+): Promise<Record<string, string>> {
   const env = { ...params.env };
   // Zona horaria del negocio (CDMX) por default. Sin esto la VM hereda la TZ del
   // host (UTC en el bare-metal) y el cerebro razona con la hora equivocada. Origen
@@ -3682,6 +3700,45 @@ export async function createAgent(
   // del user viven en ghosty-studio (provider-credentials), no en el `db.secret` de easybits.
   // ghosty-studio la pasa en `env` al spawnear (intent create-agent).
 
+  return env;
+}
+
+export async function createAgent(
+  ctx: AuthContext,
+  params: {
+    template: SandboxTemplate;
+    env: Record<string, string>;
+    name?: string;
+    timeoutSeconds?: number;
+    /** Archivos de conocimiento (base64) a sembrar en /data/workspace tras el boot. */
+    seedFiles?: Array<{ name: string; contentBase64: string }>;
+    /** Override explícito de recursos de la VM (fleetAgent worker sizing). */
+    memoryMb?: number;
+    vcpus?: number;
+    // Red de seguridad de siesta: con esto, el timer de `timeoutSeconds` del host
+    // SUSPENDE (snapshot) en vez de DESTRUIR. Lo usan los workers de flota, cuyo
+    // apagado normal lo hace el reaper propio de easybits — si ese latido se para
+    // (deploy, restart, health check caído), esto es lo único que devuelve la RAM.
+    suspendOnIdle?: boolean;
+    /**
+     * ACP (ghosty-lite, goose): MCP servers que el agente monta al abrir su sesión.
+     * Ya normalizados por `normalizeAcpMcpServers`. Se persisten en la fila para que
+     * una caja recreada vuelva con las mismas tools.
+     */
+    mcpServers?: AcpMcpServer[];
+    /** Nacer desde una plantilla derivada (template-snapshot). Ver createSandbox. */
+    derivedTemplate?: string;
+    templateKey?: string;
+    templateHash?: string;
+  }
+): Promise<CreatedAgent> {
+  requireScope(ctx, "WRITE");
+
+  // Generate embedToken upfront — also serves as OPENCLAW_GATEWAY_TOKEN for
+  // the openclaw runtime, so easybits can reuse it as Bearer when proxying
+  // /v1/chat/completions without persisting a second per-agent secret.
+  const embedToken = "agt_" + randomBytes(32).toString("hex");
+  const env = await prepareAgentEnv(ctx, params, embedToken);
   // 1. Resolve template + validate the env contract before spawning anything.
   const tpl = await resolveTemplate(ctx, params.template);
   validateRequiredEnv(tpl, env);

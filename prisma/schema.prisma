@@ -1222,6 +1222,10 @@ model Agent {
   // secretos (lleva llaves de proveedor). Es lo que permite VOLVER A LEVANTAR la caja
   // sobre esta misma fila (ensureAgentBox) cuando el host ya no la tiene.
   spawnEnv              String?
+  // Flota — sha256 del env con el que se horneó/refrescó el worker (sin cifrar: es
+  // una huella, no una credencial). Al despertar se compara con el env recomputado;
+  // si difiere, el resume lleva env nuevo + reinicio de la unit (refreshAgentEnv).
+  spawnEnvHash          String?
   // ACP only — los MCP servers que el dueño declaró al crear el agente. Viajan en
   // `session/new` del handshake, así que hay que recordarlos: la sesión se rehace
   // cada vez que la caja se recrea (reviveAgentBox) y sin esto el agente volvería
@@ -1384,6 +1388,12 @@ model FleetAgent {
   // manifiesto de assets). Un skill encendido = sus files entran al manifiesto + su
   // name/description al prompt. Ver skills/README.md.
   skills        Json?
+  // Estado derivado de la flota, opaco para la UI. Hoy:
+  //   artifact: { derivedId, hash, at, templateVersion? } — la plantilla derivada
+  //   (template-snapshot del host) de este agente: una caja con seeds ya sembrados.
+  //   Se captura tras el primer spawn frío y se reemplaza cuando cambia
+  //   fleetArtifactHash (workerTemplate/seeds/skills); NUNCA por prompt ni credencial.
+  metadata      Json?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
