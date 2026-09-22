@@ -44,9 +44,14 @@ function matchRoute(specPath: string): { pattern: string; file: string } | null 
     const segs = r.pattern.split("/").filter(Boolean);
     // `:jobId?` opcional: acepta longitud igual o una menos.
     const optional = segs[segs.length - 1]?.endsWith("?");
-    if (segs.length !== want.length && !(optional && segs.length === want.length + 1))
+    // `*` (splat) al final casa con uno o más segmentos: `agents/:id/files/*` ↔ `/agents/{id}/files/{path}`.
+    const splat = segs[segs.length - 1] === "*";
+    if (splat) {
+      if (want.length < segs.length) return false;
+    } else if (segs.length !== want.length && !(optional && segs.length === want.length + 1))
       return false;
     return want.every((w, i) => {
+      if (splat && i >= segs.length - 1) return true;
       const s = segs[i].replace(/\?$/, "");
       if (s.startsWith(":")) return true;
       return s === w.replace(/^\{(.+)\}$/, ":$1");

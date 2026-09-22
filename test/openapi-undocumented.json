@@ -18,7 +18,6 @@
   "/api/v2/agents/:id/whatsapp/link",
   "/api/v2/agents/:id/whatsapp/unlink",
   "/api/v2/agents/:id/skills",
-  "/api/v2/agents/:id/skills/import",
   "/api/v2/agents/:id/mcps",
   "/api/v2/agents/:id/admin",
   "/api/v2/sandbox/:id/admin",

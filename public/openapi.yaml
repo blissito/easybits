@@ -1592,7 +1592,7 @@ paths:
       tags: [Agents]
       operationId: putAgentSkill
       summary: Instalar o reemplazar una skill (templates con máquina)
-      description: Va a `/data/agent/skills/<slug>/`. Entra tras `POST …/restart`. Un `: ` sin comillas en `name`/`description` del frontmatter se rechaza con 400.
+      description: "Va a `/data/agent/skills/<slug>/`. Entra tras `POST …/restart`. Un `: ` sin comillas en `name`/`description` del frontmatter se rechaza con 400."
       requestBody:
         required: true
         content:
@@ -1647,7 +1647,7 @@ paths:
       tags: [Agents]
       operationId: setAgentMcp
       summary: Reemplazar la lista de MCP y reiniciar
-      description: Mismo formato que `mcpServers` al crear (`{name,type:"http",url,headers?}` o `{name,command,args?,env?}`, `$secret:NOMBRE` en env/headers). Reemplaza la lista ENTERA y reinicia el agente (sesión nueva).
+      description: "Mismo formato que `mcpServers` al crear (`{name,type:\"http\",url,headers?}` o `{name,command,args?,env?}`, `$secret:NOMBRE` en env/headers). Reemplaza la lista ENTERA y reinicia el agente (sesión nueva)."
       requestBody:
         required: true
         content:
@@ -1671,7 +1671,7 @@ paths:
       tags: [Agents]
       operationId: restartAgent
       summary: Rearrancar el agente (templates con máquina)
-      description: Reinicia el runtime con su env y rehace el handshake ACP; aplica skills, MCP y modo del prompt. Se pierde la conversación en curso. `409 agente_sin_maquina` en templates sin máquina.
+      description: "Reinicia el runtime con su env y rehace el handshake ACP; aplica skills, MCP y modo del prompt. Se pierde la conversación en curso. `409 agente_sin_maquina` en templates sin máquina."
       responses:
         "200":
           description: Reiniciado.
