@@ -2499,6 +2499,41 @@ curl https://www.easybits.cloud/api/v2/agents/$AGENT_ID/prompt \\
               <code className="bg-gray-100 px-1 rounded">systemPrompt</code> / <code className="bg-gray-100 px-1 rounded">systemPromptMode</code> en el body.
             </p>
 
+            <h3 id="ghosty-lite-config" className="text-lg font-bold mb-3 scroll-mt-24">Configurarlo por API: archivos, skills, MCP, reinicio</h3>
+            <p className="text-gray-600 text-sm mb-4">
+              Después de creado, el agente se configura sobre su máquina con el mismo contrato que Ghosty Studio, así que la skill{" "}
+              <code className="bg-gray-100 px-1 rounded">ghosty-agent</code> (<code className="bg-gray-100 px-1 rounded">npx skills add https://www.ghosty.studio</code>)
+              sirve aquí cambiando la base a <code className="bg-gray-100 px-1 rounded">https://www.easybits.cloud/api/v2/agents/$AGENT_ID</code> y el bearer a tu{" "}
+              <code className="bg-gray-100 px-1 rounded">EASYBITS_API_KEY</code>.
+            </p>
+            <div className="overflow-x-auto mb-4">
+              <table className="text-sm w-full">
+                <thead><tr className="text-left border-b"><th className="py-1 pr-3">Ruta</th><th className="py-1 pr-3">Métodos</th><th className="py-1">Qué hace</th></tr></thead>
+                <tbody className="text-gray-600">
+                  <tr className="border-b"><td className="py-1 pr-3 font-mono text-xs">/files/&lt;ruta&gt;</td><td className="py-1 pr-3">GET · PUT · DELETE</td><td className="py-1">Archivos de conocimiento en <code className="bg-gray-100 px-1 rounded">/data/work</code>. PUT con los bytes crudos (máx 10 MB). Sin reinicio.</td></tr>
+                  <tr className="border-b"><td className="py-1 pr-3 font-mono text-xs">/skills/&lt;slug&gt;</td><td className="py-1 pr-3">PUT · DELETE</td><td className="py-1">JSON <code className="bg-gray-100 px-1 rounded">{`{ markdown, assets?: [{ name, contentBase64 }] }`}</code>. Entra tras <code className="bg-gray-100 px-1 rounded">restart</code>. <code className="bg-gray-100 px-1 rounded">GET /skills</code> las lista.</td></tr>
+                  <tr className="border-b"><td className="py-1 pr-3 font-mono text-xs">/mcp</td><td className="py-1 pr-3">GET · PUT</td><td className="py-1">PUT <code className="bg-gray-100 px-1 rounded">{`{ servers: [...] }`}</code> reemplaza la lista entera y reinicia solo.</td></tr>
+                  <tr className="border-b"><td className="py-1 pr-3 font-mono text-xs">/restart</td><td className="py-1 pr-3">POST</td><td className="py-1">Rearranca el agente y abre sesión nueva (se pierde la conversación en curso).</td></tr>
+                  <tr><td className="py-1 pr-3 font-mono text-xs">/prompt</td><td className="py-1 pr-3">GET · PATCH /agents/:id</td><td className="py-1">Identidad (ver arriba).</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <CodeExample
+              title="bash"
+              code={`B=https://www.easybits.cloud/api/v2/agents/$AGENT_ID; H="Authorization: Bearer $EASYBITS_API_KEY"
+
+curl -X PUT "$B/files/precios.txt" -H "$H" --data-binary @precios.txt
+curl -X PUT "$B/skills/cotizar" -H "$H" -H 'Content-Type: application/json' \\
+  -d '{ "markdown": "---\\nname: cotizar\\ndescription: Arma cotizaciones\\n---\\n..." }'
+curl -X PUT "$B/mcp" -H "$H" -H 'Content-Type: application/json' \\
+  -d '{ "servers": [{ "name": "notion", "type": "http", "url": "https://mcp.notion.com/mcp", "headers": { "Authorization": "Bearer $secret:NOTION" } }] }'
+curl -X POST "$B/restart" -H "$H"`}
+            />
+            <p className="text-gray-600 text-sm mb-8">
+              Sólo para templates con máquina propia (<code className="bg-gray-100 px-1 rounded">ghosty-lite</code>, <code className="bg-gray-100 px-1 rounded">goose</code>); en los demás estas rutas responden{" "}
+              <code className="bg-gray-100 px-1 rounded">409 agente_sin_maquina</code>. Una skill con un <code className="bg-gray-100 px-1 rounded">: </code> sin comillas en su frontmatter se rechaza con 400 (el cargador la descartaría en silencio).
+            </p>
+
             <h3 id="ghosty-lite-mcp" className="text-lg font-bold mb-3 scroll-mt-24">Tus propias tools (MCP)</h3>
             <p className="text-gray-600 text-sm mb-4">
               El agente monta servidores <a href="https://modelcontextprotocol.io" className="underline" target="_blank" rel="noreferrer">MCP</a> propios al abrir su

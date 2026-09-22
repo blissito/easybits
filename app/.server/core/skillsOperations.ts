@@ -2,6 +2,7 @@ import { db } from "../db";
 import type { AuthContext } from "../apiAuth";
 import { requireScope } from "../apiAuth";
 import { writeFile as sandboxWriteFile, readFile as sandboxReadFile, listFiles as sandboxListFiles, openAgentMessageStream } from "./sandboxOperations";
+import { MACHINE_TEMPLATES } from "./sandboxOperations";
 
 // Cap per-file size at 10 MB so a malicious or careless upload can't OOM
 // the EasyBits process while we base64 the buffer in memory.
@@ -66,6 +67,13 @@ async function loadAgentRow(ctx: AuthContext, agentId: string): Promise<AgentRow
     throw new Error(`agent is ${row.status}; cannot install skill`);
   }
   return row;
+}
+
+/** Dónde viven las skills en la caja. Los templates con máquina (ghosty-lite / goose) sólo
+ *  enlazan `/data/agent/skills/*` al arrancar: escribir en `/skills` ahí es tirarlas a un
+ *  rincón que nadie mira (la API decía ok y el agente nunca las veía). */
+function skillsRoot(template: string): string {
+  return MACHINE_TEMPLATES.has(template) ? "/data/agent/skills" : "/skills";
 }
 
 function slug(name: string): string {
@@ -148,9 +156,10 @@ async function listSkillsFromDisk(
     (await sandboxListFiles(ctx, agent.sandboxId, { path }).catch(() => null))?.entries ?? [];
 
   const out: InstalledSkillEntry[] = [];
-  for (const d of await ls("/skills")) {
+  const root = skillsRoot(agent.template);
+  for (const d of await ls(root)) {
     if (!d.isDir) continue;
-    const dir = `/skills/${d.name}`;
+    const dir = `${root}/${d.name}`;
     const files = await ls(dir);
     if (!files.some((f) => f.name === "SKILL.md")) continue;
     let description = "";
@@ -257,10 +266,9 @@ export async function installSkill(
       `cannot derive a valid skill name from "${params.skillFilename}" — slug must match [a-z0-9][a-z0-9-]*`
     );
   }
-  const skillDir = `/skills/${name}`;
-  const written: string[] = [];
-
   const agent = await loadAgentRow(ctx, agentId);
+  const skillDir = `${skillsRoot(agent.template)}/${name}`;
+  const written: string[] = [];
 
   // 1. SKILL.md (the canonical entry point inside the skill directory).
   const skillBase64 = Buffer.from(params.skillContent).toString("base64");

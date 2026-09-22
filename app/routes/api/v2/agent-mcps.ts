@@ -1,6 +1,8 @@
 import type { Route } from "./+types/agent-mcps";
 import { authenticateRequest, requireAuth } from "~/.server/apiAuth";
 import { applySandboxRateLimit } from "~/.server/rateLimiter";
+import { db } from "~/.server/db";
+import { MACHINE_TEMPLATES } from "~/.server/core/sandboxOperations";
 import {
   registerAgentMcp,
   type RegisterMcpBody,
@@ -28,6 +30,12 @@ export async function action({ request, params }: Route.ActionArgs) {
     return Response.json({ error: "JSON body required" }, { status: 400 });
   }
   try {
+    // Templates con máquina (ghosty-lite / goose): los MCP viajan en session/new, no por el
+    // gateway de openclaw. Antes esto daba 502 sin decir por qué.
+    const row = await db.agent.findUnique({ where: { id: params.id! }, select: { template: true } });
+    if (row && MACHINE_TEMPLATES.has(row.template)) {
+      return Response.json({ error: "este template se configura con PUT /api/v2/agents/:id/mcp { servers } (reemplaza la lista y reinicia)" }, { status: 400 });
+    }
     const result = await registerAgentMcp(ctx, params.id!, body);
     return Response.json(result);
   } catch (e) {

@@ -86,7 +86,9 @@ export async function action({ request, params }: Route.ActionArgs) {
       skillContent,
       assets: assetBuffers,
     });
-    return Response.json(result);
+    // Sin hot-load (ghosty-lite / goose enlazan las skills al arrancar): decirlo, en vez de
+    // un `hotLoaded:false` que nadie lee.
+    return Response.json(result.hotLoaded ? result : { ...result, nota: "el cerebro la ve tras el siguiente reinicio: POST …/restart" });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "internal error";
     const status = msg.includes("not found")

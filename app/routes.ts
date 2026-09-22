@@ -255,6 +255,11 @@ export default [
     route("agents/:id", "routes/api/v2/agent.ts"),
     route("agents/:id/message", "routes/api/v2/agent-message.ts"),
     route("agents/:id/prompt", "routes/api/v2/agent-prompt.ts"),
+    // Config de agentes con máquina (ghosty-lite / goose), contrato de gs.
+    route("agents/:id/files/*", "routes/api/v2/agent-files.ts"),
+    route("agents/:id/skills/:slug", "routes/api/v2/agent-skill.ts"),
+    route("agents/:id/mcp", "routes/api/v2/agent-mcp.ts"),
+    route("agents/:id/restart", "routes/api/v2/agent-restart.ts"),
     // Un turno a texto, sin stream: el "Probar" del panel por token (verificación desde la API).
     route("agents/:id/try", "routes/api/v2/agent-try.ts"),
     route("agents/:id/lost", "routes/api/v2/agent-lost.ts"),

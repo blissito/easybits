@@ -1530,6 +1530,158 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  /api/v2/agents/{id}/files/{path}:
+    parameters:
+      - $ref: "#/components/parameters/id"
+      - { name: path, in: path, required: true, schema: { type: string }, description: "Ruta relativa a /data/work (vacía o carpeta en GET)." }
+    get:
+      tags: [Agents]
+      operationId: listAgentFiles
+      summary: Archivos de conocimiento del agente (templates con máquina)
+      responses:
+        "200":
+          description: Lista.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  dir: { type: string }
+                  files: { type: array, items: { type: object, properties: { path: { type: string }, size: { type: integer } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+    put:
+      tags: [Agents]
+      operationId: putAgentFile
+      summary: Subir un archivo (bytes crudos, máx 10 MB) a /data/work
+      requestBody:
+        required: true
+        content:
+          application/octet-stream:
+            schema: { type: string, format: binary }
+      responses:
+        "200":
+          description: Escrito. Sin reinicio; el cerebro lo ve ya.
+          content:
+            application/json:
+              schema: { type: object, properties: { path: { type: string }, bytes: { type: integer }, en: { type: string } } }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+    delete:
+      tags: [Agents]
+      operationId: deleteAgentFile
+      summary: Borrar un archivo de /data/work
+      responses:
+        "200":
+          description: Borrado.
+          content:
+            application/json:
+              schema: { type: object, properties: { deleted: { type: string } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /api/v2/agents/{id}/skills/{slug}:
+    parameters:
+      - $ref: "#/components/parameters/id"
+      - { name: slug, in: path, required: true, schema: { type: string, pattern: "^[a-z0-9][a-z0-9-]{0,63}$" } }
+    put:
+      tags: [Agents]
+      operationId: putAgentSkill
+      summary: Instalar o reemplazar una skill (templates con máquina)
+      description: Va a `/data/agent/skills/<slug>/`. Entra tras `POST …/restart`. Un `: ` sin comillas en `name`/`description` del frontmatter se rechaza con 400.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [markdown]
+              properties:
+                markdown: { type: string, description: "Contenido de SKILL.md con frontmatter name/description." }
+                assets: { type: array, items: { type: object, required: [name, contentBase64], properties: { name: { type: string }, contentBase64: { type: string } } } }
+      responses:
+        "200":
+          description: Escrita.
+          content:
+            application/json:
+              schema: { type: object, properties: { slug: { type: string }, files: { type: array, items: { type: string } }, bytes: { type: integer }, nota: { type: string } } }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+    delete:
+      tags: [Agents]
+      operationId: deleteAgentSkill
+      summary: Quitar una skill
+      responses:
+        "200":
+          description: Borrada; deja de verla tras `restart`.
+          content:
+            application/json:
+              schema: { type: object, properties: { deleted: { type: string }, nota: { type: string } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /api/v2/agents/{id}/mcp:
+    parameters:
+      - $ref: "#/components/parameters/id"
+    get:
+      tags: [Agents]
+      operationId: getAgentMcp
+      summary: Servidores MCP del agente (templates con máquina)
+      responses:
+        "200":
+          description: Lista vigente.
+          content:
+            application/json:
+              schema: { type: object, properties: { servers: { type: array, items: { type: object } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+    put:
+      tags: [Agents]
+      operationId: setAgentMcp
+      summary: Reemplazar la lista de MCP y reiniciar
+      description: Mismo formato que `mcpServers` al crear (`{name,type:"http",url,headers?}` o `{name,command,args?,env?}`, `$secret:NOMBRE` en env/headers). Reemplaza la lista ENTERA y reinicia el agente (sesión nueva).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [servers], properties: { servers: { type: array, maxItems: 20, items: { type: object } } } }
+      responses:
+        "200":
+          description: Aplicado y reiniciado.
+          content:
+            application/json:
+              schema: { type: object, properties: { servers: { type: array, items: { type: object } }, reiniciado: { type: boolean } } }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /api/v2/agents/{id}/restart:
+    parameters:
+      - $ref: "#/components/parameters/id"
+    post:
+      tags: [Agents]
+      operationId: restartAgent
+      summary: Rearrancar el agente (templates con máquina)
+      description: Reinicia el runtime con su env y rehace el handshake ACP; aplica skills, MCP y modo del prompt. Se pierde la conversación en curso. `409 agente_sin_maquina` en templates sin máquina.
+      responses:
+        "200":
+          description: Reiniciado.
+          content:
+            application/json:
+              schema: { type: object, properties: { reiniciado: { type: boolean }, sandboxId: { type: string } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
   /api/v2/agents/{id}/message:
     parameters:
       - $ref: "#/components/parameters/id"

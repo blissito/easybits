@@ -433,7 +433,7 @@ export function normalizeAcpMcpServers(raw: unknown): AcpMcpServer[] {
  * del handshake. Se guarda la forma con la referencia, no el valor: así rotar el secreto
  * basta para que el próximo bring-up lo tome, y la fila no guarda la credencial dos veces.
  */
-async function expandAcpMcpSecrets(
+export async function expandAcpMcpSecrets(
   servers: AcpMcpServer[],
   ownerId: string
 ): Promise<AcpMcpServer[]> {
@@ -479,7 +479,7 @@ async function expandAcpMcpSecrets(
 //   - acpSessionId: returned from session/new, identifies the agent session.
 // Called eager during startAgent so the first user message has zero
 // handshake overhead.
-async function runAcpHandshake(
+export async function runAcpHandshake(
   sandboxId: string,
   ownerId: string,
   port: number,
@@ -3052,7 +3052,7 @@ export async function listSvcInstances(ctx: AuthContext): Promise<SvcInstance[]>
 // pay a network round-trip per request.
 let templatesCache: { tpls: TemplateInfo[]; expiresAt: number } | null = null;
 
-async function resolveTemplate(
+export async function resolveTemplate(
   ctx: AuthContext,
   name: SandboxTemplate
 ): Promise<TemplateInfo> {
@@ -4386,15 +4386,16 @@ export async function destroyAgent(ctx: AuthContext, agentId: string): Promise<{
 // `ghosty-prompt-hooks` (horneado en la caja) rearma CLAUDE.md/.goosehints sin reboot.
 // ⚠️ Una sesión ACP viva congela su system prompt: el cambio entra en la SIGUIENTE sesión
 // (sessionId nuevo o /revive). Con `claude-acp` el cwd se relee y entra al siguiente turno.
-const PROMPT_TEMPLATES = new Set(["ghosty-lite", "goose"]);
+export const MACHINE_TEMPLATES = new Set(["ghosty-lite", "goose"]);
 const AGENT_PROMPT_FILE = "/data/agent/PROMPT.md";
 const AGENT_PROMPT_MODE_FILE = "/data/agent/PROMPT.mode";
 
-async function ownedAgentRow(ctx: AuthContext, agentId: string) {
+export async function ownedAgentRow(ctx: AuthContext, agentId: string) {
   const row = await db.agent.findUnique({ where: { id: agentId } });
   if (!row || !(await agentAccess(ctx, row.ownerId))) throw new Error("agent not found");
-  if (!PROMPT_TEMPLATES.has(row.template)) {
-    throw new Error(`template "${row.template}" no expone el system prompt por archivo`);
+  if (!MACHINE_TEMPLATES.has(row.template)) {
+    // 409 en las rutas: el template no tiene máquina propia (archivos, skills, MCP, restart).
+    throw new Error(`agente_sin_maquina: template "${row.template}" no expone el system prompt por archivo`);
   }
   return row;
 }
