@@ -4047,6 +4047,10 @@ export async function spawnAutonomous(
     brand: AutonomousBrand;
     name?: string;
     systemPrompt?: string;
+    /** ghosty-lite: `replace` = el agente es SÓLO systemPrompt (sin la persona Ghosty de
+        casa ni su idioma); `append` lo anexa a la de casa. Default `replace` cuando viene
+        systemPrompt: quien manda un prompt quiere ESE prompt. */
+    systemPromptMode?: "append" | "replace";
     /** "provider/model", e.g. "anthropic/claude-haiku-4-5". Defaults to MANAGED_MODEL on anthropic. */
     model?: string;
     /** User-provided plaintext API key for the selected provider (BYOK).
@@ -4143,6 +4147,13 @@ export async function spawnAutonomous(
     };
     env.GHOSTY_PROVIDER = GHOSTY_PROVIDERS[provider] ?? provider;
     env.GHOSTY_MODEL = model;
+    // El launcher siembra /data/agent/PROMPT.md desde SYSTEM_PROMPT una vez; después
+    // manda el archivo (updateAgentPrompt). Sin prompt propio no se manda nada: la caja
+    // arranca con la persona de casa.
+    if (params.systemPrompt?.trim()) {
+      env.SYSTEM_PROMPT = params.systemPrompt;
+      env.SYSTEM_PROMPT_MODE = params.systemPromptMode ?? "replace";
+    }
   }
 
   if (cfg.template === "openclaw") {
@@ -4163,7 +4174,7 @@ export async function spawnAutonomous(
 // Back-compat: spawnGhosty stays as a thin wrapper.
 export async function spawnGhosty(
   ctx: AuthContext,
-  params: { name?: string; systemPrompt?: string; timeoutSeconds?: number } = {}
+  params: { name?: string; systemPrompt?: string; systemPromptMode?: "append" | "replace"; timeoutSeconds?: number } = {}
 ): Promise<CreatedAgent> {
   return spawnAutonomous(ctx, { brand: "ghosty", ...params });
 }
@@ -4366,6 +4377,69 @@ export async function destroyAgent(ctx: AuthContext, agentId: string): Promise<{
   }
   await db.agent.delete({ where: { id: agentId } });
   return { ok: true };
+}
+
+// ── Identidad (system prompt) de un agente ghosty-lite, después de creado ────────────
+//
+// Convención del template: /data/agent/PROMPT.md es la identidad y /data/agent/PROMPT.mode
+// dice si REEMPLAZA a la persona de casa (`replace`) o se le anexa (`append`). Tras escribir,
+// `ghosty-prompt-hooks` (horneado en la caja) rearma CLAUDE.md/.goosehints sin reboot.
+// ⚠️ Una sesión ACP viva congela su system prompt: el cambio entra en la SIGUIENTE sesión
+// (sessionId nuevo o /revive). Con `claude-acp` el cwd se relee y entra al siguiente turno.
+const PROMPT_TEMPLATES = new Set(["ghosty-lite", "goose"]);
+const AGENT_PROMPT_FILE = "/data/agent/PROMPT.md";
+const AGENT_PROMPT_MODE_FILE = "/data/agent/PROMPT.mode";
+
+async function ownedAgentRow(ctx: AuthContext, agentId: string) {
+  const row = await db.agent.findUnique({ where: { id: agentId } });
+  if (!row || !(await agentAccess(ctx, row.ownerId))) throw new Error("agent not found");
+  if (!PROMPT_TEMPLATES.has(row.template)) {
+    throw new Error(`template "${row.template}" no expone el system prompt por archivo`);
+  }
+  return row;
+}
+
+export async function getAgentPrompt(
+  ctx: AuthContext,
+  agentId: string
+): Promise<{ systemPrompt: string; systemPromptMode: "append" | "replace" }> {
+  requireScope(ctx, "READ");
+  const row = await ownedAgentRow(ctx, agentId);
+  const read = (path: string) =>
+    readFile(ctx, row.sandboxId, { path }).then((r) => r.content).catch(() => "");
+  const [prompt, mode] = await Promise.all([read(AGENT_PROMPT_FILE), read(AGENT_PROMPT_MODE_FILE)]);
+  return { systemPrompt: prompt, systemPromptMode: mode.trim() === "replace" ? "replace" : "append" };
+}
+
+export async function updateAgentPrompt(
+  ctx: AuthContext,
+  agentId: string,
+  params: { systemPrompt?: string; systemPromptMode?: "append" | "replace" }
+): Promise<{ ok: true; systemPromptMode: "append" | "replace"; hooks: string }> {
+  requireScope(ctx, "WRITE");
+  const row = await ownedAgentRow(ctx, agentId);
+  if (typeof params.systemPrompt === "string") {
+    await writeFile(ctx, row.sandboxId, { path: AGENT_PROMPT_FILE, content: params.systemPrompt });
+  }
+  if (params.systemPromptMode) {
+    await writeFile(ctx, row.sandboxId, { path: AGENT_PROMPT_MODE_FILE, content: params.systemPromptMode + "\n" });
+  }
+  // Que sobreviva a la caja: una suspensión conserva /data, pero un revive (caja perdida)
+  // la recrea desde `spawnEnv` y el launcher siembra PROMPT.md desde SYSTEM_PROMPT. Sin
+  // esto, el prompt cambiado por PATCH volvía al de creación en la primera caja recreada.
+  if (row.spawnEnv) {
+    const env = JSON.parse(decryptSecret(row.spawnEnv)) as Record<string, string>;
+    if (typeof params.systemPrompt === "string") env.SYSTEM_PROMPT = params.systemPrompt;
+    if (params.systemPromptMode) env.SYSTEM_PROMPT_MODE = params.systemPromptMode;
+    await db.agent.update({ where: { id: row.id }, data: { spawnEnv: encryptSecret(JSON.stringify(env)) } });
+  }
+  // Rearma los ganchos en caliente. Cajas horneadas antes del script: se avisa, no se rompe.
+  const r = await execCommand(ctx, row.sandboxId, {
+    command: "command -v ghosty-prompt-hooks >/dev/null && ghosty-prompt-hooks || echo 'sin ghosty-prompt-hooks: entra al próximo reboot'",
+    timeoutSeconds: 30,
+  });
+  const mode = params.systemPromptMode ?? (await getAgentPrompt(ctx, agentId)).systemPromptMode;
+  return { ok: true, systemPromptMode: mode, hooks: (r.stdout ?? "").trim() };
 }
 
 // extendAgent: empuja expiresAt hacia adelante para keep-alive desde la UI.

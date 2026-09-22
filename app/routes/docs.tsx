@@ -2465,6 +2465,40 @@ export AGENT_TOKEN="agt_…"`}
               sin saldo el agente responde <code className="bg-gray-100 px-1 rounded">402 insufficient_quota</code> y parece mudo.
             </div>
 
+            <h3 id="ghosty-lite-prompt" className="text-lg font-bold mb-3 scroll-mt-24">Su system prompt (identidad)</h3>
+            <p className="text-gray-600 text-sm mb-4">
+              Por default el agente llega con la persona de Ghosty (habla en el idioma en que le escriben). Si quieres el tuyo,
+              mándalo al crear con <code className="bg-gray-100 px-1 rounded">env.SYSTEM_PROMPT</code>; con{" "}
+              <code className="bg-gray-100 px-1 rounded">SYSTEM_PROMPT_MODE</code> eliges si <strong>reemplaza</strong> a la de casa
+              (<code className="bg-gray-100 px-1 rounded">replace</code>) o se le <strong>anexa</strong> (<code className="bg-gray-100 px-1 rounded">append</code>, el default).
+              Después de creado se cambia con <code className="bg-gray-100 px-1 rounded">PATCH</code> y se lee con{" "}
+              <code className="bg-gray-100 px-1 rounded">GET …/prompt</code>; entra sin reboot.
+            </p>
+            <CodeExample
+              title="bash"
+              code={`# Al crear: identidad propia que REEMPLAZA a la de casa
+curl -X POST https://www.easybits.cloud/api/v2/agents \\
+  -H "Authorization: Bearer $EASYBITS_API_KEY" -H 'Content-Type: application/json' \\
+  -d '{ "template": "ghosty-lite", "name": "mi-agente",
+        "env": { "SYSTEM_PROMPT": "You are Max, a support agent. Always answer in English.",
+                 "SYSTEM_PROMPT_MODE": "replace" } }'
+
+# Después: cambiarlo en caliente
+curl -X PATCH https://www.easybits.cloud/api/v2/agents/$AGENT_ID \\
+  -H "Authorization: Bearer $EASYBITS_API_KEY" -H 'Content-Type: application/json' \\
+  -d '{ "systemPrompt": "You are Max…", "systemPromptMode": "replace" }'
+
+# Leer el vigente
+curl https://www.easybits.cloud/api/v2/agents/$AGENT_ID/prompt \\
+  -H "Authorization: Bearer $EASYBITS_API_KEY"`}
+            />
+            <p className="text-gray-600 text-sm mb-8">
+              Una conversación ya abierta conserva el prompt con el que arrancó: el nuevo aplica a la siguiente sesión.
+              <code className="bg-gray-100 px-1 rounded ml-1">POST /api/v2/agents/ghosty</code> y{" "}
+              <code className="bg-gray-100 px-1 rounded">/agents/autonomous</code> aceptan los mismos{" "}
+              <code className="bg-gray-100 px-1 rounded">systemPrompt</code> / <code className="bg-gray-100 px-1 rounded">systemPromptMode</code> en el body.
+            </p>
+
             <h3 id="ghosty-lite-mcp" className="text-lg font-bold mb-3 scroll-mt-24">Tus propias tools (MCP)</h3>
             <p className="text-gray-600 text-sm mb-4">
               El agente monta servidores <a href="https://modelcontextprotocol.io" className="underline" target="_blank" rel="noreferrer">MCP</a> propios al abrir su

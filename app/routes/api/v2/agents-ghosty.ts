@@ -21,6 +21,7 @@ export async function action({ request }: Route.ActionArgs) {
   const result = await spawnGhosty(ctx, {
     name: typeof body?.name === "string" ? body.name : undefined,
     systemPrompt: typeof body?.systemPrompt === "string" ? body.systemPrompt : undefined,
+    systemPromptMode: body?.systemPromptMode === "append" || body?.systemPromptMode === "replace" ? body.systemPromptMode : undefined,
     timeoutSeconds: typeof body?.timeoutSeconds === "number" ? body.timeoutSeconds : undefined,
   });
   return Response.json(result);

@@ -254,6 +254,7 @@ export default [
     route("calls/:id/destroy", "routes/api/v2/calls.$id.destroy.ts"),
     route("agents/:id", "routes/api/v2/agent.ts"),
     route("agents/:id/message", "routes/api/v2/agent-message.ts"),
+    route("agents/:id/prompt", "routes/api/v2/agent-prompt.ts"),
     // Un turno a texto, sin stream: el "Probar" del panel por token (verificación desde la API).
     route("agents/:id/try", "routes/api/v2/agent-try.ts"),
     route("agents/:id/lost", "routes/api/v2/agent-lost.ts"),

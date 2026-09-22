@@ -30,6 +30,7 @@ export async function action({ request }: Route.ActionArgs) {
     brand: brand as "ghosty" | "ghosty-lite" | "nanoclaw" | "openclaw" | "goose-managed",
     name: typeof body?.name === "string" ? body.name : undefined,
     systemPrompt: typeof body?.systemPrompt === "string" ? body.systemPrompt : undefined,
+    systemPromptMode: body?.systemPromptMode === "append" || body?.systemPromptMode === "replace" ? body.systemPromptMode : undefined,
     model: typeof body?.model === "string" ? body.model : undefined,
     providerKey: typeof body?.providerKey === "string" ? body.providerKey : undefined,
     providerKeyKind:
