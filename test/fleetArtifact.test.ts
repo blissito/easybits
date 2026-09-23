@@ -140,6 +140,7 @@ vi.mock("~/.server/core/sandboxOperations", () => ({
   openAgentChunkStream: vi.fn(),
   readFile: vi.fn(),
   listSandboxes: vi.fn(async () => agents.filter((a) => a.status === "running").map((a) => ({ status: "running" }))),
+  countsAsAgentBox: (s: any) => (s.status === "running" || s.status === "starting") && !s.metadata?.eb_tier,
 }));
 vi.mock("~/.server/storage", () => ({
   getPlatformDefaultClient: () => ({ getReadUrl: async () => null }),

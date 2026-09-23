@@ -810,6 +810,17 @@ export async function callHost<T>(
 //   - otherwise → 404 (not yours, not delegated → never reaches the host).
 // The host is owner-scoped (X-Easybits-Owner), so a delegate MUST send the
 // owner's id or the box is invisible — this is the single place that decides it.
+/**
+ * ¿Esta caja cuenta contra `concurrentSandboxes`? Sólo las activas que NO son
+ * máquinas de hosting. Una máquina vendida (`metadata.eb_tier`, sólo la escriben
+ * createPermanent/make_permanent) se cobra aparte, siempre está encendida y no
+ * es una caja de agente: contarla dejaba a quien desplegaba su app con una caja
+ * menos para sus agentes (un Mega con su micro quedaba en 1 de 2).
+ */
+export function countsAsAgentBox(s: Pick<SandboxRecord, "status" | "metadata">): boolean {
+  return (s.status === "running" || s.status === "starting") && !s.metadata?.eb_tier;
+}
+
 export async function effectiveOwnerId(ctx: AuthContext, sandboxId: string): Promise<string> {
   // Unified surface: a box is owned via db.sandbox (permanent machine) OR
   // db.agent (autonomous agent). Resolve the owner from whichever tracks it, so
@@ -939,9 +950,7 @@ export async function createSandbox(
   // fail-open: si listSandboxes falla o no devuelve array, NO bloqueamos el spawn.
   if (!persistent) {
     const list = await listSandboxes(ctx).catch(() => [] as SandboxRecord[]);
-    const active = (Array.isArray(list) ? list : []).filter(
-      (s) => s.status === "running" || s.status === "starting"
-    ).length;
+    const active = (Array.isArray(list) ? list : []).filter(countsAsAgentBox).length;
     // Budget = plan.concurrentSandboxes + add-ons reservados. MISMO denominador
     // que el fleetAgent (spawnVm) y el HUD ("X/N sandboxes") — sin esto, comprar add-ons
     // no subía este límite (quedaba en 3 aunque el HUD dijera 5).
@@ -1843,9 +1852,7 @@ export async function forkSandbox(
   // Same anti-runaway budget as createSandbox — a fork of `count` boots `count`
   // concurrent ephemeral boxes. fail-open if listing the fleet fails.
   const list = await listSandboxes(ctx).catch(() => [] as SandboxRecord[]);
-  const active = (Array.isArray(list) ? list : []).filter(
-    (s) => s.status === "running" || s.status === "starting"
-  ).length;
+  const active = (Array.isArray(list) ? list : []).filter(countsAsAgentBox).length;
   const { getReservedCapacity } = await import("./sandboxReservations");
   const reserved = await getReservedCapacity(ctx.user.id).catch(() => ({
     machines: 0,
@@ -1975,7 +1982,12 @@ export async function reassignSandboxOwnerHost(sandboxId: string, newOwnerId: st
 export async function countOwnerHostSandboxes(ownerId: string): Promise<number> {
   const list = await callHost<unknown>("GET", `/v1/sandbox?owner=${encodeURIComponent(ownerId)}`, undefined, ownerId).catch(() => []);
   const arr = Array.isArray(list) ? list : Array.isArray((list as { sandboxes?: unknown[] })?.sandboxes) ? (list as { sandboxes: unknown[] }).sandboxes : [];
-  return arr.filter((s) => (s as { status?: string })?.status !== "destroyed").length;
+  // Las máquinas de hosting (`eb_tier`) no ocupan cupo de cajas: ver countsAsAgentBox.
+  return arr.filter(
+    (s) =>
+      (s as { status?: string })?.status !== "destroyed" &&
+      !(s as { metadata?: Record<string, string> })?.metadata?.eb_tier
+  ).length;
 }
 
 export async function runCode(
@@ -4590,9 +4602,7 @@ export async function wakeAgentForMessage(agentId: string): Promise<void> {
       const plan = PLANS[getUserPlan(owner)];
       const ctx: AuthContext = { user: owner, scopes: ["WRITE"] };
       const list = await listSandboxes(ctx).catch(() => [] as SandboxRecord[]);
-      const active = (Array.isArray(list) ? list : []).filter(
-        (s) => s.status === "running" || s.status === "starting"
-      ).length;
+      const active = (Array.isArray(list) ? list : []).filter(countsAsAgentBox).length;
       const { getReservedCapacity } = await import("./sandboxReservations");
       const reserved = await getReservedCapacity(owner.id).catch(() => ({ machines: 0, agents: 0 }));
       const budget = plan.concurrentSandboxes + reserved.machines;

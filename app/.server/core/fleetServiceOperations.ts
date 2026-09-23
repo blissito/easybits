@@ -11,6 +11,7 @@ import {
   suspendSandbox,
   resumeSandbox,
   listSandboxes,
+  countsAsAgentBox,
 } from "./sandboxOperations";
 import type { SandboxTemplate } from "../sandbox/schemas";
 
@@ -341,7 +342,7 @@ async function assertServiceBoxBudget(ctx: AuthContext, kind: string): Promise<v
       db.serviceBox.count({ where: { ownerId: ctx.user.id } }),
     ]);
     const liveOwner = hostVms
-      ? hostVms.filter((v) => v.status === "running" || v.status === "starting").length
+      ? hostVms.filter(countsAsAgentBox).length
       : await db.agent.count({ where: { ownerId: ctx.user.id, status: { in: ["running", "building"] } } });
 
     const decision = admit({

@@ -24,6 +24,7 @@ import {
   readFile,
   writeFile,
   listSandboxes,
+  countsAsAgentBox,
   createTemplateSnapshot,
   getTemplateSnapshot,
   deleteTemplateSnapshot,
@@ -1475,7 +1476,7 @@ async function buildCapacitySnapshot(
   // "todo el owner" a "sólo este fleet", lo que SOBRE-ADMITÍA justo durante un
   // incidente del host. Ahora sigue siendo por owner y se marca como degradado.
   const liveOwner = hostVms
-    ? hostVms.filter((v) => v.status === "running" || v.status === "starting").length
+    ? hostVms.filter(countsAsAgentBox).length
     : await db.agent.count({
         where: { ownerId: ctx.user.id, status: { in: ["running", "building"] } },
       });
