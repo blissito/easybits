@@ -1,10 +1,10 @@
 /**
- * Oferta de fin de trial para estudiantes (sep 2026): Mega a $149 MXN/mes y una
+ * Oferta de fin de trial para estudiantes (sep 2026): Mega a $299 MXN/mes y una
  * `micro` gratis durante 3 meses (facturas de oct, nov y dic). Enero ya sale a
  * precio normal — el cupón es `repeating` y caduca solo.
  *
  * Dos cupones con id fijo (idempotente, se crean una sola vez):
- *  - STUDENT_MEGA_2026   $350 fuera del total  → Mega $499 → $149 (los trials
+ *  - STUDENT_MEGA_2026   $200 fuera del total  → Mega $499 → $299 (los trials
  *                        del taller se crearon a precio de lista, no a la promo).
  *  - STUDENT_MICRO_2026  $99 fuera, SOLO sobre productos de hosting → una micro
  *                        gratis. Si el alumno aún no tiene máquina, queda puesto
@@ -169,8 +169,8 @@ async function ensureCoupon(id: string, body: Record<string, unknown>) {
   }
 }
 await ensureCoupon(MEGA, {
-  name: "Estudiantes: Mega $149",
-  amount_off: 35000,
+  name: "Estudiantes: Mega $299",
+  amount_off: 20000,
   currency: "mxn",
   duration: "repeating",
   duration_in_months: 3,
