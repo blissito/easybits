@@ -1108,6 +1108,89 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
 
+  /api/v2/machines/{id}/push-deploy:
+    parameters:
+      - $ref: "#/components/parameters/id"
+    get:
+      tags: [Machines]
+      operationId: getPushDeploy
+      summary: Estado del push-deploy
+      responses:
+        "200":
+          description: Si está encendido, la URL del webhook y el repo de la máquina.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  enabled: { type: boolean }
+                  url: { type: string, format: uri }
+                  source: { type: object, nullable: true, additionalProperties: true }
+                  running: { type: boolean }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [Machines]
+      operationId: enablePushDeploy
+      summary: Desplegar en cada git push
+      description: |
+        Enciende el push-deploy (o rota su secreto) y devuelve la URL + secreto que se pegan
+        en GitHub → Settings → Webhooks (application/json, evento push). La máquina debe
+        haberse desplegado desde un `repo`. Sólo la rama de la máquina despliega; si el build
+        falla, vuelve sola al release anterior y el dueño recibe un correo.
+      responses:
+        "200":
+          description: Encendido. El secreto sólo se muestra aquí.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  enabled: { type: boolean }
+                  repo: { type: string }
+                  branch: { type: string }
+                  webhook:
+                    type: object
+                    properties:
+                      url: { type: string, format: uri }
+                      secret: { type: string }
+                      contentType: { type: string }
+                      events: { type: array, items: { type: string } }
+                  steps: { type: array, items: { type: string } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { description: "La máquina no salió de un repo (`MachineHasNoRepo`)." }
+    delete:
+      tags: [Machines]
+      operationId: disablePushDeploy
+      summary: Apagar el push-deploy
+      responses:
+        "200":
+          description: Apagado.
+          content:
+            application/json:
+              schema: { type: object, properties: { enabled: { type: boolean } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v2/machines/{id}/github-hook:
+    parameters:
+      - $ref: "#/components/parameters/id"
+    post:
+      tags: [Machines]
+      operationId: githubPushHook
+      summary: Receptor del webhook de GitHub
+      description: |
+        Lo llama GitHub, no tú. Sin API key: la autenticación es la firma `X-Hub-Signature-256`
+        con el secreto de `POST /machines/{id}/push-deploy`. `ping` → 200; push a otra rama → 200
+        ignorado; push a la rama → 202 y el deploy corre en segundo plano.
+      security: []
+      responses:
+        "200": { description: "ping o evento ignorado." }
+        "202": { description: "Deploy aceptado (o en cola detrás de uno en curso)." }
+        "403": { description: "Firma inválida." }
+        "404": { description: "Push-deploy apagado para esta máquina." }
+
   /api/v2/machines/{id}/secrets:
     parameters:
       - $ref: "#/components/parameters/id"
@@ -2588,9 +2671,9 @@ components:
     LaunchInput:
       type: object
       properties:
-        repo: { type: string, description: "URL git. Privado con `https://x-access-token:TOKEN@github.com/u/r.git` o `repoToken`." }
+        repo: { type: string, description: "URL git LIMPIO. Un token dentro del URL (`usuario:token@`) se rechaza con 422 `RepoUrlHasCredentials`: va en `repoToken`." }
         branch: { type: string }
-        repoToken: { type: string, description: "Acepta `$secret:NOMBRE`. No se guarda." }
+        repoToken: { type: string, description: "Token de un repo privado. Acepta `$secret:NOMBRE`; un literal se guarda en tu bóveda como `GIT_TOKEN_<id>`. La máquina recuerda sólo el NOMBRE (`runspec.source`) para que push-deploy vuelva a clonar." }
         repoUsername: { type: string }
         archiveUrl: { type: string, format: uri, description: "URL a un `.tar.gz`/`.zip` de la app." }
         sandboxId: { type: string, description: "DESTINO. Redespliega sobre una máquina existente." }

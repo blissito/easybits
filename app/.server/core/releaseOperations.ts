@@ -39,7 +39,7 @@ import {
   writeFile,
 } from "./sandboxOperations";
 import { buyMachine, releasePermanent } from "./machineOperations";
-import { createSecret, listSecrets } from "./secretOperations";
+import { createSecret, listSecrets, SECRET_REF_RE } from "./secretOperations";
 import { getPlatformDefaultClient } from "../storage";
 import { nanoid } from "nanoid";
 
@@ -133,6 +133,19 @@ export const runspecSchema = z.object({
    * al reconstruir la máquina desde un release.
    */
   secretNames: z.array(z.string().regex(/^[A-Z_][A-Z0-9_]*$/)).optional(),
+  /**
+   * De qué repo salió la app. Sin esto nadie podía redesplegar "lo último de
+   * main" (push-deploy): el repo sólo quedaba en el mensaje del release.
+   * `tokenRef` es el NOMBRE del secreto del vault con el token de git, nunca
+   * el valor — misma regla que `secretNames`.
+   */
+  source: z
+    .object({
+      repo: z.string().min(1),
+      branch: z.string().optional(),
+      tokenRef: z.string().regex(/^[A-Z_][A-Z0-9_]*$/).optional(),
+    })
+    .optional(),
 });
 
 export type Runspec = z.infer<typeof runspecSchema>;
@@ -1105,6 +1118,25 @@ export interface LaunchResult {
 }
 
 /**
+ * Deja el token de git en el vault del dueño y devuelve su NOMBRE, para que un
+ * redespliegue posterior (push-deploy) pueda volver a clonar sin que nadie
+ * tenga que pasarlo otra vez. Un `$secret:NOMBRE` ya vive en el vault: sólo se
+ * recuerda el nombre. Sin token (repo público) no hay nada que recordar.
+ */
+async function rememberRepoToken(
+  ownerId: string,
+  sandboxId: string,
+  token: string | undefined
+): Promise<string | undefined> {
+  if (!token) return undefined;
+  const ref = token.match(SECRET_REF_RE);
+  if (ref) return ref[1];
+  const name = `GIT_TOKEN_${sandboxId.replace(/[^a-zA-Z0-9]/g, "").slice(-12).toUpperCase()}`;
+  await createSecret(ownerId, { name, value: token });
+  return name;
+}
+
+/**
  * Put an app in production in ONE call: box → code → runspec → build → start →
  * public URL → release → (optional) custom domain.
  *
@@ -1194,6 +1226,12 @@ export async function launchApp(
   // Only a box WE created gets torn down on failure — never the caller's.
   let sandboxId = params.sandboxId!;
   let createdHere = false;
+  // Una caja existente que recibe código nuevo (repo/archivo) pierde el viejo:
+  // el appDir se vacía antes de clonar. Si el build nuevo falla, la app
+  // quedaría sin código y el sitio se caería en el siguiente reinicio. Con
+  // esto se vuelve al release que estaba sirviendo.
+  let previousReleaseId: string | null = null;
+  let codeReplaced = false;
   if (needsNewBox) {
     const bought = await buyMachine(ctx, {
       tier: params.tier ?? "micro",
@@ -1243,7 +1281,7 @@ export async function launchApp(
     if (params.sandboxId) {
       const row = await db.sandbox.findUnique({
         where: { sandboxId },
-        select: { persistent: true, status: true },
+        select: { persistent: true, status: true, currentReleaseId: true },
       });
       if (!row) {
         const e: any = new Error(
@@ -1259,9 +1297,17 @@ export async function launchApp(
         e.status = 409;
         throw e;
       }
+      previousReleaseId = row.currentReleaseId ?? null;
     }
 
+    if (params.repo || params.archiveUrl) codeReplaced = true;
+
     if (params.repo) {
+      spec.source = {
+        repo: params.repo,
+        branch: params.branch,
+        tokenRef: await rememberRepoToken(owner, sandboxId, params.repoToken),
+      };
       // El clone va por gitOperations: es el único sitio que sabe entregar una
       // credencial sin que acabe en `ps` ni en `.git/config`. Antes esto era un
       // `git clone` inline y un repo privado sencillamente no funcionaba.
@@ -1385,7 +1431,19 @@ export async function launchApp(
       buildOutput: started.buildOutput,
       domain,
     };
-  } catch (err) {
+  } catch (err: any) {
+    if (!createdHere && codeReplaced && previousReleaseId) {
+      // El release anterior lleva su build (prebuilt): volver es bajar +
+      // extraer + arrancar, sin depender del build que acaba de fallar.
+      const back = await applyRelease(ctx, sandboxId, previousReleaseId).catch((e) => {
+        console.error(`launchApp: no se pudo volver a ${previousReleaseId} en ${sandboxId}:`, e?.message ?? e);
+        return null;
+      });
+      if (back && back.exitCode === 0 && err && typeof err === "object") {
+        err.rolledBackTo = { releaseId: previousReleaseId, version: back.version };
+        err.message = `${err.message} — the machine is back on release v${back.version}, the site keeps serving the previous version.`;
+      }
+    }
     // Deshacer una caja que ESTA llamada acaba de crear es limpieza interna,
     // no una acción del usuario: no puede depender de que su key tenga scope
     // DELETE. Con una key READ+WRITE, releasePermanent lanzaba, el catch se lo

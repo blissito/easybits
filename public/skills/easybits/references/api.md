@@ -220,6 +220,8 @@ Known traps: `npm start` with `node --env-file=.env` dies (no `.env` in the box)
 via `env` and secrets; Express 5 rejects `app.all("*")` → `app.use(handler)`.
 
 ### Same machine, new code: POST /machines/launch `{ sandboxId, repo }` → new release, ~18 s.
+### Private repo: clean `repo` URL + `repoToken` (a token inside the URL is rejected, 422 `RepoUrlHasCredentials`).
+### POST /machines/{id}/push-deploy → `{ webhook: { url, secret } }` to paste in GitHub → Settings → Webhooks; every push to the machine's branch redeploys, a failed build rolls back to the previous release. DELETE turns it off.
 ### POST /machines/{id}/secrets `{ NAME: "value" }` · POST /machines/{id}/restart · GET /machines/{id}/logs
 ### GET /machines/{id}/releases · POST /machines/{id}/rollback `{ releaseId }` · GET /machines/{id}/backups
 ### DELETE /machines/{id} — releases the machine: stops billing (prorated) and destroys it. Destructive.

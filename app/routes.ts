@@ -346,6 +346,9 @@ export default [
     // Secretos de la app: valores al vault, sólo sus nombres al runspec.
     route("machines/:id/secrets", "routes/api/v2/machine-secrets.ts"),
     route("machines/:id/logs", "routes/api/v2/machine-logs.ts"),
+    // Push-deploy: webhook de GitHub → redeploy desde el repo de la máquina.
+    route("machines/:id/push-deploy", "routes/api/v2/machine-push-deploy.ts"),
+    route("machines/:id/github-hook", "routes/api/v2/machine-github-hook.ts"),
     // Colección aparte a propósito: recrear desde un release debe funcionar
     // cuando la máquina original YA NO EXISTE.
     route("machine-releases/:id/redeploy", "routes/api/v2/machine-release-redeploy.ts"),

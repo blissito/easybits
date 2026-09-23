@@ -572,6 +572,8 @@ export const HOSTING_ALLOWLIST = new Set<string>([
   "deploy_machine",
   "list_machine_releases",
   "rollback_machine",
+  // git push → redeploy (webhook de GitHub).
+  "push_deploy",
   "restart_machine",
   "redeploy_machine",
   "delete_machine_release",

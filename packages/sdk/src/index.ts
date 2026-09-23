@@ -2323,6 +2323,19 @@ export class EasybitsClient {
       launch: (params: LaunchParams): Promise<LaunchResult> =>
         req("/machines/launch", { method: "POST", body: JSON.stringify(params) }),
 
+      /**
+       * Deploy on every `git push`. Returns the webhook URL + secret to paste in
+       * GitHub → Settings → Webhooks (content type application/json, push
+       * events). The machine must have been launched from a repo. A failed
+       * build rolls back to the previous release and emails the owner.
+       */
+      enablePushDeploy: (sandboxId: string): Promise<PushDeployEnabled> =>
+        req(`/machines/${sandboxId}/push-deploy`, { method: "POST" }),
+      disablePushDeploy: (sandboxId: string): Promise<{ enabled: false }> =>
+        req(`/machines/${sandboxId}/push-deploy`, { method: "DELETE" }),
+      pushDeployStatus: (sandboxId: string): Promise<PushDeployStatus> =>
+        req(`/machines/${sandboxId}/push-deploy`),
+
       // ── Releases: the app code, versioned and recoverable ──
       //
       // A machine is disposable only if you can rebuild it. Fly/Vercel get that
@@ -3466,9 +3479,17 @@ export interface Runspec {
 
 /** Input for `eb.machines.launch()`. Exactly one source: repo | archiveUrl | sandboxId. */
 export interface LaunchParams {
-  /** Git URL to clone — the reproducible path. */
+  /** Git URL to clone — the reproducible path. Keep it clean: "https://user:token@…" is rejected. */
   repo?: string;
   branch?: string;
+  /**
+   * Token for a PRIVATE repo. Accepts "$secret:NAME" from your vault; a literal
+   * token is stored there for you. Only its NAME is remembered, so push-deploy
+   * can re-clone without asking again.
+   */
+  repoToken?: string;
+  /** Username for repoToken. Default "x-access-token" (GitHub). */
+  repoUsername?: string;
   /** URL of a .tar.gz/.zip of the app, e.g. uploaded from the customer's computer. */
   archiveUrl?: string;
   /** Existing machine where the app was ALREADY written; launch what is in it. */
@@ -3479,7 +3500,7 @@ export interface LaunchParams {
   template?: string;
   /** Default "/app". */
   appDir?: string;
-  /** Default "npm ci && npm run build". */
+  /** Default "(npm ci || npm install) && npm run build". */
   buildCommand?: string;
   /** Default "npm start" when there is no systemd unit. */
   startCommand?: string;
@@ -3491,9 +3512,26 @@ export interface LaunchParams {
   /** The code you pass is ALREADY BUILT → skip the build, just start it. */
   prebuilt?: boolean;
   env?: Record<string, string>;
+  /** NAMES of vault secrets the app needs (DATABASE_URL, …). Never baked into the release. */
+  secretNames?: string[];
   /** Custom domain, e.g. "tienda.com". The result's domain.dns is the record to create. */
   domain?: string;
   message?: string;
+}
+
+export interface PushDeployEnabled {
+  enabled: true;
+  repo: string;
+  branch: string;
+  webhook: { url: string; secret: string; contentType: string; events: string[] };
+  steps: string[];
+}
+
+export interface PushDeployStatus {
+  enabled: boolean;
+  url: string;
+  source: { repo: string; branch?: string; tokenRef?: string } | null;
+  running: boolean;
 }
 
 export interface LaunchResult {

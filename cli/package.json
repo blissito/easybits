@@ -1,7 +1,7 @@
 {
   "name": "@easybits.cloud/cli",
-  "version": "0.4.0",
-  "description": "Official CLI for Easybits \u2014 manage files, storage, and MCP from your terminal",
+  "version": "0.4.1",
+  "description": "Official CLI for Easybits — manage files, storage, and MCP from your terminal",
   "type": "module",
   "bin": {
     "easybits": "./dist/index.js"

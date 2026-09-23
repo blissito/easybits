@@ -1,6 +1,6 @@
 {
   "name": "@easybits.cloud/sdk",
-  "version": "0.35.1",
+  "version": "0.35.2",
   "description": "Typed HTTP client for the EasyBits cloud for AI agents — sandboxes, web, files, SQL databases, documents and app hosting",
   "type": "module",
   "main": "./dist/index.cjs",

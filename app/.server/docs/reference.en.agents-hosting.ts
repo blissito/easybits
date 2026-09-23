@@ -455,7 +455,7 @@ Defaults: \`tier: "micro"\` (nano is 256MB — it does NOT survive a Node build)
 **What we learned with a real app (React Router v7 + Express 5)**:
 - \`npm start\` with \`node --env-file=.env server.js\` **dies in the box**: there is no \`.env\`. Start with \`startCommand: "node server.js"\` and pass config through \`env\` + secrets.
 - Express 5 rejects \`app.all("*", …)\` (path-to-regexp 8). Use \`app.use(handler)\`.
-- Public GitHub repos clone without a token. A private one: \`https://x-access-token:GH_TOKEN@github.com/usuario/repo.git\`.
+- Public GitHub repos clone without a token. A private one: a **clean** URL + the token separately in \`repoToken\` (accepts \`$secret:NAME\`). **Do not put the token in the URL** (\`https://x-access-token:TOKEN@…\`): it is rejected with 422 \`RepoUrlHasCredentials\`, because git would store it in \`.git/config\` inside the box.
 
 **Redeploy the same machine from the repo** (the direct flow, no workflow): secrets first, then \`launch_app({ sandboxId, repo, … })\`. It publishes a new release (v2, v3…) and restarts the app in ~18 s. \`sandboxId\` is the TARGET; \`repo\` the source.
 
@@ -472,7 +472,7 @@ A heavier app takes longer, mostly downloading the release. With \`prebuilt: tru
 
 ⚠️ **Build INSIDE the box, not on your machine.** A \`node_modules\` with native modules (sharp, better-sqlite3) compiled on macOS blows up on Linux. The first deploy pays for the \`npm ci\`; from then on you publish \`prebuilt\` and every deploy takes seconds.
 
-If the build fails, the machine \`launch_app\` created is released on its own: it does not leave you paying for a broken box. A box you passed via \`sandboxId\` is NEVER touched.
+If the build fails, the machine \`launch_app\` created is released on its own: it does not leave you paying for a broken box. A box you passed via \`sandboxId\` is NEVER released; if you sent it new code (\`repo\` or \`archiveUrl\`) and the build fails, **it goes back on its own to the release it was serving** — the site stays up and the error says so (\`rolledBackTo\`).
 
 **It also works without a paid plan**: if the account has no plan, \`launch_app\` (and \`create_machine\`) return \`{ checkoutUrl }\` instead of failing. You hand that link to the customer; when they pay, the machine is created on its own and shows up in \`list_machines()\`. Then you call \`launch_app\` again with its \`sandboxId\` to deploy on top.
 
@@ -512,31 +512,38 @@ The values are stored encrypted in your vault and the runspec keeps only the LIS
 They take effect on the **next deploy**, not on the fly. Rotating a secret means changing it here and deploying again. If the runspec declares one that is not in the vault, the deploy fails naming which one — better than watching the app die on connect.
 
 ### Deploy from GitHub on every push
-The recommended pattern for a customer's site: **build on the GitHub runner** and send the machine the finished result. The box compiles nothing, so a site that would need 4 GB to bundle fits in \`micro\`.
+One GitHub webhook and you are done: every push to the machine's branch redeploys it. No workflow, no Actions.
 
-Once, to create the machine:
+**1. Deploy once from the repo.** A clean URL and, if it is private, the token separately (a *fine-grained* PAT with **Contents: Read** on that repo):
 
 \`\`\`bash
 curl -X POST https://www.easybits.cloud/api/v2/machines/launch \\
   -H "Authorization: Bearer $EASYBITS_API_KEY" -H "Content-Type: application/json" \\
-  -d '{"repo":"https://x-access-token:GH_TOKEN@github.com/usuario/repo.git",
-       "branch":"main","tier":"micro","template":"node","appDir":"/srv/app","port":3000}'
+  -d '{"repo":"https://github.com/usuario/repo.git","branch":"main",
+       "repoToken":"github_pat_…","tier":"micro","port":3000}'
 \`\`\`
 
-Save the \`sandboxId\` it returns. Then, in the customer's repo, two secrets (\`EASYBITS_API_KEY\`, \`EASYBITS_SANDBOX_ID\`) and a workflow that on every push to \`main\`:
+The token is stored in your vault for you (\`GIT_TOKEN_<id>\`); if it is already there, pass \`"$secret:NAME"\`. The machine remembers which repo and branch it came from (\`runspec.source\`; of the token, only the secret's NAME).
 
-1. \`npm ci && npm run build\` **on the runner** — if the build is broken it never reaches production and the site stays up.
-2. \`npm prune --omit=dev\` and package \`build\`, \`node_modules\`, \`package*.json\` and whatever the app reads on start.
-3. Upload it with \`POST /files\` (\`access: "public"\`) and keep \`file.url\`.
-4. \`POST /machines/launch\` with \`{ sandboxId, archiveUrl, prebuilt: true, appDir, port }\`.
+**2. Turn on push-deploy** and paste what it returns in GitHub → *Settings → Webhooks → Add webhook*:
 
-**\`npx @easybits.cloud/cli init\` writes that workflow for you.**
+\`\`\`bash
+curl -X POST https://www.easybits.cloud/api/v2/machines/$SANDBOX_ID/push-deploy \\
+  -H "Authorization: Bearer $EASYBITS_API_KEY"
+# → { "webhook": { "url": "…/github-hook", "secret": "…" }, "steps": [ … ] }
+\`\`\`
 
-Why \`sandboxId\` **and** \`archiveUrl\` together: \`sandboxId\` is the TARGET, not a source. You can send an already-built artifact to a machine that already exists — without that, the only place the build could happen would be inside the customer's box.
+*Payload URL* = \`webhook.url\`, *Content type* = \`application/json\`, *Secret* = \`webhook.secret\` (shown only this time; calling again rotates it), *Just the push event*. GitHub sends a \`ping\` that should come out green.
 
-The GitHub runner is Linux x64, same as the microVM, so native modules compile for the right target. **Building on a Mac does break**: a \`node_modules\` with sharp or better-sqlite3 compiled on macOS blows up on Linux.
+MCP: \`push_deploy({ sandboxId })\` · SDK: \`eb.machines.enablePushDeploy(id)\` · turn off: \`DELETE /machines/:id/push-deploy\` · status: \`GET\`.
 
-Every deploy publishes a release, so history and rollback keep working the same way.
+What happens on every push:
+- Only the machine's branch deploys; other branches are ignored.
+- It answers 202 right away and builds in the background, **inside the box** (Linux: native modules compile correctly). Each push leaves a release with the commit message, so history and rollback work as always.
+- **If the build fails, the machine goes back on its own to the version it was serving** and you get an email with the tail of the error. A broken push does not take the site down.
+- Two pushes in a row run two deploys, no more: the ones in between collapse into the latest.
+
+**If your build does not fit in the box** (bundlers that want 4 GB), build on the GitHub runner and send the result: \`npx @easybits.cloud/cli init\` writes that workflow (build on the runner → \`POST /files\` → \`POST /machines/launch\` with \`{ sandboxId, archiveUrl, prebuilt: true }\`). The runner is Linux x64 like the microVM; **building on a Mac does break** native modules like sharp or better-sqlite3.
 
 ### Dashboard (UI)
 They are also managed from \`/dash/hosting\`: each site with its status and its address, and when you open one, four tabs — **Domains** (with the DNS record to create and whether it resolves yet), **Versions** (with one-click rollback), **Variables** and **Log** (the last lines of the log). From there you can also pause and cancel.

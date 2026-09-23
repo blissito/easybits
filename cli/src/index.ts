@@ -352,8 +352,13 @@ Falta, una sola vez:
      -d '{"repo":"https://github.com/TU/REPO.git","branch":"main",
           "tier":"micro","template":"node","appDir":"${appDir}","port":${port}}'
 
-   Un repo privado necesita un token en la URL:
-   https://x-access-token:TOKEN@github.com/TU/REPO.git
+   Repo privado: deja el URL limpio y agrega el token aparte,
+     "repoToken":"github_pat_…"
+   (un token dentro del URL se rechaza).
+
+   ¿Tu build cabe en la caja? Entonces no necesitas este workflow:
+   POST /machines/SANDBOX_ID/push-deploy te da un webhook de GitHub
+   y cada push despliega solo. Docs: https://www.easybits.cloud/docs
 
 2. Guarda en el repo (Settings → Secrets and variables → Actions):
      EASYBITS_API_KEY      tu key

@@ -596,7 +596,7 @@ export async function gitLog(
 export function assertNoInlineCredentials(repo: string): void {
   if (/^https?:\/\/[^/@\s]+@/.test(repo)) {
     const e: any = new Error(
-      "El URL del repo lleva credenciales embebidas. Git las guardaría en .git/config dentro de la caja. Usa el parámetro token (acepta $secret:NOMBRE) y un URL limpio."
+      "El URL del repo lleva credenciales embebidas (usuario:token@). Git las guardaría en .git/config dentro de la caja. Manda el URL limpio (https://github.com/usuario/repo.git) y el token aparte: `repoToken` en launch_app / POST /machines/launch, `token` en las tools git_*. Ambos aceptan $secret:NOMBRE."
     );
     e.code = "RepoUrlHasCredentials";
     e.status = 422;

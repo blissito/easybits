@@ -197,6 +197,11 @@ import {
   readMachineLogs,
 } from "../core/releaseOperations";
 import {
+  disablePushDeploy,
+  enablePushDeploy,
+  getPushDeployStatus,
+} from "../core/pushDeployOperations";
+import {
   listBackups,
   createBackup,
   restoreFromBackup,
@@ -335,6 +340,7 @@ const SANDBOX_TOOL_KIND: Record<string, "create" | "op"> = {
   get_machine_runspec: "op",
   list_machine_releases: "op",
   rollback_machine: "op",
+  push_deploy: "op",
   delete_machine_release: "op",
   list_backups: "op",
   restore_machine_from_backup: "op",
@@ -1819,7 +1825,7 @@ How to embed safely (the only reliable rule):
     {
       repo: z.string().optional().describe("Git URL to clone (the reproducible path). No embedded credentials — use repoToken."),
       branch: z.string().optional(),
-      repoToken: z.string().optional().describe("Token for a PRIVATE repo. Accepts '$secret:NAME' from the vault. Used only during the clone: it never lands in .git/config, in the runspec, or in the release tarball."),
+      repoToken: z.string().optional().describe("Token for a PRIVATE repo (the repo URL must stay clean — 'https://user:token@…' is rejected). Accepts '$secret:NAME' from the vault; a literal token is stored in your vault as GIT_TOKEN_<id>. Only the secret's NAME is remembered (runspec.source) so push_deploy can re-clone; the value never lands in .git/config, the runspec or the release tarball."),
       repoUsername: z.string().optional().describe("Username for repoToken (default 'x-access-token')"),
       archiveUrl: z.string().optional().describe("URL of a .tar.gz/.zip of the app — e.g. uploaded from the customer's computer"),
       sandboxId: z.string().optional().describe("Existing machine where the app was ALREADY written; launch what is in it"),
@@ -1834,6 +1840,7 @@ How to embed safely (the only reliable rule):
       dataPaths: z.array(z.string()).optional().describe("What the nightly backup copies. Without this the machine has NOTHING backed up."),
       prebuilt: z.boolean().optional().describe("The code you pass is ALREADY BUILT → skip the build step and just start it. Keeps deploys under a minute."),
       env: z.record(z.string()).optional().describe("Non-secret runtime config (PORT, URLs, ids). Exported before build and start; vault secrets win by name. Keys must be shell identifiers."),
+      secretNames: z.array(z.string().regex(/^[A-Z_][A-Z0-9_]*$/)).optional().describe("NAMES of vault secrets the app needs (DATABASE_URL, …). Materialized inside the machine before build and start; never baked into the release."),
       domain: z.string().optional().describe("Custom domain to attach, e.g. 'tienda.com' or 'www.tienda.com'. The response's domain.dns is the exact record the customer must create."),
       message: z.string().max(200).optional(),
     },
@@ -1990,6 +1997,22 @@ How to embed safely (the only reliable rule):
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       return ok(await applyRelease(ctx, params.sandboxId, params.releaseId));
+    })
+  );
+
+  server.tool(
+    "push_deploy",
+    "Deploy on every `git push`: a GitHub webhook redeploys the machine from its repo (the one launch_app cloned, remembered in runspec.source). action 'enable' returns { webhook: { url, secret } } plus the exact steps to paste it in GitHub → Settings → Webhooks (the secret is shown only then; enable again to rotate it). 'disable' turns it off; 'status' tells if it is on. Only pushes to the machine's branch deploy. If a build fails, the machine goes back to the release it was serving (the site stays up) and the owner gets an email.",
+    {
+      sandboxId: z.string().describe("Sandbox ID of the machine"),
+      action: z.enum(["enable", "disable", "status"]).default("enable"),
+    },
+    { destructiveHint: false, idempotentHint: false, openWorldHint: false },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      if (params.action === "disable") return ok(await disablePushDeploy(ctx, params.sandboxId));
+      if (params.action === "status") return ok(await getPushDeployStatus(ctx, params.sandboxId));
+      return ok(await enablePushDeploy(ctx, params.sandboxId));
     })
   );
 

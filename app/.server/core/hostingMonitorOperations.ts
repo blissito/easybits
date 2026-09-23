@@ -51,7 +51,7 @@ export async function probeDomain(domain: string, timeoutMs = 15_000) {
 }
 
 /** Contexto del DUEÑO de la caja: `restartMachine` exige serlo. */
-async function ownerContext(ownerId: string): Promise<AuthContext | null> {
+export async function ownerContext(ownerId: string): Promise<AuthContext | null> {
   const user = await db.user.findUnique({ where: { id: ownerId } });
   if (!user) return null;
   return { user, scopes: ["READ", "WRITE", "DELETE", "ADMIN"] };
