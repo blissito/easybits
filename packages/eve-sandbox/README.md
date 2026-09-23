@@ -101,7 +101,7 @@ Not covered: `ctx.files` (Dockerfile builds — EasyBits boxes start from a temp
 
 <!-- generated:packages -->
 - `@easybits.cloud/mcp@0.3.7`
-- `@easybits.cloud/sdk@0.35.1`
+- `@easybits.cloud/sdk@0.35.2`
 - `@easybits.cloud/eve-sandbox@0.1.2`
 - `@easybits.cloud/eve-world@0.1.1`
 <!-- /generated -->
