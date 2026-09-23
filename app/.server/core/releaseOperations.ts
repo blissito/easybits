@@ -1202,6 +1202,10 @@ export async function launchApp(
     e.code = "LaunchSourceMissing";
     throw e;
   }
+  // Antes de comprar o esperar una caja: un URL con el token adentro se iba a
+  // rechazar de todos modos, y el cliente pagaba provisionar + liberar.
+  if (params.repo) assertNoInlineCredentials(params.repo);
+
   // Sólo se compra caja si no dieron una.
   const needsNewBox = !params.sandboxId;
 
