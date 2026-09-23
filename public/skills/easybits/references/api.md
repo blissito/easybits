@@ -26,7 +26,7 @@ Body: `{ template, timeoutSeconds?, suspendOnIdle?, hardTtlSeconds?, persistent?
 | `bun` | base | Bun runtime. |
 | `dev-box` | base | Clean work box (git, curl, build-essential, Node 22); the recommended one for SSH. |
 | `code-interpreter` | base | Python + persistent Jupyter kernel (sandbox_run_cell): variables and charts survive between cells. |
-| `eve-nitro` | base | Self-hosted eve (Vercel) server: Node 24, pnpm, eve CLI; persistent /data, port 3000. |
+| `eve-nitro` | base | Self-hosted eve (Vercel) server: Node 24, pnpm, eve CLI 0.65; persistent /data, port 3000. |
 | `node-agent` | agent | Node + Claude Agent SDK pre-baked (agent_run). |
 | `claude-code` | agent | Claude Agent SDK loop; per-token billing. |
 | `goose` | agent | goose (AAIF), coding agent with native ACP. |
@@ -73,7 +73,7 @@ Body: `{ command, cwd?, timeoutSeconds?, env? }` → `{ stdout, stderr, exitCode
 60 s default, 600 s max. Do not put `nohup … &` here: the shell dies with the response. The cwd
 is `/` unless you pass `cwd` (persistent volumes like `/data` are not the default). On
 `eve-nitro`: `pnpm add … --allow-build=cbor-extract` (pnpm 12 blocks build scripts) and
-`eve build` needs `env: { "EASYBITS_API_KEY": … }`.
+`eve build` prepares the session template, so it needs `env: { "EASYBITS_API_KEY": … }`.
 
 ```bash
 curl -s -X POST "$B/sandboxes/$SB/exec" "${H[@]}" -d '{"command":"node -v && ls /data/work"}'

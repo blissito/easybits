@@ -6,7 +6,8 @@ hooks, streams and delivery queue in a database instead of on the box's disk.
 
 It is a port of `@workflow/world-postgres@5.0.0-beta.44` (Drizzle) to `@libsql/client` +
 Drizzle SQLite, with graphile-worker replaced by a polling queue table with per-message
-leases. Targets `@workflow/world@5.0.0-beta.35` (the line eve 0.58.1 pins).
+leases. Targets `@workflow/world@5.0.0-beta.37` (the line eve 0.65 vendors). For eve ≤ 0.63 (world
+beta.35) pin `@easybits.cloud/eve-world@0.1.1`.
 
 ## Install
 
@@ -14,7 +15,8 @@ leases. Targets `@workflow/world@5.0.0-beta.35` (the line eve 0.58.1 pins).
 npm i @easybits.cloud/eve-world
 ```
 
-`@workflow/world@5.0.0-beta.35` is a peer dependency; eve already brings it.
+It depends on `@workflow/world@5.0.0-beta.37` (eve 0.65 vendors its own copy, so it no longer
+installs one for you).
 
 ## Use with eve
 

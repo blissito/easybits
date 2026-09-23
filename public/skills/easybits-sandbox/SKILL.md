@@ -50,7 +50,7 @@ the platform, not by you):
 | `bun` | base | Bun runtime. |
 | `dev-box` | base | Clean work box (git, curl, build-essential, Node 22); the recommended one for SSH. |
 | `code-interpreter` | base | Python + persistent Jupyter kernel (sandbox_run_cell): variables and charts survive between cells. |
-| `eve-nitro` | base | Self-hosted eve (Vercel) server: Node 24, pnpm, eve CLI; persistent /data, port 3000. |
+| `eve-nitro` | base | Self-hosted eve (Vercel) server: Node 24, pnpm, eve CLI 0.65; persistent /data, port 3000. |
 | `node-agent` | agent | Node + Claude Agent SDK pre-baked (agent_run). |
 | `claude-code` | agent | Claude Agent SDK loop; per-token billing. |
 | `goose` | agent | goose (AAIF), coding agent with native ACP. |
@@ -98,8 +98,8 @@ the platform, not by you):
   are not the cwd: pass `cwd` or `cd` explicitly.
 - **Do not retry `404`/`409`.** `404` = wrong id or not yours; `409` = state conflict (e.g.
   suspended while a turn runs, or `SandboxNotReady` above). Read `GET $B/sandboxes/$SB` and decide.
-- **eve-nitro:** pnpm 12 blocks build scripts → `pnpm add … --allow-build=cbor-extract` (or
-  `npm i`); `eve build` validates the sandbox backend, so pass `env: { "EASYBITS_API_KEY": … }`
+- **eve-nitro** (eve CLI 0.65): pnpm 12 blocks build scripts → `pnpm add … --allow-build=cbor-extract`;
+  `eve build` prepares the session template on EasyBits, so pass `env: { "EASYBITS_API_KEY": … }`
   to that `exec`. Full recipe: skill `easybits-eve`.
 - Rate limits: 10 creates/min, 120 ops/min. Max TTL by plan: Byte 1 h, Mega 4 h, Tera 24 h.
 - Never print the API key.

@@ -1,8 +1,9 @@
 /**
- * Smoke del provider (contrato PR #3271) contra la nube REAL. Llama la
+ * Smoke del provider (eve ≥ 0.64) contra la nube REAL. Llama la
  * implementación cruda (`createEasybitsProvider`) con un contexto falso —
  * `environment.open()` exige el runtime de eve — y ejercita:
- *   prepare → prepare#2 (reusa) → start → run/env/seeds → stop → resume → delete.
+ *   prepare → prepare#2 (reusa) → start → run/env/seeds → stop → resume → delete
+ *   → resume de la caja borrada FALLA (contrato de eve: reconecta, no recrea).
  *
  *   EASYBITS_API_KEY=… npx tsx scripts/smoke-provider.ts
  */
@@ -84,6 +85,9 @@ await eb.sandboxes.templateSnapshots
   .delete(artifact.derivedId)
   .then(() => console.log("  plantilla borrada", artifact.derivedId))
   .catch((e) => console.log(`  ⚠ plantilla ${artifact.derivedId} NO borrada (${e.status ?? e.message}): bórrala con una key DELETE`));
+const resumedDeleted = await provider.resume(sessionCtx, artifact, state).then(() => true, () => false);
+if (resumedDeleted) throw new Error("resume de una caja borrada NO falló (debe fallar, no recrear)");
+console.log("  resume de la caja borrada falla ✓");
 const leftover = (await eb.sandboxes.list()).filter((b) => b.name === state.sessionName && b.status !== "lost");
 if (leftover.length) throw new Error(`caja no borrada: ${leftover.map((b) => b.sandboxId)}`);
 console.log("OK");

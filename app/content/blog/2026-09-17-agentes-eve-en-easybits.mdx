@@ -1,5 +1,5 @@
 ---
-title: "Corre tus agentes eve en microVMs: el backend nativo para Vercel eve"
+title: "Corre tus agentes eve en microVMs: el provider nativo para Vercel eve"
 description: "eve es el framework de agentes de Vercel. Dos rutas con @easybits.cloud/eve-sandbox: la gratis, donde tu servidor eve se queda donde está (Vercel o tu laptop) y sólo las sesiones corren en microVMs Firecracker de EasyBits; y la hospedada (Mega+), con el servidor eve y su estado durable dentro de EasyBits. Tutorial de principio a fin."
 date: "2026-09-17"
 author: "Equipo Easybits"
@@ -10,11 +10,13 @@ featuredImage: "/blog/assets/blog-eve-easybits-cover.png"
 published: true
 ---
 
-# Corre tus agentes eve en microVMs: el backend nativo para Vercel eve
+# Corre tus agentes eve en microVMs: el provider nativo para Vercel eve
 
-[eve](https://eve.dev) es el framework open-source de agentes de Vercel: un agente es un directorio (instrucciones, tools, canales, schedules) y cada sesión es un run durable del Workflow SDK. Cuando el agente necesita ejecutar código, eve le pide una caja a un **SandboxBackend**. Trae varios (Docker, just-bash, microsandbox, Vercel Sandbox) y deja [la interfaz pública](https://eve.dev/docs/sandbox) para que alguien más escriba el suyo.
+> **Actualizado el 23 de septiembre de 2026 para eve 0.64+.** eve 0.64 cambió la forma de declarar sandboxes (de `defineSandbox({ backend, bootstrap })` a providers con `environment.open()`). Todo lo de abajo está probado con eve 0.65 y `@easybits.cloud/eve-sandbox` 0.2. Si sigues en eve 0.63 o anterior, fija `@easybits.cloud/eve-sandbox@0.1`.
 
-`@easybits.cloud/eve-sandbox` es ese backend para EasyBits: cubre el contrato completo y cada sesión de tu agente corre en su propia microVM Firecracker, en tu cuenta, cobrada con tu plan en pesos. Cambias una línea y el agente no se entera.
+[eve](https://eve.dev) es el framework open-source de agentes de Vercel: un agente es un directorio (instrucciones, tools, canales, schedules) y cada sesión es un run durable del Workflow SDK. Cuando el agente necesita ejecutar código, eve le pide una caja a un **provider de sandbox**. Trae varios (Vercel Sandbox, Docker, microsandbox, just-bash) y deja [la interfaz pública](https://eve.dev/docs/sandbox) para que alguien más escriba el suyo.
+
+`@easybits.cloud/eve-sandbox` es ese provider para EasyBits: cubre el contrato completo y cada sesión de tu agente corre en su propia microVM Firecracker, en tu cuenta, cobrada con tu plan en pesos. Cambias un archivo y el agente no se entera.
 
 Hay dos formas de usarlo, y conviene elegir antes de empezar:
 
@@ -23,87 +25,91 @@ Hay dos formas de usarlo, y conviene elegir antes de empezar:
 
 ## Ruta 1 — Gratis, sin mover tu servidor
 
-### 1. Crea el proyecto e instala el backend
+### 1. Crea el proyecto e instala el provider
 
-Necesitas Node ≥ 24 en tu máquina (lo exige eve). Si ya tienes un proyecto eve, salta al `pnpm add`:
+Necesitas Node ≥ 24 en tu máquina (lo exige eve). Si ya tienes un proyecto eve, salta al `npm i`:
 
 ```bash
-npx eve init app && cd app          # scaffold de eve (o tu proyecto existente)
-pnpm add @easybits.cloud/eve-sandbox --allow-build=cbor-extract   # o: npm i @easybits.cloud/eve-sandbox
-export EASYBITS_API_KEY=eb_...      # scope WRITE (y DELETE si eve debe borrar cajas y plantillas)
+npx eve init app && cd app                 # scaffold de eve (o tu proyecto existente)
+npm i @easybits.cloud/eve-sandbox          # con pnpm: pnpm add @easybits.cloud/eve-sandbox
+export EASYBITS_API_KEY=eb_...             # scope WRITE (y DELETE si eve debe borrar cajas y plantillas)
 ```
-
-pnpm 12 bloquea los scripts de build de dependencias y sin ese flag `pnpm add` falla con `ERR_PNPM_IGNORED_BUILDS: cbor-extract@2.2.2`; con npm no hace falta.
 
 ```ts
 // agent/sandbox.ts
 import { defineSandbox } from "eve/sandbox";
-import { easybits } from "@easybits.cloud/eve-sandbox";
+import { EasybitsSandbox } from "@easybits.cloud/eve-sandbox";
 
-export default defineSandbox({
-  backend: easybits(),
-  async bootstrap({ use }) {
-    const s = await use();
-    await s.run({ command: "git clone https://github.com/tu-org/herramientas /workspace/tools && cd /workspace/tools && npm ci" });
+// Se prepara UNA vez en `eve build` y se captura como plantilla:
+// cada sesión nace con esto ya hecho.
+export const environment = EasybitsSandbox.environment({
+  prepare: async (sandbox) => {
+    await sandbox.run({ command: "npm i -g cowsay" });
   },
 });
+
+// Cada sesión de eve abre su propia microVM desde esa plantilla.
+export default defineSandbox(() => environment.open());
 ```
+
+El `export const environment` es obligatorio: `eve build` lo busca para preparar la plantilla antes de que exista cualquier sesión.
 
 ### 2. Elige el modelo
 
-El scaffold de `eve init` (eve 0.59.1) apunta al AI Gateway de Vercel: `model: "openai/gpt-5.6-luna-fast"` como string en `agent/agent.ts`, que sin `AI_GATEWAY_API_KEY` falla con *"AI Gateway received no credentials"*. Fuera de Vercel cambia a un proveedor directo del AI SDK:
-
-```bash
-pnpm add @ai-sdk/anthropic
-```
+El scaffold de `eve init` apunta al AI Gateway de Vercel (`model: "spacexai/grok-4.7"` como string), que fuera de Vercel pide `AI_GATEWAY_API_KEY`. Para llamar a un proveedor directo, eve ya trae helpers; no hay que instalar nada:
 
 ```ts
 // agent/agent.ts
 import { defineAgent } from "eve";
-import { anthropic } from "@ai-sdk/anthropic";
+import { anthropic } from "eve/models/anthropic";
 
 export default defineAgent({
-  model: anthropic("claude-sonnet-5"),   // lee ANTHROPIC_API_KEY
+  model: anthropic(),   // claude-sonnet-5; lee ANTHROPIC_API_KEY
 });
 ```
+
+Con OpenAI es igual: `openai()` de `eve/models/openai`, que lee `OPENAI_API_KEY`.
 
 ### 3. Compila y arranca el servidor donde ya está
 
 Con `EASYBITS_API_KEY` en el entorno, en tu laptop:
 
 ```bash
-eve build          # obligatorio antes de `eve start`; valida el backend, por eso necesita EASYBITS_API_KEY
-eve dev --no-ui    # sesión local sin auth
+npx eve build          # prepara la plantilla en EasyBits; log: `easybits: plantilla dt_… lista`
+npx eve dev --no-ui    # sesión local sin auth
 ```
 
-`eve start` en local responde `401` incluso desde localhost (el `localDev()` del scaffold se ignora en producción): para probar en tu máquina usa `eve dev --no-ui`, o declara `httpBasic` como en la ruta 2. `eve dev` y `eve start` calculan hashes de plantilla distintos, así que la primera vez verás el prewarm dos veces (una por comando); no es un error. En Vercel (o cualquier Node 24) `eve start` sigue igual: el servidor corre ahí y cada sesión que necesite código pide su caja a EasyBits. Validado con eve 0.58.1 y 0.59.1.
+`eve start` en local responde `401` incluso desde localhost (el `localDev()` del scaffold se ignora en producción): para probar en tu máquina usa `eve dev --no-ui`, o declara `httpBasic` como en la ruta 2. En Vercel (o cualquier Node 24) `eve start` sigue igual: el servidor corre ahí y cada sesión que necesite código pide su caja a EasyBits.
+
+Lo probamos con una cuenta gratuita recién creada: el agente corrió `cowsay` (instalado en el `prepare`) dentro de su microVM en el primer mensaje.
 
 ### 4. Qué pasa por debajo
 
 ![Un molde y las cajas que salen de él](/blog/assets/blog-eve-easybits-snapshot.png)
 
-`eve build` compila y valida el backend (~10 s), pero no crea cajas. Es en el primer `eve start` (o `eve dev`) cuando eve llama `prewarm()`: levantamos una caja temporal `node`, escribimos tus seed files, corremos tu `bootstrap()`, capturamos el resultado como **plantilla derivada** con clave `eve:<templateKey>` + hash de las opciones (`POST /sandboxes/:id/template-snapshot`, 12-22 MB; log: `easybits: plantilla dt_… lista`) y destruimos la caja temporal. El siguiente arranque encuentra la plantilla y no reconstruye nada (`reusada`): medido, 0.3 s contra 8.6 s la primera vez. Si no la usas en 30 días se borra sola.
+`eve build` llama al `prepare()` del provider: levantamos una caja temporal `node`, copiamos tu `agent/sandbox/workspace/` a `/workspace` y tus skills a `~/.agents/skills`, corremos tu `prepare(sandbox)`, capturamos el resultado como **plantilla derivada** con clave de contenido (`POST /sandboxes/:id/template-snapshot`, 12-24 MB) y destruimos la caja temporal. El siguiente build encuentra la plantilla y no reconstruye nada (`reusada`): medido, 0.3 s contra 9.7 s la primera vez. Si cambias el `prepare`, el workspace o las skills, sale una plantilla nueva; si no la usas en 30 días se borra sola.
 
-Cuando llega el primer mensaje, `create()` pide una caja desde esa plantilla (`POST /sandboxes` con `templateKey` + `templateHash`): nace con el bootstrap ya hecho, sin fork ni copia por hija, en ~4 s. Entre turnos la caja duerme con snapshot de la VM completa y despierta en ~1 s; eve la reabre por `sandboxId` con el disco tal cual lo dejó. `stop()` y `shutdown()` son suspend; `delete()` destruye. `run()` y `spawn()` corren en login shell con stdout y stderr en streams, y `kill()` señala al grupo de procesos entero.
+Cuando una sesión pide caja, `environment.open()` llama a `start()`: la caja nace desde esa plantilla (`POST /sandboxes` con `templateKey` + `templateHash`), con todo lo del `prepare` ya hecho, en ~5 s. Entre turnos la caja duerme con snapshot de la VM completa y despierta en ~1 s; si el servidor reinicia, eve llama a `resume()` con el estado que guardó y la reabre con el disco tal cual lo dejó. Si esa caja ya no existe, `resume()` falla (es lo que pide el contrato de eve) y eve abre una sesión nueva. Detener la sesión la duerme; borrarla la destruye. `run()` y `spawn()` corren en login shell con stdout y stderr en streams, y `kill()` señala al grupo de procesos entero.
 
 ### 5. Política de red por caja
 
 ![Una compuerta que deja pasar sólo algunos haces](/blog/assets/blog-eve-easybits-policy.png)
 
 ```ts
-const sandbox = await ctx.getSandbox();
-await sandbox.setNetworkPolicy({
-  allow: { "api.github.com": [], "registry.npmjs.org": [] },
-});
+export default defineSandbox(() =>
+  environment.open({
+    networkPolicy: { allow: { "api.github.com": [], "registry.npmjs.org": [] } },
+  }),
+);
 ```
 
-Sólo a los dominios que tú autorices para esa caja, o a ninguno (`"deny-all"`). Lo cambias en caliente por API, se conserva al dormir y despertar, y si un dominio no está en la lista la conexión simplemente no sale. Es el mismo shape que usa eve en Vercel Sandbox, así que el código de tu agente no cambia. Lo único que no hacemos es `transform` (inyectar headers en el firewall): lanza un error claro en vez de fingir.
+Sólo a los dominios que tú autorices para esa caja, o a ninguno (`"deny-all"`). También se cambia en caliente con `sandbox.setNetworkPolicy(...)`, se conserva al dormir y despertar, y si un dominio no está en la lista la conexión simplemente no sale. Es el mismo shape que usa eve en Vercel Sandbox, así que el código de tu agente no cambia. Lo único que no hacemos es `transform` (inyectar headers en el firewall): lanza un error claro en vez de fingir.
 
 ### Lo que da el plan gratuito (Byte)
 
-- **Una caja concurrente**: una conversación a la vez. La caja dormida de una sesión anterior también cuenta hasta que eve la borra.
-- **Sesiones de 1 hora** y tamaño `s`.
-- El prewarm usa una caja temporal que se destruye al capturar la plantilla, así que no ocupa tu cupo después.
+- **Una caja concurrente**: una conversación a la vez. La caja dormida de una sesión anterior no ocupa tu cupo.
+- **Sesiones de 1 hora** y tamaño `s` (512 MB).
+- La preparación usa una caja temporal que se destruye al capturar la plantilla, así que no ocupa tu cupo después.
 
 Cuando tu agente atienda varias conversaciones a la vez, o necesite sesiones más largas o más grandes, pasa a **Mega ($499 MXN/mes, 2 cajas, sesiones de 4 h)** o **Tera ($2,490 MXN/mes, 5 cajas, 24 h)**. Mega es también el mínimo para la ruta 2.
 
@@ -117,10 +123,10 @@ Aquí el servidor eve corre en una caja `eve-nitro` y cada sesión en su caja hi
 B=https://www.easybits.cloud/api/v2; H=(-H "Authorization: Bearer $EASYBITS_API_KEY" -H "Content-Type: application/json")
 SB=$(curl -s -X POST "$B/sandboxes" "${H[@]}" -d '{"template":"eve-nitro","timeoutSeconds":3600,"suspendOnIdle":true}' | jq -r .sandboxId)
 until [ "$(curl -s "$B/sandboxes/$SB" "${H[@]}" | jq -r .status)" = running ]; do sleep 2; done   # exec sobre una caja `starting` → 409 SandboxNotReady
-curl -s -X POST "$B/sandboxes/$SB/exec" "${H[@]}" -d '{"command":"cd /data && eve init app && cd app && pnpm add eve@latest @easybits.cloud/eve-sandbox @easybits.cloud/eve-world @ai-sdk/anthropic --allow-build=cbor-extract","timeoutSeconds":600}'
+curl -s -X POST "$B/sandboxes/$SB/exec" "${H[@]}" -d '{"command":"cd /data && eve init app --non-interactive && cd app && pnpm add @easybits.cloud/eve-sandbox @easybits.cloud/eve-world --allow-build=cbor-extract","timeoutSeconds":600}'
 ```
 
-El template `eve-nitro` trae Node 24, pnpm y el CLI de eve (0.58.1; `pnpm add eve@latest` lo sube a 0.59.1 en el proyecto). `/data` es el volumen persistente, pero no el directorio de trabajo: `exec` arranca en `/`, por eso cada comando hace `cd /data` explícito. El flag `--allow-build=cbor-extract` es obligatorio con pnpm 12: sin él `pnpm add` falla con `ERR_PNPM_IGNORED_BUILDS` y nada de lo encadenado corre.
+El template `eve-nitro` trae Node 24, pnpm y el CLI de eve 0.65, así que `eve init` usa pnpm. El flag `--allow-build=cbor-extract` es obligatorio con pnpm 12: sin él `pnpm add` falla con `ERR_PNPM_IGNORED_BUILDS` (lo necesita `eve-world`). `/data` es el volumen persistente, pero no el directorio de trabajo: `exec` arranca en `/`, por eso cada comando hace `cd /data` explícito.
 
 Los archivos del agente se escriben con el endpoint de archivos del REST v2 (`POST /sandboxes/:id/files/write`, contenido en texto o `"encoding":"base64"`). Así sube `agent/sandbox.ts` (el mismo de la ruta 1); `agent/agent.ts` y `agent/channels/eve.ts` de los pasos 2 y 3 van igual:
 
@@ -129,16 +135,16 @@ curl -s -X POST "$B/sandboxes/$SB/files/write" "${H[@]}" \
   -d "$(jq -n --rawfile c agent/sandbox.ts '{path:"/data/app/agent/sandbox.ts",content:$c}')"   # → { ok, bytes }
 ```
 
-### 2. Elige el modelo
+### 2. Elige el modelo y el world
 
-Igual que en la ruta 1: el scaffold apunta al AI Gateway de Vercel (`model: "openai/gpt-5.6-luna-fast"` como string) y sin `AI_GATEWAY_API_KEY` falla con *"AI Gateway received no credentials"*. Fuera de Vercel el modelo va como objeto de un proveedor directo del AI SDK (`@ai-sdk/anthropic` ya quedó instalado en el paso 1), en `agent/agent.ts`:
+Igual que en la ruta 1, más una línea: el estado durable de eve va a EasyBits DB con [`@easybits.cloud/eve-world`](https://www.npmjs.com/package/@easybits.cloud/eve-world), en `agent/agent.ts`:
 
 ```ts
 import { defineAgent } from "eve";
-import { anthropic } from "@ai-sdk/anthropic";
+import { anthropic } from "eve/models/anthropic";
 
 export default defineAgent({
-  model: anthropic("claude-sonnet-5"),   // lee ANTHROPIC_API_KEY
+  model: anthropic(),   // lee ANTHROPIC_API_KEY
   experimental: { workflow: { world: "@easybits.cloud/eve-world" } },
 });
 ```
@@ -158,15 +164,15 @@ export default eveChannel({
 
 ### 4. Compila, arranca y expón
 
-`eve build` valida el backend al compilar, así que necesita `EASYBITS_API_KEY` en el `env` del exec (sin él: `@easybits.cloud/eve-sandbox: falta apiKey`). No crea cajas: la plantilla del `prewarm` se captura en el primer `eve start`.
+`eve build` prepara la plantilla de las sesiones, así que necesita `EASYBITS_API_KEY` en el `env` del exec (sin él: `@easybits.cloud/eve-sandbox: falta apiKey`).
 
 ```bash
-curl -s -X POST "$B/sandboxes/$SB/exec" "${H[@]}" -d '{"command":"cd /data/app && eve build","timeoutSeconds":300,"env":{"EASYBITS_API_KEY":"<key>"}}'
-curl -s -X POST "$B/sandboxes/$SB/bg"   "${H[@]}" -d '{"command":"exec eve start","cwd":"/data/app","env":{"EASYBITS_API_KEY":"<key>","ANTHROPIC_API_KEY":"<key>","EVE_PASSWORD":"<pass>","PORT":"3000"}}'
+curl -s -X POST "$B/sandboxes/$SB/exec" "${H[@]}" -d '{"command":"cd /data/app && npx eve build","timeoutSeconds":600,"env":{"EASYBITS_API_KEY":"<key>"}}'
+curl -s -X POST "$B/sandboxes/$SB/bg"   "${H[@]}" -d '{"command":"exec npx eve start","cwd":"/data/app","env":{"EASYBITS_API_KEY":"<key>","ANTHROPIC_API_KEY":"<key>","EVE_PASSWORD":"<pass>","PORT":"3000"}}'
 curl -s -X POST "$B/sandboxes/$SB/expose" "${H[@]}" -d '{"port":3000}'
 ```
 
-La caja `eve-nitro` nace con `EASYBITS_DB_URL` en su entorno (sin token); sólo lo pasas a mano en el `env` del `/bg` si la caja viene de un fork/snapshot o para retomar runs en una caja nueva (mismo valor, lo lees en `metadata.eve_db_url`). Sin él, eve cae al disco de la caja sin avisar. La URL pública proxea `/eve/` y `/.well-known/workflow/` sin configurar nada, pero eve pide la auth que declaraste, así que cada llamada va con `-u eve:$EVE_PASSWORD`.
+La caja `eve-nitro` nace con `EASYBITS_DB_URL` en su entorno (sin token), así que el world lo encuentra solo. Para retomar runs en una caja nueva, créala con el **mismo** valor (`"env":{"EASYBITS_DB_URL":"…"}` en el `POST /sandboxes`); lo lees en `metadata.eve_db_url` de la caja original. Sin él, eve cae al disco de la caja sin avisar. La URL pública proxea `/eve/` y `/.well-known/workflow/` sin configurar nada, pero eve pide la auth que declaraste, así que cada llamada va con `-u eve:$EVE_PASSWORD`.
 
 ### 5. Háblale
 
@@ -180,10 +186,10 @@ curl -s -u eve:$EVE_PASSWORD -X POST "$URL/eve/v1/session/$SESSION" -H "Content-
 
 ### 6. El run sobrevive a la máquina
 
-Por default eve guarda el estado de cada run en el disco del servidor. Con [`@easybits.cloud/eve-world`](https://www.npmjs.com/package/@easybits.cloud/eve-world) (la línea `world` del `defineAgent` del paso 2) ese estado —runs, pasos, hooks, streams y la cola de entregas— vive en EasyBits DB. Es parte de esta ruta y no de la gratis: la URL de la base es de la red interna de EasyBits, sólo se alcanza desde una caja.
+Por default eve guarda el estado de cada run en el disco del servidor. Con `eve-world` (la línea `world` del paso 2) ese estado —runs, pasos, hooks, streams y la cola de entregas— vive en EasyBits DB. Es parte de esta ruta y no de la gratis: la URL de la base es de la red interna de EasyBits, sólo se alcanza desde una caja.
 
-Lo medimos en producción con un run de 8 pasos: destruimos la máquina a mitad del paso 2; una máquina nueva con la misma base (el mismo `EASYBITS_DB_URL`) arrancó, retomó en el paso 3 sin repetir los anteriores —59 segundos después de la muerte de la primera— y terminó el run. La sesión de chat también sobrevive: servidor destruido a las 21:05:07, otro desde snapshot respondiendo a las 21:06:22 con toda la memoria de la conversación. Es un port del world oficial de Postgres a libSQL, en la misma línea de versiones que eve.
+Lo volvimos a medir con eve 0.65: le dimos al agente una palabra clave, destruimos la caja del servidor y levantamos otra con el mismo `EASYBITS_DB_URL`. El servidor nuevo quedó listo en 21 segundos y, al preguntarle por la misma sesión, recordó la palabra y volvió a su misma caja de sesión. Antes, con eve 0.58, un run de 8 pasos cortado a la mitad retomó en el paso siguiente sin repetir los anteriores. Es un port del world oficial de Postgres a libSQL, en la misma línea de versiones que eve.
 
 ## Empieza hoy
 
-Ruta 1: crea el proyecto, instala el paquete, cambia `agent/sandbox.ts` y `agent/agent.ts`, y corre `eve build` y `eve dev`/`eve start` donde ya lo corrías; gratis, una conversación a la vez. Ruta 2: sube a Mega y sigue los seis pasos. La página del producto está en [/eve](/eve), la referencia en [/docs/eve.md](/docs/eve.md) y tu propio agente puede configurarlo con `npx skills add https://www.easybits.cloud --skill easybits-eve`.
+Ruta 1: crea el proyecto, instala el paquete, escribe `agent/sandbox.ts` y `agent/agent.ts`, y corre `eve build` y `eve dev`/`eve start` donde ya lo corrías; gratis, una conversación a la vez. Ruta 2: sube a Mega y sigue los seis pasos. La página del producto está en [/eve](/eve), la referencia en [/docs/eve.md](/docs/eve.md) y tu propio agente puede configurarlo con `npx skills add https://www.easybits.cloud --skill easybits-eve`.

@@ -1,16 +1,12 @@
 /**
- * Implementación cruda del provider #3271 (prepare/start/resume). Sin
- * importar `eve/sandbox/provider` en runtime, para poder probarla fuera de
+ * Implementación cruda del provider (prepare/start/resume). Sin importar
+ * `eve/sandbox/provider` en runtime (sólo tipos), para poder probarla fuera de
  * eve (`scripts/smoke-provider.ts`). Ver `provider.ts` para el mapeo.
  */
 import { createHash } from "node:crypto";
 import { EasybitsClient, EasybitsError, type Sandbox } from "@easybits.cloud/sdk";
-import type { SandboxNetworkPolicy, SandboxSession } from "eve/sandbox";
-// `MutableNetworkSandboxSession`/`SandboxEnvironment` los exporta el PR desde
-// `eve/sandbox`; el eve instalado (0.59) no los tiene, así que se toman de la
-// copia del contrato hasta que #3271 mergee.
+import type { MutableNetworkSandboxSession, SandboxNetworkPolicy, SandboxSession } from "eve/sandbox";
 import type {
-  MutableNetworkSandboxSession,
   SandboxPreparedArtifact,
   SandboxProviderHandle,
   SandboxProviderImplementation,
@@ -41,9 +37,11 @@ export interface EasybitsEnvironmentOptions extends EasybitsBackendOptions {
   /** Setup que hereda toda caja nueva; corre UNA vez sobre la caja temporal antes del snapshot. */
   prepare?: (sandbox: SandboxSession) => Promise<void> | void;
   /**
-   * Si en `resume` la caja ya no existe en la nube, volver a forkear el
-   * artifact (disco nuevo, mismo bootstrap; el `env` de `open()` se pierde
-   * porque vive en el disco perdido). Default `true`; `false` lanza.
+   * Si en `resume` la caja ya no existe en la nube, volver a crearla desde el
+   * artifact (disco nuevo, mismo `prepare`; el `env` de `open()` se pierde
+   * porque vive en el disco perdido). Default `false`: el contrato de eve pide
+   * que `resume` reconecte y falle si el estado nativo ya no existe — eve
+   * vuelve a correr el selector y abre una sesión nueva.
    */
   recreateOnLoss?: boolean;
 }
@@ -90,7 +88,7 @@ class TemplateNotProvisionedError extends Error {
 
 /** Implementación cruda (prepare/start/resume). Útil para probar sin el runtime de eve. */
 export function createEasybitsProvider(options: EasybitsEnvironmentOptions = {}): Impl {
-  const { prepare, recreateOnLoss = true, ...rest } = options;
+  const { prepare, recreateOnLoss = false, ...rest } = options;
   const opts = resolveOptions(rest);
   const eb = new EasybitsClient({ apiKey: opts.apiKey, baseUrl: opts.baseUrl });
 

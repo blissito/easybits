@@ -456,7 +456,7 @@ Use `eb.listTemplates()` for the live catalog with required env. Kinds: `base`
 | `bun` | base | Bun runtime. |
 | `dev-box` | base | Clean work box (git, curl, build-essential, Node 22); the recommended one for SSH. |
 | `code-interpreter` | base | Python + persistent Jupyter kernel (sandbox_run_cell): variables and charts survive between cells. |
-| `eve-nitro` | base | Self-hosted eve (Vercel) server: Node 24, pnpm, eve CLI; persistent /data, port 3000. |
+| `eve-nitro` | base | Self-hosted eve (Vercel) server: Node 24, pnpm, eve CLI 0.65; persistent /data, port 3000. |
 | `node-agent` | agent | Node + Claude Agent SDK pre-baked (agent_run). |
 | `claude-code` | agent | Claude Agent SDK loop; per-token billing. |
 | `goose` | agent | goose (AAIF), coding agent with native ACP. |

@@ -32,7 +32,7 @@ export const TEMPLATE_CATALOG: Record<SandboxTemplate, TemplateInfo> = {
   bun: { kind: "base", summary: "Runtime Bun.", summaryEn: "Bun runtime." },
   "dev-box": { kind: "base", summary: "Caja de trabajo limpia (git, curl, build-essential, Node 22); la recomendada para SSH.", summaryEn: "Clean work box (git, curl, build-essential, Node 22); the recommended one for SSH." },
   "code-interpreter": { kind: "base", summary: "Python + kernel Jupyter persistente (sandbox_run_cell): variables y gráficas sobreviven entre celdas.", summaryEn: "Python + persistent Jupyter kernel (sandbox_run_cell): variables and charts survive between cells." },
-  "eve-nitro": { kind: "base", summary: "Servidor eve (Vercel) self-hosted: Node 24, pnpm, eve CLI; /data persistente, puerto 3000.", summaryEn: "Self-hosted eve (Vercel) server: Node 24, pnpm, eve CLI; persistent /data, port 3000." },
+  "eve-nitro": { kind: "base", summary: "Servidor eve (Vercel) self-hosted: Node 24, pnpm, eve CLI 0.65; /data persistente, puerto 3000.", summaryEn: "Self-hosted eve (Vercel) server: Node 24, pnpm, eve CLI 0.65; persistent /data, port 3000." },
   "node-agent": { kind: "agent", summary: "Node + Claude Agent SDK pre-horneado (agent_run).", summaryEn: "Node + Claude Agent SDK pre-baked (agent_run)." },
   "claude-code": { kind: "agent", summary: "Loop del Claude Agent SDK; billing por token.", summaryEn: "Claude Agent SDK loop; per-token billing." },
   goose: { kind: "agent", summary: "goose (AAIF), agente de código con ACP nativo.", summaryEn: "goose (AAIF), coding agent with native ACP." },

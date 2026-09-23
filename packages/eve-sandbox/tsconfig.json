@@ -8,8 +8,7 @@
     "esModuleInterop": true,
     "outDir": "dist",
     "rootDir": "src",
-    "skipLibCheck": true,
-    "paths": { "eve/sandbox/provider": ["./src/provider-contract.ts"] }
+    "skipLibCheck": true
   },
   "include": ["src"]
 }

@@ -74,8 +74,8 @@ Esto es un índice. Carga sólo la sección que necesites; el documento completo
 - **Agentes en WhatsApp** — tu número o el de tu cliente; cada conversación en su propia
   microVM, con su prompt, sus conectores y su voz.
 - **Voz y video** — transcribir, TTS, subtítulos y video animado a MP4.
-- **eve (Vercel)** — backend nativo de sandboxes (@easybits.cloud/eve-sandbox): el contrato
-  SandboxBackend completo. Ruta gratis: tu servidor donde está + sesiones en EasyBits.
+- **eve (Vercel)** — provider nativo de sandboxes (@easybits.cloud/eve-sandbox, eve ≥ 0.64):
+  el contrato completo de providers. Ruta gratis: tu servidor donde está + sesiones en EasyBits.
   Landing: [/eve](${BASE}/eve).
 - **Pagos y email** — links de MercadoPago (el dinero va directo a tu cuenta) y envíos
   con contactos y bajas automáticas.

@@ -1,9 +1,10 @@
 /**
- * @easybits.cloud/eve-sandbox/provider — contrato NUEVO de eve
- * (`defineSandboxProvider`, PR vercel/eve#3271) sobre microVMs de EasyBits.
+ * Provider de sandbox de eve (`defineSandboxProvider`, eve ≥ 0.64) sobre
+ * microVMs de EasyBits. También se exporta desde la raíz del paquete; el
+ * subpath `/provider` se conserva por compatibilidad.
  *
  *   import { defineSandbox } from "eve/sandbox";
- *   import { EasybitsSandbox } from "@easybits.cloud/eve-sandbox/provider";
+ *   import { EasybitsSandbox } from "@easybits.cloud/eve-sandbox";
  *   export const environment = EasybitsSandbox.environment({ prepare: … });
  *   export default defineSandbox(() => environment.open({ networkPolicy: "deny-all" }));
  *
@@ -18,13 +19,14 @@
  *                    /etc/profile.d (login shell) y `networkPolicy` se aplica
  *                    al host. state = { sandboxId, sessionName, generation, version }.
  *   resume(ctx, artifact, state) → GET por id; dormida → resume; perdida →
- *                    busca por `sessionName`; si tampoco existe, re-crea desde el
- *                    mismo artifact (disco nuevo; `recreateOnLoss:false` lanza).
+ *                    busca por `sessionName`; si tampoco existe, FALLA (contrato
+ *                    de eve: resume reconecta, no recrea). `recreateOnLoss:true`
+ *                    re-crea desde el mismo artifact (disco nuevo).
  *   stop/shutdown  → suspend · delete → destroy.
  *
  * Nunca se serializan credenciales ni opciones en artifact/state.
  */
-import type { MutableNetworkSandboxSession, SandboxEnvironment } from "eve/sandbox/provider";
+import type { MutableNetworkSandboxSession, SandboxEnvironment } from "eve/sandbox";
 import { defineSandboxProvider } from "eve/sandbox/provider";
 import {
   createEasybitsProvider,

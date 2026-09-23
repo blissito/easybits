@@ -1,8 +1,7 @@
 /**
- * Núcleo compartido por los dos contratos de eve que este paquete implementa:
- * el `SandboxBackend` (eve ≤ 0.59, `./index.ts`) y el `defineSandboxProvider`
- * (PR #3271, `./provider.ts`). Opciones, reattach, seeds y la sesión
- * (run/spawn/files/removePath/setNetworkPolicy) sobre `@easybits.cloud/sdk`.
+ * Núcleo del provider (`defineSandboxProvider`, eve ≥ 0.64): opciones,
+ * reattach, seeds y la sesión (run/spawn/files/removePath/setNetworkPolicy)
+ * sobre `@easybits.cloud/sdk`.
  */
 import { createHash } from "node:crypto";
 import { dirname } from "node:path";
@@ -11,7 +10,6 @@ import type {
   SandboxNetworkPolicy,
   SandboxProcess,
   SandboxRunOptions,
-  SandboxSeedFile,
   SandboxSession,
   SandboxSpawnOptions,
 } from "eve/sandbox";
@@ -107,6 +105,12 @@ export async function reattach(eb: EasybitsClient, meta?: Record<string, unknown
   return box;
 }
 
+/** Archivo a sembrar en la caja antes de capturar la plantilla. */
+export interface SandboxSeedFile {
+  path: string;
+  content: string | Uint8Array;
+}
+
 export function ignore404(e: unknown) {
   if (e instanceof EasybitsError && e.status === 404) return;
   throw e;
@@ -186,7 +190,6 @@ export async function openSession(box: Sandbox, id: string, opts: ResolvedOption
   }
 
   return {
-    id,
     resolvePath,
     run,
     spawn,

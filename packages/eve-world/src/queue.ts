@@ -241,7 +241,10 @@ export function createQueue(config: ResolvedConfig, drizzle: Drizzle, deliverOve
       const body = deserializePayload(await readAll(req.body));
       try {
         const result = await handler(body, { attempt, queueName, messageId });
-        if (typeof result?.timeoutSeconds === 'number') return Response.json({ timeoutSeconds: result.timeoutSeconds });
+        // Desde world beta.37 el handler devuelve `unknown`; sólo `{ timeoutSeconds }`
+        // es control de cola (no soportamos `invoke`, así que no hay otro caso).
+        const timeoutSeconds = (result as { timeoutSeconds?: unknown } | undefined)?.timeoutSeconds;
+        if (typeof timeoutSeconds === 'number') return Response.json({ timeoutSeconds });
         return Response.json({ ok: true });
       } catch (error) {
         return Response.json(String(error), { status: 500 });

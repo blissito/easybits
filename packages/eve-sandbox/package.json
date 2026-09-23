@@ -1,7 +1,7 @@
 {
   "name": "@easybits.cloud/eve-sandbox",
-  "version": "0.1.2",
-  "description": "EasyBits SandboxBackend for eve (Vercel) \u2014 run eve agents' sandboxes on EasyBits Firecracker microVMs",
+  "version": "0.2.1",
+  "description": "EasyBits sandbox provider for eve (Vercel) — run eve agents' sandboxes on EasyBits Firecracker microVMs",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -46,7 +46,7 @@
     "access": "public"
   },
   "peerDependencies": {
-    "eve": ">=0.58.0"
+    "eve": ">=0.64.0"
   },
   "dependencies": {
     "@easybits.cloud/sdk": "^0.35.0"
@@ -54,7 +54,7 @@
   "devDependencies": {
     "@types/node": "^24.0.0",
     "ai": "^7.0.105",
-    "eve": "0.58.1",
+    "eve": "0.65.0",
     "tsup": "^8.0.0",
     "typescript": "^5.7.0"
   }

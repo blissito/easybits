@@ -298,7 +298,7 @@ https://www.easybits.cloud/api/mcp/core
             />
             <FeatureCard
               title="Agentes"
-              description="Agentes persistentes en su propia microVM (ghosty-lite, goose, claude-code), una flota en WhatsApp, Teams y web, y el backend de sandboxes para eve (@easybits.cloud/eve-sandbox)."
+              description="Agentes persistentes en su propia microVM (ghosty-lite, goose, claude-code), una flota en WhatsApp, Teams y web, y el provider de sandboxes para eve (@easybits.cloud/eve-sandbox)."
               badge="POST /v2/agents"
             />
           </div>

@@ -6,18 +6,18 @@ import { ProductPage, productJsonLd } from "./product/ProductPage";
 import { productLoader } from "./product/loader";
 
 // Página de pilar para la comunidad de eve (Vercel). Regla de la casa: los
-// números son medidos (scripts/smoke.ts del paquete) o del catálogo; sin adjetivos.
+// números son medidos (scripts/smoke-provider.ts del paquete) o del catálogo; sin adjetivos.
 export const loader = productLoader;
 
 export const meta = () => [
   ...getBasicMetaTags({
-    title: "eve (Vercel) en microVMs — backend nativo de sandboxes | EasyBits",
+    title: "eve (Vercel) en microVMs — provider nativo de sandboxes | EasyBits",
     description:
-      "No muevas tu servidor eve (el framework de Vercel): con una línea en agent/sandbox.ts tus sesiones corren en máquinas virtuales de EasyBits, una por sesión, aislada, que duerme entre turnos y despierta en un segundo. Gratis para empezar; servidor hospedado desde Mega. En MXN.",
+      "No muevas tu servidor eve (el framework de Vercel): con un archivo, agent/sandbox.ts, tus sesiones corren en máquinas virtuales de EasyBits, una por sesión, aislada, que duerme entre turnos y despierta en un segundo. Gratis para empezar; servidor hospedado desde Mega. En MXN.",
     url: "https://www.easybits.cloud/eve",
     image: "https://www.easybits.cloud/blog/assets/blog-eve-easybits-policy.png",
   }),
-  { name: "keywords", content: "eve, Vercel eve, SandboxBackend, eve sandbox, agentes IA, microVM, Firecracker, EasyBits" },
+  { name: "keywords", content: "eve, Vercel eve, eve sandbox provider, eve sandbox, agentes IA, microVM, Firecracker, EasyBits" },
   { tagName: "link", rel: "alternate", hrefLang: "es", href: "https://www.easybits.cloud/eve" },
   { tagName: "link", rel: "canonical", href: "https://www.easybits.cloud/eve" },
 ];
@@ -26,7 +26,7 @@ const JSON_LD = {
   ...productJsonLd({
     name: "EasyBits para eve (Vercel)",
     description:
-      "Backend de sandboxes para eve, el framework de agentes de Vercel: tu servidor se queda donde está y cada sesión corre en su propia máquina virtual Firecracker, con imagen reusable, suspend/resume y política de red por caja. Gratis para empezar (una conversación a la vez); servidor eve hospedado en EasyBits desde $499 MXN/mes.",
+      "Provider de sandboxes para eve, el framework de agentes de Vercel: tu servidor se queda donde está y cada sesión corre en su propia máquina virtual Firecracker, con imagen reusable, suspend/resume y política de red por caja. Gratis para empezar (una conversación a la vez); servidor eve hospedado en EasyBits desde $499 MXN/mes.",
     path: "/eve",
     priceMxn: 0,
   }),
@@ -78,31 +78,33 @@ function Snippet({ title, code }: { title: string; code: string }) {
 const SNIPPET_SANDBOX = `
 // agent/sandbox.ts
 import { defineSandbox } from "eve/sandbox";
-import { easybits } from "@easybits.cloud/eve-sandbox";
+import { EasybitsSandbox } from "@easybits.cloud/eve-sandbox";
 
-export default defineSandbox({
-  backend: easybits(),   // lee EASYBITS_API_KEY
-  async bootstrap({ use }) {
-    const s = await use();
-    await s.run({ command: "npm ci" });
+// Se prepara una vez en \`eve build\` (lee EASYBITS_API_KEY)
+export const environment = EasybitsSandbox.environment({
+  prepare: async (sandbox) => {
+    await sandbox.run({ command: "npm i -g cowsay" });
   },
-});`;
+});
+
+export default defineSandbox(() => environment.open());`;
 
 const SNIPPET_WORLD = `
 // agent/agent.ts
 import { defineAgent } from "eve";
-import { anthropic } from "@ai-sdk/anthropic";
+import { anthropic } from "eve/models/anthropic";
 
 export default defineAgent({
-  model: anthropic("claude-sonnet-5"),
+  model: anthropic(),
   experimental: { workflow: { world: "@easybits.cloud/eve-world" } },
 });`;
 
 const SNIPPET_POLICY = `
-const sandbox = await ctx.getSandbox();
-await sandbox.setNetworkPolicy({
-  allow: { "api.github.com": [], "registry.npmjs.org": [] },
-});`;
+export default defineSandbox(() =>
+  environment.open({
+    networkPolicy: { allow: { "api.github.com": [], "registry.npmjs.org": [] } },
+  }),
+);`;
 
 export default function Eve({ loaderData }: Route.ComponentProps) {
   return (
@@ -123,34 +125,34 @@ export default function Eve({ loaderData }: Route.ComponentProps) {
               <a className="underline" href="https://eve.dev/docs/sandbox" target="_blank" rel="noopener noreferrer">
                 docs de eve: Sandbox
               </a>
-              ). Una línea en <code>agent/sandbox.ts</code> y cada sesión corre en su propio sandbox
+              ). Un archivo, <code>agent/sandbox.ts</code>, y cada sesión corre en su propio sandbox
               en EasyBits, aislado, con root e internet, mientras tu servidor sigue en Vercel o en
               tu laptop. Gratis para empezar, en pesos mexicanos.
             </>
           ),
           proof:
-            "Arranque de una sesión ~4 s · despertar ~1 s · el entorno preparado se reusa en cada arranque (0.3 s) · npm i @easybits.cloud/eve-sandbox",
+            "Arranque de una sesión ~5 s · despertar ~1 s · el entorno preparado se reusa en cada build (0.3 s) · npm i @easybits.cloud/eve-sandbox",
           bentos: [
             {
-              title: "Una línea, y tu servidor no se mueve",
+              title: "Un archivo, y tu servidor no se mueve",
               body: (
                 <>
                   Instala el paquete, cambia <code>agent/sandbox.ts</code> y sigue corriendo{" "}
-                  <code>eve dev</code> o <code>eve start</code> donde ya lo hacías: Vercel o tu laptop. En el
-                  primer arranque eve prepara lo que tu agente necesita (su{" "}
+                  <code>eve dev</code> o <code>eve start</code> donde ya lo hacías: Vercel o tu laptop. En{" "}
+                  <code>eve build</code>, eve prepara lo que tu agente necesita (su{" "}
                   <a className="underline" href="https://eve.dev/docs/sandbox" target="_blank" rel="noopener noreferrer">
-                    bootstrap
+                    prepare
                   </a>
-                  ) en un sandbox temporal y nosotros guardamos el resultado como imagen; los arranques
-                  siguientes reusan la imagen en 0.3 s.
+                  ) en un sandbox temporal y nosotros guardamos el resultado como imagen; los builds
+                  siguientes la reusan en 0.3 s.
                   <Snippet title="npm i @easybits.cloud/eve-sandbox" code={SNIPPET_SANDBOX} />
                 </>
               ),
               bullets: [
                 "Gratis para empezar: una conversación a la vez, sesiones de 1 h",
-                "Una imagen por versión de tu agente; primera captura 8.6 s, reuso medido en 0.3 s",
-                "Los archivos que eve siembra (skills, configuración) ya vienen dentro",
-                "Validado con eve 0.58.1 y 0.59.1",
+                "Una imagen por versión de tu agente; primera captura ~10 s, reuso medido en 0.3 s",
+                "Tu workspace y tus skills de eve ya vienen dentro",
+                "Probado con eve 0.65 y una cuenta gratuita recién creada",
               ],
               image: "/blog/assets/blog-eve-easybits-cover.png",
             },
@@ -174,8 +176,8 @@ export default function Eve({ loaderData }: Route.ComponentProps) {
                     @easybits.cloud/eve-world
                   </a>{" "}
                   el estado de eve (runs, pasos, hooks, streams) vive en EasyBits DB en vez del disco del
-                  servidor. Lo probamos en producción: matamos el sandbox a mitad de un run de 8 pasos y otra
-                  sandbox lo retomó en el paso 3, sin repetir los anteriores, 59 segundos después.
+                  servidor. Lo probamos en producción con eve 0.65: destruimos el sandbox del servidor, otro
+                  con la misma base quedó listo en 21 s y la conversación siguió donde iba, con su memoria.
                   <Snippet title="npm i @easybits.cloud/eve-world" code={SNIPPET_WORLD} />
                 </>
               ),
@@ -192,9 +194,9 @@ export default function Eve({ loaderData }: Route.ComponentProps) {
               body: (
                 <>
                   Desde tu código de eve puedes limitar la salida a internet de una sesión: sólo a los dominios
-                  que autorices, o a ninguno. Se cambia en caliente, se conserva al dormir, y lo que no está en la
-                  lista simplemente no sale.
-                  <Snippet title="dentro de una tool o callback de eve" code={SNIPPET_POLICY} />
+                  que autorices, o a ninguno. También se cambia en caliente con <code>setNetworkPolicy</code>, se
+                  conserva al dormir, y lo que no está en la lista simplemente no sale.
+                  <Snippet title="agent/sandbox.ts" code={SNIPPET_POLICY} />
                 </>
               ),
               bullets: [
