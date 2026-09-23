@@ -4,7 +4,8 @@
  * precio normal — el cupón es `repeating` y caduca solo.
  *
  * Dos cupones con id fijo (idempotente, se crean una sola vez):
- *  - STUDENT_MEGA_2026   $150 fuera del total  → Mega $299 → $149.
+ *  - STUDENT_MEGA_2026   $350 fuera del total  → Mega $499 → $149 (los trials
+ *                        del taller se crearon a precio de lista, no a la promo).
  *  - STUDENT_MICRO_2026  $99 fuera, SOLO sobre productos de hosting → una micro
  *                        gratis. Si el alumno aún no tiene máquina, queda puesto
  *                        y aplica cuando la compre como item del plan.
@@ -16,6 +17,11 @@
  * El SDK de stripe del repo (v13, API 2023-08-16) sólo acepta UN cupón por
  * suscripción. Aquí se habla directo a la API con una versión que acepta
  * `discounts[]`, sin tocar la versión que usa la app.
+ *
+ * ⚠️ Ningún trial del taller tiene tarjeta y `trial_settings.end_behavior.
+ * missing_payment_method = "cancel"`: al vencer, Stripe CANCELA. El cupón sólo
+ * sirve si el alumno registra tarjeta antes de su `trial_end` — la columna
+ * `tarjeta` lo dice.
  *
  * Run: npx tsx scripts/student-offer.mts            (dry-run: sólo imprime)
  *      npx tsx scripts/student-offer.mts --apply    (crea cupones y los aplica)
@@ -110,6 +116,7 @@ type Row = {
   planSub: string;
   microSub: string;
   descuentos: string;
+  tarjeta: string;
   estado: string;
 };
 const rows: Row[] = [];
@@ -128,6 +135,7 @@ for (const s of subs) {
   );
   const microSub = machineSubs[0]?.id ?? s.id;
 
+  const pms = await stripe("GET", "/payment_methods", { customer, limit: 1 });
   const current = (s.discounts ?? []).map((d: any) => (typeof d === "string" ? d : d.coupon?.id ?? d.id));
   rows.push({
     email,
@@ -136,6 +144,7 @@ for (const s of subs) {
     planSub: s.metadata.plan,
     microSub: microSub === s.id ? "misma" : microSub,
     descuentos: current.length ? String(current.length) : "—",
+    tarjeta: pms.data.length ? "sí" : "NO",
     estado: "",
   });
   todo.push({ planSub: s.id, microSub, email });
@@ -161,7 +170,7 @@ async function ensureCoupon(id: string, body: Record<string, unknown>) {
 }
 await ensureCoupon(MEGA, {
   name: "Estudiantes: Mega $149",
-  amount_off: 15000,
+  amount_off: 35000,
   currency: "mxn",
   duration: "repeating",
   duration_in_months: 3,
