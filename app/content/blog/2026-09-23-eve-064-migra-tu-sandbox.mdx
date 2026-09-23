@@ -1,0 +1,89 @@
+---
+title: "eve 0.64 cambió los sandboxes: cómo migrar tu agente (y seguir en EasyBits)"
+description: "eve 0.64 reemplazó defineSandbox({ backend, bootstrap }) por providers con environment.open(). Qué cambia en agent/sandbox.ts, la tabla de equivalencias, tres detalles más de eve 0.65 y qué versión fijar si todavía no quieres migrar. Probado en producción."
+date: "2026-09-23"
+author: "Equipo Easybits"
+tags: ["eve", "vercel", "migración", "sandboxes"]
+kind: "tutorial"
+featuredImage: "/blog/assets/blog-eve-064-migracion-cover.png"
+published: true
+---
+
+# eve 0.64 cambió los sandboxes: cómo migrar tu agente
+
+Si actualizaste [eve](https://eve.dev) esta semana y tu proyecto dejó de compilar con algo como `Module '"eve/sandbox"' has no exported member 'SandboxBackend'`, no es tu código: eve 0.64 (22 de septiembre) cambió la forma de declarar sandboxes. Antes un sandbox era un objeto con un `backend`; ahora es un **provider** que expone un `environment` y cada sesión lo abre con `environment.open()`.
+
+`@easybits.cloud/eve-sandbox` ya habla el contrato nuevo desde la versión 0.2. La migración es un archivo.
+
+## Antes y después
+
+```ts
+// agent/sandbox.ts — eve ≤ 0.63
+import { defineSandbox } from "eve/sandbox";
+import { easybits } from "@easybits.cloud/eve-sandbox";
+
+export default defineSandbox({
+  backend: easybits(),
+  async bootstrap({ use }) {
+    const s = await use();
+    await s.run({ command: "npm ci" });
+  },
+});
+```
+
+```ts
+// agent/sandbox.ts — eve ≥ 0.64
+import { defineSandbox } from "eve/sandbox";
+import { EasybitsSandbox } from "@easybits.cloud/eve-sandbox";
+
+export const environment = EasybitsSandbox.environment({
+  prepare: async (sandbox) => {
+    await sandbox.run({ command: "npm ci" });
+  },
+});
+
+export default defineSandbox(() => environment.open());
+```
+
+```bash
+npm i eve@latest @easybits.cloud/eve-sandbox@latest
+```
+
+El `export const environment` no es opcional: `eve build` lo busca para preparar la plantilla antes de que exista cualquier sesión. Sin él, no hay nada que preparar.
+
+## Qué pasó con cada pieza
+
+| eve ≤ 0.63 | eve ≥ 0.64 | En EasyBits |
+|---|---|---|
+| `bootstrap({ use })` | `prepare(sandbox)` en `environment()` | Corre una vez en una caja temporal y se guarda como plantilla |
+| prewarm en el primer `eve start` | preparación en `eve build` (en `eve dev`, al primer acceso) | 9.7 s la primera vez, 0.3 s reusada |
+| `create()` del backend | `environment.open()` → `start()` | La caja nace de la plantilla en ~5 s |
+| reattach por metadata | `resume()` | Despierta la misma caja en ~1 s. Si ya no existe, falla y eve abre una sesión nueva |
+| `setNetworkPolicy` después de crear | `open({ networkPolicy })`, o en caliente con `setNetworkPolicy` | Mismo shape que Vercel: allow-all, deny-all o lista de dominios |
+
+El cambio en `resume()` es de fondo, no de sintaxis: el contrato nuevo pide reconectar lo que existe, no reconstruirlo en silencio. Si una caja se perdió, eve vuelve a correr tu `defineSandbox()` y la sesión arranca limpia desde la plantilla, en vez de fingir que nada pasó. Si prefieres el comportamiento anterior, `EasybitsSandbox.environment({ recreateOnLoss: true })`.
+
+## Tres detalles más que vas a notar con eve 0.65
+
+- **El modelo por default del scaffold** es `spacexai/grok-4.7` vía AI Gateway de Vercel, que fuera de Vercel pide `AI_GATEWAY_API_KEY`. eve ya trae helpers directos sin instalar nada: `import { anthropic } from "eve/models/anthropic"` y `model: anthropic()`, que lee `ANTHROPIC_API_KEY`.
+- **`eve start` en local responde 401**, incluso desde localhost. Para probar en tu máquina, `eve dev --no-ui`.
+- **Si hospedas el servidor en una caja `eve-nitro`**: ya trae el CLI de eve 0.65 y pnpm, así que `eve init` usa pnpm; instala con `pnpm add … --allow-build=cbor-extract`. Para el estado durable, `@easybits.cloud/eve-world` 0.1.2 va con la versión del Workflow SDK que trae eve 0.65.
+
+## Si no quieres migrar hoy
+
+Fija las tres versiones juntas y todo sigue como estaba:
+
+```bash
+npm i eve@0.63 @easybits.cloud/eve-sandbox@0.1 @easybits.cloud/eve-world@0.1.1
+```
+
+## Lo probamos antes de publicarlo
+
+Con una cuenta gratuita recién creada seguimos el camino completo: `eve init` con 0.65, el `agent/sandbox.ts` de arriba, `eve build` y `eve dev`. En el primer mensaje el agente corrió `cowsay`, instalado en el `prepare`, dentro de su propia microVM.
+
+Con el servidor hospedado en `eve-nitro` y `eve-world`, destruimos la caja del servidor a media conversación y levantamos otra con la misma base: quedó lista en 21 segundos, y la misma sesión siguió con su memoria y volvió a su misma caja.
+
+
+## Siguiente paso
+
+El tutorial completo, con la ruta gratis y la hospedada, está en [Corre tus agentes eve en microVMs](/blog/agentes-eve-en-easybits). La página del producto está en [/eve](/eve), la referencia en [/docs/eve.md](/docs/eve.md), y tu agente de código puede hacer la migración por ti con `npx skills add https://www.easybits.cloud --skill easybits-eve`.
