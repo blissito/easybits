@@ -153,7 +153,10 @@ export async function handleGithubHook(
   if (payload.deleted || payload.ref !== `refs/heads/${branch}`) {
     return { status: 200, body: { ignored: `ref ${payload.ref} (deploys ${branch})` } };
   }
-  if (row.status !== "running") {
+  // Sólo se descartan estados muertos: la fila puede quedarse en
+  // "provisioning" un rato después de que la caja ya sirve, y launchApp espera
+  // a que esté arriba de todos modos.
+  if (["suspended", "pending_deletion", "destroyed", "lost"].includes(row.status)) {
     return { status: 409, body: { error: "MachineNotRunning", status: row.status } };
   }
 
