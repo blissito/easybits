@@ -16,7 +16,7 @@ export const meta = () => [
   ...getBasicMetaTags({
     title: `Hosting de apps desde \$${CHEAPEST}/mes en MXN | EasyBits`,
     description:
-      "De un repositorio a una URL pública con TLS en una sola llamada. Dominio propio, respaldos diarios y rollback. Sin plan de pago: la máquina es su propia suscripción.",
+      "Conecta tu repo de GitHub y ya está: cada push se despliega solo, con TLS, dominio propio, respaldos diarios y rollback. Precio fijo en pesos, sin cobro por tráfico.",
     url: "https://www.easybits.cloud/hosting",
   }),
   { tagName: "link", rel: "canonical", href: "https://www.easybits.cloud/hosting" },
@@ -41,19 +41,20 @@ export default function Hosting({ loaderData }: Route.ComponentProps) {
         user={loaderData.user}
         data={{
           kicker: "Hosting",
-          title: "De un repo a una URL",
-          highlight: "en una llamada",
+          title: "Conecta tu repo",
+          highlight: "y ya está",
           subtitle:
-            "Tu app corre en su propia máquina, con TLS y dominio propio. Tu agente puede desplegarla igual que lo harías tú — porque usa la misma API.",
+            "Instalas la App de GitHub, eliges el repo y se despliega. Cada push a tu rama sale a producción solo; si el build falla, tu sitio sigue en la versión anterior.",
           proof: `Deploy medido en ~12 s · recuperación total tras pérdida en 11.9 s · desde \$${CHEAPEST}/mes`,
-          ctaLabel: "Ver máquinas →",
-          ctaTo: "/planes",
+          ctaLabel: "Conectar GitHub →",
+          ctaTo: "/dash/hosting",
           bentos: [
             {
-              title: "Una llamada hace todo el camino",
-              body: "Provisionar la caja, traer el código, construirlo dentro, publicar la URL y dejar el release guardado. No hay pasos sueltos que se te olviden.",
+              title: "Del push a producción",
+              body: "Traer el código, construirlo, publicar la URL y dejar el release guardado. Sin tokens que pegar ni webhooks que configurar a mano.",
               bullets: [
-                "Desde un repositorio, un archivo o una caja que ya tenías",
+                "Detecta cómo construir y arrancar tu proyecto",
+                "Cada push a la rama se despliega solo",
                 "TLS y subdominio público automáticos",
                 "Dominio propio cuando lo quieras",
                 "El build corre DENTRO de la caja, en Linux, no en tu Mac",
