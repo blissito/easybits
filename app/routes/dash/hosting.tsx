@@ -233,7 +233,7 @@ function shortId(sandboxId: string) {
 }
 
 const DOT: Record<string, string> = {
-  running: "bg-emerald-500",
+  running: "bg-green-500",
   starting: "bg-amber-400 animate-pulse",
   provisioning: "bg-amber-400 animate-pulse",
   suspended: "bg-gray-400",
@@ -727,7 +727,7 @@ function Domains({ machine, detail, fetcher, confirm }: any) {
             >
               <div className="flex items-center gap-2 min-w-0">
                 <span
-                  className={`w-2 h-2 rounded-full shrink-0 ${live ? "bg-emerald-500" : "bg-amber-400"}`}
+                  className={`w-2 h-2 rounded-full shrink-0 ${live ? "bg-green-500" : "bg-amber-400"}`}
                 />
                 <a
                   href={`https://${d.domain}`}
@@ -847,7 +847,7 @@ function Releases({ machine, detail, fetcher }: any) {
               </span>
             )}
             {live ? (
-              <span className="flex items-center gap-1 text-xs font-semibold text-emerald-600 shrink-0">
+              <span className="flex items-center gap-1 text-xs font-semibold text-green-600 shrink-0">
                 <LuCircleCheck className="w-3.5 h-3.5" /> en vivo
               </span>
             ) : (
