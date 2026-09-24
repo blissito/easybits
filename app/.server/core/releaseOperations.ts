@@ -1143,6 +1143,9 @@ async function rememberRepoToken(
   return name;
 }
 
+/** Fases de launchApp, en orden. Las pinta el stepper de /dash/hosting. */
+export type LaunchStep = "provision" | "boot" | "clone" | "build" | "release";
+
 /**
  * Put an app in production in ONE call: box → code → runspec → build → start →
  * public URL → release → (optional) custom domain.
@@ -1193,6 +1196,8 @@ export async function launchApp(
     secretNames?: string[];
     domain?: string;
     message?: string;
+    /** Avance por fases, para pintar un stepper mientras corre. */
+    onStep?: (step: LaunchStep, info?: { sandboxId?: string }) => void;
   }
 ): Promise<LaunchResult> {
   requireScope(ctx, "WRITE");
@@ -1249,6 +1254,7 @@ export async function launchApp(
   let previousReleaseId: string | null = null;
   let codeReplaced = false;
   if (needsNewBox) {
+    params.onStep?.("provision");
     const bought = await buyMachine(ctx, {
       tier: params.tier ?? "micro",
       // El default de build/start es npm: sin Node en la caja (ubuntu) la
@@ -1281,6 +1287,7 @@ export async function launchApp(
     // host answers 503 "sandbox not running" to anything sent meanwhile. The
     // webhook path hits this every time: the customer pays and the launch dies
     // on a race. Wait for it before touching the box.
+    params.onStep?.("boot", { sandboxId });
     await waitUntilRunning(ctx, sandboxId, { timeoutMs: 90_000 }).catch(() => {
       const e: any = new Error(
         `Machine ${sandboxId} did not reach "running" in time; nothing was deployed onto it.`
@@ -1340,6 +1347,7 @@ export async function launchApp(
       assertNoInlineCredentials(params.repo);
       const dest = shQuote(spec.appDir);
       const tmp = `${TMPDIR}/eb-clone-${nanoid(8)}`;
+      params.onStep?.("clone", { sandboxId });
       const res = await runGit(ctx, sandboxId, {
         auth: { token: repoToken, username: params.repoUsername },
         timeoutSeconds: 300,
@@ -1414,6 +1422,7 @@ export async function launchApp(
     // —secretNames, sin ir más lejos— y arrancar con el spec local los
     // perdería. Un relanzamiento sobre una caja existente dejaría la app sin
     // sus secretos aunque estuvieran cargados.
+    params.onStep?.("build", { sandboxId });
     const merged = await setRunspec(ctx, sandboxId, spec);
     const started = await buildAndStart(ctx, sandboxId, owner, merged);
     if (started.exitCode !== 0) {
@@ -1432,6 +1441,7 @@ export async function launchApp(
     // represent a state that actually worked, not whatever happened to be on
     // disk. This is the step that makes the box recoverable, so it is not
     // optional and not the caller's job to remember.
+    params.onStep?.("release", { sandboxId });
     const release = await publishRelease(ctx, sandboxId, {
       message:
         params.message ??

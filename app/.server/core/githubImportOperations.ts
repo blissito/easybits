@@ -23,7 +23,7 @@ import {
   type InstallationRepo,
 } from "./githubApp";
 import { acceptPush } from "./pushDeployOperations";
-import { launchApp, runspecSchema } from "./releaseOperations";
+import { launchApp, runspecSchema, type LaunchStep } from "./releaseOperations";
 
 export async function claimInstallations(userId: string, code: string) {
   const userToken = await exchangeUserCode(code);
@@ -104,7 +104,13 @@ export async function detectRunspec(
 
 export async function importRepo(
   ctx: AuthContext,
-  params: { repo: string; branch?: string; sandboxId?: string; tier?: string }
+  params: {
+    repo: string;
+    branch?: string;
+    sandboxId?: string;
+    tier?: string;
+    onStep?: (step: LaunchStep, info?: { sandboxId?: string }) => void;
+  }
 ) {
   requireScope(ctx, "WRITE");
   // El repo se busca entre LOS SUYOS: un installationId que llegara del
@@ -130,6 +136,75 @@ export async function importRepo(
     tier: params.tier,
     name: hit.fullName.split("/")[1],
     message: `import ${hit.fullName}`,
+    onStep: params.onStep,
+  });
+}
+
+// ── deploy en segundo plano + estado para el stepper ─────────────────────────
+
+const TERMINAL = new Set(["ready", "failed", "checkout"]);
+/** Sin avance en este tiempo = el proceso murió (p. ej. un deploy de EasyBits lo reinició). */
+const STALE_MS = 30 * 60_000;
+
+/**
+ * Arranca el import y regresa AL INSTANTE con el id del Deployment. La UI
+ * pregunta por él cada par de segundos; antes la petición se quedaba abierta
+ * todo el build y el botón decía «Desplegando…» sin más.
+ */
+export async function startImport(
+  ctx: AuthContext,
+  params: { repo: string; branch?: string; sandboxId?: string; tier?: string }
+) {
+  requireScope(ctx, "WRITE");
+  const dep = await db.deployment.create({
+    data: {
+      ownerId: ctx.user.id,
+      repo: params.repo,
+      branch: params.branch || null,
+      sandboxId: params.sandboxId || null,
+      trigger: "import",
+    },
+  });
+  const set = (data: Record<string, unknown>) =>
+    db.deployment.update({ where: { id: dep.id }, data }).catch(() => {});
+
+  void (async () => {
+    try {
+      const res = await importRepo(ctx, {
+        ...params,
+        onStep: (step, info) =>
+          void set({ status: step, ...(info?.sandboxId ? { sandboxId: info.sandboxId } : {}) }),
+      });
+      if (res.checkoutUrl) {
+        await set({ status: "checkout", checkoutUrl: res.checkoutUrl });
+      } else {
+        await set({ status: "ready", url: res.url, version: res.version, sandboxId: res.sandboxId });
+      }
+    } catch (e: any) {
+      await set({ status: "failed", error: String(e?.message ?? e).slice(-2000) });
+    }
+  })();
+  return { deploymentId: dep.id };
+}
+
+export async function getDeployment(userId: string, id: string) {
+  const dep = await db.deployment.findFirst({ where: { id, ownerId: userId } });
+  if (!dep) return null;
+  if (!TERMINAL.has(dep.status) && Date.now() - dep.updatedAt.getTime() > STALE_MS) {
+    return db.deployment.update({
+      where: { id },
+      data: { status: "failed", error: "El deploy se interrumpió. Vuelve a intentarlo." },
+    });
+  }
+  return dep;
+}
+
+/** Deploys recientes del usuario (para retomar el stepper tras recargar). */
+export function recentDeployments(userId: string, limit = 5) {
+  return db.deployment.findMany({
+    where: { ownerId: userId },
+    orderBy: { createdAt: "desc" },
+    take: limit,
   });
 }
 

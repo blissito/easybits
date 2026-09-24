@@ -1584,6 +1584,29 @@ model Sandbox {
   @@index([ownerId])
 }
 
+// Un intento de deploy desde GitHub (importar o push). Existe para que la UI
+// muestre el avance por pasos y el resultado sin sostener una petición abierta
+// minutos: el deploy corre en segundo plano y esta fila es su estado.
+model Deployment {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  ownerId    String   @db.ObjectId
+  repo       String   // "dueño/repo"
+  branch     String?
+  sha        String?
+  trigger    String   @default("import") // import | push
+  sandboxId  String?
+  // queued | provision | boot | clone | build | release | ready | failed | checkout
+  status     String   @default("queued")
+  url        String?
+  checkoutUrl String?
+  error      String?
+  version    Int?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([ownerId, createdAt])
+}
+
 // Instalaciones de la GitHub App (`ghosty-studio`) que un usuario reclamó desde
 // /dash/hosting. Una instalación de organización la pueden reclamar varios
 // usuarios de EasyBits, por eso la unicidad es el par. Con esto se listan sus

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useFetcher, data } from "react-router";
+import { useFetcher, useRevalidator, data } from "react-router";
 import type { Route } from "./+types/hosting";
 import { getUserOrRedirect } from "~/.server/getters";
 import { db } from "~/.server/db";
@@ -21,7 +21,12 @@ import {
 } from "~/.server/core/releaseOperations";
 import { HOSTING_CATALOG } from "~/lib/hostingCatalog";
 import { githubAppEnabled } from "~/.server/core/githubApp";
-import { importRepo, listImportableRepos } from "~/.server/core/githubImportOperations";
+import {
+  getDeployment,
+  listImportableRepos,
+  recentDeployments,
+  startImport,
+} from "~/.server/core/githubImportOperations";
 import { ConfirmDialog } from "~/components/common/ConfirmDialog";
 import {
   LuExternalLink, LuLink, LuKeyRound, LuHistory, LuScrollText,
@@ -94,6 +99,10 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
     ? await db.githubInstallation.findMany({ where: { userId: user.id }, select: { account: true } })
     : [];
   const repos = installs.length ? await listImportableRepos(user.id).catch(() => []) : [];
+  // Si hay un deploy en curso (o recién terminado), el stepper se retoma al recargar.
+  const last = installs.length ? (await recentDeployments(user.id, 1))[0] : null;
+  const lastDeployment =
+    last && Date.now() - last.createdAt.getTime() < 60 * 60_000 ? serializeDeployment(last) : null;
 
   return data({
     machines: enriched,
@@ -102,6 +111,7 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
       connected: installs.length > 0,
       accounts: [...new Set(installs.map((i) => i.account))],
       repos,
+      lastDeployment,
     },
   });
 };
@@ -139,17 +149,16 @@ export const action = async ({ request }: Route.ActionArgs) => {
       return data({ detail: { releases, domains, secrets, logs } });
     }
     case "import": {
-      try {
-        const res = await importRepo(ctx, {
-          repo: String(form.get("repo") || ""),
-          branch: String(form.get("branch") || "") || undefined,
-          sandboxId: id || undefined,
-        });
-        if (res.checkoutUrl) return data({ imported: { checkoutUrl: res.checkoutUrl } });
-        return data({ imported: { url: res.url, version: res.version, sandboxId: res.sandboxId } });
-      } catch (e: any) {
-        return data({ imported: { error: String(e?.message ?? e).slice(0, 600) } }, { status: 400 });
-      }
+      const { deploymentId } = await startImport(ctx, {
+        repo: String(form.get("repo") || ""),
+        branch: String(form.get("branch") || "") || undefined,
+        sandboxId: id || undefined,
+      });
+      return data({ deploymentId });
+    }
+    case "deployment": {
+      const dep = await getDeployment(user.id, String(form.get("deploymentId") || ""));
+      return data({ deployment: dep ? serializeDeployment(dep) : null });
     }
     case "rollback":
       return data({ ok: await applyRelease(ctx, id, String(form.get("releaseId"))) });
@@ -177,6 +186,19 @@ export const action = async ({ request }: Route.ActionArgs) => {
       return data({ error: "intent desconocido" }, { status: 400 });
   }
 };
+
+function serializeDeployment(d: any) {
+  return {
+    id: d.id as string,
+    repo: d.repo as string,
+    status: d.status as string,
+    url: (d.url ?? null) as string | null,
+    checkoutUrl: (d.checkoutUrl ?? null) as string | null,
+    error: (d.error ?? null) as string | null,
+    version: (d.version ?? null) as number | null,
+    createdAt: new Date(d.createdAt).toISOString(),
+  };
+}
 
 /* ------------------------------------------------------------------ */
 
@@ -302,15 +324,77 @@ const GITHUB_NOTICE: Record<string, string> = {
 /**
  * «Conecta tu repo y ya está»: instalar la App, elegir repo y desplegar. Cada
  * push a la rama elegida vuelve a desplegar solo (webhook de la App).
+ *
+ * El deploy corre en segundo plano (fila Deployment) y aquí se pinta por pasos:
+ * antes la petición quedaba abierta todo el build y sólo se veía «Desplegando…».
  */
+const STEPS = [
+  { key: "queued", label: "Leer el repo" },
+  { key: "provision", label: "Crear la máquina" },
+  { key: "boot", label: "Encenderla" },
+  { key: "clone", label: "Traer el código" },
+  { key: "build", label: "Construir y arrancar" },
+  { key: "release", label: "Publicar" },
+  { key: "ready", label: "En línea" },
+] as const;
+const TERMINAL = ["ready", "failed", "checkout"];
+
+function DeployStepper({ deployment, startedAt }: { deployment: any; startedAt: number }) {
+  const [now, setNow] = useState(Date.now());
+  const done = TERMINAL.includes(deployment.status);
+  useEffect(() => {
+    if (done) return;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [done]);
+  const failed = deployment.status === "failed";
+  const idx = Math.max(0, STEPS.findIndex((s) => s.key === deployment.status));
+  // Si falla, el paso donde iba es el último que se marcó; se pinta en rojo.
+  const [failedAt, setFailedAt] = useState(0);
+  useEffect(() => {
+    if (!failed && idx > 0) setFailedAt(idx);
+  }, [idx, failed]);
+  const current = failed ? failedAt : idx;
+  const secs = Math.max(0, Math.round((now - startedAt) / 1000));
+
+  return (
+    <ol className="mt-4 grid gap-1.5">
+      {STEPS.map((step, i) => {
+        const state =
+          failed && i === current ? "failed" : i < current || deployment.status === "ready" ? "done" : i === current ? "active" : "todo";
+        return (
+          <li key={step.key} className="flex items-center gap-2 text-sm">
+            <span
+              className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-[2px] text-[11px] font-bold
+                ${state === "done" ? "bg-emerald-500 border-black text-white" : ""}
+                ${state === "active" ? "border-black bg-brand-500 animate-pulse" : ""}
+                ${state === "failed" ? "bg-red-500 border-black text-white" : ""}
+                ${state === "todo" ? "border-metal/40 text-metal/60" : ""}`}
+            >
+              {state === "done" ? "✓" : state === "failed" ? "✕" : i + 1}
+            </span>
+            <span className={state === "todo" ? "text-metal/60" : "text-dark font-medium"}>{step.label}</span>
+            {state === "active" && !done && <span className="text-xs text-metal">· {secs}s</span>}
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
 function GithubImport({ github, machines }: { github: any; machines: any[] }) {
-  const fetcher = useFetcher<any>();
+  const start = useFetcher<any>();
+  const poll = useFetcher<any>();
+  const revalidator = useRevalidator();
   const [repo, setRepo] = useState(github.repos[0]?.fullName ?? "");
   const [branch, setBranch] = useState("");
   const [target, setTarget] = useState("");
   const [notice, setNotice] = useState<string | null>(null);
-  const busy = fetcher.state !== "idle";
-  const result = fetcher.data?.imported;
+  const [deployment, setDeployment] = useState<any>(github.lastDeployment);
+  const [startedAt, setStartedAt] = useState<number>(
+    github.lastDeployment ? Date.parse(github.lastDeployment.createdAt) : Date.now()
+  );
+  const running = !!deployment && !TERMINAL.includes(deployment.status);
   const selected = github.repos.find((r: any) => r.fullName === repo);
 
   useEffect(() => {
@@ -318,14 +402,39 @@ function GithubImport({ github, machines }: { github: any; machines: any[] }) {
     if (q) setNotice(GITHUB_NOTICE[q] ?? null);
   }, []);
 
+  // El submit regresa al instante con el id; desde ahí manda el sondeo.
   useEffect(() => {
-    if (result?.checkoutUrl) window.location.href = result.checkoutUrl;
-  }, [result?.checkoutUrl]);
+    const id = start.data?.deploymentId;
+    if (!id) return;
+    setStartedAt(Date.now());
+    setDeployment({ id, repo, status: "queued" });
+  }, [start.data?.deploymentId]);
+
+  useEffect(() => {
+    if (!running) return;
+    const t = setInterval(() => {
+      if (poll.state === "idle") {
+        poll.submit({ intent: "deployment", deploymentId: deployment.id }, { method: "post" });
+      }
+    }, 2000);
+    return () => clearInterval(t);
+  }, [running, deployment?.id, poll.state]);
+
+  useEffect(() => {
+    const d = poll.data?.deployment;
+    if (!d || d.id !== deployment?.id) return;
+    setDeployment(d);
+    if (d.status === "checkout" && d.checkoutUrl) window.location.href = d.checkoutUrl;
+    // La máquina nueva debe aparecer en la lista sin recargar.
+    if (d.status === "ready") revalidator.revalidate();
+  }, [poll.data]);
+
+  const busy = start.state !== "idle" || running;
 
   return (
     <div className="mb-6 rounded-xl border-[2px] border-black bg-white p-4 min-w-0">
       <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-2 min-w-0">
+        <div className="flex items-center gap-2 min-w-0 flex-wrap">
           <LuGithub className="shrink-0" />
           <h2 className="font-bold text-dark">Importar desde GitHub</h2>
           {github.connected && (
@@ -346,7 +455,7 @@ function GithubImport({ github, machines }: { github: any; machines: any[] }) {
           </a>
         )}
       </div>
-      {notice && <p className="mt-2 text-sm text-metal">{notice}</p>}
+      {notice && !deployment && <p className="mt-2 text-sm text-metal">{notice}</p>}
 
       {!github.connected ? (
         <div className="mt-3">
@@ -365,9 +474,9 @@ function GithubImport({ github, machines }: { github: any; machines: any[] }) {
           La App no tiene acceso a ningún repo. Usa «Agregar repos», guarda en GitHub y recarga esta página.
         </p>
       ) : (
-        <fetcher.Form method="post" className="mt-3 grid gap-2 md:grid-cols-[2fr_1fr_1.4fr_auto] min-w-0">
+        <start.Form method="post" className="mt-3 grid gap-2 md:grid-cols-[2fr_1fr_1.4fr_auto] min-w-0">
           <input type="hidden" name="intent" value="import" />
-          <select name="repo" value={repo} onChange={(e) => setRepo(e.target.value)} className={input}>
+          <select name="repo" value={repo} onChange={(e) => setRepo(e.target.value)} className={input} disabled={busy}>
             {github.repos.map((r: any) => (
               <option key={r.fullName} value={r.fullName}>
                 {r.fullName}
@@ -381,8 +490,9 @@ function GithubImport({ github, machines }: { github: any; machines: any[] }) {
             onChange={(e) => setBranch(e.target.value)}
             placeholder={selected?.defaultBranch ?? "main"}
             className={input}
+            disabled={busy}
           />
-          <select name="sandboxId" value={target} onChange={(e) => setTarget(e.target.value)} className={input}>
+          <select name="sandboxId" value={target} onChange={(e) => setTarget(e.target.value)} className={input} disabled={busy}>
             <option value="">Máquina nueva</option>
             {machines.map((m: any) => (
               <option key={m.sandboxId} value={m.sandboxId}>
@@ -397,24 +507,44 @@ function GithubImport({ github, machines }: { github: any; machines: any[] }) {
           >
             {busy ? "Desplegando…" : "Desplegar"}
           </button>
-        </fetcher.Form>
+        </start.Form>
       )}
 
-      {target && github.connected && (
+      {target && github.connected && !deployment && (
         <p className="mt-2 text-xs text-red-600">
           Se reemplaza el código de esa máquina. Si el build falla, sigue la versión anterior.
         </p>
       )}
-      {result?.error && <p className="mt-2 text-sm text-red-600 break-words">{result.error}</p>}
-      {result?.url && (
-        <p className="mt-2 text-sm">
-          <LuCircleCheck className="inline mr-1 text-emerald-600" />
-          Versión {result.version} en línea:{" "}
-          <a href={result.url} target="_blank" rel="noreferrer" className="underline break-all">
-            {result.url}
-          </a>
-          . Cada push a la rama se despliega solo.
-        </p>
+
+      {deployment && (
+        <div className="mt-3 border-t-[2px] border-black/10 pt-3">
+          <p className="text-sm font-semibold text-dark">{deployment.repo}</p>
+          <DeployStepper key={deployment.id} deployment={deployment} startedAt={startedAt} />
+          {deployment.status === "ready" && deployment.url && (
+            <p className="mt-3 text-sm">
+              Versión {deployment.version} en línea:{" "}
+              <a href={deployment.url} target="_blank" rel="noreferrer" className="underline break-all">
+                {deployment.url}
+              </a>
+              . Cada push a la rama se despliega solo.
+            </p>
+          )}
+          {deployment.status === "checkout" && (
+            <p className="mt-3 text-sm text-metal">Te llevamos a pagar la máquina…</p>
+          )}
+          {deployment.status === "failed" && (
+            <p className="mt-3 text-sm text-red-600 break-words whitespace-pre-wrap">{deployment.error}</p>
+          )}
+          {TERMINAL.includes(deployment.status) && (
+            <button
+              type="button"
+              onClick={() => setDeployment(null)}
+              className="mt-2 text-sm font-semibold underline underline-offset-2"
+            >
+              {deployment.status === "failed" ? "Intentar de nuevo" : "Desplegar otro"}
+            </button>
+          )}
+        </div>
       )}
     </div>
   );
