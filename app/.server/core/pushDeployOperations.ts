@@ -99,10 +99,15 @@ export async function disablePushDeploy(ctx: AuthContext, sandboxId: string) {
 export async function getPushDeployStatus(ctx: AuthContext, sandboxId: string) {
   const { row, owner } = await ownedMachine(ctx, sandboxId);
   const spec = runspecSchema.safeParse(row.runspec ?? {});
-  const on = !!(await db.secret.findUnique({
-    where: { userId_name: { userId: owner, name: hookSecretName(sandboxId) } },
-    select: { id: true },
-  }));
+  // Importada con la GitHub App = encendido siempre: el push llega por el
+  // webhook único de la App, no por el secreto de esta máquina.
+  const viaApp = !!(spec.success && spec.data.source?.installationId);
+  const on =
+    viaApp ||
+    !!(await db.secret.findUnique({
+      where: { userId_name: { userId: owner, name: hookSecretName(sandboxId) } },
+      select: { id: true },
+    }));
   return {
     enabled: on,
     url: hookUrl(sandboxId),
@@ -145,6 +150,18 @@ export async function handleGithubHook(
   } catch {
     return { status: 400, body: { error: "BadPayload" } };
   }
+  return acceptPush(sandboxId, row, payload);
+}
+
+/**
+ * Decide si un push toca a esta máquina y, si sí, lo encola. Lo comparten el
+ * webhook manual por máquina y el webhook único de la GitHub App.
+ */
+export function acceptPush(
+  sandboxId: string,
+  row: { ownerId: string; runspec: unknown; status: string },
+  payload: any
+): { status: number; body: Record<string, unknown> } {
   const spec = runspecSchema.safeParse(row.runspec ?? {});
   const source = spec.success ? spec.data.source : undefined;
   if (!source) return { status: 409, body: { error: "MachineHasNoRepo" } };
@@ -206,6 +223,8 @@ async function runPushDeploy(sandboxId: string, ownerId: string, spec: Runspec, 
       repo: spec.source.repo,
       branch: spec.source.branch,
       repoToken: spec.source.tokenRef ? `$secret:${spec.source.tokenRef}` : undefined,
+      // Con la GitHub App no hay token guardado: launchApp mina uno por clone.
+      githubInstallationId: spec.source.installationId,
       appDir: spec.appDir,
       buildCommand: spec.buildCommand,
       startCommand: spec.startCommand,

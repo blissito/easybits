@@ -161,6 +161,9 @@ export default [
       // tenía dónde verlo. La versión anterior (routes/dash/hosting/*, mezclada
       // con WhatsApp) se borró en ce77fcd8; ésta se reescribió desde la API.
       route("hosting", "routes/dash/hosting.tsx"),
+      // «Importar desde GitHub»: instalar la App ghosty-studio y volver.
+      route("hosting/github/connect", "routes/dash/hosting-github-connect.ts"),
+      route("hosting/github/callback", "routes/dash/hosting-github-callback.ts"),
       // Panel de la flota: roster de agentes, canales, capacidades, skills y ensayo.
       route("flota", "routes/dash/flota.tsx"),
       // La vista anterior (acordeón + modal de capacidades) sigue accesible mientras
@@ -349,6 +352,8 @@ export default [
     // Push-deploy: webhook de GitHub → redeploy desde el repo de la máquina.
     route("machines/:id/push-deploy", "routes/api/v2/machine-push-deploy.ts"),
     route("machines/:id/github-hook", "routes/api/v2/machine-github-hook.ts"),
+    // Webhook ÚNICO de la GitHub App: push de cualquier repo importado.
+    route("github/app-hook", "routes/api/v2/github-app-hook.ts"),
     // Colección aparte a propósito: recrear desde un release debe funcionar
     // cuando la máquina original YA NO EXISTE.
     route("machine-releases/:id/redeploy", "routes/api/v2/machine-release-redeploy.ts"),

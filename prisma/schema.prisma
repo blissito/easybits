@@ -1584,6 +1584,23 @@ model Sandbox {
   @@index([ownerId])
 }
 
+// Instalaciones de la GitHub App (`ghosty-studio`) que un usuario reclamó desde
+// /dash/hosting. Una instalación de organización la pueden reclamar varios
+// usuarios de EasyBits, por eso la unicidad es el par. Con esto se listan sus
+// repos importables; el deploy guarda el installationId en runspec.source.
+model GithubInstallation {
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId         String   @db.ObjectId
+  installationId Int
+  account        String
+  accountType    String   @default("User")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([userId, installationId])
+  @@index([installationId])
+}
+
 // A named, persisted image captured from a running sandbox (copy-on-write clone
 // source). The host holds the actual disk+memory files under
 // /var/lib/sandbox-host/snapshots/named/<snapshotId>/; this row is the thin

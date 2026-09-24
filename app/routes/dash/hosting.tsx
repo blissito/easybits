@@ -20,10 +20,12 @@ import {
   unsetMachineSecret,
 } from "~/.server/core/releaseOperations";
 import { HOSTING_CATALOG } from "~/lib/hostingCatalog";
+import { githubAppEnabled } from "~/.server/core/githubApp";
+import { importRepo, listImportableRepos } from "~/.server/core/githubImportOperations";
 import { ConfirmDialog } from "~/components/common/ConfirmDialog";
 import {
   LuExternalLink, LuLink, LuKeyRound, LuHistory, LuScrollText,
-  LuPlay, LuPause, LuRotateCcw, LuTrash2, LuPlus, LuCircleCheck,
+  LuPlay, LuPause, LuRotateCcw, LuTrash2, LuPlus, LuCircleCheck, LuGithub,
 } from "react-icons/lu";
 
 export const meta = () => [
@@ -86,7 +88,12 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
     })
   );
 
-  return data({ machines: enriched });
+  // «Importar desde GitHub». Los repos sólo se piden si ya instaló la App.
+  const enabled = githubAppEnabled();
+  const installs = enabled ? await db.githubInstallation.count({ where: { userId: user.id } }) : 0;
+  const repos = installs ? await listImportableRepos(user.id).catch(() => []) : [];
+
+  return data({ machines: enriched, github: { enabled, connected: installs > 0, repos } });
 };
 
 export const action = async ({ request }: Route.ActionArgs) => {
@@ -120,6 +127,19 @@ export const action = async ({ request }: Route.ActionArgs) => {
         readMachineLogs(ctx, id, { lines: 40 }).catch(() => ({ output: "" })),
       ]);
       return data({ detail: { releases, domains, secrets, logs } });
+    }
+    case "import": {
+      try {
+        const res = await importRepo(ctx, {
+          repo: String(form.get("repo") || ""),
+          branch: String(form.get("branch") || "") || undefined,
+          sandboxId: id || undefined,
+        });
+        if (res.checkoutUrl) return data({ imported: { checkoutUrl: res.checkoutUrl } });
+        return data({ imported: { url: res.url, version: res.version, sandboxId: res.sandboxId } });
+      } catch (e: any) {
+        return data({ imported: { error: String(e?.message ?? e).slice(0, 600) } }, { status: 400 });
+      }
     }
     case "rollback":
       return data({ ok: await applyRelease(ctx, id, String(form.get("releaseId"))) });
@@ -226,7 +246,7 @@ const input =
   "placeholder:text-metal/50 focus:outline-none focus:ring-2 focus:ring-brand-500/40";
 
 export default function Hosting({ loaderData }: Route.ComponentProps) {
-  const { machines } = loaderData;
+  const { machines, github } = loaderData;
   const [openId, setOpenId] = useState<string | null>(null);
 
   return (
@@ -244,6 +264,8 @@ export default function Hosting({ loaderData }: Route.ComponentProps) {
         </p>
       </header>
 
+      {github.enabled && <GithubImport github={github} machines={machines} />}
+
       <div className="grid gap-3 w-full min-w-0">
         {machines.map((m: any) => (
           <MachineCard
@@ -256,6 +278,124 @@ export default function Hosting({ loaderData }: Route.ComponentProps) {
         </div>
       </div>
     </section>
+  );
+}
+
+const GITHUB_NOTICE: Record<string, string> = {
+  ok: "GitHub conectado. Elige un repo para desplegarlo.",
+  none: "La App quedó autorizada pero sin instalar en ninguna cuenta. Vuelve a «Conectar GitHub».",
+  state: "El enlace de GitHub expiró o no era tuyo. Inténtalo otra vez.",
+  error: "GitHub no respondió como esperábamos. Inténtalo otra vez.",
+  off: "Importar desde GitHub no está disponible en este momento.",
+};
+
+/**
+ * «Conecta tu repo y ya está»: instalar la App, elegir repo y desplegar. Cada
+ * push a la rama elegida vuelve a desplegar solo (webhook de la App).
+ */
+function GithubImport({ github, machines }: { github: any; machines: any[] }) {
+  const fetcher = useFetcher<any>();
+  const [repo, setRepo] = useState(github.repos[0]?.fullName ?? "");
+  const [branch, setBranch] = useState("");
+  const [target, setTarget] = useState("");
+  const [notice, setNotice] = useState<string | null>(null);
+  const busy = fetcher.state !== "idle";
+  const result = fetcher.data?.imported;
+  const selected = github.repos.find((r: any) => r.fullName === repo);
+
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search).get("github");
+    if (q) setNotice(GITHUB_NOTICE[q] ?? null);
+  }, []);
+
+  useEffect(() => {
+    if (result?.checkoutUrl) window.location.href = result.checkoutUrl;
+  }, [result?.checkoutUrl]);
+
+  return (
+    <div className="mb-6 rounded-xl border-[2px] border-black bg-white p-4 min-w-0">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-2 min-w-0">
+          <LuGithub className="shrink-0" />
+          <h2 className="font-bold text-dark">Importar desde GitHub</h2>
+        </div>
+        {github.connected && (
+          <a href="/dash/hosting/github/connect" className="text-sm font-semibold underline underline-offset-2">
+            Agregar repos
+          </a>
+        )}
+      </div>
+      {notice && <p className="mt-2 text-sm text-metal">{notice}</p>}
+
+      {!github.connected ? (
+        <div className="mt-3">
+          <p className="text-sm text-metal mb-3">
+            Instala la App en tu cuenta, elige los repos y listo: cada push se despliega solo.
+          </p>
+          <a
+            href="/dash/hosting/github/connect"
+            className="inline-flex items-center gap-2 h-9 px-3 rounded-lg border-[2px] border-black bg-brand-500 text-sm font-semibold"
+          >
+            <LuGithub /> Conectar GitHub
+          </a>
+        </div>
+      ) : github.repos.length === 0 ? (
+        <p className="mt-3 text-sm text-metal">
+          La App no tiene acceso a ningún repo. Usa «Agregar repos» para elegirlos.
+        </p>
+      ) : (
+        <fetcher.Form method="post" className="mt-3 grid gap-2 md:grid-cols-[2fr_1fr_1.4fr_auto] min-w-0">
+          <input type="hidden" name="intent" value="import" />
+          <select name="repo" value={repo} onChange={(e) => setRepo(e.target.value)} className={input}>
+            {github.repos.map((r: any) => (
+              <option key={r.fullName} value={r.fullName}>
+                {r.fullName}
+                {r.private ? " 🔒" : ""}
+              </option>
+            ))}
+          </select>
+          <input
+            name="branch"
+            value={branch}
+            onChange={(e) => setBranch(e.target.value)}
+            placeholder={selected?.defaultBranch ?? "main"}
+            className={input}
+          />
+          <select name="sandboxId" value={target} onChange={(e) => setTarget(e.target.value)} className={input}>
+            <option value="">Máquina nueva</option>
+            {machines.map((m: any) => (
+              <option key={m.sandboxId} value={m.sandboxId}>
+                {title(m)} · {shortId(m.sandboxId)}
+              </option>
+            ))}
+          </select>
+          <button
+            type="submit"
+            disabled={busy || !repo}
+            className={`h-9 px-3 rounded-lg border-[2px] border-black bg-brand-500 text-sm font-semibold ${busy ? "opacity-40" : ""}`}
+          >
+            {busy ? "Desplegando…" : "Desplegar"}
+          </button>
+        </fetcher.Form>
+      )}
+
+      {target && github.connected && (
+        <p className="mt-2 text-xs text-red-600">
+          Se reemplaza el código de esa máquina. Si el build falla, sigue la versión anterior.
+        </p>
+      )}
+      {result?.error && <p className="mt-2 text-sm text-red-600 break-words">{result.error}</p>}
+      {result?.url && (
+        <p className="mt-2 text-sm">
+          <LuCircleCheck className="inline mr-1 text-emerald-600" />
+          Versión {result.version} en línea:{" "}
+          <a href={result.url} target="_blank" rel="noreferrer" className="underline break-all">
+            {result.url}
+          </a>
+          . Cada push a la rama se despliega solo.
+        </p>
+      )}
+    </div>
   );
 }
 

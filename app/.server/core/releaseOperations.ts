@@ -67,6 +67,7 @@ const PREBUILT_KEEP = new Set(["node_modules", "dist", "build", ".next"]);
 export { SECRETS_FILE } from "./secretsFile";
 import { SECRETS_FILE, sourceSecrets, writeSecretsFile } from "./secretsFile";
 import { assertNoInlineCredentials, gitFailure, runGit } from "./gitOperations";
+import { installationToken, repoPathFromUrl } from "./githubApp";
 
 /** Dónde se anota el pid de la app, para poder pararla en el siguiente deploy. */
 export const PID_FILE = ".easybits-app.pid";
@@ -144,6 +145,12 @@ export const runspecSchema = z.object({
       repo: z.string().min(1),
       branch: z.string().optional(),
       tokenRef: z.string().regex(/^[A-Z_][A-Z0-9_]*$/).optional(),
+      /**
+       * Instalación de la GitHub App que cubre el repo. Con esto no se guarda
+       * token alguno: cada clone mina uno de 1 h, recortado al repo y de sólo
+       * lectura. Excluyente con `tokenRef`.
+       */
+      installationId: z.number().int().positive().optional(),
     })
     .optional(),
 });
@@ -1164,6 +1171,11 @@ export async function launchApp(
      */
     repoToken?: string;
     repoUsername?: string;
+    /**
+     * Instalación de la GitHub App con acceso al repo. Reemplaza a `repoToken`:
+     * el token se mina aquí y se recuerda la instalación, no el token.
+     */
+    githubInstallationId?: number;
     archiveUrl?: string;
     sandboxId?: string;
     tier?: string;
@@ -1307,11 +1319,21 @@ export async function launchApp(
     if (params.repo || params.archiveUrl) codeReplaced = true;
 
     if (params.repo) {
-      spec.source = {
-        repo: params.repo,
-        branch: params.branch,
-        tokenRef: await rememberRepoToken(owner, sandboxId, params.repoToken),
-      };
+      let repoToken = params.repoToken;
+      if (params.githubInstallationId && !repoToken) {
+        const path = repoPathFromUrl(params.repo);
+        repoToken = await installationToken(params.githubInstallationId, {
+          onlyRepo: path?.split("/")[1],
+          readOnly: true,
+        });
+        spec.source = { repo: params.repo, branch: params.branch, installationId: params.githubInstallationId };
+      } else {
+        spec.source = {
+          repo: params.repo,
+          branch: params.branch,
+          tokenRef: await rememberRepoToken(owner, sandboxId, params.repoToken),
+        };
+      }
       // El clone va por gitOperations: es el único sitio que sabe entregar una
       // credencial sin que acabe en `ps` ni en `.git/config`. Antes esto era un
       // `git clone` inline y un repo privado sencillamente no funcionaba.
@@ -1319,7 +1341,7 @@ export async function launchApp(
       const dest = shQuote(spec.appDir);
       const tmp = `${TMPDIR}/eb-clone-${nanoid(8)}`;
       const res = await runGit(ctx, sandboxId, {
-        auth: { token: params.repoToken, username: params.repoUsername },
+        auth: { token: repoToken, username: params.repoUsername },
         timeoutSeconds: 300,
         pre: [
           // Se vacía el CONTENIDO, no el directorio: si appDir es un punto de
