@@ -320,7 +320,13 @@ function GithubImport({ github, machines }: { github: any; machines: any[] }) {
           <h2 className="font-bold text-dark">Importar desde GitHub</h2>
         </div>
         {github.connected && (
-          <a href="/dash/hosting/github/connect" className="text-sm font-semibold underline underline-offset-2">
+          // Pestaña nueva: al guardar repos GitHub no regresa solo; se vuelve aquí y se recarga.
+          <a
+            href="/dash/hosting/github/connect?add=1"
+            target="_blank"
+            rel="noreferrer"
+            className="text-sm font-semibold underline underline-offset-2"
+          >
             Agregar repos
           </a>
         )}
@@ -341,7 +347,7 @@ function GithubImport({ github, machines }: { github: any; machines: any[] }) {
         </div>
       ) : github.repos.length === 0 ? (
         <p className="mt-3 text-sm text-metal">
-          La App no tiene acceso a ningún repo. Usa «Agregar repos» para elegirlos.
+          La App no tiene acceso a ningún repo. Usa «Agregar repos», guarda en GitHub y recarga esta página.
         </p>
       ) : (
         <fetcher.Form method="post" className="mt-3 grid gap-2 md:grid-cols-[2fr_1fr_1.4fr_auto] min-w-0">

@@ -110,6 +110,16 @@ export function installUrl(state: string): string {
   return `https://github.com/apps/${GITHUB_APP_SLUG}/installations/new?state=${encodeURIComponent(state)}`;
 }
 
+/**
+ * Autorizar sin instalar. Si la App ya está instalada en su cuenta (p. ej. desde
+ * Teams), `/installations/new` abre la pantalla de configuración y NO regresa;
+ * esta liga sí regresa al instante con `code` (mismo callback, el relay de Teams).
+ */
+export function authorizeUrl(state: string): string {
+  const q = new URLSearchParams({ client_id: process.env.GITHUB_CLIENT_ID ?? "", state });
+  return `https://github.com/login/oauth/authorize?${q}`;
+}
+
 /** Canjea el `code` user-to-server. Sólo se usa para saber qué instalaciones son del usuario; no se guarda. */
 export async function exchangeUserCode(code: string): Promise<string> {
   const res = await fetch("https://github.com/login/oauth/access_token", {

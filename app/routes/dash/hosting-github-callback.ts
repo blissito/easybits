@@ -2,7 +2,7 @@ import { redirect } from "react-router";
 import type { Route } from "./+types/hosting-github-callback";
 import { getUserOrRedirect } from "~/.server/getters";
 import { githubStateCookie } from "~/.server/githubState";
-import { STATE_PREFIX } from "~/.server/core/githubApp";
+import { installUrl, STATE_PREFIX } from "~/.server/core/githubApp";
 import { claimInstallations } from "~/.server/core/githubImportOperations";
 
 // GET /dash/hosting/github/callback?code&state — llega rebotado por el relay de
@@ -20,7 +20,10 @@ export async function loader({ request }: Route.LoaderArgs) {
   }
   try {
     const n = await claimInstallations(user.id, code);
-    return redirect(`/dash/hosting?github=${n ? "ok" : "none"}`, { headers: clear });
+    // Autorizó pero no la tiene instalada: a instalar, con el MISMO state (la
+    // cookie sigue viva). Al instalar GitHub regresa aquí con otro code.
+    if (!n) return redirect(installUrl(state));
+    return redirect("/dash/hosting?github=ok", { headers: clear });
   } catch (e: any) {
     console.error("[github-app] callback:", e?.message ?? e);
     return redirect("/dash/hosting?github=error", { headers: clear });
