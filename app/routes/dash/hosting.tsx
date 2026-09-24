@@ -90,10 +90,20 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
 
   // «Importar desde GitHub». Los repos sólo se piden si ya instaló la App.
   const enabled = githubAppEnabled();
-  const installs = enabled ? await db.githubInstallation.count({ where: { userId: user.id } }) : 0;
-  const repos = installs ? await listImportableRepos(user.id).catch(() => []) : [];
+  const installs = enabled
+    ? await db.githubInstallation.findMany({ where: { userId: user.id }, select: { account: true } })
+    : [];
+  const repos = installs.length ? await listImportableRepos(user.id).catch(() => []) : [];
 
-  return data({ machines: enriched, github: { enabled, connected: installs > 0, repos } });
+  return data({
+    machines: enriched,
+    github: {
+      enabled,
+      connected: installs.length > 0,
+      accounts: [...new Set(installs.map((i) => i.account))],
+      repos,
+    },
+  });
 };
 
 export const action = async ({ request }: Route.ActionArgs) => {
@@ -318,6 +328,11 @@ function GithubImport({ github, machines }: { github: any; machines: any[] }) {
         <div className="flex items-center gap-2 min-w-0">
           <LuGithub className="shrink-0" />
           <h2 className="font-bold text-dark">Importar desde GitHub</h2>
+          {github.connected && (
+            <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700">
+              <LuCircleCheck /> Conectado como {github.accounts.map((a: string) => `@${a}`).join(", ")}
+            </span>
+          )}
         </div>
         {github.connected && (
           // Pestaña nueva: al guardar repos GitHub no regresa solo; se vuelve aquí y se recarga.
