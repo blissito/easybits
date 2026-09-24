@@ -366,7 +366,7 @@ function DeployStepper({ deployment, startedAt }: { deployment: any; startedAt: 
           <li key={step.key} className="flex items-center gap-2 text-sm">
             <span
               className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-[2px] text-[11px] font-bold
-                ${state === "done" ? "bg-emerald-500 border-black text-white" : ""}
+                ${state === "done" ? "bg-green-500 border-black text-white" : ""}
                 ${state === "active" ? "border-black bg-brand-500 animate-pulse" : ""}
                 ${state === "failed" ? "bg-red-500 border-black text-white" : ""}
                 ${state === "todo" ? "border-metal/40 text-metal/60" : ""}`}
@@ -438,7 +438,7 @@ function GithubImport({ github, machines }: { github: any; machines: any[] }) {
           <LuGithub className="shrink-0" />
           <h2 className="font-bold text-dark">Importar desde GitHub</h2>
           {github.connected && (
-            <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700">
+            <span className="inline-flex items-center gap-1 text-xs font-semibold text-green-700">
               <LuCircleCheck /> Conectado como {github.accounts.map((a: string) => `@${a}`).join(", ")}
             </span>
           )}
