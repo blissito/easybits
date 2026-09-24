@@ -1191,6 +1191,21 @@ paths:
         "403": { description: "Firma inválida." }
         "404": { description: "Push-deploy apagado para esta máquina." }
 
+  /api/v2/github/app-hook:
+    post:
+      tags: [Machines]
+      operationId: githubAppHook
+      summary: Receptor del webhook de la GitHub App
+      description: |
+        Lo llama GitHub, no tú. Es el webhook ÚNICO de la App `ghosty-studio`: un push redespliega
+        las máquinas importadas desde /dash/hosting con ese repo y esa rama. Sin API key: la
+        autenticación es la firma `X-Hub-Signature-256`. `installation.deleted` olvida la instalación.
+      security: []
+      responses:
+        "200": { description: "ping o evento ignorado." }
+        "202": { description: "Push aceptado; lista las máquinas que se redespliegan." }
+        "403": { description: "Firma inválida." }
+
   /api/v2/machines/{id}/secrets:
     parameters:
       - $ref: "#/components/parameters/id"
