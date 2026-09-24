@@ -4,7 +4,11 @@
 Premisa: traer clientes que hoy pagan $20 USD en Vercel «porque conectan el repo y ya está». Ya está en prod
 (24-sep): GitHub App `ghosty-studio` compartida con Teams, importar repo en `/dash/hosting`, push→redeploy por
 webhook único, detección mínima (estático → `serve`). Falta cerrar la paridad con lo que TODOS los players hacen
-y fijar lo que nos diferencia. Fuentes: tres investigaciones sobre docs oficiales (24-sep-2026); cada afirmación
+y fijar lo que nos diferencia.
+
+> **Webhook (24-sep):** la URL única de la App ahora es de Ghosty Studio (`https://www.ghosty.studio/api/github/app-hook`):
+> verifica, guarda y nos reenvía verbatim `push`/`installation`/`ping`/`pull_request` con reintentos, firmado con
+> `GITHUB_APP_WEBHOOK_FORWARD_SECRET`. `verifyAppWebhook` acepta ese y el de la App (rollback = volver la URL aquí). Fuentes: tres investigaciones sobre docs oficiales (24-sep-2026); cada afirmación
 de abajo tiene URL en el anexo que se guarda con el spec.
 
 ## 1. Lo que hacen todos (la barra mínima)

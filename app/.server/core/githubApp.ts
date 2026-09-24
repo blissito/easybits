@@ -192,14 +192,23 @@ export function repoPathFromUrl(url: string): string | null {
   return m ? `${m[1]}/${m[2]}`.toLowerCase() : null;
 }
 
-/** Firma del webhook de la App (`x-hub-signature-256`). */
+/**
+ * Firma del webhook de la App (`x-hub-signature-256`).
+ *
+ * Desde el 2026-09-24 el receptor ÚNICO de la App es Ghosty Studio (`/api/github/app-hook`), que
+ * nos reenvía verbatim lo nuestro (push, installation) firmado con su secreto de reenvío
+ * (`GITHUB_APP_WEBHOOK_FORWARD_SECRET`). Se aceptan los dos: el de la App (llegada directa, y
+ * rollback) y el de reenvío. Sobre el cuerpo CRUDO siempre.
+ */
 export function verifyAppWebhook(rawBody: string, header: string | null): boolean {
-  const secret = process.env.GITHUB_APP_WEBHOOK_SECRET;
-  if (!secret || !header) return false;
-  const expected = "sha256=" + createHmac("sha256", secret).update(rawBody).digest("hex");
-  const a = Buffer.from(header);
-  const b = Buffer.from(expected);
-  return a.length === b.length && timingSafeEqual(a, b);
+  if (!header) return false;
+  const b = Buffer.from(header);
+  for (const secret of [process.env.GITHUB_APP_WEBHOOK_SECRET, process.env.GITHUB_APP_WEBHOOK_FORWARD_SECRET]) {
+    if (!secret) continue;
+    const a = Buffer.from("sha256=" + createHmac("sha256", secret).update(rawBody).digest("hex"));
+    if (a.length === b.length && timingSafeEqual(a, b)) return true;
+  }
+  return false;
 }
 
 /** Un archivo del repo (texto) con la instalación, o null si no existe. */
