@@ -16,6 +16,7 @@ import { db } from "../db";
 import {
   exchangeUserCode,
   installationRepos,
+  readRepoFile,
   repoPathFromUrl,
   userInstallations,
   verifyAppWebhook,
@@ -57,6 +58,50 @@ export async function listImportableRepos(userId: string): Promise<ImportableRep
     .sort((a, b) => String(b.pushedAt ?? "").localeCompare(String(a.pushedAt ?? "")));
 }
 
+// Servidor estático para lo que no trae `start`. `npx` y no global: un release
+// se reconstruye en una caja limpia y ahí sólo existe lo que el comando baje.
+const STATIC_SERVE = (dir: string) => `npx --yes serve@14 -l tcp://0.0.0.0:3000 ${dir}`;
+const INSTALL = "(npm ci || npm install)";
+
+/**
+ * Cómo construir y arrancar, leyendo el repo (lo que Vercel llama detectar el
+ * framework). launchApp por default supone `npm run build` + `npm start`, y un
+ * sitio estático —index.html y un package.json sin scripts— moría en el build.
+ */
+export async function detectRunspec(
+  installationId: number,
+  repoPath: string,
+  branch?: string
+): Promise<{ buildCommand: string; startCommand: string }> {
+  const raw = await readRepoFile(installationId, repoPath, "package.json", branch).catch(() => null);
+  let scripts: Record<string, string> = {};
+  if (raw) {
+    try {
+      scripts = JSON.parse(raw).scripts ?? {};
+    } catch {
+      /* package.json roto: se trata como estático */
+    }
+  }
+  const warm = `npx --yes serve@14 --version >/dev/null`;
+  if (!raw) return { buildCommand: warm, startCommand: STATIC_SERVE(".") };
+  if (scripts.start) {
+    return {
+      buildCommand: scripts.build ? `${INSTALL} && npm run build` : INSTALL,
+      startCommand: "npm start",
+    };
+  }
+  if (scripts.build) {
+    // Build sin start = sitio estático generado (Vite, Astro, CRA…). La salida
+    // más común primero; si no hay ninguna, la raíz.
+    const out = `$(for d in dist build out public; do [ -f "$d/index.html" ] && echo "$d" && break; done; true)`;
+    return {
+      buildCommand: `${INSTALL} && npm run build && ${warm}`,
+      startCommand: `sh -c 'd=${out}; exec ${STATIC_SERVE('"${d:-.}"')}'`,
+    };
+  }
+  return { buildCommand: `${INSTALL} && ${warm}`, startCommand: STATIC_SERVE(".") };
+}
+
 export async function importRepo(
   ctx: AuthContext,
   params: { repo: string; branch?: string; sandboxId?: string; tier?: string }
@@ -74,9 +119,12 @@ export async function importRepo(
     e.status = 404;
     throw e;
   }
+  const branch = params.branch || hit.defaultBranch;
+  const detected = await detectRunspec(hit.installationId, hit.fullName, branch);
   return launchApp(ctx, {
     repo: hit.cloneUrl,
-    branch: params.branch || hit.defaultBranch,
+    branch,
+    ...detected,
     githubInstallationId: hit.installationId,
     sandboxId: params.sandboxId || undefined,
     tier: params.tier,

@@ -201,3 +201,21 @@ export function verifyAppWebhook(rawBody: string, header: string | null): boolea
   const b = Buffer.from(expected);
   return a.length === b.length && timingSafeEqual(a, b);
 }
+
+/** Un archivo del repo (texto) con la instalación, o null si no existe. */
+export async function readRepoFile(
+  installationId: number,
+  repoPath: string,
+  path: string,
+  ref?: string
+): Promise<string | null> {
+  const token = await installationToken(installationId, {
+    onlyRepo: repoPath.split("/")[1],
+    readOnly: true,
+  });
+  const q = ref ? `?ref=${encodeURIComponent(ref)}` : "";
+  const res = await fetch(`${API}/repos/${repoPath}/contents/${path}${q}`, {
+    headers: { ...H, Authorization: `Bearer ${token}`, Accept: "application/vnd.github.raw+json" },
+  });
+  return res.ok ? res.text() : null;
+}
