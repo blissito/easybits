@@ -1,6 +1,6 @@
 {
   "name": "@easybits.cloud/cli",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Official CLI for EasyBits, the cloud for AI agents — sandboxes, hosting, domains, databases, agents and files from your terminal",
   "type": "module",
   "bin": {
@@ -35,7 +35,7 @@
     "access": "public"
   },
   "dependencies": {
-    "@easybits.cloud/sdk": "^0.35.2"
+    "@easybits.cloud/sdk": "^0.35.3"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

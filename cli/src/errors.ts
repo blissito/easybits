@@ -34,21 +34,35 @@ export function notLoggedIn(): CliError {
 }
 
 /** Saca el mensaje legible del cuerpo de error de la API (JSON o texto). */
-function apiMessage(body: string): string {
+function apiMessage(body: string): { message: string; kind?: string } {
   try {
     const j = JSON.parse(body);
+    // Forma { error: "SandboxBusy", message: "…" }: el código y el texto, los dos.
+    if (typeof j.error === "string" && typeof j.message === "string") return { message: `${j.error}: ${j.message}`, kind: j.error };
+    if (typeof j.code === "string" && typeof j.error === "string") return { message: `${j.code}: ${j.error}`, kind: j.code };
     const msg = j.message ?? j.error ?? j.detail;
-    if (typeof msg === "string") return msg;
-    if (msg) return JSON.stringify(msg);
+    if (typeof msg === "string") return { message: msg };
+    if (msg) return { message: JSON.stringify(msg) };
   } catch {}
-  return body.trim() || "empty response";
+  return { message: body.trim() || "empty response" };
 }
+
+// Qué hacer ante cada error con nombre (los documenta /docs: sandboxes y databases).
+const KIND_HINTS: Record<string, string> = {
+  SandboxBusy: "A snapshot or fork is running on this sandbox. Wait a few minutes and retry (easybits sb get <id> shows `activity`).",
+  SandboxUnreachable: "The sandbox is not answering inside. Wait and retry; if it persists, destroy it.",
+  SandboxHostTimeout: "The operation may still be running. Check `easybits sb get <id>` and retry in a few minutes.",
+  SandboxHostError: "The sandbox host failed. Retry; if it persists, contact support.",
+  SQL_ERROR: "Fix the SQL statement.",
+  DATABASE_STORAGE_MISSING: "This database has no storage; its data is unavailable. Delete it (easybits db rm) and create a new one.",
+  DATABASE_BACKEND_ERROR: "The database backend failed. Retry in a moment.",
+};
 
 /** Convierte cualquier error en un CliError con código de salida y pista. */
 export function toCliError(err: unknown): CliError {
   if (err instanceof CliError) return err;
   if (err instanceof EasybitsError) {
-    const message = apiMessage(err.body);
+    const { message, kind } = apiMessage(err.body);
     if (err.status === 401) {
       return new CliError(
         `Credentials rejected (401): ${message}`,
@@ -59,13 +73,14 @@ export function toCliError(err: unknown): CliError {
       );
     }
     const hint =
-      err.status === 403
+      (kind && KIND_HINTS[kind]) ??
+      (err.status === 403
         ? "Your key may lack the scope for this action (READ/WRITE/DELETE)."
         : err.status === 404
           ? "Check the id. List what you have with the matching `ls` command."
           : err.status === 402
             ? "Plan limit reached. See: easybits usage"
-            : undefined;
+            : undefined);
     return new CliError(`API error ${err.status}: ${message}`, EXIT.API, hint, "api_error", err.status);
   }
   const message = err instanceof Error ? err.message : String(err);

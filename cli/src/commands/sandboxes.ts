@@ -20,6 +20,7 @@ export function sandboxRecord(s: Sandbox) {
     cpuMode: s.cpuMode,
     monthlyMxn: s.monthlyMxn,
     metadata: s.metadata,
+    activity: s.activity,
   };
 }
 
@@ -28,6 +29,8 @@ function printSandbox(s: ReturnType<typeof sandboxRecord>) {
   if (s.name) console.log(`Name:      ${s.name}`);
   console.log(`Template:  ${s.template}`);
   console.log(`Status:    ${s.status}`);
+  // Mientras hay un snapshot/fork en curso la caja contesta 409 SandboxBusy a todo lo demás.
+  if (s.activity) console.log(`Activity:  ${s.activity} (busy: exec/suspend/destroy answer 409 SandboxBusy until it ends)`);
   console.log(`Created:   ${fmtDate(s.createdAt)}`);
   console.log(`Expires:   ${s.persistent ? "never (permanent)" : fmtDate(s.expiresAt)}`);
   if (s.tier) console.log(`Tier:      ${s.tier}${s.monthlyMxn != null ? ` ($${s.monthlyMxn} MXN/month)` : ""}`);
