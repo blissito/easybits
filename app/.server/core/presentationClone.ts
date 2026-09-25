@@ -199,7 +199,7 @@ async function generateSlidesInBackground(
   }
 }
 
-async function cloneSingleSlide(pageImage: string, pageWidth: number, pageHeight: number, maxIterations = 3, modelId?: string): Promise<string> {
+export async function cloneSingleSlide(pageImage: string, pageWidth: number, pageHeight: number, maxIterations = 3, modelId?: string): Promise<string> {
   const originalBuf = Buffer.from(pageImage, "base64");
   const model = getModel(modelId);
 
