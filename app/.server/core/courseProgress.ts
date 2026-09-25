@@ -42,7 +42,7 @@ export async function getVerifiedFacts(userId: string): Promise<VerifiedFacts> {
         where: { ownerId: userId, OR: [{ authCreds: { not: null } }, { wabaConfig: { not: null } }] },
       })
     ),
-    gt0(db.website.count({ where: { ownerId: userId, deletedAt: null, fileCount: { gt: 0 } } })),
+    gt0(db.website.count({ where: { ownerId: userId, OR: [{ deletedAt: null }, { deletedAt: { isSet: false } }], fileCount: { gt: 0 } } })),
     gt0(db.machineRelease.count({ where: { ownerId: userId, status: "available" } })),
   ]);
   return { api_key, mcp_connected, file, sandbox, database, fleet_agent, whatsapp, website, release };

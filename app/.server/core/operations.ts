@@ -1328,7 +1328,9 @@ export async function getUsageStats(ctx: AuthContext) {
       _sum: { size: true },
     }),
     db.file.count({ where: { ownerId: ctx.user.id, status: "DELETED" } }),
-    db.website.count({ where: { ownerId: ctx.user.id, deletedAt: null } }),
+    // En Mongo `deletedAt: null` NO casa con el campo ausente (los sitios nunca borrados):
+    // contaba 0 mientras listWebsites sí los devolvía. Mismo filtro que listWebsites.
+    db.website.count({ where: { ownerId: ctx.user.id, OR: [{ deletedAt: null }, { deletedAt: { isSet: false } }] } }),
     db.webhook.count({ where: { userId: ctx.user.id } }),
     db.database.count({ where: { userId: ctx.user.id } }),
     checkAiGenerationLimit(ctx.user.id),
