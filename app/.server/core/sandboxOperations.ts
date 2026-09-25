@@ -657,6 +657,18 @@ export function transformAcpStream(
 
 // Un status !ok del host, con el status y el cuerpo a la mano. El mensaje
 // conserva el formato de siempre: hay callers que lo leen con regex.
+/** El host no contestó a tiempo. La operación puede seguir corriendo allá. */
+export class SandboxHostTimeoutError extends Error {
+  constructor(
+    public method: string,
+    public path: string,
+    public timeoutMs: number
+  ) {
+    super(`sandbox host ${method} ${path} → timeout after ${timeoutMs}ms`);
+    this.name = "SandboxHostTimeoutError";
+  }
+}
+
 export class SandboxHostError extends Error {
   constructor(
     method: string,
@@ -679,6 +691,17 @@ export class SandboxHostError extends Error {
 // 500 "Unexpected Server Error": el SDK y los adaptadores (eve) devuelven `null`
 // solo ante 404 y reintentan/abortan ante 5xx.
 export function hostErrorResponse(e: unknown): Response | null {
+  // Timeout contra el host: la operación puede seguir allá (p. ej. un snapshot grande
+  // mantiene la caja ocupada varios minutos). 504 con la pista, nunca un 500 pelón.
+  if (e instanceof SandboxHostTimeoutError) {
+    return Response.json(
+      {
+        error: "SandboxHostTimeout",
+        message: `El host no respondió en ${Math.round(e.timeoutMs / 1000)} s (${e.method} ${e.path.replace(/^\/v1/, "")}). La operación puede seguir en curso: consulta GET /sandboxes/:id y reintenta en unos minutos.`,
+      },
+      { status: 504 }
+    );
+  }
   if (!(e instanceof SandboxHostError)) return null;
   let status = e.status;
   let raw = e.body;
@@ -701,12 +724,33 @@ export function hostErrorResponse(e: unknown): Response | null {
     }
   }
   if (status === 502) {
-    const m = /agent \S+ → (\d{3}): ([\s\S]*)$/.exec(parseHostMessage(raw));
-    if (!m) return null;
-    status = Number(m[1]);
-    raw = m[2].trim();
+    const msg = parseHostMessage(raw);
+    const m = /agent \S+ → (\d{3}): ([\s\S]*)$/.exec(msg);
+    if (m) {
+      status = Number(m[1]);
+      raw = m[2].trim();
+    } else if (/dial tcp|no route to host|connection refused|connection reset|EOF/i.test(msg)) {
+      // El host no alcanza al agente DENTRO de la caja: VM pausada (snapshot en curso),
+      // reiniciando o colgada. No es un fallo de la API: 409 con qué hacer.
+      return Response.json(
+        {
+          error: "SandboxUnreachable",
+          message:
+            "La caja no responde por dentro (puede estar a mitad de un snapshot, reiniciando o colgada). Espera un poco y reintenta; si sigue, destrúyela.",
+          detail: msg.slice(0, 300),
+        },
+        { status: 409 }
+      );
+    }
   }
-  if (status >= 500) return null;
+  if (status >= 500) {
+    // Cualquier otro 5xx del host: se reporta como 502 con su mensaje, para que el
+    // cliente vea QUÉ pasó en lugar de "Unexpected Server Error".
+    return Response.json(
+      { error: "SandboxHostError", status, message: parseHostMessage(raw).slice(0, 500) || `sandbox host → ${status}` },
+      { status: 502 }
+    );
+  }
   let body: unknown;
   try {
     body = JSON.parse(raw);
@@ -787,9 +831,7 @@ export async function callHost<T>(
       return (await res.json()) as T;
     } catch (e) {
       const isTimeout = e instanceof Error && e.name === "TimeoutError";
-      const wrapped = isTimeout
-        ? new Error(`sandbox host ${method} ${path} → timeout after ${timeoutMs}ms`)
-        : e;
+      const wrapped = isTimeout ? new SandboxHostTimeoutError(method, path, timeoutMs) : e;
       // Reintenta errores de red/timeout solo en GET.
       if (attempt < maxAttempts && (isTimeout || e instanceof TypeError)) {
         lastErr = wrapped;
@@ -1753,11 +1795,16 @@ export async function snapshotSandbox(
 ): Promise<SnapshotRecord> {
   requireScope(ctx, "WRITE");
   const ownerId = await effectiveOwnerId(ctx, sandboxId);
+  // El snapshot copia disco + memoria: una caja ubuntu normal pasó de los 120 s por
+  // defecto (medido 2026-09-25) y el cliente recibía 500 mientras el host seguía
+  // copiando — sin fila SandboxSnapshot y con la caja ocupada varios minutos. 10 min
+  // como el techo de template-snapshot ×2 (éste lleva memoria).
   const meta = await callHost<SnapshotRecord>(
     "POST",
     `/v1/sandbox/${sandboxId}/snapshot`,
     { name: opts?.name },
-    ownerId
+    ownerId,
+    600_000
   );
   const src = await db.sandbox
     .findUnique({ where: { sandboxId }, select: { tier: true } })
