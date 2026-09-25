@@ -7,6 +7,8 @@ import { db } from "~/.server/db";
 import type { AuthContext } from "~/.server/apiAuth";
 import { ok, fail } from "~/.server/mcp/responses";
 import { renderViaBoxAndStore, captureScreenshot, auditPage, type RenderOptions } from "~/.server/core/fleetRender";
+import { compareRender } from "~/.server/core/renderCompare";
+import { COMPARE_RENDER_DESC, compareRenderShape, compareRenderHint } from "~/.server/mcp/compareRenderTool";
 
 // Dedicated, always-on `render` MCP server for FleetAgents — Streamable-HTTP.
 // Injected per-turn into EVERY fleet agent (NOT gated by the easybits builtin
@@ -195,6 +197,18 @@ function buildRenderServer(ctx: AuthContext): McpServer {
       }
     }
   );
+
+  // Mismo contrato que el MCP principal; aquí sin créditos, como el resto de este
+  // servidor (el costo real es la caja del owner).
+  tool("compare_render", COMPARE_RENDER_DESC.replace(/\n- Cost: .*$/, "\n- Gratis, no consume créditos."), compareRenderShape, async (p) => {
+    try {
+      if (!p.fileId && !p.pdfUrl) return fail("Pasa `fileId` o `pdfUrl` del PDF original.");
+      const r = await compareRender(ctx, p);
+      return ok({ ...r, hint: compareRenderHint(r) });
+    } catch (e) {
+      return fail((e as Error).message);
+    }
+  });
 
   // `office_to_pdf` (docx/xlsx/pptx → PDF) was removed 2026-08-17: it routed to
   // a LibreOffice endpoint the render-svc box does not serve, so it had never

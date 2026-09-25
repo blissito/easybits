@@ -41,7 +41,7 @@ function buildToolGroupIndex(): Map<string, string> {
 const PREFIX_GROUPS: Array<[RegExp, string]> = [
   [/^web_|^research_/, "web"],
   [/^(sandbox|agent_run|expose_port|run_code|exec)/, "sandbox"],
-  [/^(service_|voice_|render_|audit_page)/, "sandbox"],
+  [/^(service_|voice_|render_|audit_page|compare_render)/, "sandbox"],
   [/^(fleet|wa_)/, "fleet"],
   [/^(machine_|launch_app|release|rollback|redeploy)/, "hosting"],
   [/^(secret_|db_)/, "core"],

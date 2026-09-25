@@ -96,7 +96,7 @@ function buildPayload(input: RenderInput): RenderPayload {
 }
 
 /** Sube los bytes a los Files del owner y devuelve el File público. */
-async function storeRender(
+export async function storeRender(
   ctx: AuthContext,
   bytes: Buffer,
   contentType: string,

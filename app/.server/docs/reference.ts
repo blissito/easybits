@@ -397,6 +397,17 @@ Read \`violations\` and \`incomplete\` separately — \`incomplete\` is what axe
 Costs 1 credit per viewport.
 MCP: \`audit_page\`
 
+### Compare a clone against its PDF
+\`POST /render/compare\`
+Body: \`{ fileId? | pdfUrl?, pages: { page, html }[], thresholds?: { layout?, textCoverage? }, waitMs? }\`
+A deterministic number to iterate against, instead of a human saying "looks right". Each PDF page is rasterized at 1200 px wide and the clone's HTML is rendered at exactly that size, **twice**.
+Returns per page: \`layout\` (difference after downscaling and blurring — ignores glyph anti-aliasing; **this is the one that decides**), \`pixel\` (full-resolution, informative), \`textCoverage\` (share of the PDF's words present as real text in the HTML — pasting the PDF as an image scores layout≈0 but fails here; \`null\` for scanned PDFs), \`trusted\` (both renders were identical — if false, the number means nothing), \`regions\` (top grid cells by difference, in page px) and \`diffUrl\` (original | clone | red diff).
+A page passes when \`trusted && layout ≤ 0.02 && textCoverage ≥ 0.95\`.
+The loop: compare → fix the first region of the worst page → compare again, until \`passed === total\`. Up to 20 pages per call.
+Costs 1 credit per page.
+SDK: \`eb.compareRender({ fileId, pages })\`
+MCP: \`compare_render\` (also on the fleet's always-on \`render\` MCP)
+
 ### Node-level editing (\`data-id\` addressing)
 Edit a page **by node** instead of re-emitting it. What you don't touch stays **byte-identical**.
 This matters beyond cost: re-emitting 40 KB to move one sentence is slow, but the real problem is that every full rewrite is a chance to change things nobody asked for.

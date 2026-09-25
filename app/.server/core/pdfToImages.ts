@@ -49,12 +49,13 @@ function readPngDimensions(buf: Buffer): { width: number; height: number } | nul
  * Convert PDF to images. Returns page images with their rendered dimensions.
  * @param maxPages - render at most this many leading pages (default 20).
  * @param maxWidth - render width in px (default 1200). Height preserves aspect ratio.
+ * @param page - render only this 1-based page (ignores maxPages).
  */
 export async function pdfToImages(
   pdfBuffer: Buffer,
-  opts: { maxPages?: number; maxWidth?: number } = {}
+  opts: { maxPages?: number; maxWidth?: number; page?: number } = {}
 ): Promise<PdfPage[]> {
-  const { maxPages = 20, maxWidth = 1200 } = opts;
+  const { maxPages = 20, maxWidth = 1200, page } = opts;
 
   if (pdfBuffer.length > MAX_PDF_BYTES) {
     throw new Error(
@@ -78,7 +79,8 @@ export async function pdfToImages(
             "-png",
             "-scale-to-x", String(maxWidth),
             "-scale-to-y", "-1",
-            "-l", String(maxPages),
+            // `page` rasteriza UNA sola página (1-based); si no, las primeras maxPages.
+            ...(page ? ["-f", String(page), "-l", String(page)] : ["-l", String(maxPages)]),
             pdfPath,
             prefix,
           ],

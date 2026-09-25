@@ -168,6 +168,46 @@ export interface Screenshot {
   warning?: string;
 }
 
+export interface CompareRenderParams {
+  /** PDF original en tu librería. Gana sobre `pdfUrl`. */
+  fileId?: string;
+  /** PDF original por URL pública https. */
+  pdfUrl?: string;
+  /** Hasta 20. `html` = HTML completo del clon de esa página (se renderiza a 1200 px de ancho). */
+  pages: { page: number; html: string }[];
+  /** Default layout 0.02 · textCoverage 0.95. */
+  thresholds?: { layout?: number; textCoverage?: number };
+  /** Espera extra antes de capturar el clon (fuentes lentas). */
+  waitMs?: number;
+}
+
+export interface CompareRenderPage {
+  page: number;
+  pass: boolean;
+  /** El HTML salió igual en dos renders. Si es false, los números no sirven. */
+  trusted: boolean;
+  /** 0–1, resolución completa (incluye ruido de fuentes). */
+  pixel: number | null;
+  /** 0–1, composición sin antialias. El que decide. */
+  layout: number | null;
+  /** 0–1, palabras del PDF presentes como texto. null = PDF escaneado. */
+  textCoverage: number | null;
+  /** Celdas con más diferencia, en px de la página. */
+  regions: { x: number; y: number; w: number; h: number; ratio: number }[];
+  /** Imagen original | clon | diff en rojo. */
+  diffUrl: string | null;
+  width: number;
+  height: number;
+  error?: string;
+}
+
+export interface CompareRenderResult {
+  pages: CompareRenderPage[];
+  passed: number;
+  total: number;
+  thresholds: { layout: number; textCoverage: number };
+}
+
 export interface SearchStockPhotoParams {
   /** Qué buscar. En inglés da mejores resultados en todos los bancos. */
   query: string;
@@ -1219,6 +1259,22 @@ export class EasybitsClient {
    */
   async screenshot(params: ScreenshotParams): Promise<Screenshot> {
     return this.request<Screenshot>("/screenshots", {
+      method: "POST",
+      body: JSON.stringify(params),
+    });
+  }
+
+  /**
+   * Compara un clon HTML contra su PDF original, página por página: un número
+   * determinista para iterar hasta que quede igual.
+   *
+   * Cada página regresa `layout` (el que decide), `pixel`, `textCoverage` (texto
+   * editable, no imagen), `trusted` (el render salió igual dos veces), `regions`
+   * (dónde arreglar) y `diffUrl`. Pasa con trusted && layout ≤ 0.02 && textCoverage ≥ 0.95.
+   * Cuesta 1 crédito por página, máx. 20 por llamada, requiere scope WRITE.
+   */
+  async compareRender(params: CompareRenderParams): Promise<CompareRenderResult> {
+    return this.request<CompareRenderResult>("/render/compare", {
       method: "POST",
       body: JSON.stringify(params),
     });

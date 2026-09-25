@@ -15,6 +15,7 @@ import {
   type AuditViewport,
   type ScreenshotPreset,
 } from "../../core/fleetRender";
+import { compareRender, type CompareInput, type CompareResult } from "../../core/renderCompare";
 import type { AuthContext } from "../../apiAuth";
 import { db } from "../../db";
 import { ServiceProviderError } from "../errors";
@@ -23,6 +24,7 @@ import { CREDIT_SCALE } from "~/lib/credits";
 
 const SERVICE_ID = "render.screenshot";
 const AUDIT_SERVICE_ID = "render.audit";
+const COMPARE_SERVICE_ID = "render.compare";
 
 export interface ScreenshotInput {
   url?: string;
@@ -105,6 +107,34 @@ export const auditService: ServiceDef<AuditInput, AuditOutput> = {
       return { data: await auditPage(auth, input) };
     } catch (e) {
       throw new ServiceProviderError(AUDIT_SERVICE_ID, 502, (e as Error).message);
+    }
+  },
+};
+
+export interface CompareOutput extends ServiceResult {
+  data: CompareResult;
+}
+
+/**
+ * Compara un clon HTML contra su PDF original, página por página. Cobra POR
+ * PÁGINA (cada una son dos renders en la caja del owner).
+ */
+export const compareService: ServiceDef<CompareInput, CompareOutput> = {
+  id: COMPARE_SERVICE_ID,
+  product: "image",
+  displayName: "Comparar clon vs PDF (pixel + layout + texto)",
+  description:
+    "Mide qué tan igual quedó un clon HTML de un PDF: diferencia de píxeles, de " +
+    "composición y cuánto texto quedó editable. Un número determinista para iterar.",
+  estimateCost: (input) => Math.max(1, input.pages?.length ?? 1) * CREDIT_SCALE,
+  async execute(input, ctx: ServiceCtx): Promise<CompareOutput> {
+    const user = await db.user.findUnique({ where: { id: ctx.userId } });
+    if (!user) throw new ServiceProviderError(COMPARE_SERVICE_ID, 404, "usuario no encontrado");
+    const auth = { user, scopes: ["READ", "WRITE", "DELETE"] } as unknown as AuthContext;
+    try {
+      return { data: await compareRender(auth, input) };
+    } catch (e) {
+      throw new ServiceProviderError(COMPARE_SERVICE_ID, 400, (e as Error).message);
     }
   },
 };

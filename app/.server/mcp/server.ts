@@ -33,6 +33,7 @@ import { offloadOversizedRead } from "./offloadOversizedRead";
 import { installDynamicTools } from "./dynamicTools";
 import { resolveFormat as resolveSocialFormat, SOCIAL_PRESET_KEYS } from "../core/socialPresets";
 import { ok, fail, paginate, failService } from "./responses";
+import { COMPARE_RENDER_DESC, compareRenderShape, compareRenderHint } from "./compareRenderTool";
 import {
   gitCheckout,
   gitClone,
@@ -6941,6 +6942,31 @@ function registerVideoTools(server: McpServer) {
       }
     })
   );
+
+  {
+    server.tool(
+      "compare_render",
+      COMPARE_RENDER_DESC,
+      compareRenderShape,
+      wrapHandler(async (params, extra) => {
+        const ctx = extra.authInfo as unknown as AuthContext;
+        if (!params.fileId && !params.pdfUrl) return fail("Pasa `fileId` o `pdfUrl` del PDF original.");
+        const { consumeService } = await import("../services/consume");
+        try {
+          const result = await consumeService<import("../services/providers/render").CompareOutput>(
+            "render.compare",
+            params,
+            { userId: ctx.user.id }
+          );
+          return ok({ ...result.data, hint: compareRenderHint(result.data) });
+        } catch (e) {
+          const f = failService(e, "Compare");
+          if (f) return f;
+          throw e;
+        }
+      })
+    );
+  }
 
   server.tool(
     "voice_tts_create",

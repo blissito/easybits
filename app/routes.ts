@@ -372,6 +372,7 @@ export default [
     route("icons", "routes/api/v2/icons.ts"),
     route("screenshots", "routes/api/v2/screenshots.ts"),
     route("audits", "routes/api/v2/audits.ts"),
+    route("render/compare", "routes/api/v2/render-compare.ts"),
     route("files/bulk-delete", "routes/api/v2/files-bulk-delete.ts"),
     route("files/bulk-upload", "routes/api/v2/files-bulk-upload.ts"),
     route("files/:fileId", "routes/api/v2/file.ts"),

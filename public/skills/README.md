@@ -18,6 +18,7 @@ npx skills add blissito/easybits-skills        # same skills, from this repo
 | `easybits-agent` | create a persistent agent and talk to it (HTTP/ACP) |
 | `easybits-mcp` | connect the MCP server to an editor or Claude.ai |
 | `easybits-docs` | read the docs without scraping (`.md`, llms.txt, docs MCP) |
+| `easybits-clone-verify` | score an HTML clone of a PDF page by page and iterate until it passes |
 
 Source of truth: `public/skills/` in [blissito/easybits](https://github.com/blissito/easybits);
 this repo is a `git subtree` mirror pushed with `npm run skills:publish`. MIT.
