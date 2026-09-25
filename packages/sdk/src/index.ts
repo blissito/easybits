@@ -2630,6 +2630,8 @@ export class Sandbox {
   tier?: string;
   cpuMode?: "shared" | "reserved";
   monthlyMxn?: number;
+  /** Long operation in progress (snapshot/fork); undefined when idle. */
+  activity?: SandboxActivity;
   private req: SandboxReq;
   /** Filesystem operations inside the sandbox. */
   readonly files: SandboxFiles;
@@ -2648,6 +2650,7 @@ export class Sandbox {
     this.tier = record.tier;
     this.cpuMode = record.cpuMode;
     this.monthlyMxn = record.monthlyMxn;
+    this.activity = record.activity;
     this.req = req;
     this.files = new SandboxFiles(record.sandboxId, req);
     this.git = new SandboxGit(record.sandboxId, req);
@@ -2679,6 +2682,7 @@ export class Sandbox {
     this.status = rec.status;
     this.expiresAt = rec.expiresAt;
     this.metadata = rec.metadata;
+    this.activity = rec.activity;
     return this;
   }
   /** Poll until status is "running" (or throw on error/stopped/timeout). */
@@ -3379,7 +3383,15 @@ export interface SandboxRecord {
   tier?: string;
   cpuMode?: "shared" | "reserved";
   monthlyMxn?: number;
+  /**
+   * Long operation running on the box right now; absent otherwise. While set,
+   * exec/suspend/destroy/snapshot/fork answer 409 `SandboxBusy` — wait and retry.
+   */
+  activity?: SandboxActivity;
 }
+
+/** What a sandbox is busy doing (see SandboxRecord.activity). */
+export type SandboxActivity = "snapshotting" | "forking";
 
 /** A named, persisted copy-on-write image captured from a running sandbox. */
 export interface SnapshotRecord {
