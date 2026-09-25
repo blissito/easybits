@@ -7,7 +7,8 @@ import type { CompareOutput } from "~/.server/services/providers/render";
 /**
  * POST /api/v2/render/compare — compara un clon HTML contra su PDF original.
  *
- * Body: { fileId | pdfUrl, pages: [{ page, html }], thresholds?, waitMs? }.
+ * Body: { fileId | pdfUrl, pages: [{ page, html }], waitMs? }. Los umbrales son
+ * fijos: quien llama suele ser el agente al que se califica.
  * Corre en la caja de render del owner, guarda las imágenes de diff en Files y
  * cobra por página → exige scope WRITE.
  */

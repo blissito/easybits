@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 /**
- * Compara el clon HTML de un PDF contra el original, página por página, con
+ * Verifica el clon HTML de un PDF contra el original, página por página, con
  * POST /api/v2/render/compare. Sin dependencias (Node 18+).
  *
  *   node compare.mjs --pdf <fileId | https://…pdf> --dir <carpeta> [--pages 1,3] [--wait 500]
  *
  * <carpeta> tiene page-1.html, page-2.html… (una por página del PDF).
- * Escribe <carpeta>/compare-report.json e imprime una tabla corta.
+ * Escribe <carpeta>/compare-report.json e imprime una tabla corta con el primer motivo.
  *
  * Env: EASYBITS_API_KEY (requerida) · EASYBITS_BASE_URL (default https://www.easybits.cloud)
  * Salida: 0 = todas pasan · 1 = alguna no pasa · 2 = error de uso o de red
@@ -63,11 +63,11 @@ const report = { passed: all.filter((p) => p.pass).length, total: all.length, pa
 writeFileSync(join(dir, "compare-report.json"), JSON.stringify(report, null, 2));
 
 const pct = (n) => (n == null ? "  —  " : `${(n * 100).toFixed(1).padStart(5)}%`);
-console.log("pág  pasa  layout  pixel   texto   región principal");
+console.log("pág  pasa  texto  tipo.  vivo   layout  motivo");
 for (const p of all) {
-  const r = p.regions?.[0];
-  const where = p.error ? `ERROR ${p.error}` : !p.trusted ? "render no determinista" : r ? `x${r.x} y${r.y} ${r.w}×${r.h}` : "";
-  console.log(`${String(p.page).padStart(3)}  ${p.pass ? " sí " : " no "}  ${pct(p.layout)}  ${pct(p.pixel)}  ${pct(p.textCoverage)}  ${where}`);
+  console.log(
+    `${String(p.page).padStart(3)}  ${p.pass ? " sí " : " no "}  ${pct(p.text?.matched)}  ${pct(p.text?.typography)}  ${pct(p.liveText)}  ${pct(p.layout)}  ${p.reasons?.[0] ?? ""}`
+  );
 }
-console.log(`\n${report.passed}/${report.total} pasan · detalle y diffUrl en ${join(dir, "compare-report.json")}`);
+console.log(`\n${report.passed}/${report.total} pasan · detalle, reasons y diffUrl en ${join(dir, "compare-report.json")}`);
 process.exit(report.passed === report.total ? 0 : 1);

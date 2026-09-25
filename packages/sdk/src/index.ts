@@ -173,31 +173,81 @@ export interface CompareRenderParams {
   fileId?: string;
   /** PDF original por URL pública https. */
   pdfUrl?: string;
-  /** Hasta 20. `html` = HTML completo del clon de esa página (se renderiza a 1200 px de ancho). */
+  /** Hasta 20. `html` = HTML completo del clon de esa página, al tamaño `pageCss` (pt × 4/3; carta = 816×1056). */
   pages: { page: number; html: string }[];
-  /** Default layout 0.02 · textCoverage 0.95. */
-  thresholds?: { layout?: number; textCoverage?: number };
   /** Espera extra antes de capturar el clon (fuentes lentas). */
   waitMs?: number;
+}
+
+export interface CompareRenderFont {
+  family: string;
+  size: number;
+  weight: number;
+  italic: boolean;
+  color: string;
 }
 
 export interface CompareRenderPage {
   page: number;
   pass: boolean;
-  /** El HTML salió igual en dos renders. Si es false, los números no sirven. */
+  /** Tamaño CSS al que se renderiza el clon (= la página del PDF). */
+  pageCss: { width: number; height: number };
+  /** El HTML se pintó igual dos veces. Si es false, los números no sirven. */
   trusted: boolean;
-  /** 0–1, resolución completa (incluye ruido de fuentes). */
-  pixel: number | null;
-  /** 0–1, composición sin antialias. El que decide. */
+  /** Cuánto se sale el contenido de la página (px CSS). */
+  overflow: { x: number; y: number };
+  /** PDF sin capa de texto: sólo se midió `layout`. */
+  scanned: boolean;
+  /** Lo que el HTML usa y no se permite (scripts, @media, hojas externas, CSS content con texto…). */
+  violations: string[];
+  text: {
+    words: number;
+    /** Fracción del original en su lugar (≤ 1.5 pt). */
+    matched: number;
+    /** Fracción del original que no aparece como texto. Debe ser 0. */
+    missing: number;
+    /** Fracción del texto del clon que no existe en el original. */
+    extra: number;
+    /** Letras y números del clon que el original no tiene. Debe quedar vacío. */
+    invented: string;
+    /** Palabras en su lugar pero tapadas o invisibles. Debe quedar vacío. */
+    hiddenWords?: { word: string; x: number; y: number }[];
+    /** Palabras que no se dibujan con la forma del original (fuente con glifos cambiados). */
+    glyphMismatches?: { word: string; x: number; y: number; ratio: number }[];
+    /** Palabras del PDF que no están escritas en el HTML (p. ej. generadas con CSS). */
+    notInSource?: string[];
+    /** Peores palabras: dx/dy en pt; null = no aparece. */
+    misplaced: { word: string; x: number; y: number; dx: number | null; dy: number | null }[];
+    /** De las palabras en su lugar, fracción con misma familia, tamaño, peso, cursiva, color y ancho. */
+    typography: number | null;
+    fontMismatches: {
+      word: string;
+      x: number;
+      y: number;
+      original: CompareRenderFont;
+      clone: CompareRenderFont;
+      differs: ("family" | "size" | "weight" | "style" | "color" | "width")[];
+      widthPt: { original: number; clone: number };
+    }[];
+    /** Fuentes que usa el original. */
+    originalFonts: string[];
+  } | null;
+  /** Fracción de líneas cuyo texto es texto vivo (no imagen). */
+  liveText: number | null;
+  /** 0–1, composición visual (fondos, colores, tablas, formas). */
   layout: number | null;
-  /** 0–1, palabras del PDF presentes como texto. null = PDF escaneado. */
-  textCoverage: number | null;
-  /** Celdas con más diferencia, en px de la página. */
+  /** 0–1, diferencia entre cómo se ve en pantalla y cómo se imprime. */
+  screen?: number | null;
+  /** 0–1, la zona pequeña más distinta (logo o recuadro que falta o cambió). */
+  layoutWorstCell?: number | null;
+  /** 0–1, diferencia a resolución completa. Informativo. */
+  pixel: number | null;
+  /** Dónde está la diferencia visual, en px CSS de la página. */
   regions: { x: number; y: number; w: number; h: number; ratio: number }[];
   /** Imagen original | clon | diff en rojo. */
   diffUrl: string | null;
-  width: number;
-  height: number;
+  /** Por qué no pasó, en español. */
+  reasons: string[];
   error?: string;
 }
 
@@ -205,7 +255,8 @@ export interface CompareRenderResult {
   pages: CompareRenderPage[];
   passed: number;
   total: number;
-  thresholds: { layout: number; textCoverage: number };
+  /** Umbrales fijos con los que se decidió. */
+  thresholds: { tolerancePt: number; text: number; extra: number; liveText: number; typography: number; layout: number; screen: number; cell: number };
 }
 
 export interface SearchStockPhotoParams {
@@ -1265,12 +1316,9 @@ export class EasybitsClient {
   }
 
   /**
-   * Compara un clon HTML contra su PDF original, página por página: un número
-   * determinista para iterar hasta que quede igual.
-   *
-   * Cada página regresa `layout` (el que decide), `pixel`, `textCoverage` (texto
-   * editable, no imagen), `trusted` (el render salió igual dos veces), `regions`
-   * (dónde arreglar) y `diffUrl`. Pasa con trusted && layout ≤ 0.02 && textCoverage ≥ 0.95.
+   * Verifica un clon HTML contra su PDF original, página por página, sobre lo que
+   * el navegador pinta: texto vivo en su lugar, misma tipografía, sin desborde,
+   * misma composición. `reasons` dice qué arreglar. Umbrales fijos.
    * Cuesta 1 crédito por página, máx. 20 por llamada, requiere scope WRITE.
    */
   async compareRender(params: CompareRenderParams): Promise<CompareRenderResult> {

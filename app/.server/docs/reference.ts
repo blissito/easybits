@@ -397,14 +397,18 @@ Read \`violations\` and \`incomplete\` separately — \`incomplete\` is what axe
 Costs 1 credit per viewport.
 MCP: \`audit_page\`
 
-### Compare a clone against its PDF
+### Verify a clone against its PDF
 \`POST /render/compare\`
-Body: \`{ fileId? | pdfUrl?, pages: { page, html }[], thresholds?: { layout?, textCoverage? }, waitMs? }\`
-A deterministic number to iterate against, instead of a human saying "looks right". Each PDF page is rasterized at 1200 px wide and the clone's HTML is rendered at exactly that size, **twice**.
-Returns per page: \`layout\` (difference after downscaling and blurring — ignores glyph anti-aliasing; **this is the one that decides**), \`pixel\` (full-resolution, informative), \`textCoverage\` (share of the PDF's words present as real text in the HTML — pasting the PDF as an image scores layout≈0 but fails here; \`null\` for scanned PDFs), \`trusted\` (both renders were identical — if false, the number means nothing), \`regions\` (top grid cells by difference, in page px) and \`diffUrl\` (original | clone | red diff).
-A page passes when \`trusted && layout ≤ 0.02 && textCoverage ≥ 0.95\`.
-The loop: compare → fix the first region of the worst page → compare again, until \`passed === total\`. Up to 20 pages per call.
-Costs 1 credit per page.
+Body: \`{ fileId? | pdfUrl?, pages: { page, html }[], waitMs? }\`
+A pass/fail verdict to iterate against, instead of a human saying "looks right". Because the agent optimizes it, everything is measured on what the browser **paints**, never on the source — otherwise pasting the PDF as an image and hiding the text would win.
+Design each page at the PDF page's CSS size: points × 4/3 (US letter = 816×1056 px). The response returns it as \`pageCss\`.
+Per page: \`text\` (every PDF word must exist as live DOM text within 1.5 pt of its place — none may be missing; \`misplaced\` lists the worst with dx/dy in pt), \`text.typography\` (same family, size, weight, italic, color and word width — the PDF's letter spacing counts; \`originalFonts\` names the fonts to use), \`liveText\` (text must not be baked into an image or canvas, nor hidden over an image of the PDF), \`overflow\`, \`trusted\` (renders identically twice), \`layout\` (backgrounds, tables, shapes; \`regions\` says where), \`diffUrl\` (original | clone | red diff) and \`reasons\` (why it failed, in Spanish).
+The clone is evaluated **without JavaScript** and must be static: no \`<script>\`, event handlers, \`@media\`/\`media=\`, \`backdrop-filter\`, \`mix-blend-mode\`, iframes, external stylesheets (Google/Bunny Fonts are fine) or text generated with CSS \`content\`. Those are what would let a page show one thing on screen and another in print, where the text is read from. \`violations\` lists them.
+It is printed to PDF (twice, for determinism) and screenshotted once: the screen must look like the print (\`screen\`), every word must be **visible** (not covered), drawn with the **same glyph shapes** as the original (a font whose "7" draws a "9" fails), and written in the HTML itself (\`notInSource\`). No letters or digits may be added (\`invented\`).
+Every text rule is zero-tolerance — a faithful clone scores exactly 1.0 — and visual changes are also checked per small region (\`layoutWorstCell\`), so a deleted logo or table rule fails even when the page average barely moves.
+Thresholds are fixed, not configurable: the caller is usually the agent being graded.
+Text positions and fonts come from MuPDF (per-character origin, size, color) and the PDF font descriptors (weight, italic) — font names lie (Chrome names every weight of a variable font "Inter-Regular"). Original and clone are rasterized by the same engine (MuPDF), so a faithful clone scores ~0 visual difference.
+Up to 20 pages per call. Costs 1 credit per page.
 SDK: \`eb.compareRender({ fileId, pages })\`
 MCP: \`compare_render\` (also on the fleet's always-on \`render\` MCP)
 

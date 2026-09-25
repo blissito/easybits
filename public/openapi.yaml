@@ -477,12 +477,16 @@ paths:
     post:
       tags: [Documents]
       operationId: compareRender
-      summary: Comparar un clon HTML contra su PDF
+      summary: Verificar un clon HTML contra su PDF
       description: >-
-        Rasteriza cada página del PDF a 1200 px de ancho, renderiza el HTML del clon al mismo tamaño
-        (dos veces, para comprobar que es determinista) y devuelve por página `layout` (el que decide),
-        `pixel`, `textCoverage`, `trusted`, `regions` y `diffUrl`. Pasa con
-        trusted && layout ≤ 0.02 && textCoverage ≥ 0.95. Cuesta 1 crédito por página; máx. 20.
+        Mide lo que el navegador PINTA, no el código: cada palabra del PDF como texto vivo del DOM en su
+        lugar (≤ 1.5 pt, sin faltantes), misma tipografía (familia, tamaño, peso, cursiva, color, ancho),
+        texto no horneado en imagen, cada palabra visible y con la forma de glifo del original, escrita en el
+        HTML, sin texto inventado, sin desborde, pantalla igual a impresión, render determinista y misma
+        composición visual. El clon se evalúa sin JavaScript y debe ser estático (sin script, @media, hojas
+        externas salvo Google/Bunny Fonts, ni CSS content con texto). Tamaño CSS de la página = pt × 4/3.
+        Umbrales fijos; `reasons` explica cada fallo.
+        Cuesta 1 crédito por página; máx. 20.
       requestBody:
         required: true
         content:
@@ -503,15 +507,10 @@ paths:
                     properties:
                       page: { type: integer, minimum: 1 }
                       html: { type: string }
-                thresholds:
-                  type: object
-                  properties:
-                    layout: { type: number }
-                    textCoverage: { type: number }
                 waitMs: { type: integer }
       responses:
         "200":
-          description: Resultado por página, más `passed` y `total`.
+          description: Resultado por página (pass, text, liveText, overflow, layout, reasons, diffUrl), más `passed` y `total`.
           content:
             application/json:
               schema: { type: object, additionalProperties: true }
