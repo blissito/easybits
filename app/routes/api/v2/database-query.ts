@@ -10,7 +10,10 @@ export async function action({ request, params }: Route.ActionArgs) {
     return Response.json({ error: "Method not allowed" }, { status: 405 });
   }
 
-  const body = await request.json();
+  const body = await request.json().catch(() => null);
+  if (!body || typeof body !== "object") {
+    return Response.json({ error: "Body must be JSON: { sql, args? } or { statements }" }, { status: 400 });
+  }
 
   // Import mode: { table, columns, rows, onConflict? }
   if (body.table && body.columns && body.rows) {

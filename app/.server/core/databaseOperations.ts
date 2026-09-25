@@ -2,9 +2,29 @@ import crypto from "crypto";
 import { db } from "../db";
 import type { AuthContext } from "../apiAuth";
 import { requireScope } from "../apiAuth";
-import { sqldQuery, sqldExec, sqldCreateNamespace, sqldDeleteNamespace } from "../sqld";
+import { sqldQuery, sqldExec, sqldCreateNamespace, sqldDeleteNamespace, SqldError } from "../sqld";
 import { dispatchWebhooks } from "../webhooks";
 import { getUserPlan, PLANS, type PlanKey } from "~/lib/plans";
+
+/**
+ * Traduce un error de sqld a una Response con status y mensaje accionables. Antes todo
+ * salía como 500 "Unexpected Server Error": un SQL mal escrito y una base sin namespace
+ * se veían igual que una caída.
+ */
+export function sqldErrorResponse(err: unknown): unknown {
+  if (!(err instanceof SqldError)) return err;
+  const json = (status: number, body: Record<string, unknown>) =>
+    new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
+  if (err.kind === "sql") return json(400, { error: err.message, code: "SQL_ERROR" });
+  if (err.kind === "namespace_missing") {
+    return json(409, {
+      error:
+        "This database has no storage on the server (its namespace is missing), so its data is not available. Delete it and create a new one, or contact support.",
+      code: "DATABASE_STORAGE_MISSING",
+    });
+  }
+  return json(502, { error: `Database backend error (${err.upstreamStatus ?? "unknown"}). Try again.`, code: "DATABASE_BACKEND_ERROR" });
+}
 
 export const DB_LIMITS: Record<PlanKey, number> = { Byte: 3, Mega: 10, Tera: 20 };
 
@@ -208,7 +228,7 @@ export async function queryDatabase(
     return result;
   } catch (err) {
     logQuery(database.namespace, sql, args, source, performance.now() - start, 0, "error", err instanceof Error ? err.message : String(err));
-    throw err;
+    throw sqldErrorResponse(err);
   }
 }
 
@@ -245,7 +265,7 @@ export async function execDatabase(
   } catch (err) {
     const summary = statements.length === 1 ? statements[0].sql : `[batch: ${statements.length} statements]`;
     logQuery(database.namespace, summary, [], source, performance.now() - start, 0, "error", err instanceof Error ? err.message : String(err));
-    throw err;
+    throw sqldErrorResponse(err);
   }
 }
 
@@ -302,7 +322,9 @@ export async function importDatabase(
   const sql = `${verb} INTO "${table}" (${colList}) VALUES (${placeholders})`;
 
   const statements = rows.map((row) => ({ sql, args: row }));
-  const results = await sqldExec(database.namespace, statements);
+  const results = await sqldExec(database.namespace, statements).catch((err) => {
+    throw sqldErrorResponse(err);
+  });
 
   const totalAffected = results.reduce(
     (sum, r) => sum + (r.affected_row_count || 0),

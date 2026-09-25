@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import { db } from "../db";
 import { sqldQuery, sqldCreateNamespace } from "../sqld";
 import { dispatchWebhooks } from "../webhooks";
@@ -124,23 +125,32 @@ export async function createFormConfig(
   } else {
     // Create a dedicated DB for this form
     const dbName = `form-${formName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}-${Date.now().toString(36)}`;
+    // Mismo arreglo que createDatabase (incidente 2026-07-08): el namespace va DESDE el
+    // create y, si sqld falla, se borra la fila. Con el placeholder `namespace: ""` un
+    // fallo dejaba la fila huérfana, envenenaba el @unique y la base quedaba en la lista
+    // sin almacenamiento real (toda query → namespace inexistente).
+    const namespace = crypto.randomBytes(12).toString("hex"); // 24-hex = ObjectId válido
     const database = await db.database.create({
       data: {
+        id: namespace,
         name: dbName,
-        namespace: "",
+        namespace,
         description: `Submissions for form: ${formName}`,
         userId: ctx.user.id,
       },
     });
-    const namespace = database.id;
-    await sqldCreateNamespace(namespace);
-    await db.database.update({ where: { id: database.id }, data: { namespace } });
 
     const columns = opts.fields
       .map((f) => `"${f.name}" TEXT`)
       .join(", ");
     const createSql = `CREATE TABLE IF NOT EXISTS "${tableName}" (id INTEGER PRIMARY KEY AUTOINCREMENT, ${columns}, submitted_at TEXT DEFAULT (datetime('now')))`;
-    await sqldQuery(namespace, createSql, []);
+    try {
+      await sqldCreateNamespace(namespace);
+      await sqldQuery(namespace, createSql, []);
+    } catch (e) {
+      await db.database.delete({ where: { id: database.id } }).catch(() => {});
+      throw e;
+    }
 
     dbId = database.id;
     dispatchWebhooks(ctx.user.id, "database.created", { id: database.id, name: dbName });

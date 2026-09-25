@@ -46,6 +46,32 @@ async function sqldFetch(url: string, init: RequestInit): Promise<Response> {
   throw lastErr ?? new Error("sqld fetch failed");
 }
 
+/**
+ * Error de sqld con su CAUSA, para que la API conteste algo útil en vez de un 500 pelón:
+ * - `sql`: la sentencia falló (sintaxis, tabla inexistente, constraint) → culpa del cliente.
+ * - `namespace_missing`: la fila Database existe pero sqld no tiene su namespace.
+ * - `upstream`: sqld respondió otro error HTTP (caído, 5xx…).
+ */
+export class SqldError extends Error {
+  constructor(
+    message: string,
+    readonly kind: "sql" | "namespace_missing" | "upstream",
+    readonly upstreamStatus?: number,
+  ) {
+    super(message);
+    this.name = "SqldError";
+  }
+}
+
+async function httpError(res: Response): Promise<SqldError> {
+  const text = await res.text().catch(() => "");
+  // sqld: 404 {"error":"Namespace `…` doesn't exist"}
+  if (res.status === 404 && /namespace/i.test(text)) {
+    return new SqldError(`sqld error 404: ${text}`, "namespace_missing", 404);
+  }
+  return new SqldError(`sqld error ${res.status}: ${text}`, "upstream", res.status);
+}
+
 interface StmtArg {
   type: "integer" | "float" | "text" | "blob" | "null";
   value?: string;
@@ -87,7 +113,7 @@ interface PipelineResponse {
 
 function parseResult(raw: PipelineResponse["results"][0]): SqldResult {
   if (raw.type === "error") {
-    throw new Error(raw.error?.message || "sqld error");
+    throw new SqldError(raw.error?.message || "sqld error", "sql");
   }
   const r = raw.response!.result;
   return {
@@ -148,10 +174,7 @@ export async function sqldQuery(
     }),
   });
 
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(`sqld error ${res.status}: ${text}`);
-  }
+  if (!res.ok) throw await httpError(res);
 
   const data: PipelineResponse = await res.json();
   return parseResult(data.results[0]);
@@ -179,10 +202,7 @@ export async function sqldExec(
     body: JSON.stringify({ requests }),
   });
 
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(`sqld error ${res.status}: ${text}`);
-  }
+  if (!res.ok) throw await httpError(res);
 
   const data: PipelineResponse = await res.json();
   // Last result is the "close" response, skip it
