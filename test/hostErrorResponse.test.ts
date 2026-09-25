@@ -60,4 +60,16 @@ describe("hostErrorResponse", () => {
     const r = hostErrorResponse(new SandboxHostError("POST", "/x/exec/background", 503, '{"error":"sandbox not running"}'))!;
     expect(r.status).toBe(409);
   });
+  it("409 Busy del daemon (snapshot en curso) → 409 SandboxBusy con su mensaje", async () => {
+    const r = hostErrorResponse(
+      new SandboxHostError("POST", "/v1/sandbox/x/exec", 409, '{"error":"Busy","message":"snapshot in progress; retry in a few minutes"}')
+    )!;
+    expect(r.status).toBe(409);
+    expect(await r.json()).toEqual({ error: "SandboxBusy", message: "snapshot in progress; retry in a few minutes" });
+  });
+  it("otros 409 del host pasan tal cual", async () => {
+    const r = hostErrorResponse(new SandboxHostError("POST", "/x", 409, '{"error":"DerivedTemplateStale"}'))!;
+    expect(r.status).toBe(409);
+    expect(await r.json()).toEqual({ error: "DerivedTemplateStale" });
+  });
 });

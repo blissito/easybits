@@ -5,7 +5,7 @@ license: MIT
 compatibility: Needs Node 22+ (npx is enough), network access to https://www.easybits.cloud and an EasyBits API key
 metadata:
   author: easybits
-  version: "1.1"
+  version: "1.2"
 ---
 
 # Use the EasyBits CLI
@@ -52,6 +52,12 @@ https://www.easybits.cloud/dash/developer — never invent one.
    | 2 | usage error | fix the command; run `easybits <cmd> <sub> --help` |
    | 3 | no session / expired / rejected | run `easybits login --json` (above) or ask for a key |
 
+   Named API errors come inside `error` (e.g. `API error 409: SandboxBusy: …`) with a `hint`:
+   `SandboxBusy` 409 (snapshot/fork running — `easybits sb get <id>` shows `activity`; retry
+   in minutes), `SandboxNotReady` 409 (wait for running), `SandboxUnreachable` 409 (retry, else
+   destroy), `SandboxHostTimeout` 504 (may still be running; check before repeating),
+   `SandboxHostError` 502 (retry), `SQL_ERROR` 400 (fix the SQL), `DATABASE_STORAGE_MISSING` 409
+   (data gone; `db rm` and recreate), `DATABASE_BACKEND_ERROR` 502 (retry).
 3. `sandboxes exec` without `--json` exits with the remote command's code. With `--json`
    it exits 0 and reports `exitCode`, `stdout`, `stderr`. Put the command after `--`.
 4. Put flags after the subcommand: `easybits sb create --template node`, not

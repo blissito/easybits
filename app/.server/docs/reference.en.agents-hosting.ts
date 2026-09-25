@@ -359,6 +359,26 @@ Flow: \`domain-add\` → create the DNS record given in \`dns\` → \`domain-ver
 - \`sandbox_resume({ sandboxId })\` — restore from snapshot; restores the remaining TTL (no sandbox_extend needed)
 - \`sandbox_destroy({ sandboxId })\` — destroy and release
 
+### Sandbox activity and errors
+
+\`GET /sandboxes/:id\` (SDK \`sb.refresh()\`, MCP \`sandbox_status\`) includes \`activity\` while a long operation runs on the box: \`"snapshotting"\` or \`"forking"\`. With nothing in progress the field is absent. While it is present, \`exec\`, \`suspend\`, \`destroy\`, \`snapshot\` and \`fork\` answer **409 \`SandboxBusy\`** right away: wait until it is gone and retry.
+
+\`\`\`json
+{ "sandboxId": "sb_…", "status": "running", "activity": "snapshotting" }
+\`\`\`
+
+Sandbox errors come as \`{ "error": "<code>", "message": "…" }\`:
+
+| Status | \`error\` | What happened | What to do |
+|---|---|---|---|
+| 409 | \`SandboxBusy\` | A snapshot or fork is running on the box | Check \`activity\` with \`GET /sandboxes/:id\` and retry once it is gone (usually minutes) |
+| 409 | \`SandboxNotReady\` | The box is still \`starting\` (or asleep) | Wait for \`status=running\`, or \`resume\` it if \`suspended\` |
+| 409 | \`SandboxUnreachable\` | The host cannot reach the agent inside the box (restarting or hung) | Wait and retry; if it persists, destroy it and create another |
+| 504 | \`SandboxHostTimeout\` | The host did not answer in time; the operation may still be running | Check \`GET /sandboxes/:id\` and retry in a few minutes; don't blindly repeat it |
+| 502 | \`SandboxHostError\` | The sandbox host failed (\`status\` and \`message\` carry its error) | Retry; if it persists, contact support with the \`message\` |
+
+A \`snapshot\` can take several minutes (it copies disk and memory); the API waits up to 10.
+
 ### Persistent agents (agent_create)
 \`POST /agents\`
 Body: \`{ template, env, name?, timeoutSeconds?, seedFiles?, mcpServers? }\` — \`env\` is required (\`{}\` if the template asks for nothing): model keys and agent config; they are written inside the VM and never come back out through the API.

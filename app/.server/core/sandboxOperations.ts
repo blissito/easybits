@@ -115,6 +115,11 @@ export interface SandboxRecord {
   // muerte de una caja dormida. Zero-time ("0001-…") = sin cap duro.
   suspendOnIdle?: boolean;
   hardExpiresAt?: string;
+  /**
+   * Operación larga en curso sobre la caja (en memoria del daemon; ausente si no hay).
+   * Mientras dura, exec/suspend/destroy/snapshot/fork contestan 409 Busy → SandboxBusy.
+   */
+  activity?: "snapshotting" | "forking";
 }
 
 export interface ExecResult {
@@ -705,6 +710,26 @@ export function hostErrorResponse(e: unknown): Response | null {
   if (!(e instanceof SandboxHostError)) return null;
   let status = e.status;
   let raw = e.body;
+  // El daemon contesta 409 {"error":"Busy"} al instante mientras corre un snapshot/fork
+  // (antes se colgaba minutos). Se nombra como el resto de errores de caja; los demás
+  // 409 del host siguen pasando tal cual.
+  if (status === 409) {
+    try {
+      const j = JSON.parse(raw);
+      if (j?.error === "Busy") {
+        return Response.json(
+          {
+            error: "SandboxBusy",
+            message:
+              typeof j.message === "string" && j.message
+                ? j.message
+                : "The sandbox is busy with a snapshot or fork; retry in a few minutes.",
+          },
+          { status: 409 }
+        );
+      }
+    } catch {}
+  }
   // Caja recién creada (o dormida) sobre la que ya se pide exec/bg/files: el
   // host responde 503 "sandbox not running yet (status=starting)". No es un
   // fallo nuestro sino un estado transitorio del cliente → 409 con el status

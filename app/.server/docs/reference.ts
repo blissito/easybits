@@ -1263,6 +1263,26 @@ Flujo: \`domain-add\` → crea el registro DNS que indica \`dns\` → \`domain-v
 - \`sandbox_resume({ sandboxId })\` — restaurar desde snapshot; restaura el TTL restante (no hace falta sandbox_extend)
 - \`sandbox_destroy({ sandboxId })\` — destruir y liberar
 
+### Actividad y errores de una caja
+
+\`GET /sandboxes/:id\` (SDK \`sb.refresh()\`, MCP \`sandbox_status\`) trae \`activity\` mientras corre una operación larga sobre la caja: \`"snapshotting"\` o \`"forking"\`. Sin operación en curso, el campo no viene. Mientras está presente, \`exec\`, \`suspend\`, \`destroy\`, \`snapshot\` y \`fork\` contestan **409 \`SandboxBusy\`** al instante: espera a que desaparezca y reintenta.
+
+\`\`\`json
+{ "sandboxId": "sb_…", "status": "running", "activity": "snapshotting" }
+\`\`\`
+
+Los errores de una caja traen \`{ "error": "<código>", "message": "…" }\`:
+
+| Status | \`error\` | Qué pasó | Qué hacer |
+|---|---|---|---|
+| 409 | \`SandboxBusy\` | Hay un snapshot o fork en curso sobre la caja | Consulta \`activity\` con \`GET /sandboxes/:id\` y reintenta cuando desaparezca (suelen ser minutos) |
+| 409 | \`SandboxNotReady\` | La caja aún está en \`starting\` (o dormida) | Espera \`status=running\`, o \`resume\` si está \`suspended\` |
+| 409 | \`SandboxUnreachable\` | El host no alcanza al agente dentro de la caja (reiniciando o colgada) | Espera y reintenta; si sigue, destrúyela y crea otra |
+| 504 | \`SandboxHostTimeout\` | El host no respondió a tiempo; la operación puede seguir en curso | Revisa \`GET /sandboxes/:id\` y reintenta en unos minutos; no la repitas a ciegas |
+| 502 | \`SandboxHostError\` | El host de cajas falló (\`status\` y \`message\` traen su error) | Reintenta; si persiste, contacta a soporte con el \`message\` |
+
+Un \`snapshot\` puede tardar varios minutos (copia disco y memoria); la API espera hasta 10.
+
 ### Agentes persistentes (agent_create)
 \`POST /agents\`
 Body: \`{ template, env, name?, timeoutSeconds?, seedFiles?, mcpServers? }\` — \`env\` es obligatorio (\`{}\` si el template no pide nada): llaves del modelo y config del agente; se escriben dentro de la VM y no vuelven a salir por la API.
@@ -1686,6 +1706,17 @@ Body: \`{ table: string, columns: string[], rows: any[][], onConflict?: "ignore"
 Up to 10,000 rows per request. Column/table names must be alphanumeric + underscores.
 Returns: \`{ imported: number, total: number }\`
 MCP: \`db_import({ dbId, table, columns, rows, onConflict? })\`
+
+### Errores
+
+Los errores de consulta traen \`{ "error": "…", "code": "<código>" }\`:
+
+| Status | \`code\` | Qué pasó | Qué hacer |
+|---|---|---|---|
+| 400 | \`SQL_ERROR\` | La sentencia falló (sintaxis, tabla inexistente, constraint); \`error\` trae el mensaje de SQLite | Corrige el SQL |
+| 409 | \`DATABASE_STORAGE_MISSING\` | La base existe en tu cuenta pero su almacenamiento no está en el servidor; sus datos no están disponibles | Bórrala y crea otra, o contacta a soporte |
+| 502 | \`DATABASE_BACKEND_ERROR\` | El servidor de bases falló | Reintenta en un momento |
+| 404 | — | La base no existe o no es tuya | Revisa el id con \`GET /databases\` |
 
 ### Database object
 \`\`\`json

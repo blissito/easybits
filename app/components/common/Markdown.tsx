@@ -1,5 +1,6 @@
 import React from "react";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { ImageGallery, Image } from "../mdx/ImageGallery";
 import { Callout } from "../mdx/Callout";
 import { CodeBlock } from "../mdx/CodeBlock";
@@ -217,7 +218,8 @@ const components = {
 export default function Markdown(props: any) {
   return (
     <div className="markdown prose prose-lg max-w-none">
-      <ReactMarkdown components={components} {...props} />
+      {/* GFM: las tablas de los docs (errores, templates) se pintaban como texto crudo. */}
+      <ReactMarkdown components={components} remarkPlugins={[remarkGfm]} {...props} />
     </div>
   );
 }

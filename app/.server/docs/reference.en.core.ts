@@ -322,6 +322,17 @@ Up to 10,000 rows per request. Column/table names must be alphanumeric + undersc
 Returns: \`{ imported: number, total: number }\`
 MCP: \`db_import({ dbId, table, columns, rows, onConflict? })\`
 
+### Errors
+
+Query errors come as \`{ "error": "…", "code": "<code>" }\`:
+
+| Status | \`code\` | What happened | What to do |
+|---|---|---|---|
+| 400 | \`SQL_ERROR\` | The statement failed (syntax, missing table, constraint); \`error\` carries SQLite's message | Fix the SQL |
+| 409 | \`DATABASE_STORAGE_MISSING\` | The database exists in your account but its storage is missing on the server; its data is not available | Delete it and create a new one, or contact support |
+| 502 | \`DATABASE_BACKEND_ERROR\` | The database backend failed | Retry in a moment |
+| 404 | — | The database does not exist or is not yours | Check the id with \`GET /databases\` |
+
 ### Database object
 \`\`\`json
 {

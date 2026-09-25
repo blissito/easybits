@@ -35,7 +35,16 @@ export const loader = async () => {
   // lee un agente en /docs/cli.md es lo que ve la persona.
   const { getDocsMarkdown } = await import("~/.server/docs/reference");
   const cliMarkdown = await getDocsMarkdown("cli");
-  return { toolCount: catalog.length, groupCounts, groups, templates, cliMarkdown };
+  // Tablas de errores: misma fuente que /docs/<sección>.md (reference.ts), recortadas por título.
+  const slice = (md: string, from: string, to: string) => {
+    const i = md.indexOf(from);
+    if (i < 0) return "";
+    const j = md.indexOf(to, i + from.length);
+    return md.slice(i, j < 0 ? undefined : j).trim();
+  };
+  const sandboxErrorsMarkdown = slice(await getDocsMarkdown("agents"), "### Actividad y errores de una caja", "\n### ");
+  const databaseErrorsMarkdown = slice(await getDocsMarkdown("databases"), "### Errores", "\n### ");
+  return { toolCount: catalog.length, groupCounts, groups, templates, cliMarkdown, sandboxErrorsMarkdown, databaseErrorsMarkdown };
 };
 
 // El gemelo markdown de esta página (/docs.md) y que la caché distinga por Accept:
@@ -94,7 +103,7 @@ const SECTIONS = [
 const NEW_SECTIONS = new Set<string>(["cli", "eve", "agentes-en-tu-app", "ghosty-lite", "flota", "video-projects", "calls", "secrets", "images", "web"]);
 
 export default function DocsPage({ loaderData }: Route.ComponentProps) {
-  const { toolCount, groupCounts, groups, templates, cliMarkdown } = loaderData;
+  const { toolCount, groupCounts, groups, templates, cliMarkdown, sandboxErrorsMarkdown, databaseErrorsMarkdown } = loaderData;
   const location = useLocation();
 
   // Estado inicial DETERMINISTA (igual en server y cliente) para no causar un
@@ -2374,6 +2383,10 @@ sandbox_git_log({ sandboxId, dir, limit?, cursor? })` },
             <div className="bg-blue-50 border-2 border-blue-300 rounded-xl p-4 text-sm">
               <strong>Rate limits:</strong> 10 spawns/min (sandbox_create, agent_create, agent_run). 120 operaciones/min para el resto. Sandboxes se auto-destruyen al TTL (default 5 min; máx según plan: Byte 1h · Mega 4h · Tera 24h).
             </div>
+            {/* Actividad y errores de una caja — desde reference.ts */}
+            <div className="mt-8">
+              <Markdown>{sandboxErrorsMarkdown}</Markdown>
+            </div>
           </section>
 
           {/* Ghosty Lite — agente ACP en su propia microVM, cerebro medido con TU llave */}
@@ -3667,6 +3680,10 @@ db_import({ dbId: "db_abc", table: "contactos", columns: ["nombre","email"], row
 
             <div className="bg-green-50 border-2 border-green-300 rounded-xl p-4 text-sm">
               Eventos de webhook: <code className="bg-gray-100 px-1 rounded">database.created</code> y <code className="bg-gray-100 px-1 rounded">database.deleted</code>. Combínalos con la sección <a href="#webhooks" className="underline font-medium">Webhooks</a> para notificar sistemas externos.
+            </div>
+            {/* Errores de consulta — desde reference.ts */}
+            <div className="mt-8">
+              <Markdown>{databaseErrorsMarkdown}</Markdown>
             </div>
           </section>
 
