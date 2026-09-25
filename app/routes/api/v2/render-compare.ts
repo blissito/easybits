@@ -1,6 +1,7 @@
 import type { Route } from "./+types/render-compare";
 import { authenticateRequest, requireAuth, requireScope } from "~/.server/apiAuth";
 import { consumeService } from "~/.server/services/consume";
+import { QuotaExceededError, ServiceProviderError } from "~/.server/services/errors";
 import type { CompareOutput } from "~/.server/services/providers/render";
 
 /**
@@ -30,8 +31,23 @@ export async function action({ request }: Route.ActionArgs) {
     return Response.json({ error: "'pages' must be a non-empty array of { page, html }" }, { status: 400 });
   }
 
-  const result = await consumeService<CompareOutput>("render.compare", body, {
-    userId: ctx.user.id,
-  });
-  return Response.json(result.data);
+  try {
+    const result = await consumeService<CompareOutput>("render.compare", body, {
+      userId: ctx.user.id,
+    });
+    return Response.json(result.data);
+  } catch (e) {
+    // Entrada inválida (PDF ajeno, URL privada, >20 páginas): el motivo le sirve
+    // al agente para corregir; un 500 genérico sólo lo haría reintentar.
+    if (e instanceof ServiceProviderError) {
+      return Response.json({ error: e.providerMessage, code: e.code }, { status: e.providerStatus ?? 400 });
+    }
+    if (e instanceof QuotaExceededError) {
+      return Response.json(
+        { error: "Sin créditos", code: e.code, requiredCost: e.requiredCost, available: e.available },
+        { status: 402 },
+      );
+    }
+    throw e;
+  }
 }
