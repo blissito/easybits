@@ -1,20 +1,23 @@
 {
   "name": "@easybits.cloud/cli",
-  "version": "0.4.1",
-  "description": "Official CLI for Easybits — manage files, storage, and MCP from your terminal",
+  "version": "0.5.0",
+  "description": "Official CLI for EasyBits, the cloud for AI agents — sandboxes, hosting, domains, databases, agents and files from your terminal",
   "type": "module",
   "bin": {
     "easybits": "./dist/index.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "README.md"
   ],
   "keywords": [
     "easybits",
     "cli",
-    "file-management",
-    "mcp",
-    "digital-assets"
+    "sandboxes",
+    "microvm",
+    "hosting",
+    "ai-agents",
+    "mcp"
   ],
   "repository": {
     "type": "git",
@@ -23,19 +26,23 @@
   },
   "license": "MIT",
   "scripts": {
-    "build": "tsup src/index.ts --format esm --dts --clean",
-    "dev": "tsup src/index.ts --format esm --watch",
-    "prepublishOnly": "npm run build"
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "prepublishOnly": "npm run build",
+    "typecheck": "tsc --noEmit"
   },
   "publishConfig": {
     "access": "public"
   },
   "dependencies": {
-    "@easybits.cloud/sdk": "^0.31.0"
+    "@easybits.cloud/sdk": "^0.35.2"
   },
   "devDependencies": {
+    "@types/node": "^22.0.0",
     "tsup": "^8.0.0",
-    "typescript": "^5.7.0",
-    "@types/node": "^22.0.0"
+    "typescript": "^5.7.0"
+  },
+  "engines": {
+    "node": ">=22"
   }
 }

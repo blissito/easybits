@@ -1,524 +1,139 @@
 #!/usr/bin/env node
-import {
-  EasybitsClient,
-  EasybitsError,
-  readRcConfig,
-  writeRcConfig,
-  resolveApiKey,
-  resolveBaseUrl,
-  createClientFromEnv,
-} from "@easybits.cloud/sdk";
-import { readFileSync, existsSync, statSync, mkdirSync, writeFileSync } from "fs";
+import { parseArgs } from "node:util";
+import type { Ctx, Leaf, Options } from "./types.js";
+import { findCommand } from "./commands/index.js";
+import { commandHelp, globalHelp, leafHelp } from "./help.js";
+import { BANNER } from "./banner.js";
+import { CliError, EXIT, toCliError, usageError } from "./errors.js";
 
-// ─── Helpers ─────────────────────────────────────────────────────
+declare const __CLI_VERSION__: string;
+const VERSION = typeof __CLI_VERSION__ === "string" ? __CLI_VERSION__ : "dev";
 
-/** Lee `--nombre valor` de la línea de comandos. */
-function flag(name: string): string | undefined {
-  const i = process.argv.indexOf(name);
-  return i > -1 ? process.argv[i + 1] : undefined;
+const GLOBAL_OPTIONS: Options = {
+  json: { type: "boolean" },
+  token: { type: "string" },
+  help: { type: "boolean", short: "h" },
+  version: { type: "boolean", short: "v" },
+};
+
+function wantsJson(argv: string[]): boolean {
+  const end = argv.indexOf("--");
+  return (end === -1 ? argv : argv.slice(0, end)).includes("--json");
 }
 
-async function getClient(): Promise<EasybitsClient> {
-  try {
-    return await createClientFromEnv();
-  } catch {
-    console.error("Not logged in. Run: easybits login <api-key>");
-    process.exit(1);
-  }
+/** El banner sólo para humanos: nunca en tubería, con NO_COLOR o con --json. */
+function showBanner(json: boolean) {
+  if (!BANNER || json || !process.stdout.isTTY || process.env.NO_COLOR) return;
+  process.stdout.write(BANNER.endsWith("\n") ? BANNER : BANNER + "\n");
 }
-
-// ─── Commands ────────────────────────────────────────────────────
-
-async function login() {
-  const key = process.argv[3];
-  if (!key) {
-    console.error("Usage: easybits login <api-key>");
-    process.exit(1);
-  }
-  await writeRcConfig({ apiKey: key });
-  console.log("Saved API key to ~/.easybitsrc");
-}
-
-async function filesList() {
-  const client = await getClient();
-  try {
-    const data = await client.listFiles();
-    if (data.items.length === 0) {
-      console.log("No files found");
-      return;
-    }
-    console.log(
-      `${"Name".padEnd(30)} ${"Size".padEnd(10)} ${"Status".padEnd(10)} ID`
-    );
-    console.log("-".repeat(70));
-    for (const f of data.items) {
-      const size =
-        f.size < 1024 * 1024
-          ? `${(f.size / 1024).toFixed(1)}KB`
-          : `${(f.size / (1024 * 1024)).toFixed(1)}MB`;
-      console.log(
-        `${f.name.slice(0, 29).padEnd(30)} ${size.padEnd(10)} ${f.status.padEnd(10)} ${f.id}`
-      );
-    }
-  } catch (err) {
-    if (err instanceof EasybitsError) {
-      console.error(`Error ${err.status}: ${err.body}`);
-      process.exit(1);
-    }
-    throw err;
-  }
-}
-
-async function filesUpload() {
-  const fileName = process.argv[4];
-  if (!fileName) {
-    console.error("Usage: easybits files upload <filename>");
-    process.exit(1);
-  }
-  if (!existsSync(fileName)) {
-    console.error(`File not found: ${fileName}`);
-    process.exit(1);
-  }
-  const stat = statSync(fileName);
-  const ext = fileName.split(".").pop() || "";
-  const mimeMap: Record<string, string> = {
-    pdf: "application/pdf",
-    png: "image/png",
-    jpg: "image/jpeg",
-    jpeg: "image/jpeg",
-    mp4: "video/mp4",
-    zip: "application/zip",
-  };
-  const contentType = mimeMap[ext] || "application/octet-stream";
-
-  const client = await getClient();
-  try {
-    const data = await client.uploadFile({
-      fileName: fileName.split("/").pop()!,
-      contentType,
-      size: stat.size,
-    });
-
-    // Upload to presigned URL
-    const fileBuffer = readFileSync(fileName);
-    const uploadRes = await fetch(data.putUrl, {
-      method: "PUT",
-      body: fileBuffer,
-      headers: { "Content-Type": contentType },
-    });
-
-    if (uploadRes.ok) {
-      console.log(`Uploaded: ${data.file.id}`);
-    } else {
-      console.error(`Upload failed: ${uploadRes.status}`);
-    }
-  } catch (err) {
-    if (err instanceof EasybitsError) {
-      console.error(`Error ${err.status}: ${err.body}`);
-      process.exit(1);
-    }
-    throw err;
-  }
-}
-
-async function filesDelete() {
-  const fileId = process.argv[4];
-  if (!fileId) {
-    console.error("Usage: easybits files delete <file-id>");
-    process.exit(1);
-  }
-  const client = await getClient();
-  try {
-    await client.deleteFile(fileId);
-    console.log("Deleted");
-  } catch (err) {
-    if (err instanceof EasybitsError) {
-      console.error(`Error ${err.status}: ${err.body}`);
-      process.exit(1);
-    }
-    throw err;
-  }
-}
-
-async function providersList() {
-  console.log("Default provider: Tigris (platform)");
-  console.log("Use the Developer Dashboard to add custom providers.");
-}
-
-async function printMcpConfig() {
-  const apiKey = await resolveApiKey();
-  const baseUrl = await resolveBaseUrl();
-  const config = {
-    mcpServers: {
-      easybits: {
-        type: "streamable-http",
-        url: `${baseUrl}/api/mcp`,
-        headers: {
-          Authorization: `Bearer ${apiKey || "eb_sk_live_YOUR_KEY"}`,
-        },
-      },
-    },
-  };
-  console.log(JSON.stringify(config, null, 2));
-}
-
-function printMcpStdioConfig() {
-  const config = {
-    mcpServers: {
-      easybits: {
-        command: "npx",
-        args: ["-y", "@easybits.cloud/mcp"],
-        env: {
-          EASYBITS_API_KEY: "eb_sk_live_YOUR_KEY",
-        },
-      },
-    },
-  };
-  console.log(JSON.stringify(config, null, 2));
-}
-
-
-// ─── init: dejar el repo listo para desplegar en cada push ───────
 
 /**
- * Escribe el workflow de GitHub Actions y el script que despliega.
- *
- * El build ocurre en el runner y a la máquina le llega el resultado ya hecho:
- * así la caja no compila nada y un sitio que necesitaría 4 GB para bundlear
- * cabe en la más pequeña. El runner es Linux x64, igual que la microVM, así
- * que los módulos nativos compilan para el destino correcto — hacer esto en
- * una Mac sí rompe.
+ * Posiciones de los posicionales ANTES de `--`, saltando el valor de las banderas
+ * globales con argumento (`--token X`). Sirve para ubicar comando y subcomando sin
+ * conocer todavía las banderas del subcomando.
  */
-async function init() {
-  const appDir = flag("--app-dir") ?? "/srv/app";
-  const port = flag("--port") ?? "3000";
-
-  if (!existsSync("package.json")) {
-    console.error(
-      "Aquí no hay package.json. Corre esto en la raíz del repo de tu app."
-    );
-    process.exit(1);
+function positionalIndexes(argv: string[]): number[] {
+  const out: number[] = [];
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === "--") break;
+    if (a === "--token") {
+      i++;
+      continue;
+    }
+    if (a.startsWith("-") && a !== "-") continue;
+    out.push(i);
   }
-
-  const workflow = `# Despliegue a EasyBits en cada push a main.
-#
-# El build ocurre AQUÍ, no dentro de la máquina: así la caja sólo descarga y
-# arranca, y el sitio cabe en un tier pequeño. Si el build falla, no llega a
-# producción y el sitio sigue en pie.
-#
-# Secretos que necesita el repo (Settings → Secrets and variables → Actions):
-#   EASYBITS_API_KEY     tu key de easybits.cloud/dash/developer
-#   EASYBITS_SANDBOX_ID  el id que devolvió machines/launch al crear la máquina
-#
-# Las variables de la app (DATABASE_URL, etc.) NO van aquí: se cargan una vez
-# con PUT /machines/:id/secrets y viven cifradas en tu bóveda.
-name: Deploy a EasyBits
-
-on:
-  push:
-    branches: [main]
-  workflow_dispatch:
-
-concurrency: deploy-produccion
-
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: npm
-      - run: npm ci
-      - run: npm run build
-
-      - name: Empaquetar y desplegar
-        env:
-          EASYBITS_API_KEY: \${{ secrets.EASYBITS_API_KEY }}
-          EASYBITS_SANDBOX_ID: \${{ secrets.EASYBITS_SANDBOX_ID }}
-          EASYBITS_APP_DIR: ${appDir}
-          EASYBITS_PORT: "${port}"
-        run: node .github/scripts/easybits-deploy.mjs
-`;
-
-  const script = [
-    '// Empaqueta lo que hace falta para servir y lo manda a la máquina.',
-    "// Lo genera 'easybits init'; ajústalo si tu app necesita otros archivos.",
-    '',
-    'import { createReadStream, statSync } from "node:fs";',
-    'import { execFileSync } from "node:child_process";',
-    '',
-    'const API = process.env.EASYBITS_API || "https://www.easybits.cloud/api/v2";',
-    'const KEY = process.env.EASYBITS_API_KEY;',
-    'const MACHINE = process.env.EASYBITS_SANDBOX_ID;',
-    'const APP_DIR = process.env.EASYBITS_APP_DIR || "' + appDir + '";',
-    'const PORT = Number(process.env.EASYBITS_PORT || ' + port + ');',
-    'const TARBALL = "/tmp/easybits-build.tgz";',
-    'const SHA = (process.env.GITHUB_SHA || "manual").slice(0, 7);',
-    '',
-    'if (!KEY || !MACHINE) {',
-    '  console.error("Faltan EASYBITS_API_KEY o EASYBITS_SANDBOX_ID en los secretos del repo.");',
-    '  process.exit(1);',
-    '}',
-    '',
-    'async function api(path, body) {',
-    '  const res = await fetch(API + path, {',
-    '    method: "POST",',
-    '    headers: { Authorization: "Bearer " + KEY, "Content-Type": "application/json" },',
-    '    body: JSON.stringify(body),',
-    '  });',
-    '  const text = await res.text();',
-    '  let data;',
-    '  try { data = JSON.parse(text); } catch { data = {}; }',
-    '  if (!res.ok) {',
-    '    console.error("x " + path + " respondio " + res.status);',
-    '    console.error(data.message || data.error || text);',
-    '    process.exit(1);',
-    '  }',
-    '  return data;',
-    '}',
-    '',
-    '// Servir no necesita vite ni los compiladores: podarlos es la diferencia',
-    '// entre mandar 170 MB por deploy y mandar lo que la maquina ejecuta.',
-    'console.log("-> podando dependencias de desarrollo");',
-    'execFileSync("npm", ["prune", "--omit=dev"], { stdio: "inherit" });',
-    '',
-    'console.log("-> empaquetando");',
-    'execFileSync("tar", [',
-    '  "czf", TARBALL, "--exclude=.git", "--exclude=node_modules/.cache",',
-    '  "build", "node_modules", "package.json", "package-lock.json",',
-    ']);',
-    'const size = statSync(TARBALL).size;',
-    'console.log("   " + (size / 1048576).toFixed(1) + " MB");',
-    '',
-    '// Publico y de vida corta: la caja lo baja con curl, sin credenciales. No',
-    '// lleva secretos: esos los inyecta EasyBits desde la boveda, ya dentro.',
-    'console.log("-> subiendo");',
-    'const up = await api("/files", {',
-    '  fileName: "build-" + SHA + ".tgz",',
-    '  contentType: "application/gzip",',
-    '  size,',
-    '  access: "public",',
-    '});',
-    'const put = await fetch(up.putUrl, {',
-    '  method: "PUT",',
-    '  headers: { "Content-Type": "application/gzip", "Content-Length": String(size) },',
-    '  body: createReadStream(TARBALL),',
-    '  duplex: "half",',
-    '});',
-    'if (!put.ok) {',
-    '  console.error("x la subida devolvio " + put.status);',
-    '  process.exit(1);',
-    '}',
-    '',
-    '// prebuilt: la caja no reconstruye nada, solo descomprime y arranca.',
-    'console.log("-> desplegando");',
-    'const out = await api("/machines/launch", {',
-    '  sandboxId: MACHINE,',
-    '  archiveUrl: up.file.url,',
-    '  prebuilt: true,',
-    '  appDir: APP_DIR,',
-    '  port: PORT,',
-    '  message: "deploy " + SHA,',
-    '});',
-    '',
-    'if (out.exitCode !== 0) {',
-    '  console.error("x termino con codigo " + out.exitCode);',
-    '  console.error(out.buildOutput || out.startOutput || "");',
-    '  process.exit(1);',
-    '}',
-    'console.log("OK desplegado - version " + out.version);',
-    'console.log("   " + out.url);',
-    '',
-  ].join("\n");
-
-  mkdirSync(".github/workflows", { recursive: true });
-  mkdirSync(".github/scripts", { recursive: true });
-  writeFileSync(".github/workflows/easybits-deploy.yml", workflow);
-  writeFileSync(".github/scripts/easybits-deploy.mjs", script);
-
-  console.log(`Listo. Escribí:
-  .github/workflows/easybits-deploy.yml
-  .github/scripts/easybits-deploy.mjs
-
-Falta, una sola vez:
-
-1. Crea la máquina (si aún no la tienes):
-
-   curl -X POST https://www.easybits.cloud/api/v2/machines/launch \\
-     -H "Authorization: Bearer $EASYBITS_API_KEY" \\
-     -H "Content-Type: application/json" \\
-     -d '{"repo":"https://github.com/TU/REPO.git","branch":"main",
-          "tier":"micro","template":"node","appDir":"${appDir}","port":${port}}'
-
-   Repo privado: deja el URL limpio y agrega el token aparte,
-     "repoToken":"github_pat_…"
-   (un token dentro del URL se rechaza).
-
-   ¿Tu build cabe en la caja? Entonces no necesitas este workflow:
-   POST /machines/SANDBOX_ID/push-deploy te da un webhook de GitHub
-   y cada push despliega solo. Docs: https://www.easybits.cloud/docs
-
-2. Guarda en el repo (Settings → Secrets and variables → Actions):
-     EASYBITS_API_KEY      tu key
-     EASYBITS_SANDBOX_ID   el id que devolvió el paso 1
-
-3. Si tu app usa variables secretas:
-
-   curl -X PUT https://www.easybits.cloud/api/v2/machines/SANDBOX_ID/secrets \\
-     -H "Authorization: Bearer $EASYBITS_API_KEY" \\
-     -H "Content-Type: application/json" \\
-     -d '{"DATABASE_URL":"..."}'
-
-Desde ahí, cada push a main despliega.`);
+  return out;
 }
 
-
-// ─── ssh-proxy ───────────────────────────────────────────────────
-//
-// Se usa como ProxyCommand de ssh: mueve bytes entre stdin/stdout y un
-// WebSocket contra el borde. Con esto `ssh caja.ghosty` entra a la microVM SIN
-// que EasyBits abra un puerto por caja — el 443 pasa en redes donde un puerto
-// alto no pasa (oficinas, VPN corporativa), que es de donde vienen los "no me
-// conecta" imposibles de reproducir.
-//
-// El túnel NO autentica: la sesión SSH se autentica de punta a punta entre el
-// cliente y el sshd de la caja. Aquí sólo se mueven bytes opacos.
-//
-// Node 22 trae `WebSocket` global, así que esto no añade ni una dependencia.
-async function sshProxy() {
-  const target = process.argv[3];
-  if (!target) {
-    console.error("uso: easybits ssh-proxy <sandboxId|caja.ghosty>");
-    process.exit(2);
-  }
-  // Acepta `sb_xxx`, `sb_xxx.ghosty`, o el NOMBRE de la caja (`taller.ghosty`).
-  // El nombre existe para que una persona escriba 15 caracteres en vez de 46; no
-  // es secreto, y da igual que no lo sea: la sesión se autentica con tu llave y
-  // con el ticket firmado, nunca con el nombre.
-  let sandboxId = target.split(".")[0];
-
-  const eb = await createClientFromEnv();
-  if (!sandboxId.startsWith("sb_")) {
-    const hits = (await eb.sandboxes.list()).filter((s) => s.name === sandboxId);
-    // Los nombres NO son únicos. Fallar es mejor que elegir: entrar a la caja
-    // equivocada es peor que no entrar.
-    if (hits.length === 0) throw new Error(`no hay ninguna caja llamada "${sandboxId}"`);
-    if (hits.length > 1)
-      throw new Error(`"${sandboxId}" es ambiguo: ${hits.length} cajas lo usan; pasa el sandboxId`);
-    sandboxId = hits[0].sandboxId;
-  }
-  const sb = await eb.sandboxes.get(sandboxId);
-  const { url } = await sb.sshTicket();
-
-  const ws = new WebSocket(url);
-  ws.binaryType = "arraybuffer";
-
-  // Todo el diagnóstico va a stderr: stdout es el canal de SSH y cualquier byte
-  // de más ahí corrompe el handshake.
-  ws.onerror = () => {
-    console.error("easybits ssh-proxy: no se pudo abrir el túnel");
-    process.exit(1);
-  };
-  ws.onclose = () => process.exit(0);
-  ws.onmessage = (ev: MessageEvent) => {
-    const data = ev.data;
-    process.stdout.write(
-      typeof data === "string" ? Buffer.from(data) : Buffer.from(data as ArrayBuffer)
-    );
-  };
-  await new Promise<void>((resolve) => (ws.onopen = () => resolve()));
-  process.stdin.on("data", (chunk: Buffer) => ws.send(chunk));
-  process.stdin.on("end", () => ws.close());
-}
-
-
-// ─── ssh-key ─────────────────────────────────────────────────────
-//
-// Devuelve la llave PÚBLICA para inyectar en una caja, creándola la primera vez.
-//
-// Existe para quitarle una decisión al agente. Elegir entre las llaves de ~/.ssh
-// —o generar una y acordarse de cuál— es donde se equivoca: inyecta una pública
-// que no corresponde a la privada con la que luego conecta, y el sshd responde
-// "Permission denied" aunque todo lo demás esté bien. Como este mismo CLI es el
-// ProxyCommand, usar SIEMPRE esta llave hace imposible que no coincidan.
-//
-// La privada NUNCA sale de esta máquina: EasyBits sólo recibe la pública.
-async function sshKey() {
-  const { homedir } = await import("node:os");
-  const { join } = await import("node:path");
-  const { existsSync, readFileSync, mkdirSync } = await import("node:fs");
-  const { execFileSync } = await import("node:child_process");
-
-  const dir = join(homedir(), ".ssh");
-  const key = join(dir, "easybits_ed25519");
-  const pub = `${key}.pub`;
-
-  if (!existsSync(pub)) {
-    mkdirSync(dir, { recursive: true, mode: 0o700 });
-    execFileSync("ssh-keygen", ["-t", "ed25519", "-N", "", "-f", key, "-C", "easybits"], {
-      stdio: ["ignore", "ignore", "inherit"],
+function parse(argv: string[], skip: number[], leaf: Leaf | undefined) {
+  const rest = argv.filter((_, i) => !skip.includes(i));
+  try {
+    const { values, positionals } = parseArgs({
+      args: rest,
+      options: { ...GLOBAL_OPTIONS, ...(leaf?.options ?? {}) } as any,
+      allowPositionals: true,
+      strict: true,
     });
-    console.error(`easybits: llave creada en ${key}`);
+    return { values: values as Ctx["opts"], positionals };
+  } catch (e) {
+    // parseArgs agrega un consejo sobre `--` que confunde más de lo que ayuda.
+    throw usageError((e as Error).message.split("\n")[0].split(". To specify")[0].replace(/\.?$/, "."), leaf?.usage);
   }
-  process.stdout.write(readFileSync(pub, "utf8").trim() + "\n");
 }
 
-// ─── Router ──────────────────────────────────────────────────────
+async function main(argv: string[]): Promise<void> {
+  const pos = positionalIndexes(argv);
+  const cmdName = pos.length ? argv[pos[0]] : undefined;
 
-const [cmd, sub] = [process.argv[2], process.argv[3]];
+  if (!cmdName || cmdName === "help") {
+    const topic = cmdName === "help" && pos[1] != null ? findCommand(argv[pos[1]]) : undefined;
+    const { values } = parse(argv, pos.slice(0, 2), undefined);
+    if (values.version) {
+      console.log(VERSION);
+      return;
+    }
+    if (topic) {
+      console.log(commandHelp(topic));
+      return;
+    }
+    showBanner(values.json === true);
+    console.log(globalHelp(VERSION));
+    return;
+  }
 
-switch (cmd) {
-  case "login":
-    login();
-    break;
-  case "files":
-    if (sub === "list" || !sub) filesList();
-    else if (sub === "upload") filesUpload();
-    else if (sub === "delete") filesDelete();
-    else console.error(`Unknown: files ${sub}`);
-    break;
-  case "providers":
-    providersList();
-    break;
-  case "init":
-    init();
-    break;
-  case "config":
-    printMcpConfig();
-    break;
-  case "mcp":
-    printMcpStdioConfig();
-    break;
-  case "ssh-proxy":
-    sshProxy();
-    break;
-  case "ssh-key":
-    sshKey();
-    break;
-  case "help":
-  case undefined:
-    console.log(`easybits CLI — @easybits.cloud/cli
+  const cmd = findCommand(cmdName);
+  if (!cmd) throw usageError(`Unknown command "${cmdName}".`);
 
-Commands:
-  login <key>       Save API key
-  init              Write the GitHub Actions deploy workflow
-                    (--app-dir /srv/app, --port 3000)
-  files list        List your files
-  files upload <f>  Upload a file
-  files delete <id> Delete a file
-  providers list    Show storage providers
-  config            Print MCP config JSON (streamable HTTP)
-  mcp               Print MCP stdio config JSON
-  ssh-key           Print your public key for sandbox_ssh_enable (creates it once)
-  ssh-proxy <id>    SSH tunnel over 443 (use as ssh ProxyCommand)
+  let leaf = cmd.leaf;
+  const skip = [pos[0]];
+  if (cmd.subs) {
+    const subName = pos[1] != null ? argv[pos[1]] : undefined;
+    const entry = subName
+      ? Object.entries(cmd.subs).find(([n, l]) => n === subName || l.aliases?.includes(subName))
+      : undefined;
+    if (entry) {
+      leaf = entry[1];
+      skip.push(pos[1]);
+    } else if (subName) {
+      throw usageError(`Unknown subcommand "${cmd.name} ${subName}".`, `easybits ${cmd.name} <${Object.keys(cmd.subs).join("|")}>`);
+    } else if (cmd.defaultSub && !argv.includes("--help") && !argv.includes("-h")) {
+      leaf = cmd.subs[cmd.defaultSub];
+    } else if (!argv.includes("--help") && !argv.includes("-h")) {
+      throw usageError(`Missing subcommand for "${cmd.name}".`, `easybits ${cmd.name} <${Object.keys(cmd.subs).join("|")}>`);
+    }
+  }
 
-SSH to a box — add to ~/.ssh/config:
-  Host *.ghosty
-    ProxyCommand easybits ssh-proxy %h
-    User root`);
-    break;
-  default:
-    console.error(`Unknown command: ${cmd}. Run 'easybits help'`);
+  const { values, positionals } = parse(argv, skip, leaf);
+  if (values.version) {
+    console.log(VERSION);
+    return;
+  }
+  if (values.help || !leaf) {
+    console.log(leaf && (leaf !== cmd.subs?.[cmd.defaultSub ?? ""] || skip.length > 1) ? leafHelp(leaf) : commandHelp(cmd));
+    return;
+  }
+
+  const ctx: Ctx = {
+    json: values.json === true,
+    token: typeof values.token === "string" ? values.token : undefined,
+    args: positionals,
+    opts: values,
+  };
+  await leaf.run.call(leaf, ctx);
 }
+
+const argv = process.argv.slice(2);
+main(argv).catch((err: unknown) => {
+  const e: CliError = toCliError(err);
+  if (wantsJson(argv)) {
+    process.stderr.write(
+      JSON.stringify({ error: { code: e.code, message: e.message, status: e.status, hint: e.hint, exitCode: e.exitCode } }) + "\n",
+    );
+  } else {
+    process.stderr.write(`Error: ${e.message}\n`);
+    if (e.hint) process.stderr.write(`${e.hint}\n`);
+  }
+  process.exitCode = e.exitCode || EXIT.API;
+});
