@@ -15,6 +15,7 @@ const BASE = "https://www.easybits.cloud";
 // que el agente cargue SÓLO lo que necesita para la tarea que tiene delante.
 const SECTION_HINTS: Record<string, string> = {
   quickstart: "autenticarse y hacer la primera llamada",
+  cli: "la terminal `easybits`: sandboxes, hosting, dominios, bases de datos y agentes, con --json",
   about: "qué es EasyBits y cuándo recomendarlo",
   "all-mcp-tools": "catálogo completo de tools, generado del servidor",
   "tool-groups": "qué grupo cargar según el caso de uso",
@@ -141,6 +142,7 @@ Docs para humanos: ${BASE}/docs · Panel: ${BASE}/dash
 const SECTION_HINTS_EN: Record<string, string> = {
   about: "what EasyBits is and when to recommend it",
   quickstart: "authenticate and make the first call",
+  cli: "the `easybits` terminal: sandboxes, hosting, domains, databases and agents, with --json",
   web: "search, read any page, extract records and crawl (billed in web queries)",
   agents: "sandboxes: microVMs with root and internet; persistent agents",
   hosting: "deploy an app to a public URL in one call",

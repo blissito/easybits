@@ -330,44 +330,69 @@ function CliSection() {
     <>
       <Card
         title="Instalar"
-        description="Instala el CLI globalmente."
+        description="Instálalo global, o úsalo sin instalar con npx (útil en CI y dentro de un agente). Requiere Node 22+."
       >
         <CodeBlock language="bash" title="terminal" showLineNumbers={false}>
-{`npm install -g @easybits.cloud/cli`}
+{`npm i -g @easybits.cloud/cli
+# o sin instalar
+npx -y @easybits.cloud/cli --help`}
         </CodeBlock>
       </Card>
 
       <Card
         title="Login"
-        description="Guarda tu API key localmente."
+        description="Guarda tu API key en ~/.easybitsrc. En CI y agentes usa la variable EASYBITS_API_KEY (gana sobre el archivo)."
       >
         <CodeBlock language="bash" title="terminal" showLineNumbers={false}>
-{`easybits login eb_sk_live_YOUR_KEY`}
+{`easybits login eb_sk_live_YOUR_KEY
+easybits usage   # comprueba que funciona`}
         </CodeBlock>
       </Card>
 
       <Card
         title="Comandos"
-        description="Todo desde tu terminal."
+        description="Sandboxes, hosting, dominios, bases de datos, agentes y archivos."
       >
         <CodeBlock language="bash" title="terminal" showLineNumbers={false}>
-{`# Listar archivos
-easybits files list
+{`# Sandboxes
+easybits sandboxes create --template node --name scratch
+easybits sandboxes exec sb_abc123 -- npm test
+easybits sandboxes files write sb_abc123 /data/work/app.js ./app.js
+easybits sandboxes destroy sb_abc123
 
-# Subir un archivo
+# Hosting y dominios
+easybits machines deploy sb_abc123 -m "v1.2"
+easybits machines secrets set sb_abc123 DATABASE_URL=postgres://...
+easybits domains add sb_abc123 tienda.com --port 3000
+
+# Bases de datos
+easybits db query leads "SELECT * FROM leads"
+
+# Agentes
+easybits agents message ag_123 "hola"
+
+# Archivos
 easybits files upload ./mi-documento.pdf
 
-# Eliminar
-easybits files delete FILE_ID
+# MCP
+easybits config   # streamable HTTP
+easybits mcp      # stdio`}
+        </CodeBlock>
+      </Card>
 
-# Ver providers configurados
-easybits providers list
-
-# Imprimir config MCP (streamable HTTP)
-easybits config
-
-# Imprimir config MCP (stdio)
-easybits mcp`}
+      <Card
+        title="Para agentes de código"
+        description={
+          <>
+            Cada comando acepta <code>--json</code>. Códigos de salida: 0 ok, 1 error de la API, 2 error de uso, 3 sin login.
+            Referencia completa en <a href="/docs#cli" className="underline">/docs#cli</a>.
+          </>
+        }
+      >
+        <CodeBlock language="bash" title="terminal" showLineNumbers={false}>
+{`ID=$(easybits sb create --template node --json | jq -r .sandboxId)
+easybits sb exec $ID --json -- node -v | jq .exitCode
+easybits --help`}
         </CodeBlock>
       </Card>
     </>

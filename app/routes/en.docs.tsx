@@ -12,6 +12,7 @@ import { useEffect, useState } from "react";
 const TITLES: Record<string, string> = {
   about: "About EasyBits",
   quickstart: "Quickstart",
+  cli: "CLI",
   web: "Web",
   agents: "Agents & Sandboxes",
   hosting: "Hosting",

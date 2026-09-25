@@ -1,0 +1,112 @@
+---
+name: easybits-cli
+description: "Drive EasyBits from the terminal with the easybits CLI (npm @easybits.cloud/cli) - sandboxes, exec, sandbox files, permanent machines and releases, secrets, custom domains, SQL databases, agents and files, all with --json and stable exit codes. Use when a coding agent has a shell and needs to create or operate EasyBits resources without writing HTTP calls, or when the user mentions the easybits CLI."
+license: MIT
+compatibility: Needs Node 22+ (npx is enough), network access to https://www.easybits.cloud and an EasyBits API key
+metadata:
+  author: easybits
+  version: "1.0"
+---
+
+# Use the EasyBits CLI
+
+`easybits` wraps the EasyBits REST API v2 in commands. Prefer it over hand-written `curl`
+when you have a shell: arguments are validated, output is stable JSON with `--json`, and
+the exit code tells you what went wrong.
+
+## Setup
+
+```bash
+npx -y @easybits.cloud/cli --version      # no install needed
+npm i -g @easybits.cloud/cli              # or install once → `easybits`
+export EASYBITS_API_KEY=eb_sk_live_...    # preferred for agents and CI
+easybits usage --json                     # check the key works
+```
+
+Key precedence: `EASYBITS_API_KEY` > `--token <key>` > `~/.easybitsrc` (written by
+`easybits login <key>`). If there is no key, ask the user for one from
+https://www.easybits.cloud/dash/developer — never invent one.
+
+## Rules for agents
+
+1. Always pass `--json`. stdout is then JSON only; errors go to stderr as
+   `{"error":{"code","message","status","hint","exitCode"}}`.
+2. Branch on the exit code:
+
+   | Exit | Meaning | What to do |
+   |---|---|---|
+   | 0 | ok | continue |
+   | 1 | API error (4xx/5xx) | read `error.message`/`hint`; 404 → wrong id, 402 → plan limit |
+   | 2 | usage error | fix the command; run `easybits <cmd> <sub> --help` |
+   | 3 | not logged in / key rejected | ask the user for a valid key |
+
+3. `sandboxes exec` without `--json` exits with the remote command's code. With `--json`
+   it exits 0 and reports `exitCode`, `stdout`, `stderr`. Put the command after `--`.
+4. Put flags after the subcommand: `easybits sb create --template node`, not
+   `easybits --template node sb create`.
+5. Destroy what you create. Sandboxes you did not create belong to the user: do not
+   suspend, exec into or destroy them unless asked.
+
+## Sandboxes (Firecracker microVMs, alias `sb`)
+
+```bash
+ID=$(easybits sb create --template node --name scratch --timeout 1800 --json | jq -r .sandboxId)
+easybits sb exec "$ID" --json -- 'cd /data/work && npm ci && npm test'
+easybits sb files write "$ID" /data/work/app.js ./app.js     # or --content '...', or stdin
+easybits sb files read  "$ID" /data/work/out.json            # --out file for binaries
+easybits sb files ls    "$ID" /data/work --json
+easybits sb logs "$ID" --unit myapp --lines 100
+easybits sb suspend "$ID" && easybits sb resume "$ID"
+easybits sb snapshot "$ID" --name checkpoint
+easybits sb destroy "$ID"
+```
+
+Templates: `ubuntu` (default), `python`, `node`, `bun`, `code-interpreter`… Full list:
+`easybits docs agents`.
+
+## Hosting (permanent machines, alias `deploy`)
+
+```bash
+easybits machines ls --json
+easybits machines deploy "$ID" -m "v1.2"            # publish a release of the current code
+easybits machines releases "$ID" --json
+easybits machines rollback "$ID" "$RELEASE_ID"
+easybits machines logs "$ID" --grep ERROR
+easybits machines secrets set "$ID" DATABASE_URL="$DATABASE_URL"
+easybits machines secrets ls "$ID" --json           # names only; values are never readable
+easybits init --port 3000                           # GitHub Actions: deploy on every push
+```
+
+## Domains
+
+```bash
+easybits domains add "$ID" shop.example.com --port 3000 --json   # returns the DNS record
+easybits domains verify "$ID" shop.example.com                   # exit 1 until ready
+```
+
+## Databases (libSQL)
+
+```bash
+easybits db create leads --json
+easybits db query leads "SELECT * FROM leads WHERE name = ?" --arg Ana --json
+easybits db rm leads
+```
+
+`query` resolves id or name and never creates a database from a typo.
+
+## Agents and files
+
+```bash
+easybits agents create --template goose --name helper --json
+easybits agents message "$AGENT_ID" "summarize the README" --json   # { content, tokens }
+easybits agents destroy "$AGENT_ID"
+easybits files upload ./report.pdf --json
+easybits files ls --json
+```
+
+## More
+
+- `easybits --help`, `easybits <command> --help`, `easybits <command> <sub> --help`
+- `easybits docs cli --en` prints the full CLI reference as markdown; `easybits docs <section>`
+  prints any docs section (hosting, agents, databases…).
+- `easybits config` prints MCP config JSON if the task is better served by the MCP tools.

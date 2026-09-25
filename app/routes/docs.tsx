@@ -5,6 +5,7 @@ import { useState, useEffect, useRef } from "react";
 import { CodeBlock } from "~/components/mdx/CodeBlock";
 import { PageActions } from "~/components/docs/PageActions";
 import { SkillsInstall } from "~/components/docs/SkillsInstall";
+import Markdown from "~/components/common/Markdown";
 import { FLEET_BOX, HOSTING_CATALOG, SELLABLE_TIERS } from "~/lib/hostingCatalog";
 
 // Formato humano de specs de un tier (MB → GB/MB legible).
@@ -30,7 +31,11 @@ export const loader = async () => {
     kind: KIND_LABEL[TEMPLATE_CATALOG[t].kind].es,
     summary: TEMPLATE_CATALOG[t].summary,
   }));
-  return { toolCount: catalog.length, groupCounts, groups, templates };
+  // La sección del CLI se escribe UNA vez en markdown (reference.ts) y se pinta aquí: lo que
+  // lee un agente en /docs/cli.md es lo que ve la persona.
+  const { getDocsMarkdown } = await import("~/.server/docs/reference");
+  const cliMarkdown = await getDocsMarkdown("cli");
+  return { toolCount: catalog.length, groupCounts, groups, templates, cliMarkdown };
 };
 
 // El gemelo markdown de esta página (/docs.md) y que la caché distinga por Accept:
@@ -57,6 +62,7 @@ const SECTIONS = [
   { id: "ghosty-code", label: "Ghosty Code" },
   { id: "cowork", label: "Claude Cowork" },
   { id: "sdk", label: "SDK" },
+  { id: "cli", label: "CLI" },
   { id: "files", label: "Archivos" },
   { id: "bulk", label: "Operaciones en lote" },
   { id: "images", label: "Imágenes" },
@@ -85,10 +91,10 @@ const SECTIONS = [
 ] as const;
 
 // Sections that show the "Nuevo" badge in the nav (recently shipped).
-const NEW_SECTIONS = new Set<string>(["eve", "agentes-en-tu-app", "ghosty-lite", "flota", "video-projects", "calls", "secrets", "images", "web"]);
+const NEW_SECTIONS = new Set<string>(["cli", "eve", "agentes-en-tu-app", "ghosty-lite", "flota", "video-projects", "calls", "secrets", "images", "web"]);
 
 export default function DocsPage({ loaderData }: Route.ComponentProps) {
-  const { toolCount, groupCounts, groups, templates } = loaderData;
+  const { toolCount, groupCounts, groups, templates, cliMarkdown } = loaderData;
   const location = useLocation();
 
   // Estado inicial DETERMINISTA (igual en server y cliente) para no causar un
@@ -781,6 +787,11 @@ try {
     console.log(err.body);   // '{"error":"File not found"}'
   }
 }`} />
+          </section>
+
+          {/* CLI — desde el markdown de reference.ts */}
+          <section id="cli" className="mb-16">
+            <Markdown>{cliMarkdown}</Markdown>
           </section>
 
           {/* Archivos */}

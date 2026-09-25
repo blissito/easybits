@@ -84,6 +84,147 @@ DERIVA del servidor MCP: ver [Tool Groups](#tool-groups). No lo copies aquí a
 mano; cada cifra escrita en prosa se desincroniza en el siguiente deploy.
 `,
 
+  // El CLI (@easybits.cloud/cli). La versión EN vive en reference.en.cli.ts: mantener en paralelo.
+  cli: `## CLI
+
+\`easybits\` es la terminal de EasyBits: sandboxes, hosting, dominios, bases de datos, agentes y archivos sin escribir un \`curl\`. Está hecho para personas **y para agentes de código**: cada comando acepta \`--json\` y los códigos de salida son estables.
+
+### Instalar
+
+\`\`\`bash
+npm i -g @easybits.cloud/cli     # queda el comando \`easybits\`
+npx -y @easybits.cloud/cli --help  # sin instalar (útil en CI y dentro de un agente)
+\`\`\`
+
+Requiere Node 22 o superior.
+
+### Login
+
+\`\`\`bash
+easybits login eb_sk_live_TU_KEY   # la guarda en ~/.easybitsrc
+easybits usage                     # comprueba que funciona: plan y almacenamiento
+\`\`\`
+
+La key sale del [Dashboard de Desarrollador](https://www.easybits.cloud/dash/developer). Orden de precedencia: variable \`EASYBITS_API_KEY\` > bandera \`--token\` > \`~/.easybitsrc\`. En CI y en agentes usa la variable.
+
+### Sandboxes
+
+\`\`\`bash
+easybits sandboxes create --template node --name scratch   # espera a que corra
+easybits sandboxes ls
+easybits sandboxes exec sb_abc123 -- npm test               # sale con el código del comando
+easybits sandboxes logs sb_abc123 --unit myapp --lines 100
+easybits sandboxes files ls sb_abc123 /data/work
+easybits sandboxes files write sb_abc123 /data/work/app.js ./app.js
+easybits sandboxes files read sb_abc123 /data/out.png --out out.png
+easybits sandboxes suspend sb_abc123      # duerme a disco; resume la despierta
+easybits sandboxes resume sb_abc123
+easybits sandboxes snapshot sb_abc123 --name antes-del-upgrade
+easybits sandboxes destroy sb_abc123
+\`\`\`
+
+Alias: \`easybits sb …\`. Todo lo que va después de \`--\` en \`exec\` es el comando, tal cual.
+
+### Hosting: máquinas permanentes
+
+\`\`\`bash
+easybits machines ls
+easybits machines deploy sb_abc123 -m "v1.2"             # publica un release del código actual
+easybits machines releases sb_abc123
+easybits machines logs sb_abc123 --grep ERROR
+easybits machines rollback sb_abc123 rel_789             # misma máquina, datos intactos
+easybits machines secrets ls sb_abc123
+easybits machines secrets set sb_abc123 DATABASE_URL=postgres://… API_KEY=xyz
+easybits machines secrets unset sb_abc123 API_KEY
+easybits init --port 3000                                # workflow de GitHub Actions: deploy en cada push
+\`\`\`
+
+Alias: \`easybits deploy …\`. Ojo: \`secrets set\` deja los valores en el historial de tu shell; en scripts pásalos desde variables.
+
+### Dominios
+
+\`\`\`bash
+easybits domains add sb_abc123 tienda.com --port 3000   # imprime el registro DNS a crear
+easybits domains verify sb_abc123 tienda.com            # sale con 1 mientras no esté listo
+easybits domains ls sb_abc123
+easybits domains rm sb_abc123 tienda.com
+\`\`\`
+
+### Bases de datos
+
+\`\`\`bash
+easybits db create leads
+easybits db query leads "CREATE TABLE leads (id INTEGER PRIMARY KEY, name TEXT)"
+easybits db query leads "INSERT INTO leads(name) VALUES (?)" --arg Ana
+easybits db query leads "SELECT * FROM leads" --json
+easybits db ls
+easybits db rm leads
+\`\`\`
+
+\`query\` acepta el id o el nombre, y nunca crea una base por un nombre mal escrito.
+
+### Agentes
+
+\`\`\`bash
+easybits agents create --template goose --name ayudante
+easybits agents message ag_123 "resume el README"    # la respuesta llega en streaming
+easybits agents ls
+easybits agents destroy ag_123
+\`\`\`
+
+### Archivos, sitios y cuenta
+
+\`\`\`bash
+easybits files upload ./reporte.pdf
+easybits files ls
+easybits files delete FILE_ID
+easybits websites ls
+easybits usage
+\`\`\`
+
+### MCP, SSH y docs
+
+\`\`\`bash
+easybits config            # JSON de MCP (streamable HTTP) con tu key
+easybits mcp               # JSON de MCP por stdio
+easybits ssh-key           # tu llave pública para habilitar SSH en una caja
+easybits docs hosting      # una sección de estos docs en markdown
+easybits docs cli --en     # esta página en inglés
+\`\`\`
+
+SSH por el 443 — agrega a \`~/.ssh/config\` y entra con \`ssh <nombre>.ghosty\`:
+
+\`\`\`
+Host *.ghosty
+    ProxyCommand easybits ssh-proxy %h
+    User root
+\`\`\`
+
+### \`--json\` y códigos de salida
+
+Con \`--json\` la salida a stdout es **sólo JSON** (sin banner, sin tablas) y los errores salen a stderr como \`{"error":{"code","message","status","hint","exitCode"}}\`.
+
+| Código | Significa |
+|---|---|
+| \`0\` | ok |
+| \`1\` | error de la API (4xx/5xx), o \`domains verify\` todavía no listo |
+| \`2\` | error de uso: comando, subcomando o argumento faltante o desconocido |
+| \`3\` | sin login, o la key fue rechazada (401) |
+
+Excepción deliberada: \`sandboxes exec\` sin \`--json\` sale con el código del comando remoto (como \`ssh\`); con \`--json\` sale 0 y el código viaja en \`exitCode\`.
+
+\`easybits --help\` y \`easybits <comando> <subcomando> --help\` muestran uso, banderas y ejemplos.
+
+### Para agentes de código
+
+- Usa siempre \`--json\` y decide por el código de salida, no por el texto.
+- Pon la key en \`EASYBITS_API_KEY\`; no dependas del \`~/.easybitsrc\` de la máquina.
+- Encadena con \`jq\`: \`ID=$(easybits sb create --template node --json | jq -r .sandboxId)\`.
+- En \`exec\`, separa el comando con \`--\` y usa \`--json\` para leer \`stdout\`, \`stderr\` y \`exitCode\` juntos.
+- Destruye lo que crees: \`easybits sb destroy $ID\`.
+- Skill lista para instalar: \`npx skills add https://easybits.cloud\` (incluye \`easybits-cli\`).
+`,
+
   files: `## Files
 
 ### List files
@@ -2506,7 +2647,7 @@ export type DocsLocale = "es" | "en";
 
 // Secciones con traducción. Las generadas (tool-groups, all-mcp-tools) se reusan en EN:
 // los nombres de tools son el contrato. Cualquier otra cae al ES con un aviso.
-export const EN_SECTION_KEYS = ["about", "quickstart", "web", "agents", "eve", "hosting", "databases", "files", "errors", "tool-groups"] as const;
+export const EN_SECTION_KEYS = ["about", "quickstart", "cli", "web", "agents", "eve", "hosting", "databases", "files", "errors", "tool-groups"] as const;
 
 const HEADER_EN = `# EasyBits API Reference
 
