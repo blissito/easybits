@@ -1,4 +1,5 @@
 import { VALID_SECTIONS, EN_SECTION_KEYS } from "~/.server/docs/reference";
+import { skillsIndex } from "~/.server/docs/skillsWellKnown";
 import type { Route } from "./+types/llms.txt";
 
 // GET /llms.txt — ÍNDICE para agentes (público, sin auth).
@@ -10,6 +11,9 @@ import type { Route } from "./+types/llms.txt";
 // /llms-full.txt y cada sección en /llms/<section>.txt (1-12 KB cada una).
 
 const BASE = "https://www.easybits.cloud";
+
+// Nombres de las skills publicadas, derivados de public/skills (nunca a mano).
+const SKILL_NAMES = () => skillsIndex().map((s) => s.name).sort().map((n) => `\`${n}\``).join(", ");
 
 // Qué se puede pedir por separado, con una línea de por qué te importa. El objetivo es
 // que el agente cargue SÓLO lo que necesita para la tarea que tiene delante.
@@ -90,7 +94,8 @@ Esto es un índice. Carga sólo la sección que necesites; el documento completo
 
 - **Skills instalables**: \`npx skills add https://easybits.cloud\` (índice en
   [/.well-known/skills/index.json](${BASE}/.well-known/skills/index.json)). Enseña cuándo usar
-  REST, MCP o SDK, y las llamadas exactas con \`EASYBITS_API_KEY\`.
+  REST, MCP o SDK, y las llamadas exactas con \`EASYBITS_API_KEY\`. Skills: ${SKILL_NAMES()}.
+  Con \`easybits-cli\` tu agente opera todo desde la terminal: \`npx -y @easybits.cloud/cli --help\`.
 - **MCP de esta documentación** (sin auth): \`claude mcp add --transport http easybits-docs ${BASE}/mcp/docs\`
   → \`search_docs\`, \`read_doc\`, \`list_docs\`, \`tools_catalog\`, \`openapi\`.
 - **OpenAPI 3.1**: [/openapi.yaml](${BASE}/openapi.yaml) · renderizada en ${BASE}/docs/api.
@@ -168,7 +173,8 @@ This is an index. Load only the section you need; the full English document is a
 ## For coding agents
 
 - **Installable skills**: \`npx skills add https://easybits.cloud\` (index at
-  [/.well-known/agent-skills/index.json](${BASE}/.well-known/agent-skills/index.json)).
+  [/.well-known/agent-skills/index.json](${BASE}/.well-known/agent-skills/index.json)). Skills: ${SKILL_NAMES()}.
+  With \`easybits-cli\` your agent runs everything from the shell: \`npx -y @easybits.cloud/cli --help\`.
 - **Docs MCP** (no auth): \`claude mcp add --transport http easybits-docs ${BASE}/mcp/docs\`
   → \`search_docs\`, \`read_doc\`, \`list_docs\`, \`tools_catalog\`, \`openapi\`.
 - **OpenAPI 3.1**: [/openapi.yaml](${BASE}/openapi.yaml) · rendered at ${BASE}/docs/api.

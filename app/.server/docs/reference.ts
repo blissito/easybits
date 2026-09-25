@@ -89,6 +89,22 @@ mano; cada cifra escrita en prosa se desincroniza en el siguiente deploy.
 
 \`easybits\` es la terminal de EasyBits: sandboxes, hosting, dominios, bases de datos, agentes y archivos sin escribir un \`curl\`. Está hecho para personas **y para agentes de código**: cada comando acepta \`--json\` y los códigos de salida son estables.
 
+### Para tu agente de código
+
+Instala las skills de EasyBits en tu agente (Claude Code, Codex, Cursor…). Traen \`easybits-cli\`, que le enseña a usar este CLI, y las demás (\`easybits-sandbox\`, \`easybits-agent\`…):
+
+\`\`\`bash
+npx skills add https://easybits.cloud
+\`\`\`
+
+Y pégale este prompt, cambiando lo del final por lo que necesites:
+
+\`\`\`text
+Instala la skill de EasyBits (npx skills add https://easybits.cloud) y usa el CLI (npx -y @easybits.cloud/cli) para crear un sandbox node, correr mis pruebas adentro y decirme el resultado. Si no hay sesión, corre \`easybits login --json\` y pásame la liga.
+\`\`\`
+
+El agente te pasará una liga para entrar la primera vez; lo demás lo hace él.
+
 ### Instalar
 
 \`\`\`bash
@@ -1263,6 +1279,8 @@ Flujo: \`domain-add\` → crea el registro DNS que indica \`dns\` → \`domain-v
 - \`sandbox_resume({ sandboxId })\` — restaurar desde snapshot; restaura el TTL restante (no hace falta sandbox_extend)
 - \`sandbox_destroy({ sandboxId })\` — destruir y liberar
 
+> **Skill para tu agente:** \`npx skills add https://easybits.cloud\` instala \`easybits-sandbox\` (la API de cajas) y \`easybits-cli\` (lo mismo desde la terminal: \`easybits sandboxes …\`).
+
 ### Actividad y errores de una caja
 
 \`GET /sandboxes/:id\` (SDK \`sb.refresh()\`, MCP \`sandbox_status\`) trae \`activity\` mientras corre una operación larga sobre la caja: \`"snapshotting"\` o \`"forking"\`. Sin operación en curso, el campo no viene. Mientras está presente, \`exec\`, \`suspend\`, \`destroy\`, \`snapshot\` y \`fork\` contestan **409 \`SandboxBusy\`** al instante: espera a que desaparezca y reintenta.
@@ -1661,6 +1679,8 @@ También se administran desde \`/dash/hosting\`: cada sitio con su estado y su d
   databases: `## Databases (SQLite-as-a-Service)
 
 Create isolated SQLite databases for your agents and apps. Powered by sqld (libsql-server).
+
+> **Skill para tu agente:** \`npx skills add https://easybits.cloud\` instala \`easybits-cli\`: \`easybits db create|query|ls|rm\` con \`--json\`.
 
 ### List databases
 \`GET /databases\`

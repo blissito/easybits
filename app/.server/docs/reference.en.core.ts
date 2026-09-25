@@ -277,6 +277,8 @@ export const EN_DATABASES = `## Databases (SQLite-as-a-Service)
 
 Create isolated SQLite databases for your agents and apps. Powered by sqld (libsql-server).
 
+> **Skill for your agent:** \`npx skills add https://easybits.cloud\` installs \`easybits-cli\`: \`easybits db create|query|ls|rm\` with \`--json\`.
+
 ### List databases
 \`GET /databases\`
 Returns: \`{ items: Database[] }\`

@@ -42,8 +42,12 @@ export const loader = async () => {
     const j = md.indexOf(to, i + from.length);
     return md.slice(i, j < 0 ? undefined : j).trim();
   };
-  const sandboxErrorsMarkdown = slice(await getDocsMarkdown("agents"), "### Actividad y errores de una caja", "\n### ");
-  const databaseErrorsMarkdown = slice(await getDocsMarkdown("databases"), "### Errores", "\n### ");
+  // Y la línea que apunta a la skill de la sección, arriba de su tabla.
+  const skillLine = (md: string) => md.match(/^> \*\*Skill para tu agente:\*\*.*$/m)?.[0] ?? "";
+  const agentsMd = await getDocsMarkdown("agents");
+  const databasesMd = await getDocsMarkdown("databases");
+  const sandboxErrorsMarkdown = [skillLine(agentsMd), slice(agentsMd, "### Actividad y errores de una caja", "\n### ")].join("\n\n");
+  const databaseErrorsMarkdown = [skillLine(databasesMd), slice(databasesMd, "### Errores", "\n### ")].join("\n\n");
   return { toolCount: catalog.length, groupCounts, groups, templates, cliMarkdown, sandboxErrorsMarkdown, databaseErrorsMarkdown };
 };
 

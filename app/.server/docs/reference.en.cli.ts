@@ -3,6 +3,22 @@ export const EN_CLI = `## CLI
 
 \`easybits\` is EasyBits from your terminal: sandboxes, hosting, domains, databases, agents and files without writing a single \`curl\`. It is built for people **and for coding agents**: every command takes \`--json\` and the exit codes are stable.
 
+### For your coding agent
+
+Install the EasyBits skills in your agent (Claude Code, Codex, Cursor…). They include \`easybits-cli\`, which teaches it this CLI, and the rest (\`easybits-sandbox\`, \`easybits-agent\`…):
+
+\`\`\`bash
+npx skills add https://easybits.cloud
+\`\`\`
+
+Then paste this prompt, changing the end to whatever you need:
+
+\`\`\`text
+Install the EasyBits skill (npx skills add https://easybits.cloud) and use the CLI (npx -y @easybits.cloud/cli) to create a node sandbox, run my tests inside it and tell me the result. If there is no session, run \`easybits login --json\` and give me the link.
+\`\`\`
+
+The agent will hand you a link to sign in the first time; it does the rest.
+
 ### Install
 
 \`\`\`bash

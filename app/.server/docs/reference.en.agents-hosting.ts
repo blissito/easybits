@@ -359,6 +359,8 @@ Flow: \`domain-add\` → create the DNS record given in \`dns\` → \`domain-ver
 - \`sandbox_resume({ sandboxId })\` — restore from snapshot; restores the remaining TTL (no sandbox_extend needed)
 - \`sandbox_destroy({ sandboxId })\` — destroy and release
 
+> **Skill for your agent:** \`npx skills add https://easybits.cloud\` installs \`easybits-sandbox\` (the sandbox API) and \`easybits-cli\` (the same from the shell: \`easybits sandboxes …\`).
+
 ### Sandbox activity and errors
 
 \`GET /sandboxes/:id\` (SDK \`sb.refresh()\`, MCP \`sandbox_status\`) includes \`activity\` while a long operation runs on the box: \`"snapshotting"\` or \`"forking"\`. With nothing in progress the field is absent. While it is present, \`exec\`, \`suspend\`, \`destroy\`, \`snapshot\` and \`fork\` answer **409 \`SandboxBusy\`** right away: wait until it is gone and retry.
