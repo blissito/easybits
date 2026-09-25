@@ -101,11 +101,15 @@ Requiere Node 22 o superior.
 ### Login
 
 \`\`\`bash
-easybits login eb_sk_live_TU_KEY   # la guarda en ~/.easybitsrc
+easybits login                     # abre el navegador, entras y listo
+easybits login eb_sk_live_TU_KEY   # alternativa: una API key, sin navegador
 easybits usage                     # comprueba que funciona: plan y almacenamiento
+easybits logout                    # olvida la sesión y la key
 \`\`\`
 
-La key sale del [Dashboard de Desarrollador](https://www.easybits.cloud/dash/developer). Orden de precedencia: variable \`EASYBITS_API_KEY\` > bandera \`--token\` > \`~/.easybitsrc\`. En CI y en agentes usa la variable.
+\`easybits login\` usa OAuth2 con PKCE: abre el navegador, imprime también la URL y espera a que vuelvas; la sesión (con refresh) queda en \`~/.easybitsrc\` y se renueva sola. Si corres un comando sin sesión desde una terminal, el login arranca solo; sin terminal (un agente, CI) sale con código \`3\`.
+
+La API key sale del [Dashboard de Desarrollador](https://www.easybits.cloud/dash/developer). Orden de precedencia: variable \`EASYBITS_API_KEY\` > bandera \`--token\` > sesión del navegador > key guardada con \`login <key>\`. En CI usa la variable.
 
 ### Sandboxes
 
@@ -209,7 +213,7 @@ Con \`--json\` la salida a stdout es **sólo JSON** (sin banner, sin tablas) y l
 | \`0\` | ok |
 | \`1\` | error de la API (4xx/5xx), o \`domains verify\` todavía no listo |
 | \`2\` | error de uso: comando, subcomando o argumento faltante o desconocido |
-| \`3\` | sin login, o la key fue rechazada (401) |
+| \`3\` | sin sesión (sin terminal), sesión vencida, o credencial rechazada (401) |
 
 Excepción deliberada: \`sandboxes exec\` sin \`--json\` sale con el código del comando remoto (como \`ssh\`); con \`--json\` sale 0 y el código viaja en \`exitCode\`.
 
@@ -218,7 +222,8 @@ Excepción deliberada: \`sandboxes exec\` sin \`--json\` sale con el código del
 ### Para agentes de código
 
 - Usa siempre \`--json\` y decide por el código de salida, no por el texto.
-- Pon la key en \`EASYBITS_API_KEY\`; no dependas del \`~/.easybitsrc\` de la máquina.
+- Si no hay sesión, corre \`easybits login --json\`: la primera línea es \`{"event":"login_url","url":…}\` — muéstrale esa liga a la persona — y cuando entra llega \`{"event":"logged_in",…}\`. Con \`--no-browser\` no abre el navegador de la máquina.
+- En CI, o si la persona te da una key, usa \`EASYBITS_API_KEY\`.
 - Encadena con \`jq\`: \`ID=$(easybits sb create --template node --json | jq -r .sandboxId)\`.
 - En \`exec\`, separa el comando con \`--\` y usa \`--json\` para leer \`stdout\`, \`stderr\` y \`exitCode\` juntos.
 - Destruye lo que crees: \`easybits sb destroy $ID\`.

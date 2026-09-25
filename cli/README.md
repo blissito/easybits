@@ -16,12 +16,15 @@ Requires Node 22+.
 ## Log in
 
 ```bash
-easybits login eb_sk_live_YOUR_KEY   # saved to ~/.easybitsrc
+easybits login                       # opens your browser (OAuth2 + PKCE); session renews itself
+easybits login eb_sk_live_YOUR_KEY   # or save an API key instead
 easybits usage
+easybits logout
 ```
 
-Get a key at https://www.easybits.cloud/dash/developer. Precedence:
-`EASYBITS_API_KEY` env var > `--token <key>` > `~/.easybitsrc`.
+Running a command without a session in a terminal starts the login automatically;
+without a terminal (agents, CI) it exits `3`. Precedence: `EASYBITS_API_KEY` env var >
+`--token <key>` > browser session > saved API key. Keys: https://www.easybits.cloud/dash/developer.
 
 ## Commands
 
@@ -98,7 +101,8 @@ Host *.ghosty
 ## For coding agents
 
 - `--json`: stdout is JSON only; errors go to stderr as `{"error":{"code","message","status","hint","exitCode"}}`.
-- Exit codes: `0` ok · `1` API error · `2` usage error · `3` not logged in or key rejected.
+- Exit codes: `0` ok · `1` API error · `2` usage error · `3` no session, expired or rejected.
+- Login for a person: `easybits login --json` prints `{"event":"login_url","url":…}` first (show it to them), then `{"event":"logged_in",…}`.
 - `sandboxes exec` without `--json` exits with the remote command's code; with `--json` it exits 0 and reports `exitCode`.
 - Skill: `npx skills add https://easybits.cloud` (includes `easybits-cli`).
 

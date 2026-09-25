@@ -28,7 +28,7 @@ export function notLoggedIn(): CliError {
   return new CliError(
     "Not logged in.",
     EXIT.AUTH,
-    "Run: easybits login <api-key>  (or set EASYBITS_API_KEY)",
+    "Run: easybits login   (or: easybits login <api-key>, or set EASYBITS_API_KEY)",
     "not_logged_in",
   );
 }
@@ -51,9 +51,9 @@ export function toCliError(err: unknown): CliError {
     const message = apiMessage(err.body);
     if (err.status === 401) {
       return new CliError(
-        `API key rejected (401): ${message}`,
+        `Credentials rejected (401): ${message}`,
         EXIT.AUTH,
-        "Run: easybits login <api-key>  with a valid key from https://www.easybits.cloud/dash/developer",
+        "Run: easybits login   (or pass a valid API key from https://www.easybits.cloud/dash/developer)",
         "unauthorized",
         401,
       );

@@ -1,5 +1,5 @@
 import type { Command } from "../types.js";
-import { login, usage, websites, providers, config, mcp } from "./account.js";
+import { login, logout, usage, websites, providers, config, mcp } from "./account.js";
 import { files } from "./files.js";
 import { init } from "./init.js";
 import { sshKey, sshProxy } from "./ssh.js";
@@ -13,6 +13,7 @@ import { docs } from "./docs.js";
 // El orden aquí es el orden de la ayuda.
 export const COMMANDS: Command[] = [
   login,
+  logout,
   usage,
   sandboxes,
   agents,

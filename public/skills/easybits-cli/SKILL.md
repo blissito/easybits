@@ -5,7 +5,7 @@ license: MIT
 compatibility: Needs Node 22+ (npx is enough), network access to https://www.easybits.cloud and an EasyBits API key
 metadata:
   author: easybits
-  version: "1.0"
+  version: "1.1"
 ---
 
 # Use the EasyBits CLI
@@ -19,12 +19,24 @@ the exit code tells you what went wrong.
 ```bash
 npx -y @easybits.cloud/cli --version      # no install needed
 npm i -g @easybits.cloud/cli              # or install once → `easybits`
-export EASYBITS_API_KEY=eb_sk_live_...    # preferred for agents and CI
-easybits usage --json                     # check the key works
+easybits usage --json                     # exit 3 = no session yet
 ```
 
-Key precedence: `EASYBITS_API_KEY` > `--token <key>` > `~/.easybitsrc` (written by
-`easybits login <key>`). If there is no key, ask the user for one from
+### Log the person in (you drive it, they click)
+
+```bash
+easybits login --json
+# → {"event":"login_url","url":"https://www.easybits.cloud/oauth/authorize?…"}   (immediately)
+# → {"event":"logged_in","method":"oauth","plan":"…","expiresAt":"…"}          (after they sign in)
+```
+
+Show the `login_url` link to the person and keep the command running until
+`logged_in` arrives (it opens their browser too; `--no-browser` skips that). The
+session renews itself. It uses a loopback redirect, so the browser must be on the same
+machine as the CLI; otherwise ask for an API key.
+
+Alternatives: `easybits login <api-key>` or `EASYBITS_API_KEY` (preferred in CI).
+Precedence: `EASYBITS_API_KEY` > `--token` > browser session > saved key. Keys come from
 https://www.easybits.cloud/dash/developer — never invent one.
 
 ## Rules for agents
@@ -38,7 +50,7 @@ https://www.easybits.cloud/dash/developer — never invent one.
    | 0 | ok | continue |
    | 1 | API error (4xx/5xx) | read `error.message`/`hint`; 404 → wrong id, 402 → plan limit |
    | 2 | usage error | fix the command; run `easybits <cmd> <sub> --help` |
-   | 3 | not logged in / key rejected | ask the user for a valid key |
+   | 3 | no session / expired / rejected | run `easybits login --json` (above) or ask for a key |
 
 3. `sandboxes exec` without `--json` exits with the remote command's code. With `--json`
    it exits 0 and reports `exitCode`, `stdout`, `stderr`. Put the command after `--`.

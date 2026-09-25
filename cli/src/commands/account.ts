@@ -1,22 +1,59 @@
-import { writeRcConfig, resolveBaseUrl } from "@easybits.cloud/sdk";
+import { resolveBaseUrl } from "@easybits.cloud/sdk";
 import type { Command } from "../types.js";
-import { need } from "../args.js";
+import { bool } from "../args.js";
 import { emit, fmtBytes, table, fmtDate } from "../output.js";
-import { getClient, resolveKey } from "../client.js";
+import { getClient, resolveApiKey } from "../client.js";
+import { oauthLogin, readRc, writeRc } from "../auth.js";
 
 export const login: Command = {
   name: "login",
   group: "Account",
-  summary: "Save your API key to ~/.easybitsrc",
-  synopsis: "login <api-key>",
+  summary: "Sign in with your browser (or save an API key)",
+  synopsis: "login [api-key]",
   leaf: {
-    summary: "Save your API key to ~/.easybitsrc",
-    usage: "easybits login <api-key>",
-    examples: ["easybits login eb_sk_live_xxxxxxxx"],
+    summary: "Sign in with your browser (OAuth2 + PKCE), or save an API key instead",
+    usage: "easybits login [api-key] [--no-browser]",
+    options: {
+      "no-browser": { type: "boolean", description: "Only print the sign-in URL (e.g. for an agent to relay it)" },
+    },
+    examples: [
+      "easybits login                        # opens the browser; waits for you",
+      "easybits login --json                 # agents: prints {\"event\":\"login_url\"} first",
+      "easybits login eb_sk_live_xxxxxxxx    # API key instead of the browser",
+    ],
     async run(ctx) {
-      const key = need(ctx, 0, "api-key", this.usage);
-      await writeRcConfig({ apiKey: key });
-      emit(ctx, { ok: true, path: "~/.easybitsrc" }, () => console.log("Saved API key to ~/.easybitsrc"));
+      const key = ctx.args[0];
+      if (key) {
+        // Una key explícita reemplaza la sesión del navegador: queda una sola credencial.
+        const { oauth: _drop, ...rest } = readRc();
+        writeRc({ ...rest, apiKey: key });
+        emit(ctx, { ok: true, method: "apiKey", path: "~/.easybitsrc" }, () => console.log("Saved API key to ~/.easybitsrc"));
+        return;
+      }
+      const session = await oauthLogin(ctx, { openBrowser: !bool(ctx, "no-browser") });
+      // Comprueba que el token sirve antes de decir "listo".
+      const eb = await getClient(ctx);
+      const u = await eb.getUsageStats();
+      const done = { event: "logged_in", method: "oauth", plan: u.plan, expiresAt: new Date(session.expiresAt).toISOString() };
+      if (ctx.json) process.stdout.write(JSON.stringify(done) + "\n");
+      else console.log(`Logged in (plan ${u.plan}). Session saved to ~/.easybitsrc`);
+    },
+  },
+};
+
+export const logout: Command = {
+  name: "logout",
+  group: "Account",
+  summary: "Forget the saved session and API key",
+  synopsis: "logout",
+  leaf: {
+    summary: "Remove the browser session and the API key from ~/.easybitsrc",
+    usage: "easybits logout",
+    examples: ["easybits logout"],
+    async run(ctx) {
+      const { oauth: _o, apiKey: _k, ...rest } = readRc();
+      writeRc(rest);
+      emit(ctx, { ok: true }, () => console.log("Logged out. Removed credentials from ~/.easybitsrc"));
     },
   },
 };
@@ -104,7 +141,8 @@ export const config: Command = {
     usage: "easybits config",
     examples: ["easybits config > .mcp.json"],
     async run(ctx) {
-      const apiKey = await resolveKey(ctx);
+      // Sólo una API key: el access token del navegador vence en una hora.
+      const apiKey = resolveApiKey(ctx);
       const baseUrl = await resolveBaseUrl();
       // Siempre JSON: es su salida natural, con o sin --json.
       console.log(

@@ -341,11 +341,12 @@ npx -y @easybits.cloud/cli --help`}
 
       <Card
         title="Login"
-        description="Guarda tu API key en ~/.easybitsrc. En CI y agentes usa la variable EASYBITS_API_KEY (gana sobre el archivo)."
+        description="Abre el navegador y entras; la sesión se renueva sola. También acepta una API key. En CI usa la variable EASYBITS_API_KEY (gana sobre todo)."
       >
         <CodeBlock language="bash" title="terminal" showLineNumbers={false}>
-{`easybits login eb_sk_live_YOUR_KEY
-easybits usage   # comprueba que funciona`}
+{`easybits login                       # con el navegador
+easybits login eb_sk_live_YOUR_KEY   # o con una API key
+easybits usage                       # comprueba que funciona`}
         </CodeBlock>
       </Card>
 
@@ -384,7 +385,7 @@ easybits mcp      # stdio`}
         title="Para agentes de código"
         description={
           <>
-            Cada comando acepta <code>--json</code>. Códigos de salida: 0 ok, 1 error de la API, 2 error de uso, 3 sin login.
+            Cada comando acepta <code>--json</code>. Códigos de salida: 0 ok, 1 error de la API, 2 error de uso, 3 sin sesión. Para que la persona entre: <code>easybits login --json</code> imprime primero la liga (<code>login_url</code>).
             Referencia completa en <a href="/docs#cli" className="underline">/docs#cli</a>.
           </>
         }

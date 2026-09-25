@@ -15,11 +15,15 @@ Requires Node 22 or later.
 ### Log in
 
 \`\`\`bash
-easybits login eb_sk_live_YOUR_KEY   # saved to ~/.easybitsrc
+easybits login                       # opens the browser; sign in and you're done
+easybits login eb_sk_live_YOUR_KEY   # alternative: an API key, no browser
 easybits usage                       # check it works: plan and storage
+easybits logout                      # forget the session and the key
 \`\`\`
 
-Get the key from the [Developer Dashboard](https://www.easybits.cloud/dash/developer). Precedence: the \`EASYBITS_API_KEY\` env var > the \`--token\` flag > \`~/.easybitsrc\`. In CI and in agents, use the env var.
+\`easybits login\` uses OAuth2 with PKCE: it opens the browser, also prints the URL, and waits for you to come back; the session (with a refresh token) is stored in \`~/.easybitsrc\` and renews itself. If you run a command without a session from a terminal, the login starts on its own; without a terminal (an agent, CI) it exits with code \`3\`.
+
+Get an API key from the [Developer Dashboard](https://www.easybits.cloud/dash/developer). Precedence: the \`EASYBITS_API_KEY\` env var > the \`--token\` flag > the browser session > a key saved with \`login <key>\`. In CI, use the env var.
 
 ### Sandboxes
 
@@ -123,7 +127,7 @@ With \`--json\`, stdout is **JSON only** (no banner, no tables) and errors go to
 | \`0\` | ok |
 | \`1\` | API error (4xx/5xx), or \`domains verify\` not ready yet |
 | \`2\` | usage error: unknown or missing command, subcommand or argument |
-| \`3\` | not logged in, or the key was rejected (401) |
+| \`3\` | not logged in (non-interactive), session expired, or credentials rejected (401) |
 
 Deliberate exception: \`sandboxes exec\` without \`--json\` exits with the remote command's code (like \`ssh\`); with \`--json\` it exits 0 and the code travels in \`exitCode\`.
 
@@ -132,7 +136,8 @@ Deliberate exception: \`sandboxes exec\` without \`--json\` exits with the remot
 ### For coding agents
 
 - Always pass \`--json\` and branch on the exit code, not on the text.
-- Put the key in \`EASYBITS_API_KEY\`; don't rely on the machine's \`~/.easybitsrc\`.
+- With no session, run \`easybits login --json\`: the first line is \`{"event":"login_url","url":…}\` — show that link to the person — and \`{"event":"logged_in",…}\` arrives once they sign in. \`--no-browser\` skips opening this machine's browser.
+- In CI, or when the person gives you a key, use \`EASYBITS_API_KEY\`.
 - Chain with \`jq\`: \`ID=$(easybits sb create --template node --json | jq -r .sandboxId)\`.
 - In \`exec\`, separate the command with \`--\` and use \`--json\` to read \`stdout\`, \`stderr\` and \`exitCode\` together.
 - Destroy what you create: \`easybits sb destroy $ID\`.

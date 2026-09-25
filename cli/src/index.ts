@@ -24,7 +24,7 @@ function wantsJson(argv: string[]): boolean {
 /** El banner sólo para humanos: nunca en tubería, con NO_COLOR o con --json. */
 function showBanner(json: boolean) {
   if (!BANNER || json || !process.stdout.isTTY || process.env.NO_COLOR) return;
-  process.stdout.write(BANNER.endsWith("\n") ? BANNER : BANNER + "\n");
+  process.stdout.write((BANNER.endsWith("\n") ? BANNER : BANNER + "\n") + "\n");
 }
 
 /**
