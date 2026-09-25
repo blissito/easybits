@@ -1,0 +1,3 @@
+{ "name": "easybits-short-02", "private": true, "type": "module",
+  "scripts": { "score": "node score.mjs", "check": "npx --yes hyperframes@0.8.77 check",
+    "render": "npx --yes hyperframes@0.8.77 render . --experimental-fast-capture=false --low-memory-mode" } }

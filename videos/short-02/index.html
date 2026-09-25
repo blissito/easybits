@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="es" data-resolution="portrait">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1080, height=1920" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <script src="score.gen.js"></script>
+    <style>
+      /* Short-02 «El diff de píxeles» · Easybits: morado #7c3aed, ámbar #fbbf24, fondo #0b0b0f.
+         Caricatura plana: contorno grueso, rellenos sólidos, sombra dura. Sin gradientes, blur ni glow. */
+      @font-face { font-family: "Jersey"; src: url(assets/fonts/Jersey10.ttf); }
+      @font-face { font-family: "ArchivoBlack"; src: url(assets/fonts/ArchivoBlack.ttf); }
+      @font-face { font-family: "Inter"; src: url(assets/fonts/Inter_Variable.woff2); }
+      @font-face { font-family: "Mono"; src: url(assets/fonts/JetBrainsMono.ttf); }
+      :root { --bg: #0b0b0f; --violet: #7c3aed; --amber: #fbbf24; --red: #ef233c; --ink: #f5f3ff; --gray: #6b6880; --green: #22c55e; }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { width: 1080px; height: 1920px; overflow: hidden; background: var(--bg); font-family: "Inter", sans-serif; color: var(--ink); }
+      .abs { position: absolute; }
+
+      /* mesa de luz de pruebas: retícula que se desliza un módulo en todo el video, regla y marcas de registro */
+      #grid { position: absolute; left: -60px; top: -60px; width: 1200px; height: 2040px;
+        background-image: linear-gradient(rgba(124,58,237,.17) 2px, transparent 2px), linear-gradient(90deg, rgba(124,58,237,.17) 2px, transparent 2px);
+        background-size: 60px 60px; }
+      #ruler { position: absolute; left: 0; top: 240px; width: 34px; height: 1160px;
+        background: repeating-linear-gradient(180deg, var(--gray) 0 2px, transparent 2px 12px) left/14px 100% repeat-y,
+                    repeating-linear-gradient(180deg, var(--amber) 0 3px, transparent 3px 60px) left/28px 100% repeat-y; }
+      .reg { position: absolute; width: 64px; height: 64px; }
+      .reg::before, .reg::after { content: ""; position: absolute; background: var(--amber); }
+      .reg::before { left: 30px; top: 0; width: 4px; height: 64px; } .reg::after { top: 30px; left: 0; height: 4px; width: 64px; }
+      .reg i { position: absolute; inset: 14px; border: 4px solid var(--amber); border-radius: 50%; }
+
+      /* subtítulo karaoke: una línea, 72 px; dichas en blanco, actual en ámbar, por decir en gris */
+      #cap { position: absolute; left: 60px; width: 960px; top: 272px; height: 110px; z-index: 60; }
+      .cl { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; gap: 20px;
+        font-family: "Inter"; font-weight: 800; font-size: 72px; line-height: 1; letter-spacing: -1.5px; white-space: nowrap; }
+      .cw { color: #5e5b71; }
+
+      /* la hoja: contorno grueso + sombra dura */
+      .page { position: absolute; left: 96px; top: 440px; width: 734px; height: 950px; background: #fff; border: 6px solid var(--ink); box-shadow: 14px 14px 0 var(--violet); overflow: hidden; }
+      .page img { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+      .tag { position: absolute; font-family: "ArchivoBlack"; font-size: 34px; padding: 14px 22px; border: 5px solid var(--ink); box-shadow: 8px 8px 0 var(--ink); white-space: nowrap; }
+      .scene { position: absolute; inset: 0; display: none; }
+      #s-pregunta { display: block; }
+
+      /* cortinilla: rebanadas sesgadas + un glifo enorme que sella el corte */
+      .slice { position: absolute; top: -300px; width: 330px; height: 2520px; transform-origin: 50% 50%; z-index: 90; }
+      #glyph { position: absolute; inset: 0; display: grid; place-items: center; z-index: 95; visibility: hidden; }
+      #glyph b { font-family: "ArchivoBlack"; font-size: 560px; line-height: 1; color: var(--ink); -webkit-text-stroke: 14px var(--bg); paint-order: stroke fill; text-shadow: 22px 22px 0 var(--bg); }
+
+      /* marca (FlipLetters: dos filas de letras superpuestas) */
+      #word { position: relative; height: 120px; perspective: 1000px; }
+      #word .row { position: absolute; left: 0; top: 0; display: flex; font-family: "Jersey"; font-size: 124px; line-height: 1; color: #fff; transform-style: preserve-3d; }
+      #word .row span { display: inline-block; transform-origin: 50% 50% -30px; }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-width="1080" data-height="1920" data-duration="31.25">
+      <div id="grid"></div>
+      <div id="ruler"></div>
+      <div class="reg" id="reg1" style="left:880px;top:420px"><i></i></div>
+      <div class="reg" id="reg2" style="left:60px;top:1330px"><i></i></div>
+
+      <!-- 1 · pregunta: la hoja original y una lupa que la revisa -->
+      <div class="scene" id="s-pregunta">
+        <div class="page" id="p1"><img src="assets/img/p1-orig.png" /></div>
+        <svg id="lupa" class="abs" style="left:0;top:0;width:1080px;height:1920px;overflow:visible" viewBox="0 0 1080 1920">
+          <g id="lupaG" transform="translate(470 690)">
+            <line x1="238" y1="238" x2="336" y2="336" stroke="#0b0b0f" stroke-width="44" stroke-linecap="round" />
+            <line x1="238" y1="238" x2="330" y2="330" stroke="#fbbf24" stroke-width="30" stroke-linecap="round" />
+            <circle cx="150" cy="150" r="118" fill="rgba(124,58,237,.10)" stroke="#0b0b0f" stroke-width="30" />
+            <circle cx="150" cy="150" r="118" fill="none" stroke="#f5f3ff" stroke-width="14" />
+            <path d="M86 108 Q106 80 140 74" fill="none" stroke="#fff" stroke-width="12" stroke-linecap="round" />
+          </g>
+        </svg>
+        <div class="tag" id="tag1" style="left:540px;top:1250px;background:#7c3aed;color:#fff;transform:rotate(-4deg);visibility:hidden">¿original o copia?</div>
+      </div>
+
+      <!-- 2 · foto: la copia se ve idéntica; una cámara dispara -->
+      <div class="scene" id="s-foto">
+        <div class="page" id="p2"><img src="assets/img/a-clon.png" /><div id="flashW" class="abs" style="inset:0;background:#fff;opacity:0"></div></div>
+        <div class="tag" id="tagPerf" style="left:120px;top:1250px;background:#22c55e;color:#0b0b0f;visibility:hidden">se ve idéntica</div>
+        <svg id="cam" class="abs" style="left:590px;top:1130px;width:300px;height:230px" viewBox="0 0 300 230">
+          <g id="camG">
+            <rect x="20" y="52" width="260" height="160" rx="26" fill="#fbbf24" stroke="#0b0b0f" stroke-width="12" />
+            <rect x="92" y="22" width="92" height="42" rx="10" fill="#fbbf24" stroke="#0b0b0f" stroke-width="12" />
+            <circle cx="150" cy="132" r="54" fill="#f5f3ff" stroke="#0b0b0f" stroke-width="12" />
+            <circle id="lens" cx="150" cy="132" r="26" fill="#7c3aed" stroke="#0b0b0f" stroke-width="8" />
+            <rect x="222" y="74" width="34" height="18" rx="5" fill="#f5f3ff" stroke="#0b0b0f" stroke-width="6" />
+          </g>
+        </svg>
+      </div>
+
+      <!-- 3 · delata: las líneas horneadas bajan en rojo y cae el sello -->
+      <div class="scene" id="s-delata">
+        <div class="page" id="p3"><img src="assets/img/a-clon.png" /><img id="horneado" src="assets/img/a-horneado.png" style="clip-path:inset(0 0 100% 0)" /></div>
+        <svg id="stamp" class="abs" style="left:250px;top:760px;width:560px;height:300px;overflow:visible;visibility:hidden" viewBox="0 0 560 300">
+          <g id="stampG">
+            <rect x="10" y="40" width="540" height="200" rx="18" fill="rgba(239,35,60,.14)" stroke="#ef233c" stroke-width="16" />
+            <rect x="34" y="64" width="492" height="152" rx="8" fill="none" stroke="#ef233c" stroke-width="6" />
+            <text x="280" y="168" text-anchor="middle" font-family="ArchivoBlack" font-size="66" fill="#ef233c">ES UNA FOTO</text>
+          </g>
+        </svg>
+        <div class="tag" id="tag37" style="left:120px;top:1250px;background:#ef233c;color:#fff;visibility:hidden">37 líneas: imagen, no texto</div>
+      </div>
+
+      <!-- 4 · trampas: tres copias, cada una en rojo donde miente -->
+      <div class="scene" id="s-trampas">
+        <div class="page" id="t0"><img src="assets/img/w-ldiff.png" /></div>
+        <div class="page" id="t1" style="visibility:hidden"><img src="assets/img/p2-ldiff.png" /></div>
+        <div class="page" id="t2" style="visibility:hidden"><img src="assets/img/lg-ldiff.png" /></div>
+        <div class="tag" id="trapTag" style="left:120px;top:1250px;background:#ef233c;color:#fff;visibility:hidden"><span id="trapTxt">palabra tapada</span></div>
+        <svg class="abs" style="left:0;top:0;width:1080px;height:1920px;overflow:visible" viewBox="0 0 1080 1920">
+          <circle id="ring0" r="70" fill="none" stroke="#fbbf24" stroke-width="12" style="visibility:hidden" />
+          <circle id="ring1" r="70" fill="none" stroke="#fbbf24" stroke-width="12" style="visibility:hidden" />
+          <circle id="ring2" r="70" fill="none" stroke="#fbbf24" stroke-width="12" style="visibility:hidden" />
+        </svg>
+      </div>
+
+      <!-- 5 · fiel: el rojo se va, la cuenta baja a cero y cae la palomita -->
+      <div class="scene" id="s-fiel">
+        <div class="page" id="p5"><img src="assets/img/p1-ldiff.png" /><img id="redOld" src="assets/img/lg-ldiff.png" /></div>
+        <div class="tag" id="countTag" style="left:120px;top:1250px;background:#0b0b0f;color:#fbbf24">píxeles en rojo: <span id="count">753</span></div>
+        <svg id="ok5" class="abs" style="left:560px;top:520px;width:300px;height:300px;visibility:hidden" viewBox="0 0 300 300">
+          <g id="ok5G">
+            <circle cx="150" cy="150" r="128" fill="#22c55e" stroke="#0b0b0f" stroke-width="16" />
+            <path d="M86 156 L132 200 L218 104" fill="none" stroke="#0b0b0f" stroke-width="30" stroke-linecap="round" stroke-linejoin="round" />
+          </g>
+        </svg>
+      </div>
+
+      <!-- 6 · cierre: la misma hoja del inicio, aprobada, y la marca -->
+      <div class="scene" id="s-cta">
+        <div class="page" id="p6" style="left:180px;top:430px;width:560px;height:725px;transform:rotate(-3deg)"><img src="assets/img/p1-orig.png" /></div>
+        <svg id="ok6" class="abs" style="left:520px;top:520px;width:300px;height:300px;visibility:hidden" viewBox="0 0 300 300">
+          <g id="ok6G">
+            <circle cx="150" cy="150" r="128" fill="#22c55e" stroke="#0b0b0f" stroke-width="16" />
+            <path d="M86 156 L132 200 L218 104" fill="none" stroke="#0b0b0f" stroke-width="30" stroke-linecap="round" stroke-linejoin="round" />
+          </g>
+        </svg>
+        <div id="brand" class="abs" style="left:96px;top:1168px;display:flex;align-items:center;gap:22px">
+          <img id="eyes" src="assets/img/eyes.svg" style="width:124px" />
+          <div id="word"><div class="row front" id="wf"></div><div class="row back" id="wb"></div></div>
+        </div>
+        <div id="url" class="abs" style="left:100px;top:1302px;font-family:Mono;font-size:50px;color:#fbbf24;visibility:hidden">easybits.cloud</div>
+        <div id="date" class="abs" style="left:100px;top:1366px;font-size:26px;color:#b8b4cc;font-weight:600;visibility:hidden">compare_render · desde el 25 sep 2026</div>
+      </div>
+
+      <div id="cap"></div>
+      <div id="wipe"></div>
+      <div id="glyph"><b id="glyphT">?</b></div>
+    </div>
+
+    <script>
+      const SC = window.SCORE, T = SC.T;
+      const $ = (s) => document.querySelector(s);
+      window.__timelines = window.__timelines || {};
+      const tl = gsap.timeline({ paused: true });
+      const S = Object.fromEntries(SC.scenes.map((s) => [s.id, s]));
+      const pop = (el, t, from = 0.6) => {
+        tl.set(el, { visibility: "visible" }, t);
+        tl.fromTo(el, { scale: from }, { scale: 1, duration: 0.3, ease: "back.out(2.2)", immediateRender: false }, t);
+      };
+
+      // fondo: la retícula recorre un módulo en todo el video (bucle finito, cierra sin salto)
+      tl.fromTo("#grid", { x: 0, y: 0 }, { x: 60, y: 60, duration: SC.duration, ease: "none" }, 0);
+      tl.to(["#reg1 i", "#reg2 i"], { rotation: 180, duration: SC.duration, ease: "none" }, 0);
+
+      // escenas
+      SC.scenes.forEach((s, i) => {
+        if (i === 0) return;
+        tl.set("#s-" + SC.scenes[i - 1].id, { display: "none" }, s.t0);
+        tl.set("#s-" + s.id, { display: "block" }, s.t0);
+      });
+
+      // ---- subtítulos karaoke (una línea a la vez) ----
+      const cap = $("#cap");
+      SC.caps.forEach((c, i) => {
+        const line = document.createElement("div"); line.className = "cl";
+        const spans = c.words.map((w) => { const sp = document.createElement("span"); sp.className = "cw"; sp.textContent = w.w; line.appendChild(sp); return sp; });
+        cap.appendChild(line);
+        const tIn = i === 0 ? 0 : c.t - 0.05; // el primer renglón ya está en el cuadro 0 (miniatura)
+        tl.set(line, { display: "flex" }, tIn);
+        tl.set(line, { display: "none" }, c.until);
+        c.words.forEach((w, k) => {
+          tl.set(spans[k], { color: "#fbbf24" }, w.t);
+          const next = c.words[k + 1];
+          tl.set(spans[k], { color: "#f5f3ff" }, next ? next.t : w.e + 0.08);
+        });
+      });
+
+      // ---- 1 · pregunta: la lupa recorre la hoja (vaivén finito) ----
+      tl.fromTo("#lupaG", { x: 470, y: 690 }, { x: 180, y: 500, duration: 1.2, ease: "sine.inOut", repeat: 2, yoyo: true }, 0.2);
+      pop("#tag1", T.tag1);
+      tl.to("#tag1", { rotation: 2, duration: 0.5, ease: "sine.inOut", repeat: 3, yoyo: true }, T.tag1 + 0.3);
+
+      // ---- 2 · foto ----
+      pop("#tagPerf", T.perfecta);
+      tl.to("#camG", { y: -10, duration: 0.45, ease: "sine.inOut", repeat: 3, yoyo: true, svgOrigin: "150 132" }, S.foto.t0 + 0.2);
+      tl.to("#camG", { scale: 1.12, duration: 0.08, ease: "power2.out", repeat: 1, yoyo: true, svgOrigin: "150 132" }, T.flash);
+      tl.to("#lens", { attr: { fill: "#fff" }, duration: 0.05, repeat: 1, yoyo: true }, T.flash);
+      tl.to("#flashW", { opacity: 0.9, duration: 0.05 }, T.flash);
+      tl.to("#flashW", { opacity: 0, duration: 0.35, ease: "power2.out" }, T.flash + 0.06);
+      tl.set("#tagPerf", { visibility: "hidden" }, T.flash);
+
+      // ---- 3 · delata: barrido rojo de arriba abajo, sello, etiqueta ----
+      tl.to("#horneado", { clipPath: "inset(0 0 0% 0)", duration: 0.9, ease: "power2.inOut" }, T.scan);
+      tl.set("#stamp", { visibility: "visible" }, T.stamp);
+      tl.fromTo("#stampG", { scale: 1.7, rotation: -12 }, { scale: 1, rotation: -12, duration: 0.3, ease: "back.out(1.8)", svgOrigin: "280 140", immediateRender: false }, T.stamp);
+      tl.to("#p3", { x: 6, y: 5, duration: 0.05, repeat: 3, yoyo: true }, T.stamp + 0.12);
+      pop("#tag37", T.tag37);
+
+      // ---- 4 · trampas: cada copia entra girando y un aro ámbar marca dónde miente ----
+      // coordenadas del documento (816 px de ancho) → la hoja (722 px de ancho útil, borde de 6 px)
+      const PX = (x) => 102 + x * (722 / 816), PY = (y) => 446 + y * (722 / 816);
+      const TRAPS = [
+        { txt: "palabra tapada", x: PX(172), y: PY(88) },
+        { txt: "otra fuente", x: PX(260), y: PY(196) },
+        { txt: "logo borrado", x: PX(93), y: PY(91) },
+      ];
+      TRAPS.forEach((tr, k) => {
+        const t = T.trap[k];
+        if (k > 0) {
+          tl.set("#t" + (k - 1), { visibility: "hidden" }, t);
+          tl.set("#t" + k, { visibility: "visible" }, t);
+        }
+        tl.fromTo("#t" + k, { rotationY: k === 0 ? 0 : -70 }, { rotationY: 0, duration: 0.32, ease: "back.out(1.6)", immediateRender: false }, t);
+        tl.set("#trapTxt", { textContent: tr.txt }, t);
+        pop("#trapTag", t);
+        // un aro propio por trampa: reusar uno con otro svgOrigin lo desplaza (GSAP compensa el origen)
+        if (k > 0) tl.set("#ring" + (k - 1), { visibility: "hidden" }, t);
+        tl.set("#ring" + k, { visibility: "visible", attr: { cx: tr.x, cy: tr.y } }, t + 0.1);
+        tl.fromTo("#ring" + k, { scale: 2.2, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.3, ease: "back.out(2)", svgOrigin: `${tr.x} ${tr.y}`, immediateRender: false }, t + 0.1);
+      });
+      // «todas en rojo»: las tres copias en abanico
+      tl.set("#ring2", { visibility: "hidden" }, T.fan);
+      tl.set("#trapTag", { visibility: "hidden" }, T.fan);
+      [0, 1, 2].forEach((k) => {
+        tl.set("#t" + k, { visibility: "visible" }, T.fan);
+        tl.to("#t" + k, { scale: 0.5, x: [-240, 0, 240][k], y: -40 + k * 12, rotation: [-8, 0, 8][k], duration: 0.4, ease: "back.out(1.4)", transformOrigin: "50% 50%" }, T.fan + k * 0.04);
+      });
+
+      // ---- 5 · fiel: el rojo se desvanece dentro de la hoja y la cuenta baja a 0 ----
+      tl.to("#redOld", { opacity: 0, duration: T.countEnd - T.clean, ease: "power1.in" }, T.clean);
+      const cnt = { v: 753 };
+      tl.to(cnt, { v: 0, duration: T.countEnd - T.clean, ease: "power1.in", onUpdate: () => { $("#count").textContent = Math.round(cnt.v); } }, T.clean);
+      tl.set("#count", { textContent: "0" }, T.countEnd);
+      tl.to("#countTag", { backgroundColor: "#22c55e", color: "#0b0b0f", duration: 0.1 }, T.countEnd);
+      tl.set("#ok5", { visibility: "visible" }, T.check);
+      tl.fromTo("#ok5G", { scale: 1.8, rotation: 10 }, { scale: 1, rotation: 10, duration: 0.3, ease: "back.out(2)", svgOrigin: "150 150", immediateRender: false }, T.check);
+
+      tl.set("#reg2", { display: "none" }, S.cta.t0); // en el cierre la marca de registro chocaría con la URL
+      // ---- 6 · cierre: la hoja del inicio vuelve aprobada; marca, URL y fecha ----
+      tl.set("#ok6", { visibility: "visible" }, T.ctaCheck);
+      tl.fromTo("#ok6G", { scale: 1.8, rotation: 10 }, { scale: 1, rotation: 10, duration: 0.3, ease: "back.out(2)", svgOrigin: "150 150", immediateRender: false }, T.ctaCheck);
+      // FlipLetters: la fila de enfrente voltea y entra la de atrás, 0.05 s por letra
+      ["#wf", "#wb"].forEach((id) => [..."Easybits"].forEach((ch) => { const sp = document.createElement("span"); sp.textContent = ch; $(id).appendChild(sp); }));
+      tl.set("#brand", { opacity: 0 }, 0);
+      tl.set("#wb span", { rotationX: 90, y: "40%", opacity: 0 }, 0);
+      tl.set("#brand", { opacity: 1 }, T.logo);
+      tl.fromTo("#eyes", { scale: 0.4 }, { scale: 1, duration: 0.35, ease: "back.out(2)", immediateRender: false }, T.logo);
+      tl.fromTo("#wf span", { rotationX: -90, opacity: 0 }, { rotationX: 0, opacity: 1, duration: 0.3, stagger: 0.05, ease: "back.out(1.6)", immediateRender: false }, T.logo);
+      tl.to("#wf span", { rotationX: 90, y: "-40%", opacity: 0, duration: 0.3, stagger: 0.05 }, T.url + 0.6);
+      tl.to("#wb span", { rotationX: 0, y: "0%", opacity: 1, duration: 0.3, stagger: 0.05 }, T.url + 0.6);
+      pop("#url", T.url, 0.8);
+      pop("#date", T.url + 0.25, 0.8);
+      tl.to("#p6", { rotation: 0, duration: 1.2, ease: "sine.inOut", repeat: 1, yoyo: true }, S.cta.t0 + 0.3);
+
+      // ---- cortinillas: rebanadas sesgadas con back.out; el glifo sella el corte ----
+      const wipe = $("#wipe");
+      const COLS = ["#7c3aed", "#fbbf24", "#f5f3ff", "#7c3aed", "#fbbf24", "#7c3aed"];
+      SC.scenes.slice(1).forEach((s) => {
+        const t = s.t0;
+        COLS.forEach((col, k) => {
+          const p = document.createElement("div"); p.className = "slice"; p.style.background = col; p.style.left = -240 + k * 250 + "px";
+          p.style.border = "8px solid #0b0b0f"; wipe.appendChild(p);
+          tl.set(p, { skewX: -16, y: 2600, visibility: "visible" }, 0);
+          tl.to(p, { y: 0, duration: 0.34, ease: "back.out(1.3)" }, t - 0.4 + k * 0.03);
+          tl.to(p, { y: -2700, duration: 0.3, ease: "power3.in" }, t + 0.16 + k * 0.03);
+        });
+        tl.set("#glyphT", { textContent: s.glyph }, t - 0.2);
+        tl.set("#glyph", { visibility: "visible" }, t - 0.2);
+        tl.fromTo("#glyph b", { scale: 0.3, rotation: -10 }, { scale: 1, rotation: 0, duration: 0.24, ease: "back.out(2.4)", immediateRender: false }, t - 0.2);
+        tl.to("#glyph b", { scale: 1.6, opacity: 0, duration: 0.18, ease: "power2.in" }, t + 0.12);
+        tl.set("#glyph b", { opacity: 1 }, t + 0.32);
+        tl.set("#glyph", { visibility: "hidden" }, t + 0.32);
+      });
+
+      window.__timelines["main"] = tl;
+    </script>
+  </body>
+</html>

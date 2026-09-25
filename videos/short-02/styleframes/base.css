@@ -1,0 +1,26 @@
+/* Short-02 · paleta EasyBits: morado #7c3aed, ámbar #fbbf24, fondo #0b0b0f. Caricatura plana: contorno grueso, sombra dura. */
+@font-face{font-family:"Jersey";src:url(../assets/fonts/Jersey10.ttf)}
+@font-face{font-family:"ArchivoBlack";src:url(../assets/fonts/ArchivoBlack.ttf)}
+@font-face{font-family:"Inter";src:url(../assets/fonts/Inter_Variable.woff2)}
+@font-face{font-family:"Mono";src:url(../assets/fonts/JetBrainsMono.ttf)}
+:root{--bg:#0b0b0f;--violet:#7c3aed;--amber:#fbbf24;--red:#ef233c;--ink:#f5f3ff;--gray:#6b6880;--green:#22c55e}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:1080px;height:1920px;overflow:hidden;background:var(--bg);font-family:Inter,sans-serif;color:var(--ink)}
+/* mesa de luz de pruebas: retícula, regla y marcas de registro */
+.table{position:absolute;inset:0;background:
+  linear-gradient(rgba(124,58,237,.16) 2px,transparent 2px) 0 0/60px 60px,
+  linear-gradient(90deg,rgba(124,58,237,.16) 2px,transparent 2px) 0 0/60px 60px,var(--bg)}
+.ruler{position:absolute;left:0;top:240px;width:34px;height:1160px;background:
+  repeating-linear-gradient(180deg,var(--gray) 0 2px,transparent 2px 12px),
+  repeating-linear-gradient(180deg,var(--amber) 0 3px,transparent 3px 60px);background-size:14px 100%,28px 100%;background-repeat:repeat-y}
+.reg{position:absolute;width:64px;height:64px}
+.reg:before,.reg:after{content:"";position:absolute;background:var(--amber)}
+.reg:before{left:30px;top:0;width:4px;height:64px}.reg:after{top:30px;left:0;height:4px;width:64px}
+.reg i{position:absolute;inset:14px;border:4px solid var(--amber);border-radius:50%}
+/* subtítulo karaoke: una línea, 72 px */
+.cap{position:absolute;left:60px;right:60px;top:272px;height:110px;display:flex;align-items:center;justify-content:center;gap:18px;font-family:ArchivoBlack;font-size:72px;line-height:1;letter-spacing:-1px;white-space:nowrap}
+.cap .said{color:var(--ink)}.cap .now{color:var(--amber)}.cap .next{color:#4a4760}
+/* la hoja: contorno grueso + sombra dura */
+.page{position:absolute;left:96px;top:440px;width:734px;height:950px;background:#fff;border:6px solid var(--ink);box-shadow:14px 14px 0 var(--violet);overflow:hidden}
+.page img{width:100%;height:100%;display:block}
+.tag{position:absolute;font-family:ArchivoBlack;font-size:34px;padding:14px 22px;border:5px solid var(--ink);box-shadow:8px 8px 0 var(--ink);white-space:nowrap}
