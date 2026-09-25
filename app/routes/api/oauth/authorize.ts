@@ -2,6 +2,7 @@ import { redirect } from "react-router";
 import { db } from "~/.server/db";
 import { getUserOrNull } from "~/.server/getters";
 import { randomToken, sha256 } from "~/.server/oauth";
+import { findOAuthClient, isRedirectAllowed } from "~/.server/oauthClients";
 
 // GET /oauth/authorize — OAuth 2.1 authorization endpoint (PKCE S256 required)
 // If no session, redirects to /login?next=<same url>. Once authenticated,
@@ -23,11 +24,11 @@ export async function loader({ request }: { request: Request }) {
     return Response.json({ error: "invalid_request", error_description: "only S256 supported" }, { status: 400 });
   }
 
-  const client = await db.oAuthClient.findUnique({ where: { clientId } });
+  const client = await findOAuthClient(clientId);
   if (!client) {
     return Response.json({ error: "invalid_client" }, { status: 400 });
   }
-  if (!client.redirectUris.includes(redirectUri)) {
+  if (!isRedirectAllowed(client.redirectUris, redirectUri)) {
     return Response.json({ error: "invalid_redirect_uri" }, { status: 400 });
   }
 

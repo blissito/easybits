@@ -6,6 +6,7 @@ import {
   sha256,
   verifyPkceS256,
 } from "~/.server/oauth";
+import { findOAuthClient } from "~/.server/oauthClients";
 
 // POST /oauth/token — exchanges an authorization code for an access token
 // Supports public clients (PKCE only) and confidential clients (client_secret_post).
@@ -49,7 +50,7 @@ export async function action({ request }: { request: Request }) {
     return Response.json({ error: "invalid_request" }, { status: 400 });
   }
 
-  const client = await db.oAuthClient.findUnique({ where: { clientId } });
+  const client = await findOAuthClient(clientId);
   if (!client) {
     return Response.json({ error: "invalid_client" }, { status: 401 });
   }

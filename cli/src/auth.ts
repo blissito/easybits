@@ -5,9 +5,8 @@
 // navegador, imprime la URL (con --json emite `{"event":"login_url"}` de inmediato para
 // que el agente se la muestre) y espera el regreso del navegador.
 //
-// El servidor compara el redirect_uri EXACTO contra el registrado, así que cada login
-// registra su cliente (DCR, RFC 7591) con el puerto que tocó — igual que hacen Claude Code
-// y Ghosty Code contra este mismo servidor. Sin cambios del lado del servidor.
+// El cliente `easybits-cli` es público y de casa: el servidor lo crea solo y acepta su
+// redirect loopback con cualquier puerto (app/.server/oauthClients.ts, RFC 8252 §7.3).
 //
 // Alternativa sin navegador: `easybits login <api-key>` o EASYBITS_API_KEY.
 import { createHash, randomBytes } from "node:crypto";
@@ -20,6 +19,7 @@ import { resolveBaseUrl } from "@easybits.cloud/sdk";
 import type { Ctx } from "./types.js";
 import { CliError, EXIT } from "./errors.js";
 
+export const CLIENT_ID = "easybits-cli";
 const LOGIN_TIMEOUT_MS = 5 * 60_000;
 const RC_PATH = join(homedir(), ".easybitsrc");
 
@@ -117,16 +117,7 @@ export async function oauthLogin(ctx: Ctx, opts: { openBrowser?: boolean } = {})
   const redirectUri = `http://127.0.0.1:${port}/cb`;
 
   try {
-    const reg = await fetch(`${base}/oauth/register`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ client_name: "EasyBits CLI", redirect_uris: [redirectUri] }),
-    });
-    const client = (await reg.json().catch(() => ({}))) as { client_id?: string; error?: string };
-    if (!reg.ok || !client.client_id) {
-      throw new CliError(`Could not start the login (${client.error ?? reg.status}).`, EXIT.AUTH, "Or use an API key: easybits login <api-key>", "login_failed", reg.status);
-    }
-    const clientId = client.client_id;
+    const clientId = CLIENT_ID;
 
     const url =
       `${base}/oauth/authorize?` +
