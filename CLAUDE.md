@@ -111,6 +111,17 @@ La plataforma donde un agente ejecuta código en su propia microVM, busca y lee 
   - **3 motores de render, no mezclar**: facturas/cotizaciones/reportes JSON → `structured_doc`/`@react-pdf/renderer` (sin browser); HTML→PDF/PNG → caja render-svc; `fast_pdf` (Typst) deprecado.
 - **service_start/service_status/service_stop** (MCP, server.ts): warm/estado/stop manual de una caja; enum `["voice","render"]`.
 
+## compare_render — verificador de clones PDF→HTML (skill `easybits-clone-verify`)
+
+Núcleo: `app/.server/core/renderCompare.ts`. Superficies: REST `POST /api/v2/render/compare`, SDK `compareRender()` (≥ 0.36.0), MCP `compare_render` (también en el MCP `render` de la flota), skill `public/skills/easybits-clone-verify`. Un agente itera contra él, así que **todo se mide sobre lo que se PINTA, nunca sobre el código fuente**: la v1 leía el HTML y un red team pasó 13 trampas (imagen del PDF + texto escondido, `@media print`, fuente con glifos cambiados…).
+
+- El clon se imprime a PDF **sin JavaScript** (dos veces: determinismo) y se captura una vez (desborde y pantalla = impresión). HTML estático obligatorio (`htmlViolations`): sin script, `@media`, `backdrop-filter`, `mix-blend-mode`, hojas externas salvo Google/Bunny Fonts, ni CSS `content` con letras.
+- Texto por carácter con **MuPDF** (`mutool draw -F stext`: origen, línea base, tamaño, color) y peso/cursiva del **descriptor** de la fuente (`/FontWeight`): Chrome nombra todos los pesos de una fuente variable "Inter-Regular". Nunca NFKC (aplana m²→m2).
+- Original, clon y clon sin texto (`mutool draw -K`) se rasterizan con el mismo motor. Por palabra: en su lugar (1.5 pt), escrita en el HTML, visible, misma forma de glifo (por carácter, normalizada por tinta), misma tipografía y ancho, mismo color en pantalla. Composición: promedio + peor celda.
+- **Umbrales fijos y cero tolerancia en texto**: quien llama suele ser el agente calificado; un clon fiel saca 1.0 exacto.
+- ⚠️ **mutool 1.28.5 se compila en el Dockerfile** (etapa `mutool`, fijado por sha256). El `mupdf-tools` de bookworm (1.21) nombra las Type 3 "Unnamed-T3" y apagaba la tipografía **en silencio**. Subir versión + hash juntos y probar en un contenedor antes.
+- Probar: `npx tsx --tsconfig tsconfig.json scripts/compare-battery.mts <pdf> <pág>` (clones fieles + ~25 trampas generadas desde el PDF; el criterio es clasificación Y motivo correctos) y `scripts/compare-local.mts <pdf> <pág> <html>`. Requiere `mutool` local (`brew install mupdf-tools`). Límite conocido: texto con degradado (`background-clip:text`) legítimo puede fallar.
+
 ## Hosting: vender un VPS (releases, backups, cobro)
 
 Vendible desde 2026-08-10. **No requiere plan de pago**: una máquina es su PROPIA suscripción de Stripe (`buyMachine` → con plan, máquina al instante; sin plan, `{checkoutUrl}` y la caja **nace en el webhook** al confirmarse el pago, idempotente por `subscriptionId`). `Sandbox.stripeSubscriptionId` vs `stripeSubItemId` distinguen las dos formas de cobro — `release` debe cancelar la correcta.
