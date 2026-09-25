@@ -3,7 +3,7 @@ import type { Command } from "../types.js";
 import { bool } from "../args.js";
 import { emit, fmtBytes, table, fmtDate } from "../output.js";
 import { getClient, resolveApiKey } from "../client.js";
-import { oauthLogin, readRc, writeRc } from "../auth.js";
+import { fetchEmail, oauthLogin, readRc, writeRc } from "../auth.js";
 
 export const login: Command = {
   name: "login",
@@ -19,24 +19,24 @@ export const login: Command = {
     examples: [
       "easybits login                        # opens the browser; waits for you",
       "easybits login --json                 # agents: prints {\"event\":\"login_url\"} first",
-      "easybits login eb_sk_live_xxxxxxxx    # API key instead of the browser",
+      "easybits login eb_sk_live_xxxxxxxx    # API key instead of the browser (validated first)",
     ],
     async run(ctx) {
       const key = ctx.args[0];
       if (key) {
+        // Se valida antes de guardar: una key mala no debe reemplazar una sesión buena.
+        const email = await fetchEmail(key);
         // Una key explícita reemplaza la sesión del navegador: queda una sola credencial.
         const { oauth: _drop, ...rest } = readRc();
         writeRc({ ...rest, apiKey: key });
-        emit(ctx, { ok: true, method: "apiKey", path: "~/.easybitsrc" }, () => console.log("Saved API key to ~/.easybitsrc"));
+        if (ctx.json) process.stdout.write(JSON.stringify({ event: "logged_in", email, method: "apiKey" }) + "\n");
+        else console.log(`Logged in${email ? ` as ${email}` : ""}. API key saved to ~/.easybitsrc`);
         return;
       }
       const session = await oauthLogin(ctx, { openBrowser: !bool(ctx, "no-browser") });
-      // Comprueba que el token sirve antes de decir "listo".
-      const eb = await getClient(ctx);
-      const u = await eb.getUsageStats();
-      const done = { event: "logged_in", method: "oauth", plan: u.plan, expiresAt: new Date(session.expiresAt).toISOString() };
-      if (ctx.json) process.stdout.write(JSON.stringify(done) + "\n");
-      else console.log(`Logged in (plan ${u.plan}). Session saved to ~/.easybitsrc`);
+      const email = await fetchEmail(session.accessToken);
+      if (ctx.json) process.stdout.write(JSON.stringify({ event: "logged_in", email, method: "oauth" }) + "\n");
+      else console.log(`Logged in${email ? ` as ${email}` : ""}. Session saved to ~/.easybitsrc`);
     },
   },
 };

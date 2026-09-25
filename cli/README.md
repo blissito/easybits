@@ -100,9 +100,9 @@ Host *.ghosty
 
 ## For coding agents
 
-- `--json`: stdout is JSON only; errors go to stderr as `{"error":{"code","message","status","hint","exitCode"}}`.
+- `--json`: stdout is JSON only, errors included: `{"error":"…","code":3,"hint":"…"}` (`code` = exit code).
 - Exit codes: `0` ok · `1` API error · `2` usage error · `3` no session, expired or rejected.
-- Login for a person: `easybits login --json` prints `{"event":"login_url","url":…}` first (show it to them), then `{"event":"logged_in",…}`.
+- Login for a person: `easybits login --json` prints `{"event":"login_url","url":…}` first (show it to them), then `{"event":"logged_in","email":…}`.
 - `sandboxes exec` without `--json` exits with the remote command's code; with `--json` it exits 0 and reports `exitCode`.
 - Skill: `npx skills add https://easybits.cloud` (includes `easybits-cli`).
 

@@ -107,7 +107,7 @@ easybits usage                     # comprueba que funciona: plan y almacenamien
 easybits logout                    # olvida la sesión y la key
 \`\`\`
 
-\`easybits login\` usa OAuth2 con PKCE: abre el navegador, imprime también la URL y espera a que vuelvas; la sesión (con refresh) queda en \`~/.easybitsrc\` y se renueva sola. Si corres un comando sin sesión desde una terminal, el login arranca solo; sin terminal (un agente, CI) sale con código \`3\`.
+\`easybits login\` usa OAuth2 con PKCE: abre el navegador, imprime también la URL y espera a que vuelvas; la sesión (con refresh) queda en \`~/.easybitsrc\` y se renueva sola. La sesión se renueva sola antes de vencer, y una vez más si la API contesta 401. Si corres un comando sin sesión desde una terminal, el login arranca solo; sin terminal o con \`--json\` (un agente, CI) sale con código \`3\`. Al volver del navegador verás la página de EasyBits.
 
 La API key sale del [Dashboard de Desarrollador](https://www.easybits.cloud/dash/developer). Orden de precedencia: variable \`EASYBITS_API_KEY\` > bandera \`--token\` > sesión del navegador > key guardada con \`login <key>\`. En CI usa la variable.
 
@@ -206,7 +206,7 @@ Host *.ghosty
 
 ### \`--json\` y códigos de salida
 
-Con \`--json\` la salida a stdout es **sólo JSON** (sin banner, sin tablas) y los errores salen a stderr como \`{"error":{"code","message","status","hint","exitCode"}}\`.
+Con \`--json\` stdout lleva **sólo JSON** (sin banner, sin tablas), **errores incluidos**: \`{"error":"…","code":3,"hint":"…"}\`, donde \`code\` es el código de salida. Es el único canal que tiene que leer un agente; los avisos para humanos van a stderr.
 
 | Código | Significa |
 |---|---|
@@ -222,7 +222,7 @@ Excepción deliberada: \`sandboxes exec\` sin \`--json\` sale con el código del
 ### Para agentes de código
 
 - Usa siempre \`--json\` y decide por el código de salida, no por el texto.
-- Si no hay sesión, corre \`easybits login --json\`: la primera línea es \`{"event":"login_url","url":…}\` — muéstrale esa liga a la persona — y cuando entra llega \`{"event":"logged_in",…}\`. Con \`--no-browser\` no abre el navegador de la máquina.
+- Si no hay sesión, corre \`easybits login --json\`: la primera línea es \`{"event":"login_url","url":…}\` — muéstrale esa liga a la persona — y cuando entra llega \`{"event":"logged_in","email":…}\`. Con \`--no-browser\` no abre el navegador de la máquina.
 - En CI, o si la persona te da una key, usa \`EASYBITS_API_KEY\`.
 - Encadena con \`jq\`: \`ID=$(easybits sb create --template node --json | jq -r .sandboxId)\`.
 - En \`exec\`, separa el comando con \`--\` y usa \`--json\` para leer \`stdout\`, \`stderr\` y \`exitCode\` juntos.

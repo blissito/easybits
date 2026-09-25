@@ -46,9 +46,12 @@ export function writeRc(rc: Rc): void {
   chmodSync(RC_PATH, 0o600); // por si ya existía con otro modo: guarda tokens
 }
 
-/** ¿Hay una persona en la terminal a la que se le pueda abrir el navegador? */
+/**
+ * ¿Hay una persona en la terminal a la que se le pueda abrir el navegador? Se mira stderr
+ * (donde van los avisos) y no stdout, para que `easybits sb ls | jq` también lo arranque.
+ */
 export const interactive = (ctx: Ctx) =>
-  Boolean(process.stdin.isTTY && process.stdout.isTTY) && !ctx.json;
+  Boolean(process.stdin.isTTY && process.stderr.isTTY) && !ctx.json;
 
 const b64url = (buf: Buffer) => buf.toString("base64url");
 const info = (s: string) => process.stderr.write(s + "\n");
@@ -78,10 +81,25 @@ async function tokenRequest(base: string, form: Record<string, string>): Promise
   return body as TokenResponse & { access_token: string };
 }
 
-const FAIL_PAGE = `<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+// Página de error del regreso al loopback. En español y con el logo de EasyBits servido
+// por el sitio (el mismo de BrandLogo), nunca un emoji. El éxito redirige a /oauth/listo.
+const FAIL_PAGE = (base: string) => `<!doctype html><html lang="es"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>EasyBits CLI</title><body style="font-family:system-ui,sans-serif;background:#0b0b0f;color:#f4f5fb;display:grid;place-items:center;min-height:100vh;margin:0;padding:16px;box-sizing:border-box">
-<div style="text-align:center;max-width:420px"><h1 style="font-size:24px;margin:0 0 8px">Sign-in was not completed</h1>
-<p style="margin:0;color:#a1a1aa">Go back to the terminal and run <code>easybits login</code> again.</p></div>`;
+<div style="text-align:center;max-width:420px">
+<img src="${base}/logo-purple.svg" alt="EasyBits" width="96" height="96" style="display:block;margin:0 auto 20px">
+<h1 style="font-size:26px;margin:0 0 8px">No se pudo entrar</h1>
+<p style="margin:0;color:#a1a1aa;line-height:1.5">Vuelve a la terminal y corre <code style="color:#fbbf24">easybits login</code> otra vez.</p></div>`;
+
+/** Email de la cuenta dueña del token (GET /api/v2/me acepta el JWT OAuth y las keys). */
+export async function fetchEmail(token: string): Promise<string | undefined> {
+  const base = (await resolveBaseUrl()).replace(/\/+$/, "");
+  const res = await fetch(`${base}/api/v2/me`, { headers: { authorization: `Bearer ${token}` } });
+  if (res.status === 401) {
+    throw new CliError("Credentials rejected (401).", EXIT.AUTH, "Check the key at https://www.easybits.cloud/dash/developer", "unauthorized", 401);
+  }
+  if (!res.ok) return undefined;
+  return ((await res.json().catch(() => ({}))) as { email?: string }).email;
+}
 
 /**
  * Login interactivo. Emite los eventos en stdout con --json (una línea cada uno) y los
@@ -141,7 +159,7 @@ export async function oauthLogin(ctx: Ctx, opts: { openBrowser?: boolean } = {})
           res.writeHead(302, { location: `${base}/oauth/listo` }).end();
           resolve(got!);
         } else {
-          res.writeHead(400, { "content-type": "text/html; charset=utf-8" }).end(FAIL_PAGE);
+          res.writeHead(400, { "content-type": "text/html; charset=utf-8" }).end(FAIL_PAGE(base));
           reject(
             new CliError(`Login was not completed (${u.searchParams.get("error") ?? "state mismatch"}).`, EXIT.AUTH, "Run: easybits login", "login_failed"),
           );

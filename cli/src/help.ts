@@ -3,7 +3,7 @@ import { COMMANDS } from "./commands/index.js";
 import { SSH_CONFIG_SNIPPET } from "./commands/ssh.js";
 
 export const GLOBAL_FLAGS = `Global flags:
-  --json           Machine output: JSON on stdout; errors as JSON on stderr
+  --json           Machine output: JSON on stdout, errors included
   --token <key>    API key for this call (EASYBITS_API_KEY wins if set)
   -h, --help       Help (also: easybits <command> --help)
   -v, --version    Print the CLI version

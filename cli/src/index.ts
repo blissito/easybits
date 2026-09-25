@@ -4,7 +4,9 @@ import type { Ctx, Leaf, Options } from "./types.js";
 import { findCommand } from "./commands/index.js";
 import { commandHelp, globalHelp, leafHelp } from "./help.js";
 import { BANNER } from "./banner.js";
+import { EasybitsError } from "@easybits.cloud/sdk";
 import { CliError, EXIT, toCliError, usageError } from "./errors.js";
+import { forceRefresh, usedSession } from "./client.js";
 
 declare const __CLI_VERSION__: string;
 const VERSION = typeof __CLI_VERSION__ === "string" ? __CLI_VERSION__ : "dev";
@@ -121,16 +123,26 @@ async function main(argv: string[]): Promise<void> {
     args: positionals,
     opts: values,
   };
-  await leaf.run.call(leaf, ctx);
+  try {
+    await leaf.run.call(leaf, ctx);
+  } catch (e) {
+    // El access token dura 1 h: un 401 con sesión casi siempre es eso. Se refresca UNA vez
+    // y se repite el comando (un 401 llega antes de que la API haga nada).
+    if (e instanceof EasybitsError && e.status === 401 && usedSession() && (await forceRefresh())) {
+      await leaf.run.call(leaf, ctx);
+      return;
+    }
+    throw e;
+  }
 }
 
 const argv = process.argv.slice(2);
 main(argv).catch((err: unknown) => {
   const e: CliError = toCliError(err);
   if (wantsJson(argv)) {
-    process.stderr.write(
-      JSON.stringify({ error: { code: e.code, message: e.message, status: e.status, hint: e.hint, exitCode: e.exitCode } }) + "\n",
-    );
+    // Con --json el error va a STDOUT: es el único canal que parsea un agente. Mismo
+    // formato que el CLI hermano `ghosty`: { error, code (= código de salida), hint }.
+    process.stdout.write(JSON.stringify({ error: e.message, code: e.exitCode, ...(e.hint ? { hint: e.hint } : {}) }) + "\n");
   } else {
     process.stderr.write(`Error: ${e.message}\n`);
     if (e.hint) process.stderr.write(`${e.hint}\n`);

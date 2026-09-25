@@ -27,12 +27,12 @@ easybits usage --json                     # exit 3 = no session yet
 ```bash
 easybits login --json
 # → {"event":"login_url","url":"https://www.easybits.cloud/oauth/authorize?…"}   (immediately)
-# → {"event":"logged_in","method":"oauth","plan":"…","expiresAt":"…"}          (after they sign in)
+# → {"event":"logged_in","email":"…","method":"oauth"}                         (after they sign in)
 ```
 
 Show the `login_url` link to the person and keep the command running until
 `logged_in` arrives (it opens their browser too; `--no-browser` skips that). The
-session renews itself. It uses a loopback redirect, so the browser must be on the same
+session renews itself (before expiry, and once on a 401). It uses a loopback redirect, so the browser must be on the same
 machine as the CLI; otherwise ask for an API key.
 
 Alternatives: `easybits login <api-key>` or `EASYBITS_API_KEY` (preferred in CI).
@@ -41,8 +41,8 @@ https://www.easybits.cloud/dash/developer — never invent one.
 
 ## Rules for agents
 
-1. Always pass `--json`. stdout is then JSON only; errors go to stderr as
-   `{"error":{"code","message","status","hint","exitCode"}}`.
+1. Always pass `--json`. stdout is then JSON only, errors included:
+   `{"error":"…","code":3,"hint":"…"}` (`code` is the exit code). Read only stdout.
 2. Branch on the exit code:
 
    | Exit | Meaning | What to do |
