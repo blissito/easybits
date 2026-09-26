@@ -17,7 +17,7 @@ import { savePresentationStyle } from "./presentationStyles";
 import { CLONE_CORRECTION_PROMPT, CLONE_SCORE_PROMPT, INSPIRE_SLIDE_PROMPT } from "~/lib/presentationPrompts";
 import { enrichImages } from "../images/enrichImages";
 
-const CLONE_MODEL = "gemini-2.5-pro";
+const CLONE_MODEL = "claude-sonnet-5"; // gemini-2.5-pro retirado para nuestra llave (2026-09-25)
 
 /**
  * Hybrid clone prompt: absolute positioning for decorations, normal flow for content.
@@ -274,7 +274,7 @@ export async function cloneSingleSlide(pageImage: string, pageWidth: number, pag
 /** Score how faithful a reproduction is (1-10) using Flash vision */
 async function scoreReproduction(originalBuf: Buffer, renderedBuf: Buffer): Promise<number> {
   try {
-    const model = getModel("gemini-2.5-flash"); // scoring always on Flash (cheap)
+    const model = getModel("claude-haiku-4-5-20251001"); // scoring en Haiku (barato; Gemini Flash está en free tier)
     const result = streamText({
       model,
       system: CLONE_SCORE_PROMPT,

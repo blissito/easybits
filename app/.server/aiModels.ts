@@ -20,13 +20,17 @@ export type DocModelOperation =
   // autoTagFile/searchFilesWithAI en core/ai.ts.
   | "wabaPaymentSignal";
 
+// gemini-2.5-pro quedó retirado para la llave del proyecto (404 "no longer available to new
+// users", 2026-09-25) y los Gemini Flash están en el tier gratuito de 20/día, que falla en
+// silencio a volumen. Documents va con Anthropic (llave de pago): generar con Sonnet,
+// refinar / variantes / pasos rápidos con Haiku (la economía de CLAUDE.md).
 const DEFAULTS: Record<DocModelOperation, string> = {
-  docDirections: "gemini-2.5-flash",
-  docDirectionsPreview: "gemini-2.5-flash",
-  docGenerate: "gemini-2.5-pro",
-  docRefine: "gemini-2.5-pro",
-  docRegeneratePage: "gemini-2.5-pro",
-  docAutoDescribe: "gemini-2.5-flash",
+  docDirections: "claude-haiku-4-5-20251001",
+  docDirectionsPreview: "claude-haiku-4-5-20251001",
+  docGenerate: "claude-sonnet-5",
+  docRefine: "claude-haiku-4-5-20251001",
+  docRegeneratePage: "claude-haiku-4-5-20251001",
+  docAutoDescribe: "claude-haiku-4-5-20251001",
   wabaPaymentSignal: "claude-haiku-4-5-20251001",
 };
 

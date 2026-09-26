@@ -5,7 +5,7 @@ import { streamText } from "ai";
 import { resolveModelLocal } from "../aiModels";
 import { INSPIRE_EXTRACT_PROMPT } from "~/lib/presentationPrompts";
 
-const STYLE_MODEL = "gemini-2.5-flash";
+const STYLE_MODEL = "claude-haiku-4-5-20251001"; // Gemini Flash está en free tier (20/día)
 
 function throwJson(error: string, status: number): never {
   throw new Response(JSON.stringify({ error }), {

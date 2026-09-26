@@ -27,7 +27,7 @@ import {
 } from "./socialPresets";
 import { enrichImages } from "../images/enrichImages";
 
-const CLONE_MODEL = "gemini-2.5-pro";
+const CLONE_MODEL = "claude-sonnet-5"; // gemini-2.5-pro retirado para nuestra llave (2026-09-25)
 
 type Mode = "clone" | "reimagine";
 
