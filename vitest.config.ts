@@ -10,6 +10,7 @@ export default defineConfig({
     // Los *.spec.ts son tests de Playwright (corren con `npm run e2e`),
     // no de vitest. Excluirlos para no fallar el unit suite.
     // Los paquetes con deps propias (eve-world) se prueban en su carpeta; la raíz no las instala.
-    exclude: [...configDefaults.exclude, "**/*.spec.ts", "packages/eve-world/**"],
+    // La CLI usa node:test (`npm test` en cli/), no vitest.
+    exclude: [...configDefaults.exclude, "**/*.spec.ts", "packages/eve-world/**", "cli/**"],
   },
 });
