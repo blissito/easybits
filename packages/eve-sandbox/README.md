@@ -55,7 +55,7 @@ export default defineSandbox(() => environment.open());
 
 <!-- generated:packages -->
 - `@easybits.cloud/mcp@0.3.7`
-- `@easybits.cloud/sdk@0.36.1`
+- `@easybits.cloud/sdk@0.36.2`
 - `@easybits.cloud/eve-sandbox@0.2.1`
 - `@easybits.cloud/eve-world@0.1.2`
 <!-- /generated -->

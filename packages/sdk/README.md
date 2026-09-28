@@ -330,7 +330,7 @@ console.log(ssh.command); // ssh -p 49002 root@<host of THAT box>
 // networks or corporate VPNs, and that failure reaches you as an
 // unreproducible "it won't connect". The tunnel rides the same 443 as the web:
 //
-//   npm i -g @easybits.cloud/cli && easybits login <api-key>
+//   npm i -g @easybits.cloud/cli && easybits login   # or: easybits login - < key.txt
 //   easybits ssh-key      # your public key; created once, never leaves the box
 //
 //   # ~/.ssh/config
