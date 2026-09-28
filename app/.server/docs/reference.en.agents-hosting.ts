@@ -294,8 +294,8 @@ ssh -p 49002 root@cname.sandboxes.easybits.cloud
 The command above uses a high port on the host, and **a high port does not get through an office network or a corporate VPN**. That reaches you as "it won't connect" from a network you cannot reproduce. The tunnel comes in through the usual 443: if the user can open a web page, they can get into their box.
 
 \`\`\`sh
-npm i -g @easybits.cloud/cli && easybits login <tu-api-key>
-easybits ssh-key          # tu llave pública; la crea si no existe
+npm i -g @easybits.cloud/cli && easybits login   # or: easybits login - < key.txt
+easybits ssh-key          # your public key; created if missing
 \`\`\`
 
 In \`~/.ssh/config\`:

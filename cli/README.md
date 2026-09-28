@@ -17,7 +17,9 @@ Requires Node 22+.
 
 ```bash
 easybits login                       # opens your browser (OAuth2 + PKCE); session renews itself
+easybits login --no-browser          # only print the sign-in URL
 easybits login - < key.txt           # or save an API key, read from stdin (never in argv)
+printenv EB_KEY | easybits login --with-token   # same as -
 easybits usage
 easybits logout
 ```
@@ -25,7 +27,8 @@ easybits logout
 Running a command without a session in a terminal starts the login automatically;
 without a terminal (agents, CI) it exits `3`. Precedence: `EASYBITS_API_KEY` env var >
 `--token <key>` > browser session > saved API key. Keys: https://www.easybits.cloud/dash/developer.
-In CI and agents, `EASYBITS_API_KEY` needs no login at all.
+In CI and agents, `EASYBITS_API_KEY` needs no login at all. `EASYBITS_URL` points the CLI at
+another server (default `https://www.easybits.cloud`; `baseUrl` in `~/.easybitsrc` works too).
 
 ## Commands
 
@@ -33,9 +36,10 @@ In CI and agents, `EASYBITS_API_KEY` needs no login at all.
 # Sandboxes (alias: sb)
 easybits sandboxes ls
 easybits sandboxes create --template node --name scratch --dotenv .env
+easybits sandboxes create --size m --timeout 1800 --no-wait   # size s|m|l|xl (plan-gated)
 easybits sandboxes get sb_abc123
 easybits sandboxes exec sb_abc123 -- npm test
-easybits sandboxes logs sb_abc123 --unit myapp --lines 100
+easybits sandboxes logs sb_abc123 --unit myapp --lines 100 --since "10 min ago" --grep ERROR
 easybits sandboxes files ls sb_abc123 /data/work
 easybits sandboxes files read sb_abc123 /etc/os-release
 easybits sandboxes files write sb_abc123 /data/work/app.js ./app.js
@@ -47,8 +51,8 @@ easybits sandboxes destroy sb_abc123 --yes
 # Hosting: permanent machines (alias: deploy)
 easybits machines ls
 easybits machines deploy sb_abc123 -m "v1.2"
-easybits machines releases sb_abc123
-easybits machines logs sb_abc123 --grep ERROR
+easybits machines releases sb_abc123 --limit 5
+easybits machines logs sb_abc123 --lines 100 --grep ERROR
 easybits machines rollback sb_abc123 rel_789
 easybits machines secrets ls sb_abc123
 easybits machines secrets set sb_abc123 --dotenv .env.production   # - reads stdin
@@ -72,6 +76,7 @@ easybits db rm leads --yes
 easybits agents ls
 easybits agents create --template goose --name helper --dotenv .env
 easybits agents message ag_123 "hello"
+easybits agents message ag_123 "and now?" --session ses_456   # continue a conversation
 easybits agents destroy ag_123 --yes
 
 # Files, websites, account
@@ -79,6 +84,7 @@ easybits files ls
 easybits files upload ./report.pdf
 easybits files delete FILE_ID --yes
 easybits websites ls
+easybits providers                   # storage provider (Tigris by default)
 easybits usage
 
 # MCP, SSH, docs
@@ -86,6 +92,7 @@ easybits config        # MCP config (streamable HTTP)
 easybits mcp           # MCP config (stdio)
 easybits ssh-key       # public key for sandbox SSH
 easybits docs cli      # a docs section as markdown (--en for English)
+easybits docs --open   # open the docs in your browser
 ```
 
 Every command has help with examples: `easybits <command> <subcommand> --help`
@@ -94,7 +101,7 @@ Every command has help with examples: `easybits <command> <subcommand> --help`
 **Destructive commands** (`db rm`, `agents destroy`, `sandboxes destroy`, `domains rm`,
 `files delete`) ask before acting in a terminal: `[y/N]`, or typing the name/id for
 irreversible ones (a database, an agent, a permanent sandbox). Without a terminal they
-never prompt: pass `--yes` / `-y`, or they exit `2`.
+never prompt — and neither do they with `--json`: pass `--yes` / `-y`, or they exit `2`.
 
 **Secrets** go in a dotenv file or on stdin, never in argv (visible in `ps` and shell
 history): `--dotenv <path>` (`KEY=VALUE` lines, `-` = stdin) on `sandboxes create|exec|resume`,
@@ -116,11 +123,17 @@ Host *.ghosty
 - `--json`: stdout is JSON only, errors included: `{"error":"…","code":3,"hint":"…"}` (`code` = exit code).
 - Exit codes: `0` ok · `1` API error · `2` usage error · `3` no session, expired or rejected.
 - Login for a person: `easybits login --json` prints `{"event":"login_url","url":…}` first (show it to them), then `{"event":"logged_in","email":…}`.
-- Destructive commands need `--yes` (no TTY means no prompt: exit `2` with the exact command to rerun).
+- Destructive commands need `--yes`, also with `--json` (no TTY or `--json` means no prompt: exit `2` with the exact command to rerun).
 - `sandboxes exec` without `--json` exits with the remote command's code; with `--json` it exits 0 and reports `exitCode`.
 - Skill: `npx skills add https://easybits.cloud` (includes `easybits-cli`).
 
 Full reference: https://www.easybits.cloud/docs#cli · https://www.easybits.cloud/en/docs/cli.md
+
+## Changes in 0.6.1
+
+- Help: `--yes` is no longer listed as a global flag; it lives on each destructive command
+  (and the global help says it is required without a terminal or with `--json`).
+- `easybits init` suggests `machines secrets set <id> --dotenv …` instead of `KEY=VALUE` in argv.
 
 ## Changes in 0.6.0
 

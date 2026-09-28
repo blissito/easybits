@@ -31,49 +31,56 @@ Requires Node 22 or later.
 ### Log in
 
 \`\`\`bash
-easybits login                       # opens the browser; sign in and you're done
-easybits login eb_sk_live_YOUR_KEY   # alternative: an API key, no browser
-easybits usage                       # check it works: plan and storage
-easybits logout                      # forget the session and the key
+easybits login                                  # opens the browser; sign in and you're done
+easybits login --no-browser                     # only print the URL (e.g. for an agent to relay it)
+easybits login - < key.txt                      # alternative: an API key on stdin, no browser
+printenv EB_KEY | easybits login --with-token   # same as \`-\`
+easybits usage                                  # check it works: plan and storage
+easybits logout                                 # forget the session and the key
 \`\`\`
 
 \`easybits login\` uses OAuth2 with PKCE: it opens the browser, also prints the URL, and waits for you to come back; the session (with a refresh token) is stored in \`~/.easybitsrc\` and renews itself. The session renews itself before it expires, and once more if the API answers 401. If you run a command without a session from a terminal, the login starts on its own; without a terminal or with \`--json\` (an agent, CI) it exits with code \`3\`.
 
-Get an API key from the [Developer Dashboard](https://www.easybits.cloud/dash/developer). Precedence: the \`EASYBITS_API_KEY\` env var > the \`--token\` flag > the browser session > a key saved with \`login <key>\`. In CI, use the env var.
+Get an API key from the [Developer Dashboard](https://www.easybits.cloud/dash/developer). Precedence: the \`EASYBITS_API_KEY\` env var > the \`--token\` flag > the browser session > a key saved with \`login -\`. In CI, use the env var. The key never goes in argv: \`ps\` and your shell history would see it (that is why \`login -\` reads it from stdin and validates it before saving).
+
+\`EASYBITS_URL\` points the CLI at another server (default \`https://www.easybits.cloud\`); \`baseUrl\` in \`~/.easybitsrc\` works too.
 
 ### Sandboxes
 
 \`\`\`bash
 easybits sandboxes create --template node --name scratch   # waits until running
+easybits sandboxes create --template node --size m --timeout 1800 --no-wait --dotenv .env
 easybits sandboxes ls
+easybits sandboxes get sb_abc123                            # status, expiry, activity in progress
 easybits sandboxes exec sb_abc123 -- npm test               # exits with the command's code
-easybits sandboxes logs sb_abc123 --unit myapp --lines 100
+easybits sandboxes logs sb_abc123 --unit myapp --lines 100 --since "10 min ago" --grep ERROR
 easybits sandboxes files ls sb_abc123 /data/work
 easybits sandboxes files write sb_abc123 /data/work/app.js ./app.js
 easybits sandboxes files read sb_abc123 /data/out.png --out out.png
 easybits sandboxes suspend sb_abc123      # sleeps to disk; resume wakes it
 easybits sandboxes resume sb_abc123
 easybits sandboxes snapshot sb_abc123 --name before-upgrade
-easybits sandboxes destroy sb_abc123
+easybits sandboxes destroy sb_abc123 --yes
 \`\`\`
 
-Alias: \`easybits sb …\`. Everything after \`--\` in \`exec\` is the command, verbatim.
+Alias: \`easybits sb …\`. Everything after \`--\` in \`exec\` is the command, verbatim. On \`create\`: \`--template\` (default \`ubuntu\`), \`--size s|m|l|xl\` (gated by plan), \`--timeout <s>\` (lifetime before auto-destroy) and \`--no-wait\` (return without waiting for \`running\`). \`logs\` returns 200 lines by default; \`--since\` takes \`journalctl\` syntax.
 
 ### Hosting: permanent machines
 
 \`\`\`bash
 easybits machines ls
 easybits machines deploy sb_abc123 -m "v1.2"             # publish a release of the current code
-easybits machines releases sb_abc123
-easybits machines logs sb_abc123 --grep ERROR
+easybits machines releases sb_abc123 --limit 5
+easybits machines logs sb_abc123 --lines 100 --grep ERROR
 easybits machines rollback sb_abc123 rel_789             # same machine, data untouched
 easybits machines secrets ls sb_abc123
-easybits machines secrets set sb_abc123 DATABASE_URL=postgres://… API_KEY=xyz
+easybits machines secrets set sb_abc123 --dotenv .env.production   # KEY=VALUE lines
+printf 'API_KEY=%s\\n' "$API_KEY" | easybits machines secrets set sb_abc123 --dotenv -
 easybits machines secrets unset sb_abc123 API_KEY
 easybits init --port 3000                                # GitHub Actions workflow: deploy on every push
 \`\`\`
 
-Alias: \`easybits deploy …\`. Note: \`secrets set\` leaves values in your shell history; in scripts pass them from variables.
+Alias: \`easybits deploy …\`. Secrets go in a dotenv file or on stdin (\`--dotenv -\`), never in argv: \`ps\` and your shell history would see them. \`secrets ls\` shows names only; values are never readable.
 
 ### Domains
 
@@ -81,7 +88,7 @@ Alias: \`easybits deploy …\`. Note: \`secrets set\` leaves values in your shel
 easybits domains add sb_abc123 shop.example.com --port 3000   # prints the DNS record to create
 easybits domains verify sb_abc123 shop.example.com            # exits 1 until it is ready
 easybits domains ls sb_abc123
-easybits domains rm sb_abc123 shop.example.com
+easybits domains rm sb_abc123 shop.example.com --yes
 \`\`\`
 
 ### Databases
@@ -91,19 +98,21 @@ easybits db create leads
 easybits db query leads "CREATE TABLE leads (id INTEGER PRIMARY KEY, name TEXT)"
 easybits db query leads "INSERT INTO leads(name) VALUES (?)" --arg Ana
 easybits db query leads "SELECT * FROM leads" --json
+easybits db tables leads                             # tables, row counts, columns
 easybits db ls
-easybits db rm leads
+easybits db rm leads --yes
 \`\`\`
 
-\`query\` takes the id or the name, and never creates a database from a mistyped name.
+\`query\` and \`tables\` take the id or the name, and never create a database from a mistyped name. With \`--json\`, \`tables\` returns \`[{name, rows, columns:[{name,type,pk}]}]\`.
 
 ### Agents
 
 \`\`\`bash
 easybits agents create --template goose --name helper
 easybits agents message ag_123 "summarize the README"   # the reply streams in
+easybits agents message ag_123 "and the tests?" --session ses_456   # continue the same conversation
 easybits agents ls
-easybits agents destroy ag_123
+easybits agents destroy ag_123 --yes
 \`\`\`
 
 ### Files, websites and account
@@ -111,8 +120,9 @@ easybits agents destroy ag_123
 \`\`\`bash
 easybits files upload ./report.pdf
 easybits files ls
-easybits files delete FILE_ID
+easybits files delete FILE_ID --yes   # to the trash for 7 days
 easybits websites ls
+easybits providers                     # storage provider (Tigris by default)
 easybits usage
 \`\`\`
 
@@ -124,6 +134,8 @@ easybits mcp               # MCP JSON over stdio
 easybits ssh-key           # your public key to enable SSH on a box
 easybits docs hosting      # one section of these docs as markdown
 easybits docs cli --en     # this page
+easybits docs --open       # open the docs in your browser
+easybits help db query     # = easybits db query --help
 \`\`\`
 
 SSH over 443 — add to \`~/.ssh/config\` and connect with \`ssh <name>.ghosty\`:
@@ -147,7 +159,11 @@ With \`--json\`, stdout carries **JSON only** (no banner, no tables), **errors i
 
 Deliberate exception: \`sandboxes exec\` without \`--json\` exits with the remote command's code (like \`ssh\`); with \`--json\` it exits 0 and the code travels in \`exitCode\`.
 
-\`easybits --help\` and \`easybits <command> <subcommand> --help\` show usage, flags and examples.
+### Deletes: \`--yes\`
+
+\`sandboxes destroy\`, \`agents destroy\`, \`db rm\`, \`domains rm\` and \`files delete\` ask before acting in a terminal: \`[y/N]\`, or typing the name/id for irreversible ones (a database, an agent, a permanent sandbox). **Without a terminal or with \`--json\` they never prompt**: pass \`--yes\` (\`-y\`) or they exit \`2\` with a hint holding the exact command.
+
+\`easybits --help\`, \`easybits <command> <subcommand> --help\` and \`easybits help <command> <subcommand>\` show usage, flags and examples. A typo gets a "Did you mean".
 
 ### For coding agents
 
@@ -156,6 +172,7 @@ Deliberate exception: \`sandboxes exec\` without \`--json\` exits with the remot
 - In CI, or when the person gives you a key, use \`EASYBITS_API_KEY\`.
 - Chain with \`jq\`: \`ID=$(easybits sb create --template node --json | jq -r .sandboxId)\`.
 - In \`exec\`, separate the command with \`--\` and use \`--json\` to read \`stdout\`, \`stderr\` and \`exitCode\` together.
-- Destroy what you create: \`easybits sb destroy $ID\`.
+- Deleting with \`--json\` requires \`--yes\`; without it the command exits \`2\`.
+- Destroy what you create: \`easybits sb destroy $ID --json --yes\`.
 - Ready-made skill: \`npx skills add https://easybits.cloud\` (includes \`easybits-cli\`).
 `;

@@ -202,7 +202,7 @@ One-time setup left:
 
 3. If your app uses secret env vars:
 
-   easybits machines secrets set SANDBOX_ID DATABASE_URL=...
+   easybits machines secrets set SANDBOX_ID --dotenv .env.production
 
 From then on, every push to main deploys.`));
     },

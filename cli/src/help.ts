@@ -5,9 +5,13 @@ import { SSH_CONFIG_SNIPPET } from "./commands/ssh.js";
 export const GLOBAL_FLAGS = `Global flags:
   --json           Machine output: JSON on stdout, errors included
   --token <key>    API key for this call (prefer EASYBITS_API_KEY: argv leaks to ps)
-  -y, --yes        On rm/destroy: skip the confirmation (required without a TTY)
   -h, --help       Help (also: easybits <command> --help)
   -v, --version    Print the CLI version
+
+Deletes (sandboxes destroy, agents destroy, db rm, domains rm, files delete) ask first;
+without a terminal or with --json pass -y/--yes, or they exit 2.
+
+Env: EASYBITS_API_KEY (API key), EASYBITS_URL (API server, default https://www.easybits.cloud)
 
 Exit codes: 0 ok, 1 API error, 2 usage error, 3 not logged in or bad key`;
 

@@ -2141,7 +2141,7 @@ console.log(ssh.command);         // ssh -p 49002 root@<host>  ← respaldo`} />
               El comando de arriba usa un puerto alto del anfitrión, y <strong>un puerto alto no atraviesa la red de una oficina ni una VPN corporativa</strong>. Eso te llega como “no me conecta” desde una red que no puedes reproducir. El túnel entra por el mismo 443 de siempre: si el usuario puede abrir una página web, entra a su caja.
             </p>
             <CodeExample title="Una vez" code={`npm i -g @easybits.cloud/cli
-easybits login <tu-api-key>
+easybits login   # o con una API key: easybits login - < key.txt
 
 # tu llave pública, para sandbox_ssh_enable (la crea si no existe)
 easybits ssh-key`} />

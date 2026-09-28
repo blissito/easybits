@@ -54,7 +54,7 @@ const KIND_HINTS: Record<string, string> = {
   SandboxHostTimeout: "The operation may still be running. Check `easybits sb get <id>` and retry in a few minutes.",
   SandboxHostError: "The sandbox host failed. Retry; if it persists, contact support.",
   SQL_ERROR: "Fix the SQL statement.",
-  DATABASE_STORAGE_MISSING: "This database has no storage; its data is unavailable. Delete it (easybits db rm) and create a new one.",
+  DATABASE_STORAGE_MISSING: "This database has no storage; its data is unavailable. Delete it (easybits db rm <db> --yes) and create a new one.",
   DATABASE_BACKEND_ERROR: "The database backend failed. Retry in a moment.",
 };
 

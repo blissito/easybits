@@ -3975,7 +3975,7 @@ export async function createClientFromEnv(): Promise<EasybitsClient> {
   const apiKey = await resolveApiKey();
   if (!apiKey) {
     throw new Error(
-      "No API key found. Set EASYBITS_API_KEY or run: easybits login <key>"
+      "No API key found. Set EASYBITS_API_KEY or run: easybits login (or: easybits login --with-token < key.txt)"
     );
   }
   const baseUrl = await resolveBaseUrl();

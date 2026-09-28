@@ -6,7 +6,7 @@ import { interactive } from "./auth.js";
 
 /** La bandera que salta la confirmación; se agrega a cada hoja destructiva. */
 export const YES_OPTION = {
-  yes: { type: "boolean", short: "y", description: "Skip the confirmation (required without a terminal)" },
+  yes: { type: "boolean", short: "y", description: "Skip the confirmation (required without a terminal or with --json)" },
 } as const;
 
 /** El comando tal como se tecleó, para la pista «Run: … --yes». */

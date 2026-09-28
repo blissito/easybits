@@ -2678,7 +2678,7 @@ export async function enableSandboxSsh(
     tunnel: {
       setup: [
         `npm i -g @easybits.cloud/cli`,
-        `easybits login <tu-api-key>`,
+        `easybits login   # or: easybits login - < key.txt`,
         `# in ~/.ssh/config:`,
         `Host *.ghosty`,
         `  ProxyCommand easybits ssh-proxy %h`,

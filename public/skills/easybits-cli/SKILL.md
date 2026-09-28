@@ -5,7 +5,7 @@ license: MIT
 compatibility: Needs Node 22+ (npx is enough), network access to https://www.easybits.cloud and an EasyBits API key
 metadata:
   author: easybits
-  version: "1.2"
+  version: "1.3"
 ---
 
 # Use the EasyBits CLI
@@ -35,9 +35,18 @@ Show the `login_url` link to the person and keep the command running until
 session renews itself (before expiry, and once on a 401). It uses a loopback redirect, so the browser must be on the same
 machine as the CLI; otherwise ask for an API key.
 
-Alternatives: `easybits login <api-key>` or `EASYBITS_API_KEY` (preferred in CI).
+Alternatives: `EASYBITS_API_KEY` (preferred in CI, needs no login), or save a key read from
+stdin — never put it in argv (`ps` and shell history see it):
+
+```bash
+easybits login - < key.txt                       # validated before it is saved
+printenv EB_KEY | easybits login --with-token     # same thing
+easybits logout                                   # forget session and key
+```
+
 Precedence: `EASYBITS_API_KEY` > `--token` > browser session > saved key. Keys come from
-https://www.easybits.cloud/dash/developer — never invent one.
+https://www.easybits.cloud/dash/developer — never invent one. `EASYBITS_URL` points the CLI
+at another server (default https://www.easybits.cloud).
 
 ## Rules for agents
 
@@ -62,22 +71,29 @@ https://www.easybits.cloud/dash/developer — never invent one.
    it exits 0 and reports `exitCode`, `stdout`, `stderr`. Put the command after `--`.
 4. Put flags after the subcommand: `easybits sb create --template node`, not
    `easybits --template node sb create`.
-5. Destroy what you create. Sandboxes you did not create belong to the user: do not
+5. Deletes need `--yes`: `sb destroy`, `agents destroy`, `db rm`, `domains rm`, `files delete`.
+   With `--json` (or no terminal) they never prompt; without `--yes` they exit 2.
+6. Destroy what you create. Sandboxes you did not create belong to the user: do not
    suspend, exec into or destroy them unless asked.
 
 ## Sandboxes (Firecracker microVMs, alias `sb`)
 
 ```bash
 ID=$(easybits sb create --template node --name scratch --timeout 1800 --json | jq -r .sandboxId)
+easybits sb ls --json
+easybits sb get "$ID" --json                                 # status, expiresAt, activity
 easybits sb exec "$ID" --json -- 'cd /data/work && npm ci && npm test'
 easybits sb files write "$ID" /data/work/app.js ./app.js     # or --content '...', or stdin
 easybits sb files read  "$ID" /data/work/out.json            # --out file for binaries
 easybits sb files ls    "$ID" /data/work --json
-easybits sb logs "$ID" --unit myapp --lines 100
+easybits sb logs "$ID" --unit myapp --lines 100 --since "10 min ago" --grep ERROR
 easybits sb suspend "$ID" && easybits sb resume "$ID"
 easybits sb snapshot "$ID" --name checkpoint
-easybits sb destroy "$ID"
+easybits sb destroy "$ID" --json --yes
 ```
+
+`create` flags: `--size s|m|l|xl` (plan-gated), `--no-wait` (return before running),
+`--dotenv <path|->` for env (`--env K=V` only for non-secret values).
 
 Templates: `ubuntu` (default), `python`, `node`, `bun`, `code-interpreter`… Full list:
 `easybits docs agents`.
@@ -87,10 +103,12 @@ Templates: `ubuntu` (default), `python`, `node`, `bun`, `code-interpreter`… Fu
 ```bash
 easybits machines ls --json
 easybits machines deploy "$ID" -m "v1.2"            # publish a release of the current code
-easybits machines releases "$ID" --json
+easybits machines releases "$ID" --limit 5 --json
 easybits machines rollback "$ID" "$RELEASE_ID"
-easybits machines logs "$ID" --grep ERROR
-easybits machines secrets set "$ID" DATABASE_URL="$DATABASE_URL"
+easybits machines logs "$ID" --lines 100 --grep ERROR
+easybits machines secrets set "$ID" --dotenv .env.production     # KEY=VALUE lines
+printf 'DATABASE_URL=%s\n' "$DATABASE_URL" | easybits machines secrets set "$ID" --dotenv -
+easybits machines secrets unset "$ID" DATABASE_URL
 easybits machines secrets ls "$ID" --json           # names only; values are never readable
 easybits init --port 3000                           # GitHub Actions: deploy on every push
 ```
@@ -100,6 +118,8 @@ easybits init --port 3000                           # GitHub Actions: deploy on 
 ```bash
 easybits domains add "$ID" shop.example.com --port 3000 --json   # returns the DNS record
 easybits domains verify "$ID" shop.example.com                   # exit 1 until ready
+easybits domains ls "$ID" --json
+easybits domains rm "$ID" shop.example.com --json --yes
 ```
 
 ## Databases (libSQL)
@@ -107,24 +127,30 @@ easybits domains verify "$ID" shop.example.com                   # exit 1 until 
 ```bash
 easybits db create leads --json
 easybits db query leads "SELECT * FROM leads WHERE name = ?" --arg Ana --json
-easybits db rm leads
+easybits db tables leads --json          # [{name, rows, columns:[{name,type,pk}]}]
+easybits db ls --json
+easybits db rm leads --json --yes
 ```
 
-`query` resolves id or name and never creates a database from a typo.
+`query` and `tables` resolve id or name and never create a database from a typo.
 
 ## Agents and files
 
 ```bash
 easybits agents create --template goose --name helper --json
+easybits agents ls --json
 easybits agents message "$AGENT_ID" "summarize the README" --json   # { content, tokens }
-easybits agents destroy "$AGENT_ID"
+easybits agents message "$AGENT_ID" "now the tests" --session "$SID" --json
+easybits agents destroy "$AGENT_ID" --json --yes
 easybits files upload ./report.pdf --json
 easybits files ls --json
+easybits files delete "$FILE_ID" --json --yes     # 7-day trash
+easybits providers --json                         # storage provider
 ```
 
 ## More
 
-- `easybits --help`, `easybits <command> --help`, `easybits <command> <sub> --help`
+- `easybits --help`, `easybits <command> <sub> --help` or `easybits help <command> <sub>`
 - `easybits docs cli --en` prints the full CLI reference as markdown; `easybits docs <section>`
-  prints any docs section (hosting, agents, databases…).
+  prints any docs section (hosting, agents, databases…); `easybits docs --open` opens the browser.
 - `easybits config` prints MCP config JSON if the task is better served by the MCP tools.

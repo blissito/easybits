@@ -345,7 +345,7 @@ npx -y @easybits.cloud/cli --help`}
       >
         <CodeBlock language="bash" title="terminal" showLineNumbers={false}>
 {`easybits login                       # con el navegador
-easybits login eb_sk_live_YOUR_KEY   # o con una API key
+easybits login - < key.txt           # o con una API key, por stdin
 easybits usage                       # comprueba que funciona`}
         </CodeBlock>
       </Card>
@@ -359,11 +359,11 @@ easybits usage                       # comprueba que funciona`}
 easybits sandboxes create --template node --name scratch
 easybits sandboxes exec sb_abc123 -- npm test
 easybits sandboxes files write sb_abc123 /data/work/app.js ./app.js
-easybits sandboxes destroy sb_abc123
+easybits sandboxes destroy sb_abc123 --yes
 
 # Hosting y dominios
 easybits machines deploy sb_abc123 -m "v1.2"
-easybits machines secrets set sb_abc123 DATABASE_URL=postgres://...
+easybits machines secrets set sb_abc123 --dotenv .env.production
 easybits domains add sb_abc123 tienda.com --port 3000
 
 # Bases de datos
