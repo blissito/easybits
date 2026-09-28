@@ -3,6 +3,7 @@ import { int, need } from "../args.js";
 import { emit, table } from "../output.js";
 import { getClient } from "../client.js";
 import { usageError } from "../errors.js";
+import { YES_OPTION, confirm, requireYesIfHeadless } from "../prompt.js";
 
 async function sandbox(ctx: Ctx, usage: string) {
   const id = need(ctx, 0, "sandbox-id", usage);
@@ -62,10 +63,15 @@ export const domains: Command = {
     rm: {
       aliases: ["remove", "delete"],
       summary: "Detach a domain",
-      usage: "easybits domains rm <sandbox-id> <domain>",
-      examples: ["easybits domains rm sb_abc123 shop.example.com"],
+      usage: "easybits domains rm <sandbox-id> <domain> [--yes]",
+      options: { ...YES_OPTION },
+      examples: ["easybits domains rm sb_abc123 shop.example.com", "easybits domains rm sb_abc123 shop.example.com --yes"],
       async run(ctx) {
+        need(ctx, 0, "sandbox-id", this.usage);
         const domain = need(ctx, 1, "domain", this.usage);
+        requireYesIfHeadless(ctx);
+        // Reversible (se vuelve a agregar), pero corta el tráfico: basta [y/N] (clig.dev).
+        await confirm(ctx, `Detach ${domain} from ${ctx.args[0]}? It stops serving right away.`);
         const r = await (await sandbox(ctx, this.usage)).removeDomain(domain);
         emit(ctx, r, () => console.log(`Removed ${domain}`));
       },

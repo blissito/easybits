@@ -4,6 +4,7 @@ import { list, need, str } from "../args.js";
 import { emit, fmtDate, table } from "../output.js";
 import { getClient } from "../client.js";
 import { CliError } from "../errors.js";
+import { YES_OPTION, confirm, requireYesIfHeadless } from "../prompt.js";
 
 /** Por id o por nombre, sin crear: un typo no debe inventar una base nueva (db(name) sí crea). */
 async function findDb(eb: EasybitsClient, ref: string) {
@@ -52,14 +53,54 @@ export const db: Command = {
     rm: {
       aliases: ["delete", "drop"],
       summary: "Delete a database (irreversible)",
-      usage: "easybits db rm <db-id|name>",
-      examples: ["easybits db rm leads"],
+      usage: "easybits db rm <db-id|name> [--yes]",
+      options: { ...YES_OPTION },
+      examples: ["easybits db rm leads            # asks you to type the name", "easybits db rm leads --yes      # scripts and agents"],
+      async run(ctx) {
+        const ref = need(ctx, 0, "db-id|name", this.usage);
+        requireYesIfHeadless(ctx);
+                const eb = await getClient(ctx);
+        const hit = await findDb(eb, ref);
+        // Irreversible: se teclea el nombre, como `gh repo delete` / `turso db destroy`.
+        await confirm(ctx, `Delete database ${hit.name} (${hit.id}) and all its data?`, { typeName: hit.name });
+        const r = await eb.deleteDatabase(hit.id);
+        emit(ctx, { ...r, id: hit.id, name: hit.name }, () => console.log(`Deleted ${hit.name} (${hit.id})`));
+      },
+    },
+    tables: {
+      aliases: ["inspect", "schema"],
+      summary: "List tables with row counts and columns",
+      usage: "easybits db tables <db-id|name>",
+      examples: ["easybits db tables leads", "easybits db tables leads --json"],
+      // Patrón de `turso db inspect` / `.tables` + `.schema` de sqlite3, en una sola vista.
       async run(ctx) {
         const ref = need(ctx, 0, "db-id|name", this.usage);
         const eb = await getClient(ctx);
         const hit = await findDb(eb, ref);
-        const r = await eb.deleteDatabase(hit.id);
-        emit(ctx, { ...r, id: hit.id, name: hit.name }, () => console.log(`Deleted ${hit.name} (${hit.id})`));
+        const q = (sql: string, args?: unknown[]) => eb.queryDatabase(hit.id, sql, args);
+        const names = (
+          await q("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_litestream_%' ORDER BY name")
+        ).rows.map((r) => String(r[0]));
+        const ident = (n: string) => `"${n.replace(/"/g, '""')}"`;
+        const tables: Array<{ name: string; rows: number; columns: Array<{ name: string; type: string; pk: boolean }> }> = [];
+        for (const name of names) {
+          const info = await q(`PRAGMA table_info(${ident(name)})`);
+          const col = (k: string) => info.cols.indexOf(k);
+          const columns = info.rows.map((r) => ({ name: String(r[col("name")]), type: String(r[col("type")] ?? ""), pk: Number(r[col("pk")]) > 0 }));
+          const count = await q(`SELECT count(*) FROM ${ident(name)}`);
+          tables.push({ name, rows: Number(count.rows[0]?.[0] ?? 0), columns });
+        }
+        emit(ctx, tables, () =>
+          table(
+            tables.map((t) => ({
+              name: t.name,
+              rows: t.rows,
+              columns: t.columns.map((c) => `${c.name}${c.type ? ` ${c.type}` : ""}${c.pk ? " PK" : ""}`).join(", "),
+            })),
+            [["name", "TABLE"], ["rows", "ROWS"], ["columns", "COLUMNS"]],
+            `No tables in ${hit.name}. Create one: easybits db query ${hit.name} 'CREATE TABLE …'`,
+          ),
+        );
       },
     },
     query: {

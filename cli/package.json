@@ -1,6 +1,6 @@
 {
   "name": "@easybits.cloud/cli",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "description": "Official CLI for EasyBits, the cloud for AI agents — sandboxes, hosting, domains, databases, agents and files from your terminal",
   "type": "module",
   "bin": {
@@ -29,7 +29,8 @@
     "build": "tsup",
     "dev": "tsup --watch",
     "prepublishOnly": "npm run build",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "node --experimental-strip-types --no-warnings --test src/*.test.ts"
   },
   "publishConfig": {
     "access": "public"

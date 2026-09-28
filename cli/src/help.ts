@@ -4,7 +4,8 @@ import { SSH_CONFIG_SNIPPET } from "./commands/ssh.js";
 
 export const GLOBAL_FLAGS = `Global flags:
   --json           Machine output: JSON on stdout, errors included
-  --token <key>    API key for this call (EASYBITS_API_KEY wins if set)
+  --token <key>    API key for this call (prefer EASYBITS_API_KEY: argv leaks to ps)
+  -y, --yes        On rm/destroy: skip the confirmation (required without a TTY)
   -h, --help       Help (also: easybits <command> --help)
   -v, --version    Print the CLI version
 

@@ -1,10 +1,11 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import type { Sandbox } from "@easybits.cloud/sdk";
 import type { Command, Ctx } from "../types.js";
-import { bool, int, list, need, pairs, readStdin, str } from "../args.js";
+import { ENV_FILE_OPTION, bool, envFrom, int, need, readStdin, str } from "../args.js";
 import { emit, fmtBytes, fmtDate, table } from "../output.js";
 import { getClient } from "../client.js";
 import { usageError } from "../errors.js";
+import { YES_OPTION, confirm, requireYesIfHeadless } from "../prompt.js";
 
 /** Registro plano de una caja: la clase Sandbox lleva handles internos que no son datos. */
 export function sandboxRecord(s: Sandbox) {
@@ -71,23 +72,25 @@ export const sandboxes: Command = {
     create: {
       aliases: ["new"],
       summary: "Create a sandbox and wait until it is running",
-      usage: "easybits sandboxes create [--template ubuntu] [--name <name>] [--timeout <s>] [--size s|m|l|xl] [--env K=V]...",
+      usage: "easybits sandboxes create [--template ubuntu] [--name <name>] [--timeout <s>] [--size s|m|l|xl] [--dotenv <path>] [--env K=V]...",
       options: {
         template: { type: "string", value: "name", description: "Base template (default ubuntu): ubuntu, python, node, code-interpreter…" },
         name: { type: "string", value: "name", description: "Human label (lets you `ssh <name>.ghosty`)" },
         timeout: { type: "string", value: "seconds", description: "Time to live before auto-destroy" },
         size: { type: "string", value: "s|m|l|xl", description: "VM size class (gated by plan)" },
-        env: { type: "string", multiple: true, value: "K=V", description: "Environment variable (repeatable)" },
+        env: { type: "string", multiple: true, value: "K=V", description: "Environment variable, non-secret (repeatable)" },
+        ...ENV_FILE_OPTION,
         "no-wait": { type: "boolean", description: "Return right away instead of waiting for running" },
       },
       examples: [
         "easybits sandboxes create --template node --name scratch",
         "ID=$(easybits sb create --template python --json | jq -r .sandboxId)",
+        "easybits sb create --template node --dotenv .env",
       ],
       async run(ctx) {
         const size = str(ctx, "size");
         if (size && !["s", "m", "l", "xl"].includes(size)) throw usageError("--size must be s, m, l or xl.", this.usage);
-        const env = pairs(list(ctx, "env"), this.usage);
+        const env = await envFrom(ctx, this.usage);
         const eb = await getClient(ctx);
         const sb = await eb.sandboxes.create({
           template: str(ctx, "template") ?? "ubuntu",
@@ -113,14 +116,16 @@ export const sandboxes: Command = {
     },
     exec: {
       summary: "Run a shell command inside a sandbox",
-      usage: "easybits sandboxes exec <sandbox-id> [--cwd <dir>] [--timeout <s>] -- <command...>",
+      usage: "easybits sandboxes exec <sandbox-id> [--cwd <dir>] [--timeout <s>] [--dotenv <path>] -- <command...>",
       options: {
         cwd: { type: "string", value: "dir", description: "Working directory" },
         timeout: { type: "string", value: "seconds", description: "Kill the command after this long" },
-        env: { type: "string", multiple: true, value: "K=V", description: "Environment variable (repeatable)" },
+        env: { type: "string", multiple: true, value: "K=V", description: "Environment variable, non-secret (repeatable)" },
+        ...ENV_FILE_OPTION,
       },
       examples: [
         "easybits sandboxes exec sb_abc123 -- uname -a",
+        "easybits sb exec sb_abc123 --dotenv .env -- node migrate.js",
         "easybits sb exec sb_abc123 --cwd /data/work -- npm test",
         "easybits sb exec sb_abc123 --json -- 'ls -la /' | jq .exitCode",
       ],
@@ -128,7 +133,7 @@ export const sandboxes: Command = {
         need(ctx, 0, "sandbox-id", this.usage);
         const command = ctx.args.slice(1).join(" ");
         if (!command) throw usageError("Missing <command>.", this.usage);
-        const env = pairs(list(ctx, "env"), this.usage);
+        const env = await envFrom(ctx, this.usage);
         const sb = await sandbox(ctx, this.usage);
         const r = await sb.exec(command, {
           cwd: str(ctx, "cwd"),
@@ -235,11 +240,14 @@ export const sandboxes: Command = {
     },
     resume: {
       summary: "Wake a suspended sandbox",
-      usage: "easybits sandboxes resume <sandbox-id> [--env K=V]...",
-      options: { env: { type: "string", multiple: true, value: "K=V", description: "Rewrite env on wake (repeatable)" } },
+      usage: "easybits sandboxes resume <sandbox-id> [--dotenv <path>] [--env K=V]...",
+      options: {
+        env: { type: "string", multiple: true, value: "K=V", description: "Rewrite env on wake, non-secret (repeatable)" },
+        ...ENV_FILE_OPTION,
+      },
       examples: ["easybits sandboxes resume sb_abc123"],
       async run(ctx) {
-        const env = pairs(list(ctx, "env"), this.usage);
+        const env = await envFrom(ctx, this.usage);
         const r = await (await sandbox(ctx, this.usage)).resume(Object.keys(env).length ? { env } : {});
         emit(ctx, r, () => console.log(`Resumed ${r.sandboxId ?? ctx.args[0]} (${r.status ?? "running"})`));
       },
@@ -247,10 +255,21 @@ export const sandboxes: Command = {
     destroy: {
       aliases: ["rm", "delete"],
       summary: "Destroy a sandbox (irreversible)",
-      usage: "easybits sandboxes destroy <sandbox-id>",
-      examples: ["easybits sandboxes destroy sb_abc123"],
+      usage: "easybits sandboxes destroy <sandbox-id> [--yes]",
+      options: { ...YES_OPTION },
+      examples: ["easybits sandboxes destroy sb_abc123", "easybits sb rm sb_abc123 --yes"],
       async run(ctx) {
-        const r = await (await sandbox(ctx, this.usage)).destroy();
+        need(ctx, 0, "sandbox-id", this.usage);
+        requireYesIfHeadless(ctx);
+        const sb = await sandbox(ctx, this.usage);
+        // Una permanente guarda datos y cobra por mes: se teclea el id (patrón de
+        // `gh repo delete`); una efímera, [y/N] basta (clig.dev).
+        await confirm(
+          ctx,
+          sb.persistent ? `Destroy permanent sandbox ${sb.sandboxId}${sb.name ? ` (${sb.name})` : ""} and its disk?` : `Destroy sandbox ${sb.sandboxId}?`,
+          sb.persistent ? { typeName: sb.sandboxId } : {},
+        );
+        const r = await sb.destroy();
         emit(ctx, { ...r, sandboxId: ctx.args[0] }, () => console.log(`Destroyed ${ctx.args[0]}`));
       },
     },

@@ -1,11 +1,11 @@
 import type { Command } from "../types.js";
-import { int, need, pairs, str } from "../args.js";
+import { ENV_FILE_OPTION, int, need, pairs, readEnvFile, str } from "../args.js";
 import { emit, fmtBytes, fmtDate, table } from "../output.js";
 import { getClient } from "../client.js";
 import { usageError } from "../errors.js";
 import { sandboxRecord } from "./sandboxes.js";
 
-const SECRETS_USAGE = "easybits machines secrets <ls|set|unset> <machine-id> [KEY=VALUE... | NAME]";
+const SECRETS_USAGE = "easybits machines secrets <ls|set|unset> <machine-id> [--dotenv <path> | NAME]";
 
 export const machines: Command = {
   name: "machines",
@@ -93,9 +93,11 @@ export const machines: Command = {
     secrets: {
       summary: "App env vars stored encrypted in your vault",
       usage: SECRETS_USAGE,
+      options: { ...ENV_FILE_OPTION },
       examples: [
         "easybits machines secrets ls sb_abc123",
-        "easybits machines secrets set sb_abc123 DATABASE_URL=postgres://… API_KEY=xyz",
+        "easybits machines secrets set sb_abc123 --dotenv .env.production",
+        "printf 'API_KEY=%s\\n' \"$API_KEY\" | easybits machines secrets set sb_abc123 --dotenv -",
         "easybits machines secrets unset sb_abc123 API_KEY",
       ],
       async run(ctx) {
@@ -109,8 +111,11 @@ export const machines: Command = {
             console.log(`In vault: ${r.inVault.length ? r.inVault.join(", ") : "(none)"}`);
           });
         } else if (action === "set") {
-          const values = pairs(ctx.args.slice(2), SECRETS_USAGE);
-          if (!Object.keys(values).length) throw usageError("Give at least one KEY=VALUE.", SECRETS_USAGE);
+          // KEY=VALUE en argv sigue funcionando (compatibilidad), pero ya no se anuncia:
+          // clig.dev «Do not read secrets directly from flags» (gh secret set lee stdin).
+          const file = str(ctx, "dotenv");
+          const values = { ...(file ? await readEnvFile(file, SECRETS_USAGE) : {}), ...pairs(ctx.args.slice(2), SECRETS_USAGE) };
+          if (!Object.keys(values).length) throw usageError("Give --dotenv <path> (or - for stdin).", SECRETS_USAGE);
           const r = await eb.machines.setSecrets(id, values);
           emit(ctx, r, () => console.log(`Set ${Object.keys(values).join(", ")}. Injected now: ${r.secretNames.join(", ")}`));
         } else if (action === "unset") {

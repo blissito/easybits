@@ -1,6 +1,7 @@
 import { resolveBaseUrl } from "@easybits.cloud/sdk";
 import type { Command } from "../types.js";
-import { bool } from "../args.js";
+import { bool, readStdin } from "../args.js";
+import { usageError } from "../errors.js";
 import { emit, fmtBytes, table, fmtDate } from "../output.js";
 import { getClient, resolveApiKey } from "../client.js";
 import { fetchEmail, oauthLogin, readRc, writeRc } from "../auth.js";
@@ -9,20 +10,30 @@ export const login: Command = {
   name: "login",
   group: "Account",
   summary: "Sign in with your browser (or save an API key)",
-  synopsis: "login [api-key]",
+  synopsis: "login [-]",
   leaf: {
     summary: "Sign in with your browser (OAuth2 + PKCE), or save an API key instead",
-    usage: "easybits login [api-key] [--no-browser]",
+    usage: "easybits login [-|--with-token] [--no-browser]",
     options: {
       "no-browser": { type: "boolean", description: "Only print the sign-in URL (e.g. for an agent to relay it)" },
+      "with-token": { type: "boolean", description: "Read an API key from stdin instead of the browser (same as -)" },
     },
     examples: [
-      "easybits login                        # opens the browser; waits for you",
-      "easybits login --json                 # agents: prints {\"event\":\"login_url\"} first",
-      "easybits login eb_sk_live_xxxxxxxx    # API key instead of the browser (validated first)",
+      "easybits login                               # opens the browser; waits for you",
+      "easybits login --json                        # agents: prints {\"event\":\"login_url\"} first",
+      "easybits login - < key.txt                   # API key from stdin (validated first)",
+      "printenv EB_KEY | easybits login --with-token",
+      "EASYBITS_API_KEY=… easybits usage            # CI/agents: the env var needs no login at all",
     ],
     async run(ctx) {
-      const key = ctx.args[0];
+      // La key por stdin, como `gh auth login --with-token`: en argv la verían `ps` y el
+      // historial (clig.dev). `login <api-key>` sigue funcionando, pero ya no se anuncia.
+      let key = ctx.args[0];
+      if (key === "-" || bool(ctx, "with-token")) {
+        if (process.stdin.isTTY) throw usageError("Pipe the API key on stdin: easybits login - < key.txt", this.usage);
+        key = (await readStdin()).toString("utf8").trim();
+        if (!key) throw usageError("Empty API key on stdin.", this.usage);
+      }
       if (key) {
         // Se valida antes de guardar: una key mala no debe reemplazar una sesión buena.
         const email = await fetchEmail(key);

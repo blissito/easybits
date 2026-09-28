@@ -5,6 +5,7 @@ import { need } from "../args.js";
 import { emit, fmtBytes, table } from "../output.js";
 import { getClient } from "../client.js";
 import { CliError, usageError } from "../errors.js";
+import { YES_OPTION, confirm, requireYesIfHeadless } from "../prompt.js";
 
 const MIME: Record<string, string> = {
   pdf: "application/pdf",
@@ -73,10 +74,14 @@ export const files: Command = {
     delete: {
       aliases: ["rm"],
       summary: "Delete a file (soft delete, 7-day trash)",
-      usage: "easybits files delete <file-id>",
-      examples: ["easybits files delete 6650f0c2a1b2c3d4e5f60718"],
+      usage: "easybits files delete <file-id> [--yes]",
+      options: { ...YES_OPTION },
+      examples: ["easybits files delete 6650f0c2a1b2c3d4e5f60718", "easybits files rm 6650f0c2a1b2c3d4e5f60718 --yes"],
       async run(ctx) {
         const id = need(ctx, 0, "file-id", this.usage);
+        requireYesIfHeadless(ctx);
+                // Va a la papelera 7 días: basta [y/N] (clig.dev: «mild» → confirmación simple).
+        await confirm(ctx, `Delete file ${id}? (recoverable from trash for 7 days)`);
         const eb = await getClient(ctx);
         const r = await eb.deleteFile(id);
         emit(ctx, r, () => console.log("Deleted"));

@@ -1,3 +1,4 @@
+import { existsSync, readFileSync } from "node:fs";
 import type { Ctx } from "./types.js";
 import { usageError } from "./errors.js";
 
@@ -46,4 +47,47 @@ export async function readStdin(): Promise<Buffer> {
   const chunks: Buffer[] = [];
   for await (const c of process.stdin) chunks.push(c as Buffer);
   return Buffer.concat(chunks);
+}
+
+/**
+ * La bandera `--dotenv`, para las hojas que aceptan `--env`. No se llama `--env-file`
+ * (como docker) porque Node 22 revisa ese nombre aun después del script: con `-` o con un
+ * archivo inexistente muere con «node: -: not found» (exit 9) antes de llegar aquí.
+ */
+export const ENV_FILE_OPTION = {
+  dotenv: { type: "string", value: "path", description: "KEY=VALUE lines (dotenv); - reads stdin. Use it for secrets" },
+} as const;
+
+/**
+ * Lee un archivo dotenv (`KEY=VALUE` por renglón; `#` comenta, `export ` opcional, comillas
+ * se quitan). `-` = stdin. Los secretos no van en argv: los ve `ps` y se quedan en el
+ * historial (clig.dev «Do not read secrets directly from flags»; así lo hacen
+ * `gh secret set`, `wrangler secret put` y `vercel env add`).
+ */
+export async function readEnvFile(path: string, usage: string): Promise<Record<string, string>> {
+  let text: string;
+  if (path === "-") {
+    if (process.stdin.isTTY) throw usageError("--dotenv - expects KEY=VALUE lines on stdin.", usage);
+    text = (await readStdin()).toString("utf8");
+  } else {
+    if (!existsSync(path)) throw usageError(`File not found: ${path}`, usage);
+    text = readFileSync(path, "utf8");
+  }
+  const out: Record<string, string> = {};
+  for (const [n, raw] of text.split(/\r?\n/).entries()) {
+    const line = raw.trim();
+    if (!line || line.startsWith("#")) continue;
+    const m = /^(?:export\s+)?([A-Za-z_][A-Za-z0-9_.-]*)\s*=\s*(.*)$/.exec(line);
+    if (!m) throw usageError(`${path === "-" ? "stdin" : path}:${n + 1}: expected KEY=VALUE.`, usage);
+    let v = m[2];
+    if (v.length >= 2 && (v[0] === '"' || v[0] === "'") && v.endsWith(v[0])) v = v.slice(1, -1);
+    out[m[1]] = v;
+  }
+  return out;
+}
+
+/** `--dotenv` primero y `--env` encima (lo explícito en la línea gana, como docker). */
+export async function envFrom(ctx: Ctx, usage: string): Promise<Record<string, string>> {
+  const file = str(ctx, "dotenv");
+  return { ...(file ? await readEnvFile(file, usage) : {}), ...pairs(list(ctx, "env"), usage) };
 }

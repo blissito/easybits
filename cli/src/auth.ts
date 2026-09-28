@@ -8,7 +8,7 @@
 // El cliente `easybits-cli` es público y de casa: el servidor lo crea solo y acepta su
 // redirect loopback con cualquier puerto (app/.server/oauthClients.ts, RFC 8252 §7.3).
 //
-// Alternativa sin navegador: `easybits login <api-key>` o EASYBITS_API_KEY.
+// Alternativa sin navegador: `easybits login -` (key por stdin) o EASYBITS_API_KEY.
 import { createHash, randomBytes } from "node:crypto";
 import { createServer } from "node:http";
 import { spawn } from "node:child_process";

@@ -28,7 +28,7 @@ export function notLoggedIn(): CliError {
   return new CliError(
     "Not logged in.",
     EXIT.AUTH,
-    "Run: easybits login   (or: easybits login <api-key>, or set EASYBITS_API_KEY)",
+    "Run: easybits login   (or: easybits login - < key-file, or set EASYBITS_API_KEY)",
     "not_logged_in",
   );
 }
