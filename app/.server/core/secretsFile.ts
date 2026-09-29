@@ -13,7 +13,7 @@
  * hosting no cambie de comportamiento.
  */
 import type { AuthContext } from "../apiAuth";
-import { getSecretValue } from "./secretOperations";
+import { getMachineSecretValue } from "./secretOperations";
 import { execSandboxRaw, shQuote, writeFile } from "./sandboxOperations";
 
 /**
@@ -68,7 +68,7 @@ export async function writeSecretsFile(
   const values: Record<string, string> = {};
   const missing: string[] = [];
   for (const name of opts.names) {
-    const value = await getSecretValue(ctx.user.id, name).catch(() => null);
+    const value = await getMachineSecretValue(ctx.user.id, sandboxId, name).catch(() => null);
     if (value == null) missing.push(name);
     else values[name] = value;
   }

@@ -92,6 +92,45 @@ export async function revealSecretValue(
   return decryptSecret(row.value);
 }
 
+/**
+ * Nombre en el vault de un secreto con alcance de UNA máquina.
+ *
+ * El vault es por (dueño, nombre): sin esto, dos máquinas del mismo dueño que
+ * piden `JWT_SECRET` recibían el mismo valor, y quien tiene varios negocios en
+ * una cuenta no podía darle a cada app el suyo. El nombre visible para la app
+ * sigue siendo `JWT_SECRET`; sólo el guardado lleva el sufijo de la máquina.
+ */
+export function machineSecretName(sandboxId: string, name: string): string {
+  return `${name}__M_${sandboxId.replace(/[^a-zA-Z0-9]/g, "").toUpperCase()}`;
+}
+
+/** El de la máquina si existe; si no, el global del dueño (lo de siempre). */
+export async function getMachineSecretValue(
+  userId: string,
+  sandboxId: string,
+  name: string
+): Promise<string | null> {
+  const scoped = await getSecretValue(userId, machineSecretName(sandboxId, name)).catch(() => null);
+  return scoped ?? getSecretValue(userId, name);
+}
+
+/**
+ * Pasa los secretos con alcance de máquina a su reemplazo (redeploy/resize
+ * crean una caja con otro id). Sin esto la caja nueva caería a los globales y
+ * arrancaría con otros valores, o no arrancaría.
+ */
+export async function copyMachineSecrets(
+  userId: string,
+  fromSandboxId: string,
+  toSandboxId: string,
+  names: string[]
+): Promise<void> {
+  for (const name of names) {
+    const value = await getSecretValue(userId, machineSecretName(fromSandboxId, name)).catch(() => null);
+    if (value != null) await createSecret(userId, { name: machineSecretName(toSandboxId, name), value });
+  }
+}
+
 export async function getSecretValue(
   userId: string,
   name: string

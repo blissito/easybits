@@ -1731,6 +1731,8 @@ Los valores se guardan cifrados en tu bóveda y en el runspec queda solo la LIST
 - \`GET /machines/:id/secrets\` → \`{ secretNames, inVault }\`. Nombres, nunca valores: un secreto guardado no se vuelve a leer por API.
 - \`DELETE /machines/:id/secrets?name=DATABASE_URL\` → deja de inyectarlo (el valor sigue en la bóveda).
 
+**Cada máquina tiene los suyos.** Un secreto que cargas en una máquina vale sólo para ella: dos apps de la misma cuenta pueden tener cada una su \`JWT_SECRET\` o su \`FACTURAPI_KEY\` (varios negocios, una cuenta). Si la máquina no tiene uno propio con ese nombre, recibe el de tu bóveda general. Un \`redeploy_machine\` se los lleva a la caja nueva.
+
 Surten efecto en el **siguiente despliegue**, no al vuelo. Rotar un secreto es cambiarlo aquí y volver a desplegar. Si el runspec declara uno que no está en la bóveda, el deploy falla diciendo cuál — mejor que ver la app morir al conectar.
 
 ### Desplegar desde GitHub en cada push

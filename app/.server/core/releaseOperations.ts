@@ -39,7 +39,7 @@ import {
   writeFile,
 } from "./sandboxOperations";
 import { buyMachine, releasePermanent } from "./machineOperations";
-import { createSecret, listSecrets, SECRET_REF_RE } from "./secretOperations";
+import { copyMachineSecrets, createSecret, listSecrets, machineSecretName, SECRET_REF_RE } from "./secretOperations";
 import { getPlatformDefaultClient } from "../storage";
 import { nanoid } from "nanoid";
 
@@ -360,8 +360,10 @@ export async function setMachineSecrets(
     throw e;
   }
 
+  // Con alcance de ESTA máquina: otra app del mismo dueño puede usar el mismo
+  // nombre con otro valor (ver machineSecretName).
   for (const name of names) {
-    await createSecret(ctx.user.id, { name, value: secrets[name] });
+    await createSecret(ctx.user.id, { name: machineSecretName(sandboxId, name), value: secrets[name] });
   }
 
   // La lista se acumula: cargar un secreto nuevo no debe desactivar los que
@@ -382,8 +384,15 @@ export async function listMachineSecrets(
   requireScope(ctx, "READ");
   const { row } = await requireMachine(ctx, sandboxId);
   const secretNames = ((row.runspec as Runspec)?.secretNames ?? []) as string[];
-  const vault = await listSecrets(ctx.user.id);
-  return { secretNames, inVault: vault.map((s) => s.name) };
+  // Lo que ESTA máquina puede recibir: los globales del dueño y los suyos (con
+  // su nombre de app), nunca los de otras máquinas.
+  const suffix = machineSecretName(sandboxId, "");
+  const inVault = new Set<string>();
+  for (const { name } of await listSecrets(ctx.user.id)) {
+    if (name.endsWith(suffix)) inVault.add(name.slice(0, -suffix.length));
+    else if (!/__M_[A-Z0-9]+$/.test(name)) inVault.add(name);
+  }
+  return { secretNames, inVault: [...inVault].sort() };
 }
 
 /**
@@ -1045,6 +1054,8 @@ export async function recreateFromRelease(
       throw e;
     });
     await unpackInto(ctx, created.sandboxId, owner, rel.storageKey, spec.appDir);
+    // Los secretos de la máquina original viajan con ella (ver machineSecretName).
+    await copyMachineSecrets(ctx.user.id, rel.sandboxId, created.sandboxId, spec.secretNames ?? []);
     const started = await buildAndStart(ctx, created.sandboxId, owner, spec);
     await db.sandbox.update({
       where: { sandboxId: created.sandboxId },

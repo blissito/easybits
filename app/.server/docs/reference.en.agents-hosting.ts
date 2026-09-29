@@ -531,6 +531,8 @@ The values are stored encrypted in your vault and the runspec keeps only the LIS
 - \`GET /machines/:id/secrets\` → \`{ secretNames, inVault }\`. Names, never values: a stored secret is never read back through the API.
 - \`DELETE /machines/:id/secrets?name=DATABASE_URL\` → stops injecting it (the value stays in the vault).
 
+**Each machine has its own.** A secret you set on a machine applies to that machine only: two apps in the same account can each have their own \`JWT_SECRET\` or \`FACTURAPI_KEY\` (several businesses, one account). If the machine has none of its own under that name, it gets the one from your general vault. A \`redeploy_machine\` carries them to the new box.
+
 They take effect on the **next deploy**, not on the fly. Rotating a secret means changing it here and deploying again. If the runspec declares one that is not in the vault, the deploy fails naming which one — better than watching the app die on connect.
 
 ### Deploy from GitHub on every push
