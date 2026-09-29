@@ -29,6 +29,12 @@ describe("arranque de la app", () => {
     expect(script).not.toContain("nohup");
   });
 
+  it("no espera 90 s a que una app Node suelte sus conexiones keep-alive", () => {
+    expect(script).toContain("TimeoutStopSec=10");
+    expect(script).toContain(`timeout 15 systemctl stop ${APP_UNIT}`);
+    expect(script).toContain(`systemctl kill -s KILL ${APP_UNIT}`);
+  });
+
   it("para la instancia anterior (unit o proceso suelto) antes de arrancar", () => {
     expect(script).toContain(`systemctl stop ${APP_UNIT}`);
     expect(script).toContain(`kill "$OLD"`);

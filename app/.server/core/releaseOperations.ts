@@ -829,6 +829,11 @@ export function buildStartScript(spec: Runspec, hasSecrets: boolean): string {
     `ExecStart=/bin/sh ${startScript}`,
     "Restart=always",
     "RestartSec=3",
+    // Un servidor Node que atiende SIGTERM con server.close() espera a que se
+    // cierren las conexiones keep-alive del proxy, y systemd lo aguantaba 90 s
+    // (su default). El exec que arranca el deploy también dura 90 s: todo
+    // redeploy de una app así moría por timeout ("exit -1", sin salida).
+    "TimeoutStopSec=10",
     `StandardOutput=append:${APP_LOG_FILE}`,
     `StandardError=append:${APP_LOG_FILE}`,
     "",
@@ -839,7 +844,9 @@ export function buildStartScript(spec: Runspec, hasSecrets: boolean): string {
   return [
     `cd ${dir}`,
     // 0. La unit, si ya existe: se para antes de tocar el puerto.
-    `systemctl stop ${APP_UNIT} 2>/dev/null || true`,
+    //    Con tope: una unit instalada antes de TimeoutStopSec=10 tarda hasta
+    //    90 s en soltar una app Node, y este exec entero dura 90.
+    `timeout 15 systemctl stop ${APP_UNIT} 2>/dev/null || systemctl kill -s KILL ${APP_UNIT} 2>/dev/null || true`,
     // 1. La instancia suelta (cajas anteriores a la unit), por su pid.
     `if [ -f ${pid} ]; then OLD=$(cat ${pid}); kill "$OLD" 2>/dev/null || true; rm -f ${pid}; fi`,
     // 2. Y quien siga ocupando el puerto, venga de donde venga. El pid sale de
