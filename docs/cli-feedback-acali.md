@@ -31,7 +31,7 @@ en lo que la plataforma falló. Arranqué con la 0.5.1 instalada; terminé en la
 | 19 | SDK | `EasybitsFile` no declara `url` (la API sí la manda). | Agregar `url?` al tipo. |
 | 20 | Publicar la CLI | Tras `npm publish`, `npm i -g …@0.14.1` daba ETARGET 1–2 min. | El script de release espera al registry. |
 | 21 | `domains add` | La sugerencia de `verify` imprime el sandboxId, no el nombre. | Imprimir el nombre que usó el usuario. |
-| 23 | `machines launch` largo | En CI, un `launch` respondió `API error 502: empty response` aunque el release SÍ se publicó (el proxy cortó la petición larga). El job quedó en rojo en falso. | Que `launch` sea asíncrono (devuelve un id y `machines wait`), o que el CLI consulte el último release antes de dar error. Mientras: reintentos en el workflow. |
+| 23 | Deploy de EasyBits mata `launch` en curso | En CI, `launch` respondió `API error 502: empty response`: un push a `main` de EasyBits redeployó el server en Fly a la mitad (502 a las 22:02:19, deploy terminó 22:02:54). El release quedó `pending` para siempre (nadie lo marca `failed`) y bloqueó 10 min los reintentos con `ReleaseInProgress`; cada reintento regresó la máquina a la versión anterior. | Apagado ordenado del server (esperar requests largos o reanudarlos), marcar `failed` los `pending` huérfanos al arrancar, y `launch` asíncrono (`machines wait`). Mientras: reintentos en el workflow del cliente. |
 | 22 | Webhooks de Facturapi | (No es EasyBits) La cuenta del cliente no tiene suscripción: 402. | Pendiente del cliente. |
 
 ## Lo que sí funcionó bien
