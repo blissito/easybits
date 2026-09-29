@@ -11,6 +11,7 @@ import { forceRefresh, usedSession } from "./client.js";
 import { resolveRefs } from "./resolve.js";
 import { cachedNewer, updateNotice, UPGRADE } from "./update.js";
 import { normalizeArgs } from "./aliases.js";
+import { completeCmd } from "./commands/completion.js";
 import { detectLang, langFlag, setLang, t } from "./i18n.js";
 
 declare const __CLI_VERSION__: string;
@@ -103,6 +104,8 @@ function aliasNote([en, es]: [string, string]) {
 const localHint = (hint: string) => hint.replace("Did you mean this?", t("Did you mean this?", "¿Quisiste decir esto?"));
 
 async function main(input: string[]): Promise<void> {
+  // El TAB de la terminal: antes de parsear nada, y nunca con avisos ni errores en voz alta.
+  if (input[0] === "__complete") return completeCmd(input.slice(1), COMMANDS);
   // La regla de nombres (aliases.ts): lo viejo sigue funcionando y avisa la forma nueva.
   const { argv, notes } = normalizeArgs(input);
   if (!wantsJson(argv)) notes.forEach(aliasNote);
@@ -199,7 +202,7 @@ const argv = process.argv.slice(2);
 setLang(detectLang(langFlag(argv)));
 // El aviso de versión nueva sólo para una persona: nunca con --json ni sin terminal. La
 // consulta a npm (una vez al día) corre en paralelo al comando.
-const notice = process.stderr.isTTY && !wantsJson(argv) && !argv.includes("doctor") ? updateNotice(VERSION) : null;
+const notice = process.stderr.isTTY && !wantsJson(argv) && !argv.includes("doctor") && argv[0] !== "__complete" ? updateNotice(VERSION) : null;
 main(argv)
   .catch((err: unknown) => {
   const e: CliError = toCliError(err);

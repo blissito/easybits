@@ -148,6 +148,16 @@ easybits apply ./helper --create --name helper-2 # a new agent from the folder
 
 The plan: \`+\` add, \`~\` change, \`-\` remove, \`!\` not applied and why. **Declarative**: what the file doesn't mention is left alone; removing what the file no longer lists needs \`--prune\`. The plan is computed by the server (it is the only one that sees the current env and MCP values). Env, MCP and skills restart the agent once at the end. Before applying, the previous file is saved to \`~/.easybits/backups/\` (roll back with \`easybits apply <backup> --agent <agent>\`). Limits: an agent can't change template (use \`--create\`), and agents without their own machine only take \`name\`. \`--show-secrets\` / \`--with-files\` keep producing the 0.9 clone JSON for \`create --from\`.
 
+### Shell completion
+
+\`\`\`bash
+source <(easybits completion zsh)      # in ~/.zshrc, after compinit
+eval "$(easybits completion bash)"     # in ~/.bashrc (bash 3.2 on macOS works)
+easybits completion fish > ~/.config/fish/completions/easybits.fish
+\`\`\`
+
+TAB completes commands, subcommands and flags (from the same table as the help) and the **names** of your agents, sandboxes/machines and databases wherever one goes (\`easybits agents get <TAB>\`, \`easybits db query <TAB>\`, \`--agent <TAB>\`). Names are cached for 5 minutes in \`~/.cache/easybits/\`.
+
 ### Language
 
 The CLI speaks Spanish or English following your locale: \`LANG=es_MX.UTF-8\` (or \`LC_ALL\`/\`LC_MESSAGES\`) → Spanish, anything else → English. Force it with \`--lang es|en\` or \`EASYBITS_LANG\`. It changes help, errors, hints and human output; **\`--json\` keys and exit codes never change** (\`error\` and \`hint\` are prose, so they follow the language).

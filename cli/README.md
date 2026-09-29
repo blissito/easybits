@@ -119,6 +119,8 @@ easybits docs --open   # open the docs in your browser
 pass its name instead of the id (`easybits sb exec scratch -- ls`, `easybits domains ls shop`).
 The match is exact and case-insensitive; if two share the name the CLI exits 2 and lists the ids.
 
+Shell completion: `source <(easybits completion zsh)` (or `bash`, `fish`).
+
 Help and messages follow your locale (`LANG=es_*` → Spanish) or `--lang es|en`.
 
 Every command has help with examples: `easybits <command> <subcommand> --help`
@@ -160,6 +162,11 @@ Host *.ghosty
 - Skill: `npx skills add https://easybits.cloud` (includes `easybits-cli`).
 
 Full reference: https://www.easybits.cloud/docs#cli · https://www.easybits.cloud/en/docs/cli.md
+
+## Changes in 0.12.0
+
+- `easybits completion zsh|bash|fish`: TAB completes commands, subcommands, flags and the names of
+  your agents, sandboxes and databases (cached 5 min in `~/.cache/easybits/`).
 
 ## Changes in 0.11.0
 

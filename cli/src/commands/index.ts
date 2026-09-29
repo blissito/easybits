@@ -9,6 +9,7 @@ import { domains } from "./domains.js";
 import { db } from "./db.js";
 import { agents } from "./agents.js";
 import { apply } from "./spec.js";
+import { completion } from "./completion.js";
 import { docs } from "./docs.js";
 import { doctor } from "./doctor.js";
 
@@ -33,6 +34,7 @@ export const COMMANDS: Command[] = [
   sshKey,
   sshProxy,
   docs,
+  completion,
 ];
 
 export function findCommand(name: string): Command | undefined {

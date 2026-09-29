@@ -165,4 +165,8 @@ export const HELP_ES: Record<string, string> = {
   "Print the docs URL, or a docs section as markdown": "Imprime la URL de los docs, o una sección de los docs en markdown",
   "English docs": "Docs en inglés",
   "Open the docs in your browser": "Abre los docs en tu navegador",
+  "Shell completion script (zsh, bash, fish)": "Script de autocompletado para tu shell (zsh, bash, fish)",
+  "Print the completion script for your shell: commands, flags and your agents, sandboxes and databases": "Imprime el script de autocompletado de tu shell: comandos, flags y tus agentes, sandboxes y bases",
+  "add to ~/.zshrc, after compinit": "agrégalo a ~/.zshrc, después de compinit",
+  "add to ~/.bashrc": "agrégalo a ~/.bashrc",
 };
