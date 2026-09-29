@@ -1807,6 +1807,94 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
 
+  /api/v2/agents/{id}/export:
+    parameters:
+      - $ref: "#/components/parameters/id"
+    get:
+      tags: [Agents]
+      operationId: exportAgentSpec
+      summary: El agente como archivo (YAML o JSON)
+      description: "Template, nombre, prompt, env no secreto, MCP, skills y archivos. Los secretos salen como `${NOMBRE}`, nunca su valor; `$secret:NOMBRE` viaja tal cual. `?format=json` devuelve `{spec}`."
+      parameters:
+        - { name: format, in: query, required: false, schema: { type: string, enum: [yaml, json] } }
+      responses:
+        "200":
+          description: El archivo del agente.
+          content:
+            text/yaml: { schema: { type: string } }
+            application/json: { schema: { type: object, properties: { spec: { type: object } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v2/agents/{id}/apply:
+    parameters:
+      - $ref: "#/components/parameters/id"
+    post:
+      tags: [Agents]
+      operationId: applyAgentSpec
+      summary: Aplicar un archivo de agente (plan declarativo)
+      description: "Compara el archivo con el agente y devuelve el plan (`+` agrega, `~` cambia, `-` quita, `!` no se aplica y dice por qué). Lo que el archivo no menciona no se toca; quitar exige `prune`. `secrets` = valores de los `${NOMBRE}` del archivo (uno sin valor conserva el de hoy). `skills`/`files` = contenido a subir. Env, MCP y skills reinician el agente una vez al final. `before` es el archivo de antes (para volver atrás)."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [spec]
+              properties:
+                spec: { type: string, description: "El archivo (YAML o JSON) como texto" }
+                secrets: { type: object, additionalProperties: { type: string } }
+                skills: { type: object, additionalProperties: { type: array, items: { type: object, properties: { path: { type: string }, contentBase64: { type: string } } } } }
+                files: { type: object, additionalProperties: { type: string, description: base64 } }
+                prune: { type: boolean }
+                dryRun: { type: boolean }
+      responses:
+        "200":
+          description: Plan (y, sin dryRun, lo aplicado).
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  agent: { type: string }
+                  dryRun: { type: boolean }
+                  plan: { type: array, items: { type: object, properties: { op: { type: string, enum: ["+", "~", "-", "!"] }, what: { type: string } } } }
+                  applied: { type: array, items: { type: string } }
+                  failed: { type: object, properties: { what: { type: string }, error: { type: string } } }
+                  before: { type: string }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /api/v2/agents/apply:
+    post:
+      tags: [Agents]
+      operationId: createAgentFromSpec
+      summary: Crear un agente desde un archivo
+      description: "Template, nombre, env, MCP y prompt del archivo (todos los `${NOMBRE}` deben venir en `secrets`). Skills y archivos entran después con `POST /agents/{id}/apply` cuando la máquina contesta."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [spec]
+              properties:
+                spec: { type: string }
+                secrets: { type: object, additionalProperties: { type: string } }
+                name: { type: string }
+                timeoutSeconds: { type: integer }
+                dryRun: { type: boolean }
+      responses:
+        "200":
+          description: Plan y, sin dryRun, el agente nuevo.
+          content:
+            application/json:
+              schema: { type: object, properties: { dryRun: { type: boolean }, plan: { type: array, items: { type: object } }, agentId: { type: string }, sandboxId: { type: string } } }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
   /api/v2/agents/{id}/restart:
     parameters:
       - $ref: "#/components/parameters/id"
