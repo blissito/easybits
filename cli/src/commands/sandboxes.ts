@@ -72,11 +72,11 @@ export const sandboxes: Command = {
     create: {
       aliases: ["new"],
       summary: "Create a sandbox and wait until it is running",
-      usage: "easybits sandboxes create [--template ubuntu] [--name <name>] [--timeout <s>] [--size s|m|l|xl] [--dotenv <path>] [--env K=V]...",
+      usage: "easybits sandboxes create [--template ubuntu] [--name <name>] [--ttl <s>] [--size s|m|l|xl] [--dotenv <path>] [--env K=V]...",
       options: {
         template: { type: "string", value: "name", description: "Base template (default ubuntu): ubuntu, python, node, code-interpreter…" },
         name: { type: "string", value: "name", description: "Human label (lets you `ssh <name>.ghosty`)" },
-        timeout: { type: "string", value: "seconds", description: "Time to live before auto-destroy" },
+        ttl: { type: "string", value: "seconds", description: "Time to live before auto-destroy (was --timeout)" },
         size: { type: "string", value: "s|m|l|xl", description: "VM size class (gated by plan)" },
         env: { type: "string", multiple: true, value: "K=V", description: "Environment variable, non-secret (repeatable)" },
         ...ENV_FILE_OPTION,
@@ -95,7 +95,7 @@ export const sandboxes: Command = {
         const sb = await eb.sandboxes.create({
           template: str(ctx, "template") ?? "ubuntu",
           name: str(ctx, "name"),
-          timeoutSeconds: int(ctx, "timeout", this.usage),
+          timeoutSeconds: int(ctx, "ttl", this.usage),
           size: size as "s" | "m" | "l" | "xl" | undefined,
           env: Object.keys(env).length ? env : undefined,
           waitForReady: !bool(ctx, "no-wait"),

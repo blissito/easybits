@@ -1,5 +1,5 @@
 import type { Command } from "../types.js";
-import { login, logout, usage, websites, providers, config, mcp } from "./account.js";
+import { login, logout, whoami, usage, websites, providers, mcp } from "./account.js";
 import { files } from "./files.js";
 import { init } from "./init.js";
 import { sshKey, sshProxy } from "./ssh.js";
@@ -14,6 +14,7 @@ import { docs } from "./docs.js";
 export const COMMANDS: Command[] = [
   login,
   logout,
+  whoami,
   usage,
   sandboxes,
   agents,
@@ -24,7 +25,6 @@ export const COMMANDS: Command[] = [
   files,
   websites,
   providers,
-  config,
   mcp,
   sshKey,
   sshProxy,

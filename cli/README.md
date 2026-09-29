@@ -36,7 +36,7 @@ another server (default `https://www.easybits.cloud`; `baseUrl` in `~/.easybitsr
 # Sandboxes (alias: sb)
 easybits sandboxes ls
 easybits sandboxes create --template node --name scratch --dotenv .env
-easybits sandboxes create --size m --timeout 1800 --no-wait   # size s|m|l|xl (plan-gated)
+easybits sandboxes create --size m --ttl 1800 --no-wait   # size s|m|l|xl (plan-gated)
 easybits sandboxes get sb_abc123
 easybits sandboxes exec sb_abc123 -- npm test
 easybits sandboxes logs sb_abc123 --unit myapp --lines 100 --since "10 min ago" --grep ERROR
@@ -50,7 +50,7 @@ easybits sandboxes destroy sb_abc123 --yes
 
 # Hosting: permanent machines (alias: deploy)
 easybits machines ls
-easybits machines deploy sb_abc123 -m "v1.2"
+easybits deploy sb_abc123 -m "v1.2"   # = machines deploy
 easybits machines releases sb_abc123 --limit 5
 easybits machines logs sb_abc123 --lines 100 --grep ERROR
 easybits machines rollback sb_abc123 rel_789
@@ -83,14 +83,15 @@ easybits agents destroy helper --yes
 # Files, websites, account
 easybits files ls
 easybits files upload ./report.pdf
-easybits files delete FILE_ID --yes
+easybits files rm FILE_ID --yes
 easybits websites ls
 easybits providers                   # storage provider (Tigris by default)
 easybits usage
 
 # MCP, SSH, docs
-easybits config        # MCP config (streamable HTTP)
-easybits mcp           # MCP config (stdio)
+easybits whoami        # account and where the credential comes from
+easybits mcp config    # MCP config (streamable HTTP)
+easybits mcp config --stdio   # MCP config (stdio)
 easybits ssh-key       # public key for sandbox SSH
 easybits docs cli      # a docs section as markdown (--en for English)
 easybits docs --open   # open the docs in your browser
@@ -104,7 +105,7 @@ Every command has help with examples: `easybits <command> <subcommand> --help`
 (or `easybits help <command> <subcommand>`). A typo gets a "Did you mean" suggestion.
 
 **Destructive commands** (`db rm`, `agents destroy`, `sandboxes destroy`, `domains rm`,
-`files delete`) ask before acting in a terminal: `[y/N]`, or typing the name/id for
+`files rm`) ask before acting in a terminal: `[y/N]`, or typing the name/id for
 irreversible ones (a database, an agent, a permanent sandbox). Without a terminal they
 never prompt — and neither do they with `--json`: pass `--yes` / `-y`, or they exit `2`.
 
@@ -133,6 +134,21 @@ Host *.ghosty
 - Skill: `npx skills add https://easybits.cloud` (includes `easybits-cli`).
 
 Full reference: https://www.easybits.cloud/docs#cli · https://www.easybits.cloud/en/docs/cli.md
+
+## Changes in 0.8.0
+
+- One naming rule (like `gh`): `easybits <noun> <verb>`. Old spellings still work and print the new
+  one on stderr (never with `--json`):
+  `easybits config` → `easybits mcp config`; `easybits mcp` → `easybits mcp config --stdio`;
+  `easybits deploy <machine>` is now the verb (= `machines deploy`), so `deploy ls` → `machines ls`;
+  `machines release` → `machines deploy` (it clashed with `releases`);
+  `sandboxes create --timeout` → `--ttl` (`--timeout` stays in `exec`, where it caps the command).
+- `files rm` is the name (`delete` still works), like `db rm` and `domains rm`.
+- New `easybits whoami`: account email and where the credential comes from.
+
+## Changes in 0.7.0
+
+- Agents, sandboxes/machines and databases by **name** anywhere an id goes; `easybits agents get`.
 
 ## Changes in 0.6.1
 

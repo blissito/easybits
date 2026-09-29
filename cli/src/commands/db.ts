@@ -19,7 +19,7 @@ async function findDb(ctx: Ctx, id: string) {
 
 export const db: Command = {
   name: "db",
-  aliases: ["databases"],
+  aliases: ["databases", "database"],
   group: "Data",
   summary: "SQL databases (libSQL)",
   synopsis: "db",

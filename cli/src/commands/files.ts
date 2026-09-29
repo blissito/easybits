@@ -71,12 +71,12 @@ export const files: Command = {
         emit(ctx, data.file, () => console.log(`Uploaded: ${data.file.id}`));
       },
     },
-    delete: {
-      aliases: ["rm"],
+    rm: {
+      aliases: ["delete", "remove"],
       summary: "Delete a file (soft delete, 7-day trash)",
-      usage: "easybits files delete <file-id> [--yes]",
+      usage: "easybits files rm <file-id> [--yes]",
       options: { ...YES_OPTION },
-      examples: ["easybits files delete 6650f0c2a1b2c3d4e5f60718", "easybits files rm 6650f0c2a1b2c3d4e5f60718 --yes"],
+      examples: ["easybits files rm 6650f0c2a1b2c3d4e5f60718", "easybits files rm 6650f0c2a1b2c3d4e5f60718 --yes"],
       async run(ctx) {
         const id = need(ctx, 0, "file-id", this.usage);
         requireYesIfHeadless(ctx);

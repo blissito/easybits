@@ -49,7 +49,7 @@ Get an API key from the [Developer Dashboard](https://www.easybits.cloud/dash/de
 
 \`\`\`bash
 easybits sandboxes create --template node --name scratch   # waits until running
-easybits sandboxes create --template node --size m --timeout 1800 --no-wait --dotenv .env
+easybits sandboxes create --template node --size m --ttl 1800 --no-wait --dotenv .env
 easybits sandboxes ls
 easybits sandboxes get sb_abc123                            # status, expiry, activity in progress
 easybits sandboxes exec sb_abc123 -- npm test               # exits with the command's code
@@ -63,13 +63,13 @@ easybits sandboxes snapshot sb_abc123 --name before-upgrade
 easybits sandboxes destroy sb_abc123 --yes
 \`\`\`
 
-Alias: \`easybits sb …\`. Everything after \`--\` in \`exec\` is the command, verbatim. On \`create\`: \`--template\` (default \`ubuntu\`), \`--size s|m|l|xl\` (gated by plan), \`--timeout <s>\` (lifetime before auto-destroy) and \`--no-wait\` (return without waiting for \`running\`). \`logs\` returns 200 lines by default; \`--since\` takes \`journalctl\` syntax.
+Alias: \`easybits sb …\`. Everything after \`--\` in \`exec\` is the command, verbatim. On \`create\`: \`--template\` (default \`ubuntu\`), \`--size s|m|l|xl\` (gated by plan), \`--ttl <s>\` (lifetime before auto-destroy; \`--timeout\` in \`exec\` caps the command) and \`--no-wait\` (return without waiting for \`running\`). \`logs\` returns 200 lines by default; \`--since\` takes \`journalctl\` syntax.
 
 ### Hosting: permanent machines
 
 \`\`\`bash
 easybits machines ls
-easybits machines deploy sb_abc123 -m "v1.2"             # publish a release of the current code
+easybits deploy sb_abc123 -m "v1.2"                      # publish a release (= machines deploy)
 easybits machines releases sb_abc123 --limit 5
 easybits machines logs sb_abc123 --lines 100 --grep ERROR
 easybits machines rollback sb_abc123 rel_789             # same machine, data untouched
@@ -80,7 +80,7 @@ easybits machines secrets unset sb_abc123 API_KEY
 easybits init --port 3000                                # GitHub Actions workflow: deploy on every push
 \`\`\`
 
-Alias: \`easybits deploy …\`. Secrets go in a dotenv file or on stdin (\`--dotenv -\`), never in argv: \`ps\` and your shell history would see them. \`secrets ls\` shows names only; values are never readable.
+\`easybits deploy <machine>\` is short for \`machines deploy <machine>\`. Secrets go in a dotenv file or on stdin (\`--dotenv -\`), never in argv: \`ps\` and your shell history would see them. \`secrets ls\` shows names only; values are never readable.
 
 ### Domains
 
@@ -116,6 +116,10 @@ easybits agents ls
 easybits agents destroy helper --yes
 \`\`\`
 
+### Naming
+
+One rule, like \`gh\`: \`easybits <noun> <verb>\`. Older spellings keep working and print the new one on stderr (never with \`--json\`): \`easybits config\` → \`mcp config\`, \`easybits mcp\` → \`mcp config --stdio\`, \`deploy ls\` → \`machines ls\` (\`easybits deploy <machine>\` is the verb), \`machines release\` → \`machines deploy\`, \`sandboxes create --timeout\` → \`--ttl\`.
+
 ### Names instead of ids
 
 Every command that takes an agent, a sandbox or machine, or a database accepts its **name** as well as its id: \`easybits sb exec scratch -- ls\`, \`easybits domains ls shop\`, \`easybits machines deploy shop -m "v2"\`. An id (\`sb_…\`, or the 24-character id of agents and databases) passes straight through; a name is matched exactly, case-insensitive, against your list (one request per run). If two share the name the CLI exits 2 and lists the ids; if none matches it exits 1 with the \`ls\` to run.
@@ -125,7 +129,7 @@ Every command that takes an agent, a sandbox or machine, or a database accepts i
 \`\`\`bash
 easybits files upload ./report.pdf
 easybits files ls
-easybits files delete FILE_ID --yes   # to the trash for 7 days
+easybits files rm FILE_ID --yes   # to the trash for 7 days
 easybits websites ls
 easybits providers                     # storage provider (Tigris by default)
 easybits usage
@@ -134,8 +138,9 @@ easybits usage
 ### MCP, SSH and docs
 
 \`\`\`bash
-easybits config            # MCP JSON (streamable HTTP) with your key
-easybits mcp               # MCP JSON over stdio
+easybits whoami            # account and where the credential comes from
+easybits mcp config        # MCP JSON (streamable HTTP) with your key
+easybits mcp config --stdio   # MCP JSON over stdio
 easybits ssh-key           # your public key to enable SSH on a box
 easybits docs hosting      # one section of these docs as markdown
 easybits docs cli --en     # this page
@@ -166,7 +171,7 @@ Deliberate exception: \`sandboxes exec\` without \`--json\` exits with the remot
 
 ### Deletes: \`--yes\`
 
-\`sandboxes destroy\`, \`agents destroy\`, \`db rm\`, \`domains rm\` and \`files delete\` ask before acting in a terminal: \`[y/N]\`, or typing the name/id for irreversible ones (a database, an agent, a permanent sandbox). **Without a terminal or with \`--json\` they never prompt**: pass \`--yes\` (\`-y\`) or they exit \`2\` with a hint holding the exact command.
+\`sandboxes destroy\`, \`agents destroy\`, \`db rm\`, \`domains rm\` and \`files rm\` ask before acting in a terminal: \`[y/N]\`, or typing the name/id for irreversible ones (a database, an agent, a permanent sandbox). **Without a terminal or with \`--json\` they never prompt**: pass \`--yes\` (\`-y\`) or they exit \`2\` with a hint holding the exact command.
 
 \`easybits --help\`, \`easybits <command> <subcommand> --help\` and \`easybits help <command> <subcommand>\` show usage, flags and examples. A typo gets a "Did you mean".
 

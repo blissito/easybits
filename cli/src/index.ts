@@ -9,6 +9,7 @@ import { EasybitsError } from "@easybits.cloud/sdk";
 import { CliError, EXIT, toCliError, usageError } from "./errors.js";
 import { forceRefresh, usedSession } from "./client.js";
 import { resolveRefs } from "./resolve.js";
+import { normalizeArgs } from "./aliases.js";
 
 declare const __CLI_VERSION__: string;
 const VERSION = typeof __CLI_VERSION__ === "string" ? __CLI_VERSION__ : "dev";
@@ -88,7 +89,16 @@ function unknownSub(cmd: Command, name: string): CliError {
   return e;
 }
 
-async function main(argv: string[]): Promise<void> {
+/** Aviso tenue en stderr para quien usa una forma vieja; nunca con --json. */
+function aliasNote(note: string) {
+  const dim = process.stderr.isTTY && !process.env.NO_COLOR;
+  process.stderr.write(dim ? `\x1b[2m${note}\x1b[0m\n` : `${note}\n`);
+}
+
+async function main(input: string[]): Promise<void> {
+  // La regla de nombres (aliases.ts): lo viejo sigue funcionando y avisa la forma nueva.
+  const { argv, notes } = normalizeArgs(input);
+  if (!wantsJson(argv)) notes.forEach(aliasNote);
   const pos = positionalIndexes(argv);
   const cmdName = pos.length ? argv[pos[0]] : undefined;
 

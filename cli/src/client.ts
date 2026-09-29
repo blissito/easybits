@@ -5,7 +5,7 @@ import { interactive, oauthLogin, readRc, refreshSession } from "./auth.js";
 
 /**
  * Una API key explícita: env EASYBITS_API_KEY > --token > `apiKey` del rc. Es lo que va
- * en configs de MCP (`easybits config`): un access token OAuth vence en una hora.
+ * en configs de MCP (`easybits mcp config`): un access token OAuth vence en una hora.
  */
 export function resolveApiKey(ctx: Ctx): string | undefined {
   return process.env.EASYBITS_API_KEY || ctx.token || readRc().apiKey;

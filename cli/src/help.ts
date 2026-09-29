@@ -8,10 +8,13 @@ export const GLOBAL_FLAGS = `Global flags:
   -h, --help       Help (also: easybits <command> --help)
   -v, --version    Print the CLI version
 
+Naming (like gh): noun then verb — easybits <noun> <verb>. Old spellings still work
+and print the new one on stderr (never with --json).
+
 Names or ids: agents, sandboxes/machines and databases take either
 (exact, case-insensitive; two with the same name → exit 2 with the ids).
 
-Deletes (sandboxes destroy, agents destroy, db rm, domains rm, files delete) ask first;
+Deletes (sandboxes destroy, agents destroy, db rm, domains rm, files rm) ask first;
 without a terminal or with --json pass -y/--yes, or they exit 2.
 
 Env: EASYBITS_API_KEY (API key), EASYBITS_URL (API server, default https://www.easybits.cloud)

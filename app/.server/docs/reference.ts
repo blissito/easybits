@@ -135,7 +135,7 @@ La API key sale del [Dashboard de Desarrollador](https://www.easybits.cloud/dash
 
 \`\`\`bash
 easybits sandboxes create --template node --name scratch   # espera a que corra
-easybits sandboxes create --template node --size m --timeout 1800 --no-wait --dotenv .env
+easybits sandboxes create --template node --size m --ttl 1800 --no-wait --dotenv .env
 easybits sandboxes ls
 easybits sandboxes get sb_abc123                            # estado, vencimiento, actividad en curso
 easybits sandboxes exec sb_abc123 -- npm test               # sale con el código del comando
@@ -149,13 +149,13 @@ easybits sandboxes snapshot sb_abc123 --name antes-del-upgrade
 easybits sandboxes destroy sb_abc123 --yes
 \`\`\`
 
-Alias: \`easybits sb …\`. Todo lo que va después de \`--\` en \`exec\` es el comando, tal cual. En \`create\`: \`--template\` (default \`ubuntu\`), \`--size s|m|l|xl\` (según tu plan), \`--timeout <s>\` (vida antes de autodestruirse) y \`--no-wait\` (regresa sin esperar a \`running\`). \`logs\` trae 200 líneas por defecto; \`--since\` acepta la sintaxis de \`journalctl\`.
+Alias: \`easybits sb …\`. Todo lo que va después de \`--\` en \`exec\` es el comando, tal cual. En \`create\`: \`--template\` (default \`ubuntu\`), \`--size s|m|l|xl\` (según tu plan), \`--ttl <s>\` (vida antes de autodestruirse; en \`exec\`, \`--timeout\` es el tope del comando) y \`--no-wait\` (regresa sin esperar a \`running\`). \`logs\` trae 200 líneas por defecto; \`--since\` acepta la sintaxis de \`journalctl\`.
 
 ### Hosting: máquinas permanentes
 
 \`\`\`bash
 easybits machines ls
-easybits machines deploy sb_abc123 -m "v1.2"             # publica un release del código actual
+easybits deploy sb_abc123 -m "v1.2"                      # publica un release (= machines deploy)
 easybits machines releases sb_abc123 --limit 5
 easybits machines logs sb_abc123 --lines 100 --grep ERROR
 easybits machines rollback sb_abc123 rel_789             # misma máquina, datos intactos
@@ -166,7 +166,7 @@ easybits machines secrets unset sb_abc123 API_KEY
 easybits init --port 3000                                # workflow de GitHub Actions: deploy en cada push
 \`\`\`
 
-Alias: \`easybits deploy …\`. Los secretos van en un archivo dotenv o por stdin (\`--dotenv -\`), nunca en argv: ahí los ven \`ps\` y el historial de tu shell. \`secrets ls\` sólo muestra nombres; los valores no se pueden leer.
+\`easybits deploy <máquina>\` es el atajo de \`machines deploy <máquina>\`. Los secretos van en un archivo dotenv o por stdin (\`--dotenv -\`), nunca en argv: ahí los ven \`ps\` y el historial de tu shell. \`secrets ls\` sólo muestra nombres; los valores no se pueden leer.
 
 ### Dominios
 
@@ -202,6 +202,10 @@ easybits agents ls
 easybits agents destroy ayudante --yes
 \`\`\`
 
+### Cómo se nombran los comandos
+
+Una sola regla, como \`gh\`: \`easybits <sustantivo> <verbo>\`. Las formas viejas siguen funcionando y avisan la nueva en stderr (nunca con \`--json\`): \`easybits config\` → \`mcp config\`, \`easybits mcp\` → \`mcp config --stdio\`, \`deploy ls\` → \`machines ls\` (\`easybits deploy <máquina>\` es el verbo), \`machines release\` → \`machines deploy\`, \`sandboxes create --timeout\` → \`--ttl\`.
+
 ### Nombres en vez de ids
 
 Todo comando que recibe un agente, un sandbox o máquina, o una base de datos acepta su **nombre** además del id: \`easybits sb exec pruebas -- ls\`, \`easybits domains ls tienda\`, \`easybits machines deploy tienda -m "v2"\`. Un id (\`sb_…\`, o el id de 24 caracteres de agentes y bases) pasa directo; un nombre se busca exacto, sin distinguir mayúsculas, en tu lista (una petición por corrida). Si dos comparten el nombre, el CLI sale con 2 y enlista los ids; si ninguno coincide, sale con 1 y te dice qué \`ls\` correr.
@@ -211,7 +215,7 @@ Todo comando que recibe un agente, un sandbox o máquina, o una base de datos ac
 \`\`\`bash
 easybits files upload ./reporte.pdf
 easybits files ls
-easybits files delete FILE_ID --yes   # a la papelera 7 días
+easybits files rm FILE_ID --yes   # a la papelera 7 días
 easybits websites ls
 easybits providers                     # proveedor de almacenamiento (Tigris por defecto)
 easybits usage
@@ -220,8 +224,9 @@ easybits usage
 ### MCP, SSH y docs
 
 \`\`\`bash
-easybits config            # JSON de MCP (streamable HTTP) con tu key
-easybits mcp               # JSON de MCP por stdio
+easybits whoami            # la cuenta y de dónde sale la credencial
+easybits mcp config        # JSON de MCP (streamable HTTP) con tu key
+easybits mcp config --stdio   # JSON de MCP por stdio
 easybits ssh-key           # tu llave pública para habilitar SSH en una caja
 easybits docs hosting      # una sección de estos docs en markdown
 easybits docs cli --en     # esta página en inglés
@@ -252,7 +257,7 @@ Excepción deliberada: \`sandboxes exec\` sin \`--json\` sale con el código del
 
 ### Borrados: \`--yes\`
 
-\`sandboxes destroy\`, \`agents destroy\`, \`db rm\`, \`domains rm\` y \`files delete\` preguntan antes de actuar en una terminal: \`[y/N]\`, o teclear el nombre/id en lo irreversible (una base, un agente, una caja permanente). **Sin terminal o con \`--json\` nunca preguntan**: pasa \`--yes\` (\`-y\`) o salen con \`2\` y la pista con el comando exacto.
+\`sandboxes destroy\`, \`agents destroy\`, \`db rm\`, \`domains rm\` y \`files rm\` preguntan antes de actuar en una terminal: \`[y/N]\`, o teclear el nombre/id en lo irreversible (una base, un agente, una caja permanente). **Sin terminal o con \`--json\` nunca preguntan**: pasa \`--yes\` (\`-y\`) o salen con \`2\` y la pista con el comando exacto.
 
 \`easybits --help\`, \`easybits <comando> <subcomando> --help\` y \`easybits help <comando> <subcomando>\` muestran uso, banderas y ejemplos. Un typo recibe un «Did you mean».
 

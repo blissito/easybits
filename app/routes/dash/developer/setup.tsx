@@ -376,8 +376,8 @@ easybits agents message ag_123 "hola"
 easybits files upload ./mi-documento.pdf
 
 # MCP
-easybits config   # streamable HTTP
-easybits mcp      # stdio`}
+easybits mcp config           # streamable HTTP
+easybits mcp config --stdio   # stdio`}
         </CodeBlock>
       </Card>
 

@@ -1,9 +1,9 @@
 import { resolveBaseUrl } from "@easybits.cloud/sdk";
 import type { Command } from "../types.js";
 import { bool, readStdin } from "../args.js";
-import { usageError } from "../errors.js";
+import { notLoggedIn, usageError } from "../errors.js";
 import { emit, fmtBytes, table, fmtDate } from "../output.js";
-import { getClient, resolveApiKey } from "../client.js";
+import { getClient, resolveApiKey, resolveCredential } from "../client.js";
 import { fetchEmail, oauthLogin, readRc, writeRc } from "../auth.js";
 
 export const login: Command = {
@@ -128,7 +128,8 @@ export const providers: Command = {
   synopsis: "providers",
   leaf: {
     summary: "Show storage providers",
-    usage: "easybits providers [list]",
+    usage: "easybits providers",
+    examples: ["easybits providers", "easybits providers --json"],
     async run(ctx) {
       const data = {
         defaultProvider: "tigris",
@@ -142,63 +143,69 @@ export const providers: Command = {
   },
 };
 
-export const config: Command = {
-  name: "config",
+/** Config MCP: streamable HTTP (default) o stdio con el proxy npm. Antes eran `config` y `mcp`. */
+export const mcp: Command = {
+  name: "mcp",
   group: "MCP",
-  summary: "Print MCP config JSON (streamable HTTP)",
-  synopsis: "config",
-  leaf: {
-    summary: "Print MCP config JSON (streamable HTTP) with your key",
-    usage: "easybits config",
-    examples: ["easybits config > .mcp.json"],
-    async run(ctx) {
-      // Sólo una API key: el access token del navegador vence en una hora.
-      const apiKey = resolveApiKey(ctx);
-      const baseUrl = await resolveBaseUrl();
-      // Siempre JSON: es su salida natural, con o sin --json.
-      console.log(
-        JSON.stringify(
-          {
+  summary: "Print the MCP config JSON for your agent or editor",
+  synopsis: "mcp",
+  subs: {
+    config: {
+      summary: "Print MCP config JSON: streamable HTTP with your key, or stdio (npx @easybits.cloud/mcp)",
+      usage: "easybits mcp config [--stdio]",
+      options: { stdio: { type: "boolean", description: "stdio config (npx @easybits.cloud/mcp) instead of streamable HTTP" } },
+      examples: ["easybits mcp config > .mcp.json", "easybits mcp config --stdio"],
+      async run(ctx) {
+        // Siempre JSON: es su salida natural, con o sin --json.
+        if (bool(ctx, "stdio")) {
+          const config = {
             mcpServers: {
-              easybits: {
-                type: "streamable-http",
-                url: `${baseUrl}/api/mcp`,
-                headers: { Authorization: `Bearer ${apiKey || "eb_sk_live_YOUR_KEY"}` },
-              },
+              easybits: { command: "npx", args: ["-y", "@easybits.cloud/mcp"], env: { EASYBITS_API_KEY: "eb_sk_live_YOUR_KEY" } },
+            },
+          };
+          console.log(JSON.stringify(config, null, 2));
+          return;
+        }
+        // Sólo una API key: el access token del navegador vence en una hora.
+        const apiKey = resolveApiKey(ctx);
+        const baseUrl = await resolveBaseUrl();
+        const config = {
+          mcpServers: {
+            easybits: {
+              type: "streamable-http",
+              url: `${baseUrl}/api/mcp`,
+              headers: { Authorization: `Bearer ${apiKey || "eb_sk_live_YOUR_KEY"}` },
             },
           },
-          null,
-          2,
-        ),
-      );
+        };
+        console.log(JSON.stringify(config, null, 2));
+      },
     },
   },
 };
 
-export const mcp: Command = {
-  name: "mcp",
-  group: "MCP",
-  summary: "Print MCP stdio config JSON",
-  synopsis: "mcp",
+export const whoami: Command = {
+  name: "whoami",
+  group: "Account",
+  summary: "Show which account and credential the CLI is using",
+  synopsis: "whoami",
   leaf: {
-    summary: "Print MCP stdio config JSON (npx @easybits.cloud/mcp)",
-    usage: "easybits mcp",
-    async run() {
-      console.log(
-        JSON.stringify(
-          {
-            mcpServers: {
-              easybits: {
-                command: "npx",
-                args: ["-y", "@easybits.cloud/mcp"],
-                env: { EASYBITS_API_KEY: "eb_sk_live_YOUR_KEY" },
-              },
-            },
-          },
-          null,
-          2,
-        ),
-      );
+    summary: "Show the account email and where the credential comes from",
+    usage: "easybits whoami",
+    examples: ["easybits whoami", "easybits whoami --json"],
+    async run(ctx) {
+      const source = process.env.EASYBITS_API_KEY
+        ? "env EASYBITS_API_KEY"
+        : ctx.token
+          ? "--token"
+          : readRc().oauth?.accessToken
+            ? "browser session (~/.easybitsrc)"
+            : readRc().apiKey
+              ? "API key (~/.easybitsrc)"
+              : undefined;
+      if (!source) throw notLoggedIn();
+      const email = await fetchEmail(await resolveCredential(ctx));
+      emit(ctx, { email, source, baseUrl: await resolveBaseUrl() }, () => console.log(`${email ?? "(unknown email)"}  via ${source}`));
     },
   },
 };

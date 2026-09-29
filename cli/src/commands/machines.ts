@@ -9,16 +9,16 @@ const SECRETS_USAGE = "easybits machines secrets <ls|set|unset> <machine> [--dot
 
 export const machines: Command = {
   name: "machines",
-  aliases: ["deploy", "machine"],
+  aliases: ["machine"],
   group: "Hosting",
-  summary: "Permanent machines and their releases (alias: deploy)",
+  summary: "Permanent machines and their releases (easybits deploy <machine> publishes)",
   synopsis: "machines",
   subs: {
     ls: {
       aliases: ["list"],
       summary: "List your permanent machines",
       usage: "easybits machines ls",
-      examples: ["easybits machines ls", "easybits deploy ls --json"],
+      examples: ["easybits machines ls", "easybits machines ls --json"],
       async run(ctx) {
         const eb = await getClient(ctx);
         const rows = (await eb.machines.list()).map(sandboxRecord);
@@ -32,11 +32,10 @@ export const machines: Command = {
       },
     },
     deploy: {
-      aliases: ["release"],
       summary: "Publish the machine's current app code as a new release",
       usage: "easybits machines deploy <machine> [--message <text>]",
       options: { message: { type: "string", short: "m", value: "text", description: "Release note" } },
-      examples: ['easybits machines deploy sb_abc123 -m "v1.2: fix checkout"'],
+      examples: ['easybits machines deploy shop -m "v1.2: fix checkout"', 'easybits deploy shop -m "v1.2"          # same thing, shorter'],
       async run(ctx) {
         const id = need(ctx, 0, "machine", this.usage);
         const eb = await getClient(ctx);

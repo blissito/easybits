@@ -5,7 +5,7 @@ license: MIT
 compatibility: Needs Node 22+ (npx is enough), network access to https://www.easybits.cloud and an EasyBits API key
 metadata:
   author: easybits
-  version: "1.4"
+  version: "1.5"
 ---
 
 # Use the EasyBits CLI
@@ -71,19 +71,23 @@ at another server (default https://www.easybits.cloud).
    it exits 0 and reports `exitCode`, `stdout`, `stderr`. Put the command after `--`.
 4. Put flags after the subcommand: `easybits sb create --template node`, not
    `easybits --template node sb create`.
-5. Deletes need `--yes`: `sb destroy`, `agents destroy`, `db rm`, `domains rm`, `files delete`.
+5. Deletes need `--yes`: `sb destroy`, `agents destroy`, `db rm`, `domains rm`, `files rm`.
    With `--json` (or no terminal) they never prompt; without `--yes` they exit 2.
 6. Names work where ids do: any agent, sandbox/machine or database argument takes its name
    (`easybits agents get helper`, `easybits sb exec scratch -- ls`, `easybits db query leads …`).
    Exact match, case-insensitive. Two with the same name → exit 2, `error` says so and `hint`
    lists the ids: retry with one. For destructive commands prefer the id you got back on create.
-7. Destroy what you create. Sandboxes you did not create belong to the user: do not
+7. Command shape is `easybits <noun> <verb>` (like `gh`). Old spellings (`easybits config`,
+   `easybits mcp`, `deploy ls`, `machines release`, `sb create --timeout`) still run but print the
+   new form on stderr; use the new one: `mcp config [--stdio]`, `machines ls`, `deploy <machine>`,
+   `sb create --ttl`. `easybits whoami --json` tells you which account and credential are in use.
+8. Destroy what you create. Sandboxes you did not create belong to the user: do not
    suspend, exec into or destroy them unless asked.
 
 ## Sandboxes (Firecracker microVMs, alias `sb`)
 
 ```bash
-ID=$(easybits sb create --template node --name scratch --timeout 1800 --json | jq -r .sandboxId)
+ID=$(easybits sb create --template node --name scratch --ttl 1800 --json | jq -r .sandboxId)
 easybits sb ls --json
 easybits sb get "$ID" --json                                 # status, expiresAt, activity
 easybits sb exec "$ID" --json -- 'cd /data/work && npm ci && npm test'
@@ -149,7 +153,7 @@ easybits agents message "$AGENT_ID" "now the tests" --session "$SID" --json
 easybits agents destroy "$AGENT_ID" --json --yes
 easybits files upload ./report.pdf --json
 easybits files ls --json
-easybits files delete "$FILE_ID" --json --yes     # 7-day trash
+easybits files rm "$FILE_ID" --json --yes     # 7-day trash
 easybits providers --json                         # storage provider
 ```
 
@@ -158,4 +162,4 @@ easybits providers --json                         # storage provider
 - `easybits --help`, `easybits <command> <sub> --help` or `easybits help <command> <sub>`
 - `easybits docs cli --en` prints the full CLI reference as markdown; `easybits docs <section>`
   prints any docs section (hosting, agents, databases…); `easybits docs --open` opens the browser.
-- `easybits config` prints MCP config JSON if the task is better served by the MCP tools.
+- `easybits mcp config` prints MCP config JSON (`--stdio` for the npx proxy) if the task is better served by the MCP tools.
