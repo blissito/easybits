@@ -116,6 +116,25 @@ easybits agents ls
 easybits agents destroy helper --yes
 \`\`\`
 
+**Configure an agent with a machine** (\`ghosty-lite\`, \`goose\`; same contract as Ghosty Studio's \`ghosty\` CLI). Every write takes \`--dry-run\`:
+
+\`\`\`bash
+easybits agents get helper --fields status,systemPromptMode --json   # record + prompt, MCP (masked), skills, files
+easybits agents get helper --prompt-out PROMPT.md                  # a long prompt goes to a file
+easybits agents set helper --prompt-file PROMPT.md --prompt-mode replace --dry-run
+easybits agents files put helper catalog.pdf prices.csv --to docs  # to /data/work; ls|get|rm too
+easybits agents skills add helper --dir ./skills/quotes --restart  # ls|get|rm too; enters after a restart
+easybits agents mcp set helper --file servers.json                 # replaces the list and restarts
+easybits agents try helper "who are you?"                          # one full turn as text, to verify
+easybits agents logs helper --since "10 min ago"
+easybits agents doctor helper                                      # exits 1 on a problem
+easybits agents export helper --out helper.json                    # never the env
+easybits agents create --like helper --name helper-2 --copy-files --dry-run
+easybits agents create --from helper.json --name helper-3 --dotenv .env
+\`\`\`
+
+Cloning (\`--like\` / \`--from\`) copies template, prompt, MCP servers and skills (\`--copy-files\`: the files too), **never the env**: pass the engine keys with \`--dotenv\`. \`export\` masks MCP secrets unless \`--show-secrets\`; \`$secret:NAME\` references travel as is.
+
 ### Naming
 
 One rule, like \`gh\`: \`easybits <noun> <verb>\`. Older spellings keep working and print the new one on stderr (never with \`--json\`): \`easybits config\` → \`mcp config\`, \`easybits mcp\` → \`mcp config --stdio\`, \`deploy ls\` → \`machines ls\` (\`easybits deploy <machine>\` is the verb), \`machines release\` → \`machines deploy\`, \`sandboxes create --timeout\` → \`--ttl\`.
@@ -139,6 +158,7 @@ easybits usage
 
 \`\`\`bash
 easybits whoami            # account and where the credential comes from
+easybits doctor            # Node, CLI version, credential, API; exits 1 on a problem
 easybits mcp config        # MCP JSON (streamable HTTP) with your key
 easybits mcp config --stdio   # MCP JSON over stdio
 easybits ssh-key           # your public key to enable SSH on a box
@@ -173,6 +193,8 @@ Deliberate exception: \`sandboxes exec\` without \`--json\` exits with the remot
 
 \`sandboxes destroy\`, \`agents destroy\`, \`db rm\`, \`domains rm\` and \`files rm\` ask before acting in a terminal: \`[y/N]\`, or typing the name/id for irreversible ones (a database, an agent, a permanent sandbox). **Without a terminal or with \`--json\` they never prompt**: pass \`--yes\` (\`-y\`) or they exit \`2\` with a hint holding the exact command.
 
+Once a day, in a terminal, the CLI says on stderr when a newer version is out (never with \`--json\`; \`EASYBITS_NO_UPDATE_CHECK=1\` or \`CI\` turn it off).
+
 \`easybits --help\`, \`easybits <command> <subcommand> --help\` and \`easybits help <command> <subcommand>\` show usage, flags and examples. A typo gets a "Did you mean".
 
 ### For coding agents
@@ -183,6 +205,7 @@ Deliberate exception: \`sandboxes exec\` without \`--json\` exits with the remot
 - Chain with \`jq\`: \`ID=$(easybits sb create --template node --json | jq -r .sandboxId)\`.
 - In \`exec\`, separate the command with \`--\` and use \`--json\` to read \`stdout\`, \`stderr\` and \`exitCode\` together.
 - Deleting with \`--json\` requires \`--yes\`; without it the command exits \`2\`.
+- Before touching an agent's config, preview with \`--dry-run\`; after, verify with \`easybits agents try <agent> "…"\` instead of assuming it worked.
 - Destroy what you create: \`easybits sb destroy $ID --json --yes\`.
 - Ready-made skill: \`npx skills add https://easybits.cloud\` (includes \`easybits-cli\`).
 `;

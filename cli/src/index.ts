@@ -9,6 +9,7 @@ import { EasybitsError } from "@easybits.cloud/sdk";
 import { CliError, EXIT, toCliError, usageError } from "./errors.js";
 import { forceRefresh, usedSession } from "./client.js";
 import { resolveRefs } from "./resolve.js";
+import { cachedNewer, updateNotice, UPGRADE } from "./update.js";
 import { normalizeArgs } from "./aliases.js";
 
 declare const __CLI_VERSION__: string;
@@ -188,8 +189,15 @@ async function main(input: string[]): Promise<void> {
 }
 
 const argv = process.argv.slice(2);
-main(argv).catch((err: unknown) => {
+// El aviso de versión nueva sólo para una persona: nunca con --json ni sin terminal. La
+// consulta a npm (una vez al día) corre en paralelo al comando.
+const notice = process.stderr.isTTY && !wantsJson(argv) && !argv.includes("doctor") ? updateNotice(VERSION) : null;
+main(argv)
+  .catch((err: unknown) => {
   const e: CliError = toCliError(err);
+  // Una bandera o comando que esta versión no conoce, habiendo una más nueva: dilo.
+  const latest = e.code === "usage" ? cachedNewer(VERSION) : null;
+  if (latest) e.hint = `${e.hint ? e.hint + "\n" : ""}You have ${VERSION}; ${latest} is out and may have it. Run: ${UPGRADE}`;
   if (wantsJson(argv)) {
     // Con --json el error va a STDOUT: es el único canal que parsea un agente. Mismo
     // formato que el CLI hermano `ghosty`: { error, code (= código de salida), hint }.
@@ -199,4 +207,9 @@ main(argv).catch((err: unknown) => {
     if (e.hint) process.stderr.write(`${e.hint}\n`);
   }
   process.exitCode = e.exitCode || EXIT.API;
-});
+  })
+  // Después de la salida del comando, para no meterse a media tabla.
+  .then(() => notice)
+  .then((line) => {
+    if (line) process.stderr.write(`\n${line}\n`);
+  });

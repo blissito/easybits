@@ -202,6 +202,25 @@ easybits agents ls
 easybits agents destroy ayudante --yes
 \`\`\`
 
+**Configurar un agente con máquina** (\`ghosty-lite\`, \`goose\`; mismo contrato que la CLI \`ghosty\` de Ghosty Studio). Toda escritura acepta \`--dry-run\`:
+
+\`\`\`bash
+easybits agents get ayudante --fields status,systemPromptMode --json   # ficha + prompt, MCP (enmascarado), skills, archivos
+easybits agents get ayudante --prompt-out PROMPT.md                  # un prompt largo va a un archivo
+easybits agents set ayudante --prompt-file PROMPT.md --prompt-mode replace --dry-run
+easybits agents files put ayudante catalogo.pdf precios.csv --to docs  # a /data/work; también ls|get|rm
+easybits agents skills add ayudante --dir ./skills/cotizar --restart   # también ls|get|rm; entra tras reiniciar
+easybits agents mcp set ayudante --file servers.json                 # reemplaza la lista y reinicia
+easybits agents try ayudante "¿quién eres?"                          # un turno completo a texto, para verificar
+easybits agents logs ayudante --since "10 min ago"
+easybits agents doctor ayudante                                      # sale con 1 si hay un problema
+easybits agents export ayudante --out ayudante.json                  # nunca el env
+easybits agents create --like ayudante --name ayudante-2 --copy-files --dry-run
+easybits agents create --from ayudante.json --name ayudante-3 --dotenv .env
+\`\`\`
+
+Clonar (\`--like\` / \`--from\`) copia template, prompt, servidores MCP y skills (con \`--copy-files\`, también los archivos), **nunca el env**: las llaves del motor van con \`--dotenv\`. \`export\` enmascara los secretos del MCP salvo con \`--show-secrets\`; las referencias \`$secret:NOMBRE\` viajan tal cual.
+
 ### Cómo se nombran los comandos
 
 Una sola regla, como \`gh\`: \`easybits <sustantivo> <verbo>\`. Las formas viejas siguen funcionando y avisan la nueva en stderr (nunca con \`--json\`): \`easybits config\` → \`mcp config\`, \`easybits mcp\` → \`mcp config --stdio\`, \`deploy ls\` → \`machines ls\` (\`easybits deploy <máquina>\` es el verbo), \`machines release\` → \`machines deploy\`, \`sandboxes create --timeout\` → \`--ttl\`.
@@ -225,6 +244,7 @@ easybits usage
 
 \`\`\`bash
 easybits whoami            # la cuenta y de dónde sale la credencial
+easybits doctor            # Node, versión del CLI, credencial, API; sale con 1 si hay un problema
 easybits mcp config        # JSON de MCP (streamable HTTP) con tu key
 easybits mcp config --stdio   # JSON de MCP por stdio
 easybits ssh-key           # tu llave pública para habilitar SSH en una caja
@@ -259,6 +279,8 @@ Excepción deliberada: \`sandboxes exec\` sin \`--json\` sale con el código del
 
 \`sandboxes destroy\`, \`agents destroy\`, \`db rm\`, \`domains rm\` y \`files rm\` preguntan antes de actuar en una terminal: \`[y/N]\`, o teclear el nombre/id en lo irreversible (una base, un agente, una caja permanente). **Sin terminal o con \`--json\` nunca preguntan**: pasa \`--yes\` (\`-y\`) o salen con \`2\` y la pista con el comando exacto.
 
+Una vez al día, en una terminal, el CLI avisa en stderr cuando hay versión nueva (nunca con \`--json\`; \`EASYBITS_NO_UPDATE_CHECK=1\` o \`CI\` lo apagan).
+
 \`easybits --help\`, \`easybits <comando> <subcomando> --help\` y \`easybits help <comando> <subcomando>\` muestran uso, banderas y ejemplos. Un typo recibe un «Did you mean».
 
 ### Para agentes de código
@@ -269,6 +291,7 @@ Excepción deliberada: \`sandboxes exec\` sin \`--json\` sale con el código del
 - Encadena con \`jq\`: \`ID=$(easybits sb create --template node --json | jq -r .sandboxId)\`.
 - En \`exec\`, separa el comando con \`--\` y usa \`--json\` para leer \`stdout\`, \`stderr\` y \`exitCode\` juntos.
 - Borrar con \`--json\` exige \`--yes\`; sin él sale con \`2\`.
+- Antes de tocar la config de un agente, previsualiza con \`--dry-run\`; después, verifica con \`easybits agents try <agente> "…"\` en vez de suponer que funcionó.
 - Destruye lo que crees: \`easybits sb destroy $ID --json --yes\`.
 - Skill lista para instalar: \`npx skills add https://easybits.cloud\` (incluye \`easybits-cli\`).
 `,

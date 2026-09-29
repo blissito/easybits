@@ -9,12 +9,14 @@ import { domains } from "./domains.js";
 import { db } from "./db.js";
 import { agents } from "./agents.js";
 import { docs } from "./docs.js";
+import { doctor } from "./doctor.js";
 
 // El orden aquí es el orden de la ayuda.
 export const COMMANDS: Command[] = [
   login,
   logout,
   whoami,
+  doctor,
   usage,
   sandboxes,
   agents,

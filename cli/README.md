@@ -75,10 +75,25 @@ easybits db rm leads --yes
 # Agents
 easybits agents ls
 easybits agents create --template goose --name helper --dotenv .env
-easybits agents get helper          # by name or id
+easybits agents get helper          # by name or id: record + prompt, MCP, skills, files
+easybits agents get helper --fields status,systemPromptMode --json
+easybits agents get helper --prompt-out PROMPT.md
 easybits agents message helper "hello"
 easybits agents message helper "and now?" --session ses_456   # continue a conversation
 easybits agents destroy helper --yes
+
+# Configure an agent with a machine (ghosty-lite, goose) — every write takes --dry-run
+easybits agents set helper --prompt-file PROMPT.md [--prompt-mode append|replace]
+easybits agents files ls|get|put|rm helper [path|local-files…] [--to DIR] [--out FILE]
+easybits agents skills ls|get|add|rm helper [slug…] [--dir FOLDER | --file SKILL.md] [--restart]
+easybits agents mcp get|set helper [--file servers.json|-]   # set replaces the list and restarts
+easybits agents restart helper
+easybits agents try helper "who are you?"      # one full turn as text: verify what you set up
+easybits agents logs helper --since "10 min ago"
+easybits agents doctor helper                   # exits 1 on a problem
+easybits agents export helper --out helper.json [--show-secrets] [--with-files]
+easybits agents create --like helper --name helper-2 [--copy-files] --dry-run   # clone its setup, never its env
+easybits agents create --from helper.json --name helper-3
 
 # Files, websites, account
 easybits files ls
@@ -90,6 +105,7 @@ easybits usage
 
 # MCP, SSH, docs
 easybits whoami        # account and where the credential comes from
+easybits doctor        # Node, CLI version, credential, API; exits 1 on a problem
 easybits mcp config    # MCP config (streamable HTTP)
 easybits mcp config --stdio   # MCP config (stdio)
 easybits ssh-key       # public key for sandbox SSH
@@ -108,6 +124,12 @@ Every command has help with examples: `easybits <command> <subcommand> --help`
 `files rm`) ask before acting in a terminal: `[y/N]`, or typing the name/id for
 irreversible ones (a database, an agent, a permanent sandbox). Without a terminal they
 never prompt — and neither do they with `--json`: pass `--yes` / `-y`, or they exit `2`.
+
+**Dry runs.** Writes that change an agent (`agents set`, `files put|rm`, `skills add|rm`,
+`mcp set`, `create`) take `--dry-run`: they print what would change and touch nothing.
+
+**Updates.** Once a day the CLI checks npm and, in a terminal, says on stderr when a newer
+version is out (never with `--json`). `EASYBITS_NO_UPDATE_CHECK=1` or `CI` turns it off.
 
 **Secrets** go in a dotenv file or on stdin, never in argv (visible in `ps` and shell
 history): `--dotenv <path>` (`KEY=VALUE` lines, `-` = stdin) on `sandboxes create|exec|resume`,
@@ -134,6 +156,20 @@ Host *.ghosty
 - Skill: `npx skills add https://easybits.cloud` (includes `easybits-cli`).
 
 Full reference: https://www.easybits.cloud/docs#cli · https://www.easybits.cloud/en/docs/cli.md
+
+## Changes in 0.9.0
+
+- Configure agents with a machine (ghosty-lite, goose) from the terminal, same contract as
+  Ghosty Studio's `ghosty` CLI: `agents set` (system prompt), `agents files`, `agents skills`,
+  `agents mcp`, `agents restart`, `agents try` (one turn as text), `agents logs`, `agents doctor`.
+- `agents get` shows the prompt, MCP servers (secrets masked), skills and files;
+  `--fields a,b` and `--prompt-out FILE` (write a long prompt to a file instead of the terminal).
+- `agents export` and `agents create --like <agent> | --from <export.json>`: clone an agent's
+  setup (template, prompt, MCP, skills, optionally files). Never its env: pass keys with `--dotenv`.
+- `agents create --prompt | --prompt-file | --prompt-mode | --mcp-file`. A multi-line prompt is
+  written once the machine is up (the box env cannot hold newlines).
+- `--dry-run` on every agent write; `files rm` and `skills rm` take several at once (one confirmation).
+- New `easybits doctor`; a daily update notice on stderr; an unknown flag on an old version says to update.
 
 ## Changes in 0.8.0
 

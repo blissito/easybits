@@ -14,10 +14,12 @@ and print the new one on stderr (never with --json).
 Names or ids: agents, sandboxes/machines and databases take either
 (exact, case-insensitive; two with the same name → exit 2 with the ids).
 
-Deletes (sandboxes destroy, agents destroy, db rm, domains rm, files rm) ask first;
-without a terminal or with --json pass -y/--yes, or they exit 2.
+Deletes (sandboxes destroy, agents destroy, db rm, domains rm, files rm, agents files|skills rm)
+ask first; without a terminal or with --json pass -y/--yes, or they exit 2.
+Agent writes (agents set|create|files|skills|mcp) take --dry-run: show the change, touch nothing.
 
-Env: EASYBITS_API_KEY (API key), EASYBITS_URL (API server, default https://www.easybits.cloud)
+Env: EASYBITS_API_KEY (API key), EASYBITS_URL (API server, default https://www.easybits.cloud),
+     EASYBITS_NO_UPDATE_CHECK=1 (no daily "update available" notice on stderr)
 
 Exit codes: 0 ok, 1 API error, 2 usage error, 3 not logged in or bad key`;
 
@@ -32,7 +34,17 @@ export function globalHelp(version: string): string {
     for (const c of cmds) {
       lines.push(`  ${c.synopsis.padEnd(COL)}${c.summary}`);
       // Los subcomandos en un segundo renglón: la ayuda cabe en 80 columnas.
-      if (c.subs) lines.push(`  ${"".padEnd(COL)}${Object.keys(c.subs).join(" ")}`);
+      if (c.subs) {
+        // Varios renglones si no caben (agents tiene muchos subcomandos).
+        let row = "";
+        for (const n of Object.keys(c.subs)) {
+          if (row && row.length + 1 + n.length > 80 - 2 - COL) {
+            lines.push(`  ${"".padEnd(COL)}${row}`);
+            row = n;
+          } else row = row ? `${row} ${n}` : n;
+        }
+        if (row) lines.push(`  ${"".padEnd(COL)}${row}`);
+      }
     }
     lines.push("");
   }

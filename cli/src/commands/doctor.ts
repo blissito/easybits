@@ -1,0 +1,94 @@
+// `easybits doctor`: ¿la CLI puede trabajar? Node, versión, credencial, API y el rc.
+// Sale con 1 si algo falla, para que un agente lo use como compuerta antes de operar.
+import { existsSync, statSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
+import { resolveBaseUrl } from "@easybits.cloud/sdk";
+import type { Command } from "../types.js";
+import { emit } from "../output.js";
+import { fetchEmail, readRc } from "../auth.js";
+import { resolveCredential } from "../client.js";
+import { EXIT, toCliError } from "../errors.js";
+import { UPGRADE, fetchLatest, newer, updateCheckDisabled } from "../update.js";
+
+declare const __CLI_VERSION__: string;
+const VERSION = typeof __CLI_VERSION__ === "string" ? __CLI_VERSION__ : "dev";
+
+type Check = { check: string; ok: boolean; detail: string; hint?: string };
+
+export const doctor: Command = {
+  name: "doctor",
+  group: "Account",
+  summary: "Check the CLI setup: Node, version, credential, API; exits 1 on a problem",
+  synopsis: "doctor",
+  leaf: {
+    summary: "Check Node, the CLI version, your credential and the API; exits 1 on a problem",
+    usage: "easybits doctor",
+    examples: ["easybits doctor", "easybits doctor --json | jq '.checks[] | select(.ok==false)'", "easybits agents doctor <agent>   # one agent"],
+    async run(ctx) {
+      const checks: Check[] = [];
+      const major = Number(process.versions.node.split(".")[0]);
+      checks.push({ check: "node", ok: major >= 22, detail: process.versions.node, ...(major >= 22 ? {} : { hint: "The CLI needs Node 22 or newer." }) });
+
+      if (updateCheckDisabled()) checks.push({ check: "version", ok: true, detail: `${VERSION} (update check off)` });
+      else {
+        const latest = await fetchLatest(3000);
+        const old = latest && VERSION !== "dev" && newer(latest, VERSION);
+        checks.push({
+          check: "version",
+          ok: !old,
+          detail: latest ? `${VERSION}${old ? ` (latest ${latest})` : " (latest)"}` : `${VERSION} (npm unreachable)`,
+          ...(old ? { hint: `Run: ${UPGRADE}` } : {}),
+        });
+      }
+
+      const base = await resolveBaseUrl();
+      const health = await fetch(`${base.replace(/\/+$/, "")}/api/health`, { signal: AbortSignal.timeout(5000) })
+        .then((r) => ({ ok: r.ok, detail: `${base} (${r.status})` }))
+        .catch((e: Error) => ({ ok: false, detail: `${base}: ${e.message}` }));
+      checks.push({ check: "api", ...health, ...(health.ok ? {} : { hint: "Check your network or EASYBITS_URL." }) });
+
+      const rc = readRc();
+      const source = process.env.EASYBITS_API_KEY
+        ? "env EASYBITS_API_KEY"
+        : ctx.token
+          ? "--token"
+          : rc.oauth?.accessToken
+            ? "browser session (~/.easybitsrc)"
+            : rc.apiKey
+              ? "API key (~/.easybitsrc)"
+              : null;
+      if (!source) checks.push({ check: "credential", ok: false, detail: "not logged in", hint: "Run: easybits login   (or set EASYBITS_API_KEY)" });
+      else {
+        try {
+          const email = await fetchEmail(await resolveCredential(ctx));
+          checks.push({ check: "credential", ok: true, detail: `${email ?? "(unknown email)"} via ${source}` });
+        } catch (e) {
+          const err = toCliError(e);
+          checks.push({ check: "credential", ok: false, detail: `${source}: ${err.message}`, hint: err.hint });
+        }
+        // Las dos a la vez confunden: el env gana y el rc queda de otra cuenta.
+        if (process.env.EASYBITS_API_KEY && (rc.apiKey || rc.oauth)) {
+          checks.push({ check: "credential-env", ok: true, detail: "EASYBITS_API_KEY wins over the saved login in ~/.easybitsrc" });
+        }
+      }
+
+      const rcPath = join(homedir(), ".easybitsrc");
+      if (existsSync(rcPath)) {
+        const mode = statSync(rcPath).mode & 0o777;
+        const ok = (mode & 0o077) === 0;
+        checks.push({ check: "rc-file", ok, detail: `${rcPath} ${mode.toString(8).padStart(3, "0")}`, ...(ok ? {} : { hint: `It holds tokens. Run: chmod 600 ${rcPath}` }) });
+      }
+
+      const ok = checks.every((c) => c.ok);
+      emit(ctx, { ok, checks }, () => {
+        for (const c of checks) {
+          console.log(`${c.ok ? "ok  " : "FAIL"}  ${c.check.padEnd(14)} ${c.detail}`);
+          if (!c.ok && c.hint) console.log(`      ${"".padEnd(14)} → ${c.hint}`);
+        }
+        console.log(ok ? "\nAll good." : "\nProblems found.");
+      });
+      if (!ok) process.exitCode = EXIT.API;
+    },
+  },
+};

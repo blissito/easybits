@@ -1,11 +1,11 @@
 ---
 name: easybits-cli
-description: "Drive EasyBits from the terminal with the easybits CLI (npm @easybits.cloud/cli) - sandboxes, exec, sandbox files, permanent machines and releases, secrets, custom domains, SQL databases, agents and files, all with --json and stable exit codes. Use when a coding agent has a shell and needs to create or operate EasyBits resources without writing HTTP calls, or when the user mentions the easybits CLI."
+description: "Drive EasyBits from the terminal with the easybits CLI (npm @easybits.cloud/cli) - sandboxes, exec, sandbox files, permanent machines and releases, secrets, custom domains, SQL databases, agents (prompt, skills, MCP, files, clone) and files, all with --json and stable exit codes. Use when a coding agent has a shell and needs to create or operate EasyBits resources without writing HTTP calls, or when the user mentions the easybits CLI."
 license: MIT
 compatibility: Needs Node 22+ (npx is enough), network access to https://www.easybits.cloud and an EasyBits API key
 metadata:
   author: easybits
-  version: "1.5"
+  version: "1.6"
 ---
 
 # Use the EasyBits CLI
@@ -71,7 +71,8 @@ at another server (default https://www.easybits.cloud).
    it exits 0 and reports `exitCode`, `stdout`, `stderr`. Put the command after `--`.
 4. Put flags after the subcommand: `easybits sb create --template node`, not
    `easybits --template node sb create`.
-5. Deletes need `--yes`: `sb destroy`, `agents destroy`, `db rm`, `domains rm`, `files rm`.
+5. Deletes need `--yes`: `sb destroy`, `agents destroy`, `db rm`, `domains rm`, `files rm`,
+   `agents files rm`, `agents skills rm`.
    With `--json` (or no terminal) they never prompt; without `--yes` they exit 2.
 6. Names work where ids do: any agent, sandbox/machine or database argument takes its name
    (`easybits agents get helper`, `easybits sb exec scratch -- ls`, `easybits db query leads …`).
@@ -81,7 +82,11 @@ at another server (default https://www.easybits.cloud).
    `easybits mcp`, `deploy ls`, `machines release`, `sb create --timeout`) still run but print the
    new form on stderr; use the new one: `mcp config [--stdio]`, `machines ls`, `deploy <machine>`,
    `sb create --ttl`. `easybits whoami --json` tells you which account and credential are in use.
-8. Destroy what you create. Sandboxes you did not create belong to the user: do not
+8. Agent writes (`agents set|create|files put|rm|skills add|rm|mcp set`) take `--dry-run`: preview
+   first, then run it, then verify with `easybits agents try <agent> "…" --json` (one full turn as
+   text) or `easybits agents doctor <agent> --json` (exit 1 on a problem). `easybits doctor --json`
+   checks the CLI itself (Node, version, credential, API).
+9. Destroy what you create. Sandboxes you did not create belong to the user: do not
    suspend, exec into or destroy them unless asked.
 
 ## Sandboxes (Firecracker microVMs, alias `sb`)
@@ -156,6 +161,34 @@ easybits files ls --json
 easybits files rm "$FILE_ID" --json --yes     # 7-day trash
 easybits providers --json                         # storage provider
 ```
+
+## Configure an agent (ghosty-lite, goose)
+
+Same contract as the Ghosty Studio `ghosty` CLI. Other templates answer
+`agente_sin_maquina`.
+
+```bash
+easybits agents get helper --fields systemPrompt,systemPromptMode,skills,mcpServers --json
+easybits agents get helper --prompt-out PROMPT.md --json        # long prompt → file; JSON has {file, bytes}
+easybits agents set helper --prompt-file PROMPT.md --dry-run --json   # {changes:{systemPrompt:{from,to}}}
+easybits agents set helper --prompt-file PROMPT.md --prompt-mode replace --json   # no reboot
+easybits agents files put helper catalog.pdf prices.csv --to docs --json   # into /data/work
+easybits agents files ls helper --json
+easybits agents skills add helper --dir ./skills/quotes --restart --json   # folder with SKILL.md
+easybits agents skills ls helper --json
+easybits agents mcp set helper --file servers.json --json   # replaces ALL servers, restarts
+easybits agents try helper "which skills do you have?" --json   # {text, error, session, ms}
+easybits agents doctor helper --json                            # {ok, checks:[{check,ok,detail,hint}]}
+easybits agents export helper --out helper.json --json          # never the env; MCP secrets masked
+easybits agents create --like helper --name helper-2 --dry-run --json   # plan: template, prompt, MCP, skills
+easybits agents create --like helper --name helper-2 --copy-files --json
+```
+
+- A skill enters after a restart (`--restart`, or `agents restart`), which starts a new session.
+  A SKILL.md with an unquoted `: ` in `name:`/`description:` is refused (the engine would drop it).
+- Cloning copies template, prompt, MCP servers and skills (`--copy-files`: files too), never the
+  env: pass the engine keys with `--dotenv`. `--from` needs an export made with `--show-secrets`
+  if the MCP servers carry literal secrets (`$secret:NAME` references are fine).
 
 ## More
 
