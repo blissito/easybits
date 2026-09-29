@@ -68,7 +68,8 @@ easybits domains rm sb_abc123 shop.example.com --yes
 # Databases
 easybits db ls
 easybits db create leads
-easybits db tables leads             # tables, row counts, columns
+easybits db tables leads             # tables, row counts, columns, permanent vs external links
+easybits db photos put catalog --table products --key-column sku --dir photos/   # SKU-123.jpg → row sku=SKU-123
 easybits db query leads "SELECT * FROM leads" --json
 easybits db rm leads --yes
 
@@ -162,6 +163,14 @@ Host *.ghosty
 - Skill: `npx skills add https://easybits.cloud` (includes `easybits-cli`).
 
 Full reference: https://www.easybits.cloud/docs#cli · https://www.easybits.cloud/en/docs/cli.md
+
+## Changes in 0.13.0
+
+- Catalog photos: `db photos put <db> --table T --key-column sku --dir photos/ [--column C]
+  [--replace] [--dry-run]` uploads each photo as a public file with a permanent link and writes it
+  in the matching row (real type by bytes, JPEG/PNG/WebP, 10 MB; one upload per distinct photo).
+- `db tables` shows, per text column with links, how many are permanent, expiring (signed),
+  external or empty (`--json`: `links`).
 
 ## Changes in 0.12.0
 

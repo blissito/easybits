@@ -184,12 +184,15 @@ easybits db create leads
 easybits db query leads "CREATE TABLE leads (id INTEGER PRIMARY KEY, name TEXT)"
 easybits db query leads "INSERT INTO leads(name) VALUES (?)" --arg Ana
 easybits db query leads "SELECT * FROM leads" --json
-easybits db tables leads                             # tablas, filas y columnas
+easybits db tables leads                             # tablas, filas, columnas y ligas
+easybits db photos put catalogo --table productos --key-column sku --dir fotos/ --dry-run
 easybits db ls
 easybits db rm leads --yes
 \`\`\`
 
-\`query\` y \`tables\` aceptan el id o el nombre, y nunca crean una base por un nombre mal escrito. Con \`--json\`, \`tables\` da \`[{name, rows, columns:[{name,type,pk}]}]\`.
+\`query\` y \`tables\` aceptan el id o el nombre, y nunca crean una base por un nombre mal escrito. Con \`--json\`, \`tables\` da \`[{name, rows, columns:[{name,type,pk}], links:[{column, permanent, expiring, external, empty}]}]\`: por cada columna de texto con ligas, cuántas son **permanentes** (almacenamiento público de EasyBits), **caducan** (URLs firmadas), son de fuera o están vacías.
+
+**Fotos del catálogo**: \`db photos put <db> --table T --key-column sku --dir fotos/ [--column C] [--replace] [--dry-run]\` pone \`SKU-123.jpg\` en la fila cuyo \`sku\` es \`SKU-123\`: revisa el tipo real por sus bytes (JPEG, PNG, WebP; máx 10 MB; avisa arriba de 5 MB, el tope de WhatsApp por liga), la sube como **archivo público con liga permanente** (la misma foto para dos filas se sube una vez) y escribe la liga en la columna (default \`image_url\`, \`photo_url\`, \`imagen\`…). Una fila que ya tiene liga permanente se queda salvo \`--replace\`; lo que no es foto o no tiene fila se enlista con el motivo.
 
 ### Agentes
 

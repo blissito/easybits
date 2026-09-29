@@ -1,8 +1,11 @@
 import type { Command } from "../types.js";
-import { list, need, str } from "../args.js";
+import { bool, list, need, str } from "../args.js";
 import { emit, fmtDate, table } from "../output.js";
 import { getClient } from "../client.js";
 import type { Ctx } from "../types.js";
+import { existsSync, readFileSync, statSync } from "node:fs";
+import { WHATSAPP_MAX_BYTES, defaultPhotoColumn, linkStatsSql, parseLinkStats, photoFiles, planPhotos, type LinkStats } from "../photos.js";
+import { usageError } from "../errors.js";
 import { listRefs } from "../resolve.js";
 import { CliError } from "../errors.js";
 import { YES_OPTION, confirm, requireYesIfHeadless } from "../prompt.js";
@@ -73,7 +76,7 @@ export const db: Command = {
     },
     tables: {
       aliases: ["inspect", "schema"],
-      summary: "List tables with row counts and columns",
+      summary: "List tables with row counts and columns, and how many links are permanent",
       usage: "easybits db tables <db-id|name>",
       examples: ["easybits db tables leads", "easybits db tables leads --json"],
       // Patrón de `turso db inspect` / `.tables` + `.schema` de sqlite3, en una sola vista.
@@ -86,15 +89,23 @@ export const db: Command = {
           await q("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_litestream_%' ORDER BY name")
         ).rows.map((r) => String(r[0]));
         const ident = (n: string) => `"${n.replace(/"/g, '""')}"`;
-        const tables: Array<{ name: string; rows: number; columns: Array<{ name: string; type: string; pk: boolean }> }> = [];
+        const tables: Array<{
+          name: string;
+          rows: number;
+          columns: Array<{ name: string; type: string; pk: boolean }>;
+          links: LinkStats[];
+        }> = [];
         for (const name of names) {
           const info = await q(`PRAGMA table_info(${ident(name)})`);
           const col = (k: string) => info.cols.indexOf(k);
           const columns = info.rows.map((r) => ({ name: String(r[col("name")]), type: String(r[col("type")] ?? ""), pk: Number(r[col("pk")]) > 0 }));
           const count = await q(`SELECT count(*) FROM ${ident(name)}`);
-          tables.push({ name, rows: Number(count.rows[0]?.[0] ?? 0), columns });
+          // Columnas de texto: ¿cuántas ligas son permanentes, caducan, son de fuera o faltan?
+          const textCols = columns.filter((c) => !c.type || /CHAR|TEXT|CLOB/i.test(c.type)).map((c) => c.name);
+          const links = textCols.length ? parseLinkStats(textCols, (await q(linkStatsSql(name, textCols))).rows[0] ?? []) : [];
+          tables.push({ name, rows: Number(count.rows[0]?.[0] ?? 0), columns, links });
         }
-        emit(ctx, tables, () =>
+        emit(ctx, tables, () => {
           table(
             tables.map((t) => ({
               name: t.name,
@@ -102,9 +113,116 @@ export const db: Command = {
               columns: t.columns.map((c) => `${c.name}${c.type ? ` ${c.type}` : ""}${c.pk ? " PK" : ""}`).join(", "),
             })),
             [["name", "TABLE"], ["rows", "ROWS"], ["columns", "COLUMNS"]],
-            `No tables in ${hit.name}. Create one: easybits db query ${hit.name} 'CREATE TABLE …'`,
-          ),
-        );
+            t(`No tables in ${hit.name}. Create one: easybits db query ${hit.name} 'CREATE TABLE …'`, `No hay tablas en ${hit.name}. Crea una: easybits db query ${hit.name} 'CREATE TABLE …'`),
+          );
+          const withLinks = tables.flatMap((tb) => tb.links.map((l) => ({ ...l, table: tb.name })));
+          if (withLinks.length) {
+            console.log("\n" + t("Links (permanent = EasyBits public storage; expiring = signed URL):", "Ligas (permanente = almacenamiento público de EasyBits; caduca = URL firmada):"));
+            table(
+              withLinks.map((l) => ({ where: `${l.table}.${l.column}`, permanent: l.permanent, expiring: l.expiring, external: l.external, empty: l.empty })),
+              [["where", "COLUMN"], ["permanent", "PERMANENT"], ["expiring", "EXPIRING"], ["external", "EXTERNAL"], ["empty", "EMPTY"]],
+            );
+            if (withLinks.some((l) => l.external + l.expiring > 0)) {
+              console.log(t("Make them permanent: easybits db photos put <db> --table T --key-column sku --dir photos/", "Hazlas permanentes: easybits db photos put <db> --table T --key-column sku --dir fotos/"));
+            }
+          }
+        });
+      },
+    },
+    photos: {
+      summary: "Put catalog photos in a table: SKU-123.jpg → the row whose key is SKU-123, as a permanent public link",
+      usage: "easybits db photos put <db> --table <table> --key-column <col> --dir <folder> [--column <col>] [--replace] [--dry-run]",
+      options: {
+        table: { type: "string", value: "table", description: "Table to update" },
+        "key-column": { type: "string", value: "col", description: "Column that matches the file name (e.g. sku)" },
+        dir: { type: "string", value: "folder", description: "Folder with the photos (JPEG, PNG or WebP, max 10 MB each)" },
+        column: { type: "string", value: "col", description: "Column for the link (default: image_url, photo_url, imagen…)" },
+        replace: { type: "boolean", description: "Also replace rows that already have a permanent link" },
+        "dry-run": { type: "boolean", description: "Show the plan; upload nothing" },
+      },
+      examples: [
+        "easybits db photos put catalogo --table productos --key-column sku --dir fotos/ --dry-run",
+        "easybits db photos put catalogo --table productos --key-column sku --dir fotos/ --column foto",
+        "easybits db tables catalogo                  # how many links are permanent, external or empty",
+      ],
+      async run(ctx) {
+        const action = need(ctx, 0, "put", this.usage);
+        if (action !== "put") throw usageError(t(`Unknown photos action "${action}".`, `Acción de photos desconocida "${action}".`), this.usage);
+        const ref = need(ctx, 1, "db", this.usage);
+        const tableName = str(ctx, "table");
+        const keyCol = str(ctx, "key-column");
+        const dir = str(ctx, "dir");
+        if (!tableName || !keyCol || !dir) throw usageError(t("Missing --table, --key-column or --dir.", "Faltan --table, --key-column o --dir."), this.usage);
+        if (!existsSync(dir) || !statSync(dir).isDirectory()) throw usageError(t(`Not a folder: ${dir}`, `No es una carpeta: ${dir}`), this.usage);
+        const { photos, rejected } = photoFiles(dir);
+        const eb = await getClient(ctx);
+        const hit = await findDb(ctx, ref);
+        const q = (sql: string, args?: unknown[]) => eb.queryDatabase(hit.id, sql, args);
+        const ident = (n: string) => `"${n.replace(/"/g, '""')}"`;
+        const info = await q(`PRAGMA table_info(${ident(tableName)})`);
+        const cols = info.rows.map((r) => String(r[info.cols.indexOf("name")]));
+        if (!cols.length) throw new CliError(t(`No table "${tableName}" in ${hit.name}.`, `No hay tabla "${tableName}" en ${hit.name}.`), 1, t(`See: easybits db tables ${hit.name}`, `Mira: easybits db tables ${hit.name}`), "not_found", 404);
+        if (!cols.includes(keyCol)) throw usageError(t(`No column "${keyCol}" in ${tableName} (${cols.join(", ")}).`, `No hay columna "${keyCol}" en ${tableName} (${cols.join(", ")}).`), this.usage);
+        const column = str(ctx, "column") ?? defaultPhotoColumn(cols);
+        if (!column) throw usageError(t(`${tableName} has no photo column: pass --column (${cols.join(", ")}).`, `${tableName} no tiene columna de foto: pasa --column (${cols.join(", ")}).`), this.usage);
+        if (!cols.includes(column)) throw usageError(t(`No column "${column}" in ${tableName} (${cols.join(", ")}).`, `No hay columna "${column}" en ${tableName} (${cols.join(", ")}).`), this.usage);
+        // Lo que hay hoy en esas filas (de 100 en 100: tope de parámetros de SQLite).
+        const current = new Map<string, unknown>();
+        for (let i = 0; i < photos.length; i += 100) {
+          const keys = photos.slice(i, i + 100).map((p) => p.key);
+          const r = await q(`SELECT ${ident(keyCol)}, ${ident(column)} FROM ${ident(tableName)} WHERE ${ident(keyCol)} IN (${keys.map(() => "?").join(",")})`, keys);
+          for (const row of r.rows) current.set(String(row[0]), row[1]);
+        }
+        const plan = planPhotos(photos, current, bool(ctx, "replace"));
+        const big = photos.filter((p) => p.bytes > WHATSAPP_MAX_BYTES).map((p) => p.file);
+        const summary = { db: hit.name, table: tableName, keyColumn: keyCol, column, plan, rejected, overWhatsappLimit: big };
+        const count = (a: string) => plan.filter((p) => p.action === a).length;
+        const why = (r: string) => (r === "not_an_image" ? t("not a JPEG/PNG/WebP", "no es JPEG/PNG/WebP") : r === "too_large" ? t("over 10 MB", "más de 10 MB") : t("empty file", "archivo vacío"));
+        const printPlan = () => {
+          for (const p of plan) {
+            const what = p.action === "update" ? t("update", "actualizar") : p.action === "keep" ? t("keep (already permanent; --replace to redo)", "se queda (ya es permanente; --replace para rehacerla)") : t("no row with that key", "no hay fila con esa llave");
+            console.log(`${p.action === "update" ? "~" : "!"} ${p.file} → ${keyCol}=${p.key}: ${what}`);
+          }
+          for (const r of rejected) console.log(`! ${r.file}: ${why(r.reason)}`);
+          if (big.length) console.log(t(`Over 5 MB (WhatsApp won't send them by link): ${big.join(", ")}`, `Más de 5 MB (WhatsApp no las manda por liga): ${big.join(", ")}`));
+        };
+        if (bool(ctx, "dry-run") || !count("update")) {
+          emit(ctx, { ...summary, dryRun: bool(ctx, "dry-run") }, () => {
+            printPlan();
+            console.log(count("update") ? t("(dry run: nothing uploaded)", "(simulación: no se subió nada)") : t("Nothing to update.", "Nada que actualizar."));
+          });
+          return;
+        }
+        // Una subida por foto DISTINTA (misma foto para dos filas = un archivo), pública y permanente.
+        const urls = new Map<string, string>();
+        const results: Array<{ key: string; file: string; url?: string; error?: string }> = [];
+        for (const item of plan.filter((p) => p.action === "update")) {
+          const photo = photos.find((p) => p.key === item.key)!;
+          try {
+            let url = urls.get(photo.sha);
+            if (!url) {
+              const up = await eb.uploadFile({ fileName: `${photo.sha.slice(0, 32)}.${photo.ext}`, contentType: photo.mime, size: photo.bytes, access: "public" } as never);
+              const res = await fetch(up.putUrl, { method: "PUT", body: readFileSync(photo.path), headers: { "Content-Type": photo.mime } });
+              if (!res.ok) throw new Error(t(`storage answered ${res.status}`, `el almacenamiento contestó ${res.status}`));
+              url = (up.file as { url?: string }).url;
+              if (!url) throw new Error(t("the API returned no public link", "la API no devolvió liga pública"));
+              urls.set(photo.sha, url);
+            }
+            await q(`UPDATE ${ident(tableName)} SET ${ident(column)} = ? WHERE ${ident(keyCol)} = ?`, [url, item.key]);
+            results.push({ key: item.key, file: item.file, url });
+            if (!ctx.json) console.log(`~ ${item.file} → ${keyCol}=${item.key}: ${url}`);
+          } catch (e) {
+            results.push({ key: item.key, file: item.file, error: (e as Error).message });
+            if (!ctx.json) console.error(`! ${item.file}: ${(e as Error).message}`);
+          }
+        }
+        const failed = results.filter((r) => r.error).length;
+        emit(ctx, { ...summary, results }, () => {
+          for (const p of plan.filter((x) => x.action !== "update")) console.log(`! ${p.file} → ${keyCol}=${p.key}: ${p.action === "keep" ? t("kept", "se quedó") : t("no row with that key", "no hay fila con esa llave")}`);
+          for (const r of rejected) console.log(`! ${r.file}: ${why(r.reason)}`);
+          console.log(t(`Updated ${results.length - failed} row(s)${failed ? `, ${failed} failed` : ""}.`, `${results.length - failed} fila(s) actualizadas${failed ? `, ${failed} fallaron` : ""}.`));
+        });
+        if (failed) process.exitCode = 1;
       },
     },
     query: {

@@ -5,7 +5,7 @@ license: MIT
 compatibility: Needs Node 22+ (npx is enough), network access to https://www.easybits.cloud and an EasyBits API key
 metadata:
   author: easybits
-  version: "1.10"
+  version: "1.11"
 ---
 
 # Use the EasyBits CLI
@@ -144,12 +144,18 @@ easybits domains rm "$ID" shop.example.com --json --yes
 ```bash
 easybits db create leads --json
 easybits db query leads "SELECT * FROM leads WHERE name = ?" --arg Ana --json
-easybits db tables leads --json          # [{name, rows, columns:[{name,type,pk}]}]
+easybits db tables leads --json          # [{name, rows, columns:[{name,type,pk}], links:[{column,permanent,expiring,external,empty}]}]
+easybits db photos put catalog --table products --key-column sku --dir photos/ --dry-run --json   # plan per file
+easybits db photos put catalog --table products --key-column sku --dir photos/ --json             # {results:[{key,file,url|error}]}
 easybits db ls --json
 easybits db rm leads --json --yes
 ```
 
 `query` and `tables` resolve id or name and never create a database from a typo.
+
+Photos: name each file after its row key (`SKU-123.jpg` → `sku = SKU-123`). The link written is a
+permanent public one; rows that already have one are kept unless `--replace`. Read `!` lines:
+no matching row, not a JPEG/PNG/WebP, or over 10 MB.
 
 ## Agents and files
 
