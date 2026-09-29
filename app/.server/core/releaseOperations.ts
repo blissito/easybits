@@ -262,6 +262,19 @@ export async function getRunspec(ctx: AuthContext, sandboxId: string): Promise<R
  * Merge-and-persist. The DB is the source of truth; the copy written into the
  * box (`<appDir>/easybits.json`) only makes the tarball self-describing.
  */
+/**
+ * Mezcla un patch sobre el runspec guardado.
+ *
+ * `env` se mezcla por LLAVE: relanzar con `--env TZ=…` agrega TZ, no borra
+ * DATABASE_URL y el resto (antes el mapa nuevo reemplazaba al viejo y la app
+ * arrancaba sin su configuración).
+ */
+export function mergeRunspec(current: unknown, defined: Partial<Runspec>): Runspec {
+  const base = ((current as Partial<Runspec>) ?? {}) as Partial<Runspec>;
+  const env = defined.env ? { ...(base.env ?? {}), ...defined.env } : base.env;
+  return runspecSchema.parse({ ...base, ...defined, ...(env ? { env } : {}) });
+}
+
 export async function setRunspec(
   ctx: AuthContext,
   sandboxId: string,
@@ -277,7 +290,7 @@ export async function setRunspec(
   const defined = Object.fromEntries(
     Object.entries(patch).filter(([, v]) => v !== undefined)
   );
-  const merged = runspecSchema.parse({ ...((row.runspec as object) ?? {}), ...defined });
+  const merged = mergeRunspec(row.runspec, defined);
   await db.sandbox.update({ where: { sandboxId }, data: { runspec: merged } });
   // Best-effort mirror — a suspended box must not block a config change.
   try {
@@ -960,6 +973,21 @@ export async function restartMachine(
   };
 }
 
+/**
+ * El runspec de un release con los secretNames que la máquina tiene HOY.
+ *
+ * Los secretos no son código: se cargan aparte (`machines secrets set`) y un
+ * release publicado antes de cargarlos no los lista. Volver a ese release —a
+ * mano o por el rollback automático de un launch fallido— los borraba y la app
+ * ya no arrancaba (p. ej. "JWT_SECRET es obligatorio").
+ */
+export function releaseSpecKeepingSecrets(releaseRunspec: unknown, currentRunspec: unknown): Runspec {
+  const spec = runspecSchema.parse(releaseRunspec ?? {});
+  const current = ((currentRunspec as Partial<Runspec>)?.secretNames ?? []) as string[];
+  const names = [...new Set([...(spec.secretNames ?? []), ...current])].sort();
+  return names.length ? { ...spec, secretNames: names } : spec;
+}
+
 /** Roll the SAME box back (or forward) to a given release, in place. */
 export async function applyRelease(
   ctx: AuthContext,
@@ -967,14 +995,14 @@ export async function applyRelease(
   releaseId: string
 ): Promise<{ sandboxId: string; releaseId: string; version: number; exitCode: number; buildOutput?: string }> {
   requireScope(ctx, "WRITE");
-  const { owner } = await requireMachine(ctx, sandboxId);
+  const { owner, row } = await requireMachine(ctx, sandboxId);
   const rel = await findOwnedRelease(ctx, releaseId);
   if (rel.status !== "available") {
     const e: any = new Error(`Release ${releaseId} is ${rel.status}, not available`);
     e.code = "ReleaseNotAvailable";
     throw e;
   }
-  const spec = runspecSchema.parse(rel.runspec ?? {});
+  const spec = releaseSpecKeepingSecrets(rel.runspec, row.runspec);
   await unpackInto(ctx, sandboxId, owner, rel.storageKey, spec.appDir);
   const started = await buildAndStart(ctx, sandboxId, owner, spec);
   await db.sandbox.update({

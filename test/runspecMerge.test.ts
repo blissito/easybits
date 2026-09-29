@@ -49,3 +49,19 @@ describe("merge del runspec", () => {
     expect(merged.secretNames).toEqual([]);
   });
 });
+
+describe("mergeRunspec y rollback (bugs vistos en la entrega de Acali)", async () => {
+  const { mergeRunspec, releaseSpecKeepingSecrets } = await import("~/.server/core/releaseOperations");
+
+  it("--env en un relanzamiento AGREGA llaves, no borra las que ya estaban", () => {
+    const guardado = { appDir: "/app", env: { DATABASE_URL: "http://db", APP_URL: "https://x" }, secretNames: ["JWT_SECRET"] };
+    const merged = mergeRunspec(guardado, { env: { TZ: "America/Mexico_City" } });
+    expect(merged.env).toEqual({ DATABASE_URL: "http://db", APP_URL: "https://x", TZ: "America/Mexico_City" });
+    expect(merged.secretNames).toEqual(["JWT_SECRET"]);
+  });
+
+  it("volver a un release anterior a los secretos conserva los secretNames de hoy", () => {
+    const spec = releaseSpecKeepingSecrets({ appDir: "/app" }, { appDir: "/app", secretNames: ["JWT_SECRET", "SESSION_SECRET"] });
+    expect(spec.secretNames).toEqual(["JWT_SECRET", "SESSION_SECRET"]);
+  });
+});
