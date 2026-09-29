@@ -3205,6 +3205,35 @@ export interface AgentEndpoint {
   port?: number;
 }
 
+/**
+ * El env de la caja es un EnvironmentFile de systemd: sandbox-host rechaza el arranque si un
+ * valor trae \n («env value for SYSTEM_PROMPT contains newline»). Un prompt multilínea (lo
+ * normal: un PROMPT.md) llegaba por dos caminos: el create con `SYSTEM_PROMPT` en el env (el
+ * agente nacía sin arrancar) y el PATCH del prompt, que lo guarda en `spawnEnv` para el revive
+ * (desde ahí fallaban restart, `mcp set` y el revive; medido con la CLI 2026-09-28).
+ * Se siembra como archivo —lo mismo que haría el launcher, sólo si falta: el archivo manda
+ * una vez creado— y se quita del env. Un prompt de un renglón sigue su camino de siempre.
+ */
+async function seedMultilinePrompt(
+  ctx: AuthContext,
+  sandboxId: string,
+  env: Record<string, string>
+): Promise<Record<string, string>> {
+  const prompt = env.SYSTEM_PROMPT;
+  if (typeof prompt !== "string" || !/[\r\n]/.test(prompt)) return env;
+  const { SYSTEM_PROMPT: _p, SYSTEM_PROMPT_MODE: mode, ...rest } = env;
+  const b64 = Buffer.from(prompt, "utf8").toString("base64");
+  const modeCmd =
+    mode === "append" || mode === "replace"
+      ? ` && { [ -f ${AGENT_PROMPT_MODE_FILE} ] || echo ${mode} > ${AGENT_PROMPT_MODE_FILE}; }`
+      : "";
+  await execCommand(ctx, sandboxId, {
+    command: `mkdir -p /data/agent && { [ -f ${AGENT_PROMPT_FILE} ] || echo ${shQuote(b64)} | base64 -d > ${AGENT_PROMPT_FILE}; }${modeCmd}`,
+    timeoutSeconds: 30,
+  });
+  return rest;
+}
+
 export async function startAgent(
   ctx: AuthContext,
   sandboxId: string,
@@ -3218,11 +3247,12 @@ export async function startAgent(
   }
 ): Promise<AgentEndpoint> {
   requireScope(ctx, "WRITE");
+  const env = await seedMultilinePrompt(ctx, sandboxId, params.env);
   return callHost<AgentEndpoint>(
     "POST",
     `/v1/sandbox/${sandboxId}/agent/start`,
     {
-      env: params.env,
+      env,
       port: params.port,
       healthPath: params.healthPath,
       timeoutSeconds: params.timeoutSeconds ?? 30,
