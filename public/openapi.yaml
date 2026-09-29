@@ -2139,6 +2139,75 @@ paths:
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
 
+  /api/v2/fleet-agents/{fleetAgentId}/baileys/export:
+    parameters:
+      - $ref: "#/components/parameters/fleetAgentId"
+    post:
+      tags: [Fleet]
+      operationId: fleetBaileysExport
+      summary: Exportar la sesión de WhatsApp personal (Baileys)
+      description: |
+        Sólo el **dueño** (API key o sesión; otro usuario recibe 404). Sólo lee la DB: no toca el
+        socket ni hace logout. `dryRun: true` devuelve la salud sin llaves. Sin `dryRun` exige
+        `confirm: "export"` y agrega `authCreds`/`authKeys` (BufferJSON, tal cual se guardan): la
+        respuesta entra tal cual a `POST /api/v2/agents/{id}/wa/import` de Ghosty Studio (más
+        `ownNumber`), porque `groups` es el mapa `{ "<jid>@g.us": "nombre" }` de los grupos encendidos.
+
+        `health`: sin creds → `logged_out` si hubo sesión (Baileys las borra en loggedOut), si no
+        `never_paired`; creds sin `registered`/`me.id` → `never_paired`; `connected` con un mensaje
+        entrante de grupo (o la conexión, si nunca hubo) en los últimos 7 días → `alive`; lo demás
+        → `stale` (un `connected` sin actividad puede ser un socket muerto que nunca cerró).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                dryRun: { type: boolean }
+                confirm: { type: string, enum: [export], description: Obligatorio sin dryRun. }
+      responses:
+        "200":
+          description: Salud de la sesión (y llaves sin dryRun).
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  agentId: { type: string }
+                  name: { type: string }
+                  phone: { type: string, nullable: true }
+                  health: { type: string, enum: [alive, stale, logged_out, never_paired] }
+                  status:
+                    type: object
+                    properties:
+                      connection: { type: string, nullable: true }
+                      connectionAt: { type: string, format: date-time, nullable: true }
+                      lastSeenAt: { type: string, format: date-time, nullable: true }
+                      lastError: { type: string, nullable: true }
+                  registered: { type: boolean }
+                  hasCreds: { type: boolean }
+                  keyCount: { type: integer }
+                  groups:
+                    type: object
+                    description: "Grupos encendidos: { jid: nombre } (formato de importación de gs)."
+                    additionalProperties: { type: string }
+                  groupDetails:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        jid: { type: string }
+                        name: { type: string, nullable: true }
+                        enabled: { type: boolean }
+                        main: { type: boolean }
+                  authCreds: { type: object, additionalProperties: true, description: Sólo sin dryRun. }
+                  authKeys: { type: object, additionalProperties: true, description: Sólo sin dryRun. }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
   # ───────────────────────── Webhooks ─────────────────────────
   /api/v2/webhooks:
     get:

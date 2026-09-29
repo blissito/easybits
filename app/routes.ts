@@ -291,6 +291,8 @@ export default [
     route("fleet-agents/:fleetAgentId/voice-preview", "routes/api/v2/fleet-agents.$fleetAgentId.voice-preview.ts"),
     route("fleet-agents/:fleetAgentId/connect", "routes/api/v2/fleet-agents.$fleetAgentId.connect.ts"),
     route("fleet-agents/:fleetAgentId/groups", "routes/api/v2/fleet-agents.$fleetAgentId.groups.ts"),
+    // Export de la sesión Baileys (salud + llaves) para migrar a gs — sólo dueño, sólo lectura
+    route("fleet-agents/:fleetAgentId/baileys/export", "routes/api/v2/fleet-agents.$fleetAgentId.baileys.export.ts"),
     // Always-on `render` MCP for fleet agents (PDF/screenshots/audit via the on-demand render-svc box)
     route("fleet-render/:fleetAgentId/mcp", "routes/api/v2/fleet-render.$fleetAgentId.mcp.ts"),
     route("fleet-artifact/:fleetAgentId/mcp", "routes/api/v2/fleet-artifact.$fleetAgentId.mcp.ts"),
