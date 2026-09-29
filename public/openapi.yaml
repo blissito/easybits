@@ -1848,6 +1848,7 @@ paths:
                 files: { type: object, additionalProperties: { type: string, description: base64 } }
                 prune: { type: boolean }
                 dryRun: { type: boolean }
+                name: { type: string, description: "Reemplaza el name del archivo" }
       responses:
         "200":
           description: Plan (y, sin dryRun, lo aplicado).

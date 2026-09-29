@@ -6,7 +6,7 @@ import { parseAgentSpec } from "~/.server/core/agentSpec";
 import { applyAgentSpec, readApplyBody } from "~/.server/core/agentSpecOperations";
 
 // Aplica un archivo de agente sobre uno existente (declarativo, ver agentSpec.ts).
-//   POST /api/v2/agents/:id/apply { spec (texto YAML/JSON), secrets?, skills?, files?, prune?, dryRun? }
+//   POST /api/v2/agents/:id/apply { spec (texto YAML/JSON), secrets?, skills?, files?, prune?, dryRun?, name? }
 //   → { agent, dryRun, plan: [{op,what}], applied?, failed?, before? }
 export async function action({ request, params }: Route.ActionArgs) {
   if (request.method !== "POST") return Response.json({ error: "method_not_allowed" }, { status: 405 });
@@ -21,6 +21,8 @@ export async function action({ request, params }: Route.ActionArgs) {
   } catch (e) {
     return Response.json({ error: "invalid_spec", message: (e as Error).message }, { status: 400 });
   }
+  // `apply --create --name X` aplica el resto del archivo al nuevo sin devolverle el nombre del archivo.
+  if (typeof body.name === "string" && body.name.trim()) spec.name = body.name.trim();
   try {
     return Response.json(
       await applyAgentSpec(ctx, params.id!, spec, {
