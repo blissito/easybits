@@ -19,6 +19,7 @@ import {
   ownedAgentRow,
   resumeSandbox,
   startAgent,
+  markAgentStartFailed,
   resolveTemplate,
   runAcpHandshake,
   expandAcpMcpSecrets,
@@ -198,18 +199,25 @@ export async function restartAgentMachine(ctx: AuthContext, agentId: string): Pr
   const mcpServers = row.acpMcpServers ? (JSON.parse(decryptSecret(row.acpMcpServers)) as AcpMcpServer[]) : [];
   // resume = despierta si dormía; con env reescribe los archivos. Sobre una caja despierta es un no-op.
   await resumeSandbox(ctx, row.sandboxId, { env }).catch(() => {});
-  await startAgent(ctx, row.sandboxId, { env, port: tpl.agent?.port, healthPath: tpl.agent?.health_path, unit: tpl.agent?.unit, envFile: tpl.agent?.env_file });
-  const handshake = await runAcpHandshake(
-    row.sandboxId,
-    row.ownerId,
-    port,
-    messagePath,
-    env.ACP_AGENT_TOKEN,
-    mcpServers.length ? await expandAcpMcpSecrets(mcpServers, row.ownerId) : []
-  );
+  let handshake: Awaited<ReturnType<typeof runAcpHandshake>>;
+  try {
+    await startAgent(ctx, row.sandboxId, { env, port: tpl.agent?.port, healthPath: tpl.agent?.health_path, unit: tpl.agent?.unit, envFile: tpl.agent?.env_file });
+    handshake = await runAcpHandshake(
+      row.sandboxId,
+      row.ownerId,
+      port,
+      messagePath,
+      env.ACP_AGENT_TOKEN,
+      mcpServers.length ? await expandAcpMcpSecrets(mcpServers, row.ownerId) : []
+    );
+  } catch (e) {
+    // La unit ya se detuvo o no arrancó: la fila no puede seguir diciendo running.
+    const reason = await markAgentStartFailed(row.id, e);
+    throw new MachineConfigError(`agent failed to start: ${reason}`, 502);
+  }
   await db.agent.update({
     where: { id: row.id },
-    data: { status: "running", acpSessionId: handshake.acpSessionId, acpTransportSessionId: handshake.acpTransportSessionId },
+    data: { status: "running", lastError: null, acpSessionId: handshake.acpSessionId, acpTransportSessionId: handshake.acpTransportSessionId },
   });
   return { reiniciado: true, sandboxId: row.sandboxId };
 }

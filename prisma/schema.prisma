@@ -1207,6 +1207,10 @@ model Agent {
   embedToken  String    @unique
   name        String?
   status      String    @default("running")
+  // Por qué falló el último arranque del runtime (create, revive o restart). Con esto
+  // un status "error" no se "reconcilia" a running sólo porque la VM responde: la VM
+  // puede estar viva con la unit muerta. Se limpia en el siguiente arranque bueno.
+  lastError   String?
   createdAt   DateTime  @default(now())
   expiresAt   DateTime?
 

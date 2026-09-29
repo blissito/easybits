@@ -3966,13 +3966,10 @@ export async function createAgent(
         seedFiles: params.seedFiles,
         mcpServers: params.mcpServers,
       });
-      await db.agent.update({ where: { id: row.id }, data: { status: "running", ...up } });
+      await db.agent.update({ where: { id: row.id }, data: { status: "running", lastError: null, ...up } });
     } catch (e) {
       console.error(`async bringup failed for agent ${row.id}:`, e);
-      await db.agent.update({
-        where: { id: row.id },
-        data: { status: "error" },
-      }).catch(() => {});
+      await markAgentStartFailed(row.id, e);
     }
   })();
 
@@ -4304,6 +4301,8 @@ export interface AgentRecord {
   embedToken: string;
   name: string | null;
   status: string;
+  /** Por qué falló el último arranque (status "error"); null si arrancó bien. */
+  lastError: string | null;
   createdAt: Date;
   expiresAt: Date | null;
   // Runtime metadata snapshot (Prisma defaults if missing).
@@ -4321,6 +4320,36 @@ export interface AgentRecord {
   tuiCommand?: string;
 }
 
+/** Mensaje legible y acotado de un arranque fallido (va a la fila y a la API). */
+export function startErrorMessage(e: unknown): string {
+  const raw = e instanceof Error ? e.message : String(e);
+  return raw.replace(/\s+/g, " ").trim().slice(0, 500) || "arranque fallido";
+}
+
+/** Deja la fila en "error" con la razón. Nunca lanza: el caller ya está manejando `e`. */
+export async function markAgentStartFailed(agentId: string, e: unknown): Promise<string> {
+  const reason = startErrorMessage(e);
+  await db.agent
+    .update({ where: { id: agentId }, data: { status: "error", lastError: reason } })
+    .catch(() => {});
+  return reason;
+}
+
+/**
+ * Reconciliación del status cacheado contra el host. La VM viva NO prueba que el runtime
+ * arrancó: si el último arranque falló (lastError) la fila se queda en "error" aunque el
+ * host diga running — antes se "curaba" sola y el agente salía running con la unit muerta.
+ * Sólo "lost" (la caja ya no existe) le gana a un arranque fallido.
+ */
+export function reconcileAgentStatus(
+  row: { status: string; lastError?: string | null },
+  real: string | null
+): string | null {
+  if (!real || real === row.status) return null;
+  if (row.status === "error" && row.lastError && real !== "lost") return null;
+  return real;
+}
+
 function toAgentRecord(row: {
   id: string;
   ownerId: string;
@@ -4330,6 +4359,7 @@ function toAgentRecord(row: {
   embedToken: string;
   name: string | null;
   status: string;
+  lastError?: string | null;
   createdAt: Date;
   expiresAt: Date | null;
   protocol: string | null;
@@ -4357,6 +4387,7 @@ function toAgentRecord(row: {
     embedToken: row.embedToken,
     name: row.name,
     status: row.status,
+    lastError: row.status === "error" ? row.lastError ?? null : null,
     createdAt: row.createdAt,
     expiresAt: row.expiresAt,
     protocol: row.protocol ?? "sse",
@@ -4400,9 +4431,10 @@ export async function getAgent(ctx: AuthContext, agentId: string): Promise<Agent
     if (real === "running" && row.protocol === "acp" && !row.acpSessionId && row.status === "building") {
       real = null;
     }
-    if (real && real !== row.status) {
-      await db.agent.update({ where: { id: row.id }, data: { status: real } });
-      return toAgentRecord({ ...row, status: real });
+    const next = reconcileAgentStatus(row, real);
+    if (next) {
+      await db.agent.update({ where: { id: row.id }, data: { status: next } });
+      return toAgentRecord({ ...row, status: next });
     }
   }
   return toAgentRecord(row);
@@ -4466,11 +4498,12 @@ export async function listAgents(ctx: AuthContext): Promise<AgentRecord[]> {
     rows.map(async (row) => {
       if (!RECONCILE.has(row.status)) return toAgentRecord(row);
       const real = await probeRealStatus(ctx, row).catch(() => null);
-      if (real && real !== row.status) {
+      const next = reconcileAgentStatus(row, real);
+      if (next) {
         await db.agent
-          .update({ where: { id: row.id }, data: { status: real } })
+          .update({ where: { id: row.id }, data: { status: next } })
           .catch(() => undefined);
-        return toAgentRecord({ ...row, status: real });
+        return toAgentRecord({ ...row, status: next });
       }
       return toAgentRecord(row);
     }),
@@ -4691,7 +4724,9 @@ export async function wakeAgentForMessage(agentId: string): Promise<void> {
   }
 
   if (row.status !== "suspended") {
-    throw new Error(`agent is ${row.status}; cannot wake for message`);
+    throw new Error(
+      `agent is ${row.status}${row.status === "error" && row.lastError ? ` (${row.lastError})` : ""}; cannot wake for message`
+    );
   }
 
   // Cap del plan ANTES de resumir: el resume del host NO pasa por createSandbox,
@@ -4764,14 +4799,21 @@ async function reviveAgentBox(agentId: string): Promise<AgentRecord> {
   const ctx: AuthContext = { user: owner, scopes: ["WRITE"] };
 
   // ¿De verdad no existe? El status cacheado puede mentir en las dos direcciones.
+  // Excepción: caja viva con el último arranque fallido (lastError) → se reintenta el
+  // arranque SOBRE ESA caja más abajo, en vez de declararla running por responder.
+  let retryOnBox = false;
   if (row.status !== "lost") {
     const real = await probeRealStatus(ctx, row).catch(() => null);
     if (real !== "lost") {
-      if (real && real !== row.status) {
-        await db.agent.update({ where: { id: agentId }, data: { status: real } }).catch(() => {});
-        return toAgentRecord({ ...row, status: real });
+      retryOnBox = row.status === "error" && !!row.lastError && real === "running";
+      if (!retryOnBox) {
+        const next = reconcileAgentStatus(row, real);
+        if (next) {
+          await db.agent.update({ where: { id: agentId }, data: { status: next } }).catch(() => {});
+          return toAgentRecord({ ...row, status: next });
+        }
+        return toAgentRecord(row);
       }
-      return toAgentRecord(row);
     }
   }
   if ((row.protocol ?? "sse") !== "acp") {
@@ -4790,6 +4832,32 @@ async function reviveAgentBox(agentId: string): Promise<AgentRecord> {
   const tpl = await resolveTemplate(ctx, template);
   const port = row.port ?? tpl.agent?.port ?? 3000;
   const messagePath = row.messagePath ?? tpl.agent?.message_path ?? "/acp";
+
+  if (retryOnBox) {
+    console.log(`[agent-revive] ${agentId}: box ${row.sandboxId} alive but its last start failed, retrying start`);
+    try {
+      const up = await bringUpAgentRuntime(ctx, {
+        agentId,
+        sandboxId: row.sandboxId,
+        template,
+        tpl,
+        env,
+        embedToken: row.embedToken,
+        protocol: "acp",
+        port,
+        messagePath,
+        mcpServers,
+      });
+      const updated = await db.agent.update({
+        where: { id: agentId },
+        data: { status: "running", lastError: null, lastMessageAt: new Date(), ...up },
+      });
+      return toAgentRecord(updated);
+    } catch (e) {
+      const reason = await markAgentStartFailed(agentId, e);
+      throw new Error(`agent failed to start: ${reason}`);
+    }
+  }
 
   console.log(`[agent-revive] ${agentId}: box ${row.sandboxId} is gone, recreating`);
   const sb = await createSandbox(ctx, {
@@ -4830,13 +4898,13 @@ async function reviveAgentBox(agentId: string): Promise<AgentRecord> {
     });
     const updated = await db.agent.update({
       where: { id: agentId },
-      data: { status: "running", lastMessageAt: new Date(), ...up },
+      data: { status: "running", lastError: null, lastMessageAt: new Date(), ...up },
     });
     console.log(`[agent-revive] ${agentId}: up on ${sb.sandboxId} at ${up.agentUrl}`);
     return toAgentRecord(updated);
   } catch (e) {
-    await db.agent.update({ where: { id: agentId }, data: { status: "error" } }).catch(() => {});
-    throw e;
+    const reason = await markAgentStartFailed(agentId, e);
+    throw new Error(`agent failed to start: ${reason}`);
   }
 }
 
