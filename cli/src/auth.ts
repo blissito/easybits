@@ -18,6 +18,7 @@ import { join } from "node:path";
 import { resolveBaseUrl } from "@easybits.cloud/sdk";
 import type { Ctx } from "./types.js";
 import { CliError, EXIT } from "./errors.js";
+import { t } from "./i18n.js";
 
 export const CLIENT_ID = "easybits-cli";
 const LOGIN_TIMEOUT_MS = 5 * 60_000;
@@ -76,7 +77,7 @@ async function tokenRequest(base: string, form: Record<string, string>): Promise
   });
   const body = (await res.json().catch(() => ({}))) as TokenResponse;
   if (!res.ok || !body.access_token) {
-    throw new CliError(`Login failed (${body.error ?? res.status}).`, EXIT.AUTH, "Run: easybits login", "login_failed", res.status);
+    throw new CliError(t(`Login failed (${body.error ?? res.status}).`, `No se pudo entrar (${body.error ?? res.status}).`), EXIT.AUTH, t("Run: easybits login", "Corre: easybits login"), "login_failed", res.status);
   }
   return body as TokenResponse & { access_token: string };
 }
@@ -95,7 +96,7 @@ export async function fetchEmail(token: string): Promise<string | undefined> {
   const base = (await resolveBaseUrl()).replace(/\/+$/, "");
   const res = await fetch(`${base}/api/v2/me`, { headers: { authorization: `Bearer ${token}` } });
   if (res.status === 401) {
-    throw new CliError("Credentials rejected (401).", EXIT.AUTH, "Check the key at https://www.easybits.cloud/dash/developer", "unauthorized", 401);
+    throw new CliError(t("Credentials rejected (401).", "Credenciales rechazadas (401)."), EXIT.AUTH, t("Check the key at https://www.easybits.cloud/dash/developer", "Revisa la key en https://www.easybits.cloud/dash/developer"), "unauthorized", 401);
   }
   if (!res.ok) return undefined;
   return ((await res.json().catch(() => ({}))) as { email?: string }).email;
@@ -133,7 +134,7 @@ export async function oauthLogin(ctx: Ctx, opts: { openBrowser?: boolean } = {})
 
     const code = await new Promise<string>((resolve, reject) => {
       const timer = setTimeout(
-        () => reject(new CliError("Login timed out after 5 minutes.", EXIT.AUTH, "Run: easybits login", "login_timeout")),
+        () => reject(new CliError(t("Login timed out after 5 minutes.", "El login se venció a los 5 minutos."), EXIT.AUTH, t("Run: easybits login", "Corre: easybits login"), "login_timeout")),
         LOGIN_TIMEOUT_MS,
       );
       server.on("request", (req, res) => {
@@ -159,11 +160,11 @@ export async function oauthLogin(ctx: Ctx, opts: { openBrowser?: boolean } = {})
 
       if (ctx.json) process.stdout.write(JSON.stringify({ event: "login_url", url }) + "\n");
       if (opts.openBrowser !== false) {
-        info("Opening your browser to sign in to EasyBits…");
+        info(t("Opening your browser to sign in to EasyBits…", "Abriendo tu navegador para entrar a EasyBits…"));
         openUrl(url);
       }
-      info(`If it doesn't open, visit:\n  ${url}`);
-      info("Waiting for the browser…");
+      info(t(`If it doesn't open, visit:\n  ${url}`, `Si no se abre, entra a:\n  ${url}`));
+      info(t("Waiting for the browser…", "Esperando al navegador…"));
     });
 
     const tok = await tokenRequest(base, {

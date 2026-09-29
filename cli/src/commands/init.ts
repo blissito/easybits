@@ -3,6 +3,7 @@ import type { Command } from "../types.js";
 import { str } from "../args.js";
 import { emit } from "../output.js";
 import { usageError } from "../errors.js";
+import { t } from "../i18n.js";
 
 // ─── init: dejar el repo listo para desplegar en cada push ───────
 //
@@ -31,7 +32,7 @@ export const init: Command = {
   const port = str(ctx, "port") ?? "3000";
 
   if (!existsSync("package.json")) {
-    throw usageError("No package.json here. Run this at the root of your app's repo.", this.usage);
+    throw usageError(t("No package.json here. Run this at the root of your app's repo.", "Aquí no hay package.json. Córrelo en la raíz del repo de tu app."), this.usage);
   }
 
   const workflow = `# Despliegue a EasyBits en cada push a main.
@@ -174,7 +175,7 @@ jobs:
   writeFileSync(".github/scripts/easybits-deploy.mjs", script);
 
   const written = [".github/workflows/easybits-deploy.yml", ".github/scripts/easybits-deploy.mjs"];
-  emit(ctx, { written, appDir, port: Number(port) }, () => console.log(`Done. Wrote:
+  emit(ctx, { written, appDir, port: Number(port) }, () => console.log(t(`Done. Wrote:
   .github/workflows/easybits-deploy.yml
   .github/scripts/easybits-deploy.mjs
 
@@ -204,7 +205,37 @@ One-time setup left:
 
    easybits machines secrets set SANDBOX_ID --dotenv .env.production
 
-From then on, every push to main deploys.`));
+From then on, every push to main deploys.`, `Listo. Escribí:
+  .github/workflows/easybits-deploy.yml
+  .github/scripts/easybits-deploy.mjs
+
+Falta configurar una sola vez:
+
+1. Crea la máquina (si todavía no tienes una):
+
+   curl -X POST https://www.easybits.cloud/api/v2/machines/launch \\
+     -H "Authorization: Bearer $EASYBITS_API_KEY" \\
+     -H "Content-Type: application/json" \\
+     -d '{"repo":"https://github.com/TU/REPO.git","branch":"main",
+          "tier":"micro","template":"node","appDir":"${appDir}","port":${port}}'
+
+   Repo privado: deja la URL limpia y pasa el token aparte,
+     "repoToken":"github_pat_…"
+   (un token dentro de la URL se rechaza).
+
+   ¿Tu build cabe en la máquina? Entonces no necesitas este workflow:
+   POST /machines/SANDBOX_ID/push-deploy te da un webhook de GitHub
+   y cada push se despliega solo. Docs: https://www.easybits.cloud/docs
+
+2. Agrega estos secretos del repo (Settings → Secrets and variables → Actions):
+     EASYBITS_API_KEY      tu key
+     EASYBITS_SANDBOX_ID   el id que devolvió el paso 1
+
+3. Si tu app usa variables de entorno secretas:
+
+   easybits machines secrets set SANDBOX_ID --dotenv .env.production
+
+Desde ahí, cada push a main despliega.`)));
     },
   },
 };

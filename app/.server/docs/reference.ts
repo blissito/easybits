@@ -234,6 +234,10 @@ easybits apply ./ayudante --create --name ayudante-2  # un agente nuevo desde la
 
 El plan: \`+\` agrega, \`~\` cambia, \`-\` quita, \`!\` no se aplica y dice por qué. **Declarativo**: lo que el archivo no menciona no se toca; quitar lo que el archivo ya no lista exige \`--prune\`. El plan lo calcula el servidor (es el único que ve el env y los valores del MCP de hoy). Env, MCP y skills reinician el agente una vez al final. Antes de aplicar se guarda el archivo anterior en \`~/.easybits/backups/\` (para volver: \`easybits apply <respaldo> --agent <agente>\`). Límites: un agente no cambia de template (usa \`--create\`) y los agentes sin máquina propia sólo toman \`name\`. \`--show-secrets\` / \`--with-files\` siguen dando el JSON de clonado de 0.9 para \`create --from\`.
 
+### Idioma
+
+El CLI habla español o inglés según tu locale: \`LANG=es_MX.UTF-8\` (o \`LC_ALL\`/\`LC_MESSAGES\`) → español; cualquier otro → inglés. Fuérzalo con \`--lang es|en\` o \`EASYBITS_LANG\`. Cambia la ayuda, los errores, las pistas y la salida para personas; **las llaves de \`--json\` y los códigos de salida nunca cambian** (\`error\` y \`hint\` son prosa, así que siguen el idioma).
+
 ### Cómo se nombran los comandos
 
 Una sola regla, como \`gh\`: \`easybits <sustantivo> <verbo>\`. Las formas viejas siguen funcionando y avisan la nueva en stderr (nunca con \`--json\`): \`easybits config\` → \`mcp config\`, \`easybits mcp\` → \`mcp config --stdio\`, \`deploy ls\` → \`machines ls\` (\`easybits deploy <máquina>\` es el verbo), \`machines release\` → \`machines deploy\`, \`sandboxes create --timeout\` → \`--ttl\`.

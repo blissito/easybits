@@ -28,6 +28,7 @@ import { getClient } from "../client.js";
 import { applyTarget, exportSpec } from "./spec.js";
 import { usageError } from "../errors.js";
 import { YES_OPTION, confirm, requireYesIfHeadless } from "../prompt.js";
+import { t } from "../i18n.js";
 
 /** ¿Es el JSON de clonado de 0.9 (`kind: easybits.agent`)? Si no, es un archivo de agente nuevo. */
 function isLegacyExport(path: string): boolean {
@@ -57,7 +58,7 @@ export const agents: Command = {
           table(
             items.map((a) => ({ ...a, createdAt: fmtDate(a.createdAt) })),
             [["agentId", "ID"], ["name", "NAME"], ["template", "TEMPLATE"], ["status", "STATUS"], ["createdAt", "CREATED"]],
-            "No agents. Create one: easybits agents create --template <template>",
+            t("No agents. Create one: easybits agents create --template <template>", "No hay agentes. Crea uno: easybits agents create --template <template>"),
           ),
         );
       },
@@ -92,16 +93,16 @@ export const agents: Command = {
       async run(ctx) {
         const like = str(ctx, "like");
         const from = str(ctx, "from");
-        if (like && from) throw usageError("Use --like or --from, not both.", this.usage);
+        if (like && from) throw usageError(t("Use --like or --from, not both.", "Usa --like o --from, no los dos."), this.usage);
         const promptInline = str(ctx, "prompt");
         const promptFile = str(ctx, "prompt-file");
-        if (promptInline != null && promptFile) throw usageError("Use --prompt or --prompt-file, not both.", this.usage);
+        if (promptInline != null && promptFile) throw usageError(t("Use --prompt or --prompt-file, not both.", "Usa --prompt o --prompt-file, no los dos."), this.usage);
         const mode = str(ctx, "prompt-mode");
-        if (mode && mode !== "append" && mode !== "replace") throw usageError("--prompt-mode must be append or replace.", this.usage);
-        if (promptFile && !existsSync(promptFile)) throw usageError(`File not found: ${promptFile}`, this.usage);
+        if (mode && mode !== "append" && mode !== "replace") throw usageError(t("--prompt-mode must be append or replace.", "--prompt-mode debe ser append o replace."), this.usage);
+        if (promptFile && !existsSync(promptFile)) throw usageError(t(`File not found: ${promptFile}`, `No existe el archivo: ${promptFile}`), this.usage);
         const mcpFile = str(ctx, "mcp-file");
-        if (mcpFile && !existsSync(mcpFile)) throw usageError(`File not found: ${mcpFile}`, this.usage);
-        if (bool(ctx, "copy-files") && !like && !from) throw usageError("--copy-files needs --like or --from.", this.usage);
+        if (mcpFile && !existsSync(mcpFile)) throw usageError(t(`File not found: ${mcpFile}`, `No existe el archivo: ${mcpFile}`), this.usage);
+        if (bool(ctx, "copy-files") && !like && !from) throw usageError(t("--copy-files needs --like or --from.", "--copy-files necesita --like o --from."), this.usage);
         // Un archivo de `agents export` (0.10+) es un spec: lo crea `apply --create`, que además
         // sube skills y archivos si es un directorio. El JSON de clonado de 0.9 sigue abajo.
         if (from && !isLegacyExport(from)) {
@@ -115,7 +116,7 @@ export const agents: Command = {
             ? await buildExport(ctx, await resolveRef(ctx, "agent", like), { secrets: true, fileContents: bool(ctx, "copy-files") })
             : undefined;
         const template = str(ctx, "template") ?? source?.template;
-        if (!template) throw usageError("Missing --template (or --like / --from).", this.usage);
+        if (!template) throw usageError(t("Missing --template (or --like / --from).", "Falta --template (o --like / --from)."), this.usage);
         const env = await envFrom(ctx, this.usage);
         const prompt = promptInline ?? (promptFile ? readFileSync(promptFile, "utf8") : source?.systemPrompt);
         const promptMode = mode ?? source?.systemPromptMode;
@@ -126,13 +127,13 @@ export const agents: Command = {
         const multiline = !!prompt && /[\r\n]/.test(prompt.trimEnd());
         const promptAfter = multiline ? prompt : undefined;
         if (multiline && !MACHINE_TEMPLATES.has(template)) {
-          throw usageError(`A multi-line prompt needs a template with a machine (${[...MACHINE_TEMPLATES].join(", ")}).`, this.usage);
+          throw usageError(t(`A multi-line prompt needs a template with a machine (${[...MACHINE_TEMPLATES].join(", ")}).`, `Un prompt de varios renglones necesita un template con máquina (${[...MACHINE_TEMPLATES].join(", ")}).`), this.usage);
         }
         if (prompt && !multiline) env.SYSTEM_PROMPT = prompt.trimEnd();
         if (promptMode && (prompt || mode) && !multiline) env.SYSTEM_PROMPT_MODE = promptMode;
         const mcpServers = mcpFile ? parseMcpFile(readFileSync(mcpFile, "utf8"), this.usage) : source?.mcpServers;
         if (mcpServers && hasMasked(mcpServers)) {
-          throw usageError(`${from ?? "the source"} has masked MCP values (…***).`, "Re-export with --show-secrets, or pass --mcp-file");
+          throw usageError(t(`${from ?? "the source"} has masked MCP values (…***).`, `${from ?? "la fuente"} trae valores del MCP tapados (…***).`), t("Re-export with --show-secrets, or pass --mcp-file", "Vuelve a exportar con --show-secrets, o pasa --mcp-file"));
         }
         const name = str(ctx, "name") ?? (source?.name ? `${source.name}-copy` : undefined);
         const plan = {
@@ -149,8 +150,8 @@ export const agents: Command = {
         if (bool(ctx, "dry-run")) {
           emit(ctx, { dryRun: true, ...plan }, () => {
             for (const [k, v] of Object.entries(plan)) console.log(`${k.padEnd(12)} ${Array.isArray(v) ? v.join(", ") || "-" : v ?? "-"}`);
-            if (source) console.log("Env is never copied: pass the engine's keys with --dotenv.");
-            console.log("(dry run: nothing created)");
+            if (source) console.log(t("Env is never copied: pass the engine's keys with --dotenv.", "El env nunca se copia: pasa las llaves del motor con --dotenv."));
+            console.log(t("(dry run: nothing created)", "(simulación: no se creó nada)"));
           });
           return;
         }
@@ -166,11 +167,11 @@ export const agents: Command = {
         // Después del reinicio de applyExport: el PATCH rearma los ganchos en caliente, sin reboot.
         if (promptAfter) await api(ctx, "PATCH", `/agents/${a.agentId}`, { systemPrompt: promptAfter, ...(promptMode ? { systemPromptMode: promptMode } : {}) });
         emit(ctx, { ...a, ...(copied ? { copied } : {}) }, () => {
-          console.log(`Agent:   ${a.agentId}`);
+          console.log(`${t("Agent:  ", "Agente: ")} ${a.agentId}`);
           console.log(`Sandbox: ${a.sandboxId}`);
           console.log(`URL:     ${a.agentUrl}`);
-          if (copied) console.log(`Copied:  ${copied.skills.length} skill(s), ${copied.files.length} file(s)${copied.skippedFiles.length ? ` (${copied.skippedFiles.length} skipped: export without --with-files)` : ""}`);
-          console.log(`Talk to it: easybits agents try ${a.agentId} "hello"`);
+          if (copied) console.log(t(`Copied:  ${copied.skills.length} skill(s), ${copied.files.length} file(s)${copied.skippedFiles.length ? ` (${copied.skippedFiles.length} skipped: export without --with-files)` : ""}`, `Copiado: ${copied.skills.length} skill(s), ${copied.files.length} archivo(s)${copied.skippedFiles.length ? ` (${copied.skippedFiles.length} sin copiar: export sin --with-files)` : ""}`));
+          console.log(t(`Talk to it: easybits agents try ${a.agentId} "hello"`, `Háblale: easybits agents try ${a.agentId} "hola"`));
         });
       },
     },
@@ -183,7 +184,7 @@ export const agents: Command = {
       async run(ctx) {
         const id = need(ctx, 0, "agent", this.usage);
         const content = ctx.args.slice(1).join(" ");
-        if (!content) throw usageError("Missing <text>.", this.usage);
+        if (!content) throw usageError(t("Missing <text>.", "Falta <text>."), this.usage);
         const eb = await getClient(ctx);
         const params = { content, sessionId: str(ctx, "session") };
         if (ctx.json) {
@@ -204,10 +205,10 @@ export const agents: Command = {
         const id = need(ctx, 0, "agent", this.usage);
         requireYesIfHeadless(ctx);
                 // Se lleva su caja y su /data: se teclea el id (patrón de `gh repo delete`).
-        await confirm(ctx, `Destroy agent ${id} and its sandbox (including /data)?`, { typeName: id });
+        await confirm(ctx, t(`Destroy agent ${id} and its sandbox (including /data)?`, `¿Destruir el agente ${id} y su sandbox (con /data)?`), { typeName: id });
         const eb = await getClient(ctx);
         const r = await eb.destroyAgent(id);
-        emit(ctx, { ...r, agentId: id }, () => console.log(`Destroyed ${id}`));
+        emit(ctx, { ...r, agentId: id }, () => console.log(t(`Destroyed ${id}`, `Destruido ${id}`)));
       },
     },
     set,

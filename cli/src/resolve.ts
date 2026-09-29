@@ -4,6 +4,7 @@ import type { Ctx } from "./types.js";
 import { getClient } from "./client.js";
 import { CliError, EXIT } from "./errors.js";
 import { REF_ARGS, matchRef, looksLikeId, type NamedRef, type RefKind } from "./refs.js";
+import { t } from "./i18n.js";
 
 const LS_HINT: Record<RefKind, string> = {
   agent: "easybits agents ls",
@@ -11,7 +12,8 @@ const LS_HINT: Record<RefKind, string> = {
   db: "easybits db ls",
 };
 
-const NOUN: Record<RefKind, string> = { agent: "agent", sandbox: "sandbox or machine", db: "database" };
+const NOUN = (): Record<RefKind, string> => ({ agent: t("agent", "agente"), sandbox: t("sandbox or machine", "sandbox o máquina"), db: t("database", "base de datos") });
+const NOUNS = (): Record<RefKind, string> => ({ agent: t("agents", "agentes"), sandbox: t("sandboxes", "sandboxes"), db: t("databases", "bases de datos") });
 
 // Una lista por tipo y por corrida: dos referencias del mismo tipo no piden dos veces.
 const cache = new Map<RefKind, Promise<NamedRef[]>>();
@@ -38,14 +40,14 @@ export async function resolveRef(ctx: Ctx, kind: RefKind, ref: string): Promise<
   const r = matchRef(kind, ref, await listRefs(ctx, kind));
   if (r.ok) return r.id;
   if (r.reason === "not_found") {
-    throw new CliError(`No ${NOUN[kind]} with id or name "${ref}".`, EXIT.API, `List them with: ${LS_HINT[kind]}`, "not_found", 404);
+    throw new CliError(t(`No ${NOUN()[kind]} with id or name "${ref}".`, `No hay ${NOUN()[kind]} con id o nombre "${ref}".`), EXIT.API, `${t("List them with", "Enlístalos con")}: ${LS_HINT[kind]}`, "not_found", 404);
   }
   const shown = r.matches.slice(0, 10).map((m) => `  ${m.id}${m.status ? `  (${m.status})` : ""}`);
-  if (r.matches.length > 10) shown.push(`  …and ${r.matches.length - 10} more`);
+  if (r.matches.length > 10) shown.push(t(`  …and ${r.matches.length - 10} more`, `  …y ${r.matches.length - 10} más`));
   throw new CliError(
-    `"${ref}" matches ${r.matches.length} ${kind === "db" ? "databases" : `${kind}s`}. Use the id:`,
+    t(`"${ref}" matches ${r.matches.length} ${NOUNS()[kind]}. Use the id:`, `"${ref}" coincide con ${r.matches.length} ${NOUNS()[kind]}. Usa el id:`),
     EXIT.USAGE,
-    `${shown.join("\n")}\nList them with: ${LS_HINT[kind]}`,
+    `${shown.join("\n")}\n${t("List them with", "Enlístalos con")}: ${LS_HINT[kind]}`,
     "ambiguous",
   );
 }

@@ -119,6 +119,8 @@ easybits docs --open   # open the docs in your browser
 pass its name instead of the id (`easybits sb exec scratch -- ls`, `easybits domains ls shop`).
 The match is exact and case-insensitive; if two share the name the CLI exits 2 and lists the ids.
 
+Help and messages follow your locale (`LANG=es_*` → Spanish) or `--lang es|en`.
+
 Every command has help with examples: `easybits <command> <subcommand> --help`
 (or `easybits help <command> <subcommand>`). A typo gets a "Did you mean" suggestion.
 
@@ -158,6 +160,12 @@ Host *.ghosty
 - Skill: `npx skills add https://easybits.cloud` (includes `easybits-cli`).
 
 Full reference: https://www.easybits.cloud/docs#cli · https://www.easybits.cloud/en/docs/cli.md
+
+## Changes in 0.11.0
+
+- **Spanish or English, following your locale** (`LANG=es_*` → Spanish; otherwise English), or
+  `--lang es|en` / `EASYBITS_LANG`. Help, errors, hints and human output; `--json` keys and exit
+  codes never change. Known API messages are shown in the same language.
 
 ## Changes in 0.10.0
 

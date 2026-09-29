@@ -6,6 +6,7 @@ import type { Ctx } from "../types.js";
 import { listRefs } from "../resolve.js";
 import { CliError } from "../errors.js";
 import { YES_OPTION, confirm, requireYesIfHeadless } from "../prompt.js";
+import { t } from "../i18n.js";
 
 /**
  * La base ya resuelta (index.ts cambió el nombre por el id con refs.ts). Sin crear: un
@@ -13,7 +14,7 @@ import { YES_OPTION, confirm, requireYesIfHeadless } from "../prompt.js";
  */
 async function findDb(ctx: Ctx, id: string) {
   const hit = (await listRefs(ctx, "db")).find((d) => d.id === id);
-  if (!hit) throw new CliError(`No database "${id}".`, 1, "List them with: easybits db ls", "not_found", 404);
+  if (!hit) throw new CliError(t(`No database "${id}".`, `No existe la base "${id}".`), 1, t("List them with: easybits db ls", "Enlístalas con: easybits db ls"), "not_found", 404);
   return { id, name: hit.name ?? id };
 }
 
@@ -36,7 +37,7 @@ export const db: Command = {
           table(
             items.map((d) => ({ ...d, createdAt: fmtDate(d.createdAt) })),
             [["id", "ID"], ["name", "NAME"], ["createdAt", "CREATED"], ["description", "DESCRIPTION"]],
-            "No databases. Create one: easybits db create <name>",
+            t("No databases. Create one: easybits db create <name>", "No hay bases. Crea una: easybits db create <nombre>"),
           ),
         );
       },
@@ -50,7 +51,7 @@ export const db: Command = {
         const name = need(ctx, 0, "name", this.usage);
         const eb = await getClient(ctx);
         const d = await eb.createDatabase({ name, description: str(ctx, "description") });
-        emit(ctx, d, () => console.log(`Created ${d.name} (${d.id})`));
+        emit(ctx, d, () => console.log(t(`Created ${d.name} (${d.id})`, `Creada ${d.name} (${d.id})`)));
       },
     },
     rm: {
@@ -65,9 +66,9 @@ export const db: Command = {
                 const eb = await getClient(ctx);
         const hit = await findDb(ctx, ref);
         // Irreversible: se teclea el nombre, como `gh repo delete` / `turso db destroy`.
-        await confirm(ctx, `Delete database ${hit.name} (${hit.id}) and all its data?`, { typeName: hit.name });
+        await confirm(ctx, t(`Delete database ${hit.name} (${hit.id}) and all its data?`, `¿Borrar la base ${hit.name} (${hit.id}) con todos sus datos?`), { typeName: hit.name });
         const r = await eb.deleteDatabase(hit.id);
-        emit(ctx, { ...r, id: hit.id, name: hit.name }, () => console.log(`Deleted ${hit.name} (${hit.id})`));
+        emit(ctx, { ...r, id: hit.id, name: hit.name }, () => console.log(t(`Deleted ${hit.name} (${hit.id})`, `Borrada ${hit.name} (${hit.id})`)));
       },
     },
     tables: {
@@ -131,7 +132,12 @@ export const db: Command = {
               "(0 rows)",
             );
           } else {
-            console.log(`OK, ${r.affected_row_count} row(s) affected${r.last_insert_rowid ? `, last id ${r.last_insert_rowid}` : ""}`);
+            console.log(
+              t(
+                `OK, ${r.affected_row_count} row(s) affected${r.last_insert_rowid ? `, last id ${r.last_insert_rowid}` : ""}`,
+                `OK, ${r.affected_row_count} fila(s) afectadas${r.last_insert_rowid ? `, último id ${r.last_insert_rowid}` : ""}`,
+              ),
+            );
           }
         });
       },

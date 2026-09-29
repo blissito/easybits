@@ -6,6 +6,7 @@ import { emit, fmtBytes, fmtDate, table } from "../output.js";
 import { getClient } from "../client.js";
 import { usageError } from "../errors.js";
 import { YES_OPTION, confirm, requireYesIfHeadless } from "../prompt.js";
+import { t } from "../i18n.js";
 
 /** Registro plano de una caja: la clase Sandbox lleva handles internos que no son datos. */
 export function sandboxRecord(s: Sandbox) {
@@ -27,14 +28,14 @@ export function sandboxRecord(s: Sandbox) {
 
 function printSandbox(s: ReturnType<typeof sandboxRecord>) {
   console.log(`ID:        ${s.sandboxId}`);
-  if (s.name) console.log(`Name:      ${s.name}`);
+  if (s.name) console.log(`${t("Name:     ", "Nombre:   ")} ${s.name}`);
   console.log(`Template:  ${s.template}`);
-  console.log(`Status:    ${s.status}`);
+  console.log(`${t("Status:   ", "Estado:   ")} ${s.status}`);
   // Mientras hay un snapshot/fork en curso la caja contesta 409 SandboxBusy a todo lo demás.
-  if (s.activity) console.log(`Activity:  ${s.activity} (busy: exec/suspend/destroy answer 409 SandboxBusy until it ends)`);
-  console.log(`Created:   ${fmtDate(s.createdAt)}`);
-  console.log(`Expires:   ${s.persistent ? "never (permanent)" : fmtDate(s.expiresAt)}`);
-  if (s.tier) console.log(`Tier:      ${s.tier}${s.monthlyMxn != null ? ` ($${s.monthlyMxn} MXN/month)` : ""}`);
+  if (s.activity) console.log(t(`Activity:  ${s.activity} (busy: exec/suspend/destroy answer 409 SandboxBusy until it ends)`, `Actividad: ${s.activity} (ocupado: exec/suspend/destroy contestan 409 SandboxBusy hasta que termine)`));
+  console.log(`${t("Created:  ", "Creado:   ")} ${fmtDate(s.createdAt)}`);
+  console.log(`${t("Expires:  ", "Vence:    ")} ${s.persistent ? t("never (permanent)", "nunca (permanente)") : fmtDate(s.expiresAt)}`);
+  if (s.tier) console.log(`Tier:      ${s.tier}${s.monthlyMxn != null ? ` ($${s.monthlyMxn} MXN/${t("month", "mes")})` : ""}`);
 }
 
 async function sandbox(ctx: Ctx, usage: string) {
@@ -64,7 +65,7 @@ export const sandboxes: Command = {
           table(
             rows.map((r) => ({ ...r, expires: r.persistent ? "permanent" : fmtDate(r.expiresAt) })),
             [["sandboxId", "ID"], ["name", "NAME"], ["template", "TEMPLATE"], ["status", "STATUS"], ["expires", "EXPIRES"]],
-            "No sandboxes. Create one: easybits sandboxes create --template node",
+            t("No sandboxes. Create one: easybits sandboxes create --template node", "No hay sandboxes. Crea uno: easybits sandboxes create --template node"),
           ),
         );
       },
@@ -89,7 +90,7 @@ export const sandboxes: Command = {
       ],
       async run(ctx) {
         const size = str(ctx, "size");
-        if (size && !["s", "m", "l", "xl"].includes(size)) throw usageError("--size must be s, m, l or xl.", this.usage);
+        if (size && !["s", "m", "l", "xl"].includes(size)) throw usageError(t("--size must be s, m, l or xl.", "--size debe ser s, m, l o xl."), this.usage);
         const env = await envFrom(ctx, this.usage);
         const eb = await getClient(ctx);
         const sb = await eb.sandboxes.create({
@@ -132,7 +133,7 @@ export const sandboxes: Command = {
       async run(ctx) {
         need(ctx, 0, "sandbox", this.usage);
         const command = ctx.args.slice(1).join(" ");
-        if (!command) throw usageError("Missing <command>.", this.usage);
+        if (!command) throw usageError(t("Missing <command>.", "Falta <command>."), this.usage);
         const env = await envFrom(ctx, this.usage);
         const sb = await sandbox(ctx, this.usage);
         const r = await sb.exec(command, {
@@ -147,7 +148,7 @@ export const sandboxes: Command = {
         // Como `ssh`/`docker exec`: la salida tal cual y el código de salida del comando.
         if (r.stdout) process.stdout.write(r.stdout);
         if (r.stderr) process.stderr.write(r.stderr);
-        if (r.truncated) console.error("easybits: output truncated");
+        if (r.truncated) console.error(t("easybits: output truncated", "easybits: salida recortada"));
         process.exitCode = r.exitCode;
       },
     },
@@ -207,7 +208,7 @@ export const sandboxes: Command = {
             // base64 para no corromper binarios en el camino.
             const r = await sb.files.read(path, { encoding: "base64" });
             writeFileSync(out, Buffer.from(r.content, "base64"));
-            emit(ctx, { path, out, size: r.size }, () => console.error(`Saved ${fmtBytes(r.size)} to ${out}`));
+            emit(ctx, { path, out, size: r.size }, () => console.error(t(`Saved ${fmtBytes(r.size)} to ${out}`, `Guardé ${fmtBytes(r.size)} en ${out}`)));
           } else {
             const r = await sb.files.read(path);
             emit(ctx, r, () => process.stdout.write(r.content));
@@ -218,14 +219,14 @@ export const sandboxes: Command = {
           let buf: Buffer;
           if (inline != null) buf = Buffer.from(inline, "utf8");
           else if (local) {
-            if (!existsSync(local)) throw usageError(`File not found: ${local}`, FILES_USAGE);
+            if (!existsSync(local)) throw usageError(t(`File not found: ${local}`, `No existe el archivo: ${local}`), FILES_USAGE);
             buf = readFileSync(local);
           } else if (!process.stdin.isTTY) buf = await readStdin();
-          else throw usageError("Give a local file, --content, or pipe data on stdin.", FILES_USAGE);
+          else throw usageError(t("Give a local file, --content, or pipe data on stdin.", "Pasa un archivo local, --content, o datos por stdin."), FILES_USAGE);
           const r = await sb.files.write(path, buf.toString("base64"), { encoding: "base64" });
-          emit(ctx, { path, ...r }, () => console.log(`Wrote ${fmtBytes(r.bytes)} to ${path}`));
+          emit(ctx, { path, ...r }, () => console.log(t(`Wrote ${fmtBytes(r.bytes)} to ${path}`, `Escribí ${fmtBytes(r.bytes)} en ${path}`)));
         } else {
-          throw usageError(`Unknown files action "${action}".`, FILES_USAGE);
+          throw usageError(t(`Unknown files action "${action}".`, `Acción de files desconocida "${action}".`), FILES_USAGE);
         }
       },
     },
@@ -235,7 +236,7 @@ export const sandboxes: Command = {
       examples: ["easybits sandboxes suspend sb_abc123"],
       async run(ctx) {
         const r = await (await sandbox(ctx, this.usage)).suspend();
-        emit(ctx, r, () => console.log(`Suspended ${r.sandboxId ?? ctx.args[0]} (${r.status ?? "suspended"})`));
+        emit(ctx, r, () => console.log(t(`Suspended ${r.sandboxId ?? ctx.args[0]} (${r.status ?? "suspended"})`, `Suspendido ${r.sandboxId ?? ctx.args[0]} (${r.status ?? "suspended"})`)));
       },
     },
     resume: {
@@ -249,7 +250,7 @@ export const sandboxes: Command = {
       async run(ctx) {
         const env = await envFrom(ctx, this.usage);
         const r = await (await sandbox(ctx, this.usage)).resume(Object.keys(env).length ? { env } : {});
-        emit(ctx, r, () => console.log(`Resumed ${r.sandboxId ?? ctx.args[0]} (${r.status ?? "running"})`));
+        emit(ctx, r, () => console.log(t(`Resumed ${r.sandboxId ?? ctx.args[0]} (${r.status ?? "running"})`, `Despierto ${r.sandboxId ?? ctx.args[0]} (${r.status ?? "running"})`)));
       },
     },
     destroy: {
@@ -266,11 +267,13 @@ export const sandboxes: Command = {
         // `gh repo delete`); una efímera, [y/N] basta (clig.dev).
         await confirm(
           ctx,
-          sb.persistent ? `Destroy permanent sandbox ${sb.sandboxId}${sb.name ? ` (${sb.name})` : ""} and its disk?` : `Destroy sandbox ${sb.sandboxId}?`,
+          sb.persistent
+            ? t(`Destroy permanent sandbox ${sb.sandboxId}${sb.name ? ` (${sb.name})` : ""} and its disk?`, `¿Destruir el sandbox permanente ${sb.sandboxId}${sb.name ? ` (${sb.name})` : ""} y su disco?`)
+            : t(`Destroy sandbox ${sb.sandboxId}?`, `¿Destruir el sandbox ${sb.sandboxId}?`),
           sb.persistent ? { typeName: sb.sandboxId } : {},
         );
         const r = await sb.destroy();
-        emit(ctx, { ...r, sandboxId: ctx.args[0] }, () => console.log(`Destroyed ${ctx.args[0]}`));
+        emit(ctx, { ...r, sandboxId: ctx.args[0] }, () => console.log(t(`Destroyed ${ctx.args[0]}`, `Destruido ${ctx.args[0]}`)));
       },
     },
     snapshot: {

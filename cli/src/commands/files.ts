@@ -6,6 +6,7 @@ import { emit, fmtBytes, table } from "../output.js";
 import { getClient } from "../client.js";
 import { CliError, usageError } from "../errors.js";
 import { YES_OPTION, confirm, requireYesIfHeadless } from "../prompt.js";
+import { t } from "../i18n.js";
 
 const MIME: Record<string, string> = {
   pdf: "application/pdf",
@@ -45,7 +46,7 @@ export const files: Command = {
           table(
             data.items.map((f) => ({ ...f, size: fmtBytes(f.size) })),
             [["name", "NAME"], ["size", "SIZE"], ["status", "STATUS"], ["id", "ID"]],
-            "No files found",
+            t("No files found", "No hay archivos"),
           ),
         );
       },
@@ -56,7 +57,7 @@ export const files: Command = {
       examples: ["easybits files upload ./report.pdf", "easybits files upload ./logo.png --json"],
       async run(ctx) {
         const path = need(ctx, 0, "path", this.usage);
-        if (!existsSync(path)) throw usageError(`File not found: ${path}`, this.usage);
+        if (!existsSync(path)) throw usageError(t(`File not found: ${path}`, `No existe el archivo: ${path}`), this.usage);
         const size = statSync(path).size;
         const contentType = MIME[extname(path).slice(1).toLowerCase()] || "application/octet-stream";
         const eb = await getClient(ctx);
@@ -67,8 +68,8 @@ export const files: Command = {
           body: readFileSync(path),
           headers: { "Content-Type": contentType },
         });
-        if (!res.ok) throw new CliError(`Upload failed: storage answered ${res.status}`, 1, undefined, "upload_failed", res.status);
-        emit(ctx, data.file, () => console.log(`Uploaded: ${data.file.id}`));
+        if (!res.ok) throw new CliError(t(`Upload failed: storage answered ${res.status}`, `Falló la subida: el almacenamiento contestó ${res.status}`), 1, undefined, "upload_failed", res.status);
+        emit(ctx, data.file, () => console.log(`${t("Uploaded", "Subido")}: ${data.file.id}`));
       },
     },
     rm: {
@@ -81,10 +82,10 @@ export const files: Command = {
         const id = need(ctx, 0, "file-id", this.usage);
         requireYesIfHeadless(ctx);
                 // Va a la papelera 7 días: basta [y/N] (clig.dev: «mild» → confirmación simple).
-        await confirm(ctx, `Delete file ${id}? (recoverable from trash for 7 days)`);
+        await confirm(ctx, t(`Delete file ${id}? (recoverable from trash for 7 days)`, `¿Borrar el archivo ${id}? (se recupera de la papelera por 7 días)`));
         const eb = await getClient(ctx);
         const r = await eb.deleteFile(id);
-        emit(ctx, r, () => console.log("Deleted"));
+        emit(ctx, r, () => console.log(t("Deleted", "Borrado")));
       },
     },
   },

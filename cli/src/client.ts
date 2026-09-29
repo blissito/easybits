@@ -2,6 +2,7 @@ import { EasybitsClient, resolveBaseUrl } from "@easybits.cloud/sdk";
 import type { Ctx } from "./types.js";
 import { CliError, EXIT, notLoggedIn } from "./errors.js";
 import { interactive, oauthLogin, readRc, refreshSession } from "./auth.js";
+import { t } from "./i18n.js";
 
 /**
  * Una API key explícita: env EASYBITS_API_KEY > --token > `apiKey` del rc. Es lo que va
@@ -43,14 +44,14 @@ export async function resolveCredential(ctx: Ctx): Promise<string> {
     fromSession = false;
     if (rc.apiKey) return rc.apiKey;
     if (!interactive(ctx)) {
-      throw new CliError("Your session expired.", EXIT.AUTH, "Run: easybits login   (or set EASYBITS_API_KEY)", "session_expired");
+      throw new CliError(t("Your session expired.", "Tu sesión venció."), EXIT.AUTH, t("Run: easybits login   (or set EASYBITS_API_KEY)", "Corre: easybits login   (o define EASYBITS_API_KEY)"), "session_expired");
     }
   } else if (rc.apiKey) {
     return rc.apiKey;
   } else if (!interactive(ctx)) {
     throw notLoggedIn();
   }
-  process.stderr.write("Not logged in yet — let's fix that.\n");
+  process.stderr.write(t("Not logged in yet — let's fix that.\n", "Todavía no inicias sesión — vamos a arreglarlo.\n"));
   fromSession = true;
   return (await oauthLogin(ctx)).accessToken;
 }

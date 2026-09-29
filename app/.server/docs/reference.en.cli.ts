@@ -148,6 +148,10 @@ easybits apply ./helper --create --name helper-2 # a new agent from the folder
 
 The plan: \`+\` add, \`~\` change, \`-\` remove, \`!\` not applied and why. **Declarative**: what the file doesn't mention is left alone; removing what the file no longer lists needs \`--prune\`. The plan is computed by the server (it is the only one that sees the current env and MCP values). Env, MCP and skills restart the agent once at the end. Before applying, the previous file is saved to \`~/.easybits/backups/\` (roll back with \`easybits apply <backup> --agent <agent>\`). Limits: an agent can't change template (use \`--create\`), and agents without their own machine only take \`name\`. \`--show-secrets\` / \`--with-files\` keep producing the 0.9 clone JSON for \`create --from\`.
 
+### Language
+
+The CLI speaks Spanish or English following your locale: \`LANG=es_MX.UTF-8\` (or \`LC_ALL\`/\`LC_MESSAGES\`) → Spanish, anything else → English. Force it with \`--lang es|en\` or \`EASYBITS_LANG\`. It changes help, errors, hints and human output; **\`--json\` keys and exit codes never change** (\`error\` and \`hint\` are prose, so they follow the language).
+
 ### Naming
 
 One rule, like \`gh\`: \`easybits <noun> <verb>\`. Older spellings keep working and print the new one on stderr (never with \`--json\`): \`easybits config\` → \`mcp config\`, \`easybits mcp\` → \`mcp config --stdio\`, \`deploy ls\` → \`machines ls\` (\`easybits deploy <machine>\` is the verb), \`machines release\` → \`machines deploy\`, \`sandboxes create --timeout\` → \`--ttl\`.

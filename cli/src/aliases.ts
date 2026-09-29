@@ -11,7 +11,7 @@ function positionals(argv: string[]): number[] {
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--") break;
-    if (a === "--token") {
+    if (a === "--token" || a === "--lang") {
       i++;
       continue;
     }
@@ -25,10 +25,10 @@ const MACHINE_SUBS = ["ls", "list", "deploy", "release", "releases", "logs", "ro
 const SANDBOX_NAMES = ["sandboxes", "sandbox", "sb"];
 const AGENT_NAMES = ["agents", "agent"];
 
-/** Devuelve el argv reescrito y los avisos para quien usó una forma vieja. */
-export function normalizeArgs(input: string[]): { argv: string[]; notes: string[] } {
+/** Devuelve el argv reescrito y los avisos (inglés, español) para quien usó una forma vieja. */
+export function normalizeArgs(input: string[]): { argv: string[]; notes: Array<[en: string, es: string]> } {
   const argv = [...input];
-  const notes: string[] = [];
+  const notes: Array<[string, string]> = [];
   const end = argv.indexOf("--");
   const head = end === -1 ? argv : argv.slice(0, end);
   const help = head.includes("--help") || head.includes("-h");
@@ -38,11 +38,11 @@ export function normalizeArgs(input: string[]): { argv: string[]; notes: string[
   // `config` y `mcp` eran dos comandos para lo mismo: ahora `mcp config [--stdio]`.
   if (at(0) === "config") {
     argv.splice(pos[0], 1, "mcp", "config");
-    notes.push("`easybits config` is now `easybits mcp config`.");
+    notes.push(["`easybits config` is now `easybits mcp config`.", "`easybits config` ahora es `easybits mcp config`."]);
   } else if (at(0) === "mcp" && at(1) == null && !help) {
     argv.splice(pos[0] + 1, 0, "config");
     argv.push("--stdio");
-    notes.push("`easybits mcp` is now `easybits mcp config --stdio`.");
+    notes.push(["`easybits mcp` is now `easybits mcp config --stdio`.", "`easybits mcp` ahora es `easybits mcp config --stdio`."]);
   }
 
   // `deploy` era alias del SUSTANTIVO machines (y chocaba con el verbo: `deploy deploy`).
@@ -51,10 +51,10 @@ export function normalizeArgs(input: string[]): { argv: string[]; notes: string[
     const sub = at(1);
     if (sub && MACHINE_SUBS.includes(sub) && sub !== "deploy") {
       argv[pos[0]] = "machines";
-      notes.push(`\`easybits deploy ${sub}\` is now \`easybits machines ${sub}\`.`);
+      notes.push([`\`easybits deploy ${sub}\` is now \`easybits machines ${sub}\`.`, `\`easybits deploy ${sub}\` ahora es \`easybits machines ${sub}\`.`]);
     } else if (sub === "deploy") {
       argv[pos[0]] = "machines";
-      notes.push("`easybits deploy deploy` is now `easybits deploy <machine>`.");
+      notes.push(["`easybits deploy deploy` is now `easybits deploy <machine>`.", "`easybits deploy deploy` ahora es `easybits deploy <máquina>`."]);
     } else {
       argv.splice(pos[0], 1, "machines", "deploy");
     }
@@ -64,7 +64,7 @@ export function normalizeArgs(input: string[]): { argv: string[]; notes: string[
   // `machines release` (publica) contra `machines releases` (lista): se queda `deploy`.
   if ((at(0) === "machines" || at(0) === "machine") && at(1) === "release") {
     argv[pos[1]] = "deploy";
-    notes.push("`machines release` is now `machines deploy`.");
+    notes.push(["`machines release` is now `machines deploy`.", "`machines release` ahora es `machines deploy`."]);
   }
 
   // `--timeout` quería decir dos cosas: vida de la caja (create) y tope del comando (exec).
@@ -75,7 +75,10 @@ export function normalizeArgs(input: string[]): { argv: string[]; notes: string[
     for (let i = 0; i < (stop === -1 ? argv.length : stop); i++) {
       if (argv[i] === "--timeout" || argv[i].startsWith("--timeout=")) {
         argv[i] = argv[i].replace("--timeout", "--ttl");
-        notes.push(`\`${noun} create --timeout\` is now \`--ttl\`${noun === "sandboxes" ? " (`--timeout` stays for `exec`)" : ""}.`);
+        notes.push([
+          `\`${noun} create --timeout\` is now \`--ttl\`${noun === "sandboxes" ? " (`--timeout` stays for `exec`)" : ""}.`,
+          `\`${noun} create --timeout\` ahora es \`--ttl\`${noun === "sandboxes" ? " (`--timeout` sigue en `exec`)" : ""}.`,
+        ]);
       }
     }
   }

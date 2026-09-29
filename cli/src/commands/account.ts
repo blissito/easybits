@@ -5,6 +5,7 @@ import { notLoggedIn, usageError } from "../errors.js";
 import { emit, fmtBytes, table, fmtDate } from "../output.js";
 import { getClient, resolveApiKey, resolveCredential } from "../client.js";
 import { fetchEmail, oauthLogin, readRc, writeRc } from "../auth.js";
+import { t } from "../i18n.js";
 
 export const login: Command = {
   name: "login",
@@ -30,9 +31,9 @@ export const login: Command = {
       // historial (clig.dev). `login <api-key>` sigue funcionando, pero ya no se anuncia.
       let key = ctx.args[0];
       if (key === "-" || bool(ctx, "with-token")) {
-        if (process.stdin.isTTY) throw usageError("Pipe the API key on stdin: easybits login - < key.txt", this.usage);
+        if (process.stdin.isTTY) throw usageError(t("Pipe the API key on stdin: easybits login - < key.txt", "Pasa la API key por stdin: easybits login - < key.txt"), this.usage);
         key = (await readStdin()).toString("utf8").trim();
-        if (!key) throw usageError("Empty API key on stdin.", this.usage);
+        if (!key) throw usageError(t("Empty API key on stdin.", "La API key llegó vacía por stdin."), this.usage);
       }
       if (key) {
         // Se valida antes de guardar: una key mala no debe reemplazar una sesión buena.
@@ -41,13 +42,13 @@ export const login: Command = {
         const { oauth: _drop, ...rest } = readRc();
         writeRc({ ...rest, apiKey: key });
         if (ctx.json) process.stdout.write(JSON.stringify({ event: "logged_in", email, method: "apiKey" }) + "\n");
-        else console.log(`Logged in${email ? ` as ${email}` : ""}. API key saved to ~/.easybitsrc`);
+        else console.log(t(`Logged in${email ? ` as ${email}` : ""}. API key saved to ~/.easybitsrc`, `Sesión iniciada${email ? ` como ${email}` : ""}. API key guardada en ~/.easybitsrc`));
         return;
       }
       const session = await oauthLogin(ctx, { openBrowser: !bool(ctx, "no-browser") });
       const email = await fetchEmail(session.accessToken);
       if (ctx.json) process.stdout.write(JSON.stringify({ event: "logged_in", email, method: "oauth" }) + "\n");
-      else console.log(`Logged in${email ? ` as ${email}` : ""}. Session saved to ~/.easybitsrc`);
+      else console.log(t(`Logged in${email ? ` as ${email}` : ""}. Session saved to ~/.easybitsrc`, `Sesión iniciada${email ? ` como ${email}` : ""}. Sesión guardada en ~/.easybitsrc`));
     },
   },
 };
@@ -64,7 +65,7 @@ export const logout: Command = {
     async run(ctx) {
       const { oauth: _o, apiKey: _k, ...rest } = readRc();
       writeRc(rest);
-      emit(ctx, { ok: true }, () => console.log("Logged out. Removed credentials from ~/.easybitsrc"));
+      emit(ctx, { ok: true }, () => console.log(t("Logged out. Removed credentials from ~/.easybitsrc", "Sesión cerrada. Se quitaron las credenciales de ~/.easybitsrc")));
     },
   },
 };
@@ -84,10 +85,13 @@ export const usage: Command = {
       emit(ctx, u, () => {
         console.log(`Plan:     ${u.plan}`);
         console.log(
-          `Storage:  ${fmtBytes(u.storage.usedBytes)} of ${fmtBytes(u.storage.maxBytes)} (${u.storage.percentUsed}%)`,
+          t(`Storage:  ${fmtBytes(u.storage.usedBytes)} of ${fmtBytes(u.storage.maxBytes)} (${u.storage.percentUsed}%)`, `Espacio:  ${fmtBytes(u.storage.usedBytes)} de ${fmtBytes(u.storage.maxBytes)} (${u.storage.percentUsed}%)`),
         );
         console.log(
-          `Files:    ${u.counts.files}  (trash: ${u.counts.deletedFiles})\nWebsites: ${u.counts.websites}\nWebhooks: ${u.counts.webhooks}`,
+          t(
+            `Files:    ${u.counts.files}  (trash: ${u.counts.deletedFiles})\nWebsites: ${u.counts.websites}\nWebhooks: ${u.counts.webhooks}`,
+            `Archivos: ${u.counts.files}  (papelera: ${u.counts.deletedFiles})\nSitios:   ${u.counts.websites}\nWebhooks: ${u.counts.webhooks}`,
+          ),
         );
       });
     },
@@ -112,7 +116,7 @@ export const websites: Command = {
           table(
             items.map((w) => ({ ...w, size: fmtBytes(w.totalSize), createdAt: fmtDate(w.createdAt) })),
             [["id", "ID"], ["name", "NAME"], ["status", "STATUS"], ["fileCount", "FILES"], ["size", "SIZE"], ["url", "URL"]],
-            "No websites yet.",
+            t("No websites yet.", "Todavía no hay sitios."),
           ),
         );
       },
@@ -136,8 +140,8 @@ export const providers: Command = {
         note: "Use the Developer Dashboard to add custom providers.",
       };
       emit(ctx, data, () => {
-        console.log("Default provider: Tigris (platform)");
-        console.log("Use the Developer Dashboard to add custom providers.");
+        console.log(t("Default provider: Tigris (platform)", "Proveedor por default: Tigris (plataforma)"));
+        console.log(t("Use the Developer Dashboard to add custom providers.", "Agrega proveedores propios en el Developer Dashboard."));
       });
     },
   },
@@ -205,7 +209,7 @@ export const whoami: Command = {
               : undefined;
       if (!source) throw notLoggedIn();
       const email = await fetchEmail(await resolveCredential(ctx));
-      emit(ctx, { email, source, baseUrl: await resolveBaseUrl() }, () => console.log(`${email ?? "(unknown email)"}  via ${source}`));
+      emit(ctx, { email, source, baseUrl: await resolveBaseUrl() }, () => console.log(`${email ?? t("(unknown email)", "(correo desconocido)")}  ${t("via", "por")} ${source}`));
     },
   },
 };

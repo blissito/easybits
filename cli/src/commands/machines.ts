@@ -4,6 +4,7 @@ import { emit, fmtBytes, fmtDate, table } from "../output.js";
 import { getClient } from "../client.js";
 import { usageError } from "../errors.js";
 import { sandboxRecord } from "./sandboxes.js";
+import { t } from "../i18n.js";
 
 const SECRETS_USAGE = "easybits machines secrets <ls|set|unset> <machine> [--dotenv <path> | NAME]";
 
@@ -26,7 +27,7 @@ export const machines: Command = {
           table(
             rows,
             [["sandboxId", "ID"], ["name", "NAME"], ["tier", "TIER"], ["status", "STATUS"], ["monthlyMxn", "MXN/MONTH"]],
-            "No permanent machines. See: easybits docs hosting",
+            t("No permanent machines. See: easybits docs hosting", "No hay máquinas permanentes. Mira: easybits docs hosting"),
           ),
         );
       },
@@ -56,7 +57,7 @@ export const machines: Command = {
           table(
             r.items.map((x) => ({ ...x, size: fmtBytes(x.sizeBytes), createdAt: fmtDate(x.createdAt) })),
             [["version", "VERSION"], ["releaseId", "ID"], ["status", "STATUS"], ["size", "SIZE"], ["createdAt", "CREATED"], ["message", "MESSAGE"]],
-            "No releases yet. Publish one: easybits machines deploy <machine>",
+            t("No releases yet. Publish one: easybits machines deploy <machine>", "Todavía no hay releases. Publica uno: easybits deploy <máquina>"),
           ),
         );
       },
@@ -85,7 +86,7 @@ export const machines: Command = {
         const rel = need(ctx, 1, "release-id", this.usage);
         const eb = await getClient(ctx);
         const r = await eb.machines.rollback(id, rel);
-        emit(ctx, r, () => console.log(`Rolled back to v${r.version} (exit ${r.exitCode})`));
+        emit(ctx, r, () => console.log(t(`Rolled back to v${r.version} (exit ${r.exitCode})`, `De vuelta en v${r.version} (salida ${r.exitCode})`)));
         if (r.exitCode !== 0) process.exitCode = 1;
       },
     },
@@ -106,23 +107,23 @@ export const machines: Command = {
         if (action === "ls" || action === "list") {
           const r = await eb.machines.secrets(id);
           emit(ctx, r, () => {
-            console.log(`Injected: ${r.secretNames.length ? r.secretNames.join(", ") : "(none)"}`);
-            console.log(`In vault: ${r.inVault.length ? r.inVault.join(", ") : "(none)"}`);
+            console.log(`${t("Injected", "Inyectados")}: ${r.secretNames.length ? r.secretNames.join(", ") : t("(none)", "(ninguno)")}`);
+            console.log(`${t("In vault", "En el vault")}: ${r.inVault.length ? r.inVault.join(", ") : t("(none)", "(ninguno)")}`);
           });
         } else if (action === "set") {
           // KEY=VALUE en argv sigue funcionando (compatibilidad), pero ya no se anuncia:
           // clig.dev «Do not read secrets directly from flags» (gh secret set lee stdin).
           const file = str(ctx, "dotenv");
           const values = { ...(file ? await readEnvFile(file, SECRETS_USAGE) : {}), ...pairs(ctx.args.slice(2), SECRETS_USAGE) };
-          if (!Object.keys(values).length) throw usageError("Give --dotenv <path> (or - for stdin).", SECRETS_USAGE);
+          if (!Object.keys(values).length) throw usageError(t("Give --dotenv <path> (or - for stdin).", "Pasa --dotenv <ruta> (o - para stdin)."), SECRETS_USAGE);
           const r = await eb.machines.setSecrets(id, values);
-          emit(ctx, r, () => console.log(`Set ${Object.keys(values).join(", ")}. Injected now: ${r.secretNames.join(", ")}`));
+          emit(ctx, r, () => console.log(t(`Set ${Object.keys(values).join(", ")}. Injected now: ${r.secretNames.join(", ")}`, `Guardados ${Object.keys(values).join(", ")}. Inyectados ahora: ${r.secretNames.join(", ")}`)));
         } else if (action === "unset") {
           const name = need(ctx, 2, "NAME", SECRETS_USAGE);
           const r = await eb.machines.unsetSecret(id, name);
-          emit(ctx, r, () => console.log(`Unset ${name} (value kept in the vault)`));
+          emit(ctx, r, () => console.log(t(`Unset ${name} (value kept in the vault)`, `Quitado ${name} (el valor sigue en el vault)`)));
         } else {
-          throw usageError(`Unknown secrets action "${action}".`, SECRETS_USAGE);
+          throw usageError(t(`Unknown secrets action "${action}".`, `Acción de secrets desconocida "${action}".`), SECRETS_USAGE);
         }
       },
     },

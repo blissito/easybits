@@ -11,6 +11,7 @@ import { forceRefresh, usedSession } from "./client.js";
 import { resolveRefs } from "./resolve.js";
 import { cachedNewer, updateNotice, UPGRADE } from "./update.js";
 import { normalizeArgs } from "./aliases.js";
+import { detectLang, langFlag, setLang, t } from "./i18n.js";
 
 declare const __CLI_VERSION__: string;
 const VERSION = typeof __CLI_VERSION__ === "string" ? __CLI_VERSION__ : "dev";
@@ -18,6 +19,7 @@ const VERSION = typeof __CLI_VERSION__ === "string" ? __CLI_VERSION__ : "dev";
 const GLOBAL_OPTIONS: Options = {
   json: { type: "boolean" },
   token: { type: "string" },
+  lang: { type: "string" },
   help: { type: "boolean", short: "h" },
   version: { type: "boolean", short: "v" },
 };
@@ -43,7 +45,7 @@ function positionalIndexes(argv: string[]): number[] {
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--") break;
-    if (a === "--token") {
+    if (a === "--token" || a === "--lang") {
       i++;
       continue;
     }
@@ -75,26 +77,30 @@ function findSub(cmd: Command, name: string) {
 
 // «Did you mean» a la Cobra: la sugerencia va en la pista; nunca se corre sola.
 function unknownCommand(name: string): CliError {
-  const e = usageError(`Unknown command "${name}".`);
+  const e = usageError(t(`Unknown command "${name}".`, `Comando desconocido "${name}".`));
   const names = COMMANDS.flatMap((c) => [c.name, ...(c.aliases ?? [])]);
   const hint = didYouMean(name, names, "easybits ", (n) => findCommand(n)?.name ?? n);
-  if (hint) e.hint = `${hint}\nRun: easybits --help`;
+  if (hint) e.hint = `${localHint(hint)}\n${t("Run", "Corre")}: easybits --help`;
   return e;
 }
 
 function unknownSub(cmd: Command, name: string): CliError {
-  const e = usageError(`Unknown subcommand "${cmd.name} ${name}".`, `easybits ${cmd.name} <${Object.keys(cmd.subs ?? {}).join("|")}>`);
+  const e = usageError(t(`Unknown subcommand "${cmd.name} ${name}".`, `Subcomando desconocido "${cmd.name} ${name}".`), `easybits ${cmd.name} <${Object.keys(cmd.subs ?? {}).join("|")}>`);
   const names = Object.entries(cmd.subs ?? {}).flatMap(([n, l]) => [n, ...(l.aliases ?? [])]);
   const hint = didYouMean(name, names, `easybits ${cmd.name} `, (n) => findSub(cmd, n)?.[0] ?? n);
-  if (hint) e.hint = `${hint}\n${e.hint}`;
+  if (hint) e.hint = `${localHint(hint)}\n${e.hint}`;
   return e;
 }
 
 /** Aviso tenue en stderr para quien usa una forma vieja; nunca con --json. */
-function aliasNote(note: string) {
+function aliasNote([en, es]: [string, string]) {
+  const note = t(en, es);
   const dim = process.stderr.isTTY && !process.env.NO_COLOR;
   process.stderr.write(dim ? `\x1b[2m${note}\x1b[0m\n` : `${note}\n`);
 }
+
+/** «Did you mean» de suggest.ts (puro, en inglés) en el idioma de la corrida. */
+const localHint = (hint: string) => hint.replace("Did you mean this?", t("Did you mean this?", "¿Quisiste decir esto?"));
 
 async function main(input: string[]): Promise<void> {
   // La regla de nombres (aliases.ts): lo viejo sigue funcionando y avisa la forma nueva.
@@ -148,7 +154,7 @@ async function main(input: string[]): Promise<void> {
       leaf = cmd.subs[cmd.defaultSub];
       subKey = cmd.defaultSub;
     } else if (!argv.includes("--help") && !argv.includes("-h")) {
-      throw usageError(`Missing subcommand for "${cmd.name}".`, `easybits ${cmd.name} <${Object.keys(cmd.subs).join("|")}>`);
+      throw usageError(t(`Missing subcommand for "${cmd.name}".`, `Falta el subcomando de "${cmd.name}".`), `easybits ${cmd.name} <${Object.keys(cmd.subs).join("|")}>`);
     }
   }
 
@@ -189,6 +195,8 @@ async function main(input: string[]): Promise<void> {
 }
 
 const argv = process.argv.slice(2);
+// El idioma antes que nada: la ayuda y hasta el primer error de uso ya salen en él.
+setLang(detectLang(langFlag(argv)));
 // El aviso de versión nueva sólo para una persona: nunca con --json ni sin terminal. La
 // consulta a npm (una vez al día) corre en paralelo al comando.
 const notice = process.stderr.isTTY && !wantsJson(argv) && !argv.includes("doctor") ? updateNotice(VERSION) : null;
@@ -197,7 +205,7 @@ main(argv)
   const e: CliError = toCliError(err);
   // Una bandera o comando que esta versión no conoce, habiendo una más nueva: dilo.
   const latest = e.code === "usage" ? cachedNewer(VERSION) : null;
-  if (latest) e.hint = `${e.hint ? e.hint + "\n" : ""}You have ${VERSION}; ${latest} is out and may have it. Run: ${UPGRADE}`;
+  if (latest) e.hint = `${e.hint ? e.hint + "\n" : ""}${t(`You have ${VERSION}; ${latest} is out and may have it. Run: ${UPGRADE}`, `Tienes ${VERSION}; ya salió ${latest} y quizá lo trae. Corre: ${UPGRADE}`)}`;
   if (wantsJson(argv)) {
     // Con --json el error va a STDOUT: es el único canal que parsea un agente. Mismo
     // formato que el CLI hermano `ghosty`: { error, code (= código de salida), hint }.

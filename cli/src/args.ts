@@ -1,11 +1,12 @@
 import { existsSync, readFileSync } from "node:fs";
 import type { Ctx } from "./types.js";
 import { usageError } from "./errors.js";
+import { t } from "./i18n.js";
 
 /** Posicional obligatorio `i`; si falta, error de uso (exit 2) con la línea de uso. */
 export function need(ctx: Ctx, i: number, name: string, usage: string): string {
   const v = ctx.args[i];
-  if (v == null || v === "") throw usageError(`Missing <${name}>.`, usage);
+  if (v == null || v === "") throw usageError(t(`Missing <${name}>.`, `Falta <${name}>.`), usage);
   return v;
 }
 
@@ -27,7 +28,7 @@ export function int(ctx: Ctx, key: string, usage: string): number | undefined {
   const v = str(ctx, key);
   if (v == null) return undefined;
   const n = Number(v);
-  if (!Number.isInteger(n) || n < 0) throw usageError(`--${key} must be a non-negative integer.`, usage);
+  if (!Number.isInteger(n) || n < 0) throw usageError(t(`--${key} must be a non-negative integer.`, `--${key} debe ser un entero no negativo.`), usage);
   return n;
 }
 
@@ -36,7 +37,7 @@ export function pairs(items: string[], usage: string): Record<string, string> {
   const out: Record<string, string> = {};
   for (const item of items) {
     const eq = item.indexOf("=");
-    if (eq < 1) throw usageError(`Expected KEY=VALUE, got "${item}".`, usage);
+    if (eq < 1) throw usageError(t(`Expected KEY=VALUE, got "${item}".`, `Se esperaba KEY=VALUE y llegó "${item}".`), usage);
     out[item.slice(0, eq)] = item.slice(eq + 1);
   }
   return out;
@@ -67,10 +68,10 @@ export const ENV_FILE_OPTION = {
 export async function readEnvFile(path: string, usage: string): Promise<Record<string, string>> {
   let text: string;
   if (path === "-") {
-    if (process.stdin.isTTY) throw usageError("--dotenv - expects KEY=VALUE lines on stdin.", usage);
+    if (process.stdin.isTTY) throw usageError(t("--dotenv - expects KEY=VALUE lines on stdin.", "--dotenv - espera renglones KEY=VALUE por stdin."), usage);
     text = (await readStdin()).toString("utf8");
   } else {
-    if (!existsSync(path)) throw usageError(`File not found: ${path}`, usage);
+    if (!existsSync(path)) throw usageError(t(`File not found: ${path}`, `No existe el archivo: ${path}`), usage);
     text = readFileSync(path, "utf8");
   }
   const out: Record<string, string> = {};
@@ -78,7 +79,7 @@ export async function readEnvFile(path: string, usage: string): Promise<Record<s
     const line = raw.trim();
     if (!line || line.startsWith("#")) continue;
     const m = /^(?:export\s+)?([A-Za-z_][A-Za-z0-9_.-]*)\s*=\s*(.*)$/.exec(line);
-    if (!m) throw usageError(`${path === "-" ? "stdin" : path}:${n + 1}: expected KEY=VALUE.`, usage);
+    if (!m) throw usageError(`${path === "-" ? "stdin" : path}:${n + 1}: ${t("expected KEY=VALUE.", "se esperaba KEY=VALUE.")}`, usage);
     let v = m[2];
     if (v.length >= 2 && (v[0] === '"' || v[0] === "'") && v.endsWith(v[0])) v = v.slice(1, -1);
     out[m[1]] = v;

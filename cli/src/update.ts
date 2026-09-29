@@ -6,6 +6,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
+import { t } from "./i18n.js";
 
 const FILE = join(process.env.XDG_CONFIG_HOME || join(homedir(), ".config"), "easybits", "update.json");
 const DAY = 24 * 60 * 60 * 1000;
@@ -64,5 +65,5 @@ export function cachedNewer(current: string): string | null {
 export async function updateNotice(current: string): Promise<string | null> {
   if (current === "dev") return null;
   const latest = await latestVersion();
-  return latest && newer(latest, current) ? `Update available: ${current} → ${latest}. Run: ${UPGRADE}` : null;
+  return latest && newer(latest, current) ? t(`Update available: ${current} → ${latest}. Run: ${UPGRADE}`, `Hay versión nueva: ${current} → ${latest}. Corre: ${UPGRADE}`) : null;
 }

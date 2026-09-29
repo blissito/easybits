@@ -3,6 +3,7 @@ import type { Ctx } from "./types.js";
 import { bool } from "./args.js";
 import { CliError, EXIT } from "./errors.js";
 import { interactive } from "./auth.js";
+import { t } from "./i18n.js";
 
 /** La bandera que salta la confirmación; se agrega a cada hoja destructiva. */
 export const YES_OPTION = {
@@ -35,7 +36,7 @@ async function ask(question: string): Promise<string> {
  */
 export function requireYesIfHeadless(ctx: Ctx): void {
   if (bool(ctx, "yes") || interactive(ctx)) return;
-  throw new CliError("--yes required when not running interactively.", EXIT.USAGE, `Run: ${sameCommand()} --yes`, "usage");
+  throw new CliError(t("--yes required when not running interactively.", "Sin terminal hace falta --yes."), EXIT.USAGE, `${t("Run", "Corre")}: ${sameCommand()} --yes`, "usage");
 }
 
 /**
@@ -50,12 +51,12 @@ export async function confirm(ctx: Ctx, action: string, opts: { typeName?: strin
   if (bool(ctx, "yes")) return;
   requireYesIfHeadless(ctx);
   if (opts.typeName) {
-    process.stderr.write(`${action}\nThis cannot be undone.\n`);
-    const answer = await ask(`Type "${opts.typeName}" to confirm: `);
-    if (answer !== opts.typeName) throw new CliError("Aborted: the name did not match.", EXIT.USAGE, undefined, "aborted");
+    process.stderr.write(`${action}\n${t("This cannot be undone.", "No se puede deshacer.")}\n`);
+    const answer = await ask(t(`Type "${opts.typeName}" to confirm: `, `Teclea "${opts.typeName}" para confirmar: `));
+    if (answer !== opts.typeName) throw new CliError(t("Aborted: the name did not match.", "Cancelado: el nombre no coincide."), EXIT.USAGE, undefined, "aborted");
     return;
   }
-  const answer = await ask(`${action} [y/N] `);
+  const answer = await ask(`${action} ${t("[y/N]", "[s/N]")} `);
   // Cancelar sale con 2, igual que gh (CancelError → exit 2).
-  if (!/^y(es)?$/i.test(answer)) throw new CliError("Aborted.", EXIT.USAGE, undefined, "aborted");
+  if (!/^(y(es)?|s[ií]?)$/i.test(answer)) throw new CliError(t("Aborted.", "Cancelado."), EXIT.USAGE, undefined, "aborted");
 }

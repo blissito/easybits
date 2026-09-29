@@ -17,6 +17,7 @@ import { resolveRef } from "../resolve.js";
 import { EXIT, usageError } from "../errors.js";
 import { YES_OPTION, confirm, requireYesIfHeadless } from "../prompt.js";
 import { buildExport, exportAgent, waitMachine } from "./agents-config.js";
+import { serverText, t } from "../i18n.js";
 
 type Change = { op: "+" | "~" | "-" | "!"; what: string };
 type ApplyRes = { agent: string; dryRun: boolean; plan: Change[]; applied?: string[]; failed?: { what: string; error: string }; before?: string };
@@ -55,7 +56,7 @@ export const exportSpec: Leaf = {
     }
     if (isFileTarget(out)) {
       writeFileSync(out, /\.json$/i.test(out) ? JSON.stringify(await getJson(), null, 2) + "\n" : await getYaml());
-      emit(ctx, { saved: resolve(out) }, () => console.log(`Saved ${resolve(out)}\nEdit it, then: easybits apply ${out} --dry-run`));
+      emit(ctx, { saved: resolve(out) }, () => console.log(t(`Saved ${resolve(out)}\nEdit it, then: easybits apply ${out} --dry-run`, `Guardado ${resolve(out)}\nEdítalo y luego: easybits apply ${out} --dry-run`)));
       return;
     }
     // Directorio: el archivo + el contenido de skills y archivos, para que `apply DIR` los suba.
@@ -76,7 +77,7 @@ export const exportSpec: Leaf = {
     const summary = { saved: dir, skills: (x.skills ?? []).map((s) => s.slug), files: (x.files ?? []).map((f) => f.path) };
     emit(ctx, summary, () =>
       console.log(
-        `Saved ${dir}/agent.yaml${summary.skills.length ? ` + skills/ (${summary.skills.join(", ")})` : ""}${summary.files.length ? ` + files/ (${summary.files.length})` : ""}\nEdit it, then: easybits apply ${out} --dry-run`,
+        `${t("Saved", "Guardado")} ${dir}/agent.yaml${summary.skills.length ? ` + skills/ (${summary.skills.join(", ")})` : ""}${summary.files.length ? ` + files/ (${summary.files.length})` : ""}\n${t("Edit it, then", "Edítalo y luego")}: easybits apply ${out} --dry-run`,
       ),
     );
   },
@@ -85,10 +86,10 @@ export const exportSpec: Leaf = {
 // ── apply ─────────────────────────────────────────────────────────────────────────────────
 
 function readTarget(target: string, usage: string): { text: string; dir?: string } {
-  if (!existsSync(target)) throw usageError(`Not found: ${target}`, usage);
+  if (!existsSync(target)) throw usageError(t(`Not found: ${target}`, `No existe: ${target}`), usage);
   if (statSync(target).isDirectory()) {
     const name = SPEC_NAMES.find((n) => existsSync(join(target, n)));
-    if (!name) throw usageError(`${target} has no agent.yaml.`, usage);
+    if (!name) throw usageError(t(`${target} has no agent.yaml.`, `${target} no tiene agent.yaml.`), usage);
     return { text: readFileSync(join(target, name), "utf8"), dir: target };
   }
   return { text: readFileSync(target, "utf8") };
@@ -114,7 +115,7 @@ export async function applyTarget(ctx: Ctx, target: string, o: ApplyOpts): Promi
   const uploads = dir ? readUploads(dir) : {};
 
   if (o.create) {
-    if (o.agent) throw usageError("Use --agent or --create, not both.", o.usage);
+    if (o.agent) throw usageError(t("Use --agent or --create, not both.", "Usa --agent o --create, no los dos."), o.usage);
     const body = { spec: text, secrets, ...(o.name ? { name: o.name } : {}) };
     const plan = await api<CreateRes>(ctx, "POST", "/agents/apply", { ...body, dryRun: true });
     if (o.dryRun) {
@@ -122,13 +123,13 @@ export async function applyTarget(ctx: Ctx, target: string, o: ApplyOpts): Promi
         printPlan(plan.plan);
         for (const s of Object.keys(uploads.skills ?? {})) console.log(`+ skill ${s}`);
         for (const f of Object.keys(uploads.files ?? {})) console.log(`+ file ${f}`);
-        console.log("(dry run: nothing created)");
+        console.log(t("(dry run: nothing created)", "(simulación: no se creó nada)"));
       });
       return;
     }
     const created = await api<CreateRes>(ctx, "POST", "/agents/apply", body);
     const id = created.agentId!;
-    if (!ctx.json) process.stderr.write(`Created ${id}; applying the rest…\n`);
+    if (!ctx.json) process.stderr.write(t(`Created ${id}; applying the rest…\n`, `Creado ${id}; aplicando lo demás…\n`));
     // Lo que vive en la caja (skills, archivos) entra cuando la máquina contesta.
     let rest: ApplyRes | undefined;
     if (/\n?(skills|files):/m.test(text) || uploads.skills || uploads.files) {
@@ -139,17 +140,17 @@ export async function applyTarget(ctx: Ctx, target: string, o: ApplyOpts): Promi
     const res = { agentId: id, sandboxId: created.sandboxId, plan: [...created.plan, ...extra], applied: rest?.applied, failed: rest?.failed };
     emit(ctx, res, () => {
       printPlan(res.plan);
-      console.log(`Created ${id}.${res.failed ? "" : ` Try it: easybits agents try ${id} "hello"`}`);
-      if (res.failed) console.error(`Stopped at «${res.failed.what}»: ${res.failed.error}`);
+      console.log(t(`Created ${id}.${res.failed ? "" : ` Try it: easybits agents try ${id} "hello"`}`, `Creado ${id}.${res.failed ? "" : ` Pruébalo: easybits agents try ${id} "hola"`}`));
+      if (res.failed) console.error(t(`Stopped at «${res.failed.what}»: ${res.failed.error}`, `Se detuvo en «${res.failed.what}»: ${serverText(res.failed.error)}`));
     });
     if (res.failed) process.exitCode = EXIT.API;
     return;
   }
 
   const ref = o.agent ?? specId(text);
-  if (!ref) throw usageError("The file has no agent id.", "Point it at one with --agent <name|id>, or make a new one with --create.");
+  if (!ref) throw usageError(t("The file has no agent id.", "El archivo no trae id de agente."), t("Point it at one with --agent <name|id>, or make a new one with --create.", "Apúntalo a uno con --agent <nombre|id>, o crea uno nuevo con --create."));
   const id = await resolveRef(ctx, "agent", ref);
-  if (missing.length && !ctx.json) process.stderr.write(`Not in your environment (keep their current value): ${missing.join(", ")}\n`);
+  if (missing.length && !ctx.json) process.stderr.write(t(`Not in your environment (keep their current value): ${missing.join(", ")}\n`, `No están en tu entorno (conservan su valor de hoy): ${missing.join(", ")}\n`));
   const path = `/agents/${id}/apply`;
   const body = { spec: text, secrets, ...uploads, ...(o.prune ? { prune: true } : {}) };
   const plan = await api<ApplyRes>(ctx, "POST", path, { ...body, dryRun: true });
@@ -157,19 +158,25 @@ export async function applyTarget(ctx: Ctx, target: string, o: ApplyOpts): Promi
   if (o.dryRun || !actionable.length) {
     emit(ctx, plan, () => {
       if (plan.plan.length) printPlan(plan.plan);
-      console.log(actionable.length ? "(dry run: nothing changed)" : plan.plan.length ? "Nothing to apply (see the ! lines)." : "No changes: the agent already matches the file.");
+      console.log(
+        actionable.length
+          ? t("(dry run: nothing changed)", "(simulación: no cambió nada)")
+          : plan.plan.length
+            ? t("Nothing to apply (see the ! lines).", "Nada que aplicar (mira los renglones con !).")
+            : t("No changes: the agent already matches the file.", "Sin cambios: el agente ya coincide con el archivo."),
+      );
     });
     return;
   }
   requireYesIfHeadless(ctx);
-  await confirm(ctx, `${plan.plan.map(line).join("\n")}\nApply ${actionable.length} change(s) to ${id}?`);
+  await confirm(ctx, `${plan.plan.map(line).join("\n")}\n${t(`Apply ${actionable.length} change(s) to ${id}?`, `¿Aplicar ${actionable.length} cambio(s) a ${id}?`)}`);
   const r = await api<ApplyRes>(ctx, "POST", path, body);
   const backup = r.before ? saveBackup(id, r.before) : undefined;
   const { before: _b, ...shown } = r;
   emit(ctx, { ...shown, ...(backup ? { backup } : {}) }, () => {
-    console.log(`Applied ${r.applied?.length ?? 0} change(s) to ${id}.`);
-    if (backup) console.log(`Before (to roll back: easybits apply ${backup} --agent ${id}): ${backup}`);
-    if (r.failed) console.error(`Stopped at «${r.failed.what}»: ${r.failed.error}`);
+    console.log(t(`Applied ${r.applied?.length ?? 0} change(s) to ${id}.`, `${r.applied?.length ?? 0} cambio(s) aplicados a ${id}.`));
+    if (backup) console.log(t(`Before (to roll back: easybits apply ${backup} --agent ${id}): ${backup}`, `Lo de antes (para volver: easybits apply ${backup} --agent ${id}): ${backup}`));
+    if (r.failed) console.error(t(`Stopped at «${r.failed.what}»: ${r.failed.error}`, `Se detuvo en «${r.failed.what}»: ${serverText(r.failed.error)}`));
   });
   if (r.failed) process.exitCode = EXIT.API;
 }

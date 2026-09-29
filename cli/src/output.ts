@@ -1,4 +1,5 @@
 import type { Ctx } from "./types.js";
+import { lang, t } from "./i18n.js";
 
 /** Con --json imprime `data` en stdout; si no, corre la salida para humanos. */
 export function emit(ctx: Ctx, data: unknown, human: () => void): void {
@@ -20,12 +21,21 @@ export function fmtDate(s: string | null | undefined): string {
   return Number.isNaN(d.getTime()) ? s : d.toISOString().slice(0, 16).replace("T", " ");
 }
 
+// Encabezados de tabla en español (con LANG=es_*). Las llaves de --json no cambian nunca.
+const HEADERS_ES: Record<string, string> = {
+  COLUMNS: "COLUMNAS", CREATED: "CREADO", DESCRIPTION: "DESCRIPCIÓN", DOMAIN: "DOMINIO", EXPIRES: "VENCE",
+  FILES: "ARCHIVOS", MESSAGE: "MENSAJE", MODIFIED: "MODIFICADO", "MXN/MONTH": "MXN/MES", NAME: "NOMBRE",
+  PATH: "RUTA", PORT: "PUERTO", ROWS: "FILAS", SIZE: "TAMAÑO", STATUS: "ESTADO", TABLE: "TABLA",
+  TYPE: "TIPO", "URL / COMMAND": "URL / COMANDO", VERSION: "VERSIÓN",
+};
+
 /** Tabla de texto plano con columnas alineadas. `empty` se imprime si no hay filas. */
 export function table(
   rows: Array<Record<string, unknown>>,
   cols: Array<[key: string, label: string]>,
-  empty = "Nothing here yet.",
+  empty = t("Nothing here yet.", "Todavía no hay nada."),
 ): void {
+  if (lang() === "es") cols = cols.map(([k, l]) => [k, HEADERS_ES[l] ?? l]);
   if (rows.length === 0) {
     console.log(empty);
     return;

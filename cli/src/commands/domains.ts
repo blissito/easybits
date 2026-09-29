@@ -4,6 +4,7 @@ import { emit, table } from "../output.js";
 import { getClient } from "../client.js";
 import { usageError } from "../errors.js";
 import { YES_OPTION, confirm, requireYesIfHeadless } from "../prompt.js";
+import { t } from "../i18n.js";
 
 async function sandbox(ctx: Ctx, usage: string) {
   const id = need(ctx, 0, "sandbox", usage);
@@ -24,7 +25,7 @@ export const domains: Command = {
       examples: ["easybits domains ls sb_abc123"],
       async run(ctx) {
         const items = await (await sandbox(ctx, this.usage)).listDomains();
-        emit(ctx, items, () => table(items as any, [["domain", "DOMAIN"], ["port", "PORT"]], "No custom domains."));
+        emit(ctx, items, () => table(items as any, [["domain", "DOMAIN"], ["port", "PORT"]], t("No custom domains.", "Sin dominios propios.")));
       },
     },
     add: {
@@ -35,12 +36,12 @@ export const domains: Command = {
       async run(ctx) {
         const domain = need(ctx, 1, "domain", this.usage);
         const port = int(ctx, "port", this.usage);
-        if (port == null) throw usageError("Missing --port.", this.usage);
+        if (port == null) throw usageError(t("Missing --port.", "Falta --port."), this.usage);
         const r = await (await sandbox(ctx, this.usage)).addDomain(domain, port);
         emit(ctx, r, () => {
-          console.log(`Attached ${r.domain} → port ${r.port}`);
-          console.log(`Create this DNS record: ${JSON.stringify(r.dns)}`);
-          console.log(`Then run: easybits domains verify ${ctx.args[0]} ${r.domain}`);
+          console.log(t(`Attached ${r.domain} → port ${r.port}`, `Ligado ${r.domain} → puerto ${r.port}`));
+          console.log(t(`Create this DNS record: ${JSON.stringify(r.dns)}`, `Crea este registro DNS: ${JSON.stringify(r.dns)}`));
+          console.log(t(`Then run: easybits domains verify ${ctx.args[0]} ${r.domain}`, `Luego corre: easybits domains verify ${ctx.args[0]} ${r.domain}`));
         });
       },
     },
@@ -52,8 +53,8 @@ export const domains: Command = {
         const domain = need(ctx, 1, "domain", this.usage);
         const r = await (await sandbox(ctx, this.usage)).verifyDomain(domain);
         emit(ctx, r, () => {
-          console.log(`${r.domain}: ${r.ready ? "ready" : "not ready yet"}`);
-          console.log(`DNS resolved: ${r.dns.resolved}  HTTPS ok: ${r.https.ok}`);
+          console.log(`${r.domain}: ${r.ready ? t("ready", "listo") : t("not ready yet", "todavía no está listo")}`);
+          console.log(t(`DNS resolved: ${r.dns.resolved}  HTTPS ok: ${r.https.ok}`, `DNS resuelve: ${r.dns.resolved}  HTTPS ok: ${r.https.ok}`));
           if (r.hint) console.log(r.hint);
         });
         // No listo = no es error de API, pero sí algo que un script debe notar.
@@ -71,9 +72,9 @@ export const domains: Command = {
         const domain = need(ctx, 1, "domain", this.usage);
         requireYesIfHeadless(ctx);
         // Reversible (se vuelve a agregar), pero corta el tráfico: basta [y/N] (clig.dev).
-        await confirm(ctx, `Detach ${domain} from ${ctx.args[0]}? It stops serving right away.`);
+        await confirm(ctx, t(`Detach ${domain} from ${ctx.args[0]}? It stops serving right away.`, `¿Desligar ${domain} de ${ctx.args[0]}? Deja de servir de inmediato.`));
         const r = await (await sandbox(ctx, this.usage)).removeDomain(domain);
-        emit(ctx, r, () => console.log(`Removed ${domain}`));
+        emit(ctx, r, () => console.log(t(`Removed ${domain}`, `Quitado ${domain}`)));
       },
     },
   },

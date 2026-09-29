@@ -5,7 +5,7 @@ license: MIT
 compatibility: Needs Node 22+ (npx is enough), network access to https://www.easybits.cloud and an EasyBits API key
 metadata:
   author: easybits
-  version: "1.8"
+  version: "1.9"
 ---
 
 # Use the EasyBits CLI
@@ -49,6 +49,9 @@ https://www.easybits.cloud/dash/developer — never invent one. `EASYBITS_URL` p
 at another server (default https://www.easybits.cloud).
 
 ## Rules for agents
+
+0. Output language follows the locale (`LANG=es_*` → Spanish). Parse `--json` keys and exit
+   codes, never prose; pass `--lang en` if you need to match English text.
 
 1. Always pass `--json`. stdout is then JSON only, errors included:
    `{"error":"…","code":3,"hint":"…"}` (`code` is the exit code). Read only stdout.

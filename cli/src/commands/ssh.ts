@@ -6,6 +6,7 @@ import type { Command } from "../types.js";
 import { need } from "../args.js";
 import { getClient } from "../client.js";
 import { CliError, usageError } from "../errors.js";
+import { t } from "../i18n.js";
 
 export const SSH_CONFIG_SNIPPET = `Host *.ghosty
     ProxyCommand easybits ssh-proxy %h
@@ -40,7 +41,7 @@ export const sshKey: Command = {
         execFileSync("ssh-keygen", ["-t", "ed25519", "-N", "", "-f", key, "-C", "easybits"], {
           stdio: ["ignore", "ignore", "inherit"],
         });
-        console.error(`easybits: key created at ${key}`);
+        console.error(t(`easybits: key created at ${key}`, `easybits: llave creada en ${key}`));
       }
       const publicKey = readFileSync(pub, "utf8").trim();
       if (ctx.json) process.stdout.write(JSON.stringify({ publicKey, path: pub }, null, 2) + "\n");
@@ -82,9 +83,9 @@ export const sshProxy: Command = {
         const hits = (await eb.sandboxes.list()).filter((s) => s.name === sandboxId);
         // Los nombres NO son únicos. Fallar es mejor que elegir: entrar a la caja
         // equivocada es peor que no entrar.
-        if (hits.length === 0) throw usageError(`No sandbox named "${sandboxId}".`, this.usage);
+        if (hits.length === 0) throw usageError(t(`No sandbox named "${sandboxId}".`, `No hay un sandbox llamado "${sandboxId}".`), this.usage);
         if (hits.length > 1)
-          throw usageError(`"${sandboxId}" is ambiguous: ${hits.length} sandboxes use it; pass the sandboxId.`, this.usage);
+          throw usageError(t(`"${sandboxId}" is ambiguous: ${hits.length} sandboxes use it; pass the sandboxId.`, `"${sandboxId}" es ambiguo: lo usan ${hits.length} sandboxes; pasa el sandboxId.`), this.usage);
         sandboxId = hits[0].sandboxId;
       }
       const sb = await eb.sandboxes.get(sandboxId);
@@ -97,10 +98,10 @@ export const sshProxy: Command = {
       // de más ahí corrompe el handshake.
       await new Promise<void>((resolve, reject) => {
         ws.onopen = () => resolve();
-        ws.onerror = () => reject(new CliError("easybits ssh-proxy: could not open the tunnel"));
+        ws.onerror = () => reject(new CliError(t("easybits ssh-proxy: could not open the tunnel", "easybits ssh-proxy: no se pudo abrir el túnel")));
       });
       ws.onerror = () => {
-        console.error("easybits ssh-proxy: tunnel error");
+        console.error(t("easybits ssh-proxy: tunnel error", "easybits ssh-proxy: error del túnel"));
         process.exit(1);
       };
       ws.onclose = () => process.exit(0);

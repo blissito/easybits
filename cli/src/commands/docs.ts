@@ -4,6 +4,7 @@ import type { Command } from "../types.js";
 import { bool } from "../args.js";
 import { emit } from "../output.js";
 import { CliError } from "../errors.js";
+import { t } from "../i18n.js";
 
 export const docs: Command = {
   name: "docs",
@@ -36,9 +37,9 @@ export const docs: Command = {
       const res = await fetch(url);
       if (!res.ok) {
         throw new CliError(
-          `Docs section "${section}" not found (${res.status}).`,
+          t(`Docs section "${section}" not found (${res.status}).`, `No existe la sección "${section}" de los docs (${res.status}).`),
           2,
-          `See the section list: ${base}/llms.txt`,
+          t(`See the section list: ${base}/llms.txt`, `Mira la lista de secciones: ${base}/llms.txt`),
           "usage",
           res.status,
         );
