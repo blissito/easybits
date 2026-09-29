@@ -99,6 +99,10 @@ export const MANAGED_ENV = new Set([
   "CLAUDE_CODE_OAUTH_TOKEN",
   "FORMMY_SECRET_KEY",
   "FORMMY_API_URL",
+  // La llave de EasyBits del agente (su acceso al MCP y, en ghosty-lite, su cerebro) la pone la
+  // plataforma desde el vault: un apply con EASYBITS_API_KEY en TU entorno no debe pisarla.
+  "EASYBITS_API_KEY",
+  "EASYBITS_BASE_URL",
 ]);
 
 const refName = (s: string) => s.replace(/[^A-Za-z0-9_]/g, "_").toUpperCase();
