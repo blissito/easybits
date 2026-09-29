@@ -69,6 +69,8 @@ Alias: \`easybits sb …\`. Everything after \`--\` in \`exec\` is the command, 
 
 \`\`\`bash
 easybits machines ls
+easybits machines launch --repo https://github.com/you/shop.git --tier micro      # create the machine and deploy (= launch_app)
+easybits machines launch --machine shop --archive ./build.tgz --prebuilt -m v2   # redeploy
 easybits deploy sb_abc123 -m "v1.2"                      # publish a release (= machines deploy)
 easybits machines releases sb_abc123 --limit 5
 easybits machines logs sb_abc123 --lines 100 --grep ERROR

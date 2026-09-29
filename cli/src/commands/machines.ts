@@ -1,8 +1,10 @@
 import type { Command } from "../types.js";
-import { ENV_FILE_OPTION, int, need, pairs, readEnvFile, str } from "../args.js";
+import { existsSync, readFileSync, statSync } from "node:fs";
+import { basename } from "node:path";
+import { ENV_FILE_OPTION, bool, int, list, need, pairs, readEnvFile, str } from "../args.js";
 import { emit, fmtBytes, fmtDate, table } from "../output.js";
 import { getClient } from "../client.js";
-import { usageError } from "../errors.js";
+import { CliError, usageError } from "../errors.js";
 import { sandboxRecord } from "./sandboxes.js";
 import { t } from "../i18n.js";
 
@@ -30,6 +32,112 @@ export const machines: Command = {
             t("No permanent machines. See: easybits docs hosting", "No hay máquinas permanentes. Mira: easybits docs hosting"),
           ),
         );
+      },
+    },
+    launch: {
+      aliases: ["create", "new"],
+      summary: "Create a machine and put an app on it in one step (or redeploy onto an existing one)",
+      usage:
+        "easybits machines launch (--repo <url> | --archive <url|file> | --machine <machine>) [--tier micro] [--name <name>] [--prebuilt] [--start <cmd>] [--port 3000] [--env K=V]... [--secret NAME]... [--data <path>]... [--domain <host>]",
+      options: {
+        repo: { type: "string", value: "url", description: "Git repo to clone (clean URL; a token goes in --repo-token)" },
+        branch: { type: "string", value: "name", description: "Branch to clone" },
+        "repo-token": { type: "string", value: "$secret:NAME", description: "Token for a private repo; best as $secret:NAME from your vault" },
+        archive: { type: "string", value: "url|file", description: "A .tar.gz/.zip of the app: URL, or a local file that gets uploaded first" },
+        machine: { type: "string", value: "machine", description: "Deploy onto this existing machine instead of creating one" },
+        tier: { type: "string", value: "tier", description: "Size for a new machine: nano, micro (default), estandar, focus, performance…" },
+        name: { type: "string", value: "name", description: "Human label" },
+        "app-dir": { type: "string", value: "dir", description: "Where the app lives in the machine (default /app)" },
+        build: { type: "string", value: "cmd", description: "Build command (default: npm ci && npm run build)" },
+        start: { type: "string", value: "cmd", description: "Start command (default: npm start)" },
+        port: { type: "string", value: "port", description: "Port the app listens on (default 3000)" },
+        prebuilt: { type: "boolean", description: "The code is already built: skip the build, just start it" },
+        env: { type: "string", multiple: true, value: "K=V", description: "Environment variable, non-secret (repeatable)" },
+        secret: { type: "string", multiple: true, value: "NAME", description: "Vault secret the app needs, by name (repeatable)" },
+        data: { type: "string", multiple: true, value: "path", description: "Path the nightly backup copies (repeatable). Without it nothing is backed up" },
+        domain: { type: "string", value: "host", description: "Domain to attach; the output says which DNS record to create" },
+        message: { type: "string", short: "m", value: "text", description: "Release note" },
+      },
+      examples: [
+        "easybits machines launch --repo https://github.com/you/shop.git --tier micro --domain shop.example.com",
+        "easybits machines launch --archive ./build.tgz --prebuilt --tier nano --name shop --start 'npm start'",
+        "easybits machines launch --machine shop --archive ./build.tgz --prebuilt -m v2   # redeploy",
+      ],
+      async run(ctx) {
+        const repo = str(ctx, "repo");
+        let archiveUrl = str(ctx, "archive");
+        const sandboxId = str(ctx, "machine");
+        // Con --machine también se puede mandar código nuevo (repo o archive): la máquina es el DESTINO.
+        if (!repo && !archiveUrl && !sandboxId) {
+          throw usageError(t("Give a source: --repo, --archive or --machine.", "Pasa una fuente: --repo, --archive o --machine."), this.usage);
+        }
+        if (repo && archiveUrl) throw usageError(t("--repo and --archive are exclusive.", "--repo y --archive se excluyen."), this.usage);
+        if (sandboxId && str(ctx, "tier")) {
+          throw usageError(t("--tier is only for a new machine (resize = redeploy_machine).", "--tier sólo aplica a una máquina nueva (cambiar tamaño = redeploy_machine)."), this.usage);
+        }
+
+        const eb = await getClient(ctx);
+
+        // Un archivo local se sube primero (público y de vida corta: la caja lo baja con curl, sin
+        // credenciales). No debe llevar secretos: esos llegan desde el vault, ya dentro de la caja.
+        if (archiveUrl && !/^https?:\/\//.test(archiveUrl)) {
+          if (!existsSync(archiveUrl)) throw usageError(t(`File not found: ${archiveUrl}`, `No existe el archivo: ${archiveUrl}`), this.usage);
+          const size = statSync(archiveUrl).size;
+          const contentType = archiveUrl.endsWith(".zip") ? "application/zip" : "application/gzip";
+          const up = await eb.uploadFile({ fileName: basename(archiveUrl), contentType, size, access: "public" });
+          const res = await fetch(up.putUrl, { method: "PUT", body: readFileSync(archiveUrl), headers: { "Content-Type": contentType } });
+          if (!res.ok) throw new CliError(t(`Upload failed: storage answered ${res.status}`, `Falló la subida: el almacenamiento contestó ${res.status}`), 1, undefined, "upload_failed", res.status);
+          // El tipo EasybitsFile del SDK aún no declara `url`, pero un archivo público la trae.
+          archiveUrl = (up.file as { url?: string }).url;
+          if (!archiveUrl) throw new CliError(t("The upload returned no public URL.", "La subida no devolvió una URL pública."), 1, undefined, "upload_failed");
+        }
+
+        const env = pairs(list(ctx, "env"), this.usage);
+        const secretNames = list(ctx, "secret");
+        const dataPaths = list(ctx, "data");
+        const r = await eb.machines.launch({
+          repo,
+          branch: str(ctx, "branch"),
+          repoToken: str(ctx, "repo-token"),
+          archiveUrl,
+          sandboxId,
+          tier: str(ctx, "tier"),
+          name: str(ctx, "name"),
+          appDir: str(ctx, "app-dir"),
+          buildCommand: str(ctx, "build"),
+          startCommand: str(ctx, "start"),
+          port: int(ctx, "port", this.usage),
+          prebuilt: bool(ctx, "prebuilt") || undefined,
+          env: Object.keys(env).length ? env : undefined,
+          secretNames: secretNames.length ? secretNames : undefined,
+          dataPaths: dataPaths.length ? dataPaths : undefined,
+          domain: str(ctx, "domain"),
+          message: str(ctx, "message"),
+        });
+
+        if (r.checkoutUrl) {
+          emit(ctx, r, () => {
+            console.log(t("Your account has no plan: pay the machine here and it is created by itself:", "Tu cuenta no tiene plan: paga la máquina aquí y se crea sola:"));
+            console.log(`  ${r.checkoutUrl}`);
+            console.log(t("Then deploy onto it: easybits machines launch --machine <id> …", "Luego despliega encima: easybits machines launch --machine <id> …"));
+          });
+          return;
+        }
+        if (r.exitCode !== 0) {
+          throw new CliError(
+            t(`Launch failed (exit ${r.exitCode}) on ${r.sandboxId}`, `Falló el lanzamiento (exit ${r.exitCode}) en ${r.sandboxId}`),
+            1,
+            r.buildOutput?.slice(-2000),
+            "launch_failed",
+          );
+        }
+        emit(ctx, r, () => {
+          console.log(`${r.sandboxId}  v${r.version}  ${r.url}`);
+          if (r.domain) {
+            console.log(`${t("Domain", "Dominio")}: ${r.domain.domain} → ${r.domain.url}`);
+            console.log(`DNS: ${JSON.stringify(r.domain.dns)}`);
+          }
+        });
       },
     },
     deploy: {

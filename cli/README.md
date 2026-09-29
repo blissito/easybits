@@ -50,6 +50,8 @@ easybits sandboxes destroy sb_abc123 --yes
 
 # Hosting: permanent machines (alias: deploy)
 easybits machines ls
+easybits machines launch --repo https://github.com/you/shop.git --tier micro --domain shop.example.com
+easybits machines launch --machine shop --archive ./build.tgz --prebuilt -m v2   # redeploy
 easybits deploy sb_abc123 -m "v1.2"   # = machines deploy
 easybits machines releases sb_abc123 --limit 5
 easybits machines logs sb_abc123 --lines 100 --grep ERROR
@@ -163,6 +165,14 @@ Host *.ghosty
 - Skill: `npx skills add https://easybits.cloud` (includes `easybits-cli`).
 
 Full reference: https://www.easybits.cloud/docs#cli · https://www.easybits.cloud/en/docs/cli.md
+
+## Changes in 0.14.0
+
+- `machines launch` (aliases `create`, `new`): create a permanent machine and put an app on it in
+  one step — the CLI side of `launch_app`. Source is `--repo`, `--archive <url|file>` (a local file
+  is uploaded first) or `--machine` (redeploy onto an existing one). `--tier`, `--prebuilt`,
+  `--start`, `--port`, `--env K=V`, `--secret NAME`, `--data <path>`, `--domain`.
+  Without a plan it prints the checkout link instead of failing.
 
 ## Changes in 0.13.0
 

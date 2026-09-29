@@ -5,7 +5,7 @@ license: MIT
 compatibility: Needs Node 22+ (npx is enough), network access to https://www.easybits.cloud and an EasyBits API key
 metadata:
   author: easybits
-  version: "1.11"
+  version: "1.12"
 ---
 
 # Use the EasyBits CLI
@@ -119,6 +119,8 @@ Templates: `ubuntu` (default), `python`, `node`, `bun`, `code-interpreter`… Fu
 
 ```bash
 easybits machines ls --json
+easybits machines launch --repo "$REPO" --tier micro --json      # new machine + deploy (--archive <url|file> too)
+easybits machines launch --machine "$ID" --archive ./build.tgz --prebuilt -m v2   # redeploy prebuilt code
 easybits machines deploy "$ID" -m "v1.2"            # publish a release of the current code
 easybits machines releases "$ID" --limit 5 --json
 easybits machines rollback "$ID" "$RELEASE_ID"

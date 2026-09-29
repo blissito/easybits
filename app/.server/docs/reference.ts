@@ -155,6 +155,8 @@ Alias: \`easybits sb …\`. Todo lo que va después de \`--\` en \`exec\` es el 
 
 \`\`\`bash
 easybits machines ls
+easybits machines launch --repo https://github.com/tu/tienda.git --tier micro      # crea la máquina y despliega (= launch_app)
+easybits machines launch --machine tienda --archive ./build.tgz --prebuilt -m v2   # redespliega
 easybits deploy sb_abc123 -m "v1.2"                      # publica un release (= machines deploy)
 easybits machines releases sb_abc123 --limit 5
 easybits machines logs sb_abc123 --lines 100 --grep ERROR
