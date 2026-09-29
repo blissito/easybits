@@ -10,6 +10,9 @@ import { listRefs } from "../resolve.js";
 import { CliError } from "../errors.js";
 import { YES_OPTION, confirm, requireYesIfHeadless } from "../prompt.js";
 import { t } from "../i18n.js";
+import { api } from "../api.js";
+import { MACHINE_TEMPLATES } from "./agents-config.js";
+import { findNameRefs, replaceName, type NameRef } from "../db-name-refs.js";
 
 /**
  * La base ya resuelta (index.ts cambió el nombre por el id con refs.ts). Sin crear: un
@@ -19,6 +22,47 @@ async function findDb(ctx: Ctx, id: string) {
   const hit = (await listRefs(ctx, "db")).find((d) => d.id === id);
   if (!hit) throw new CliError(t(`No database "${id}".`, `No existe la base "${id}".`), 1, t("List them with: easybits db ls", "Enlístalas con: easybits db ls"), "not_found", 404);
   return { id, name: hit.name ?? id };
+}
+
+const ident = (n: string) => `"${n.replace(/"/g, '""')}"`;
+
+/** Tablas y filas de una base (lo que se perdería al borrarla). */
+async function tableCounts(ctx: Ctx, id: string) {
+  const eb = await getClient(ctx);
+  const q = (sql: string) => eb.queryDatabase(id, sql);
+  const names = (await q("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_litestream_%' AND name NOT LIKE '_easybits_%' ORDER BY name")).rows.map((r) => String(r[0]));
+  const out: Array<{ name: string; rows: number }> = [];
+  for (const name of names) out.push({ name, rows: Number((await q(`SELECT count(*) FROM ${ident(name)}`)).rows[0]?.[0] ?? 0) });
+  return out;
+}
+
+type PromptRef = { agentId: string; agent: string; refs: NameRef[] };
+
+/**
+ * Los prompts de tus agentes con máquina (ghosty-lite, goose) que nombran la base. Las tools
+ * `db_*` van por id y no se rompen al renombrar; lo que se queda viejo es el prompt que dice
+ * «usa la base leads» y el agente la busca por nombre en `db_list`.
+ */
+async function promptRefs(ctx: Ctx, name: string) {
+  const eb = await getClient(ctx);
+  const found: PromptRef[] = [];
+  const skipped: Array<{ agentId: string; agent: string; reason: string }> = [];
+  for (const a of await eb.listAgents()) {
+    if (!MACHINE_TEMPLATES.has(a.template)) continue;
+    const agent = a.name ?? a.agentId;
+    if (a.status === "lost" || a.status === "error") {
+      skipped.push({ agentId: a.agentId, agent, reason: a.status });
+      continue;
+    }
+    try {
+      const p = await api<{ systemPrompt: string }>(ctx, "GET", `/agents/${a.agentId}/prompt`);
+      const refs = findNameRefs(p.systemPrompt ?? "", name);
+      if (refs.length) found.push({ agentId: a.agentId, agent, refs });
+    } catch (e) {
+      skipped.push({ agentId: a.agentId, agent, reason: (e as Error).message });
+    }
+  }
+  return { found, skipped };
 }
 
 export const db: Command = {
@@ -60,18 +104,100 @@ export const db: Command = {
     rm: {
       aliases: ["delete", "drop"],
       summary: "Delete a database (irreversible)",
-      usage: "easybits db rm <db-id|name> [--yes]",
-      options: { ...YES_OPTION },
-      examples: ["easybits db rm leads            # asks you to type the name", "easybits db rm leads --yes      # scripts and agents"],
+      usage: "easybits db rm <db-id|name> [--dry-run] [--yes]",
+      options: { "dry-run": { type: "boolean", description: "Show its tables and rows; delete nothing" }, ...YES_OPTION },
+      examples: [
+        "easybits db rm leads --dry-run  # what would be lost",
+        "easybits db rm leads            # asks you to type the name",
+        "easybits db rm leads --yes      # scripts and agents",
+      ],
       async run(ctx) {
         const ref = need(ctx, 0, "db-id|name", this.usage);
+        if (bool(ctx, "dry-run")) {
+          const hit = await findDb(ctx, ref);
+          const tables = await tableCounts(ctx, hit.id);
+          const rows = tables.reduce((n, x) => n + x.rows, 0);
+          emit(ctx, { id: hit.id, name: hit.name, dryRun: true, tables }, () => {
+            console.log(t(`${hit.name} (${hit.id}): ${tables.length} table(s), ${rows} row(s)`, `${hit.name} (${hit.id}): ${tables.length} tabla(s), ${rows} fila(s)`));
+            for (const x of tables) console.log(`  ${x.name}: ${x.rows}`);
+            console.log(t("(dry run: nothing deleted)", "(simulación: no se borró nada)"));
+          });
+          return;
+        }
         requireYesIfHeadless(ctx);
-                const eb = await getClient(ctx);
+        const eb = await getClient(ctx);
         const hit = await findDb(ctx, ref);
         // Irreversible: se teclea el nombre, como `gh repo delete` / `turso db destroy`.
         await confirm(ctx, t(`Delete database ${hit.name} (${hit.id}) and all its data?`, `¿Borrar la base ${hit.name} (${hit.id}) con todos sus datos?`), { typeName: hit.name });
         const r = await eb.deleteDatabase(hit.id);
         emit(ctx, { ...r, id: hit.id, name: hit.name }, () => console.log(t(`Deleted ${hit.name} (${hit.id})`, `Borrada ${hit.name} (${hit.id})`)));
+      },
+    },
+    rename: {
+      aliases: ["mv"],
+      summary: "Rename a database and rewrite the agent prompts that name it",
+      usage: "easybits db rename <db-id|name> <new-name> [--skip-prompts] [--dry-run]",
+      options: {
+        "skip-prompts": { type: "boolean", description: "Rename only; leave your agents' prompts as they are" },
+        "dry-run": { type: "boolean", description: "Show the prompts that name it; change nothing" },
+      },
+      examples: [
+        "easybits db rename totequim catalogo --dry-run   # which prompts name it",
+        "easybits db rename totequim catalogo",
+        "easybits db rename totequim catalogo --skip-prompts --json",
+      ],
+      // El id no cambia (las tools db_* van por id). Se reescribe el nombre como palabra suelta:
+      // `totequim.com`, `@totequim`, `totequim_prueba` y «TOTEQUIM» se quedan (db-name-refs.ts).
+      async run(ctx) {
+        const ref = need(ctx, 0, "db-id|name", this.usage);
+        const to = need(ctx, 1, "new-name", this.usage).trim();
+        if (!/^[a-zA-Z0-9_-]{1,64}$/.test(to)) throw usageError(t("The name takes letters, digits, - and _ (max 64).", "El nombre lleva letras, dígitos, - y _ (máx 64)."), this.usage);
+        const hit = await findDb(ctx, ref);
+        const from = hit.name;
+        if (to === from) throw usageError(t(`${from} already has that name.`, `${from} ya se llama así.`), this.usage);
+        const taken = (await listRefs(ctx, "db")).find((d) => d.name === to);
+        if (taken) throw new CliError(t(`A database named "${to}" already exists (${taken.id}).`, `Ya hay una base "${to}" (${taken.id}).`), 1, undefined, "conflict", 409);
+        const scan = bool(ctx, "skip-prompts") ? { found: [], skipped: [] } : await promptRefs(ctx, from);
+        const base = { id: hit.id, from, to, references: scan.found, skipped: scan.skipped };
+        const printRefs = () => {
+          if (bool(ctx, "skip-prompts")) return console.log(t("Prompts not checked (--skip-prompts).", "Prompts sin revisar (--skip-prompts)."));
+          if (!scan.found.length) console.log(t("No agent prompt names it.", "Ningún prompt de tus agentes la nombra."));
+          else console.log(t(`Named in ${scan.found.length} prompt(s):`, `La nombran ${scan.found.length} prompt(s):`));
+          for (const r of scan.found) {
+            console.log(`  ${r.agent} (${r.agentId})`);
+            for (const l of r.refs.slice(0, 3)) console.log(`    ${l.line}: ${l.text}`);
+            if (r.refs.length > 3) console.log(t(`    … +${r.refs.length - 3} more`, `    … +${r.refs.length - 3} más`));
+          }
+          for (const x of scan.skipped) console.log(t(`  ! ${x.agent} (${x.agentId}) not checked: ${x.reason}`, `  ! ${x.agent} (${x.agentId}) sin revisar: ${x.reason}`));
+        };
+        if (bool(ctx, "dry-run")) {
+          emit(ctx, { ...base, dryRun: true }, () => {
+            console.log(`${from} → ${to}`);
+            printRefs();
+            console.log(t("(dry run: nothing changed; without --dry-run those prompts are rewritten too)", "(simulación: no cambió nada; sin --dry-run también se reescriben esos prompts)"));
+          });
+          return;
+        }
+        await api(ctx, "PATCH", `/databases/${hit.id}`, { name: to });
+        // Un prompt que falla no deshace el nombre: se reporta y se dice cómo reintentarlo.
+        const rewritten: string[] = [];
+        const failed: Array<{ agentId: string; error: string }> = [];
+        for (const r of scan.found) {
+          try {
+            const cur = await api<{ systemPrompt: string }>(ctx, "GET", `/agents/${r.agentId}/prompt`);
+            await api(ctx, "PATCH", `/agents/${r.agentId}`, { systemPrompt: replaceName(cur.systemPrompt, from, to) });
+            rewritten.push(r.agentId);
+          } catch (e) {
+            failed.push({ agentId: r.agentId, error: (e as Error).message });
+          }
+        }
+        emit(ctx, { ...base, dryRun: false, rewritten, failed }, () => {
+          console.log(t(`Renamed ${from} → ${to} (${hit.id}). ${rewritten.length} prompt(s) rewritten.`, `Renombrada ${from} → ${to} (${hit.id}). ${rewritten.length} prompt(s) reescritos.`));
+          for (const f of failed) console.error(`! ${f.agentId}: ${f.error}`);
+          for (const x of scan.skipped) console.log(t(`! ${x.agent} (${x.agentId}) not checked: ${x.reason}`, `! ${x.agent} (${x.agentId}) sin revisar: ${x.reason}`));
+          console.log(`${t("Undo", "Deshacer")}: easybits db rename ${to} ${from}`);
+        });
+        if (failed.length) process.exitCode = 1;
       },
     },
     tables: {
@@ -88,7 +214,6 @@ export const db: Command = {
         const names = (
           await q("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_litestream_%' ORDER BY name")
         ).rows.map((r) => String(r[0]));
-        const ident = (n: string) => `"${n.replace(/"/g, '""')}"`;
         const tables: Array<{
           name: string;
           rows: number;
@@ -158,7 +283,6 @@ export const db: Command = {
         const eb = await getClient(ctx);
         const hit = await findDb(ctx, ref);
         const q = (sql: string, args?: unknown[]) => eb.queryDatabase(hit.id, sql, args);
-        const ident = (n: string) => `"${n.replace(/"/g, '""')}"`;
         const info = await q(`PRAGMA table_info(${ident(tableName)})`);
         const cols = info.rows.map((r) => String(r[info.cols.indexOf("name")]));
         if (!cols.length) throw new CliError(t(`No table "${tableName}" in ${hit.name}.`, `No hay tabla "${tableName}" en ${hit.name}.`), 1, t(`See: easybits db tables ${hit.name}`, `Mira: easybits db tables ${hit.name}`), "not_found", 404);

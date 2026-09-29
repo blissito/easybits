@@ -170,6 +170,11 @@ export const agents: Command = {
           console.log(`${t("Agent:  ", "Agente: ")} ${a.agentId}`);
           console.log(`Sandbox: ${a.sandboxId}`);
           console.log(`URL:     ${a.agentUrl}`);
+          // Con --prompt/--prompt-file el prompt ya va aplicado: se dice cuál, no se pide otra vez.
+          if (prompt) {
+            const origin = promptFile ?? (promptInline != null ? "--prompt" : `${t("from", "de")} ${source?.source.agentId ?? "export"}`);
+            console.log(`Prompt:  ${origin}, ${prompt.length.toLocaleString("en-US")} ${t("chars", "caracteres")}`);
+          }
           if (copied) console.log(t(`Copied:  ${copied.skills.length} skill(s), ${copied.files.length} file(s)${copied.skippedFiles.length ? ` (${copied.skippedFiles.length} skipped: export without --with-files)` : ""}`, `Copiado: ${copied.skills.length} skill(s), ${copied.files.length} archivo(s)${copied.skippedFiles.length ? ` (${copied.skippedFiles.length} sin copiar: export sin --with-files)` : ""}`));
           console.log(t(`Talk to it: easybits agents try ${a.agentId} "hello"`, `Háblale: easybits agents try ${a.agentId} "hola"`));
         });

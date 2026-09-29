@@ -5,7 +5,7 @@ license: MIT
 compatibility: Needs Node 22+ (npx is enough), network access to https://www.easybits.cloud and an EasyBits API key
 metadata:
   author: easybits
-  version: "1.12"
+  version: "1.13"
 ---
 
 # Use the EasyBits CLI
@@ -150,10 +150,19 @@ easybits db tables leads --json          # [{name, rows, columns:[{name,type,pk}
 easybits db photos put catalog --table products --key-column sku --dir photos/ --dry-run --json   # plan per file
 easybits db photos put catalog --table products --key-column sku --dir photos/ --json             # {results:[{key,file,url|error}]}
 easybits db ls --json
+easybits db rename leads prospects --dry-run --json   # {from,to,references:[{agentId,agent,refs:[{line,text}]}],skipped}
+easybits db rename leads prospects --json             # {rewritten:[agentId], failed:[{agentId,error}]}
+easybits db rm leads --dry-run --json                 # {tables:[{name,rows}]}: what would be lost
 easybits db rm leads --json --yes
 ```
 
 `query` and `tables` resolve id or name and never create a database from a typo.
+
+Rename: the id does not change (the `db_*` tools go by id), so nothing breaks; what goes stale is a
+prompt that says "use the leads database". `db rename` rewrites the name in your ghosty-lite/goose
+agents' prompts as a standalone word only (`leads.com`, `@leads`, `leads_test` and `LEADS` stay).
+`--skip-prompts` renames only. Skills and env are not scanned: grep them yourself. Exit 1 if a
+prompt failed to rewrite (the rename stays; `failed` says which).
 
 Photos: name each file after its row key (`SKU-123.jpg` → `sku = SKU-123`). The link written is a
 permanent public one; rows that already have one are kept unless `--replace`. Read `!` lines:

@@ -189,10 +189,14 @@ easybits db query leads "SELECT * FROM leads" --json
 easybits db tables leads                             # tablas, filas, columnas y ligas
 easybits db photos put catalogo --table productos --key-column sku --dir fotos/ --dry-run
 easybits db ls
+easybits db rename leads prospectos --dry-run        # qué prompts de agentes la nombran
+easybits db rm leads --dry-run                       # tablas y filas que se perderían
 easybits db rm leads --yes
 \`\`\`
 
 \`query\` y \`tables\` aceptan el id o el nombre, y nunca crean una base por un nombre mal escrito. Con \`--json\`, \`tables\` da \`[{name, rows, columns:[{name,type,pk}], links:[{column, permanent, expiring, external, empty}]}]\`: por cada columna de texto con ligas, cuántas son **permanentes** (almacenamiento público de EasyBits), **caducan** (URLs firmadas), son de fuera o están vacías.
+
+**Renombrar**: \`db rename <db> <nombre-nuevo> [--skip-prompts] [--dry-run]\` cambia el nombre (el id no cambia, así que las tools \`db_*\` siguen funcionando) y reescribe el nombre en los prompts de tus agentes ghosty-lite/goose donde aparece como palabra suelta: nunca dentro de \`x.com\`, \`@x\`, \`x_prueba\` ni en mayúsculas (la marca). \`--dry-run\` enseña cada prompt y renglón; si un prompt falla se reporta (sale con 1) y el nombre nuevo se queda. Skills y env no se revisan.
 
 **Fotos del catálogo**: \`db photos put <db> --table T --key-column sku --dir fotos/ [--column C] [--replace] [--dry-run]\` pone \`SKU-123.jpg\` en la fila cuyo \`sku\` es \`SKU-123\`: revisa el tipo real por sus bytes (JPEG, PNG, WebP; máx 10 MB; avisa arriba de 5 MB, el tope de WhatsApp por liga), la sube como **archivo público con liga permanente** (la misma foto para dos filas se sube una vez) y escribe la liga en la columna (default \`image_url\`, \`photo_url\`, \`imagen\`…). Una fila que ya tiene liga permanente se queda salvo \`--replace\`; lo que no es foto o no tiene fila se enlista con el motivo.
 
@@ -1799,6 +1803,11 @@ MCP: \`db_create({ name, description? })\`
 \`GET /databases/:dbId\`
 SDK: \`eb.getDatabase(dbId)\`
 MCP: \`db_get({ dbId })\`
+
+### Rename database
+\`PATCH /databases/:dbId\`
+Body: \`{ name?: string, description?: string|null }\` (name: letters, digits, \`-\`, \`_\`, max 64; 409 if you already have one with that name).
+Only metadata: the id and the data do not change, so \`db_*\` calls by \`dbId\` keep working. Prompts that name the old name do not update themselves: \`easybits db rename\` rewrites them.
 
 ### Delete database
 \`DELETE /databases/:dbId\`

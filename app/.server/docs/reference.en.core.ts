@@ -298,6 +298,11 @@ MCP: \`db_create({ name, description? })\`
 SDK: \`eb.getDatabase(dbId)\`
 MCP: \`db_get({ dbId })\`
 
+### Rename database
+\`PATCH /databases/:dbId\`
+Body: \`{ name?: string, description?: string|null }\` (name: letters, digits, \`-\`, \`_\`, max 64; 409 if you already have one with that name).
+Only metadata: the id and the data do not change, so \`db_*\` calls by \`dbId\` keep working. Prompts that name the old name do not update themselves: \`easybits db rename\` rewrites them.
+
 ### Delete database
 \`DELETE /databases/:dbId\`
 Permanently deletes the database and all its data.

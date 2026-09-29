@@ -186,6 +186,48 @@ export async function getDatabase(ctx: AuthContext, dbId: string) {
   };
 }
 
+/**
+ * Renombra una base (y/o cambia su descripción). Sólo metadatos: el `namespace` de sqld y el
+ * id no cambian, así que las tools `db_*` (que van por `dbId`) siguen funcionando. Lo que sí
+ * queda viejo son los prompts que la nombran: eso lo reescribe `easybits db rename`.
+ */
+export async function updateDatabase(
+  ctx: AuthContext,
+  dbId: string,
+  opts: { name?: string; description?: string | null }
+) {
+  requireScope(ctx, "WRITE");
+  const bad = (status: number, error: string) =>
+    new Response(JSON.stringify({ error }), { status, headers: { "Content-Type": "application/json" } });
+  const database = await db.database.findUnique({ where: { id: dbId } });
+  if (!database || database.userId !== ctx.user.id) throw bad(404, "Database not found");
+
+  const data: { name?: string; description?: string | null } = {};
+  if (opts.name !== undefined) {
+    const name = String(opts.name).trim();
+    if (!name || name.length > 64) throw bad(400, "Name is required and must be ≤64 chars");
+    if (!/^[a-zA-Z0-9_-]+$/.test(name)) throw bad(400, "Name must be alphanumeric, dashes, or underscores");
+    if (name !== database.name) {
+      const taken = await db.database.findUnique({ where: { userId_name: { userId: ctx.user.id, name } } });
+      if (taken) throw bad(409, `Database "${name}" already exists`);
+      data.name = name;
+    }
+  }
+  if (opts.description !== undefined) data.description = opts.description ? String(opts.description) : null;
+  if (!Object.keys(data).length) throw bad(400, "Nothing to change: name and/or description");
+
+  const updated = await db.database.update({ where: { id: dbId }, data });
+  return {
+    id: updated.id,
+    name: updated.name,
+    previousName: database.name,
+    namespace: updated.namespace,
+    description: updated.description,
+    createdAt: updated.createdAt,
+    updatedAt: updated.updatedAt,
+  };
+}
+
 export async function deleteDatabase(ctx: AuthContext, dbId: string) {
   requireScope(ctx, "DELETE");
   const database = await db.database.findUnique({ where: { id: dbId } });

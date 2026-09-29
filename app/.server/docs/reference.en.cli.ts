@@ -103,10 +103,14 @@ easybits db query leads "SELECT * FROM leads" --json
 easybits db tables leads                             # tables, row counts, columns, links
 easybits db photos put catalog --table products --key-column sku --dir photos/ --dry-run
 easybits db ls
+easybits db rename leads prospects --dry-run         # which agent prompts name it
+easybits db rm leads --dry-run                       # tables and rows that would be lost
 easybits db rm leads --yes
 \`\`\`
 
 \`query\` and \`tables\` take the id or the name, and never create a database from a mistyped name. With \`--json\`, \`tables\` returns \`[{name, rows, columns:[{name,type,pk}], links:[{column, permanent, expiring, external, empty}]}]\`: for each text column holding links, how many are **permanent** (EasyBits public storage), **expiring** (signed URLs), from elsewhere or empty.
+
+**Rename**: \`db rename <db> <new-name> [--skip-prompts] [--dry-run]\` changes the name (the id stays, so the \`db_*\` tools keep working) and rewrites it in your ghosty-lite/goose agents' prompts where it appears as a standalone word: never inside \`x.com\`, \`@x\`, \`x_test\` or in capitals (the brand). \`--dry-run\` shows each prompt and line; a prompt that fails is reported (exit 1) and the new name stays. Skills and env are not scanned.
 
 **Catalog photos**: \`db photos put <db> --table T --key-column sku --dir photos/ [--column C] [--replace] [--dry-run]\` puts \`SKU-123.jpg\` in the row whose \`sku\` is \`SKU-123\`: it checks the real type by its bytes (JPEG, PNG, WebP; max 10 MB; warns over 5 MB, WhatsApp\'s limit by link), uploads it as a **public file with a permanent link** (the same photo for two rows is uploaded once) and writes the link in the column (default \`image_url\`, \`photo_url\`, \`imagen\`…). A row that already has a permanent link is kept unless \`--replace\`; files that aren\'t photos or have no matching row are listed with the reason.
 

@@ -73,6 +73,8 @@ easybits db create leads
 easybits db tables leads             # tables, row counts, columns, permanent vs external links
 easybits db photos put catalog --table products --key-column sku --dir photos/   # SKU-123.jpg → row sku=SKU-123
 easybits db query leads "SELECT * FROM leads" --json
+easybits db rename leads prospects --dry-run   # which agent prompts name it
+easybits db rm leads --dry-run                 # tables and rows that would be lost
 easybits db rm leads --yes
 
 # Agents
@@ -165,6 +167,16 @@ Host *.ghosty
 - Skill: `npx skills add https://easybits.cloud` (includes `easybits-cli`).
 
 Full reference: https://www.easybits.cloud/docs#cli · https://www.easybits.cloud/en/docs/cli.md
+
+## Changes in 0.15.0
+
+- `db rename <db> <new-name> [--skip-prompts] [--dry-run]` (alias `mv`): renames the database (the
+  id does not change, so the `db_*` tools keep working) and rewrites the name in your ghosty-lite /
+  goose agents' prompts where it appears as a standalone word — never inside `x.com`, `@x`, `x_test`
+  or in capitals. `--dry-run` lists each prompt and line; a prompt that fails is reported (exit 1)
+  and the rename stays. New API: `PATCH /api/v2/databases/:dbId { name?, description? }`.
+- `db rm --dry-run`: the tables and row counts you would lose.
+- `agents create --prompt/--prompt-file` prints which prompt was applied and its size.
 
 ## Changes in 0.14.1
 

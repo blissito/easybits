@@ -53,6 +53,7 @@ export const REF_ARGS: Record<string, { index: number; kind: RefKind }> = {
   "domains verify": { index: 0, kind: "sandbox" },
   "domains rm": { index: 0, kind: "sandbox" },
   "db rm": { index: 0, kind: "db" },
+  "db rename": { index: 0, kind: "db" },
   "db tables": { index: 0, kind: "db" },
   "db query": { index: 0, kind: "db" },
   "db photos": { index: 1, kind: "db" },

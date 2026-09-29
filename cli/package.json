@@ -1,6 +1,6 @@
 {
   "name": "@easybits.cloud/cli",
-  "version": "0.14.1",
+  "version": "0.15.0",
   "description": "Official CLI for EasyBits, the cloud for AI agents — sandboxes, hosting, domains, databases, agents and files from your terminal",
   "type": "module",
   "bin": {
