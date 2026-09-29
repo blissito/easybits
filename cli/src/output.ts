@@ -42,3 +42,20 @@ export function table(
   console.log(line(cols.map(([, l]) => l)));
   for (const r of rows) console.log(line(cols.map(([k]) => cell(r[k]))));
 }
+
+/**
+ * `--fields a,b` → sólo esas claves, en ese orden (como `gh … --json a,b`). Un campo que no
+ * existe es error de uso: mejor que un `null` silencioso que el agente cree dato.
+ */
+export function pickFields<T extends Record<string, unknown>>(rec: T, fields: string[] | undefined): Partial<T> {
+  if (!fields?.length) return rec;
+  const out: Record<string, unknown> = {};
+  for (const f of fields) out[f] = rec[f];
+  return out as Partial<T>;
+}
+
+/** Enmascara un valor que parece secreto; las referencias `$secret:NOMBRE` se ven tal cual. */
+export function maskSecret(v: string): string {
+  if (v.startsWith("$secret:")) return v;
+  return v.length <= 8 ? "***" : `${v.slice(0, 4)}…***`;
+}

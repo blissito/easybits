@@ -1,6 +1,30 @@
+import { existsSync, readFileSync } from "node:fs";
+import type { AgentInfo } from "@easybits.cloud/sdk";
 import type { Command } from "../types.js";
-import { ENV_FILE_OPTION, envFrom, int, need, str } from "../args.js";
+import { ENV_FILE_OPTION, bool, envFrom, int, need, str } from "../args.js";
 import { emit, fmtDate, table } from "../output.js";
+import { api } from "../api.js";
+import { resolveRef } from "../resolve.js";
+import {
+  type AgentExport,
+  applyExport,
+  buildExport,
+  doctor,
+  exportAgent,
+  files,
+  get,
+  MACHINE_TEMPLATES,
+  hasMasked,
+  logs,
+  mcp,
+  parseMcpFile,
+  readExport,
+  restart,
+  set,
+  skills,
+  tryTurn,
+  waitMachine,
+} from "./agents-config.js";
 import { getClient } from "../client.js";
 import { usageError } from "../errors.js";
 import { YES_OPTION, confirm, requireYesIfHeadless } from "../prompt.js";
@@ -29,58 +53,109 @@ export const agents: Command = {
         );
       },
     },
-    get: {
-      aliases: ["show"],
-      summary: "Show one agent (by id or name)",
-      usage: "easybits agents get <agent>",
-      examples: ["easybits agents get helper", "easybits agents get 6650f0c2a1b2c3d4e5f60718 --json"],
-      async run(ctx) {
-        const id = need(ctx, 0, "agent", this.usage);
-        const eb = await getClient(ctx);
-        const a = await eb.getAgent(id);
-        emit(ctx, a, () => {
-          console.log(`ID:        ${a.agentId}`);
-          if (a.name) console.log(`Name:      ${a.name}`);
-          console.log(`Template:  ${a.template}`);
-          console.log(`Status:    ${a.status}`);
-          console.log(`Sandbox:   ${a.sandboxId}`);
-          console.log(`URL:       ${a.agentUrl}`);
-          console.log(`Created:   ${fmtDate(a.createdAt)}`);
-          console.log(`Expires:   ${a.expiresAt ? fmtDate(a.expiresAt) : "never"}`);
-        });
-      },
-    },
+    get,
     create: {
-      summary: "Create an agent from a template",
-      usage: "easybits agents create --template <template> [--name <name>] [--dotenv <path>] [--env K=V]... [--timeout <s>]",
+      aliases: ["new"],
+      summary: "Create an agent from a template, or clone one (--like / --from)",
+      usage: "easybits agents create (--template <template> | --like <agent> | --from <export.json>) [--name <name>] [--prompt <text> | --prompt-file <file>] [--prompt-mode append|replace] [--mcp-file <json>] [--copy-files] [--dotenv <path>] [--env K=V]... [--timeout <s>] [--dry-run]",
       options: {
         template: { type: "string", value: "template", description: "Agent template (see: easybits docs agents)" },
+        like: { type: "string", value: "agent", description: "Clone another agent's setup: template, prompt, MCP, skills (never its env)" },
+        from: { type: "string", value: "file", description: "Clone from `easybits agents export` output" },
         name: { type: "string", value: "name", description: "Label" },
+        prompt: { type: "string", value: "text", description: "System prompt (ghosty-lite, goose)" },
+        "prompt-file": { type: "string", value: "file", description: "System prompt from a file" },
+        "prompt-mode": { type: "string", value: "mode", description: "append (default) or replace the engine's prompt" },
+        "mcp-file": { type: "string", value: "json", description: "MCP servers: JSON array or { servers } (ACP templates)" },
+        "copy-files": { type: "boolean", description: `--like/--from: also copy the knowledge files in /data/work` },
         env: { type: "string", multiple: true, value: "K=V", description: "Env for the agent, non-secret (repeatable)" },
         ...ENV_FILE_OPTION,
         timeout: { type: "string", value: "seconds", description: "Lifetime before auto-destroy" },
+        "dry-run": { type: "boolean", description: "Print the plan; create nothing" },
       },
       examples: [
-        "easybits agents create --template goose --name helper",
+        "easybits agents create --template ghosty-lite --name helper --prompt-file PROMPT.md",
         "easybits agents create --template chat-anthropic --dotenv .env --json",
-        "op read op://vault/anthropic/env | easybits agents create --template chat-anthropic --dotenv -",
+        "easybits agents create --like helper --name helper-2 --dry-run",
+        "easybits agents create --like helper --name helper-2 --copy-files --dotenv .env",
+        "easybits agents create --from helper.json --name helper-3",
       ],
       async run(ctx) {
-        const template = str(ctx, "template");
-        if (!template) throw usageError("Missing --template.", this.usage);
+        const like = str(ctx, "like");
+        const from = str(ctx, "from");
+        if (like && from) throw usageError("Use --like or --from, not both.", this.usage);
+        const promptInline = str(ctx, "prompt");
+        const promptFile = str(ctx, "prompt-file");
+        if (promptInline != null && promptFile) throw usageError("Use --prompt or --prompt-file, not both.", this.usage);
+        const mode = str(ctx, "prompt-mode");
+        if (mode && mode !== "append" && mode !== "replace") throw usageError("--prompt-mode must be append or replace.", this.usage);
+        if (promptFile && !existsSync(promptFile)) throw usageError(`File not found: ${promptFile}`, this.usage);
+        const mcpFile = str(ctx, "mcp-file");
+        if (mcpFile && !existsSync(mcpFile)) throw usageError(`File not found: ${mcpFile}`, this.usage);
+        if (bool(ctx, "copy-files") && !like && !from) throw usageError("--copy-files needs --like or --from.", this.usage);
+        // La fuente del clon: otro agente (en vivo, con valores reales del MCP) o un export.
+        const source: AgentExport | undefined = from
+          ? readExport(from, this.usage)
+          : like
+            ? await buildExport(ctx, await resolveRef(ctx, "agent", like), { secrets: true, fileContents: bool(ctx, "copy-files") })
+            : undefined;
+        const template = str(ctx, "template") ?? source?.template;
+        if (!template) throw usageError("Missing --template (or --like / --from).", this.usage);
         const env = await envFrom(ctx, this.usage);
-        const eb = await getClient(ctx);
-        const a = await eb.createAgent({
-          template: template as any,
-          name: str(ctx, "name"),
+        const prompt = promptInline ?? (promptFile ? readFileSync(promptFile, "utf8") : source?.systemPrompt);
+        const promptMode = mode ?? source?.systemPromptMode;
+        // Un prompt de un renglón viaja en el env de creación. Uno multilínea NO: el env de la
+        // caja es un EnvironmentFile de systemd y sandbox-host rechaza el arranque con \n
+        // («env value for SYSTEM_PROMPT contains newline») — el agente nacía sin arrancar.
+        // Ése se escribe con PATCH al final, que sólo existe en templates con máquina.
+        const multiline = !!prompt && /[\r\n]/.test(prompt.trimEnd());
+        const promptAfter = multiline ? prompt : undefined;
+        if (multiline && !MACHINE_TEMPLATES.has(template)) {
+          throw usageError(`A multi-line prompt needs a template with a machine (${[...MACHINE_TEMPLATES].join(", ")}).`, this.usage);
+        }
+        if (prompt && !multiline) env.SYSTEM_PROMPT = prompt.trimEnd();
+        if (promptMode && (prompt || mode) && !multiline) env.SYSTEM_PROMPT_MODE = promptMode;
+        const mcpServers = mcpFile ? parseMcpFile(readFileSync(mcpFile, "utf8"), this.usage) : source?.mcpServers;
+        if (mcpServers && hasMasked(mcpServers)) {
+          throw usageError(`${from ?? "the source"} has masked MCP values (…***).`, "Re-export with --show-secrets, or pass --mcp-file");
+        }
+        const name = str(ctx, "name") ?? (source?.name ? `${source.name}-copy` : undefined);
+        const plan = {
+          template,
+          name: name ?? null,
+          envKeys: Object.keys(env),
+          promptBytes: prompt ? Buffer.byteLength(prompt) : 0,
+          promptMode: promptMode ?? null,
+          mcpServers: (mcpServers ?? []).map((s) => s.name),
+          skills: (source?.skills ?? []).map((s) => s.slug),
+          files: bool(ctx, "copy-files") ? (source?.files ?? []).map((f) => f.path) : [],
+          ...(source ? { from: source.source.agentId } : {}),
+        };
+        if (bool(ctx, "dry-run")) {
+          emit(ctx, { dryRun: true, ...plan }, () => {
+            for (const [k, v] of Object.entries(plan)) console.log(`${k.padEnd(12)} ${Array.isArray(v) ? v.join(", ") || "-" : v ?? "-"}`);
+            if (source) console.log("Env is never copied: pass the engine's keys with --dotenv.");
+            console.log("(dry run: nothing created)");
+          });
+          return;
+        }
+        const a = await api<AgentInfo>(ctx, "POST", "/agents", {
+          template,
+          name,
           env,
           timeoutSeconds: int(ctx, "timeout", this.usage),
+          ...(mcpServers?.length ? { mcpServers } : {}),
         });
-        emit(ctx, a, () => {
+        if (promptAfter || source?.skills?.length || (bool(ctx, "copy-files") && source?.files?.length)) await waitMachine(ctx, a.agentId);
+        const copied = source ? await applyExport(ctx, a.agentId, source, { files: bool(ctx, "copy-files") }) : undefined;
+        // Después del reinicio de applyExport: el PATCH rearma los ganchos en caliente, sin reboot.
+        if (promptAfter) await api(ctx, "PATCH", `/agents/${a.agentId}`, { systemPrompt: promptAfter, ...(promptMode ? { systemPromptMode: promptMode } : {}) });
+        emit(ctx, { ...a, ...(copied ? { copied } : {}) }, () => {
           console.log(`Agent:   ${a.agentId}`);
           console.log(`Sandbox: ${a.sandboxId}`);
           console.log(`URL:     ${a.agentUrl}`);
-          console.log(`Talk to it: easybits agents message ${a.agentId} "hello"`);
+          if (copied) console.log(`Copied:  ${copied.skills.length} skill(s), ${copied.files.length} file(s)${copied.skippedFiles.length ? ` (${copied.skippedFiles.length} skipped: export without --with-files)` : ""}`);
+          console.log(`Talk to it: easybits agents try ${a.agentId} "hello"`);
         });
       },
     },
@@ -120,5 +195,14 @@ export const agents: Command = {
         emit(ctx, { ...r, agentId: id }, () => console.log(`Destroyed ${id}`));
       },
     },
+    set,
+    files,
+    skills,
+    mcp,
+    restart,
+    try: tryTurn,
+    logs,
+    doctor,
+    export: exportAgent,
   },
 };
