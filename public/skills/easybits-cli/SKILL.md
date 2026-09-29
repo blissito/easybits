@@ -5,7 +5,7 @@ license: MIT
 compatibility: Needs Node 22+ (npx is enough), network access to https://www.easybits.cloud and an EasyBits API key
 metadata:
   author: easybits
-  version: "1.6"
+  version: "1.7"
 ---
 
 # Use the EasyBits CLI
@@ -179,6 +179,7 @@ easybits agents skills ls helper --json
 easybits agents mcp set helper --file servers.json --json   # replaces ALL servers, restarts
 easybits agents try helper "which skills do you have?" --json   # {text, error, session, ms}
 easybits agents doctor helper --json                            # {ok, checks:[{check,ok,detail,hint}]}
+easybits agents get helper --fields status,lastError --json     # status "error" + lastError = the runtime did not start (fix, then agents restart)
 easybits agents export helper --out helper.json --json          # never the env; MCP secrets masked
 easybits agents create --like helper --name helper-2 --dry-run --json   # plan: template, prompt, MCP, skills
 easybits agents create --like helper --name helper-2 --copy-files --json

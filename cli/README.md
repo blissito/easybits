@@ -90,7 +90,7 @@ easybits agents mcp get|set helper [--file servers.json|-]   # set replaces the 
 easybits agents restart helper
 easybits agents try helper "who are you?"      # one full turn as text: verify what you set up
 easybits agents logs helper --since "10 min ago"
-easybits agents doctor helper                   # exits 1 on a problem
+easybits agents doctor helper                   # exits 1 on a problem; status "error" shows why it did not start
 easybits agents export helper --out helper.json [--show-secrets] [--with-files]
 easybits agents create --like helper --name helper-2 [--copy-files] --dry-run   # clone its setup, never its env
 easybits agents create --from helper.json --name helper-3

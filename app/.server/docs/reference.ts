@@ -214,6 +214,7 @@ easybits agents mcp set ayudante --file servers.json                 # reemplaza
 easybits agents try ayudante "¿quién eres?"                          # un turno completo a texto, para verificar
 easybits agents logs ayudante --since "10 min ago"
 easybits agents doctor ayudante                                      # sale con 1 si hay un problema
+easybits agents get ayudante --fields status,lastError --json        # con status "error", lastError dice por qué no arrancó
 easybits agents export ayudante --out ayudante.json                  # nunca el env
 easybits agents create --like ayudante --name ayudante-2 --copy-files --dry-run
 easybits agents create --from ayudante.json --name ayudante-3 --dotenv .env

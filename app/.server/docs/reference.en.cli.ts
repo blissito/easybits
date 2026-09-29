@@ -128,6 +128,7 @@ easybits agents mcp set helper --file servers.json                 # replaces th
 easybits agents try helper "who are you?"                          # one full turn as text, to verify
 easybits agents logs helper --since "10 min ago"
 easybits agents doctor helper                                      # exits 1 on a problem
+easybits agents get helper --fields status,lastError --json        # status "error" carries why the runtime did not start
 easybits agents export helper --out helper.json                    # never the env
 easybits agents create --like helper --name helper-2 --copy-files --dry-run
 easybits agents create --from helper.json --name helper-3 --dotenv .env

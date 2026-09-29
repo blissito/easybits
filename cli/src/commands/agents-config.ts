@@ -148,7 +148,7 @@ const hasMasked = (servers: McpServer[]) =>
 // ── get ───────────────────────────────────────────────────────────────────────────────────
 
 const GET_FIELDS = [
-  "agentId", "name", "template", "status", "sandboxId", "agentUrl", "embedToken", "createdAt", "expiresAt",
+  "agentId", "name", "template", "status", "lastError", "sandboxId", "agentUrl", "embedToken", "createdAt", "expiresAt",
   "systemPrompt", "systemPromptMode", "mcpServers", "skills", "files",
 ] as const;
 const CONFIG_FIELDS = new Set(["systemPrompt", "systemPromptMode", "mcpServers", "skills", "files"]);
@@ -231,11 +231,17 @@ export const get: Leaf = {
   },
 };
 
+/** Por qué falló el último arranque (el servidor lo manda con status "error"; SDK ≥ 0.36.3). */
+export const startError = (a: AgentRecord): string | null =>
+  a.status === "error" ? ((a as AgentRecord & { lastError?: string | null }).lastError ?? null) : null;
+
 export function printAgent(a: AgentRecord) {
   console.log(`ID:        ${a.agentId}`);
   if (a.name) console.log(`Name:      ${a.name}`);
   console.log(`Template:  ${a.template}`);
   console.log(`Status:    ${a.status}`);
+  const reason = startError(a);
+  if (reason) console.log(`Error:     ${reason}`);
   console.log(`Sandbox:   ${a.sandboxId}`);
   console.log(`URL:       ${a.agentUrl}`);
   console.log(`Token:     ${maskSecret(a.embedToken ?? "")}   (full value: --fields embedToken --json)`);
@@ -622,7 +628,8 @@ export const doctor: Leaf = {
     add({
       check: "status",
       ok: a.status === "running" || a.status === "suspended",
-      detail: a.status,
+      detail: startError(a) ? `error: ${startError(a)}` : a.status,
+      ...(a.status === "error" ? { hint: `Its runtime did not start. Fix the cause, then: easybits agents restart ${id}` } : {}),
       ...(a.status === "lost" ? { hint: `Its sandbox is gone. Destroy it (easybits agents destroy ${id}) or recreate it (easybits agents create --from <export.json>).` } : {}),
     });
     if (a.expiresAt) {

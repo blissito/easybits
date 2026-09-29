@@ -784,6 +784,8 @@ export interface AgentRecord {
   embedToken: string;
   name: string | null;
   status: string;
+  /** Por qué falló el último arranque del runtime; sólo con status "error". */
+  lastError?: string | null;
   createdAt: string;
   expiresAt: string | null;
 }
@@ -3942,12 +3944,15 @@ export async function readRcConfig(): Promise<RcConfig> {
  * Works in Node.js only
  */
 export async function writeRcConfig(config: RcConfig): Promise<void> {
-  const { writeFileSync } = await import("fs");
+  const { chmodSync, writeFileSync } = await import("fs");
   const { join } = await import("path");
   const { homedir } = await import("os");
   const rcPath = join(homedir(), ".easybitsrc");
   const existing = await readRcConfig();
-  writeFileSync(rcPath, JSON.stringify({ ...existing, ...config }, null, 2));
+  // Guarda llaves y tokens: sólo el dueño lo lee. El chmod cubre un archivo que ya
+  // existía con otro modo (writeFileSync sólo aplica `mode` al crearlo).
+  writeFileSync(rcPath, JSON.stringify({ ...existing, ...config }, null, 2), { mode: 0o600 });
+  chmodSync(rcPath, 0o600);
 }
 
 /**
