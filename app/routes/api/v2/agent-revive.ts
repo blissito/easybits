@@ -25,6 +25,8 @@ export async function action({ request, params }: Route.ActionArgs) {
       wsUrl: agent.agentUrl,
     });
   } catch (e) {
+    // Un Response lanzado (403, cupo del plan) trae su propio cuerpo: se devuelve tal cual.
+    if (e instanceof Response) return e;
     return Response.json(
       { error: e instanceof Error ? e.message : "revive failed" },
       { status: 503 }

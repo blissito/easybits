@@ -4796,7 +4796,9 @@ async function reviveAgentBox(agentId: string): Promise<AgentRecord> {
   if (!row) throw new Error("agent not found");
   const owner = await db.user.findUnique({ where: { id: row.ownerId } });
   if (!owner) throw new Error("agent owner not found");
-  const ctx: AuthContext = { user: owner, scopes: ["WRITE"] };
+  // READ también: resolveTemplate (listTemplates) y getSandbox lo exigen. Con sólo WRITE el
+  // revive lanzaba un 403 (Response, no Error) en cuanto la caché de templates caducaba.
+  const ctx: AuthContext = { user: owner, scopes: ["READ", "WRITE"] };
 
   // ¿De verdad no existe? El status cacheado puede mentir en las dos direcciones.
   // Excepción: caja viva con el último arranque fallido (lastError) → se reintenta el
