@@ -5,7 +5,7 @@ license: MIT
 compatibility: Needs Node 22+ (npx is enough), network access to https://www.easybits.cloud and an EasyBits API key
 metadata:
   author: easybits
-  version: "1.7"
+  version: "1.8"
 ---
 
 # Use the EasyBits CLI
@@ -180,7 +180,6 @@ easybits agents mcp set helper --file servers.json --json   # replaces ALL serve
 easybits agents try helper "which skills do you have?" --json   # {text, error, session, ms}
 easybits agents doctor helper --json                            # {ok, checks:[{check,ok,detail,hint}]}
 easybits agents get helper --fields status,lastError --json     # status "error" + lastError = the runtime did not start (fix, then agents restart)
-easybits agents export helper --out helper.json --json          # never the env; MCP secrets masked
 easybits agents create --like helper --name helper-2 --dry-run --json   # plan: template, prompt, MCP, skills
 easybits agents create --like helper --name helper-2 --copy-files --json
 ```
@@ -190,6 +189,23 @@ easybits agents create --like helper --name helper-2 --copy-files --json
 - Cloning copies template, prompt, MCP servers and skills (`--copy-files`: files too), never the
   env: pass the engine keys with `--dotenv`. `--from` needs an export made with `--show-secrets`
   if the MCP servers carry literal secrets (`$secret:NAME` references are fine).
+
+## The agent as a file (export → edit → apply)
+
+```bash
+easybits agents export helper --out ./helper --json      # agent.yaml + skills/<slug>/ + files/
+easybits apply ./helper --dry-run --json                 # {plan:[{op,what}]}: + add, ~ change, - remove, ! skipped
+ANTHROPIC_API_KEY="$KEY" easybits apply ./helper --yes --json   # {applied, failed?, backup}
+easybits apply ./helper --create --name helper-2 --yes --json   # {agentId, plan, applied}
+```
+
+- Declarative: fields missing from the file are left alone; removing needs `--prune`. Read the
+  `!` lines: they say what was NOT applied and why (a `${VAR}` you did not export, a template
+  change, a skill with no folder).
+- Secrets are never in the file (`${NAME}`); export the variable before `apply` to set it, or
+  leave it unset to keep today's value. Prefer `$secret:NAME` (vault) inside MCP headers.
+- `failed` in the result = stopped at that step (exit 1); `backup` is the file to roll back with
+  `easybits apply <backup> --agent <agent> --yes`.
 
 ## More
 

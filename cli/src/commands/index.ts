@@ -8,6 +8,7 @@ import { machines } from "./machines.js";
 import { domains } from "./domains.js";
 import { db } from "./db.js";
 import { agents } from "./agents.js";
+import { apply } from "./spec.js";
 import { docs } from "./docs.js";
 import { doctor } from "./doctor.js";
 
@@ -20,6 +21,7 @@ export const COMMANDS: Command[] = [
   usage,
   sandboxes,
   agents,
+  apply,
   machines,
   domains,
   init,

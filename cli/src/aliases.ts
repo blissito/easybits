@@ -23,6 +23,7 @@ function positionals(argv: string[]): number[] {
 
 const MACHINE_SUBS = ["ls", "list", "deploy", "release", "releases", "logs", "rollback", "secrets"];
 const SANDBOX_NAMES = ["sandboxes", "sandbox", "sb"];
+const AGENT_NAMES = ["agents", "agent"];
 
 /** Devuelve el argv reescrito y los avisos para quien usó una forma vieja. */
 export function normalizeArgs(input: string[]): { argv: string[]; notes: string[] } {
@@ -67,13 +68,14 @@ export function normalizeArgs(input: string[]): { argv: string[]; notes: string[
   }
 
   // `--timeout` quería decir dos cosas: vida de la caja (create) y tope del comando (exec).
-  // En create ahora es `--ttl`.
-  if (SANDBOX_NAMES.includes(at(0) ?? "") && (at(1) === "create" || at(1) === "new")) {
+  // En create (sandboxes y agents) ahora es `--ttl`.
+  const noun = SANDBOX_NAMES.includes(at(0) ?? "") ? "sandboxes" : AGENT_NAMES.includes(at(0) ?? "") ? "agents" : null;
+  if (noun && (at(1) === "create" || at(1) === "new")) {
     const stop = argv.indexOf("--");
     for (let i = 0; i < (stop === -1 ? argv.length : stop); i++) {
       if (argv[i] === "--timeout" || argv[i].startsWith("--timeout=")) {
         argv[i] = argv[i].replace("--timeout", "--ttl");
-        notes.push("`sandboxes create --timeout` is now `--ttl` (`--timeout` stays for `exec`).");
+        notes.push(`\`${noun} create --timeout\` is now \`--ttl\`${noun === "sandboxes" ? " (`--timeout` stays for `exec`)" : ""}.`);
       }
     }
   }

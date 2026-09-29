@@ -215,12 +215,24 @@ easybits agents try ayudante "¿quién eres?"                          # un turn
 easybits agents logs ayudante --since "10 min ago"
 easybits agents doctor ayudante                                      # sale con 1 si hay un problema
 easybits agents get ayudante --fields status,lastError --json        # con status "error", lastError dice por qué no arrancó
-easybits agents export ayudante --out ayudante.json                  # nunca el env
 easybits agents create --like ayudante --name ayudante-2 --copy-files --dry-run
-easybits agents create --from ayudante.json --name ayudante-3 --dotenv .env
 \`\`\`
 
 Clonar (\`--like\` / \`--from\`) copia template, prompt, servidores MCP y skills (con \`--copy-files\`, también los archivos), **nunca el env**: las llaves del motor van con \`--dotenv\`. \`export\` enmascara los secretos del MCP salvo con \`--show-secrets\`; las referencias \`$secret:NOMBRE\` viajan tal cual.
+
+### El agente como archivo
+
+\`\`\`bash
+easybits agents export ayudante --out ./ayudante      # agent.yaml + skills/ + files/, versionable en git
+easybits apply ./ayudante --dry-run                   # después de editarlo: el plan
+ANTHROPIC_API_KEY=… easybits apply ./ayudante         # enseña el plan, pregunta y aplica
+easybits apply ./ayudante --prune --dry-run           # además, lo que se QUITARÍA
+easybits apply ./ayudante --create --name ayudante-2  # un agente nuevo desde la carpeta
+\`\`\`
+
+\`agent.yaml\` lleva \`template\`, \`name\`, \`prompt\` + \`promptMode\`, \`env\` (no secreto), \`mcp\`, \`skills\` y \`files\` (\`--out archivo.yaml\` o \`.json\` escribe sólo el archivo; sin \`--out\` sale a stdout). **Los secretos nunca salen**: las llaves con cara de secreto (KEY, TOKEN, AUTH…) y las URLs con contraseña se exportan como \`\${NOMBRE}\`; al aplicar, el CLI manda sólo los valores de los \`\${NOMBRE}\` que el archivo menciona y existen en tu entorno, y uno sin valor conserva el de hoy. \`$secret:NOMBRE\` (el vault) viaja tal cual. El env de la plataforma (la llave de EasyBits del agente, tokens internos) ni se exporta ni se toca.
+
+El plan: \`+\` agrega, \`~\` cambia, \`-\` quita, \`!\` no se aplica y dice por qué. **Declarativo**: lo que el archivo no menciona no se toca; quitar lo que el archivo ya no lista exige \`--prune\`. El plan lo calcula el servidor (es el único que ve el env y los valores del MCP de hoy). Env, MCP y skills reinician el agente una vez al final. Antes de aplicar se guarda el archivo anterior en \`~/.easybits/backups/\` (para volver: \`easybits apply <respaldo> --agent <agente>\`). Límites: un agente no cambia de template (usa \`--create\`) y los agentes sin máquina propia sólo toman \`name\`. \`--show-secrets\` / \`--with-files\` siguen dando el JSON de clonado de 0.9 para \`create --from\`.
 
 ### Cómo se nombran los comandos
 

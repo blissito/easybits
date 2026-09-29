@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import type { AgentInfo } from "@easybits.cloud/sdk";
 import type { Command } from "../types.js";
 import { ENV_FILE_OPTION, bool, envFrom, int, need, str } from "../args.js";
@@ -10,7 +10,6 @@ import {
   applyExport,
   buildExport,
   doctor,
-  exportAgent,
   files,
   get,
   MACHINE_TEMPLATES,
@@ -26,8 +25,18 @@ import {
   waitMachine,
 } from "./agents-config.js";
 import { getClient } from "../client.js";
+import { applyTarget, exportSpec } from "./spec.js";
 import { usageError } from "../errors.js";
 import { YES_OPTION, confirm, requireYesIfHeadless } from "../prompt.js";
+
+/** ¿Es el JSON de clonado de 0.9 (`kind: easybits.agent`)? Si no, es un archivo de agente nuevo. */
+function isLegacyExport(path: string): boolean {
+  try {
+    return existsSync(path) && !statSync(path).isDirectory() && /"kind"\s*:\s*"easybits\.agent"/.test(readFileSync(path, "utf8"));
+  } catch {
+    return false;
+  }
+}
 
 export const agents: Command = {
   name: "agents",
@@ -57,7 +66,7 @@ export const agents: Command = {
     create: {
       aliases: ["new"],
       summary: "Create an agent from a template, or clone one (--like / --from)",
-      usage: "easybits agents create (--template <template> | --like <agent> | --from <export.json>) [--name <name>] [--prompt <text> | --prompt-file <file>] [--prompt-mode append|replace] [--mcp-file <json>] [--copy-files] [--dotenv <path>] [--env K=V]... [--timeout <s>] [--dry-run]",
+      usage: "easybits agents create (--template <template> | --like <agent> | --from <export.json>) [--name <name>] [--prompt <text> | --prompt-file <file>] [--prompt-mode append|replace] [--mcp-file <json>] [--copy-files] [--dotenv <path>] [--env K=V]... [--ttl <s>] [--dry-run]",
       options: {
         template: { type: "string", value: "template", description: "Agent template (see: easybits docs agents)" },
         like: { type: "string", value: "agent", description: "Clone another agent's setup: template, prompt, MCP, skills (never its env)" },
@@ -70,7 +79,7 @@ export const agents: Command = {
         "copy-files": { type: "boolean", description: `--like/--from: also copy the knowledge files in /data/work` },
         env: { type: "string", multiple: true, value: "K=V", description: "Env for the agent, non-secret (repeatable)" },
         ...ENV_FILE_OPTION,
-        timeout: { type: "string", value: "seconds", description: "Lifetime before auto-destroy" },
+        ttl: { type: "string", value: "seconds", description: "Lifetime before auto-destroy (was --timeout)" },
         "dry-run": { type: "boolean", description: "Print the plan; create nothing" },
       },
       examples: [
@@ -93,6 +102,12 @@ export const agents: Command = {
         const mcpFile = str(ctx, "mcp-file");
         if (mcpFile && !existsSync(mcpFile)) throw usageError(`File not found: ${mcpFile}`, this.usage);
         if (bool(ctx, "copy-files") && !like && !from) throw usageError("--copy-files needs --like or --from.", this.usage);
+        // Un archivo de `agents export` (0.10+) es un spec: lo crea `apply --create`, que además
+        // sube skills y archivos si es un directorio. El JSON de clonado de 0.9 sigue abajo.
+        if (from && !isLegacyExport(from)) {
+          await applyTarget(ctx, from, { create: true, name: str(ctx, "name"), dryRun: bool(ctx, "dry-run"), usage: this.usage });
+          return;
+        }
         // La fuente del clon: otro agente (en vivo, con valores reales del MCP) o un export.
         const source: AgentExport | undefined = from
           ? readExport(from, this.usage)
@@ -143,7 +158,7 @@ export const agents: Command = {
           template,
           name,
           env,
-          timeoutSeconds: int(ctx, "timeout", this.usage),
+          timeoutSeconds: int(ctx, "ttl", this.usage),
           ...(mcpServers?.length ? { mcpServers } : {}),
         });
         if (promptAfter || source?.skills?.length || (bool(ctx, "copy-files") && source?.files?.length)) await waitMachine(ctx, a.agentId);
@@ -203,6 +218,6 @@ export const agents: Command = {
     try: tryTurn,
     logs,
     doctor,
-    export: exportAgent,
+    export: exportSpec,
   },
 };

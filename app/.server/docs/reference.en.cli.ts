@@ -129,12 +129,24 @@ easybits agents try helper "who are you?"                          # one full tu
 easybits agents logs helper --since "10 min ago"
 easybits agents doctor helper                                      # exits 1 on a problem
 easybits agents get helper --fields status,lastError --json        # status "error" carries why the runtime did not start
-easybits agents export helper --out helper.json                    # never the env
 easybits agents create --like helper --name helper-2 --copy-files --dry-run
-easybits agents create --from helper.json --name helper-3 --dotenv .env
 \`\`\`
 
 Cloning (\`--like\` / \`--from\`) copies template, prompt, MCP servers and skills (\`--copy-files\`: the files too), **never the env**: pass the engine keys with \`--dotenv\`. \`export\` masks MCP secrets unless \`--show-secrets\`; \`$secret:NAME\` references travel as is.
+
+### The agent as a file
+
+\`\`\`bash
+easybits agents export helper --out ./helper     # agent.yaml + skills/ + files/, versionable in git
+easybits apply ./helper --dry-run                # after editing: the plan
+ANTHROPIC_API_KEY=… easybits apply ./helper      # shows the plan, asks, applies
+easybits apply ./helper --prune --dry-run        # also what would be REMOVED
+easybits apply ./helper --create --name helper-2 # a new agent from the folder
+\`\`\`
+
+\`agent.yaml\` holds \`template\`, \`name\`, \`prompt\` + \`promptMode\`, \`env\` (non-secret), \`mcp\`, \`skills\` and \`files\` (\`--out file.yaml\` or \`.json\` writes just the file; without \`--out\` it goes to stdout). **Secrets never leave**: keys that look secret (KEY, TOKEN, AUTH…) and URLs with a password are exported as \`\${NAME}\`; on apply, the CLI sends only the values of the \`\${NAME}\` the file mentions that exist in your environment, and one without a value keeps today's. \`$secret:NAME\` (vault) travels as is. The platform's own env (the agent's EasyBits key, internal tokens) is never exported nor touched.
+
+The plan: \`+\` add, \`~\` change, \`-\` remove, \`!\` not applied and why. **Declarative**: what the file doesn't mention is left alone; removing what the file no longer lists needs \`--prune\`. The plan is computed by the server (it is the only one that sees the current env and MCP values). Env, MCP and skills restart the agent once at the end. Before applying, the previous file is saved to \`~/.easybits/backups/\` (roll back with \`easybits apply <backup> --agent <agent>\`). Limits: an agent can't change template (use \`--create\`), and agents without their own machine only take \`name\`. \`--show-secrets\` / \`--with-files\` keep producing the 0.9 clone JSON for \`create --from\`.
 
 ### Naming
 

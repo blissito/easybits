@@ -91,7 +91,9 @@ easybits agents restart helper
 easybits agents try helper "who are you?"      # one full turn as text: verify what you set up
 easybits agents logs helper --since "10 min ago"
 easybits agents doctor helper                   # exits 1 on a problem; status "error" shows why it did not start
-easybits agents export helper --out helper.json [--show-secrets] [--with-files]
+easybits agents export helper --out ./helper      # the agent as a folder: agent.yaml + skills/ + files/
+easybits apply ./helper --dry-run                 # after editing: the plan (+ ~ - !); --prune also removes
+easybits apply ./helper --create --name helper-2  # a new agent from the folder
 easybits agents create --like helper --name helper-2 [--copy-files] --dry-run   # clone its setup, never its env
 easybits agents create --from helper.json --name helper-3
 
@@ -156,6 +158,15 @@ Host *.ghosty
 - Skill: `npx skills add https://easybits.cloud` (includes `easybits-cli`).
 
 Full reference: https://www.easybits.cloud/docs#cli · https://www.easybits.cloud/en/docs/cli.md
+
+## Changes in 0.10.0
+
+- **The agent as a file**: `agents export <agent> [--out DIR|file.yaml|file.json]` and
+  `easybits apply <file|dir> [--agent X] [--create] [--prune] [--dry-run] [--yes]`. Declarative
+  plan computed by the server (`+ ~ - !`; removing needs `--prune`), secrets exported as `${NAME}`
+  and filled from your environment, previous file saved to `~/.easybits/backups/`.
+  `create --from <file>` accepts the new files too.
+- `agents create --timeout` is now `--ttl` (the old flag still works and says so).
 
 ## Changes in 0.9.0
 

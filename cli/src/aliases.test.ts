@@ -45,6 +45,13 @@ test("sandboxes create --timeout → --ttl; exec lo conserva", () => {
   assert.equal(n("sb create --ttl 600").notes.length, 0);
 });
 
+test("agents create --timeout → --ttl", () => {
+  const r = n("agents create --template goose --timeout 600");
+  assert.deepEqual(r.argv, ["agents", "create", "--template", "goose", "--ttl", "600"]);
+  assert.equal(r.notes.length, 1);
+  assert.equal(n("agents try helper --timeout 5").notes.length, 0);
+});
+
 test("--token no se confunde con un posicional", () => {
   assert.deepEqual(n("--token k deploy shop").argv, ["--token", "k", "machines", "deploy", "shop"]);
 });
