@@ -244,6 +244,7 @@ export default [
     route("agents/ghosty", "routes/api/v2/agents-ghosty.ts"),
     route("agents/autonomous", "routes/api/v2/agents-autonomous.ts"),
     route("agents/lookup", "routes/api/v2/agents-lookup.ts"),
+    route("agents/apply", "routes/api/v2/agents-apply.ts"),
     route("studio/ingest", "routes/api/v2/studio-ingest.ts"),
     route("calls", "routes/api/v2/calls.ts"),
     route("calls/files", "routes/api/v2/calls.files.ts"),
@@ -258,6 +259,8 @@ export default [
     route("agents/:id", "routes/api/v2/agent.ts"),
     route("agents/:id/message", "routes/api/v2/agent-message.ts"),
     route("agents/:id/prompt", "routes/api/v2/agent-prompt.ts"),
+    route("agents/:id/export", "routes/api/v2/agent-export.ts"),
+    route("agents/:id/apply", "routes/api/v2/agent-apply.ts"),
     // Config de agentes con máquina (ghosty-lite / goose), contrato de gs.
     route("agents/:id/files/*", "routes/api/v2/agent-files.ts"),
     route("agents/:id/skills/:slug", "routes/api/v2/agent-skill.ts"),
