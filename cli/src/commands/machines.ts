@@ -6,6 +6,7 @@ import { emit, fmtBytes, fmtDate, table } from "../output.js";
 import { getClient } from "../client.js";
 import { CliError, usageError } from "../errors.js";
 import { sandboxRecord } from "./sandboxes.js";
+import { resolveRef } from "../resolve.js";
 import { t } from "../i18n.js";
 
 const SECRETS_USAGE = "easybits machines secrets <ls|set|unset> <machine> [--dotenv <path> | NAME]";
@@ -66,17 +67,19 @@ export const machines: Command = {
       async run(ctx) {
         const repo = str(ctx, "repo");
         let archiveUrl = str(ctx, "archive");
-        const sandboxId = str(ctx, "machine");
+        const machineRef = str(ctx, "machine");
         // Con --machine también se puede mandar código nuevo (repo o archive): la máquina es el DESTINO.
-        if (!repo && !archiveUrl && !sandboxId) {
+        if (!repo && !archiveUrl && !machineRef) {
           throw usageError(t("Give a source: --repo, --archive or --machine.", "Pasa una fuente: --repo, --archive o --machine."), this.usage);
         }
         if (repo && archiveUrl) throw usageError(t("--repo and --archive are exclusive.", "--repo y --archive se excluyen."), this.usage);
-        if (sandboxId && str(ctx, "tier")) {
+        if (machineRef && str(ctx, "tier")) {
           throw usageError(t("--tier is only for a new machine (resize = redeploy_machine).", "--tier sólo aplica a una máquina nueva (cambiar tamaño = redeploy_machine)."), this.usage);
         }
 
         const eb = await getClient(ctx);
+        // Nombre o id, como en el resto de los comandos.
+        const sandboxId = machineRef ? await resolveRef(ctx, "sandbox", machineRef) : undefined;
 
         // Un archivo local se sube primero (público y de vida corta: la caja lo baja con curl, sin
         // credenciales). No debe llevar secretos: esos llegan desde el vault, ya dentro de la caja.

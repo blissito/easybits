@@ -166,6 +166,10 @@ Host *.ghosty
 
 Full reference: https://www.easybits.cloud/docs#cli · https://www.easybits.cloud/en/docs/cli.md
 
+## Changes in 0.14.1
+
+- `machines launch --machine` takes a name too, like every other command.
+
 ## Changes in 0.14.0
 
 - `machines launch` (aliases `create`, `new`): create a permanent machine and put an app on it in
