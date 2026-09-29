@@ -29,6 +29,27 @@ export const agents: Command = {
         );
       },
     },
+    get: {
+      aliases: ["show"],
+      summary: "Show one agent (by id or name)",
+      usage: "easybits agents get <agent>",
+      examples: ["easybits agents get helper", "easybits agents get 6650f0c2a1b2c3d4e5f60718 --json"],
+      async run(ctx) {
+        const id = need(ctx, 0, "agent", this.usage);
+        const eb = await getClient(ctx);
+        const a = await eb.getAgent(id);
+        emit(ctx, a, () => {
+          console.log(`ID:        ${a.agentId}`);
+          if (a.name) console.log(`Name:      ${a.name}`);
+          console.log(`Template:  ${a.template}`);
+          console.log(`Status:    ${a.status}`);
+          console.log(`Sandbox:   ${a.sandboxId}`);
+          console.log(`URL:       ${a.agentUrl}`);
+          console.log(`Created:   ${fmtDate(a.createdAt)}`);
+          console.log(`Expires:   ${a.expiresAt ? fmtDate(a.expiresAt) : "never"}`);
+        });
+      },
+    },
     create: {
       summary: "Create an agent from a template",
       usage: "easybits agents create --template <template> [--name <name>] [--dotenv <path>] [--env K=V]... [--timeout <s>]",
@@ -65,12 +86,12 @@ export const agents: Command = {
     },
     message: {
       aliases: ["msg", "send"],
-      summary: "Send a message; streams the reply",
-      usage: "easybits agents message <agent-id> <text...> [--session <id>]",
+      summary: "Send a message (agent by id or name); streams the reply",
+      usage: "easybits agents message <agent> <text...> [--session <id>]",
       options: { session: { type: "string", value: "id", description: "Continue a conversation" } },
-      examples: ['easybits agents message ag_123 "summarize /data/work/README.md"', "easybits agents message ag_123 hi --json"],
+      examples: ['easybits agents message helper "summarize /data/work/README.md"', "easybits agents message 6650f0c2a1b2c3d4e5f60718 hi --json"],
       async run(ctx) {
-        const id = need(ctx, 0, "agent-id", this.usage);
+        const id = need(ctx, 0, "agent", this.usage);
         const content = ctx.args.slice(1).join(" ");
         if (!content) throw usageError("Missing <text>.", this.usage);
         const eb = await getClient(ctx);
@@ -86,11 +107,11 @@ export const agents: Command = {
     destroy: {
       aliases: ["rm", "delete"],
       summary: "Destroy an agent and its sandbox",
-      usage: "easybits agents destroy <agent-id> [--yes]",
+      usage: "easybits agents destroy <agent> [--yes]",
       options: { ...YES_OPTION },
-      examples: ["easybits agents destroy ag_123            # asks you to type the id", "easybits agents destroy ag_123 --yes"],
+      examples: ["easybits agents destroy helper            # asks you to type the id", "easybits agents destroy helper --yes"],
       async run(ctx) {
-        const id = need(ctx, 0, "agent-id", this.usage);
+        const id = need(ctx, 0, "agent", this.usage);
         requireYesIfHeadless(ctx);
                 // Se lleva su caja y su /data: se teclea el id (patrón de `gh repo delete`).
         await confirm(ctx, `Destroy agent ${id} and its sandbox (including /data)?`, { typeName: id });

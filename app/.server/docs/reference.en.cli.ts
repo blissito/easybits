@@ -109,11 +109,16 @@ easybits db rm leads --yes
 
 \`\`\`bash
 easybits agents create --template goose --name helper
-easybits agents message ag_123 "summarize the README"   # the reply streams in
-easybits agents message ag_123 "and the tests?" --session ses_456   # continue the same conversation
+easybits agents get helper                         # by name or id
+easybits agents message helper "summarize the README"   # the reply streams in
+easybits agents message helper "and the tests?" --session ses_456   # continue the same conversation
 easybits agents ls
-easybits agents destroy ag_123 --yes
+easybits agents destroy helper --yes
 \`\`\`
+
+### Names instead of ids
+
+Every command that takes an agent, a sandbox or machine, or a database accepts its **name** as well as its id: \`easybits sb exec scratch -- ls\`, \`easybits domains ls shop\`, \`easybits machines deploy shop -m "v2"\`. An id (\`sb_…\`, or the 24-character id of agents and databases) passes straight through; a name is matched exactly, case-insensitive, against your list (one request per run). If two share the name the CLI exits 2 and lists the ids; if none matches it exits 1 with the \`ls\` to run.
 
 ### Files, websites and account
 

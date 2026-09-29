@@ -75,9 +75,10 @@ easybits db rm leads --yes
 # Agents
 easybits agents ls
 easybits agents create --template goose --name helper --dotenv .env
-easybits agents message ag_123 "hello"
-easybits agents message ag_123 "and now?" --session ses_456   # continue a conversation
-easybits agents destroy ag_123 --yes
+easybits agents get helper          # by name or id
+easybits agents message helper "hello"
+easybits agents message helper "and now?" --session ses_456   # continue a conversation
+easybits agents destroy helper --yes
 
 # Files, websites, account
 easybits files ls
@@ -94,6 +95,10 @@ easybits ssh-key       # public key for sandbox SSH
 easybits docs cli      # a docs section as markdown (--en for English)
 easybits docs --open   # open the docs in your browser
 ```
+
+**Names or ids.** Wherever a command takes an agent, a sandbox/machine or a database, you can
+pass its name instead of the id (`easybits sb exec scratch -- ls`, `easybits domains ls shop`).
+The match is exact and case-insensitive; if two share the name the CLI exits 2 and lists the ids.
 
 Every command has help with examples: `easybits <command> <subcommand> --help`
 (or `easybits help <command> <subcommand>`). A typo gets a "Did you mean" suggestion.

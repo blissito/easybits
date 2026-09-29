@@ -6,7 +6,7 @@ import { usageError } from "../errors.js";
 import { YES_OPTION, confirm, requireYesIfHeadless } from "../prompt.js";
 
 async function sandbox(ctx: Ctx, usage: string) {
-  const id = need(ctx, 0, "sandbox-id", usage);
+  const id = need(ctx, 0, "sandbox", usage);
   return (await getClient(ctx)).sandboxes.get(id);
 }
 
@@ -20,7 +20,7 @@ export const domains: Command = {
     ls: {
       aliases: ["list"],
       summary: "List domains attached to a sandbox",
-      usage: "easybits domains ls <sandbox-id>",
+      usage: "easybits domains ls <sandbox>",
       examples: ["easybits domains ls sb_abc123"],
       async run(ctx) {
         const items = await (await sandbox(ctx, this.usage)).listDomains();
@@ -29,7 +29,7 @@ export const domains: Command = {
     },
     add: {
       summary: "Attach a domain to a port; prints the DNS record to create",
-      usage: "easybits domains add <sandbox-id> <domain> --port <port>",
+      usage: "easybits domains add <sandbox> <domain> --port <port>",
       options: { port: { type: "string", value: "port", description: "Port inside the sandbox (required)" } },
       examples: ["easybits domains add sb_abc123 shop.example.com --port 3000"],
       async run(ctx) {
@@ -46,7 +46,7 @@ export const domains: Command = {
     },
     verify: {
       summary: "Check DNS + HTTPS for a domain",
-      usage: "easybits domains verify <sandbox-id> <domain>",
+      usage: "easybits domains verify <sandbox> <domain>",
       examples: ["easybits domains verify sb_abc123 shop.example.com"],
       async run(ctx) {
         const domain = need(ctx, 1, "domain", this.usage);
@@ -63,11 +63,11 @@ export const domains: Command = {
     rm: {
       aliases: ["remove", "delete"],
       summary: "Detach a domain",
-      usage: "easybits domains rm <sandbox-id> <domain> [--yes]",
+      usage: "easybits domains rm <sandbox> <domain> [--yes]",
       options: { ...YES_OPTION },
       examples: ["easybits domains rm sb_abc123 shop.example.com", "easybits domains rm sb_abc123 shop.example.com --yes"],
       async run(ctx) {
-        need(ctx, 0, "sandbox-id", this.usage);
+        need(ctx, 0, "sandbox", this.usage);
         const domain = need(ctx, 1, "domain", this.usage);
         requireYesIfHeadless(ctx);
         // Reversible (se vuelve a agregar), pero corta el tráfico: basta [y/N] (clig.dev).

@@ -5,7 +5,7 @@ license: MIT
 compatibility: Needs Node 22+ (npx is enough), network access to https://www.easybits.cloud and an EasyBits API key
 metadata:
   author: easybits
-  version: "1.3"
+  version: "1.4"
 ---
 
 # Use the EasyBits CLI
@@ -73,7 +73,11 @@ at another server (default https://www.easybits.cloud).
    `easybits --template node sb create`.
 5. Deletes need `--yes`: `sb destroy`, `agents destroy`, `db rm`, `domains rm`, `files delete`.
    With `--json` (or no terminal) they never prompt; without `--yes` they exit 2.
-6. Destroy what you create. Sandboxes you did not create belong to the user: do not
+6. Names work where ids do: any agent, sandbox/machine or database argument takes its name
+   (`easybits agents get helper`, `easybits sb exec scratch -- ls`, `easybits db query leads …`).
+   Exact match, case-insensitive. Two with the same name → exit 2, `error` says so and `hint`
+   lists the ids: retry with one. For destructive commands prefer the id you got back on create.
+7. Destroy what you create. Sandboxes you did not create belong to the user: do not
    suspend, exec into or destroy them unless asked.
 
 ## Sandboxes (Firecracker microVMs, alias `sb`)
@@ -139,6 +143,7 @@ easybits db rm leads --json --yes
 ```bash
 easybits agents create --template goose --name helper --json
 easybits agents ls --json
+easybits agents get helper --json                                  # by name or id
 easybits agents message "$AGENT_ID" "summarize the README" --json   # { content, tokens }
 easybits agents message "$AGENT_ID" "now the tests" --session "$SID" --json
 easybits agents destroy "$AGENT_ID" --json --yes

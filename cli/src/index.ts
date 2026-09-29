@@ -8,6 +8,7 @@ import { BANNER } from "./banner.js";
 import { EasybitsError } from "@easybits.cloud/sdk";
 import { CliError, EXIT, toCliError, usageError } from "./errors.js";
 import { forceRefresh, usedSession } from "./client.js";
+import { resolveRefs } from "./resolve.js";
 
 declare const __CLI_VERSION__: string;
 const VERSION = typeof __CLI_VERSION__ === "string" ? __CLI_VERSION__ : "dev";
@@ -121,17 +122,20 @@ async function main(argv: string[]): Promise<void> {
   if (!cmd) throw unknownCommand(cmdName);
 
   let leaf = cmd.leaf;
+  let subKey: string | undefined;
   const skip = [pos[0]];
   if (cmd.subs) {
     const subName = pos[1] != null ? argv[pos[1]] : undefined;
     const entry = subName ? findSub(cmd, subName) : undefined;
     if (entry) {
       leaf = entry[1];
+      subKey = entry[0];
       skip.push(pos[1]);
     } else if (subName) {
       throw unknownSub(cmd, subName);
     } else if (cmd.defaultSub && !argv.includes("--help") && !argv.includes("-h")) {
       leaf = cmd.subs[cmd.defaultSub];
+      subKey = cmd.defaultSub;
     } else if (!argv.includes("--help") && !argv.includes("-h")) {
       throw usageError(`Missing subcommand for "${cmd.name}".`, `easybits ${cmd.name} <${Object.keys(cmd.subs).join("|")}>`);
     }
@@ -153,13 +157,20 @@ async function main(argv: string[]): Promise<void> {
     args: positionals,
     opts: values,
   };
+  // Nombres en vez de ids: la tabla de refs.ts dice qué posicional es un recurso.
+  const refKey = `${cmd.name} ${subKey ?? ""}`.trim();
+  const target = leaf;
+  const run = async () => {
+    await resolveRefs(ctx, refKey);
+    await target.run.call(target, ctx);
+  };
   try {
-    await leaf.run.call(leaf, ctx);
+    await run();
   } catch (e) {
     // El access token dura 1 h: un 401 con sesión casi siempre es eso. Se refresca UNA vez
     // y se repite el comando (un 401 llega antes de que la API haga nada).
     if (e instanceof EasybitsError && e.status === 401 && usedSession() && (await forceRefresh())) {
-      await leaf.run.call(leaf, ctx);
+      await run();
       return;
     }
     throw e;

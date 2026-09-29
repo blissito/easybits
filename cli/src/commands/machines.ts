@@ -5,7 +5,7 @@ import { getClient } from "../client.js";
 import { usageError } from "../errors.js";
 import { sandboxRecord } from "./sandboxes.js";
 
-const SECRETS_USAGE = "easybits machines secrets <ls|set|unset> <machine-id> [--dotenv <path> | NAME]";
+const SECRETS_USAGE = "easybits machines secrets <ls|set|unset> <machine> [--dotenv <path> | NAME]";
 
 export const machines: Command = {
   name: "machines",
@@ -34,11 +34,11 @@ export const machines: Command = {
     deploy: {
       aliases: ["release"],
       summary: "Publish the machine's current app code as a new release",
-      usage: "easybits machines deploy <machine-id> [--message <text>]",
+      usage: "easybits machines deploy <machine> [--message <text>]",
       options: { message: { type: "string", short: "m", value: "text", description: "Release note" } },
       examples: ['easybits machines deploy sb_abc123 -m "v1.2: fix checkout"'],
       async run(ctx) {
-        const id = need(ctx, 0, "machine-id", this.usage);
+        const id = need(ctx, 0, "machine", this.usage);
         const eb = await getClient(ctx);
         const r = await eb.machines.deploy(id, { message: str(ctx, "message") });
         emit(ctx, r, () => console.log(`Release v${r.version} ${r.releaseId} (${r.status}, ${fmtBytes(r.sizeBytes)})`));
@@ -46,32 +46,32 @@ export const machines: Command = {
     },
     releases: {
       summary: "List releases, newest first",
-      usage: "easybits machines releases <machine-id> [--limit <n>]",
+      usage: "easybits machines releases <machine> [--limit <n>]",
       options: { limit: { type: "string", value: "n", description: "How many" } },
       examples: ["easybits machines releases sb_abc123 --limit 5"],
       async run(ctx) {
-        const id = need(ctx, 0, "machine-id", this.usage);
+        const id = need(ctx, 0, "machine", this.usage);
         const eb = await getClient(ctx);
         const r = await eb.machines.releases(id, { limit: int(ctx, "limit", this.usage) });
         emit(ctx, r, () =>
           table(
             r.items.map((x) => ({ ...x, size: fmtBytes(x.sizeBytes), createdAt: fmtDate(x.createdAt) })),
             [["version", "VERSION"], ["releaseId", "ID"], ["status", "STATUS"], ["size", "SIZE"], ["createdAt", "CREATED"], ["message", "MESSAGE"]],
-            "No releases yet. Publish one: easybits machines deploy <machine-id>",
+            "No releases yet. Publish one: easybits machines deploy <machine>",
           ),
         );
       },
     },
     logs: {
       summary: "Tail the app's own log",
-      usage: "easybits machines logs <machine-id> [--lines <n>] [--grep <text>]",
+      usage: "easybits machines logs <machine> [--lines <n>] [--grep <text>]",
       options: {
         lines: { type: "string", value: "n", description: "Last N lines" },
         grep: { type: "string", value: "text", description: "Only lines matching" },
       },
       examples: ["easybits machines logs sb_abc123 --lines 100", "easybits machines logs sb_abc123 --grep ERROR"],
       async run(ctx) {
-        const id = need(ctx, 0, "machine-id", this.usage);
+        const id = need(ctx, 0, "machine", this.usage);
         const eb = await getClient(ctx);
         const r = await eb.machines.logs(id, { lines: int(ctx, "lines", this.usage), grep: str(ctx, "grep") });
         emit(ctx, r, () => process.stdout.write(r.output.endsWith("\n") || !r.output ? r.output : r.output + "\n"));
@@ -79,10 +79,10 @@ export const machines: Command = {
     },
     rollback: {
       summary: "Put a previous release back on the same machine (data untouched)",
-      usage: "easybits machines rollback <machine-id> <release-id>",
+      usage: "easybits machines rollback <machine> <release-id>",
       examples: ["easybits machines rollback sb_abc123 rel_789"],
       async run(ctx) {
-        const id = need(ctx, 0, "machine-id", this.usage);
+        const id = need(ctx, 0, "machine", this.usage);
         const rel = need(ctx, 1, "release-id", this.usage);
         const eb = await getClient(ctx);
         const r = await eb.machines.rollback(id, rel);
@@ -102,7 +102,7 @@ export const machines: Command = {
       ],
       async run(ctx) {
         const action = need(ctx, 0, "ls|set|unset", SECRETS_USAGE);
-        const id = need(ctx, 1, "machine-id", SECRETS_USAGE);
+        const id = need(ctx, 1, "machine", SECRETS_USAGE);
         const eb = await getClient(ctx);
         if (action === "ls" || action === "list") {
           const r = await eb.machines.secrets(id);

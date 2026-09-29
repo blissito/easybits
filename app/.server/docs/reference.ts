@@ -195,11 +195,16 @@ easybits db rm leads --yes
 
 \`\`\`bash
 easybits agents create --template goose --name ayudante
-easybits agents message ag_123 "resume el README"    # la respuesta llega en streaming
-easybits agents message ag_123 "¿y los tests?" --session ses_456   # sigue la misma conversación
+easybits agents get ayudante                        # por nombre o id
+easybits agents message ayudante "resume el README"    # la respuesta llega en streaming
+easybits agents message ayudante "¿y los tests?" --session ses_456   # sigue la misma conversación
 easybits agents ls
-easybits agents destroy ag_123 --yes
+easybits agents destroy ayudante --yes
 \`\`\`
+
+### Nombres en vez de ids
+
+Todo comando que recibe un agente, un sandbox o máquina, o una base de datos acepta su **nombre** además del id: \`easybits sb exec pruebas -- ls\`, \`easybits domains ls tienda\`, \`easybits machines deploy tienda -m "v2"\`. Un id (\`sb_…\`, o el id de 24 caracteres de agentes y bases) pasa directo; un nombre se busca exacto, sin distinguir mayúsculas, en tu lista (una petición por corrida). Si dos comparten el nombre, el CLI sale con 2 y enlista los ids; si ninguno coincide, sale con 1 y te dice qué \`ls\` correr.
 
 ### Archivos, sitios y cuenta
 

@@ -1,17 +1,20 @@
-import type { EasybitsClient } from "@easybits.cloud/sdk";
 import type { Command } from "../types.js";
 import { list, need, str } from "../args.js";
 import { emit, fmtDate, table } from "../output.js";
 import { getClient } from "../client.js";
+import type { Ctx } from "../types.js";
+import { listRefs } from "../resolve.js";
 import { CliError } from "../errors.js";
 import { YES_OPTION, confirm, requireYesIfHeadless } from "../prompt.js";
 
-/** Por id o por nombre, sin crear: un typo no debe inventar una base nueva (db(name) sí crea). */
-async function findDb(eb: EasybitsClient, ref: string) {
-  const { items } = await eb.listDatabases();
-  const hit = items.find((d) => d.id === ref) ?? items.find((d) => d.name === ref);
-  if (!hit) throw new CliError(`No database "${ref}".`, 1, "List them with: easybits db ls", "not_found", 404);
-  return hit;
+/**
+ * La base ya resuelta (index.ts cambió el nombre por el id con refs.ts). Sin crear: un
+ * typo no debe inventar una base nueva (db(name) sí crea). Reusa la lista de la corrida.
+ */
+async function findDb(ctx: Ctx, id: string) {
+  const hit = (await listRefs(ctx, "db")).find((d) => d.id === id);
+  if (!hit) throw new CliError(`No database "${id}".`, 1, "List them with: easybits db ls", "not_found", 404);
+  return { id, name: hit.name ?? id };
 }
 
 export const db: Command = {
@@ -60,7 +63,7 @@ export const db: Command = {
         const ref = need(ctx, 0, "db-id|name", this.usage);
         requireYesIfHeadless(ctx);
                 const eb = await getClient(ctx);
-        const hit = await findDb(eb, ref);
+        const hit = await findDb(ctx, ref);
         // Irreversible: se teclea el nombre, como `gh repo delete` / `turso db destroy`.
         await confirm(ctx, `Delete database ${hit.name} (${hit.id}) and all its data?`, { typeName: hit.name });
         const r = await eb.deleteDatabase(hit.id);
@@ -76,7 +79,7 @@ export const db: Command = {
       async run(ctx) {
         const ref = need(ctx, 0, "db-id|name", this.usage);
         const eb = await getClient(ctx);
-        const hit = await findDb(eb, ref);
+        const hit = await findDb(ctx, ref);
         const q = (sql: string, args?: unknown[]) => eb.queryDatabase(hit.id, sql, args);
         const names = (
           await q("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_litestream_%' ORDER BY name")
@@ -117,7 +120,7 @@ export const db: Command = {
         const ref = need(ctx, 0, "db-id|name", this.usage);
         const sql = need(ctx, 1, "sql", this.usage);
         const eb = await getClient(ctx);
-        const hit = await findDb(eb, ref);
+        const hit = await findDb(ctx, ref);
         const args = list(ctx, "arg");
         const r = await eb.queryDatabase(hit.id, sql, args.length ? args : undefined);
         emit(ctx, r, () => {

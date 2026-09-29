@@ -38,12 +38,12 @@ function printSandbox(s: ReturnType<typeof sandboxRecord>) {
 }
 
 async function sandbox(ctx: Ctx, usage: string) {
-  const id = need(ctx, 0, "sandbox-id", usage);
+  const id = need(ctx, 0, "sandbox", usage);
   const eb = await getClient(ctx);
   return eb.sandboxes.get(id);
 }
 
-const FILES_USAGE = "easybits sandboxes files <ls|read|write> <sandbox-id> <path> [local-file]";
+const FILES_USAGE = "easybits sandboxes files <ls|read|write> <sandbox> <path> [local-file]";
 
 export const sandboxes: Command = {
   name: "sandboxes",
@@ -107,7 +107,7 @@ export const sandboxes: Command = {
     get: {
       aliases: ["show", "status"],
       summary: "Show one sandbox",
-      usage: "easybits sandboxes get <sandbox-id>",
+      usage: "easybits sandboxes get <sandbox>",
       examples: ["easybits sandboxes get sb_abc123"],
       async run(ctx) {
         const rec = sandboxRecord(await sandbox(ctx, this.usage));
@@ -116,7 +116,7 @@ export const sandboxes: Command = {
     },
     exec: {
       summary: "Run a shell command inside a sandbox",
-      usage: "easybits sandboxes exec <sandbox-id> [--cwd <dir>] [--timeout <s>] [--dotenv <path>] -- <command...>",
+      usage: "easybits sandboxes exec <sandbox> [--cwd <dir>] [--timeout <s>] [--dotenv <path>] -- <command...>",
       options: {
         cwd: { type: "string", value: "dir", description: "Working directory" },
         timeout: { type: "string", value: "seconds", description: "Kill the command after this long" },
@@ -130,7 +130,7 @@ export const sandboxes: Command = {
         "easybits sb exec sb_abc123 --json -- 'ls -la /' | jq .exitCode",
       ],
       async run(ctx) {
-        need(ctx, 0, "sandbox-id", this.usage);
+        need(ctx, 0, "sandbox", this.usage);
         const command = ctx.args.slice(1).join(" ");
         if (!command) throw usageError("Missing <command>.", this.usage);
         const env = await envFrom(ctx, this.usage);
@@ -153,7 +153,7 @@ export const sandboxes: Command = {
     },
     logs: {
       summary: "Read the sandbox journal (optionally one systemd unit)",
-      usage: "easybits sandboxes logs <sandbox-id> [--unit <unit>] [--lines <n>] [--since <spec>] [--grep <text>]",
+      usage: "easybits sandboxes logs <sandbox> [--unit <unit>] [--lines <n>] [--since <spec>] [--grep <text>]",
       options: {
         unit: { type: "string", value: "unit", description: "systemd unit to filter" },
         lines: { type: "string", value: "n", description: "Last N lines (default 200)" },
@@ -188,7 +188,7 @@ export const sandboxes: Command = {
       ],
       async run(ctx) {
         const action = need(ctx, 0, "ls|read|write", FILES_USAGE);
-        const id = need(ctx, 1, "sandbox-id", FILES_USAGE);
+        const id = need(ctx, 1, "sandbox", FILES_USAGE);
         const path = need(ctx, 2, "path", FILES_USAGE);
         const eb = await getClient(ctx);
         const sb = await eb.sandboxes.get(id);
@@ -231,7 +231,7 @@ export const sandboxes: Command = {
     },
     suspend: {
       summary: "Suspend to disk (frees CPU; TTL paused)",
-      usage: "easybits sandboxes suspend <sandbox-id>",
+      usage: "easybits sandboxes suspend <sandbox>",
       examples: ["easybits sandboxes suspend sb_abc123"],
       async run(ctx) {
         const r = await (await sandbox(ctx, this.usage)).suspend();
@@ -240,7 +240,7 @@ export const sandboxes: Command = {
     },
     resume: {
       summary: "Wake a suspended sandbox",
-      usage: "easybits sandboxes resume <sandbox-id> [--dotenv <path>] [--env K=V]...",
+      usage: "easybits sandboxes resume <sandbox> [--dotenv <path>] [--env K=V]...",
       options: {
         env: { type: "string", multiple: true, value: "K=V", description: "Rewrite env on wake, non-secret (repeatable)" },
         ...ENV_FILE_OPTION,
@@ -255,11 +255,11 @@ export const sandboxes: Command = {
     destroy: {
       aliases: ["rm", "delete"],
       summary: "Destroy a sandbox (irreversible)",
-      usage: "easybits sandboxes destroy <sandbox-id> [--yes]",
+      usage: "easybits sandboxes destroy <sandbox> [--yes]",
       options: { ...YES_OPTION },
       examples: ["easybits sandboxes destroy sb_abc123", "easybits sb rm sb_abc123 --yes"],
       async run(ctx) {
-        need(ctx, 0, "sandbox-id", this.usage);
+        need(ctx, 0, "sandbox", this.usage);
         requireYesIfHeadless(ctx);
         const sb = await sandbox(ctx, this.usage);
         // Una permanente guarda datos y cobra por mes: se teclea el id (patrón de
@@ -275,7 +275,7 @@ export const sandboxes: Command = {
     },
     snapshot: {
       summary: "Capture a copy-on-write snapshot without stopping the box",
-      usage: "easybits sandboxes snapshot <sandbox-id> [--name <name>]",
+      usage: "easybits sandboxes snapshot <sandbox> [--name <name>]",
       options: { name: { type: "string", value: "name", description: "Snapshot label" } },
       examples: ["easybits sandboxes snapshot sb_abc123 --name before-upgrade"],
       async run(ctx) {
