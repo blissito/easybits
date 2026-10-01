@@ -27,7 +27,7 @@ import {
 import { getClient } from "../client.js";
 import { applyTarget, exportSpec } from "./spec.js";
 import { usageError } from "../errors.js";
-import { YES_OPTION, confirm, requireYesIfHeadless } from "../prompt.js";
+import { YES_OPTION, applyHint, confirm, requireYesIfHeadless } from "../prompt.js";
 import { t } from "../i18n.js";
 
 /** ¿Es el JSON de clonado de 0.9 (`kind: easybits.agent`)? Si no, es un archivo de agente nuevo. */
@@ -152,6 +152,7 @@ export const agents: Command = {
             for (const [k, v] of Object.entries(plan)) console.log(`${k.padEnd(12)} ${Array.isArray(v) ? v.join(", ") || "-" : v ?? "-"}`);
             if (source) console.log(t("Env is never copied: pass the engine's keys with --dotenv.", "El env nunca se copia: pasa las llaves del motor con --dotenv."));
             console.log(t("(dry run: nothing created)", "(simulación: no se creó nada)"));
+            console.log(applyHint(ctx));
           });
           return;
         }

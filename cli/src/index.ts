@@ -201,7 +201,7 @@ const argv = process.argv.slice(2);
 // El idioma antes que nada: la ayuda y hasta el primer error de uso ya salen en él.
 setLang(detectLang(langFlag(argv)));
 // El aviso de versión nueva sólo para una persona: nunca con --json ni sin terminal. La
-// consulta a npm (una vez al día) corre en paralelo al comando.
+// consulta a npm (una vez por hora) corre en paralelo al comando.
 const notice = process.stderr.isTTY && !wantsJson(argv) && !argv.includes("doctor") && argv[0] !== "__complete" ? updateNotice(VERSION) : null;
 main(argv)
   .catch((err: unknown) => {

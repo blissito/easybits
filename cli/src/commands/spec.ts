@@ -15,7 +15,7 @@ import { emit } from "../output.js";
 import { api } from "../api.js";
 import { resolveRef } from "../resolve.js";
 import { EXIT, usageError } from "../errors.js";
-import { YES_OPTION, confirm, requireYesIfHeadless } from "../prompt.js";
+import { YES_OPTION, applyHint, confirm, requireYesIfHeadless } from "../prompt.js";
 import { buildExport, exportAgent, waitMachine } from "./agents-config.js";
 import { serverText, t } from "../i18n.js";
 
@@ -124,6 +124,7 @@ export async function applyTarget(ctx: Ctx, target: string, o: ApplyOpts): Promi
         for (const s of Object.keys(uploads.skills ?? {})) console.log(`+ skill ${s}`);
         for (const f of Object.keys(uploads.files ?? {})) console.log(`+ file ${f}`);
         console.log(t("(dry run: nothing created)", "(simulación: no se creó nada)"));
+        console.log(applyHint(ctx));
       });
       return;
     }
@@ -165,6 +166,8 @@ export async function applyTarget(ctx: Ctx, target: string, o: ApplyOpts): Promi
             ? t("Nothing to apply (see the ! lines).", "Nada que aplicar (mira los renglones con !).")
             : t("No changes: the agent already matches the file.", "Sin cambios: el agente ya coincide con el archivo."),
       );
+      // Aplicar pide confirmación: sin terminal, la línea ya trae --yes.
+      if (o.dryRun && actionable.length) console.log(applyHint(ctx, { needsYes: true }));
     });
     return;
   }

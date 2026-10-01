@@ -11,9 +11,26 @@ export const YES_OPTION = {
 } as const;
 
 /** El comando tal como se tecleó, para la pista «Run: … --yes». */
-function sameCommand(): string {
-  const argv = process.argv.slice(2).map((a) => (/^[\w@%+=:,./-]+$/.test(a) ? a : `'${a.replace(/'/g, `'\\''`)}'`));
-  return `easybits ${argv.join(" ")}`;
+function sameCommand(argv: string[] = process.argv.slice(2)): string {
+  const quoted = argv.map((a) => (/^[\w@%+=:,./-]+$/.test(a) ? a : `'${a.replace(/'/g, `'\\''`)}'`));
+  return `easybits ${quoted.join(" ")}`;
+}
+
+/**
+ * El comando de verdad tras un --dry-run: el mismo sin --dry-run y, si la hoja confirma
+ * (`needsYes`) y no hay terminal, ya con --yes. Un agente de código copia la línea tal cual
+ * y sin el --yes falla con exit 2 (feedback Deník Leads #7 en `ghosty`).
+ */
+export function applyCommand(argv: string[], opts: { headless: boolean; needsYes?: boolean }): string {
+  const rest = argv.filter((a) => a !== "--dry-run");
+  const hasYes = rest.some((a) => a === "--yes" || a === "-y");
+  return `${sameCommand(rest)}${opts.needsYes && opts.headless && !hasYes ? " --yes" : ""}`;
+}
+
+/** La línea «Para aplicarlo: …» que cierra la salida de un --dry-run. */
+export function applyHint(ctx: Ctx, opts: { needsYes?: boolean } = {}): string {
+  const cmd = applyCommand(process.argv.slice(2), { headless: !interactive(ctx), needsYes: opts.needsYes });
+  return t(`To apply: ${cmd}`, `Para aplicarlo: ${cmd}`);
 }
 
 async function ask(question: string): Promise<string> {

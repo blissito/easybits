@@ -34,6 +34,22 @@ export function notLoggedIn(): CliError {
   );
 }
 
+/**
+ * ¿El 404 trae una razón («agent not found», «Section not found») o es el genérico?
+ * Genérico = vacío, HTML o un «Not found» a secas: no dice qué faltó, y la API contesta
+ * así también cuando el recurso existe pero es de otra cuenta.
+ */
+export function isGenericNotFound(body: string): boolean {
+  let msg: unknown = body;
+  try {
+    const j = JSON.parse(body);
+    msg = j?.message ?? j?.error ?? j?.detail ?? "";
+  } catch {}
+  if (typeof msg !== "string") return false;
+  const s = msg.trim();
+  return !s || s.startsWith("<") || /^(404\s*:?\s*)?not found\.?$/i.test(s);
+}
+
 /** Saca el mensaje legible del cuerpo de error de la API (JSON o texto). */
 function apiMessage(body: string): { message: string; kind?: string } {
   try {
@@ -72,6 +88,17 @@ export function toCliError(err: unknown): CliError {
         "unauthorized",
         401,
       );
+    }
+    if (err.status === 404) {
+      // Un 404 con razón la dice tal cual; el genérico avisa que también puede ser falta de
+      // acceso (la API contesta 404, nunca 403, con lo de otra cuenta) o parece un id mal escrito.
+      // Mismo trato que `ghosty` 0.27.1/0.31.0.
+      const hint404 = t(
+        "Check the id (list what you have with the matching `ls` command) and that your key is from the account that owns it (easybits whoami).",
+        "Revisa el id (enlista lo que tienes con el `ls` que corresponda) y que tu key sea de la cuenta dueña (easybits whoami).",
+      );
+      if (isGenericNotFound(err.body)) return new CliError(t("Not found — or you don't have access to it.", "No se encontró, o no tienes acceso."), EXIT.API, hint404, "not_found", 404);
+      return new CliError(message, EXIT.API, (kind && KIND_HINTS()[kind]) ?? hint404, "not_found", 404);
     }
     const hint =
       (kind && KIND_HINTS()[kind]) ??

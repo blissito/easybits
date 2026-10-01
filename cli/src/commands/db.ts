@@ -8,7 +8,7 @@ import { WHATSAPP_MAX_BYTES, defaultPhotoColumn, linkStatsSql, parseLinkStats, p
 import { usageError } from "../errors.js";
 import { listRefs } from "../resolve.js";
 import { CliError } from "../errors.js";
-import { YES_OPTION, confirm, requireYesIfHeadless } from "../prompt.js";
+import { YES_OPTION, applyHint, confirm, requireYesIfHeadless } from "../prompt.js";
 import { t } from "../i18n.js";
 import { api } from "../api.js";
 import { MACHINE_TEMPLATES } from "./agents-config.js";
@@ -121,6 +121,7 @@ export const db: Command = {
             console.log(t(`${hit.name} (${hit.id}): ${tables.length} table(s), ${rows} row(s)`, `${hit.name} (${hit.id}): ${tables.length} tabla(s), ${rows} fila(s)`));
             for (const x of tables) console.log(`  ${x.name}: ${x.rows}`);
             console.log(t("(dry run: nothing deleted)", "(simulación: no se borró nada)"));
+            console.log(applyHint(ctx, { needsYes: true }));
           });
           return;
         }
@@ -175,6 +176,7 @@ export const db: Command = {
             console.log(`${from} → ${to}`);
             printRefs();
             console.log(t("(dry run: nothing changed; without --dry-run those prompts are rewritten too)", "(simulación: no cambió nada; sin --dry-run también se reescriben esos prompts)"));
+            console.log(applyHint(ctx));
           });
           return;
         }

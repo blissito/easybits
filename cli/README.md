@@ -168,6 +168,15 @@ Host *.ghosty
 
 Full reference: https://www.easybits.cloud/docs#cli · https://www.easybits.cloud/en/docs/cli.md
 
+## Changes in 0.15.1
+
+- After a `--dry-run`, the last line is the real command (`To apply: …`); without a terminal it
+  already carries `--yes` when the command asks for confirmation.
+- A 404 with a reason prints the reason; a bare «Not found» says it may also be missing access
+  (another account's resource) and points to `easybits whoami`.
+- The «new version» notice checks npm every hour (it was once a day), and asks again when the
+  cache is older than what you have installed.
+
 ## Changes in 0.15.0
 
 - `db rename <db> <new-name> [--skip-prompts] [--dry-run]` (alias `mv`): renames the database (the

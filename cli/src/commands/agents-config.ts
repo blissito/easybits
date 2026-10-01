@@ -11,7 +11,7 @@ import { emit, fmtBytes, fmtDate, maskSecret, pickFields, table } from "../outpu
 import { getClient } from "../client.js";
 import { api, encodePath } from "../api.js";
 import { CliError, EXIT, toCliError, usageError } from "../errors.js";
-import { YES_OPTION, confirm, requireYesIfHeadless } from "../prompt.js";
+import { YES_OPTION, applyHint, confirm, requireYesIfHeadless } from "../prompt.js";
 import { t } from "../i18n.js";
 
 export const WORK_DIR = "/data/work";
@@ -287,6 +287,7 @@ export const set: Leaf = {
         if (!Object.keys(changes).length) return console.log(t("No changes: the agent already has that prompt.", "Sin cambios: el agente ya tiene ese prompt."));
         for (const [k, v] of Object.entries(changes)) console.log(`${k}: ${v.from} → ${v.to}`);
         console.log(t("(dry run: nothing changed)", "(simulación: no cambió nada)"));
+        console.log(applyHint(ctx));
       });
       return;
     }
@@ -355,6 +356,7 @@ export const files: Leaf = {
         emit(ctx, { agentId: id, dryRun: true, upload: plan }, () => {
           for (const p of plan) console.log(`${p.local} → ${WORK_DIR}/${p.path} (${fmtBytes(p.bytes)})`);
           console.log(t("(dry run: nothing uploaded)", "(simulación: no se subió nada)"));
+          console.log(applyHint(ctx));
         });
         return;
       }
@@ -370,6 +372,7 @@ export const files: Leaf = {
       if (bool(ctx, "dry-run")) {
         emit(ctx, { agentId: id, dryRun: true, delete: rest }, () => {
           for (const p of rest) console.log(`${t("would delete", "borraría")} ${WORK_DIR}/${p}`);
+          console.log(applyHint(ctx, { needsYes: true }));
         });
         return;
       }
@@ -467,7 +470,10 @@ export const skills: Leaf = {
       const assets = dir ? readSkillDir(dir) : [];
       const plan = { agentId: id, slug, files: ["SKILL.md", ...assets.map((a) => a.name)], restart: bool(ctx, "restart") };
       if (bool(ctx, "dry-run")) {
-        emit(ctx, { ...plan, dryRun: true }, () => console.log(t(`would add skill ${slug} (${plan.files.length} file(s))${plan.restart ? " and restart" : ""}\n(dry run: nothing changed)`, `agregaría la skill ${slug} (${plan.files.length} archivo(s))${plan.restart ? " y reiniciaría" : ""}\n(simulación: no cambió nada)`)));
+        emit(ctx, { ...plan, dryRun: true }, () => {
+          console.log(t(`would add skill ${slug} (${plan.files.length} file(s))${plan.restart ? " and restart" : ""}\n(dry run: nothing changed)`, `agregaría la skill ${slug} (${plan.files.length} archivo(s))${plan.restart ? " y reiniciaría" : ""}\n(simulación: no cambió nada)`));
+          console.log(applyHint(ctx));
+        });
         return;
       }
       const r = await api<{ slug: string; files: string[]; bytes: number }>(ctx, "PUT", `/agents/${id}/skills/${slug}`, { markdown, assets });
@@ -480,7 +486,10 @@ export const skills: Leaf = {
       const slugs = ctx.args.slice(2);
       if (!slugs.length) throw usageError(t("Give one or more slugs.", "Pasa uno o más slugs."), SKILLS_USAGE);
       if (bool(ctx, "dry-run")) {
-        emit(ctx, { agentId: id, dryRun: true, delete: slugs }, () => slugs.forEach((s) => console.log(`${t("would remove skill", "quitaría la skill")} ${s}`)));
+        emit(ctx, { agentId: id, dryRun: true, delete: slugs }, () => {
+          slugs.forEach((s) => console.log(`${t("would remove skill", "quitaría la skill")} ${s}`));
+          console.log(applyHint(ctx, { needsYes: true }));
+        });
         return;
       }
       requireYesIfHeadless(ctx);
@@ -541,6 +550,7 @@ export const mcp: Leaf = {
       emit(ctx, { agentId: id, dryRun: true, ...diff, servers: maskMcp(next) }, () => {
         console.log(`added: ${diff.added.join(", ") || "-"}\nremoved: ${diff.removed.join(", ") || "-"}\nchanged: ${diff.changed.join(", ") || "-"}`);
         console.log(t("(dry run: nothing changed; a real set restarts the agent)", "(simulación: no cambió nada; un set de verdad reinicia el agente)"));
+        console.log(applyHint(ctx));
       });
       return;
     }
