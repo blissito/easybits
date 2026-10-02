@@ -23,11 +23,28 @@ async function launchBrowser(): Promise<Browser> {
   });
 }
 
-function getBrowser(): Promise<Browser> {
-  if (!browserPromise) {
-    pageCount = 0;
-    browserPromise = launchBrowser();
+// El handle cacheado NO basta: hay que comprobar que siga vivo.
+//
+// Esta caja hiberna (snapshot de Firecracker). Se cierra Chromium tras
+// IDLE_CLOSE_MS justamente para que el snapshot no lo capture vivo, pero si la
+// caja se duerme ANTES de ese plazo —el reaper del orquestador, o un desalojo por
+// RAM del host— el snapshot sí guarda un Chromium vivo, y al resumir ese handle
+// está muerto aunque `browserPromise` siga resuelto. El síntoma es
+// "browser.newPage: Target page, context or browser has been closed" en el PRIMER
+// render tras despertar (visto en prod el 2026-07-27, se comió el turno de un
+// usuario).
+async function getBrowser(): Promise<Browser> {
+  if (browserPromise) {
+    try {
+      const b = await browserPromise;
+      if (b.isConnected()) return b;
+    } catch {
+      // el launch anterior falló: se relanza abajo
+    }
+    resetBrowser();
   }
+  pageCount = 0;
+  browserPromise = launchBrowser();
   return browserPromise;
 }
 
@@ -38,13 +55,48 @@ function resetBrowser() {
   if (old) old.then((b) => b.close().catch(() => {}));
 }
 
+// Un solo intento: página nueva, correr, cerrar. El manejo de fallo (reset +
+// reintento) vive en withPage, para que el semáforo se tome UNA vez por llamada y
+// un reintento no pueda colarse fuera del cupo de concurrencia.
+async function withPageOnce<T>(
+  fn: (page: Page) => Promise<T>,
+  opts?: PageOpts
+): Promise<T> {
+  const browser = await getBrowser();
+  // `emulate` va a la creación del contexto a propósito: deviceScaleFactor,
+  // isMobile, hasTouch y userAgent NO se pueden cambiar en una página viva —
+  // Playwright solo los acepta aquí. Sin esto, "modo móvil" era un viewport
+  // angosto y nada más.
+  const page = await browser.newPage({
+    viewport: opts?.viewport || { width: 816, height: 1056 },
+    ...(opts?.emulate ?? {}),
+  });
+  try {
+    const result = await fn(page);
+    pageCount++;
+    // Auto-restart browser after N pages to prevent memory bloat
+    if (pageCount >= MAX_PAGES_BEFORE_RESTART) {
+      resetBrowser();
+    }
+    return result;
+  } finally {
+    await page.close().catch(() => {});
+  }
+}
+
 /**
  * Run a function with a Playwright page from the shared pool.
  * Handles concurrency, browser lifecycle, and error recovery.
  */
+export interface PageOpts {
+  viewport?: { width: number; height: number };
+  /** Opciones de contexto de Playwright (deviceScaleFactor, isMobile, hasTouch, userAgent…). */
+  emulate?: Record<string, unknown>;
+}
+
 export async function withPage<T>(
   fn: (page: Page) => Promise<T>,
-  opts?: { viewport?: { width: number; height: number } }
+  opts?: PageOpts
 ): Promise<T> {
   // Acquire semaphore slot
   if (running >= POOL_SIZE) {
@@ -53,24 +105,19 @@ export async function withPage<T>(
   running++;
 
   try {
-    const browser = await getBrowser();
-    const page = await browser.newPage({
-      viewport: opts?.viewport || { width: 816, height: 1056 },
-    });
-    try {
-      const result = await fn(page);
-      pageCount++;
-      // Auto-restart browser after N pages to prevent memory bloat
-      if (pageCount >= MAX_PAGES_BEFORE_RESTART) {
+    // Un intento, y si el browser se murió EN el intento, uno más con uno fresco.
+    // isConnected() cubre el handle que ya llegó muerto; esto cubre el que se
+    // cae a mitad (Chromium wedged tras un resume: contesta al transporte pero no
+    // sirve una página). Sin el reintento, el primer render tras despertar la caja
+    // está condenado — y ese es justo el que ve el usuario.
+    for (let attempt = 0; ; attempt++) {
+      try {
+        return await withPageOnce(fn, opts);
+      } catch (err) {
         resetBrowser();
+        if (attempt >= 1) throw err;
       }
-      return result;
-    } finally {
-      await page.close().catch(() => {});
     }
-  } catch (err) {
-    resetBrowser();
-    throw err;
   } finally {
     running--;
     const next = waitQueue.shift();
@@ -96,16 +143,23 @@ export async function setContentAndWaitForAssets(
   html: string,
   opts?: { perAssetTimeoutMs?: number }
 ): Promise<void> {
-  await page.setContent(html, { waitUntil: "load" });
+  // Una <img loading="lazy"> bajo el pliegue nunca entra al viewport en headless: se queda
+  // sin cargar y sale como hueco. En un render no hay nada que ahorrar: todas eager.
+  const eager = html.replace(/\sloading\s*=\s*(["']?)lazy\1/gi, ' loading="eager"');
+  await page.setContent(eager, { waitUntil: "load" });
   await page.evaluate(async (timeoutMs) => {
     const withTimeout = (p: Promise<unknown>) =>
       Promise.race([p, new Promise((r) => setTimeout(r, timeoutMs))]);
 
     // (1) <img> elements
+    // `complete` ya significa "terminó, bien o mal". Una <img> que YA falló llega con
+    // complete=true y naturalWidth=0 y nunca vuelve a disparar `error`: exigir
+    // naturalWidth>0 hacía esperar el tope de 8 s por cada imagen rota (medido 2-oct en
+    // render-svc: 0.2 s → 8.2 s con una sola imagen caída).
     const imgs = Array.from(document.images);
     await Promise.all(
       imgs.map((img) =>
-        img.complete && img.naturalWidth > 0
+        img.complete
           ? Promise.resolve()
           : withTimeout(
               new Promise<void>((resolve) => {
