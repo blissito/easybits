@@ -132,8 +132,9 @@ export async function authFleetAgentManage(request: Request, fleetAgentId: strin
  */
 export type FleetAuthKind = "fleetToken" | "legacyToken" | "formmySecret" | "session";
 
+// Sin authCreds/authKeys: el cliente los omite por default (ver db.ts).
 export type FleetAuthResult = {
-  fleetAgent: FleetAgent;
+  fleetAgent: Omit<FleetAgent, "authCreds" | "authKeys">;
   kind: FleetAuthKind;
   scopes: FleetTokenScope[];
   /** Presente sólo con fleetToken: id de la credencial (rate limit + revocación). */
