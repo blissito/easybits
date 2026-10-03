@@ -24,7 +24,6 @@ import makeWASocket, {
   type AuthenticationState,
 } from "@whiskeysockets/baileys";
 import { db } from "~/.server/db";
-import { createKeyStore, deleteAgentKeys, flushAllKeyStores, mongoKeyBackend } from "~/.server/integrations/whatsapp/authKeyStore.server";
 import { routeMessage, FleetAgentAtCapacity, FleetAgentRateLimited, ADMIT_GIVEUP_MS, admitRetryDelay } from "~/.server/core/fleetAgentOperations";
 import { checkSandboxRateLimit } from "~/.server/rateLimiter";
 import { extractInboundContent } from "~/.server/integrations/whatsapp/inboundMedia.server";
@@ -332,28 +331,39 @@ const ser = (o: unknown) => JSON.parse(JSON.stringify(o, BufferJSON.replacer));
 const de = (o: unknown) => (o == null ? null : JSON.parse(JSON.stringify(o), BufferJSON.reviver));
 
 async function useDBAuthState(fleetAgentId: string): Promise<{ state: AuthenticationState; saveCreds: () => Promise<void> }> {
-  const row = await db.fleetAgent.findUnique({ where: { id: fleetAgentId }, select: { authCreds: true } });
+  const row = await db.fleetAgent.findUnique({ where: { id: fleetAgentId }, select: { authCreds: true, authKeys: true } });
   const creds = de(row?.authCreds) ?? initAuthCreds();
+  const keys: Record<string, Record<string, unknown>> = de(row?.authKeys) ?? {};
 
-  // Llaves Signal: una por documento, escritura incremental con debounce (ver
-  // authKeyStore.server.ts). Antes eran un blob en FleetAgent.authKeys reescrito
-  // completo en cada ráfaga de keys.set.
-  const store = await createKeyStore(fleetAgentId, mongoKeyBackend(db), {
-    ser,
-    de,
-    mirror: process.env.BAILEYS_KEYS_MIRROR !== "off",
-    onError: (what, e) => log(fleetAgentId, `authKeys ${what} failed: ${e instanceof Error ? e.message : e}`),
-  });
-  if (store.mode === "legacy") log(fleetAgentId, "authKeys: modo legacy (migración pendiente, reintenta al reconectar)");
+  // Debounce key persistence: during the pairing handshake Baileys fires dozens
+  // of keys.set in a burst. Writing the whole blob to Mongo on each one would
+  // stall/break the handshake — coalesce into one flush per 600ms instead.
+  let flushTimer: NodeJS.Timeout | null = null;
+  const flushKeys = () => {
+    if (flushTimer) return;
+    flushTimer = setTimeout(() => {
+      flushTimer = null;
+      db.fleetAgent.update({ where: { id: fleetAgentId }, data: { authKeys: ser(keys) } }).catch(() => {});
+    }, 600);
+    if (typeof flushTimer.unref === "function") flushTimer.unref();
+  };
   const rawKeys = {
     get: (type: string, ids: string[]) => {
-      const out = store.get(type, ids);
-      if (type === "app-state-sync-key") {
-        for (const id in out) out[id] = proto.Message.AppStateSyncKeyData.fromObject(out[id] as any);
+      const out: Record<string, unknown> = {};
+      for (const id of ids) {
+        let v = keys[type]?.[id];
+        if (type === "app-state-sync-key" && v) v = proto.Message.AppStateSyncKeyData.fromObject(v as any);
+        if (v !== undefined) out[id] = v;
       }
       return out as any;
     },
-    set: (data: any) => store.set(data),
+    set: (data: any) => {
+      for (const type in data) {
+        keys[type] = keys[type] || {};
+        Object.assign(keys[type], data[type]);
+      }
+      flushKeys();
+    },
   };
   const state: AuthenticationState = {
     creds,
@@ -497,7 +507,6 @@ export async function connectFleetAgent(fleetAgentId: string, opts: { pairingPho
         // max_reconnect is a transient close where the creds may still be valid.
         if (loggedOut) {
           await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { authCreds: null, authKeys: null } }).catch(() => {});
-          await deleteAgentKeys(db, fleetAgentId).catch(() => {});
           // Count EVERY logout toward the pairing throttle (not only the pairing-
           // code case): a genuine logout LOOP (Meta rejecting our handshake, or a
           // session that keeps dying) trips the 3/30min block, which STOPS the auto
@@ -888,9 +897,6 @@ function installDrainHandlers() {
     if (shuttingDown) return;
     shuttingDown = true;
     log("surface", `${sig} → draining (no new turns; kill_timeout 30s window)`);
-    // Llaves Signal pendientes del debounce: si se pierden, el siguiente arranque
-    // descifra con llaves viejas. Se escriben primero, antes de esperar turnos.
-    void flushAllKeyStores();
     void drainSurface();
   };
   process.once("SIGTERM", () => onSignal("SIGTERM"));

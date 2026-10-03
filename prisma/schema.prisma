@@ -1353,8 +1353,6 @@ model FleetAgent {
   // redeploys/restarts WITHOUT re-scanning the QR. Written on every creds/keys
   // update; read at boot rehydration. BufferJSON-serialized.
   authCreds     Json?
-  // LEGACY: las llaves viven en FleetAgentAuthKey desde 2026-10. Este blob sólo se
-  // lee para migrar y se mantiene como espejo de rollback (BAILEYS_KEYS_MIRROR).
   authKeys      Json?
   // ANTI-SPAM allowlist: the fleet agent only answers in these group jids. Empty = OFF
   // everywhere (safe default — never auto-replies in all the owner's groups).
@@ -1775,23 +1773,6 @@ model StudioBox {
 // (owner, kind) so ensureServiceBox is idempotent and never double-spawns. The
 // idle reaper (reapIdleServiceBoxes) destroys boxes whose lastActiveAt crossed
 // the idle grace. Mirrors StudioBox but generic over `kind`.
-// Llaves Signal de Baileys, UNA por documento (antes: blob FleetAgent.authKeys
-// reescrito completo en cada cambio; filas de 1.4 MB). Ver authKeyStore.server.ts.
-// type "__meta" / keyId "migrated" = marcador de que la colección ya es la fuente
-// de verdad para ese agente. Sin relación Prisma a propósito: el borrado va
-// explícito (logout, deleteFleetAgent). Índices: scripts/create-authkey-indexes.ts.
-model FleetAgentAuthKey {
-  id           String   @id @default(auto()) @map("_id") @db.ObjectId
-  fleetAgentId String   @db.ObjectId
-  type         String
-  keyId        String
-  value        Json
-  updatedAt    DateTime @default(now())
-
-  @@unique([fleetAgentId, type, keyId])
-  @@index([fleetAgentId])
-}
-
 model ServiceBox {
   id           String   @id @default(auto()) @map("_id") @db.ObjectId
   ownerId      String   @db.ObjectId

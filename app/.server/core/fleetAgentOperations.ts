@@ -3582,9 +3582,6 @@ export async function deleteFleetAgent(ctx: AuthContext, fleetAgentId: string): 
     await memClient().deleteObject(memKey(fleetAgentId, r.sessionUuid)).catch(() => {});
   }
   await db.fleetAgentMessage.deleteMany({ where: { fleetAgentId } });
-  // Llaves Signal de WhatsApp (colección aparte, sin relación Prisma → no cascadea).
-  const { deleteAgentKeys } = await import("~/.server/integrations/whatsapp/authKeyStore.server");
-  await deleteAgentKeys(db, fleetAgentId).catch((e) => console.error(`deleteFleetAgent: authKeys ${fleetAgentId}:`, e));
   await db.fleetAgent.delete({ where: { id: fleetAgentId } }); // FleetAgentRoute cascades
 }
 

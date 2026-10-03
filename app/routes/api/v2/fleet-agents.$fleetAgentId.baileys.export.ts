@@ -2,7 +2,6 @@ import type { Route } from "./+types/fleet-agents.$fleetAgentId.baileys.export";
 import { authenticateRequest, requireAuth, requireScope } from "~/.server/apiAuth";
 import { db } from "~/.server/db";
 import { buildBaileysExport } from "~/.server/core/baileysExport";
-import { readAgentKeysBlob } from "~/.server/integrations/whatsapp/authKeyStore.server";
 
 // POST /api/v2/fleet-agents/:fleetAgentId/baileys/export
 //   { dryRun: true }                  → salud de la sesión de WhatsApp personal (Baileys), sin llaves
@@ -34,6 +33,7 @@ export async function action({ request, params }: Route.ActionArgs) {
       name: true,
       baileys: true,
       authCreds: true,
+      authKeys: true,
       enabledGroups: true,
       mainGroupJid: true,
       seenGroups: true,
@@ -52,17 +52,13 @@ export async function action({ request, params }: Route.ActionArgs) {
     select: { createdAt: true },
   });
 
-  // Las llaves viven en FleetAgentAuthKey (una por documento); si el agente aún no
-  // migró, salen del blob legacy. Misma forma {type:{id:value}} en ambos casos.
-  const authKeys = await readAgentKeysBlob(db, fleetAgent.id);
-
   const out = buildBaileysExport(
     {
       id: fleetAgent.id,
       name: fleetAgent.name ?? fleetAgent.id,
       baileys: fleetAgent.baileys,
       authCreds: fleetAgent.authCreds,
-      authKeys,
+      authKeys: fleetAgent.authKeys,
       enabledGroups: fleetAgent.enabledGroups,
       mainGroupJid: fleetAgent.mainGroupJid,
       seenGroups: fleetAgent.seenGroups,

@@ -9,9 +9,8 @@ describe("FleetAgent omite el estado de Baileys por default", () => {
     expect(DB_OPTIONS.omit.fleetAgent).toEqual({ authCreds: true, authKeys: true });
   });
 
-  it("baileys pide authCreds explícito y las llaves salen de su colección", () => {
+  it("baileys sigue pidiendo las llaves explícitamente con select", () => {
     const src = readFileSync("app/.server/integrations/whatsapp/baileys.server.ts", "utf8");
-    expect(src).toMatch(/select:\s*\{\s*authCreds:\s*true\s*\}/);
-    expect(src).toMatch(/createKeyStore\(/);
+    expect(src).toMatch(/select:\s*\{\s*authCreds:\s*true,\s*authKeys:\s*true\s*\}/);
   });
 });
