@@ -797,7 +797,11 @@ function BoxFace({ color, state, title, slots, perVm, sandboxId, onAction, busy,
     <span ref={anclaRef} className="relative flex flex-col items-center gap-1"
       onMouseLeave={() => setOpen(false)}>
       {sandboxId && onAction && open && (
-        <span className={`absolute z-20 flex flex-col gap-1 bg-white border-2 border-black rounded-xl p-1.5 shadow-[2px_2px_0_0_#000] whitespace-nowrap ${haciaAbajo ? "top-full mt-1" : "bottom-full mb-1"}`}>
+        // El hueco entre la caja y el menú va como PADDING de este envoltorio, no como margen:
+        // con `mb-1` el mouse cruzaba 4 px fuera del ancla camino al menú, `onMouseLeave` lo
+        // cerraba y ya no se alcanzaba ningún botón (reporte de un usuario, 3-oct).
+        <span className={`absolute z-20 ${haciaAbajo ? "top-full pt-1" : "bottom-full pb-1"}`}>
+        <span className="flex flex-col gap-1 bg-white border-2 border-black rounded-xl p-1.5 shadow-[2px_2px_0_0_#000] whitespace-nowrap">
           <span className="px-1 text-[11px] text-marengo">
             {title}
             {left && <b className="ml-1 text-onix">{asleep ? "muere" : "duerme"} en {left}</b>}
@@ -826,6 +830,7 @@ function BoxFace({ color, state, title, slots, perVm, sandboxId, onAction, busy,
               Eliminar
             </button>
           )}
+        </span>
         </span>
       )}
     <motion.span title={left ? `${title} · ${asleep ? "muere" : "duerme"} en ${left}` : title}
