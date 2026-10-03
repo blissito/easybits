@@ -18,7 +18,8 @@ import logger from "../logger";
 import type { AuthContext } from "../apiAuth";
 import { requireScope } from "../apiAuth";
 import type { StorageRegion } from "@prisma/client";
-import { createHost } from "~/lib/fly_certs/certs_getters";
+import { createHost, removeHost } from "~/lib/fly_certs/certs_getters";
+import { checkWebsiteSlug, slugError, MAX_PREVIOUS_SLUGS } from "./websiteSlug";
 import { fileEvents } from "./fileEvents";
 import { PLANS, NEXT_PLAN, getUserPlan, formatPrice, type PlanKey } from "~/lib/plans";
 import { dispatchWebhooks } from "../webhooks";
@@ -952,7 +953,57 @@ export async function listWebsites(
   };
 }
 
-export async function createWebsite(ctx: AuthContext, opts: { name: string }) {
+/** URL pública de un sitio: subdominio si está enmascarado, si no la ruta `/s/<slug>`. */
+function websiteUrls(w: { slug: string; subdomainEnabled: boolean }) {
+  const subdomainUrl = w.subdomainEnabled ? `https://${w.slug}.easybits.cloud` : null;
+  return { url: subdomainUrl ?? `https://www.easybits.cloud/s/${w.slug}`, subdomainUrl };
+}
+
+/** Un slug está tomado si lo usa otro sitio vivo (los borrados no cuentan). */
+async function isWebsiteSlugTaken(slug: string, exceptId?: string) {
+  const taken = await db.website.findFirst({
+    where: {
+      slug,
+      status: { not: "DELETED" },
+      ...(exceptId ? { id: { not: exceptId } } : {}),
+    },
+    select: { id: true },
+  });
+  return Boolean(taken);
+}
+
+/**
+ * Deja libre un slug para `ownerId`:
+ * - Un sitio BORRADO del mismo dueño que lo conserva chocaría con
+ *   `@@unique([ownerId, slug])`; se le cambia por uno inservible (ya no se sirve).
+ * - Ningún otro sitio debe tenerlo como alias (`previousSlugs`): el que lo toma
+ *   como slug vivo gana y el alias viejo deja de redirigir.
+ */
+async function releaseWebsiteSlug(slug: string, ownerId: string, exceptId?: string) {
+  const deletedHolders = await db.website.findMany({
+    where: { ownerId, slug, status: "DELETED", ...(exceptId ? { id: { not: exceptId } } : {}) },
+    select: { id: true },
+  });
+  for (const d of deletedHolders) {
+    await db.website.update({ where: { id: d.id }, data: { slug: `${slug}--deleted-${d.id}` } });
+  }
+  const aliasHolders = await db.website.findMany({
+    where: { previousSlugs: { has: slug }, ...(exceptId ? { id: { not: exceptId } } : {}) },
+    select: { id: true, previousSlugs: true },
+  });
+  for (const a of aliasHolders) {
+    await db.website.update({
+      where: { id: a.id },
+      data: { previousSlugs: (a.previousSlugs ?? []).filter((x) => x !== slug) },
+    });
+  }
+}
+
+function isPrismaUniqueError(err: unknown) {
+  return Boolean(err && typeof err === "object" && "code" in err && (err as { code: string }).code === "P2002");
+}
+
+export async function createWebsite(ctx: AuthContext, opts: { name: string; slug?: string }) {
   requireScope(ctx, "WRITE");
   const name = opts.name.trim();
   if (!name) {
@@ -967,8 +1018,25 @@ export async function createWebsite(ctx: AuthContext, opts: { name: string }) {
   // at the public route). Pre-check across all non-deleted websites. Deleted
   // sites' slugs are free to reuse since the loader filters them out.
   let website;
+  if (opts.slug !== undefined) {
+    // Slug elegido por el cliente: se valida y, si está tomado, 409 (no se inventa otro).
+    const check = checkWebsiteSlug(opts.slug);
+    if (!check.ok) throw slugError("slug_invalid", check.reason);
+    if (await isWebsiteSlugTaken(check.slug)) {
+      throw slugError("slug_taken", `slug "${check.slug}" is already in use`);
+    }
+    await releaseWebsiteSlug(check.slug, ctx.user.id);
+    try {
+      website = await db.website.create({
+        data: { name, slug: check.slug, ownerId: ctx.user.id, prefix: "" },
+      });
+    } catch (err: unknown) {
+      if (isPrismaUniqueError(err)) throw slugError("slug_taken", `slug "${check.slug}" is already in use`);
+      throw err;
+    }
+  }
   const MAX_ATTEMPTS = 10;
-  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+  for (let attempt = 0; !website && attempt < MAX_ATTEMPTS; attempt++) {
     const slug = [randomFrom(NOUNS), randomFrom(PARTICIPLES_PRESENT)].join("-");
     const taken = await db.website.findFirst({
       where: { slug, status: { not: "DELETED" } },
@@ -981,9 +1049,7 @@ export async function createWebsite(ctx: AuthContext, opts: { name: string }) {
       });
       break;
     } catch (err: unknown) {
-      const isPrismaUnique =
-        err && typeof err === "object" && "code" in err && (err as { code: string }).code === "P2002";
-      if (!isPrismaUnique || attempt === MAX_ATTEMPTS - 1) throw err;
+      if (!isPrismaUniqueError(err) || attempt === MAX_ATTEMPTS - 1) throw err;
     }
   }
 
@@ -1041,7 +1107,7 @@ export async function getWebsite(ctx: AuthContext, websiteId: string) {
 export async function updateWebsite(
   ctx: AuthContext,
   websiteId: string,
-  opts: { name?: string; status?: string }
+  opts: { name?: string; status?: string; slug?: string }
 ) {
   requireScope(ctx, "WRITE");
   const website = await db.website.findUnique({ where: { id: websiteId } });
@@ -1056,6 +1122,26 @@ export async function updateWebsite(
   if (opts.name !== undefined) updates.name = opts.name;
   if (opts.status !== undefined) updates.status = opts.status;
 
+  // Cambio de slug. Los archivos viven por id (`sites/<id>/`), así que no se mueve
+  // nada en storage: sólo cambia la URL. El slug viejo queda como alias (301).
+  let newSlug: string | null = null;
+  if (opts.slug !== undefined) {
+    const check = checkWebsiteSlug(opts.slug);
+    if (!check.ok) throw slugError("slug_invalid", check.reason);
+    if (check.slug !== website.slug) {
+      if (await isWebsiteSlugTaken(check.slug, websiteId)) {
+        throw slugError("slug_taken", `slug "${check.slug}" is already in use`);
+      }
+      await releaseWebsiteSlug(check.slug, ctx.user.id, websiteId);
+      newSlug = check.slug;
+      updates.slug = newSlug;
+      updates.previousSlugs = [
+        website.slug,
+        ...(website.previousSlugs ?? []).filter((x) => x !== website.slug && x !== newSlug),
+      ].slice(0, MAX_PREVIOUS_SLUGS);
+    }
+  }
+
   // Compute authoritative stats from DB
   const stats = await db.file.aggregate({
     where: {
@@ -1069,11 +1155,39 @@ export async function updateWebsite(
   updates.fileCount = stats._count;
   updates.totalSize = stats._sum.size ?? 0;
 
-  const updated = await db.website.update({
-    where: { id: websiteId },
-    data: updates,
-  });
-  return updated;
+  let updated;
+  try {
+    updated = await db.website.update({
+      where: { id: websiteId },
+      data: updates,
+    });
+  } catch (err: unknown) {
+    if (newSlug && isPrismaUniqueError(err)) throw slugError("slug_taken", `slug "${newSlug}" is already in use`);
+    throw err;
+  }
+
+  // Subdominio enmascarado: el certificado es por host (`<slug>.easybits.cloud`),
+  // así que se emite el nuevo y se quita el viejo (mismo patrón que el dashboard).
+  if (newSlug && website.subdomainEnabled && process.env.FLY_API_TOKEN) {
+    try {
+      await createHost(`${newSlug}.easybits.cloud`);
+      await removeHost(`${website.slug}.easybits.cloud`);
+    } catch (err) {
+      console.error(`[websites] cert swap failed ${website.slug} → ${newSlug}:`, err);
+    }
+  }
+
+  const result = { ...updated, ...websiteUrls(updated) };
+  if (newSlug || opts.name !== undefined) {
+    dispatchWebhooks(ctx.user.id, "website.updated", {
+      id: updated.id,
+      name: updated.name,
+      slug: updated.slug,
+      previousSlug: newSlug ? website.slug : undefined,
+      url: result.url,
+    });
+  }
+  return result;
 }
 
 export async function deleteWebsite(ctx: AuthContext, websiteId: string) {

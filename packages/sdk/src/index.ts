@@ -409,6 +409,17 @@ export interface Website {
 export interface UpdateWebsiteParams {
   name?: string;
   status?: string;
+  /**
+   * New public slug (`/s/<slug>/`). Lowercase a-z, 0-9 and single hyphens, 3-60 chars,
+   * not reserved, unique. Errors: 400 `slug_invalid`, 409 `slug_taken`. The old slug
+   * answers 301 to the new one.
+   */
+  slug?: string;
+}
+
+export interface CreateWebsiteOptions {
+  /** Custom slug for the public URL; same rules as `UpdateWebsiteParams.slug`. */
+  slug?: string;
 }
 
 export interface Workspace {
@@ -1381,10 +1392,10 @@ export class EasybitsClient {
     return this.request<{ items: Website[] }>("/websites");
   }
 
-  async createWebsite(name: string): Promise<{ website: Website }> {
+  async createWebsite(name: string, opts?: CreateWebsiteOptions): Promise<{ website: Website }> {
     return this.request<{ website: Website }>("/websites", {
       method: "POST",
-      body: JSON.stringify({ name }),
+      body: JSON.stringify({ name, ...(opts?.slug !== undefined ? { slug: opts.slug } : {}) }),
     });
   }
 

@@ -1,8 +1,9 @@
 import { resolveBaseUrl } from "@easybits.cloud/sdk";
-import type { Command } from "../types.js";
-import { bool, readStdin } from "../args.js";
-import { notLoggedIn, usageError } from "../errors.js";
+import type { Command, Ctx } from "../types.js";
+import { bool, need, readStdin, str } from "../args.js";
+import { CliError, EXIT, notLoggedIn, usageError } from "../errors.js";
 import { emit, fmtBytes, table, fmtDate } from "../output.js";
+import { api } from "../api.js";
 import { getClient, resolveApiKey, resolveCredential } from "../client.js";
 import { fetchEmail, oauthLogin, readRc, writeRc } from "../auth.js";
 import { t } from "../i18n.js";
@@ -101,8 +102,8 @@ export const usage: Command = {
 export const websites: Command = {
   name: "websites",
   group: "Storage",
-  summary: "List your static websites",
-  synopsis: "websites",
+  summary: "Static websites: list, create, change slug",
+  synopsis: "websites <ls|create|slug>",
   subs: {
     ls: {
       aliases: ["list"],
@@ -121,9 +122,60 @@ export const websites: Command = {
         );
       },
     },
+    create: {
+      summary: "Create an empty static website (optionally with your own slug)",
+      usage: "easybits websites create <name> [--slug <slug>]",
+      options: { slug: { type: "string", value: "slug", description: "Public slug: /s/<slug>/ (a-z, 0-9, hyphens, 3-60 chars)" } },
+      examples: ["easybits websites create \"Mi tienda\" --slug mi-tienda"],
+      async run(ctx) {
+        const name = need(ctx, 0, "name", this.usage);
+        const slug = str(ctx, "slug");
+        const { website } = await api<{ website: WebsiteRow }>(ctx, "POST", "/websites", { name, ...(slug ? { slug } : {}) });
+        emit(ctx, website, () => console.log(t(`Created ${website.slug} → ${website.url}`, `Creado ${website.slug} → ${website.url}`)));
+      },
+    },
+    slug: {
+      summary: "Change a website's slug (the old URL redirects 301 to the new one)",
+      usage: "easybits websites slug <websiteId|slug> <new-slug>",
+      examples: ["easybits websites slug rio-durmiente mi-tienda"],
+      async run(ctx) {
+        const ref = need(ctx, 0, "website", this.usage);
+        const slug = need(ctx, 1, "new-slug", this.usage);
+        const websiteId = await resolveWebsiteId(ctx, ref);
+        const { website } = await api<{ ok: boolean; website: WebsiteRow }>(ctx, "PATCH", `/websites/${websiteId}`, { slug });
+        emit(ctx, website, () => console.log(t(`Slug changed → ${website.url}`, `Slug cambiado → ${website.url}`)));
+      },
+    },
   },
   defaultSub: "ls",
 };
+
+type WebsiteRow = { id: string; name: string; slug: string; url: string };
+
+/** Un id de Mongo (24 hex) pasa directo; si no, se busca por slug en tus sitios. */
+export function matchWebsite(ref: string, items: WebsiteRow[]): string | null {
+  if (/^[0-9a-f]{24}$/i.test(ref)) return ref;
+  const r = ref.trim().toLowerCase();
+  return items.find((w) => w.slug === r)?.id ?? null;
+}
+
+async function resolveWebsiteId(ctx: Ctx, ref: string): Promise<string> {
+  if (/^[0-9a-f]{24}$/i.test(ref)) return ref;
+  // La API pagina de 100 en 100; se recorre hasta encontrarlo.
+  for (let offset = 0; ; offset += 100) {
+    const page = await api<{ items: WebsiteRow[]; total: number }>(ctx, "GET", `/websites?limit=100&offset=${offset}`);
+    const id = matchWebsite(ref, page.items);
+    if (id) return id;
+    if (page.items.length < 100 || offset + 100 >= page.total) break;
+  }
+  throw new CliError(
+    t(`No website with id or slug "${ref}".`, `No hay sitio con id o slug "${ref}".`),
+    EXIT.API,
+    `${t("List them with", "Enlístalos con")}: easybits websites ls`,
+    "not_found",
+    404,
+  );
+}
 
 export const providers: Command = {
   name: "providers",

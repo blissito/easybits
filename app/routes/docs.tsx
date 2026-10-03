@@ -774,9 +774,9 @@ ghosty --yolo` },
 
             <SdkMethodTable title="Sitios web" methods={[
               ["listWebsites()", "Lista los sitios estáticos"],
-              ["createWebsite(name)", "Crea un sitio, obtén id + URL"],
+              ["createWebsite(name, { slug? })", "Crea un sitio (slug opcional), obtén id + URL"],
               ["getWebsite(websiteId)", "Obtén los detalles del sitio"],
-              ["updateWebsite(websiteId, params)", "Actualiza nombre/status"],
+              ["updateWebsite(websiteId, params)", "Actualiza nombre, slug o status"],
               ["deleteWebsite(websiteId)", "Borra el sitio + archivos"],
             ]} />
             <p className="text-xs text-gray-500 -mt-4 mb-6">
@@ -1360,7 +1360,7 @@ console.log(form.url); // https://www.easybits.cloud/f/diagnostico-situacional`}
 
             <div className="mb-6 bg-gray-50 border-2 border-gray-300 rounded-xl p-4 text-sm">
               <strong>Eventos:</strong>{" "}
-              <code>file.created</code>, <code>file.updated</code>, <code>file.deleted</code>, <code>file.restored</code>, <code>website.created</code>, <code>website.deleted</code>, <code>form.submitted</code>, <code>payment.paid</code>, <code>broadcast.sent</code>
+              <code>file.created</code>, <code>file.updated</code>, <code>file.deleted</code>, <code>file.restored</code>, <code>website.created</code>, <code>website.updated</code>, <code>website.deleted</code>, <code>form.submitted</code>, <code>payment.paid</code>, <code>broadcast.sent</code>
             </div>
 
             <Endpoint
@@ -1601,7 +1601,10 @@ for (const f of files) {
               method="POST"
               path="/websites"
               description="Crea un sitio nuevo"
-              body={[{ name: "name", type: "string", desc: "Nombre del sitio (requerido)" }]}
+              body={[
+                { name: "name", type: "string", desc: "Nombre del sitio (requerido)" },
+                { name: "slug", type: "string", desc: "Opcional. URL pública /s/<slug>/: a-z, 0-9 y guiones, 3–60, único. 400 slug_invalid / 409 slug_taken" },
+              ]}
               response={`{ "website": { "id": "...", "slug": "my-site", "url": "https://my-site.easybits.cloud" } }`}
               sdk={`const { website } = await eb.createWebsite("my-docs");
 console.log(website.url); // https://my-docs.easybits.cloud`}
@@ -1615,12 +1618,13 @@ console.log(website.url); // https://my-docs.easybits.cloud`}
             <Endpoint
               method="PATCH"
               path="/websites/:websiteId"
-              description="Actualiza el nombre o status del sitio"
+              description="Actualiza el nombre, el slug o el status del sitio. Al cambiar el slug, el viejo responde 301 al nuevo"
               body={[
                 { name: "name", type: "string", desc: "Nuevo nombre" },
+                { name: "slug", type: "string", desc: "Nuevo slug (mismas reglas que al crear). 400 slug_invalid / 409 slug_taken" },
                 { name: "status", type: "string", desc: "ej. 'DEPLOYED'" },
               ]}
-              sdk={`await eb.updateWebsite("website_id", { name: "new-name" });`}
+              sdk={`await eb.updateWebsite("website_id", { name: "new-name", slug: "mi-tienda" });`}
             />
             <Endpoint
               method="DELETE"

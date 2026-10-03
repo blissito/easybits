@@ -21,10 +21,15 @@ export async function action({ request, params }: Route.ActionArgs) {
 
   if (request.method === "PATCH") {
     requireScope(ctx, "WRITE");
-    const body = await request.json();
+    const body = await request.json().catch(() => ({}));
+    // `slug` presente pero no-string → slug_invalid (lo decide checkWebsiteSlug).
+    if (body.slug !== undefined && typeof body.slug !== "string") {
+      return Response.json({ error: "slug_invalid", message: "slug must be a string" }, { status: 400 });
+    }
     const updated = await updateWebsite(ctx, params.websiteId!, {
       status: typeof body.status === "string" ? body.status : undefined,
       name: typeof body.name === "string" ? body.name : undefined,
+      slug: typeof body.slug === "string" ? body.slug : undefined,
     });
     return Response.json({ ok: true, website: updated });
   }

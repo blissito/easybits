@@ -1,4 +1,5 @@
 import type { Route } from "./+types/s.$slug.$";
+import { redirect } from "react-router";
 import { db } from "~/.server/db";
 import {
   getPlatformDefaultClient,
@@ -90,6 +91,17 @@ export async function loader({ params, request }: Route.LoaderArgs) {
     where: { slug, status: { not: "DELETED" } },
   });
   if (!website) {
+    // Slug renombrado: si algún sitio vivo lo tiene en `previousSlugs`, 301 al
+    // slug actual conservando ruta y query (el slug vivo de otro siempre gana).
+    const renamed = await db.website.findFirst({
+      where: { previousSlugs: { has: slug }, status: { not: "DELETED" } },
+      select: { slug: true },
+    });
+    if (renamed) {
+      const reqUrl = new URL(request.url);
+      const rest = params["*"] ? `/${params["*"]}` : "/";
+      return redirect(`/s/${renamed.slug}${rest}${reqUrl.search}`, 301);
+    }
     throw new Response("Site not found", { status: 404 });
   }
 

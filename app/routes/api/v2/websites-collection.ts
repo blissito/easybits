@@ -28,6 +28,10 @@ export async function action({ request }: Route.ActionArgs) {
     return Response.json({ error: "Name required" }, { status: 400 });
   }
 
-  const website = await createWebsite(ctx, { name });
+  if (body.slug !== undefined && body.slug !== null && typeof body.slug !== "string") {
+    return Response.json({ error: "slug_invalid", message: "slug must be a string" }, { status: 400 });
+  }
+  const slug = typeof body.slug === "string" ? body.slug : undefined;
+  const website = await createWebsite(ctx, { name, slug });
   return Response.json({ website });
 }

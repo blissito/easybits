@@ -5,7 +5,7 @@ license: MIT
 compatibility: Needs Node 22+ (npx is enough), network access to https://www.easybits.cloud and an EasyBits API key
 metadata:
   author: easybits
-  version: "1.13"
+  version: "1.14"
 ---
 
 # Use the EasyBits CLI
@@ -140,6 +140,17 @@ easybits domains verify "$ID" shop.example.com                   # exit 1 until 
 easybits domains ls "$ID" --json
 easybits domains rm "$ID" shop.example.com --json --yes
 ```
+
+## Static websites (`/s/<slug>/`)
+
+```bash
+easybits websites ls --json
+easybits websites create "My shop" --slug my-shop --json       # slug optional; generated if omitted
+easybits websites slug my-shop my-store --json                  # by id or current slug; old URL 301s
+```
+
+Slug: lowercase a-z, 0-9 and single hyphens, 3-60 chars, not reserved (api, admin, www…), unique.
+Errors come back as `slug_invalid` (exit 1, HTTP 400) or `slug_taken` (HTTP 409): pick another.
 
 ## Databases (libSQL)
 

@@ -272,6 +272,8 @@ easybits files upload ./reporte.pdf
 easybits files ls
 easybits files rm FILE_ID --yes   # a la papelera 7 días
 easybits websites ls
+easybits websites create "Mi tienda" --slug mi-tienda   # slug opcional
+easybits websites slug mi-tienda mi-store               # cambiarlo; la URL vieja responde 301
 easybits providers                     # proveedor de almacenamiento (Tigris por defecto)
 easybits usage
 \`\`\`
@@ -795,9 +797,9 @@ SDK: \`eb.listWebsites()\`
 
 ### Create website
 \`POST /websites\`
-Body: \`{ name: string }\`
-Returns: \`{ website }\` with id, slug, url.
-SDK: \`eb.createWebsite(name)\`
+Body: \`{ name: string, slug?: string }\`
+Returns: \`{ website }\` with id, slug, url. \`slug\` is optional (generated if omitted).
+SDK: \`eb.createWebsite(name, { slug? })\`
 
 ### Get website
 \`GET /websites/:websiteId\`
@@ -806,8 +808,11 @@ SDK: \`eb.getWebsite(websiteId)\`
 
 ### Update website
 \`PATCH /websites/:websiteId\`
-Body: \`{ name?, status? }\`
-SDK: \`eb.updateWebsite(websiteId, { name?, status? })\`
+Body: \`{ name?, slug?, status? }\`
+Returns: \`{ ok: true, website }\` with slug and url.
+SDK: \`eb.updateWebsite(websiteId, { name?, slug?, status? })\`
+
+Slug rules (create and update): lowercase a-z, 0-9 and single hyphens, 3–60 chars, no leading/trailing hyphen, not reserved (api, admin, s, www, app, assets, static, dashboard, login…), unique among live sites. Errors: 400 \`{ error: "slug_invalid" }\`, 409 \`{ error: "slug_taken" }\`. Files are stored by id, so renaming moves nothing; the old \`/s/<old>/\` answers **301** to the new slug (up to 10 previous slugs remembered) until another site takes it. With subdomain masking on, the certificate moves to the new \`<slug>.easybits.cloud\` and the old subdomain stops working.
 
 ### List website files
 \`GET /websites/:websiteId/files?limit=&cursor=\`
@@ -923,7 +928,7 @@ Configure via MCP tool \`set_ai_key\` or dashboard. Supports ANTHROPIC and OPENA
 | \`listPermissions(fileId)\` | List file permissions |
 | \`revokePermission(permissionId)\` | Revoke a permission |
 | \`listWebsites()\` | List websites |
-| \`createWebsite(name)\` | Create a website |
+| \`createWebsite(name, { slug? })\` | Create a website |
 | \`getWebsite(websiteId)\` | Get website details |
 | \`updateWebsite(websiteId, params)\` | Update website |
 | \`deleteWebsite(websiteId)\` | Delete website + files |

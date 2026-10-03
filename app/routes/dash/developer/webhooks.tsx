@@ -17,6 +17,7 @@ const VALID_EVENTS = [
   "file.deleted",
   "file.restored",
   "website.created",
+  "website.updated",
   "website.deleted",
   "database.created",
   "database.deleted",

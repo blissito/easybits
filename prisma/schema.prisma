@@ -649,6 +649,9 @@ model Website {
   id             String        @id @default(auto()) @map("_id") @db.ObjectId
   name           String
   slug           String
+  /// Slugs anteriores (tras renombrar): `/s/<viejo>/` responde 301 al slug actual.
+  /// El slug vivo de otro sitio siempre gana sobre un alias. Máx. MAX_PREVIOUS_SLUGS.
+  previousSlugs  String[]      @default([])
   ownerId        String        @db.ObjectId
   owner          User          @relation(fields: [ownerId], references: [id])
   status         String        @default("ACTIVE")

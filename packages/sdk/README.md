@@ -95,9 +95,9 @@ const eb = await createClientFromEnv();
 | Method | Description |
 |--------|-------------|
 | `listWebsites()` | List your static websites |
-| `createWebsite(name)` | Create a new website |
+| `createWebsite(name, { slug? })` | Create a new website (optional custom slug) |
 | `getWebsite(websiteId)` | Get website details |
-| `updateWebsite(websiteId, params)` | Update website name/status |
+| `updateWebsite(websiteId, params)` | Update website name, slug or status (old slug 301s to the new one) |
 | `deleteWebsite(websiteId)` | Delete website and its files |
 
 ### Workspaces
@@ -163,6 +163,7 @@ console.log(webhook.secret); // whsec_...
 | `file.deleted` | File soft-deleted |
 | `file.restored` | File restored from trash |
 | `website.created` | Website created |
+| `website.updated` | Website name or slug changed |
 | `website.deleted` | Website deleted |
 | `workspace.created` | Workspace created |
 | `workspace.deleted` | Workspace deleted |

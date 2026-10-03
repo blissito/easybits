@@ -5579,13 +5579,14 @@ function registerSiteTools(server: McpServer) {
 
   server.tool(
     "create_website",
-    "Create a new website with a name. Generates a slug automatically. Returns `{ website }` with id, slug, prefix, url.",
+    "Create a new website with a name. Pass `slug` to choose the public URL (`/s/<slug>/`); otherwise one is generated. Slug rules: lowercase a-z, 0-9 and single hyphens, 3-60 chars, no leading/trailing hyphen, not reserved, unique (errors: slug_invalid / slug_taken). Returns `{ website }` with id, slug, prefix, url.",
     {
       name: z.string().describe("Name for the website"),
+      slug: z.string().optional().describe("Optional custom slug for the public URL, e.g. \"mi-tienda\""),
     },
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
-      const result = await createWebsite(ctx, { name: params.name });
+      const result = await createWebsite(ctx, { name: params.name, slug: params.slug });
       return {
         content: [{ type: "text", text: JSON.stringify({ website: result }, null, 2) }],
       };
@@ -5609,16 +5610,18 @@ function registerSiteTools(server: McpServer) {
 
   server.tool(
     "update_website",
-    "Update a website's name or status. Stats (fileCount, totalSize) are recomputed automatically from the database.",
+    "Update a website's name, slug or status. Changing `slug` changes the public URL (`/s/<slug>/`); files are stored by id so nothing moves, and the old slug answers 301 to the new one. Slug rules: lowercase a-z, 0-9 and single hyphens, 3-60 chars, no leading/trailing hyphen, not reserved, unique (errors: slug_invalid / slug_taken). Stats (fileCount, totalSize) are recomputed automatically. Returns the website with slug and url.",
     {
       websiteId: z.string().describe("The website ID"),
       name: z.string().optional().describe("New name"),
+      slug: z.string().optional().describe("New slug for the public URL, e.g. \"mi-tienda\""),
       status: z.enum(["ACTIVE", "ERROR"]).optional().describe("New status"),
     },
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await updateWebsite(ctx, params.websiteId, {
         name: params.name,
+        slug: params.slug,
         status: params.status,
       });
       return {

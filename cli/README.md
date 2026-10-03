@@ -107,6 +107,8 @@ easybits files ls
 easybits files upload ./report.pdf
 easybits files rm FILE_ID --yes
 easybits websites ls
+easybits websites create "My shop" --slug my-shop   # slug optional
+easybits websites slug my-shop my-store             # change it; the old URL 301s
 easybits providers                   # storage provider (Tigris by default)
 easybits usage
 

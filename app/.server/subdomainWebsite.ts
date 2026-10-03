@@ -50,6 +50,18 @@ export async function handleSubdomainWebsite(request: Request): Promise<Response
   });
 
   if (!website) {
+    // Slug renombrado: 301 al subdominio nuevo (si sigue enmascarado) o a /s/<slug>.
+    // Nota: sólo llega si el host viejo aún tiene certificado; al renombrar se quita.
+    const renamed = await db.website.findFirst({
+      where: { previousSlugs: { has: subdomain }, status: { not: "DELETED" } },
+      select: { slug: true, subdomainEnabled: true },
+    });
+    if (renamed) {
+      const target = renamed.subdomainEnabled
+        ? `https://${renamed.slug}.easybits.cloud${url.pathname}${url.search}`
+        : `https://www.easybits.cloud/s/${renamed.slug}${url.pathname}${url.search}`;
+      return Response.redirect(target, 301);
+    }
     return new Response("Site not found", { status: 404 });
   }
 
@@ -123,6 +135,14 @@ async function handleCustomDomain(request: Request, hostname: string, url: URL):
   });
 
   if (!website) {
+    // Slug renombrado dentro del mismo dueño: 301 a <slug-nuevo>.<dominio>.
+    const renamed = await db.website.findFirst({
+      where: { previousSlugs: { has: slug }, ownerId: customDomain.ownerId, status: { not: "DELETED" } },
+      select: { slug: true },
+    });
+    if (renamed) {
+      return Response.redirect(`https://${renamed.slug}.${rootDomain}${url.pathname}${url.search}`, 301);
+    }
     return new Response("Site not found", { status: 404 });
   }
 
