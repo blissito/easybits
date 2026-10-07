@@ -11,7 +11,8 @@ import os from "node:os";
 import path from "node:path";
 import { chromium } from "playwright";
 import { DEFAULT_THRESHOLDS, evaluatePage, geometry, readStext, type Renderer } from "../app/.server/core/renderCompare";
-import { cloneSingleSlide } from "../app/.server/core/presentationClone";
+import { buildCloneDocument, cloneSingleSlide } from "../app/.server/core/presentationClone";
+import { buildSkeleton } from "../app/.server/core/pdfCloneSkeleton";
 import { pdfToImages } from "../app/.server/core/pdfToImages";
 
 const args = process.argv.slice(2);
@@ -50,7 +51,14 @@ for (const t of targets) {
   const t0 = Date.now();
   let html = "";
   try {
-    html = await cloneSingleSlide(img.image, g.cssW, g.cssH, ITER, MODEL);
+    if (process.argv.includes("--skeleton")) {
+      // Esqueleto determinista desde MuPDF, sin LLM.
+      const sk = await buildSkeleton(pdfPath, page);
+      if (sk.substituted.length) console.log(`      fuentes sustituidas: ${sk.substituted.join(", ")}`);
+      html = await buildCloneDocument(sk.html, sk.cssW, sk.cssH, sk.css);
+    } else {
+      html = await buildCloneDocument(await cloneSingleSlide(img.image, g.cssW, g.cssH, ITER, MODEL), g.cssW, g.cssH);
+    }
   } catch (e) {
     rows.push({ name, error: `clonar falló: ${(e as Error).message}` });
     console.log(`✗ ${name}: clonar falló — ${(e as Error).message}`);

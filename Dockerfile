@@ -68,9 +68,11 @@ WORKDIR /app
 
 # Install Chromium for document screenshots (playwright-core) and
 # poppler-utils (pdftoppm, pdffonts) for memory-bounded PDF rasterization.
+# python3-fonttools: repara las fuentes incrustadas que clona pdfCloneSkeleton.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     chromium \
     poppler-utils \
+    python3-fonttools \
     fonts-noto-cjk \
     fonts-noto-color-emoji \
     curl \

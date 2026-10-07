@@ -245,6 +245,9 @@ describe("htmlViolations", () => {
   it("hablar de @media en el TEXTO no es violación; content sin letras (viñetas) tampoco", () => {
     expect(htmlViolations(`<style>li::before{content:"•"}</style><p>Usa @media para responsive y onload=</p>`)).toEqual([]);
   });
+  it("content: '' de Tailwind no lee letras de la regla siguiente", () => {
+    expect(htmlViolations(`<style>*,::before{--tw-content: '';} .f{font-family: "Inter", sans-serif}</style>`)).toEqual([]);
+  });
   it("@import sólo de Google/Bunny Fonts", () => {
     expect(htmlViolations(`<style>@import url("https://fonts.googleapis.com/css2?family=Inter");</style>`)).toEqual([]);
     expect(htmlViolations(`<style>@import url("https://x.example/a.css");</style>`)).toHaveLength(1);

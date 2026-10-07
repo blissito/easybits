@@ -384,7 +384,7 @@ export function parsePdffonts(out: string): { name: string; obj: string }[] {
 }
 
 /** `mutool show` de varios objetos → cuerpo de cada uno por número. */
-async function showObjects(pdfPath: string, objs: string[]): Promise<Map<string, string>> {
+export async function showObjects(pdfPath: string, objs: string[]): Promise<Map<string, string>> {
   const out = new Map<string, string>();
   if (!objs.length) return out;
   const { stdout } = await execFileAsync("mutool", ["show", pdfPath, ...objs], { timeout: 30_000, maxBuffer: 32 * 1024 * 1024 });
@@ -594,8 +594,10 @@ export function matchText(
   let str = "";
   for (const ch of cloneChars) {
     if (ch.c === "\n" || isSpace(ch.c)) continue;
+    // un elemento de `seq` por unidad UTF-16 de `str`: un emoji (dos unidades)
+    // desalineaba los índices y `seq[i]` salía undefined
     for (const piece of norm(ch.c)) {
-      seq.push(ch);
+      for (let k = 0; k < piece.length; k++) seq.push(ch);
       str += piece;
     }
   }
@@ -982,7 +984,9 @@ export function htmlViolations(html: string): string[] {
   // impresión) diría una cosa y la pantalla mostraría otra.
   if (/(^|[;{\s])(-webkit-)?backdrop-filter\s*:/i.test(css)) v.push("usa backdrop-filter (no se imprime igual que se ve)");
   if (/(^|[;{\s])mix-blend-mode\s*:\s*(?!normal)/i.test(css)) v.push("usa mix-blend-mode (no se imprime igual que se ve)");
-  if (/content\s*:\s*[^;}]*(attr\s*\(|["'][^"']*[\p{L}\p{N}])/iu.test(css)) {
+  // La cadena no cruza el fin de la declaración: `content: ''` (preflight de Tailwind)
+  // no debe leer las letras de la regla siguiente.
+  if (/content\s*:\s*[^;}]*(attr\s*\(|["'][^"';}]*[\p{L}\p{N}])/iu.test(css)) {
     v.push("genera texto con CSS content: (el texto debe estar en el HTML)");
   }
   return [...new Set(v)];
@@ -1010,7 +1014,7 @@ export function sourceText(html: string): string {
  * no tiene cómo reaccionar. Original y clon pasan por el MISMO motor: sin eso,
  * el suavizado de Chrome contra el de poppler metía ~10 % de diferencia falsa.
  */
-async function rasterize(pdfPath: string, page: number, width: number, noText = false): Promise<Buffer> {
+export async function rasterize(pdfPath: string, page: number, width: number, noText = false): Promise<Buffer> {
   const { stdout } = await execFileAsync(
     "mutool",
     ["draw", "-q", ...(noText ? ["-K"] : []), "-F", "png", "-w", String(width), "-o", "-", pdfPath, String(page)],

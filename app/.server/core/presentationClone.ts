@@ -16,6 +16,11 @@ import type { PdfPage } from "./pdfToImages";
 import { savePresentationStyle } from "./presentationStyles";
 import { CLONE_CORRECTION_PROMPT, CLONE_SCORE_PROMPT, INSPIRE_SLIDE_PROMPT } from "~/lib/presentationPrompts";
 import { enrichImages } from "../images/enrichImages";
+import { compileTailwindCSS } from "../tailwind";
+import { buildSkeleton } from "./pdfCloneSkeleton";
+import { promises as fs } from "node:fs";
+import os from "node:os";
+import path from "node:path";
 
 const CLONE_MODEL = "claude-sonnet-5"; // gemini-2.5-pro retirado para nuestra llave (2026-09-25)
 
@@ -26,7 +31,7 @@ const CLONE_MODEL = "claude-sonnet-5"; // gemini-2.5-pro retirado para nuestra l
 const CLONE_HYBRID_PROMPT = `You are a world-class HTML/CSS developer. Reproduce this PDF page as faithfully as possible using HTML + Tailwind CSS.
 
 STRATEGY — HYBRID layout:
-1. Root container: position:relative, exact page dimensions, overflow:hidden, white background
+1. PAGE SIZE IS FIXED: the page is exactly the WIDTH×HEIGHT px given below and NOTHING may extend past it (no scrolling, no second page). Size everything in px with arbitrary values (w-[312px], text-[13px], top-[48px]); never use viewport units or text sizes larger than the original.
 2. DECORATIVE LAYERS (background shapes, blobs, accent areas): position:absolute, z-[0] to z-[5]. These go BEHIND everything.
 3. CONTENT (text columns, headings, body text): normal document flow using flexbox/grid, with position:relative z-[10]. Text flows naturally this way.
 4. OVERLAPPING PHOTOS: position:absolute with z-[15-20], sized and placed to match the original.
@@ -34,7 +39,7 @@ STRATEGY — HYBRID layout:
 TYPOGRAPHY — CRITICAL, get this right:
 - Headlines: LARGE. Use text-5xl, text-6xl, text-7xl, text-8xl for big titles. Match the visual weight.
 - Section titles: text-2xl to text-4xl
-- Body text: text-sm or text-base, NEVER smaller. Leading-relaxed for readability.
+- Body text: match the original size with px values (text-[11px], leading-[14px]); do NOT enlarge it for readability — bigger text overflows the page.
 - Bold text: font-bold or font-semibold
 - Reproduce EVERY word. Do not summarize or skip text.
 - Same language as original.
@@ -50,7 +55,10 @@ DECORATIVE SHAPES:
 - Organic blobs: large divs with rounded-full or rounded-[40%_60%_50%_70%], correct color, position:absolute
 - Must be BEHIND content (low z-index)
 
-Output ONLY the inner HTML content. No <html>, <head>, <body> wrappers. No markdown fences. No explanations.`;
+Output ONLY the inner HTML content (it is placed inside a WIDTH×HEIGHT px root that is already position:relative). No <html>, <head>, <body> wrappers. No markdown fences. No explanations.`;
+
+/** Menos palabras que esto = página escaneada: no hay texto que extraer y la clona el LLM. */
+const MIN_SKELETON_WORDS = 5;
 
 function throwJson(error: string, status: number): never {
   throw new Response(JSON.stringify({ error }), {
@@ -114,6 +122,7 @@ export async function clonePresentationFromPdf(ctx: AuthContext, opts: CloneOpts
 
   // 4. Launch background generation (fire-and-forget)
   generateSlidesInBackground(ctx, presentation.id, pages, {
+    pdfBuffer,
     mode,
     content,
     styleId,
@@ -137,7 +146,7 @@ async function generateSlidesInBackground(
   ctx: AuthContext,
   presentationId: string,
   pages: PdfPage[],
-  opts: { mode: "clone" | "inspire"; content?: string; styleId?: string; sourceFileId: string; fileName: string; model?: string }
+  opts: { pdfBuffer?: Buffer; mode: "clone" | "inspire"; content?: string; styleId?: string; sourceFileId: string; fileName: string; model?: string }
 ) {
   const pageImages = pages.map((p) => p.image);
   let designSystem: any = null;
@@ -167,15 +176,37 @@ async function generateSlidesInBackground(
     }
   }
 
+  // Clonar = esqueleto determinista desde el PDF (texto y fuentes exactos). El LLM
+  // sólo entra en páginas sin capa de texto (escaneadas).
+  let pdfPath: string | null = null;
+  if (opts.mode === "clone" && opts.pdfBuffer) {
+    pdfPath = path.join(await fs.mkdtemp(path.join(os.tmpdir(), "eb-clone-")), "src.pdf");
+    await fs.writeFile(pdfPath, opts.pdfBuffer);
+  }
+
   // Generate slides one by one
   const slides: any[] = [];
 
   for (let i = 0; i < pages.length; i++) {
     try {
-      const { width: pw, height: ph } = pages[i];
-      const html = opts.mode === "clone"
-        ? await cloneSingleSlide(pageImages[i], pw, ph, 3, opts.model)
-        : await inspireSingleSlide(designSystem, opts.content || "", i, pages.length, opts.model);
+      let { width: pw, height: ph } = pages[i];
+      let html = "";
+      if (pdfPath) {
+        const sk = await buildSkeleton(pdfPath, i + 1).catch((err) => {
+          console.error(`[clonePresentation] skeleton ${i + 1} failed:`, err.message);
+          return null;
+        });
+        if (sk && sk.words >= MIN_SKELETON_WORDS) {
+          html = `<style>${sk.css}</style>${sk.html}`;
+          pw = sk.cssW;
+          ph = sk.cssH;
+        }
+      }
+      if (!html) {
+        html = opts.mode === "clone"
+          ? await cloneSingleSlide(pageImages[i], pw, ph, 3, opts.model)
+          : await inspireSingleSlide(designSystem, opts.content || "", i, pages.length, opts.model);
+      }
 
       slides.push({ id: nanoid(8), order: i, type: "2d", html, width: pw, height: ph });
 
@@ -197,6 +228,7 @@ async function generateSlidesInBackground(
       });
     }
   }
+  if (pdfPath) await fs.rm(path.dirname(pdfPath), { recursive: true, force: true }).catch(() => {});
 }
 
 export async function cloneSingleSlide(pageImage: string, pageWidth: number, pageHeight: number, maxIterations = 3, modelId?: string): Promise<string> {
@@ -211,7 +243,7 @@ export async function cloneSingleSlide(pageImage: string, pageWidth: number, pag
       role: "user",
       content: [
         { type: "image", image: originalBuf },
-        { type: "text", text: `Reproduce this page exactly. Dimensions: ${pageWidth}×${pageHeight}px.` },
+        { type: "text", text: `Reproduce this page exactly. The page is ${pageWidth}×${pageHeight} px (CSS) and everything must fit inside it.` },
       ],
     }],
   });
@@ -231,7 +263,7 @@ export async function cloneSingleSlide(pageImage: string, pageWidth: number, pag
   for (let iter = 0; iter < maxIterations - 1; iter++) {
     const correction = streamText({
       model,
-      system: CLONE_CORRECTION_PROMPT,
+      system: CLONE_CORRECTION_PROMPT.replace("960×540px", `${pageWidth}×${pageHeight}px`),
       messages: [{
         role: "user",
         content: [
@@ -312,11 +344,24 @@ function getScreenshotBrowser() {
 }
 
 /** Screenshot an HTML page at given dimensions using a reusable browser */
-async function screenshotHtml(slideHtml: string, width = 960, height = 540): Promise<Buffer | null> {
-  const fullHtml = `<!DOCTYPE html><html><head>
-<script src="https://cdn.tailwindcss.com"></script>
-<style>body{margin:0;}</style>
+/**
+ * Documento final del clon: estático (Tailwind compilado, sin JavaScript) y del
+ * tamaño exacto de la página, tanto en pantalla como impreso. Es lo que mide
+ * compare_render, que renderiza sin JS: con el CDN de Tailwind las clases nunca
+ * se aplicaban y el contenido se desbordaba varias páginas.
+ */
+export async function buildCloneDocument(slideHtml: string, width: number, height: number, extraCss = ""): Promise<string> {
+  // @import debe ir antes que cualquier otra regla: el CSS propio va primero.
+  const css = extraCss + (await compileTailwindCSS(slideHtml));
+  return `<!DOCTYPE html><html><head><meta charset="utf-8">
+<style>@page{size:${width}px ${height}px;margin:0}html,body{margin:0;padding:0;width:${width}px;height:${height}px;overflow:hidden;background:#fff}</style>
+<style>${css}</style>
 </head><body><div style="width:${width}px;height:${height}px;position:relative;overflow:hidden;">${slideHtml}</div></body></html>`;
+}
+
+async function screenshotHtml(slideHtml: string, width = 960, height = 540): Promise<Buffer | null> {
+  // El corrector ve exactamente el documento que se va a calificar.
+  const fullHtml = await buildCloneDocument(slideHtml, width, height);
 
   try {
     const browser = await getScreenshotBrowser();
