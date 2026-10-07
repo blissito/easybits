@@ -34,6 +34,7 @@ import { installDynamicTools } from "./dynamicTools";
 import { resolveFormat as resolveSocialFormat, SOCIAL_PRESET_KEYS } from "../core/socialPresets";
 import { ok, fail, paginate, failService } from "./responses";
 import { COMPARE_RENDER_DESC, compareRenderShape, compareRenderHint } from "./compareRenderTool";
+import { CLONE_PDF_DESC, clonePdfShape, clonePdfHint } from "./clonePdfTool";
 import {
   gitCheckout,
   gitClone,
@@ -6945,6 +6946,31 @@ function registerVideoTools(server: McpServer) {
       }
     })
   );
+
+  {
+    server.tool(
+      "clone_pdf",
+      CLONE_PDF_DESC,
+      clonePdfShape,
+      wrapHandler(async (params, extra) => {
+        const ctx = extra.authInfo as unknown as AuthContext;
+        if (!params.fileId && !params.pdfUrl) return fail("Pasa `fileId` o `pdfUrl` del PDF.");
+        const { consumeService } = await import("../services/consume");
+        try {
+          const result = await consumeService<import("../services/providers/render").CloneOutput>(
+            "render.clone",
+            params,
+            { userId: ctx.user.id }
+          );
+          return ok({ ...result.data, hint: clonePdfHint(result.data) });
+        } catch (e) {
+          const f = failService(e, "Clone");
+          if (f) return f;
+          throw e;
+        }
+      })
+    );
+  }
 
   {
     server.tool(

@@ -1493,7 +1493,7 @@ async function fetchPublicPdf(url: string): Promise<Buffer> {
   return buf;
 }
 
-async function loadPdf(ctx: AuthContext, input: CompareInput): Promise<Buffer> {
+export async function loadPdf(ctx: AuthContext, input: CompareInput): Promise<Buffer> {
   let buf: Buffer;
   if (input.fileId) {
     const file = await db.file.findUnique({ where: { id: input.fileId } });

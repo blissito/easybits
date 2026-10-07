@@ -35,7 +35,7 @@ import {
   brightdataCrawlService,
 } from "./providers/brightdata";
 import { stockPhotoSearchService } from "./providers/stockPhotos";
-import { auditService, compareService, screenshotService } from "./providers/render";
+import { auditService, compareService, cloneService, screenshotService } from "./providers/render";
 import { iconSearchService } from "./providers/icons";
 
 export const SERVICES = {
@@ -54,6 +54,7 @@ export const SERVICES = {
   "render.screenshot": screenshotService,
   "render.audit": auditService,
   "render.compare": compareService,
+  "render.clone": cloneService,
   "icon.iconify.search": iconSearchService,
   // Reservados — implementación pendiente:
   // "voice.elevenlabs.stt": elevenLabsSttService,

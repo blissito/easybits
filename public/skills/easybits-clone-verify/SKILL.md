@@ -5,13 +5,24 @@ license: MIT
 compatibility: Needs Node 18+ (or any HTTP client), network access to https://www.easybits.cloud and an EasyBits API key with WRITE scope
 metadata:
   author: easybits
-  version: "2.1"
+  version: "2.2"
 ---
 
 # Verify a PDF clone until it passes
 
 Don't judge a clone by eye. Measure it, fix what `reasons` says, measure again. The verdict
 is deterministic and measured on what the browser **paints**, so iterating against it works.
+
+## Start from `clone_pdf`, not from scratch
+
+Before writing any HTML, call `clone_pdf` (MCP; fleet agents have it on their `render` MCP):
+`{ fileId | pdfUrl, pages: [1, 2…], verify: true }`. It builds each page from the PDF itself —
+every word as live text at its exact position, the PDF's own fonts embedded, the page background
+without text — and returns a `url` per page plus the compare_render verdict. Most PDFs pass on
+the first call. Download the HTML (`curl -o page-1.html <url>`) only if you need to edit it.
+
+Write a page by hand only when `clone_pdf` can't: `scanned: true` (no text layer), or
+`substitutedFonts` made typography fail (Type 3 / CFF fonts). Then use the loop below.
 
 ## The loop
 

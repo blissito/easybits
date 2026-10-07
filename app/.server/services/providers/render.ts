@@ -16,6 +16,7 @@ import {
   type ScreenshotPreset,
 } from "../../core/fleetRender";
 import { compareRender, type CompareInput, type CompareResult } from "../../core/renderCompare";
+import { clonePdf, type ClonePdfInput, type ClonePdfResult } from "../../core/pdfClone";
 import type { AuthContext } from "../../apiAuth";
 import { db } from "../../db";
 import { ServiceProviderError } from "../errors";
@@ -25,6 +26,7 @@ import { CREDIT_SCALE } from "~/lib/credits";
 const SERVICE_ID = "render.screenshot";
 const AUDIT_SERVICE_ID = "render.audit";
 const COMPARE_SERVICE_ID = "render.compare";
+const CLONE_SERVICE_ID = "render.clone";
 
 export interface ScreenshotInput {
   url?: string;
@@ -135,6 +137,34 @@ export const compareService: ServiceDef<CompareInput, CompareOutput> = {
       return { data: await compareRender(auth, input) };
     } catch (e) {
       throw new ServiceProviderError(COMPARE_SERVICE_ID, 400, (e as Error).message);
+    }
+  },
+};
+
+export interface CloneOutput extends ServiceResult {
+  data: ClonePdfResult;
+}
+
+/**
+ * Clona páginas de un PDF a HTML estático con el esqueleto determinista. Cobra
+ * por página, y el doble con `verify` (incluye el compare_render).
+ */
+export const cloneService: ServiceDef<ClonePdfInput, CloneOutput> = {
+  id: CLONE_SERVICE_ID,
+  product: "image",
+  displayName: "Clonar PDF a HTML (texto, fuentes y fondo del PDF)",
+  description:
+    "Convierte páginas de un PDF en HTML estático con el texto vivo en su lugar exacto, " +
+    "las fuentes del PDF incrustadas y el fondo sin texto. Sin LLM.",
+  estimateCost: (input) => Math.max(1, input.pages?.length ?? 1) * (input.verify ? 2 : 1) * CREDIT_SCALE,
+  async execute(input, ctx: ServiceCtx): Promise<CloneOutput> {
+    const user = await db.user.findUnique({ where: { id: ctx.userId } });
+    if (!user) throw new ServiceProviderError(CLONE_SERVICE_ID, 404, "usuario no encontrado");
+    const auth = { user, scopes: ["READ", "WRITE", "DELETE"] } as unknown as AuthContext;
+    try {
+      return { data: await clonePdf(auth, input) };
+    } catch (e) {
+      throw new ServiceProviderError(CLONE_SERVICE_ID, 400, (e as Error).message);
     }
   },
 };

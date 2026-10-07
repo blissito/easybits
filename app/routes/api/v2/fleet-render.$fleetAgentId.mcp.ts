@@ -9,6 +9,8 @@ import { ok, fail } from "~/.server/mcp/responses";
 import { renderViaBoxAndStore, captureScreenshot, auditPage, type RenderOptions } from "~/.server/core/fleetRender";
 import { compareRender } from "~/.server/core/renderCompare";
 import { COMPARE_RENDER_DESC, compareRenderShape, compareRenderHint } from "~/.server/mcp/compareRenderTool";
+import { CLONE_PDF_DESC, clonePdfShape, clonePdfHint } from "~/.server/mcp/clonePdfTool";
+import { clonePdf } from "~/.server/core/pdfClone";
 
 // Dedicated, always-on `render` MCP server for FleetAgents — Streamable-HTTP.
 // Injected per-turn into EVERY fleet agent (NOT gated by the easybits builtin
@@ -205,6 +207,16 @@ function buildRenderServer(ctx: AuthContext): McpServer {
       if (!p.fileId && !p.pdfUrl) return fail("Pasa `fileId` o `pdfUrl` del PDF original.");
       const r = await compareRender(ctx, p);
       return ok({ ...r, hint: compareRenderHint(r) });
+    } catch (e) {
+      return fail((e as Error).message);
+    }
+  });
+
+  tool("clone_pdf", CLONE_PDF_DESC.replace(/\n- Cost: .*$/, "\n- Gratis, no consume créditos."), clonePdfShape, async (p) => {
+    try {
+      if (!p.fileId && !p.pdfUrl) return fail("Pasa `fileId` o `pdfUrl` del PDF.");
+      const r = await clonePdf(ctx, p);
+      return ok({ ...r, hint: clonePdfHint(r) });
     } catch (e) {
       return fail((e as Error).message);
     }
