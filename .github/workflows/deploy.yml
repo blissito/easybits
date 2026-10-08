@@ -1,6 +1,7 @@
-# See https://fly.io/docs/app-guides/continuous-deployment-with-github-actions/
+# Producción vive en sandbox-host (fierro A, caja app-host) desde 2026-10-08: este workflow sólo
+# publica la imagen en GHCR; la caja la jala sola (app-deploy.timer, ≤60 s) con salud y rollback.
 
-name: Fly Deploy
+name: Deploy
 on:
   push:
     branches:
@@ -35,8 +36,7 @@ jobs:
     name: Deploy app
     runs-on: ubuntu-latest
     concurrency: deploy-group
-    # packages:write → la misma imagen se publica también en GHCR, de donde la jala
-    # la caja de sandbox-host (migración fuera de Fly, runbook en sandbox-host).
+    # packages:write → la imagen va a GHCR, de donde la jala la caja de sandbox-host.
     permissions:
       contents: read
       packages: write
@@ -56,19 +56,6 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - uses: superfly/flyctl-actions/setup-flyctl@master
-
-      # Empujamos la imagen DIRECTO al registry de Fly en vez de cargarla en el
-      # docker local y dejar que `flyctl --local-only` la suba entera. Medido en
-      # el pipeline anterior: exportar a formato docker 69s + importar al docker
-      # local 33s + subida de flyctl 116s = ~3.5 min moviendo bits que buildx ya
-      # tenía en la mano. Empujando desde buildx sólo viajan las capas que
-      # cambiaron, y las que no ya están en el registry.
-      - name: Log in to Fly registry
-        run: flyctl auth docker
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
-
       - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
@@ -82,7 +69,6 @@ jobs:
           context: .
           push: true
           tags: |
-            registry.fly.io/easybits:${{ github.sha }}
             ghcr.io/blissito/easybits:${{ github.sha }}
             ghcr.io/blissito/easybits:main
           # CACHEBUST = SHA del commit → fuerza recompilar la fuente en cada push
@@ -105,7 +91,12 @@ jobs:
           # entero en cada deploy — cambiar 33s de export por varios minutos.
           cache-to: type=gha,mode=max
 
-      - name: Deploy
-        run: flyctl deploy --image registry.fly.io/easybits:${{ github.sha }}
-        env:
-          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+      # La caja confirma el rollout: /api/version devuelve el SHA del build.
+      - name: Wait for rollout
+        run: |
+          for i in $(seq 1 50); do
+            v=$(curl -fsS -m 5 https://www.easybits.cloud/api/version 2>/dev/null || true)
+            [ "$v" = "${{ github.sha }}" ] && { echo "prod en ${{ github.sha }}"; exit 0; }
+            sleep 6
+          done
+          echo "::error::prod no reporta ${{ github.sha }} (revisa journalctl -u app-deploy en la caja)"; exit 1
