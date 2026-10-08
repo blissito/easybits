@@ -1,13 +1,78 @@
 /**
  * Thin HTTP client for sqld (libsql-server) pipeline API.
- * Talks to sqld via Fly internal network or local instance.
+ * Talks to sqld on sandbox-host (HTTPS via Caddy, gated + JWT) or a local instance.
  *
  * sqld pipeline docs: POST /v2/pipeline with x-namespace header
  * Each request contains an array of { type: "execute", stmt: { sql, args } }
  */
 
+import crypto from "node:crypto";
+
 const SQLD_URL = process.env.SQLD_URL || "http://localhost:8080";
 const SQLD_ADMIN_URL = process.env.SQLD_ADMIN_URL || "http://localhost:9090";
+
+// ── Auth (sqld en sandbox-host, 2026-10-08) ─────────────────────────────────
+// sqld vive en sandbox-host detrás de Caddy (https://<host>/sqld y /sqld-admin).
+// Tres capas, todas obligatorias en prod:
+// 1. SQLD_GATE_KEY → header X-Sqld-Gate: Caddy corta (404) cualquier request sin
+//    él, así que internet nunca llega a sqld.
+// 2. Data API: JWT EdDSA por namespace (claim `id`), firmado aquí con
+//    SQLD_JWT_PRIVATE_KEY (base64 de 64 bytes, la misma de sandbox-host). Vida
+//    corta: si se filtra un token sólo abre UNA base unos minutos. Ojo: un token
+//    SIN `id` es maestro (ver sandbox-host/docs/sqld-auth.md), por eso el
+//    namespace se exige antes de firmar.
+// 3. Admin API: SQLD_ADMIN_KEY como `Authorization: Basic <clave>` EN CRUDO
+//    (sqld no la decodifica como el Basic de HTTP normal).
+// En local sin variables no se manda nada (sqld de desarrollo sin auth).
+const SQLD_GATE_KEY = process.env.SQLD_GATE_KEY || "";
+const SQLD_ADMIN_KEY = process.env.SQLD_ADMIN_KEY || "";
+
+let jwtKey: crypto.KeyObject | null | undefined;
+function getJwtKey(): crypto.KeyObject | null {
+  if (jwtKey !== undefined) return jwtKey;
+  const raw = process.env.SQLD_JWT_PRIVATE_KEY?.trim();
+  if (!raw) return (jwtKey = null);
+  const b = Buffer.from(raw, "base64");
+  if (b.length !== 64) throw new Error("SQLD_JWT_PRIVATE_KEY inválida: se esperan 64 bytes en base64");
+  jwtKey = crypto.createPrivateKey({
+    key: { kty: "OKP", crv: "Ed25519", d: b.subarray(0, 32).toString("base64url"), x: b.subarray(32).toString("base64url") },
+    format: "jwk",
+  });
+  return jwtKey;
+}
+
+const b64url = (s: string) => Buffer.from(s).toString("base64url");
+const tokenCache = new Map<string, { tok: string; exp: number }>();
+
+function sqldToken(namespace: string): string | null {
+  const key = getJwtKey();
+  if (!key) return null;
+  if (!namespace) throw new Error("sqld token sin namespace: sería un token maestro");
+  const now = Math.floor(Date.now() / 1000);
+  const hit = tokenCache.get(namespace);
+  if (hit && hit.exp - now > 60) return hit.tok;
+  const exp = now + 10 * 60;
+  const unsigned = `${b64url('{"alg":"EdDSA","typ":"JWT"}')}.${b64url(JSON.stringify({ id: namespace, a: "rw", exp }))}`;
+  const tok = `${unsigned}.${crypto.sign(null, Buffer.from(unsigned), key).toString("base64url")}`;
+  if (tokenCache.size > 5000) tokenCache.clear();
+  tokenCache.set(namespace, { tok, exp });
+  return tok;
+}
+
+function dataHeaders(namespace: string): Record<string, string> {
+  const h: Record<string, string> = { "Content-Type": "application/json", "x-namespace": namespace };
+  const tok = sqldToken(namespace);
+  if (tok) h.Authorization = `Bearer ${tok}`;
+  if (SQLD_GATE_KEY) h["X-Sqld-Gate"] = SQLD_GATE_KEY;
+  return h;
+}
+
+function adminHeaders(): Record<string, string> {
+  const h: Record<string, string> = { "Content-Type": "application/json" };
+  if (SQLD_ADMIN_KEY) h.Authorization = `Basic ${SQLD_ADMIN_KEY}`;
+  if (SQLD_GATE_KEY) h["X-Sqld-Gate"] = SQLD_GATE_KEY;
+  return h;
+}
 
 // easybits-db corre scale-to-zero en Fly (min_machines_running=0). El PRIMER
 // request tras un idle despierta la VM en frío y llega antes de que sqld escuche
@@ -130,7 +195,7 @@ function parseResult(raw: PipelineResponse["results"][0]): SqldResult {
 export async function sqldCreateNamespace(namespace: string): Promise<void> {
   const res = await sqldFetch(`${SQLD_ADMIN_URL}/v1/namespaces/${namespace}/create`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: adminHeaders(),
     body: JSON.stringify({}),
   });
   if (!res.ok && res.status !== 409) {
@@ -145,6 +210,7 @@ export async function sqldCreateNamespace(namespace: string): Promise<void> {
 export async function sqldDeleteNamespace(namespace: string): Promise<void> {
   const res = await sqldFetch(`${SQLD_ADMIN_URL}/v1/namespaces/${namespace}`, {
     method: "DELETE",
+    headers: adminHeaders(),
   });
   if (!res.ok && res.status !== 404) {
     const text = await res.text().catch(() => "");
@@ -162,10 +228,7 @@ export async function sqldQuery(
 ): Promise<SqldResult> {
   const res = await sqldFetch(`${SQLD_URL}/v2/pipeline`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-namespace": namespace,
-    },
+    headers: dataHeaders(namespace),
     body: JSON.stringify({
       requests: [
         { type: "execute", stmt: { sql, args: args.map(toSqldArg) } },
@@ -195,10 +258,7 @@ export async function sqldExec(
 
   const res = await sqldFetch(`${SQLD_URL}/v2/pipeline`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-namespace": namespace,
-    },
+    headers: dataHeaders(namespace),
     body: JSON.stringify({ requests }),
   });
 

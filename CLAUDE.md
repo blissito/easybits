@@ -188,15 +188,14 @@ Qué hace solo, sin que EasyBits sepa de fierros:
 ⚠️ **B corría un binario viejo** (1-ago) cuando se revisó el 2026-08-10 — sin el fix de `isBilledBox`. Al añadir o revisar fierros, verificar que todos tengan el mismo binario, o un sweep viejo puede barrer en un box lo que otro protege.
 
 ## EasyBits DB (libSQL / sqld)
-- **Servidor**: `infra/easybits-db/` — Fly app `easybits-db` (región `dfw`). Es la imagen oficial `ghcr.io/tursodatabase/libsql-server:latest` con flags; no hay código propietario.
-  - Dockerfile CMD: `sqld --http-listen-addr 0.0.0.0:8080 --admin-listen-addr 0.0.0.0:9090 --db-path /data/sqld --enable-namespaces`
-  - **Puertos**: `:8080` = pipeline API (queries), `:9090` = admin API (crear/borrar namespaces). Solo accesibles por red interna Fly.
-  - **VM**: `shared-cpu-1x` / 512 MB, scale-to-zero (`min_machines_running=0`, auto start/stop) → ~$0 en idle. Cuello de botella = disco, no CPU/RAM.
-  - **Persistencia**: volumen Fly `easybits_db_data` → `/data` (tamaño se fijó al crear con `fly volumes create`; ver con `fly volumes list -a easybits-db`).
-  - **Multi-tenant**: un namespace por cliente/recurso vía header `x-namespace` (`--enable-namespaces`).
-- **Cliente**: `app/.server/sqld.ts` — thin HTTP client del pipeline API. Lee `SQLD_URL` (:8080) y `SQLD_ADMIN_URL` (:9090). Funciones: `sqldCreateNamespace`, `sqldDeleteNamespace`, `sqldQuery`, `sqldExec`.
-- **MCP**: tools `db_create`/`db_query`/`db_list`/`db_exec` consumen este cliente.
-- **Clonar sobre sandbox-host**: la arquitectura mapea 1:1 (es sqld puro) — correr el mismo binario `sqld` en microVM Firecracker o en el host KS-5, disco montado en `/data`, exponer `:8080` (y `:9090` solo interno). Decisión pendiente: sqld central (namespaces = tenants, como hoy en Fly) vs sqld por sandbox (DB embebida por microVM, más aislamiento, sin pooling).
+- **Servidor (desde 2026-10-08)**: el sqld de **sandbox-host** (docker `sqld` en KS-5, `172.20.0.1:8100` data / `:9100` admin, datos `/var/lib/sqld`). El viejo Fly `easybits-db` está BORRADO; sus bases no se republicaron.
+- **Acceso desde Fly**: HTTPS por el Caddy de sandbox-host — `SQLD_URL=https://ns3140187.ip-54-38-94.eu/sqld`, `SQLD_ADMIN_URL=https://ns3140187.ip-54-38-94.eu/sqld-admin`. Tres capas:
+  1. `SQLD_GATE_KEY` → header `X-Sqld-Gate`; sin él Caddy responde 404 (snippet `/etc/caddy/sqld-gate.caddy` en el fierro, fuera del repo). Los puertos 8100/9100 no están en la IP pública.
+  2. Data: JWT EdDSA **por namespace** (claim `id`, 10 min) que firma `app/.server/sqld.ts` con `SQLD_JWT_PRIVATE_KEY` (la misma clave de sandbox-host). Un token sin `id` sería maestro → el cliente lo prohíbe.
+  3. Admin: `SQLD_ADMIN_KEY` como `Authorization: Basic <clave>` en crudo.
+- **Multi-tenant**: un namespace por base (24-hex) vía `x-namespace`. Conviven con los namespaces de la flota (`o<hash>__*`, frutopia/siiqtec por el proxy del mesh `/v1/db`).
+- **Cliente**: `app/.server/sqld.ts` — `sqldCreateNamespace`, `sqldDeleteNamespace`, `sqldQuery`, `sqldExec`. Sin las variables (local) no manda auth.
+- **MCP**: tools `db_create`/`db_query`/`db_list`/`db_exec` consumen este cliente (también forms y Ghosty Teams).
 
 ## GTeams: adopción formal de recursos (transferir a la cuenta del user)
 GTeams provisiona cada team con la **key de PLATAFORMA** (cuenta fixtergeek, ApiKey scope ADMIN) porque la caja existe antes de que el user conecte su EasyBits (el wizard corre DENTRO de la caja). Al conectar, la **adopción** transfiere la DB del team + la caja a la cuenta del user, respetando su **tier**. SHIPPED 2026-07-08.
