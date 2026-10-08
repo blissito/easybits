@@ -844,7 +844,9 @@ export function ensureRehydrated(): Promise<void> {
   // socket to the same WhatsApp account as Fly and they fight over the single web
   // session (connect→close flapping), and the local reaper would suspend/destroy
   // prod worker VMs. Explicit connect (the UI button) still works in dev.
-  if (process.env.NODE_ENV !== "production") {
+  // EB_BACKGROUND=off: lo mismo para una segunda instancia de PROD (migración Fly →
+  // sandbox-host, ambas vivas a la vez). Sólo una debe tener sockets y reaper.
+  if (process.env.NODE_ENV !== "production" || process.env.EB_BACKGROUND === "off") {
     rehydrated = true;
     return Promise.resolve();
   }

@@ -19,6 +19,12 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
     throw data({ error: "Unauthorized" }, { status: 401 });
   }
 
+  // Fuera de Fly (sandbox-host) no hay certs de Fly que purgar: el comodín lo emite acme.sh.
+  // 200 para que el workflow semanal no se ponga rojo.
+  if (!process.env.FLY_API_TOKEN) {
+    return data({ skipped: "no FLY_API_TOKEN" });
+  }
+
   const result = await purgeOrphanedCerts();
   console.info(`[purge-certs] total=${result.totalFlyCerts} orphans=${result.orphanedCerts.length} purged=${result.purged}`);
   return data(result);

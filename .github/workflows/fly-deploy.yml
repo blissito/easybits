@@ -35,6 +35,11 @@ jobs:
     name: Deploy app
     runs-on: ubuntu-latest
     concurrency: deploy-group
+    # packages:write → la misma imagen se publica también en GHCR, de donde la jala
+    # la caja de sandbox-host (migración fuera de Fly, runbook en sandbox-host).
+    permissions:
+      contents: read
+      packages: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -64,17 +69,28 @@ jobs:
         env:
           FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
 
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Build and push image
         uses: docker/build-push-action@v6
         with:
           context: .
           push: true
-          tags: registry.fly.io/easybits:${{ github.sha }}
+          tags: |
+            registry.fly.io/easybits:${{ github.sha }}
+            ghcr.io/blissito/easybits:${{ github.sha }}
+            ghcr.io/blissito/easybits:main
           # CACHEBUST = SHA del commit → fuerza recompilar la fuente en cada push
           # (las deps siguen cacheadas). Sin esto el gha cache a veces servía un
           # binario viejo y tools nuevas (ej. call_create) "desaparecían".
           build-args: |
             CACHEBUST=${{ github.sha }}
+            GIT_SHA=${{ github.sha }}
           # El cache se queda en GitHub Actions. Se probó moverlo al registry de
           # Fly esperando ahorrar los ~34s de restaurar capas, y MIDIÓ PEOR y con
           # mucha más varianza: 129s con gha contra 132/140/178/205s con registry

@@ -238,6 +238,7 @@ export default [
   route("u/unsubscribe", "routes/u.unsubscribe.tsx"),
   // Health
   route("api/health", "routes/api/health.ts"),
+  route("api/version", "routes/api/version.ts"),
   // v2
   ...prefix("api/v2", [
     route("agents", "routes/api/v2/agents.ts"),

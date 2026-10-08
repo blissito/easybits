@@ -88,5 +88,8 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package.json ./package.json
 COPY --from=builder /app/server.mjs ./server.mjs
 COPY --from=builder /app/app/content ./app/content
+# SHA del commit, lo expone /api/version (el deploy de sandbox-host confirma el rollout con él).
+ARG GIT_SHA=dev
+ENV GIT_SHA=$GIT_SHA
 ENV NODE_ENV=production
 CMD ["npm", "run", "start"]
