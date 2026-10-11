@@ -4,7 +4,7 @@ description: "Ejecuta código real en una máquina aislada que nace en segundos.
 minutes: 15
 cost: "$0 (Byte incluye 1 caja)"
 verify: sandbox
-agentPrompt: "Crea una caja en EasyBits con sandbox_create, ejecuta dentro `uname -a && node --version` con sandbox_exec, y muéstrame la salida. Al final destrúyela con sandbox_destroy."
+agentPrompt: "Crea una caja con `easybits sandboxes create --template node --json`, ejecuta dentro `uname -a && node --version` con `easybits sandboxes exec <id> -- sh -c '...'` y muéstrame la salida. Al final destrúyela con `easybits sandboxes destroy <id> --yes`."
 ---
 
 ## Qué vas a lograr
@@ -13,7 +13,15 @@ Una microVM (Firecracker) con tu agente adentro: Linux completo, red, disco. No 
 
 ## Pasos
 
-Desde el agente con el prompt de abajo. Con el SDK:
+Desde el agente con el prompt de abajo. Son tres comandos del CLI:
+
+```bash
+easybits sandboxes create --template node --json   # espera a que corra; trae sandboxId
+easybits sandboxes exec sb_abc123 -- sh -c "uname -a && node --version"
+easybits sandboxes destroy sb_abc123 --yes
+```
+
+Con el SDK, desde tu propio código:
 
 ```ts
 import { EasybitsClient } from "@easybits.cloud/sdk";

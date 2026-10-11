@@ -1,53 +1,43 @@
 ---
-title: "Conecta el MCP a tu agente"
-description: "Un endpoint, todas las herramientas: Claude Code, Claude.ai, Cursor o Codex."
+title: "Conecta EasyBits a tu agente"
+description: "Un comando: las skills de EasyBits en Claude Code, Codex o Cursor. El MCP queda para Claude.ai."
 minutes: 10
 cost: "$0"
 verify: mcp_connected
-agentPrompt: "Lista mis archivos en EasyBits con list_files. Si la herramienta no existe, dime exactamente qué error ves."
+agentPrompt: "Instala la skill de EasyBits (npx skills add https://easybits.cloud) y usa el CLI (npx -y @easybits.cloud/cli) para listar mis archivos. Si no hay sesión, corre `easybits login --json` y pásame la liga."
 ---
 
 ## Qué vas a lograr
 
-Que tu agente vea las herramientas de EasyBits (`upload_file`, `sandbox_create`, `db_query`…) sin instalar nada más que un conector.
+Que tu agente sepa usar EasyBits: crear cajas, subir archivos, consultar bases de datos. Con un comando, sin configurar conectores.
 
 ## Pasos
 
-**Claude Code** (un comando):
+**Claude Code, Codex, Cursor y cualquier agente con terminal** (lo recomendado):
 
 ```bash
-claude mcp add easybits -- npx -y @easybits.cloud/mcp --key eb_sk_live_TU_LLAVE
+npx skills add https://easybits.cloud
 ```
 
-**Cursor / VS Code / Windsurf / Codex** (Streamable HTTP, sin proxy):
+Instala las skills de EasyBits (`easybits-cli`, `easybits-sandbox`, `easybits-agent`…). Le enseñan a tu agente a usar el CLI `easybits`, que trae `--json` en cada comando. La primera vez, el agente corre `easybits login --json` y te pasa una liga para entrar con tu cuenta. Lo demás lo hace él.
 
-```json
-{
-  "mcpServers": {
-    "easybits": {
-      "type": "streamable-http",
-      "url": "https://www.easybits.cloud/api/mcp",
-      "headers": { "Authorization": "Bearer eb_sk_live_TU_LLAVE" }
-    }
-  }
-}
-```
+**Claude.ai (web/app)**, que no tiene terminal: Ajustes → Conectores → añadir `https://www.easybits.cloud/api/mcp` y autorizar con tu cuenta.
 
-**Claude.ai** (web/app): Ajustes → Conectores → añadir `https://www.easybits.cloud/api/mcp` y autorizar con tu cuenta (OAuth, sin pegar la llave).
-
-Después **reinicia la sesión** del agente: los clientes MCP piden la lista de herramientas al arrancar y no la refrescan.
+<Callout type="info">
+¿Tu cliente sólo habla MCP? El endpoint sigue ahí: `https://www.easybits.cloud/api/mcp` con `Authorization: Bearer eb_sk_live_TU_LLAVE`. Después de conectarlo, reinicia la sesión: los clientes MCP piden la lista de herramientas al arrancar y no la refrescan.
+</Callout>
 
 ## Hazlo con tu agente
 
-Pídele que llame una herramienta. Si responde con tus archivos (aunque la lista esté vacía), está conectado.
+Pégale el prompt de abajo. Si te pasa la liga, entras y después te responde con tus archivos (aunque la lista esté vacía), ya está conectado.
 
 <Callout type="warning">
-Si el agente dice "no tengo esa herramienta", no le creas a la primera: pídele que la llame. Un agente puede negar capacidades que sí tiene. El error real (401, timeout) sí es información.
+Si el agente dice "no puedo hacer eso", no le creas a la primera: pídele que corra el comando. Un agente puede negar capacidades que sí tiene. El error real (401, comando no encontrado) sí es información.
 </Callout>
 
 ## Qué acabas de aprender
 
-MCP es la forma en que un agente descubre herramientas. EasyBits expone todas por un solo endpoint; por defecto carga el grupo `core` y puedes pedir más con `--tools sandbox,docs`. Esta lección se marca hecha cuando **tu llave autentica una llamada real** (o tu conector OAuth queda vivo).
+Una skill es un manual que tu agente lee cuando lo necesita: cuesta casi nada de contexto hasta que la usa, y el CLI hace el trabajo. Esta lección se marca hecha cuando **tu cuenta autoriza una sesión real**: el login del CLI, tu conector de Claude.ai o una llamada con tu llave.
 
 ## Siguiente
 

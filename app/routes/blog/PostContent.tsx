@@ -8,6 +8,8 @@ import type { BlogPost } from "~/types/blog";
 
 interface PostContentProps {
   post: BlogPost;
+  /** Lecciones: todos los links abren pestaña nueva para no perder la lección. */
+  linksNewTab?: boolean;
 }
 
 // Custom component to render MDX components from JSX-like syntax in markdown
@@ -148,7 +150,7 @@ const processCallouts = (content: string) => {
   return parts;
 };
 
-export const PostContent = ({ post }: PostContentProps) => {
+export const PostContent = ({ post, linksNewTab }: PostContentProps) => {
   const contentParts = renderMDXComponents(post.content);
 
   return (
@@ -180,6 +182,7 @@ export const PostContent = ({ post }: PostContentProps) => {
                     | "tip"
                 }
                 title={part.props.title}
+                linksNewTab={linksNewTab}
               >
                 {part.props.children}
               </Callout>
@@ -192,6 +195,11 @@ export const PostContent = ({ post }: PostContentProps) => {
                 components={{
                   // Remove H1 titles to avoid duplication with post header
                   h1: () => null,
+                  ...(linksNewTab && {
+                    a: ({ node: _n, ...props }) => (
+                      <a {...props} target="_blank" rel="noopener noreferrer" />
+                    ),
+                  }),
                   // Un fence SIN lenguaje (```) también es bloque: react-markdown lo
                   // envuelve en <pre>, así que el bloque se decide aquí y no por
                   // `language-*`. Antes caía al <code> inline y perdía los saltos de línea.

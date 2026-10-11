@@ -5,7 +5,7 @@ license: MIT
 compatibility: Needs Node 22+ (npx is enough), network access to https://www.easybits.cloud and an EasyBits API key
 metadata:
   author: easybits
-  version: "1.14"
+  version: "1.15"
 ---
 
 # Use the EasyBits CLI
@@ -189,6 +189,7 @@ easybits agents message "$AGENT_ID" "summarize the README" --json   # { content,
 easybits agents message "$AGENT_ID" "now the tests" --session "$SID" --json
 easybits agents destroy "$AGENT_ID" --json --yes
 easybits files upload ./report.pdf --json
+easybits files upload ./logo.png --public --json   # .url = open CDN link; private (no url) by default
 easybits files ls --json
 easybits files rm "$FILE_ID" --json --yes     # 7-day trash
 easybits providers --json                         # storage provider

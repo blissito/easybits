@@ -269,6 +269,7 @@ Todo comando que recibe un agente, un sandbox o máquina, o una base de datos ac
 
 \`\`\`bash
 easybits files upload ./reporte.pdf
+easybits files upload ./logo.png --public   # URL abierta en el CDN; privado por default
 easybits files ls
 easybits files rm FILE_ID --yes   # a la papelera 7 días
 easybits websites ls

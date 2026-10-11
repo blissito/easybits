@@ -171,6 +171,7 @@ export const HELP_ES: Record<string, string> = {
   "Your files in EasyBits storage": "Tus archivos en el almacenamiento de EasyBits",
   "List your files": "Enlista tus archivos",
   "Upload a local file": "Sube un archivo local",
+  "Public file with an open CDN URL (default: private)": "Archivo público con URL abierta en el CDN (por defecto: privado)",
   "Delete a file (soft delete, 7-day trash)": "Borra un archivo (a la papelera 7 días)",
   "List your static websites": "Enlista tus sitios estáticos",
   "Static websites: list, create, change slug": "Sitios estáticos: enlistar, crear, cambiar slug",

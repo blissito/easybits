@@ -183,6 +183,7 @@ Every command that takes an agent, a sandbox or machine, or a database accepts i
 
 \`\`\`bash
 easybits files upload ./report.pdf
+easybits files upload ./logo.png --public   # open CDN URL; private by default
 easybits files ls
 easybits files rm FILE_ID --yes   # to the trash for 7 days
 easybits websites ls

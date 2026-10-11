@@ -4,7 +4,7 @@ description: "Sube algo desde el agente y obtén un enlace servido por CDN."
 minutes: 10
 cost: "$0"
 verify: file
-agentPrompt: "Crea un archivo hola.txt con el texto 'hola desde mi agente' y súbelo a EasyBits con upload_file como público. Devuélveme la URL."
+agentPrompt: "Crea un archivo hola.txt con el texto 'hola desde mi agente' y súbelo con `easybits files upload hola.txt --public --json`. Devuélveme la URL que viene en `url`."
 ---
 
 ## Qué vas a lograr
@@ -13,9 +13,13 @@ Un archivo en EasyBits con una URL pública que puedes abrir en el navegador. Es
 
 ## Pasos
 
-Desde el agente (recomendado) usa el prompt de abajo. Desde la UI: [Desarrollador → Archivos](/dash/developer/files) → subir.
+Desde el agente (recomendado) usa el prompt de abajo. Es un solo comando del CLI:
 
-Por API, si prefieres verlo crudo:
+```bash
+easybits files upload hola.txt --public --json
+```
+
+Desde la UI: [Desarrollador → Archivos](/dash/developer/files) → subir. Por API, si prefieres verlo crudo:
 
 ```bash
 curl -X POST https://www.easybits.cloud/api/v2/files \
@@ -28,7 +32,7 @@ curl -X POST https://www.easybits.cloud/api/v2/files \
 El resultado trae `url`. Ábrela: si ves el texto, el archivo ya vive en el CDN.
 
 <Callout type="info">
-Un archivo **privado** no tiene URL abierta; se comparte con `create_share_link` (enlace con caducidad). Elige `public` solo para lo que de verdad es público.
+Sin `--public` el archivo es **privado**: no tiene URL abierta y se comparte con un enlace con caducidad. Usa `--public` sólo para lo que de verdad es público.
 </Callout>
 
 ## Qué acabas de aprender

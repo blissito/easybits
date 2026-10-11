@@ -105,6 +105,7 @@ easybits agents create --from helper.json --name helper-3
 # Files, websites, account
 easybits files ls
 easybits files upload ./report.pdf
+easybits files upload ./logo.png --public   # open CDN URL; private by default
 easybits files rm FILE_ID --yes
 easybits websites ls
 easybits websites create "My shop" --slug my-shop   # slug optional

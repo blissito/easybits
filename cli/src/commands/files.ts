@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { basename, extname } from "node:path";
 import type { Command } from "../types.js";
-import { need } from "../args.js";
+import { bool, need } from "../args.js";
 import { emit, fmtBytes, table } from "../output.js";
 import { getClient } from "../client.js";
 import { CliError, usageError } from "../errors.js";
@@ -53,15 +53,19 @@ export const files: Command = {
     },
     upload: {
       summary: "Upload a local file",
-      usage: "easybits files upload <path>",
-      examples: ["easybits files upload ./report.pdf", "easybits files upload ./logo.png --json"],
+      usage: "easybits files upload <path> [--public]",
+      options: {
+        public: { type: "boolean", description: "Public file with an open CDN URL (default: private)" },
+      },
+      examples: ["easybits files upload ./report.pdf", "easybits files upload ./logo.png --public --json"],
       async run(ctx) {
         const path = need(ctx, 0, "path", this.usage);
         if (!existsSync(path)) throw usageError(t(`File not found: ${path}`, `No existe el archivo: ${path}`), this.usage);
         const size = statSync(path).size;
         const contentType = MIME[extname(path).slice(1).toLowerCase()] || "application/octet-stream";
         const eb = await getClient(ctx);
-        const data = await eb.uploadFile({ fileName: basename(path), contentType, size });
+        const access = bool(ctx, "public") ? "public" : undefined;
+        const data = await eb.uploadFile({ fileName: basename(path), contentType, size, access });
         // La subida va directo al storage con la URL firmada; la API sólo reserva el archivo.
         const res = await fetch(data.putUrl, {
           method: "PUT",
@@ -69,7 +73,12 @@ export const files: Command = {
           headers: { "Content-Type": contentType },
         });
         if (!res.ok) throw new CliError(t(`Upload failed: storage answered ${res.status}`, `Falló la subida: el almacenamiento contestó ${res.status}`), 1, undefined, "upload_failed", res.status);
-        emit(ctx, data.file, () => console.log(`${t("Uploaded", "Subido")}: ${data.file.id}`));
+        // Sólo un archivo público trae `url` abierta; el SDK todavía no la tipa.
+        const url = (data.file as { url?: string }).url;
+        emit(ctx, data.file, () => {
+          console.log(`${t("Uploaded", "Subido")}: ${data.file.id}`);
+          if (url) console.log(`URL: ${url}`);
+        });
       },
     },
     rm: {

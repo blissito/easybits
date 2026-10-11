@@ -3,11 +3,14 @@ import ReactMarkdown from "react-markdown";
 
 interface CalloutProps {
   children: ReactNode;
+  /** Todos los links en pestaña nueva (lecciones), no sólo los externos. */
+  linksNewTab?: boolean;
   type?: "info" | "warning" | "error" | "success" | "tip";
   title?: string;
 }
 
-export function Callout({ children, type = "info", title }: CalloutProps) {
+export function Callout({ children, type = "info", title, linksNewTab }: CalloutProps) {
+  const newTab = (href?: string) => linksNewTab || !!href?.startsWith("http");
   const getCalloutStyles = () => {
     switch (type) {
       case "warning":
@@ -122,12 +125,8 @@ export function Callout({ children, type = "info", title }: CalloutProps) {
                       <a
                         href={href}
                         className="text-blue-600 hover:text-blue-800 underline"
-                        target={href?.startsWith("http") ? "_blank" : undefined}
-                        rel={
-                          href?.startsWith("http")
-                            ? "noopener noreferrer"
-                            : undefined
-                        }
+                        target={newTab(href) ? "_blank" : undefined}
+                        rel={newTab(href) ? "noopener noreferrer" : undefined}
                       >
                         {children}
                       </a>
