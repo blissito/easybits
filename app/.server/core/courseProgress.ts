@@ -23,6 +23,10 @@ export async function getVerifiedFacts(userId: string): Promise<VerifiedFacts> {
     whatsapp,
     website,
     release,
+    multi_tenant,
+    payment_link,
+    custom_domain,
+    real_traffic,
   ] = await Promise.all([
     gt0(db.apiKey.count({ where: { userId, status: "ACTIVE" } })),
     // Llave usada o conector OAuth (Claude.ai/ChatGPT) vivo: cualquiera prueba
@@ -44,8 +48,46 @@ export async function getVerifiedFacts(userId: string): Promise<VerifiedFacts> {
     ),
     gt0(db.website.count({ where: { ownerId: userId, OR: [{ deletedAt: null }, { deletedAt: { isSet: false } }], fileCount: { gt: 0 } } })),
     gt0(db.machineRelease.count({ where: { ownerId: userId, status: "available" } })),
+    hasTwoTenants(userId),
+    gt0(db.paymentLink.count({ where: { userId } })),
+    gt0(db.customDomain.count({ where: { ownerId: userId, verified: true } })),
+    hasRealTraffic(userId),
   ]);
-  return { api_key, mcp_connected, file, sandbox, database, fleet_agent, whatsapp, website, release };
+  return {
+    api_key, mcp_connected, file, sandbox, database, fleet_agent, whatsapp, website, release,
+    multi_tenant, payment_link, custom_domain, real_traffic,
+  };
+}
+
+// Dos clientes separados = un agente de flota con al menos dos configuraciones de
+// canal (no la "*") que apuntan a bases DISTINTAS (`set-db-allow`). groupConfigs es
+// JSON libre en Mongo, así que se revisa aquí y no en la consulta.
+async function hasTwoTenants(userId: string): Promise<boolean> {
+  const agents = await db.fleetAgent.findMany({ where: { ownerId: userId }, select: { groupConfigs: true } });
+  return agents.some((a) => {
+    const configs = (a.groupConfigs ?? {}) as Record<string, { dbAllow?: unknown } | null>;
+    const scopes = new Set<string>();
+    for (const [groupId, cfg] of Object.entries(configs)) {
+      if (groupId === "*" || !Array.isArray(cfg?.dbAllow)) continue;
+      const dbs = (cfg.dbAllow as unknown[]).map(String).filter((s) => s.trim()).sort();
+      if (dbs.length) scopes.add(dbs.join(","));
+    }
+    return scopes.size >= 2;
+  });
+}
+
+// Un caso real que medir: la flota ya atendió al menos 3 conversaciones y 20
+// mensajes de clientes (filas "user" del log durable de la flota).
+export const REAL_TRAFFIC_MIN = { conversations: 3, messages: 20 };
+async function hasRealTraffic(userId: string): Promise<boolean> {
+  const agents = await db.fleetAgent.findMany({ where: { ownerId: userId }, select: { id: true } });
+  if (!agents.length) return false;
+  const where = { fleetAgentId: { in: agents.map((a) => a.id) }, role: "user" };
+  const [messages, conversations] = await Promise.all([
+    db.fleetAgentMessage.count({ where, take: REAL_TRAFFIC_MIN.messages }),
+    db.fleetAgentMessage.findMany({ where, distinct: ["groupId"], select: { groupId: true }, take: REAL_TRAFFIC_MIN.conversations }),
+  ]);
+  return messages >= REAL_TRAFFIC_MIN.messages && conversations.length >= REAL_TRAFFIC_MIN.conversations;
 }
 
 export interface LessonStatus {
@@ -56,6 +98,13 @@ export interface LessonStatus {
   verify: VerifyKind | null;
   done: boolean;
 }
+/** Mínimo de lecciones para que un curso emita certificado. */
+export const MIN_LESSONS_FOR_CERTIFICATE = 3;
+
+export type CertificateStatus =
+  | { eligible: true }
+  | { eligible: false; reason: "too_short" | "incomplete"; message: string };
+
 export interface CourseProgress {
   slug: string;
   title: string;
@@ -65,6 +114,33 @@ export interface CourseProgress {
   total: number;
   percent: number;
   lessons: LessonStatus[];
+  certificate: CertificateStatus;
+}
+
+/**
+ * Candado del certificado: el curso necesita un mínimo de lecciones y TODAS sus
+ * lecciones hechas, las verificables por hechos de la cuenta (no por "leída").
+ * Lo usan la página del curso, la ruta que emite el token y el certificado público.
+ */
+export function certificateStatus(course: Course, lessons: LessonStatus[]): CertificateStatus {
+  if (course.lessons.length < MIN_LESSONS_FOR_CERTIFICATE) {
+    return {
+      eligible: false,
+      reason: "too_short",
+      message: `Este curso todavía no emite certificado: necesita al menos ${MIN_LESSONS_FOR_CERTIFICATE} lecciones y hoy tiene ${course.lessons.length}.`,
+    };
+  }
+  const pendingVerified = lessons.filter((l) => l.verify && !l.done);
+  const pendingRead = lessons.filter((l) => !l.verify && !l.done);
+  if (pendingVerified.length || pendingRead.length) {
+    const names = [...pendingVerified, ...pendingRead].map((l) => `«${l.title}»`).join(", ");
+    return {
+      eligible: false,
+      reason: "incomplete",
+      message: `Faltan lecciones por completar: ${names}. Las que se verifican por uso se marcan solas cuando tu cuenta cumple el hecho.`,
+    };
+  }
+  return { eligible: true };
 }
 
 export function courseStatus(course: Course, facts: VerifiedFacts, readIds: Set<string>): CourseProgress {
@@ -86,6 +162,7 @@ export function courseStatus(course: Course, facts: VerifiedFacts, readIds: Set<
     total: lessons.length,
     percent: lessons.length ? Math.round((done / lessons.length) * 100) : 0,
     lessons,
+    certificate: certificateStatus(course, lessons),
   };
 }
 

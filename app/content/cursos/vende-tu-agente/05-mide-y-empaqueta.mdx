@@ -1,0 +1,36 @@
+---
+title: "Mide un caso real y empaquétalo"
+description: "Conversaciones, costo y resultado de un cliente real, convertidos en la oferta para el siguiente."
+minutes: 30
+cost: "$0"
+verify: real_traffic
+agentPrompt: "Con el MCP de EasyBits: busca mi agente de flota con `fleet_agent_list` y lee con `fleet_agent_messages` las conversaciones de mi cliente piloto (te paso sus groupId). Cuéntame: cuántas conversaciones y mensajes hubo, cuántas terminaron en lo que el negocio quería (cita, pedido, dato capturado) y cuáles se atoraron y por qué. Corre `easybits usage --json` para ver mi plan y consumo. Con mi costo por conversación (te lo doy) calcula el costo del mes y propón un precio mensual con margen. Entrégalo como un caso de una página: problema, qué hizo el agente, números, precio."
+---
+
+## Qué vas a lograr
+
+Un **caso medido** de un cliente real: cuántas conversaciones atendió el agente, cuántas terminaron bien, cuánto costó y cuánto cobras. Con eso vendes al siguiente con números, no con promesas.
+
+## Pasos
+
+1. **Elige un piloto**: un cliente real (o tu propio negocio) atendido por tu agente al menos una semana.
+2. **Cuenta el volumen**: conversaciones y mensajes. Lee cada conversación con `fleet_agent_messages` o en [Flota](/dash/flota).
+3. **Define el resultado** que le importa al negocio: citas agendadas, pedidos tomados, preguntas resueltas sin humano. Cuéntalas en las conversaciones o, mejor, en su base (lección 2), si el agente las registra ahí.
+4. **Saca el costo**: costo por conversación (lección 4 de *Agente en producción*) × conversaciones, más hosting y dominio si aplican.
+5. **Ponle precio y empaquétalo**: una mensualidad que cubra el costo con margen, y una página con problema, qué hizo el agente, números y precio. El cobro ya lo tienes (lección 3).
+
+<Callout type="info">
+Un número honesto vende más que uno inflado: «atendió 140 conversaciones, resolvió 96 sin humano y agendó 23 citas» le gana a «automatiza tu atención». Incluye también lo que no resolvió y cómo lo vas a corregir.
+</Callout>
+
+## Hazlo con tu agente
+
+El prompt de abajo junta conversaciones, consumo y precio en un caso de una página. Revisa los números antes de enseñarlo.
+
+## Qué acabas de aprender
+
+Se vende el siguiente cliente con el caso medido del anterior. Esta lección se marca hecha cuando **tu flota atendió al menos 3 conversaciones y 20 mensajes de clientes**.
+
+## Terminaste *Vende tu agente*
+
+Tienes un agente que atiende a varios clientes sin mezclar datos, un cobro, el dominio de tu cliente y un caso real medido. Tu certificado está en el temario del curso.

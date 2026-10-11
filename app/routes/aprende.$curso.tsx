@@ -13,7 +13,10 @@ export const loader = async ({ request, params }: Route.LoaderArgs) => {
   const course = await getCourse(params.curso);
   if (!course) throw data("Curso no encontrado", { status: 404 });
   const { lessons, ...meta } = course;
+  // El valor vive en un módulo .server: viaja por el loader, no por import.
+  const { MIN_LESSONS_FOR_CERTIFICATE } = await import("~/.server/core/courseProgress");
   return {
+    minLessons: MIN_LESSONS_FOR_CERTIFICATE,
     course: { ...meta, lessons: lessons.map(({ content: _c, ...l }) => l) },
     progress: null as CourseProgress | null,
   };
@@ -42,8 +45,9 @@ export const meta = ({ data: d }: Route.MetaArgs) =>
   });
 
 export default function Curso({ loaderData }: Route.ComponentProps) {
-  const { course, progress } = loaderData;
-  const complete = progress?.percent === 100;
+  const { course, progress, minLessons } = loaderData;
+  const complete = progress?.certificate.eligible === true;
+  const tooShort = course.lessons.length < minLessons;
   return (
     <section className="overflow-hidden">
       <AuthNav user={undefined} />
@@ -75,7 +79,13 @@ export default function Curso({ loaderData }: Route.ComponentProps) {
               Ver mi certificado →
             </a>
           ) : (
-            <p className="font-mono text-xs text-iron mt-4">Se desbloquea al 100%.</p>
+            <p className="font-mono text-xs text-iron mt-4">
+              {tooShort
+                ? `Este curso aún no emite certificado: necesita al menos ${minLessons} lecciones.`
+                : progress && !progress.certificate.eligible
+                  ? progress.certificate.message
+                  : "Se desbloquea al completar todas las lecciones; las verificables, por uso real de tu cuenta."}
+            </p>
           )}
         </div>
       </div>

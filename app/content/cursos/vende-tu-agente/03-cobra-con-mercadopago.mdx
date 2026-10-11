@@ -1,0 +1,39 @@
+---
+title: "Cobra con un link de pago"
+description: "Conecta tu MercadoPago y genera el cobro de la mensualidad, o deja que tu agente cobre por ti."
+minutes: 20
+cost: "$0 en EasyBits; MercadoPago cobra su comisión por venta"
+verify: payment_link
+agentPrompt: "Con el MCP de EasyBits, crea un link de pago con `create_payment_link`: title \"Agente de atención — mensualidad Acme\", amount 1500, currency MXN. Dame la URL (`initPoint`). Luego enséñame mis links con `list_payment_links` y dime cuáles están pagados. Si responde que MercadoPago no está conectado, mándame a /dash/developer/payments."
+---
+
+## Qué vas a lograr
+
+Cobrarle a tu cliente con un link de MercadoPago. El dinero cae **directo en tu cuenta de MercadoPago**: EasyBits no retiene fondos.
+
+## Pasos
+
+1. En [Pagos](/dash/developer/payments) pega tu **Access Token** de MercadoPago (y, si quieres validar firmas, tu webhook secret).
+2. Crea el cobro de la mensualidad desde tu agente con la tool `create_payment_link`: concepto, monto y moneda. Regresa un `initPoint`, la URL que le mandas a tu cliente.
+3. Cuando paga, el link pasa a `paid` solo. Revísalo con `list_payment_links` o en la misma página de Pagos.
+4. Si quieres enterarte en tu propio sistema, registra un [webhook](/dash/developer/webhooks) al evento `payment.paid`.
+
+## Que tu agente cobre a los clientes de tu cliente
+
+Es otra pieza: si tu cliente vende por WhatsApp, su agente puede mandar el link en la conversación. En [Flota](/dash/flota) → tu agente → **Capacidades**, enciende el conector **MercadoPago — links de cobro** y guarda el Access Token **de tu cliente**. Así el dinero de sus ventas va a su cuenta, no a la tuya.
+
+<Callout type="info">
+Ponle precio con el número de la lección 4 de *Agente en producción*: costo por conversación × conversaciones al mes, más el hosting, más tu margen. Lo medirás con un caso real en la lección 5.
+</Callout>
+
+## Hazlo con tu agente
+
+El prompt de abajo genera un cobro de prueba. Ábrelo: si ves la página de pago de MercadoPago, ya puedes cobrar.
+
+## Qué acabas de aprender
+
+Cobrar es un link, no una integración. Tu mensualidad va a tu MercadoPago; las ventas de tu cliente, al suyo. Esta lección se marca hecha cuando **tu cuenta generó un link de cobro**.
+
+## Siguiente
+
+Pon el agente de tu cliente en su propio dominio.

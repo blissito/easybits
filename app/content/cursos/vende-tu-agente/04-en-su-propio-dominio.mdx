@@ -1,0 +1,36 @@
+---
+title: "En el dominio de tu cliente"
+description: "El sitio de tu cliente, con su agente, servido en su propio dominio con HTTPS."
+minutes: 25
+cost: "$0 en EasyBits; el dominio lo paga tu cliente a su registrador"
+verify: custom_domain
+agentPrompt: "Con el MCP de EasyBits: registra el dominio de mi cliente con `add_domain` (domain: \"<su dominio>\") y dime exactamente qué registros DNS tiene que crear (el TXT de verificación, el CNAME comodín y, para la raíz, A y AAAA). Cuando te avise que ya están, corre `verify_domain`. Después busca mi sitio con `list_websites` y ponlo en la raíz con `set_domain_website`. Termina con la URL final."
+---
+
+## Qué vas a lograr
+
+Que el sitio de tu cliente (su página con el chat de su agente) viva en **su** dominio, por ejemplo `acme.com`, con certificado HTTPS automático. Tu cliente ve su marca, no la tuya.
+
+## Pasos
+
+1. Ten un sitio publicado en [Sitios](/dash/developer/websites): la página de tu cliente con el chat de su agente. El chat llama a tu servidor y tu servidor al agente con la llave de ese cliente (lección 2); nunca pongas el token maestro en el navegador.
+2. En [Dominios](/dash/developer/domains) agrega el dominio de tu cliente (o usa la tool `add_domain`).
+3. Pídele a tu cliente que cree en su registrador los registros que te indica la pantalla: un **TXT** `_easybits-verify.<dominio>` para probar que es suyo y un **CNAME** `*.<dominio>`. Para servir la raíz (`acme.com` sin subdominio), además los registros **A** y **AAAA** que te muestra.
+4. Verifica (`verify_domain`). Al pasar, se emite el certificado.
+5. Asigna el sitio a la raíz del dominio (`set_domain_website`). `www` redirige a la raíz solo.
+
+<Callout type="info">
+¿Lo de tu cliente es una app y no un sitio? La máquina de la lección 5 de *Agente en producción* también acepta su dominio: `easybits machines launch ... --domain app.acme.com` al crearla, o `easybits domains add <máquina> app.acme.com --port 3000` después. Esta lección se verifica con el dominio de **Dominios**.
+</Callout>
+
+## Hazlo con tu agente
+
+El prompt de abajo registra el dominio y te dice qué pedirle a tu cliente. Los DNS pueden tardar en propagarse: si `verify_domain` dice qué registro falta, espera y vuelve a correrlo.
+
+## Qué acabas de aprender
+
+El dominio es lo que hace que tu servicio se vea como producto de tu cliente. Esta lección se marca hecha cuando **tu cuenta tiene un dominio propio verificado**.
+
+## Siguiente
+
+Mide un caso real y empaquétalo para vender el siguiente.

@@ -18,10 +18,17 @@ export const loader = async ({ params }: Route.LoaderArgs) => {
   ]);
   if (!user) throw data("Certificado no encontrado", { status: 404 });
   const progress = courseStatus(course, facts, new Set(read.map((r) => r.lessonId)));
-  if (progress.percent < 100) throw data("Este certificado ya no es válido: la cuenta no cumple todos los hechos del curso.", { status: 404 });
   const name = user.displayName || user.email.split("@")[0];
+  // Candado del lado del servidor: curso demasiado corto o lecciones pendientes →
+  // no hay certificado, y se dice por qué (no un 404 mudo).
+  if (!progress.certificate.eligible) {
+    return data(
+      { blocked: { message: progress.certificate.message, reason: progress.certificate.reason }, name, course: { title: course.title, outcome: course.outcome, slug: course.slug }, lessons: progress.lessons, issuedAt: "", folio: "" },
+      { status: 403 }
+    );
+  }
   const issuedAt = read.reduce<Date | null>((m, r) => (!m || r.completedAt > m ? r.completedAt : m), null) ?? new Date();
-  return { name, course: { title: course.title, outcome: course.outcome, slug: course.slug }, lessons: progress.lessons, issuedAt: issuedAt.toISOString().slice(0, 10), folio: params.token.replace(/[^a-zA-Z0-9]/g, "").slice(0, 10).toUpperCase() };
+  return { blocked: null as { message: string; reason: string } | null, name, course: { title: course.title, outcome: course.outcome, slug: course.slug }, lessons: progress.lessons, issuedAt: issuedAt.toISOString().slice(0, 10), folio: params.token.replace(/[^a-zA-Z0-9]/g, "").slice(0, 10).toUpperCase() };
 };
 
 export const meta = ({ data: d }: Route.MetaArgs) =>
@@ -103,7 +110,24 @@ function longDate(iso: string) {
 }
 
 export default function Certificado({ loaderData }: Route.ComponentProps) {
-  const { name, course, lessons, issuedAt, folio } = loaderData;
+  const { blocked, name, course, lessons, issuedAt, folio } = loaderData;
+  if (blocked) {
+    return (
+      <main className="min-h-screen bg-brand-100 flex items-center justify-center px-4 py-8">
+        <article className="w-full max-w-xl bg-white border-2 border-black rounded-2xl p-6 sm:p-8">
+          <img src="/brand/wordmark.svg" alt="EasyBits" className="h-5" />
+          <h1 className="mt-6 text-2xl font-bold">
+            {blocked.reason === "too_short" ? "Este curso aún no emite certificado" : "Certificado pendiente"}
+          </h1>
+          <p className="mt-2 text-iron">{course.title}</p>
+          <p className="mt-4">{blocked.message}</p>
+          <Link to={`/aprende/${course.slug}`} className="inline-block mt-6 bg-black text-white px-4 py-2 rounded-full font-semibold hover:bg-brand-500">
+            Ver el temario →
+          </Link>
+        </article>
+      </main>
+    );
+  }
   return (
     <main className="min-h-screen bg-brand-100 flex items-center justify-center px-3 py-8 sm:p-8 print:bg-white print:p-0 print:min-h-0">
       <style>{CERT_CSS}</style>

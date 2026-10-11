@@ -7,6 +7,7 @@ import { getLesson } from "~/.server/courses";
 import getBasicMetaTags from "~/utils/getBasicMetaTags";
 import type { Route } from "./+types/aprende.$curso.$leccion";
 import type { CourseProgress } from "~/.server/core/courseProgress";
+import type { VerifyKind } from "~/.server/courses";
 import { Check, LessonList, card } from "./aprende/shared";
 import { wantsMarkdown } from "./aprende/shared";
 
@@ -48,7 +49,7 @@ export const meta = ({ data: d }: Route.MetaArgs) =>
     url: `https://www.easybits.cloud/aprende/${d?.course.slug}/${d?.lesson.slug}`,
   });
 
-const VERIFY_TEXT: Record<string, string> = {
+const VERIFY_TEXT: Record<VerifyKind, string> = {
   api_key: "tu cuenta tiene una API key activa",
   mcp_connected: "tu llave autenticó una llamada (o tu conector OAuth está vivo)",
   file: "tu cuenta tiene al menos un archivo",
@@ -58,6 +59,10 @@ const VERIFY_TEXT: Record<string, string> = {
   whatsapp: "un agente tuyo quedó vinculado a WhatsApp",
   website: "tu cuenta tiene un sitio con archivos",
   release: "tu cuenta tiene un release publicado",
+  multi_tenant: "un agente de flota tuyo tiene dos clientes configurados con bases distintas",
+  payment_link: "tu cuenta generó un link de cobro",
+  custom_domain: "tu cuenta tiene un dominio propio verificado",
+  real_traffic: "tu flota atendió al menos 3 conversaciones y 20 mensajes de clientes",
 };
 
 export default function Leccion({ loaderData }: Route.ComponentProps) {

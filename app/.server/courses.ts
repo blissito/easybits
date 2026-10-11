@@ -24,6 +24,10 @@ export const VERIFY_KINDS = [
   "whatsapp",
   "website",
   "release",
+  "multi_tenant",
+  "payment_link",
+  "custom_domain",
+  "real_traffic",
 ] as const;
 export type VerifyKind = (typeof VERIFY_KINDS)[number];
 

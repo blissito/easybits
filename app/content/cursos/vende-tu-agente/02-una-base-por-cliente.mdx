@@ -1,0 +1,56 @@
+---
+title: "Una base y una configuración por cliente"
+description: "Dos negocios atendidos por el mismo agente, cada uno con su base, su prompt y su llave."
+minutes: 30
+cost: "$0 (Byte incluye 3 bases)"
+verify: multi_tenant
+agentPrompt: "Crea dos bases con `easybits db create cliente-acme` y `easybits db create cliente-beta`, y saca sus namespaces con `easybits db ls --json`. Luego, con el MCP de EasyBits, sobre mi agente de flota (búscalo con `fleet_agent_list`) usa `fleet_agent_configure` para cada cliente: `set-prompt` con groupId \"cliente-acme\" (\"Atiendes a Acme. Sólo hablas de sus productos.\") y lo mismo para \"cliente-beta\"; `set-toolgroup` con buckets `db` y `db-write` en cada groupId; y `set-db-allow` con el namespace de su base en cada groupId. Verifica con `fleet_agent_capabilities` que `groups` tenga las dos configuraciones con bases distintas."
+---
+
+## Qué vas a lograr
+
+El mismo agente de flota atendiendo a **dos clientes** (Acme y Beta), cada uno con su base de datos, sus instrucciones y su llave, sin que uno pueda ver lo del otro.
+
+## Pasos
+
+1. Crea una base por cliente y anota sus namespaces:
+
+```bash
+easybits db create cliente-acme
+easybits db create cliente-beta
+easybits db ls --json
+```
+
+2. Elige un `configGroupId` estable por cliente: `cliente-acme` y `cliente-beta`. Es la unidad de configuración: cada turno que llegue con ese id usa lo que le configures ahí.
+3. Configura cada cliente con `fleet_agent_configure` (el prompt de abajo lo hace por ti): `set-prompt` con su persona, `set-toolgroup` con `db` y `db-write`, y `set-db-allow` con el namespace de **su** base. Todo con `groupId` igual a su `configGroupId`.
+4. Pruébalo. Copia el token del agente en [Flota](/dash/flota) → tu agente → **Web**, y desde tu servidor:
+
+```bash
+curl https://www.easybits.cloud/api/v2/fleet-agents/<id>/message \
+  -H "Authorization: Bearer $EASYBITS_FLEET_TOKEN" -H "Content-Type: application/json" \
+  -d '{"groupId":"web-prueba-1","configGroupId":"cliente-acme","text":"¿Qué tablas tienes?"}'
+```
+
+5. Emite una llave por cliente, atada a su configuración, para no repartir el token maestro:
+
+```bash
+curl https://www.easybits.cloud/api/v2/fleet-agents/<id>/tokens \
+  -H "Authorization: Bearer $EASYBITS_FLEET_TOKEN" -H "Content-Type: application/json" \
+  -d '{"name":"Acme","scopes":["MESSAGE"],"cfgId":"cliente-acme"}'
+```
+
+<Callout type="warning">
+La llave con `cfgId` es el candado: los turnos hechos con ella **ignoran** el `configGroupId` que mande el cliente. La lista de bases por configuración le dice al agente cuál usar; la llave impide que una sesión salte a la configuración de otro. Usa las dos.
+</Callout>
+
+## Hazlo con tu agente
+
+El prompt de abajo crea las bases y deja las dos configuraciones listas. Después corre el `curl` del paso 4 con `cliente-acme` y con `cliente-beta`: cada uno debe ver sólo su base.
+
+## Qué acabas de aprender
+
+Un cliente nuevo es una base nueva, una configuración nueva y una llave nueva, sin crear otro agente. Esta lección se marca hecha cuando **un agente de flota tuyo tiene dos configuraciones con bases distintas**.
+
+## Siguiente
+
+Cóbrale a tu cliente con un link de pago.

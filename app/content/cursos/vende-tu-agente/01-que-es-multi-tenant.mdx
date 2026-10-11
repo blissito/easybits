@@ -1,24 +1,33 @@
 ---
 title: "Qué es multi-tenant y por qué te importa"
 description: "Un agente, muchos clientes, cero mezcla de datos."
-minutes: 15
+minutes: 10
 cost: "$0"
+agentPrompt: "Con el MCP de EasyBits, usa `fleet_agent_list` y `fleet_agent_capabilities` sobre mi agente de flota y dime: qué configuraciones de canal tiene en `groups` (la \"*\" es la de todos), qué bases puede tocar cada una (`dbAllow`) y qué pasaría si hoy lo pusiera a atender a dos negocios distintos. Contesta en cinco renglones."
 ---
 
 ## Qué vas a lograr
 
-Entender la única decisión de arquitectura que separa "hice un bot" de "vendo un servicio": cómo aislar a cada cliente.
+Entender la decisión de arquitectura que separa «hice un bot» de «vendo un servicio»: cómo aislar a cada cliente.
 
 ## La regla
 
-**Un tenant = una base de datos + una llave.** El agente es el mismo; lo que cambia por cliente es *a qué* tiene acceso en ese turno. En EasyBits eso es literal: cada base es un namespace, y la flota puede inyectar una llave distinta por conversación.
+**Un cliente = su base de datos + su configuración + su llave.** El agente es el mismo; lo que cambia por cliente es *a qué* tiene acceso en ese turno. En EasyBits las tres piezas existen tal cual:
 
-Lo que NO es multi-tenant: una tabla `clientes` con una columna `cliente_id` y rezar para que ningún prompt la olvide. Un agente que puede leer todas las filas eventualmente las lee.
+- **Base**: cada base de datos es independiente. Una por cliente, nunca una tabla compartida.
+- **Configuración**: cada turno llega con un `configGroupId` (por ejemplo `cliente-acme`) que trae sus propias instrucciones, herramientas y bases permitidas.
+- **Llave**: puedes emitir para cada cliente una llave atada a su configuración. Con ella, ese cliente no puede pedir la de otro aunque cambie el mensaje.
+
+Lo que **no** es multi-tenant: una tabla `clientes` con una columna `cliente_id` y confiar en que ningún prompt la olvide. Un agente que puede leer todas las filas tarde o temprano las lee.
+
+## Hazlo con tu agente
+
+El prompt de abajo revisa cómo está hoy tu agente de flota. Si todo vive en la configuración `"*"`, todavía atiende a un solo negocio.
 
 ## Qué acabas de aprender
 
-Aislar por infraestructura (base, llave, caja) en vez de por instrucciones. Marca esta lección como leída cuando lo tengas claro; la siguiente lo construye.
+Se aísla con piezas separadas (base, configuración, llave), no con instrucciones. Esta lección es de lectura: márcala como leída cuando lo tengas claro.
 
 ## Siguiente
 
-Una base por cliente, provisionada por el propio agente.
+Dale a dos clientes su propia base y su propia configuración, sobre el mismo agente.
