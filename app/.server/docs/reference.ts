@@ -35,6 +35,14 @@ Obtén tu API key desde el [Dashboard de Desarrollador](https://www.easybits.clo
 
 **Scopes:** las keys pueden tener READ (listar/obtener), WRITE (crear/subir/actualizar/compartir), DELETE (eliminar), o ADMIN (acceso completo a la cuenta). Las keys creadas desde el dashboard incluyen READ+WRITE+DELETE por defecto.
 
+**Recomendado — skills + CLI (Claude Code, Codex, Cursor y cualquier agente con terminal):**
+\`\`\`bash
+npx skills add https://easybits.cloud
+\`\`\`
+Instala las skills de EasyBits (\`easybits-cli\`, \`easybits-sandbox\`, \`easybits-agent\`…). El agente usa el CLI \`easybits\` con \`--json\`; la primera vez corre \`easybits login --json\` y te pasa una liga para entrar. Sin llaves en archivos de configuración. Detalle en la sección [CLI](#cli).
+
+El MCP sigue siendo el camino para clientes sin terminal (Claude.ai: Ajustes → Conectores → \`https://www.easybits.cloud/api/mcp\`) o que sólo hablan MCP:
+
 **MCP — Ghosty Code (preinstalado):**
 Ghosty Code v0.0.4+ ya trae EasyBits preinstalado vía HTTP. Solo configura tu API key:
 \`\`\`bash

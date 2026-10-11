@@ -104,7 +104,14 @@ Esto es un índice. Carga sólo la sección que necesites; el documento completo
 
 ## Cómo conectarte
 
-**MCP (recomendado)** — un endpoint, todas las tools:
+**Skills + CLI (recomendado para agentes con terminal: Claude Code, Codex, Cursor)**:
+\`\`\`bash
+npx skills add https://easybits.cloud
+\`\`\`
+El agente usa \`easybits\` (\`npx -y @easybits.cloud/cli\`, \`--json\` en todo); la primera vez corre
+\`easybits login --json\` y te pasa una liga.
+
+**MCP** — para clientes sin terminal (Claude.ai) o que sólo hablan MCP; un endpoint, todas las tools:
 \`\`\`
 https://www.easybits.cloud/api/mcp?tools=core
 Authorization: Bearer eb_sk_live_...
