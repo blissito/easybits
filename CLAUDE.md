@@ -6,6 +6,19 @@ La plataforma donde un agente ejecuta código en su propia microVM, busca y lee 
 
 ⚠️ **El conteo de tools NO se escribe a mano en ningún lado.** El catálogo (`all-mcp-tools` y `tool-groups` en los docs, y `/api/tools.json`) se DERIVA del servidor MCP en `app/.server/docs/toolCatalog.ts`. Antes había cuatro cifras distintas conviviendo (99 / 118 / 158 / "200+") mientras el servidor registraba 246, y familias enteras como `web_*` no aparecían en su propia documentación. Si añades tools, no actualices prosa: `test/docsCatalog.test.ts` falla si el catálogo se desincroniza.
 
+## ⏰ Pendiente: volar restos de SIIQTEC — `due 2026-10-20`
+
+El 2026-10-06 se borraron por el camino propio de EasyBits los FleetAgents de SIIQTEC ya migrados a
+gs: **tania-0** `6a472561a353eaea9efd9c7b` y **Pia-0** `6a960f535efced3e82971710`. Quedan restos:
+- 22 workers de tania-0 en estado `error` (cajas perdidas): confirmar que el reaper los reconcilió.
+- Archivos/memoria de esos dos agentes que hayan sobrevivido al borrado (`fleet-memory/`, bundles en
+  Tigris): borrarlos.
+- Respaldo local de su config y mensajes en el scratchpad de la sesión de gs
+  (`/private/tmp/claude-501/-Users-bliss-ghosty-studio/…/scratchpad/easybits-siiqtec/`, 0600): borrarlo.
+
+⚠️ No tocar «Ghosty-teams-ambar-613» `6a5fb55f…` ni «Sitios Builder» `6aab068e…` (cuenta personal de
+Brenda, no son de la migración) sin preguntar. Y rotar el token de Fly que se imprimió en esa sesión.
+
 ## Commands
 - `npm run dev` — local dev server
 - `npm run build` — production build
@@ -175,7 +188,7 @@ Ya existe y está en producción: **`cmd/sandbox-router/`** en el repo `sandbox-
 
 Qué hace solo, sin que EasyBits sepa de fierros:
 - **Coloca** (`POST /v1/sandbox`) con este orden: *elegible* > **es el box de hosting** > afinidad por tenant > RAM libre (`GET /v1/stats` de cada box). Degrada hosts con poco disco de `.mem`; si el elegido responde 503 por cap de RAM, reintenta en el siguiente.
-- 🔒 **Las cajas VENDIDAS van al box marcado `"hosting": true`** en `/etc/sandbox-router/hosts.json` (hoy `box-b`). Se detectan por `metadata.eb_tier`, que sólo escribe `createPermanent` — NO por `persistent`, porque las cajas de servicio (render-svc, whisper-svc…) también son persistentes y no deben acaparar ese box. Efímeras y spares del warmpool siguen cayendo donde haya lugar. Es **preferencia, no pin**: si el box de hosting está inelegible o caído, la caja nace en otro fierro (servir al cliente pesa más que la colocación ideal). Antes esto sólo pasaba *por casualidad* (box-b gana por RAM libre) — y una caja vendida no se muda de fierro sin downtime.
+- 🔒 **Las cajas VENDIDAS van al box marcado `"hosting": true`** en `/etc/sandbox-router/hosts.json` (desde 2026-10-08 el fierro A, `local`; B es sólo cajas). Se detectan por `metadata.eb_tier`, que sólo escribe `createPermanent` — NO por `persistent`, porque las cajas de servicio (render-svc, whisper-svc…) también son persistentes y no deben acaparar ese box. Efímeras y spares del warmpool siguen cayendo donde haya lugar. Es **preferencia, no pin**: si el box de hosting está inelegible o caído, la caja nace en otro fierro (servir al cliente pesa más que la colocación ideal). Antes esto sólo pasaba *por casualidad* (box-b gana por RAM libre) — y una caja vendida no se muda de fierro sin downtime.
 - **Rutea por id** (`/v1/sandbox/{id}/*`): caché `id→box` con lazy-probe, invalidada al ver DELETE o mutación de `/domain`.
 - **Fan-out** de `list`/`stats` y **hairpin del dominio público**: Caddy corre SOLO en el fierro A y el wildcard DNS apunta ahí, pero el router parsea `sb-<id>-<port>` y proxea al `:8081` del box dueño por Tailscale. Una caja en B **sí** es alcanzable públicamente.
 
