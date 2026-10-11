@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link, data, redirect, useFetcher, useRevalidator } from "react-router";
 import { AuthNav } from "~/components/login/auth-nav";
 import { Footer } from "~/components/common/Footer";
@@ -90,14 +91,17 @@ export default function Leccion({ loaderData }: Route.ComponentProps) {
           <p className="text-xl text-iron mt-3">{lesson.description}</p>
 
           <div className="mt-8">
-            <PostContent post={post} />
+            <PostContent post={post} linksNewTab />
           </div>
 
           {lesson.agentPrompt && (
             <div className={`${card} p-6 mt-4`}>
               <h2 className="text-lg font-bold">Hazlo con tu agente</h2>
               <p className="text-iron text-sm mt-1">Pega esto en Claude Code, Cursor o Codex con el MCP de EasyBits conectado.</p>
-              <pre className="mt-3 whitespace-pre-wrap rounded-xl border border-black bg-brand-100 p-4 font-mono text-sm select-all">{lesson.agentPrompt}</pre>
+              <div className="relative mt-3">
+                <pre className="whitespace-pre-wrap rounded-xl border border-black bg-brand-100 p-4 pr-24 font-mono text-sm select-all">{lesson.agentPrompt}</pre>
+                <CopyPrompt text={lesson.agentPrompt} />
+              </div>
             </div>
           )}
 
@@ -144,5 +148,27 @@ export default function Leccion({ loaderData }: Route.ComponentProps) {
       </div>
       <Footer />
     </section>
+  );
+}
+
+/** Copia el prompt de «Hazlo con tu agente» de un clic (antes había que seleccionarlo a mano). */
+function CopyPrompt({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      type="button"
+      onClick={async () => {
+        try {
+          await navigator.clipboard.writeText(text.trim());
+          setCopied(true);
+          setTimeout(() => setCopied(false), 2000);
+        } catch {
+          /* sin permiso de portapapeles: queda select-all */
+        }
+      }}
+      className="absolute right-3 top-3 rounded-lg border border-black bg-white px-3 py-1 text-xs font-semibold shadow-[2px_2px_0_#000] transition-transform hover:-translate-y-0.5 active:translate-y-0"
+    >
+      {copied ? "¡Copiado!" : "Copiar"}
+    </button>
   );
 }
