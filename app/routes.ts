@@ -10,6 +10,7 @@ export default [
   // public tienda
   // index("routes/tienda.tsx"),
   route("/inicio?", "routes/home/home.tsx"), // this is gold ⭐️
+  route("/propuesta-home", "routes/home/propuesta.tsx"), // borrador de estrategia, no enlazado
   // public assetLanding
   ...prefix("tienda", [
     index("routes/assets/publicStore.tsx"),
