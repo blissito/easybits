@@ -1,0 +1,45 @@
+---
+title: "Memoria con SQL"
+description: "Una base de datos que tu agente de flota lee y escribe: clientes, pedidos, notas."
+minutes: 25
+cost: "$0 (Byte incluye 3 bases)"
+verify: database
+agentPrompt: "Crea una base llamada 'clientes' con `easybits db create clientes` y la tabla con `easybits db query clientes \"CREATE TABLE clientes(telefono TEXT PRIMARY KEY, nombre TEXT, nota TEXT)\"`. Después, con el MCP de EasyBits, dale a mi agente de flota acceso sólo a esa base: lee sus buckets actuales con `fleet_agent_capabilities`, agrégales `db` y `db-write` con `fleet_agent_configure` (`set-toolgroup`, la lista completa: reemplaza la anterior) y limita la base con `set-db-allow` al namespace de 'clientes'; ambos con groupId \"*\". Verifica con `fleet_agent_capabilities`."
+---
+
+## Qué vas a lograr
+
+Que tu agente guarde lo que importa (quién es el cliente, qué pidió) en una base SQL y lo recuerde aunque el chat se reinicie o le escriban desde otro canal.
+
+## Pasos
+
+1. Crea la base y su tabla. Con el CLI:
+
+```bash
+easybits db create clientes
+easybits db query clientes "CREATE TABLE clientes(telefono TEXT PRIMARY KEY, nombre TEXT, nota TEXT)"
+```
+
+2. En [Flota](/dash/flota) abre tu agente → canal **WhatsApp** → **Qué puede hacer** → **Bases de datos** → **Escritura**.
+3. En **¿A cuáles entra?** enciende sólo `clientes`. Sin ninguna elegida entra a **todas** tus bases.
+4. Agrégale a las **Instrucciones** cuándo usarla, por ejemplo: *"Cuando un cliente te diga su nombre, guárdalo en la tabla clientes. Antes de saludar, búscalo por su teléfono."*
+
+## Hazlo con tu agente
+
+El prompt de abajo hace los cuatro pasos sin abrir el panel. Para probarlo: dile tu nombre por WhatsApp, borra el chat y vuelve a escribirle. Si te saluda por tu nombre, la memoria ya no depende del contexto. Confírmalo tú mismo:
+
+```bash
+easybits db query clientes "SELECT * FROM clientes" --json
+```
+
+<Callout type="info">
+Dale el nivel mínimo que necesite: **Lectura** para un catálogo, **Escritura** para registrar clientes. **Borrado** casi nunca hace falta en un canal con clientes.
+</Callout>
+
+## Qué acabas de aprender
+
+La memoria del chat se compacta y se pierde; la base no. Y el acceso es por canal y por base: el agente no puede leer lo que no le diste. Esta lección se marca hecha cuando **tu cuenta tiene una base de datos**.
+
+## Siguiente
+
+Mide cuánto te cuesta cada conversación.

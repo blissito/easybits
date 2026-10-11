@@ -1,0 +1,42 @@
+---
+title: "Cuánto cuesta tu agente"
+description: "Quién paga los tokens, dónde se ven y las tres palancas para bajar el costo."
+minutes: 15
+cost: "$0"
+agentPrompt: "Corre `easybits usage --json` y explícame en cuatro renglones qué plan tengo, cuántas bases y sitios uso y cuánto me queda. Luego, con el MCP de EasyBits, usa `fleet_agent_capabilities` sobre mi agente de flota y dime qué motor y qué modelo usa, y si sus tokens los paga EasyBits o mi propia llave."
+---
+
+## Qué vas a lograr
+
+Saber cuánto te cuesta tu agente **antes** de que lo use un cliente, y dónde mirarlo después.
+
+## Quién paga los tokens
+
+Depende del **motor** que elegiste en la lección 1:
+
+- **Ghosty · EasyBits (medido)**: los tokens salen de tu cuenta de EasyBits. Los ves en [Créditos y Tokens → Tokens LLM](/dash/packs?tab=tokens), y ahí mismo recargas.
+- **Claude, DeepSeek, Codex**: usan **tu** llave del proveedor. EasyBits no te cobra esos tokens; los ves en el panel de tu proveedor.
+
+## Cómo medirlo
+
+1. Mira tu saldo de tokens (o el panel de tu proveedor) antes de probar.
+2. Ten 10 conversaciones normales con tu agente, como lo haría un cliente.
+3. Vuelve a mirar. La diferencia entre 10 es tu **costo por conversación**. Ese número es el que necesitas para ponerle precio a tu servicio.
+
+## Las tres palancas
+
+1. **Modelo**: uno rápido cuesta varias veces menos que uno «tope». En [Flota](/dash/flota) cambias motor y modelo sin crear otro agente.
+2. **Herramientas**: cada capacidad encendida es texto que el modelo lee en cada turno. Apaga lo que ese canal no usa.
+3. **Instrucciones**: cortas y concretas. Un prompt de tres páginas se paga en cada mensaje.
+
+## Hazlo con tu agente
+
+El prompt de abajo junta tu plan y la configuración del agente en un solo resumen.
+
+## Qué acabas de aprender
+
+Un agente en producción tiene un costo por conversación medible, y lo controlas con modelo, herramientas e instrucciones. Esta lección es de lectura: márcala como leída cuando tengas tu número.
+
+## Siguiente
+
+Ponle a tu agente una app propia en producción.

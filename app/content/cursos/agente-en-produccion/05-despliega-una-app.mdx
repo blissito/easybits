@@ -1,0 +1,52 @@
+---
+title: "Despliega una app para tu agente"
+description: "Una app siempre encendida con URL pública, releases y respaldo, en un solo comando."
+minutes: 30
+cost: "Desde $49 MXN/mes por máquina (requiere plan Mega o superior)"
+verify: release
+agentPrompt: "Despliega mi app con `easybits machines launch --repo <URL de mi repo> --tier micro --name mi-app --json` (o con la tool `launch_app` del MCP de EasyBits). Si regresa `checkoutUrl`, pásamela para pagar. Al terminar dame la URL pública y el id del release, y enséñame los releases con `easybits machines releases mi-app`."
+---
+
+## Qué vas a lograr
+
+Una app (el panel de tu negocio, una API que use tu agente, un formulario) corriendo siempre, con URL pública HTTPS y un **release** que permite reconstruirla si algo falla.
+
+## Pasos
+
+Con el CLI, desde un repo de Node con `npm run build` y `npm start`:
+
+```bash
+easybits machines launch --repo https://github.com/tu-usuario/mi-app.git --tier micro --name mi-app
+```
+
+En un solo paso crea la máquina, clona, construye, arranca, expone la URL y publica el primer release. Opciones útiles:
+
+- `--port 8080` si tu app no escucha en el 3000.
+- `--secret STRIPE_KEY` para pasarle un secreto de tu bóveda (nunca en `--env`).
+- `--data /app/data` para que el respaldo nocturno copie esa carpeta.
+- `--domain app.tunegocio.com` para tu dominio; la salida dice qué registro DNS crear.
+
+Para publicar cambios después:
+
+```bash
+easybits machines deploy mi-app -m "v2: nuevo formulario"
+easybits machines logs mi-app --grep ERROR
+```
+
+<Callout type="info">
+Si tu cuenta no tiene plan de pago, `launch` te regresa una liga de pago en vez de crear la máquina. Al pagar, la máquina se crea sola. `nano` ($49 MXN/mes) sirve para sitios ligeros; para Node el piso real es `micro` ($99 MXN/mes).
+</Callout>
+
+## Hazlo con tu agente
+
+Pégale el prompt de abajo con la URL de tu repo. Abre la URL que te regrese: si ves tu app, ya está en producción.
+
+## Qué acabas de aprender
+
+Una máquina sin release no se puede reconstruir; `launch` siempre deja uno. Tu agente puede apuntar sus herramientas a esa URL (por ejemplo, como un MCP propio en [Flota](/dash/flota)). Esta lección se marca hecha cuando **tu cuenta tiene un release publicado**.
+
+## Terminaste *Agente en producción*
+
+Tu agente tiene número de WhatsApp, memoria SQL, un costo medido y una app propia. Tu certificado está en el temario del curso.
+
+Siguiente ruta: *Vende tu agente* — el mismo agente, atendiendo a varios clientes sin mezclar sus datos.

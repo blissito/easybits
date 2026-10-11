@@ -1,24 +1,34 @@
 ---
 title: "Tu primer agente de flota"
-description: "Un agente persistente con su microVM, su persona y sus conectores."
+description: "Un agente persistente con nombre, instrucciones y su propia caja, que despierta cuando le escriben."
 minutes: 20
-cost: "$0 crear; los turnos consumen tokens de tu plan"
+cost: "$0 crear; los turnos los paga la llave del motor que elijas (lección 4)"
 verify: fleet_agent
+agentPrompt: "Usa el MCP de EasyBits. Con `fleet_agent_list` busca mi agente de flota y dame su id. Luego cámbiale las instrucciones con `fleet_agent_configure` (action `set-agent-prompt`) por: 'Eres el asistente de mi negocio. Contestas corto, en español de México, y nunca inventas precios.' Verifica el cambio con `fleet_agent_capabilities`."
 ---
 
 ## Qué vas a lograr
 
-Un FleetAgent: no una conversación, sino un agente con nombre, prompt y herramientas, que EasyBits despierta en su propia caja cuando le llega un mensaje y duerme cuando no.
+Un agente de flota: no una conversación suelta, sino un agente con nombre, instrucciones y herramientas. EasyBits lo despierta en su propia caja cuando le llega un mensaje y lo duerme cuando no.
 
 ## Pasos
 
-1. Ve a [Flota](/dash/flota) → nuevo agente.
-2. Dale nombre y una persona corta (a quién atiende, qué no hace).
-3. Mándale un mensaje de prueba desde el panel. Verás la caja nacer (~12 s en frío, <1 s si estaba dormida).
+1. Ve a [Flota](/dash/flota) → **+ Nuevo agente**.
+2. Ponle nombre y elige el **motor**. Con **Ghosty · EasyBits (medido)** no necesitas llave propia: los tokens salen de tu cuenta. Los demás (Claude, DeepSeek, Codex) piden la llave de ese proveedor; se guarda cifrada en tu bóveda.
+3. En **Instrucciones** escribe una persona corta: a quién atiende, qué hace y qué **no** hace.
+4. En **Ensayo** mándale un mensaje de prueba. El primer turno tarda unos segundos más porque la caja nace; los siguientes, si estaba dormida, son casi inmediatos.
+
+<Callout type="info">
+El CLI tiene `easybits agents`, pero eso es otra cosa: agentes de una sola caja para tus propios scripts. Los agentes de flota (los que atienden WhatsApp) se crean en [Flota](/dash/flota) y se configuran ahí o con las tools `fleet_agent_*` del MCP.
+</Callout>
+
+## Hazlo con tu agente
+
+Crea el agente en el panel y pégale a tu agente (Claude Code, Cursor, Claude.ai) el prompt de abajo. Si regresa el id y las instrucciones nuevas, ya puede administrar tu flota por ti.
 
 ## Qué acabas de aprender
 
-La flota separa **quién es el agente** (persona, conectores) de **por dónde le hablan** (WhatsApp, web, Teams). Esta lección se marca hecha cuando **tu cuenta tiene un agente de flota**.
+La flota separa **quién es el agente** (instrucciones, motor, capacidades) de **por dónde le hablan** (WhatsApp, web, Teams). Cambias la persona una vez y aplica en todos los canales. Esta lección se marca hecha cuando **tu cuenta tiene un agente de flota**.
 
 ## Siguiente
 
