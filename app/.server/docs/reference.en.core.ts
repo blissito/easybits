@@ -65,7 +65,7 @@ in MXN removes the exchange-rate margin and makes the cost predictable.
 
 ### Getting started
 
-Free plan (Byte): 100 MB, one box, three databases and the full MCP tools. One API key
+Free plan (Byte): 100 MB, one box (4 Ghosty agents or 1 own ACP agent), three databases and the full MCP tools. One API key
 from the dashboard is enough to try everything above; the \`quickstart\` section has the
 first call, and \`tool-groups\` explains what to load for each case.
 `;

@@ -22,11 +22,11 @@ export const Faq = () => {
         />
         <Question
           question="¿Qué es una caja o sandbox?"
-          answer="Una microVM Firecracker: una máquina virtual real y aislada, con root e internet, que tu agente crea para ejecutar lo que necesite. Cuando deja de usarla la dormimos, y despierta en menos de un segundo cuando vuelve a hacer falta. No es un contenedor compartido: cada agente tiene la suya."
+          answer="Una microVM Firecracker: una máquina virtual real y aislada, con root e internet, que tu agente crea para ejecutar lo que necesite. Cuando deja de usarla la dormimos, y despierta en menos de un segundo cuando vuelve a hacer falta. No es un contenedor compartido. Una caja aloja hasta 4 agentes Ghosty, o un agente propio (ACP), que la ocupa entera aunque esté dormido."
         />
         <Question
           question="¿Puedo quedarme en el plan gratuito?"
-          answer="Sí. El plan Byte es gratis para siempre e incluye 100 MB de almacenamiento, una caja y tres bases de datos. Sirve para construir y probar de verdad, no solo para mirar."
+          answer="Sí. El plan Byte es gratis para siempre e incluye 100 MB de almacenamiento, una caja (hasta 4 agentes Ghosty o 1 agente propio) y tres bases de datos. Sirve para construir y probar de verdad, no solo para mirar."
         />
         <Question
           question="¿Tengo que usar sus modelos de IA?"

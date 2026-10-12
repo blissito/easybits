@@ -373,6 +373,7 @@ Sandbox errors come as \`{ "error": "<code>", "message": "…" }\`:
 
 | Status | \`error\` | What happened | What to do |
 |---|---|---|---|
+| 403 | \`AgentLimitReached\` | Your plan already uses all its persistent boxes (ACP or brand agents), awake or asleep: Byte 1, Mega 2, Tera 5 | Delete an agent (\`existing\` lists them) or upgrade (\`upgradeUrl\`) |
 | 409 | \`SandboxBusy\` | A snapshot or fork is running on the box | Check \`activity\` with \`GET /sandboxes/:id\` and retry once it is gone (usually minutes) |
 | 409 | \`SandboxNotReady\` | The box is still \`starting\` (or asleep) | Wait for \`status=running\`, or \`resume\` it if \`suspended\` |
 | 409 | \`SandboxUnreachable\` | The host cannot reach the agent inside the box (restarting or hung) | Wait and retry; if it persists, destroy it and create another |

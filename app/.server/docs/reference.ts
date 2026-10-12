@@ -1408,6 +1408,7 @@ Los errores de una caja traen \`{ "error": "<código>", "message": "…" }\`:
 
 | Status | \`error\` | Qué pasó | Qué hacer |
 |---|---|---|---|
+| 403 | \`AgentLimitReached\` | Tu plan ya tiene todas sus cajas persistentes (agentes ACP o de marca), vivas o dormidas: Byte 1, Mega 2, Tera 5 | Borra un agente (\`existing\` trae cuáles) o sube de plan (\`upgradeUrl\`) |
 | 409 | \`SandboxBusy\` | Hay un snapshot o fork en curso sobre la caja | Consulta \`activity\` con \`GET /sandboxes/:id\` y reintenta cuando desaparezca (suelen ser minutos) |
 | 409 | \`SandboxNotReady\` | La caja aún está en \`starting\` (o dormida) | Espera \`status=running\`, o \`resume\` si está \`suspended\` |
 | 409 | \`SandboxUnreachable\` | El host no alcanza al agente dentro de la caja (reiniciando o colgada) | Espera y reintenta; si sigue, destrúyela y crea otra |
@@ -2745,7 +2746,7 @@ en MXN elimina el margen del tipo de cambio y hace el costo predecible.
 
 ### Para empezar
 
-Plan gratuito (Byte): 100 MB, una caja, tres bases de datos y tools MCP completas. Basta
+Plan gratuito (Byte): 100 MB, una caja (4 agentes Ghosty o 1 agente ACP propio), tres bases de datos y tools MCP completas. Basta
 una API key del panel para probar todo lo de arriba; la sección \`quickstart\` tiene la
 primera llamada, y \`tool-groups\` explica qué cargar según el caso.
 `;

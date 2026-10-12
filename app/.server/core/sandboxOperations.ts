@@ -889,6 +889,59 @@ export function countsAsAgentBox(s: Pick<SandboxRecord, "status" | "metadata">):
   return (s.status === "running" || s.status === "starting") && !s.metadata?.eb_tier;
 }
 
+/**
+ * ¿Esta caja ocupa un lugar del plan aunque esté dormida? Las persistentes (agentes ACP,
+ * templates de marca) viven hasta 30 días y despiertan solas por su dominio, sin pasar por
+ * aquí: lo que se limita es cuántas EXISTEN, no cuántas están despiertas. Las máquinas de
+ * hosting (`eb_tier`) se cobran aparte y no cuentan.
+ */
+export function countsAgainstPlan(s: Pick<SandboxRecord, "status" | "metadata">): boolean {
+  return (s.status === "running" || s.status === "starting" || s.status === "suspended") && !s.metadata?.eb_tier;
+}
+
+/**
+ * Cupo de cajas persistentes por plan (`concurrentSandboxes` + reservas): Byte 1, Mega 2,
+ * Tera 5. Antes lo persistente se saltaba el cupo entero y una cuenta gratis podía levantar
+ * agentes ACP de 2 GB sin límite (auditoría del 12-oct-2026). `replacing` = la caja que se
+ * está recreando (revive): no se cuenta. Admin y `courtesyHosting` sin tope. fail-open si el
+ * host no contesta, igual que el cupo de efímeras.
+ */
+export async function assertAccountBoxBudget(
+  ctx: AuthContext,
+  opts: { replacing?: string } = {}
+): Promise<void> {
+  if (isAdminUser(ctx.user) || (ctx.user as { courtesyHosting?: boolean }).courtesyHosting) return;
+  // callHost directo: listSandboxes exige READ y un ctx de sólo WRITE haría fail-open callado.
+  const list = await callHost<SandboxRecord[]>("GET", `/v1/sandbox?owner=${ctx.user.id}`, undefined, ctx.user.id).catch(
+    () => null
+  );
+  if (!Array.isArray(list)) return;
+  const taken = list.filter((s) => s.sandboxId !== opts.replacing && countsAgainstPlan(s));
+  const planKey = getUserPlan(ctx.user);
+  const { getReservedCapacity } = await import("./sandboxReservations");
+  const reserved = await getReservedCapacity(ctx.user.id).catch(() => ({ machines: 0, agents: 0 }));
+  const max = PLANS[planKey].concurrentSandboxes + reserved.machines;
+  if (taken.length < max) return;
+  const names = taken.map((s) => `«${s.name || s.sandboxId}»`).join(", ");
+  const higher = (Object.keys(PLANS) as Array<keyof typeof PLANS>).filter(
+    (k) => PLANS[k].concurrentSandboxes > PLANS[planKey].concurrentSandboxes
+  );
+  const upgrade = higher.map((k) => `${PLANS[k].name}: ${PLANS[k].concurrentSandboxes}`).join(" · ");
+  const message =
+    `Tu plan ${PLANS[planKey].name} incluye ${max} ${max === 1 ? "agente" : "agentes"} y ya tienes ${names}. ` +
+    (upgrade ? `Borra uno para crear otro, o sube de plan (${upgrade}).` : `Borra uno para crear otro.`);
+  throw new Response(
+    JSON.stringify({
+      error: "AgentLimitReached",
+      message,
+      max,
+      existing: taken.map((s) => ({ sandboxId: s.sandboxId, name: s.name ?? null })),
+      upgradeUrl: "https://www.easybits.cloud/planes",
+    }),
+    { status: 403, headers: { "content-type": "application/json" } }
+  );
+}
+
 export async function effectiveOwnerId(
   ctx: AuthContext,
   sandboxId: string,
@@ -965,6 +1018,8 @@ export async function createSandbox(
     // tipo de caja. Lo pone el caller porque el template no basta (claude-worker
     // es worker de flota Y agente embed standalone).
     kind?: SandboxSessionKind;
+    /** Revive: la caja perdida que esta reemplaza no cuenta contra el cupo del plan. */
+    budgetReplacing?: string;
   }
 ): Promise<SandboxRecord> {
   requireScope(ctx, "WRITE");
@@ -1009,8 +1064,8 @@ export async function createSandbox(
   if (params.memoryMb) resources.memoryMb = params.memoryMb;
   if (params.vcpus) resources.vcpus = params.vcpus;
   // Templates persistentes (agentes de marca) opt-in al flag persistent → el host
-  // les salta el reaper. Son deliberados/pagados, NO sandboxes efímeras: por eso
-  // NO cuentan contra el cap anti-runaway ni contra el TTL por plan.
+  // les salta el reaper. NO cuentan contra el cap anti-runaway ni contra el TTL por
+  // plan, pero SÍ contra el cupo de cajas del plan (assertAccountBoxBudget, abajo).
   // `params.persistent` permite a un caller (p.ej. Ghosty Launch) pedir una VM
   // always-on para hostear una app web sobre un template genérico (node/bun/etc).
   const persistent =
@@ -1022,6 +1077,10 @@ export async function createSandbox(
     params.template === "rust-ghosty" ||
     params.template === "ghosty-gc" ||
     params.template === "cagent-ghosty";
+
+  if (persistent && !params.metadata?.eb_tier) {
+    await assertAccountBoxBudget(ctx, { replacing: params.budgetReplacing });
+  }
 
   // Anti-runaway SOLO para efímeras: tope de cajas activas concurrentes por plan
   // (hace real el "N simultáneos" de plans.ts; corta loops de sandbox_create).
@@ -4881,6 +4940,7 @@ async function reviveAgentBox(agentId: string): Promise<AgentRecord> {
     persistent: true,
     hardTtlSeconds: ACP_HARD_TTL_SECONDS,
     kind: "embed",
+    budgetReplacing: row.sandboxId,
     // La caja nace ya sabiendo su bootstrap. Sin esto, un agente al que se le
     // perdió la caja volvería sin la parte que lo mantenía al día — y el fallo
     // sería invisible: responde, sólo que con el mundo de hace días.

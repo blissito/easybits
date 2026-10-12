@@ -37,6 +37,9 @@ export function langFlag(argv: string[]): string | undefined {
 // `{}` = una parte variable. Sacado de las rutas de la API (agentes con máquina, agent spec) y de
 // los errores más comunes. Los que la API manda en ESPAÑOL: [español, inglés].
 const FROM_ES: Array<[string, string]> = [
+  ["Tu plan {} incluye {} agente y ya tienes {}. Borra uno para crear otro, o sube de plan ({}).", "Your {} plan includes {} agent and you already have {}. Delete one to create another, or upgrade ({})."],
+  ["Tu plan {} incluye {} agentes y ya tienes {}. Borra uno para crear otro, o sube de plan ({}).", "Your {} plan includes {} agents and you already have {}. Delete one to create another, or upgrade ({})."],
+  ["Tu plan {} incluye {} agentes y ya tienes {}. Borra uno para crear otro.", "Your {} plan includes {} agents and you already have {}. Delete one to create another."],
   ["ruta inválida", "invalid path"],
   ["cuerpo vacío", "empty body"],
   ["archivo demasiado grande (máx 10 MB)", "file too large (max 10 MB)"],

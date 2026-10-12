@@ -70,6 +70,7 @@ const KIND_HINTS = (): Record<string, string> => ({
   SandboxUnreachable: t("The sandbox is not answering inside. Wait and retry; if it persists, destroy it.", "El sandbox no contesta por dentro. Espera y reintenta; si sigue, destrúyelo."),
   SandboxHostTimeout: t("The operation may still be running. Check `easybits sb get <id>` and retry in a few minutes.", "La operación puede seguir en curso. Revisa `easybits sb get <id>` y reintenta en unos minutos."),
   SandboxHostError: t("The sandbox host failed. Retry; if it persists, contact support.", "Falló el host de sandboxes. Reintenta; si sigue, contacta a soporte."),
+  AgentLimitReached: t("Your plan has no room for another persistent agent. Delete one (easybits agents ls) or upgrade: https://www.easybits.cloud/planes", "Tu plan ya no tiene lugar para otro agente persistente. Borra uno (easybits agents ls) o sube de plan: https://www.easybits.cloud/planes"),
   SQL_ERROR: t("Fix the SQL statement.", "Corrige la sentencia SQL."),
   DATABASE_STORAGE_MISSING: t("This database has no storage; its data is unavailable. Delete it (easybits db rm <db> --yes) and create a new one.", "Esta base no tiene almacenamiento; sus datos no están disponibles. Bórrala (easybits db rm <db> --yes) y crea otra."),
   DATABASE_BACKEND_ERROR: t("The database backend failed. Retry in a moment.", "Falló el backend de la base. Reintenta en un momento."),

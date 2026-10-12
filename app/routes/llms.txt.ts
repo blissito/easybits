@@ -132,7 +132,7 @@ ${sections}
 
 ## Precios
 
-En MXN. Plan gratuito (Byte) con 100 MB, 1 caja y 3 bases de datos. Mega $499/mes
+En MXN. Plan gratuito (Byte) con 100 MB, 1 caja (4 agentes Ghosty o 1 agente ACP propio) y 3 bases de datos. Mega $499/mes
 (promo $299) y Tera $2,490/mes amplían almacenamiento, cajas concurrentes y tokens LLM
 incluidos. Hosting desde $49/mes por máquina. Detalle en ${BASE}/planes.
 
@@ -197,7 +197,7 @@ ${rest}
 
 ## Pricing
 
-In MXN. Free plan (Byte): 100 MB, 1 sandbox, 3 databases. Mega $499/month (promo $299) and
+In MXN. Free plan (Byte): 100 MB, 1 box (4 Ghosty agents or 1 own ACP agent), 3 databases. Mega $499/month (promo $299) and
 Tera $2,490/month add storage, concurrent sandboxes and included LLM tokens. Hosting from
 $49/month per machine. Details at ${BASE}/planes.
 

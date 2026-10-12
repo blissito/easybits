@@ -5,7 +5,7 @@ license: MIT
 compatibility: Needs Node 22+ (npx is enough), network access to https://www.easybits.cloud and an EasyBits API key
 metadata:
   author: easybits
-  version: "1.16"
+  version: "1.17"
 ---
 
 # Use the EasyBits CLI
@@ -69,7 +69,8 @@ at another server (default https://www.easybits.cloud).
    `SandboxBusy` 409 (snapshot/fork running — `easybits sb get <id>` shows `activity`; retry
    in minutes), `SandboxNotReady` 409 (wait for running), `SandboxUnreachable` 409 (retry, else
    destroy), `SandboxHostTimeout` 504 (may still be running; check before repeating),
-   `SandboxHostError` 502 (retry), `SQL_ERROR` 400 (fix the SQL), `DATABASE_STORAGE_MISSING` 409
+   `SandboxHostError` 502 (retry), `AgentLimitReached` 403 (plan full of persistent agents:
+   Byte 1, Mega 2, Tera 5 — delete one or upgrade; do not retry), `SQL_ERROR` 400 (fix the SQL), `DATABASE_STORAGE_MISSING` 409
    (data gone; `db rm` and recreate), `DATABASE_BACKEND_ERROR` 502 (retry).
 3. `sandboxes exec` without `--json` exits with the remote command's code. With `--json`
    it exits 0 and reports `exitCode`, `stdout`, `stderr`. Put the command after `--`.
