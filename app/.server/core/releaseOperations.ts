@@ -829,6 +829,14 @@ export function buildStartScript(spec: Runspec, hasSecrets: boolean): string {
     `ExecStart=/bin/sh ${startScript}`,
     "Restart=always",
     "RestartSec=3",
+    // Tope de memoria sobre la RAM REAL de la caja (no la del catálogo: una
+    // nano trae 496 MB aunque el catálogo diga 256). Sin tope, una app que
+    // crece dispara el OOM global, que puede matar a sandbox-agent en vez de
+    // a ella; la bitácora de Normi estuvo ~31 h caída así el 2026-10-11. Con
+    // tope el OOM pega dentro de la unit y Restart=always la relanza en 3 s.
+    // Sin MemoryHigh a propósito: las cajas de 232 MB ya corren su app al
+    // ~74 %, y un MemoryHigh por debajo las frenaría todo el tiempo.
+    "MemoryMax=85%",
     // Un servidor Node que atiende SIGTERM con server.close() espera a que se
     // cierren las conexiones keep-alive del proxy, y systemd lo aguantaba 90 s
     // (su default). El exec que arranca el deploy también dura 90 s: todo

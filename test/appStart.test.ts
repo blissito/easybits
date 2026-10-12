@@ -29,6 +29,12 @@ describe("arranque de la app", () => {
     expect(script).not.toContain("nohup");
   });
 
+  it("topa la memoria de la app en porcentaje de la RAM real de la caja", () => {
+    expect(script).toMatch(/MemoryMax=\d+%/);
+    // Un MemoryHigh bajo frenaría a las cajas chicas, que ya corren al ~74 %.
+    expect(script).not.toContain("MemoryHigh=");
+  });
+
   it("no espera 90 s a que una app Node suelte sus conexiones keep-alive", () => {
     expect(script).toContain("TimeoutStopSec=10");
     expect(script).toContain(`timeout 15 systemctl stop ${APP_UNIT}`);
