@@ -239,7 +239,7 @@ export async function handleAppWebhook(
   // runspec es Json: Prisma-Mongo no filtra por rutas dentro de él, así que se
   // filtra aquí. Son sólo las máquinas permanentes vivas.
   const rows = await db.sandbox.findMany({
-    where: { persistent: true, status: { notIn: ["destroyed", "pending_deletion"] } },
+    where: { persistent: true, status: { notIn: ["destroyed", "pending_deletion", "transferred"] } },
     select: { sandboxId: true, ownerId: true, runspec: true, status: true },
   });
   const targets = rows.filter((r) => {

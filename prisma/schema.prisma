@@ -1540,7 +1540,7 @@ model Sandbox {
   cpuMode         String   @default("shared") // "shared" | "reserved"
   diskAddonsGB    Int      @default(0)        // stackable 100GB NVMe units * 100
   name            String?
-  status          String   @default("provisioning") // provisioning|running|suspended|error|lost|destroyed
+  status          String   @default("provisioning") // provisioning|running|suspended|error|lost|destroyed|pending_deletion|transferred (viva, pero ya es de otra plataforma: fuera del monitor, respaldos y listados)
   // Two billing shapes, and this row records which one applies:
   //  - stripeSubItemId: an item appended to the owner's PLAN subscription
   //    (plan holders, and every machine sold before Aug 2026).

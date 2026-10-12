@@ -616,7 +616,8 @@ export async function listPermanent(ctx: AuthContext): Promise<PermanentSandbox[
       // `list_machines` (MCP) no — el agente veía cajas "borradas" durante días
       // y reportaba que el borrado no funcionaba. getPermanent SÍ la resuelve,
       // para que restore_machine siga sirviendo en la vía Stripe.
-      status: { notIn: ["destroyed", "pending_deletion"] },
+      // `transferred`: la caja sigue viva pero ya es de otra plataforma.
+      status: { notIn: ["destroyed", "pending_deletion", "transferred"] },
       ownerId: { in: [ctx.user.id, ...delegatedOwners] },
     },
     orderBy: { createdAt: "desc" },
@@ -793,7 +794,7 @@ async function lockBox(ctx: AuthContext, sandboxId: string): Promise<boolean> {
  */
 export async function reconcileProtection(): Promise<{ checked: number; relocked: number }> {
   const rows = await db.sandbox.findMany({
-    where: { persistent: true, status: { notIn: ["destroyed", "pending_deletion"] } },
+    where: { persistent: true, status: { notIn: ["destroyed", "pending_deletion", "transferred"] } },
     select: { sandboxId: true, ownerId: true },
   });
   let relocked = 0;
