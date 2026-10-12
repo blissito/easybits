@@ -56,7 +56,7 @@ easybits sandboxes exec sb_abc123 -- npm test               # exits with the com
 easybits sandboxes logs sb_abc123 --unit myapp --lines 100 --since "10 min ago" --grep ERROR
 easybits sandboxes files ls sb_abc123 /data/work
 easybits sandboxes files write sb_abc123 /data/work/app.js ./app.js
-easybits sandboxes files read sb_abc123 /data/out.png --out out.png
+easybits sandboxes files read sb_abc123 /data/out.png --out out.png   # 8 MB cap: larger files exit 1 ("truncated")
 easybits sandboxes suspend sb_abc123      # sleeps to disk; resume wakes it
 easybits sandboxes resume sb_abc123
 easybits sandboxes snapshot sb_abc123 --name before-upgrade

@@ -4,7 +4,7 @@ import type { Command, Ctx } from "../types.js";
 import { ENV_FILE_OPTION, bool, envFrom, int, need, readStdin, str } from "../args.js";
 import { emit, fmtBytes, fmtDate, table } from "../output.js";
 import { getClient } from "../client.js";
-import { usageError } from "../errors.js";
+import { CliError, usageError } from "../errors.js";
 import { YES_OPTION, confirm, requireYesIfHeadless } from "../prompt.js";
 import { t } from "../i18n.js";
 
@@ -42,6 +42,20 @@ async function sandbox(ctx: Ctx, usage: string) {
   const id = need(ctx, 0, "sandbox", usage);
   const eb = await getClient(ctx);
   return eb.sandboxes.get(id);
+}
+
+// El agente de la caja corta toda lectura en 8 MB sin avisar: si llega justo eso, el
+// archivo venía más grande y lo que tenemos está truncado (una base SQLite cortada no abre).
+const FILE_READ_CAP = 8 << 20;
+
+function checkNotTruncated(size: number, path: string) {
+  if (size < FILE_READ_CAP) return;
+  throw new CliError(
+    t(`${path} is 8 MB or larger and the read was cut at 8 MB.`, `${path} pesa 8 MB o más y la lectura se cortó en 8 MB.`),
+    1,
+    t("Compress or split it inside the sandbox first (exec), then read the pieces.", "Comprímelo o pártelo dentro de la caja (exec) y lee las partes."),
+    "truncated",
+  );
 }
 
 const FILES_USAGE = "easybits sandboxes files <ls|read|write> <sandbox> <path> [local-file]";
@@ -207,10 +221,12 @@ export const sandboxes: Command = {
           if (out) {
             // base64 para no corromper binarios en el camino.
             const r = await sb.files.read(path, { encoding: "base64" });
+            checkNotTruncated(r.size, path);
             writeFileSync(out, Buffer.from(r.content, "base64"));
             emit(ctx, { path, out, size: r.size }, () => console.error(t(`Saved ${fmtBytes(r.size)} to ${out}`, `Guardé ${fmtBytes(r.size)} en ${out}`)));
           } else {
             const r = await sb.files.read(path);
+            checkNotTruncated(r.size, path);
             emit(ctx, r, () => process.stdout.write(r.content));
           }
         } else if (action === "write") {

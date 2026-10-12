@@ -150,7 +150,7 @@ easybits sandboxes exec sb_abc123 -- npm test               # sale con el códig
 easybits sandboxes logs sb_abc123 --unit myapp --lines 100 --since "10 min ago" --grep ERROR
 easybits sandboxes files ls sb_abc123 /data/work
 easybits sandboxes files write sb_abc123 /data/work/app.js ./app.js
-easybits sandboxes files read sb_abc123 /data/out.png --out out.png
+easybits sandboxes files read sb_abc123 /data/out.png --out out.png   # tope 8 MB: si el archivo pesa más, sale con código 1 ("truncated")
 easybits sandboxes suspend sb_abc123      # duerme a disco; resume la despierta
 easybits sandboxes resume sb_abc123
 easybits sandboxes snapshot sb_abc123 --name antes-del-upgrade

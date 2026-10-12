@@ -8,6 +8,7 @@ import { getSecretValue, createSecret } from "./secretOperations";
 import { encryptSecret, decryptSecret } from "../crypto";
 import { createApiKey } from "../iam";
 import { can, delegatedAccountIds, SCOPES } from "../delegation";
+import { isAdminUser } from "../getters";
 import { mintComputeKey, revokeSandboxKeys, COMPUTE_BASE_URL } from "../compute/gateway";
 import type { SandboxTemplate } from "../sandbox/schemas";
 import { PLANS, getUserPlan } from "../../lib/plans";
@@ -888,7 +889,11 @@ export function countsAsAgentBox(s: Pick<SandboxRecord, "status" | "metadata">):
   return (s.status === "running" || s.status === "starting") && !s.metadata?.eb_tier;
 }
 
-export async function effectiveOwnerId(ctx: AuthContext, sandboxId: string): Promise<string> {
+export async function effectiveOwnerId(
+  ctx: AuthContext,
+  sandboxId: string,
+  opts: { supportRead?: boolean } = {}
+): Promise<string> {
   // Unified surface: a box is owned via db.sandbox (permanent machine) OR
   // db.agent (autonomous agent). Resolve the owner from whichever tracks it, so
   // delegation works the same whether the box is a machine or an agent.
@@ -903,6 +908,12 @@ export async function effectiveOwnerId(ctx: AuthContext, sandboxId: string): Pro
   if (!ownerId) return ctx.user.id; // not tracked → ephemeral, caller owns it
   if (ownerId === ctx.user.id) return ownerId; // owner
   if (await can(ctx, ownerId, SCOPES.MACHINES)) return ownerId; // delegated
+  // Soporte: un admin puede LEER (get, files ls/read) la caja de otra cuenta para
+  // auditar. Nunca escribir ni ejecutar. Queda en el log con quién, qué caja y de quién.
+  if (opts.supportRead && isAdminUser(ctx.user)) {
+    console.warn(`[support-read] ${ctx.user.email} → ${sandboxId} (owner ${ownerId})`);
+    return ownerId;
+  }
   throw new Response(
     JSON.stringify({ error: "SandboxNotFound", message: "Sandbox no encontrado." }),
     { status: 404, headers: { "content-type": "application/json" } }
@@ -1227,7 +1238,7 @@ export async function listSandboxes(ctx: AuthContext): Promise<SandboxRecord[]> 
 
 export async function getSandbox(ctx: AuthContext, sandboxId: string): Promise<SandboxRecord> {
   requireScope(ctx, "READ");
-  return callHost<SandboxRecord>("GET", `/v1/sandbox/${sandboxId}`, undefined, await effectiveOwnerId(ctx, sandboxId));
+  return callHost<SandboxRecord>("GET", `/v1/sandbox/${sandboxId}`, undefined, await effectiveOwnerId(ctx, sandboxId, { supportRead: true }));
 }
 
 export interface WaitUntilRunningOptions {
@@ -2107,7 +2118,7 @@ export async function readFile(
     "GET",
     `/v1/sandbox/${sandboxId}/files/read?${qs.toString()}`,
     undefined,
-    await effectiveOwnerId(ctx, sandboxId)
+    await effectiveOwnerId(ctx, sandboxId, { supportRead: true })
   );
 }
 
@@ -2122,7 +2133,7 @@ export async function listFiles(
     "GET",
     `/v1/sandbox/${sandboxId}/files/list?${qs.toString()}`,
     undefined,
-    await effectiveOwnerId(ctx, sandboxId)
+    await effectiveOwnerId(ctx, sandboxId, { supportRead: true })
   );
 }
 

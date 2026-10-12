@@ -5,7 +5,7 @@ license: MIT
 compatibility: Needs Node 22+ (npx is enough), network access to https://www.easybits.cloud and an EasyBits API key
 metadata:
   author: easybits
-  version: "1.15"
+  version: "1.16"
 ---
 
 # Use the EasyBits CLI
@@ -101,7 +101,7 @@ easybits sb ls --json
 easybits sb get "$ID" --json                                 # status, expiresAt, activity
 easybits sb exec "$ID" --json -- 'cd /data/work && npm ci && npm test'
 easybits sb files write "$ID" /data/work/app.js ./app.js     # or --content '...', or stdin
-easybits sb files read  "$ID" /data/work/out.json            # --out file for binaries
+easybits sb files read  "$ID" /data/work/out.json            # --out file for binaries; 8 MB cap (exit 1 "truncated": gzip/split it with exec first)
 easybits sb files ls    "$ID" /data/work --json
 easybits sb logs "$ID" --unit myapp --lines 100 --since "10 min ago" --grep ERROR
 easybits sb suspend "$ID" && easybits sb resume "$ID"
