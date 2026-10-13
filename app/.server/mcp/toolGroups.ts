@@ -26,6 +26,7 @@ export type ToolGroupKey =
   | "payments"
   | "email"
   | "public-safe"
+  | "claude"
   | "scripting"
   // Capability buckets — composables de los PERFILES de la flota (no son grupos de
   // conector de Claude.ai, por eso no están en TOOL_GROUPS, solo en GROUP_ALLOWLISTS).
@@ -162,6 +163,13 @@ export const TOOL_GROUPS: ToolGroup[] = [
     label: "Public Safe",
     description: "Subset mínimo para agentes públicos (B2C / WhatsApp customer-facing): upload_file, create_share_link, db_select (read-only SQL con anti-stacking, anti-CROSS-JOIN, anti-sqlite_master). Sin listar workspace, sin eliminar, sin webhooks/websites/secrets, sin internet abierto. Diseñado para NanoClaw FORMMY_PUBLIC_TEMPLATE.",
     toolCount: 3,
+  },
+  {
+    key: "claude",
+    label: "Claude (directorio)",
+    description:
+      "La URL que se publica en el directorio de conectores de Claude (`/api/mcp/claude`): archivos, documentos, sitios, formularios, brand kits, bases de datos e investigación web. Sin generar imagen, video ni voz con IA, sin cobros ni hosting, sin secretos, webhooks, cajas ni flota. Strict: `run_tool` tampoco sale de aquí.",
+    strict: true,
   },
   {
     key: "scripting",
@@ -641,6 +649,51 @@ export const EMAIL_ALLOWLIST = new Set<string>([
  * To grant a specific tenant more reach, override container_config.env in
  * NanoClaw — don't expand this default set.
  */
+/**
+ * Perfil del directorio de conectores de Claude (`/api/mcp/claude`). Lo que Anthropic
+ * revisa y lo que un usuario conecta con un clic, así que se decide lo conservador:
+ *
+ * - FUERA la generación de imagen, video y audio con IA (`create_or_edit_image`,
+ *   `image_generate`, `edit_image`, `video_create`, `avatar_video_create`, `voice_tts_create`,
+ *   personajes, proyectos de video con narración, subtítulos): el directorio la prohíbe.
+ * - FUERA lo que mueve dinero o factura (links de pago, hosting/máquinas, `make_permanent`,
+ *   cajas y `agent_run`, flota, llamadas) y lo que envía correo a terceros.
+ * - FUERA lo que guarda o devuelve credenciales (secrets, llaves de IA, webhooks con su
+ *   secreto de firma, secrets de máquina).
+ *
+ * Strict: `run_tool` no puede alcanzar nada de lo de arriba. La URL de siempre (`/api/mcp`)
+ * no cambia para nadie.
+ */
+export const CLAUDE_DIRECTORY_ALLOWLIST = new Set<string>([
+  // Archivos (transform/optimize son recortes y compresión deterministas, no IA generativa)
+  "list_files", "get_file", "search_files", "upload_file", "duplicate_file",
+  "delete_file", "restore_file", "list_deleted_files",
+  "transform_image", "optimize_image", "describe_image",
+  "create_share_link", "list_share_links", "revoke_share_link",
+  // Documentos
+  "get_docs", "list_documents", "get_document", "create_document", "update_document", "delete_document",
+  "duplicate_document", "add_page", "delete_page", "reorder_pages",
+  "get_page_html", "set_page_html", "get_section_html", "set_section_html",
+  "get_node_outline", "patch_node", "structured_doc", "change_document_format", "apply_brand_kit",
+  "wait_for_document", "get_page_screenshot", "get_document_pdf", "export_document",
+  "deploy_document", "unpublish_document",
+  // Sitios (sin comprar ni dar de alta dominios)
+  "list_websites", "get_website", "create_website", "update_website", "delete_website",
+  "list_website_files", "upload_website_file", "deploy_website_file", "inject_html", "list_domains",
+  // Formularios
+  "create_form", "list_forms", "list_form_submissions",
+  // Brand kits
+  "list_brand_kits", "get_default_brand_kit", "create_brand_kit", "update_brand_kit", "delete_brand_kit",
+  "extract_brand_kit_from_url",
+  // Bases de datos
+  "db_list", "db_get", "db_create", "db_select", "db_query",
+  // Investigación web y ojos
+  "web_search", "web_fetch", "web_extract", "web_extract_status", "web_crawl",
+  "research_search", "research_scrape", "search_stock_photo", "search_icon", "screenshot_url", "audit_page",
+  // Cuenta
+  "get_usage_stats",
+]);
+
 export const PUBLIC_SAFE_ALLOWLIST = new Set<string>([
   "upload_file",
   "create_share_link",
@@ -804,6 +857,7 @@ export const GROUP_ALLOWLISTS: Partial<Record<ToolGroupKey, Set<string>>> = {
   payments: PAYMENTS_ALLOWLIST,
   email: EMAIL_ALLOWLIST,
   "public-safe": PUBLIC_SAFE_ALLOWLIST,
+  claude: CLAUDE_DIRECTORY_ALLOWLIST,
   scripting: SCRIPTING_ALLOWLIST,
   imagenes: IMAGENES_ALLOWLIST,
   documentos: DOCUMENTOS_READ_ALLOWLIST,

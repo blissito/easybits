@@ -373,7 +373,7 @@ export const EN_CLAUDE = `## Claude connector
 
 Connect EasyBits to Claude (claude.ai, Claude Desktop, Claude Code) or any OAuth-capable MCP client, without copying keys.
 
-**Connector URL:** \`https://www.easybits.cloud/api/mcp\` (or a toolset: \`/api/mcp/sandbox\`, \`/api/mcp/docs\`; see \`tool-groups\`).
+**Connector URL:** \`https://www.easybits.cloud/api/mcp/claude\`, the one listed in Claude's connectors directory. For the full catalog (sandboxes, fleet, video, hosting), add \`https://www.easybits.cloud/api/mcp\` or a toolset (\`/api/mcp/sandbox\`, \`/api/mcp/docs\`; see \`tool-groups\`) as a custom connector.
 
 ### Connect
 1. In Claude: **Settings → Connectors → Add custom connector** and paste the URL.
@@ -381,15 +381,17 @@ Connect EasyBits to Claude (claude.ai, Claude Desktop, Claude Code) or any OAuth
 3. The consent screen shows which app is asking for access and which domain you will return to. Click **Allow**.
 4. Done: Claude can see your account's tools.
 
-In Claude Code: \`claude mcp add --transport http easybits https://www.easybits.cloud/api/mcp\`, then \`/mcp\` to authorize.
+In Claude Code: \`claude mcp add --transport http easybits https://www.easybits.cloud/api/mcp/claude\`, then \`/mcp\` to authorize.
 
 ### What it can do
-The same as your account, through MCP tools: files and CDN, documents and PDFs, SQL databases, websites and domains, compute sandboxes, web search and reading, voice and video. Every tool declares \`readOnlyHint\` or \`destructiveHint\`: tools that delete, overwrite or run code ask for confirmation in Claude.
+With \`/api/mcp/claude\`: files and CDN, documents and PDFs, published websites, forms, brand kits, SQL databases and web research (search, read and extract pages). Every tool declares \`readOnlyHint\` or \`destructiveHint\`: tools that delete or overwrite ask for confirmation in Claude.
+
+What that URL does **not** include: AI image, video or voice generation, payment links and hosting, secrets and webhooks, compute sandboxes and fleet agents. They are not reachable through \`run_tool\` either.
 
 Examples:
 - "Upload this CSV to an EasyBits database and tell me the top 10 customers by purchases."
-- "Create a Node sandbox, clone my repo and run the tests."
-- "Publish this landing page as an EasyBits site and give me the URL."
+- "Build a PDF quote for this customer with my brand kit and give me a share link."
+- "Publish this landing page as an EasyBits site with a contact form and give me the URL."
 
 ### Security
 - OAuth 2.1 with mandatory PKCE S256, dynamic client registration (RFC 7591) and discoverable metadata (RFC 8414 and RFC 9728).
@@ -401,12 +403,12 @@ Examples:
 ### Endpoints
 | Endpoint | Spec |
 |---|---|
-| \`/.well-known/oauth-protected-resource/api/mcp\` | RFC 9728 |
+| \`/.well-known/oauth-protected-resource/api/mcp/claude\` | RFC 9728 |
 | \`/.well-known/oauth-authorization-server\` | RFC 8414 |
 | \`/oauth/register\` | RFC 7591 |
 | \`/oauth/authorize\`, \`/oauth/token\` | OAuth 2.1 + PKCE |
 
-Without a token, \`POST /api/mcp\` returns \`401\` with \`WWW-Authenticate: Bearer resource_metadata="…"\`.
+Without a token, \`POST /api/mcp/claude\` (and any \`/api/mcp…\`) returns \`401\` with \`WWW-Authenticate: Bearer resource_metadata="…"\`.
 
 **Privacy:** https://www.easybits.cloud/aviso-de-privacidad#aplicaciones-conectadas · **Support:** soporte@easybits.cloud
 `;

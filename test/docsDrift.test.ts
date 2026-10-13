@@ -135,7 +135,7 @@ describe("grupos MCP", () => {
     for (const m of skill.matchAll(/^\| `([a-z-]+)`/gm)) expect(known.has(m[1]), `grupo desconocido ${m[1]}`).toBe(true);
     const mentioned = new Set([...skill.matchAll(/`([a-z-]+)`/g)].map((m) => m[1]));
     // Perfiles por audiencia (no dominios) no van en la tabla del skill.
-    const PROFILES = new Set(["publico", "ghosty", "ghostyapp", "public-safe"]);
+    const PROFILES = new Set(["publico", "ghosty", "ghostyapp", "public-safe", "claude"]);
     const missing = TOOL_GROUPS.filter((g) => g.toolCount && !PROFILES.has(g.key) && !mentioned.has(g.key)).map((g) => g.key);
     expect(missing).toEqual([]);
   });
