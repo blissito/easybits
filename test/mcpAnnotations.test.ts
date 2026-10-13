@@ -40,3 +40,19 @@ describe("MCP tool annotations", () => {
     expect(tools[name].annotations.destructiveHint).toBe(de);
   });
 });
+
+describe("schemas para el directorio", () => {
+  // Se mide sobre lo que sale de verdad en `tools/list` (el JSON Schema que lee Claude).
+  test("ningún parámetro de primer nivel queda sin tipo en el JSON Schema", async () => {
+    const server = createMcpServer(["all"]);
+    const list = (server.server as any)._requestHandlers.get("tools/list");
+    const { tools } = await list({ method: "tools/list", params: {} }, {});
+    const untyped: string[] = [];
+    for (const t of tools) {
+      for (const [p, def] of Object.entries<any>(t.inputSchema?.properties ?? {})) {
+        if (!def.type && !def.anyOf && !def.oneOf && !def.enum && !def.$ref && !("const" in def)) untyped.push(`${t.name}.${p}`);
+      }
+    }
+    expect(untyped).toEqual([]);
+  });
+});

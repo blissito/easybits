@@ -2161,7 +2161,7 @@ How to embed safely (the only reliable rule):
       sandboxId: z.string().describe("Machine sandboxId"),
       path: z.string().describe("Admin path, must start with /admin/ (e.g. /admin/whatsapp/status)"),
       method: z.enum(["GET", "POST", "PATCH", "DELETE"]).optional().describe("HTTP method (default GET)"),
-      body: z.any().optional().describe("Request body for POST/PATCH"),
+      body: z.union([z.record(z.string(), z.unknown()), z.string()]).optional().describe("Request body for POST/PATCH (JSON object or string)"),
     },
     // Acepta DELETE (desvincular WhatsApp, borrar CLAUDE.md): destructiva.
     { destructiveHint: true, idempotentHint: false, openWorldHint: false },

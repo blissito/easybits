@@ -144,7 +144,12 @@ Brand kit awareness (auto-applied):
       docId: z.string().optional(),
       name: z.string().optional(),
       description: z.string().optional(),
-      tree: z.unknown().optional().describe("JSON-DSL tree for create_template"),
+      // Objeto { pages: [...] } o el mismo JSON como string (se auto-parsea). Tipado para
+      // que el JSON Schema diga `object | string` (el directorio de Claude lo exige).
+      tree: z
+        .union([z.record(z.string(), z.unknown()), z.string()])
+        .optional()
+        .describe("JSON-DSL tree for create_template: { pages: [...] } (object, or the same JSON as a string)"),
       dataSchema: z.record(z.string(), z.unknown()).optional().describe("Free-form JSON schema describing the `data` shape expected by this template"),
       data: z.record(z.string(), z.unknown()).optional().describe("Data object for create_doc"),
       patch: z.record(z.string(), z.unknown()).optional().describe("Partial data object for patch_doc"),

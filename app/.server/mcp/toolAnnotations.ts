@@ -97,6 +97,11 @@ const DESTRUCTIVE = new Set([
   "run_tool",
 ]);
 
+/** Suenan a lectura pero guardan algo: escriben sin destruir. */
+const NOT_READ_ONLY = new Set([
+  "get_node_outline", // con documentId+pageId siembra y guarda los data-id que falten
+]);
+
 /** Prefijos/sufijos que sólo leen. */
 const READ_ONLY_PATTERN = /^(list|get|search|describe)_|_(list|status)$/;
 /** Prefijos/fragmentos que destruyen. */
@@ -136,7 +141,8 @@ export type DerivedAnnotations = {
 
 export function deriveAnnotations(name: string): DerivedAnnotations {
   const readOnly =
-    READ_ONLY.has(name) || (!DESTRUCTIVE.has(name) && !DESTRUCTIVE_PATTERN.test(name) && READ_ONLY_PATTERN.test(name));
+    !NOT_READ_ONLY.has(name) &&
+    (READ_ONLY.has(name) || (!DESTRUCTIVE.has(name) && !DESTRUCTIVE_PATTERN.test(name) && READ_ONLY_PATTERN.test(name)));
   const destructive = !readOnly && (DESTRUCTIVE.has(name) || DESTRUCTIVE_PATTERN.test(name));
   return {
     title: titleFromName(name),
