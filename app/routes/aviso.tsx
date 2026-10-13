@@ -122,36 +122,85 @@ const Content = () => {
           id="aplicaciones-conectadas"
           className="font-title font-bold text-2xl text-brand_dark mt-6"
         >
-          5 bis. Aplicaciones conectadas (Claude y otros clientes MCP) /
-          Connected apps
+          5 bis. Aplicaciones conectadas (Claude, ChatGPT y otros clientes
+          MCP) / Connected apps (Claude, ChatGPT and other MCP clients)
         </h3>
         <p className="my-4">
-          Cuando usted conecta una aplicación externa (por ejemplo Claude, de
-          Anthropic) a su cuenta mediante el conector MCP de EasyBits, la
-          autoriza expresamente en una pantalla de consentimiento. A partir de
-          ese momento la aplicación puede leer y modificar, en su nombre, los
-          recursos de su cuenta que usted le pida (archivos, documentos, bases
-          de datos, sitios, cajas de cómputo). EasyBits sólo entrega a esa
-          aplicación el resultado de cada herramienta que invoca; no le envía
-          su contraseña ni sus llaves de API, y los tokens de acceso caducan en
-          una hora. El tratamiento que esa aplicación haga de la información se
-          rige por su propio aviso de privacidad. Puede retirar el acceso en
-          cualquier momento desde su panel (Developer → Claude.ai → Apps
-          conectadas), desconectando la aplicación o escribiendo a
-          soporte@easybits.cloud; el acceso se corta al instante.
+          <strong>Qué ve el conector.</strong> Cuando usted conecta una
+          aplicación externa (por ejemplo Claude, de Anthropic, o ChatGPT, de
+          OpenAI) a su cuenta mediante el conector MCP de EasyBits, la autoriza
+          expresamente en una pantalla de consentimiento. La aplicación sólo
+          puede leer y modificar, en su nombre, los recursos de la cuenta que la
+          autorizó (archivos, documentos, bases de datos, sitios, cajas de
+          cómputo), nunca los de otros usuarios. EasyBits sólo le entrega el
+          resultado de cada herramienta que invoca; no le envía su contraseña ni
+          sus llaves de API.
         </p>
         <p className="my-4">
-          When you connect an external app (for example Claude, by Anthropic)
-          to your account through the EasyBits MCP connector, you explicitly
-          authorize it on a consent screen. The app can then read and change,
-          on your behalf, the account resources you ask it to (files,
-          documents, databases, sites, compute sandboxes). EasyBits only returns
-          to that app the result of each tool it calls; it never shares your
-          password or API keys, and access tokens expire after one hour. The
-          app&apos;s own handling of that data is governed by its privacy
-          policy. You can revoke access at any time from your dashboard (Developer
-          → Claude.ai → Connected apps), by disconnecting the app, or by
-          writing to soporte@easybits.cloud; access stops immediately.
+          <strong>Qué guardamos y qué no.</strong> EasyBits no recibe ni guarda
+          el contenido de sus conversaciones con el asistente externo: sólo
+          recibe las llamadas a herramientas que el asistente decide hacer. Lo
+          que esas llamadas crean o modifican (un archivo, un documento, una
+          fila) se guarda en su cuenta como cualquier otro recurso suyo. Para
+          cobrar y medir el uso registramos, por cada operación con costo, el
+          tipo de operación, las fichas consumidas, el modelo, los tokens y la
+          duración, sin el contenido. De la conexión guardamos el nombre de la
+          aplicación, sus direcciones de retorno y un hash de cada token de
+          renovación (nunca el token en claro). Las llaves de proveedor que se
+          pasen en la URL del conector no se guardan: viven sólo durante la
+          petición.
+        </p>
+        <p className="my-4">
+          <strong>Retención.</strong> Los tokens de acceso caducan en una hora;
+          los de renovación, en 90 días, y se reemplazan por uno nuevo en cada
+          uso. Los registros de la conexión y de uso se conservan mientras su
+          cuenta exista, o hasta que usted pida su eliminación.
+        </p>
+        <p className="my-4">
+          <strong>Sus controles.</strong> Puede retirar el acceso en cualquier
+          momento desde su panel (Developer → Claude.ai → Apps conectadas),
+          desconectando la aplicación; el acceso se corta al instante, incluido
+          el token que estuviera en uso. Para eliminar su cuenta o los datos
+          asociados, escriba a soporte@easybits.cloud (ver Derechos ARCO). El
+          tratamiento que la aplicación externa haga de la información se rige
+          por su propio aviso de privacidad.
+        </p>
+        <p className="my-4">
+          <strong>What the connector sees.</strong> When you connect an external
+          app (for example Claude, by Anthropic, or ChatGPT, by OpenAI) to your
+          account through the EasyBits MCP connector, you explicitly authorize
+          it on a consent screen. The app can only read and change, on your
+          behalf, the resources of the account that authorized it (files,
+          documents, databases, sites, compute sandboxes), never other
+          users&apos;. EasyBits only returns the result of each tool it calls;
+          it never shares your password or API keys.
+        </p>
+        <p className="my-4">
+          <strong>What we store and what we don&apos;t.</strong> EasyBits does
+          not receive or store the content of your conversations with the
+          external assistant; it only receives the tool calls the assistant
+          chooses to make. Whatever those calls create or change (a file, a
+          document, a row) is stored in your account like any other resource.
+          For billing and usage metering we log, for each billable operation,
+          the operation type, credits used, model, token counts and duration,
+          without the content. For the connection itself we keep the app name,
+          its redirect URLs and a hash of each refresh token (never the token in
+          clear). Provider keys passed in the connector URL are not stored; they
+          only live for the duration of the request.
+        </p>
+        <p className="my-4">
+          <strong>Retention.</strong> Access tokens expire after one hour;
+          refresh tokens after 90 days and are rotated on every use. Connection
+          and usage records are kept while your account exists, or until you
+          ask us to delete them.
+        </p>
+        <p className="my-4">
+          <strong>Your controls.</strong> You can revoke access at any time from
+          your dashboard (Developer → Claude.ai → Connected apps) by
+          disconnecting the app; access stops immediately, including any token
+          in use. To delete your account or its data, write to
+          soporte@easybits.cloud (see ARCO rights). The external app&apos;s own
+          handling of that data is governed by its privacy policy.
         </p>
         <h3 className="font-title font-bold text-2xl text-brand_dark mt-6">
           6. Derechos ARCO
