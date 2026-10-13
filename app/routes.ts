@@ -18,6 +18,7 @@ export default [
   ]),
 
   route("/dominio-personalizado", "routes/domains.tsx"),
+  route("/login/revisor", "routes/login.revisor.tsx"),
   route("/login/:success?", "routes/login.tsx"),
   route("/logout", "routes/logout.tsx"),
   route("/preview", "routes/preview.tsx"),
