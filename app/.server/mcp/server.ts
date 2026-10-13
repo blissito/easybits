@@ -783,7 +783,7 @@ function registerCoreTools(server: McpServer) {
     server,
     "list_files",
     {
-      description: "List your files (id, name, size, contentType, access, status, createdAt). Returns `{ items, nextCursor, hasMore }`. When `hasMore` is true, pass `nextCursor` as `cursor` to get the next page. Excludes deleted files.",
+      description: "List your files (id, name, size, contentType, access, status, createdAt). Returns `{ items, nextCursor, hasMore }`. When `hasMore` is true, pass `nextCursor` as `cursor` to get the next page. Excludes deleted files and files that belong to a website/document/presentation (list those with `list_website_files`).",
       inputSchema: {
         assetId: z.string().optional().describe("Filter by asset ID"),
         limit: z.number().optional().describe("Max results (default 50)"),
@@ -863,7 +863,7 @@ How to embed safely (the only reliable rule):
 
   server.tool(
     "delete_file",
-    "Soft-delete a file (sets status to DELETED). Recoverable for 7 days via `restore_file`, then auto-purged from storage.",
+    "Soft-delete a file (sets status to DELETED). Recoverable for 7 days via `restore_file`, then auto-purged from storage. Refuses (409 WEBSITE_FILE) files that back a published website: manage those with the website tools.",
     {
       fileId: z.string().describe("The file ID to delete"),
     },
@@ -3596,7 +3596,7 @@ How to embed safely (the only reliable rule):
 
   server.tool(
     "bulk_delete_files",
-    "Soft-delete multiple files at once (max 100). Returns count of deleted files.",
+    "Soft-delete multiple files at once (max 100). Returns count of deleted files. Refuses the whole batch (409 WEBSITE_FILE) if any file backs a published website.",
     {
       fileIds: z.array(z.string()).describe("Array of file IDs to delete (1-100)"),
     },

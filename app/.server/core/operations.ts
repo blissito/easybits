@@ -60,14 +60,60 @@ async function bumpWorkspaceUsage(workspaceId: string, deltaBytes: number, delta
 
 // --- List Files ---
 
+// Los archivos de un sitio (landing, documento, presentación) viven bajo
+// `sites/<websiteId>/`: son del sitio, no de la bandeja de archivos. Listarlos
+// junto a los demás invitaba a borrarlos con `delete_file` y tumbar el sitio.
+export const WEBSITE_FILE_PREFIX = "sites/";
+
+export function isWebsiteFileName(name: string | null | undefined): boolean {
+  return !!name && name.startsWith(WEBSITE_FILE_PREFIX);
+}
+
+function websiteIdOfFileName(name: string): string | null {
+  const id = name.slice(WEBSITE_FILE_PREFIX.length).split("/")[0];
+  return /^[a-f0-9]{24}$/i.test(id) ? id : null;
+}
+
+// Ids de los sitios VIVOS que respaldan estos archivos. Un sitio borrado no
+// cuenta: sus archivos son huérfanos y se pueden borrar sin romper nada.
+async function liveWebsitesOf(ownerId: string, names: string[]) {
+  const ids = [...new Set(names.filter(isWebsiteFileName).map(websiteIdOfFileName).filter(Boolean))] as string[];
+  if (ids.length === 0) return new Map<string, { id: string; slug: string }>();
+  const sites = await db.website.findMany({
+    where: { id: { in: ids }, ownerId, status: { not: "DELETED" } },
+    select: { id: true, slug: true, deletedAt: true },
+  });
+  return new Map(sites.filter((w) => !w.deletedAt).map((w) => [w.id, { id: w.id, slug: w.slug }]));
+}
+
+function websiteFileConflict(files: { id: string; name: string }[], sites: Map<string, { id: string; slug: string }>) {
+  const blocked = files
+    .map((f) => ({ f, site: sites.get(websiteIdOfFileName(f.name) ?? "") }))
+    .filter((x) => x.site);
+  if (blocked.length === 0) return null;
+  const list = blocked.map(({ f, site }) => `${f.id} (${f.name} → /s/${site!.slug}/)`).join(", ");
+  return new Response(
+    JSON.stringify({
+      error: `Refusing to delete file(s) that back a published website: ${list}. Manage them with the website tools (list_website_files, upload_website_file/deploy_website_file to replace, delete_website to remove the whole site).`,
+      code: "WEBSITE_FILE",
+      fileIds: blocked.map(({ f }) => f.id),
+      websiteIds: [...new Set(blocked.map(({ site }) => site!.id))],
+    }),
+    { status: 409, headers: { "Content-Type": "application/json" } },
+  );
+}
+
 export async function listFiles(
   ctx: AuthContext,
-  opts?: { assetId?: string; limit?: number; cursor?: string }
+  opts?: { assetId?: string; limit?: number; cursor?: string; includeWebsiteFiles?: boolean }
 ) {
   requireScope(ctx, "READ");
   const limit = Math.min(opts?.limit ?? 50, 100);
 
   const where: Record<string, unknown> = { ownerId: ctx.user.id, status: { not: "DELETED" } };
+  if (!opts?.includeWebsiteFiles) {
+    where.NOT = { name: { startsWith: WEBSITE_FILE_PREFIX } };
+  }
   if (opts?.assetId) {
     where.assetIds = { has: opts.assetId };
   }
@@ -323,7 +369,11 @@ export async function uploadFile(
 
 // --- Delete File ---
 
-export async function deleteFile(ctx: AuthContext, fileId: string) {
+export async function deleteFile(
+  ctx: AuthContext,
+  fileId: string,
+  opts?: { allowWebsiteFile?: boolean }
+) {
   requireScope(ctx, "DELETE");
 
   const file = await db.file.findUnique({ where: { id: fileId } });
@@ -340,6 +390,11 @@ export async function deleteFile(ctx: AuthContext, fileId: string) {
     });
   }
   requireWorkspace(ctx, file.workspaceId);
+
+  if (!opts?.allowWebsiteFile && isWebsiteFileName(file.name)) {
+    const conflict = websiteFileConflict([file], await liveWebsitesOf(ctx.user.id, [file.name]));
+    if (conflict) throw conflict;
+  }
 
   // If the file is publicly served, cut the public exposure NOW (move to the
   // private bucket + purge the Tigris edge) instead of waiting for the 7-day
@@ -1495,7 +1550,11 @@ function buildUpgradeHint(planKey: PlanKey) {
 
 // --- Bulk Delete Files ---
 
-export async function bulkDeleteFiles(ctx: AuthContext, fileIds: string[]) {
+export async function bulkDeleteFiles(
+  ctx: AuthContext,
+  fileIds: string[],
+  opts?: { allowWebsiteFile?: boolean }
+) {
   requireScope(ctx, "DELETE");
 
   if (fileIds.length === 0 || fileIds.length > 100) {
@@ -1512,6 +1571,12 @@ export async function bulkDeleteFiles(ctx: AuthContext, fileIds: string[]) {
 
   if (files.length === 0) {
     return { deleted: 0, ids: [] };
+  }
+
+  // Todo o nada: si uno respalda un sitio vivo, no se borra ninguno.
+  if (!opts?.allowWebsiteFile) {
+    const conflict = websiteFileConflict(files, await liveWebsitesOf(ctx.user.id, files.map((f) => f.name)));
+    if (conflict) throw conflict;
   }
 
   await db.file.updateMany({

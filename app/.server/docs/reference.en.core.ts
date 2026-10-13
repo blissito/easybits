@@ -144,8 +144,9 @@ export const EN_FILES = `## Files
 
 ### List files
 \`GET /files\`
-Query: \`limit?\` (default 50), \`cursor?\`, \`assetId?\`
+Query: \`limit?\` (default 50), \`cursor?\`, \`assetId?\`, \`includeWebsiteFiles?\` (default false)
 Returns: \`{ items: File[], nextCursor?: string }\`
+Website/document/presentation files (\`sites/<websiteId>/…\`) are excluded unless \`includeWebsiteFiles=true\`; list them with \`GET /websites/:websiteId/files\`.
 SDK: \`eb.listFiles({ limit?, cursor?, assetId? })\`
 
 ### Upload file
@@ -169,6 +170,7 @@ SDK: \`eb.updateFile(fileId, { name?, access?, metadata? })\`
 ### Delete file
 \`DELETE /files/:fileId\`
 Soft-deletes (status → DELETED). Recoverable for 7 days.
+Returns 409 \`WEBSITE_FILE\` if the file backs a published website (same for \`POST /files/bulk-delete\`, all-or-nothing): manage those through the website endpoints.
 SDK: \`eb.deleteFile(fileId)\`
 
 ### Restore file

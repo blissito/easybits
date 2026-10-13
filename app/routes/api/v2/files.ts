@@ -29,7 +29,9 @@ export async function loader({ request }: Route.LoaderArgs) {
     return Response.json(result);
   }
 
-  const result = await listFiles(ctx, { assetId, limit, cursor });
+  // Los archivos de sitios (`sites/…`) sólo con opt-in explícito.
+  const includeWebsiteFiles = ["1", "true"].includes(url.searchParams.get("includeWebsiteFiles") ?? "");
+  const result = await listFiles(ctx, { assetId, limit, cursor, includeWebsiteFiles });
   return Response.json(result);
 }
 
