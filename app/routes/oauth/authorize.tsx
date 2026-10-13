@@ -170,8 +170,8 @@ export default function OauthAuthorize() {
             <BrandLogo size="hero" />
           </div>
           <h1 className="text-2xl font-bold tracking-tight">No se pudo conectar la aplicación</h1>
-          <p className="mt-4 text-tale">{data.description}</p>
-          <p className="mt-2 text-sm text-tale font-mono">{data.oauthError}</p>
+          <p className="mt-4 text-white/80">{data.description}</p>
+          <p className="mt-2 text-sm text-white/60 font-mono">{data.oauthError}</p>
         </div>
       </main>
     );
@@ -185,25 +185,38 @@ export default function OauthAuthorize() {
         <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-center">
           {data.clientName} quiere usar tu cuenta de EasyBits
         </h1>
-        <p className="mt-4 text-tale text-center">
-          Es una aplicación externa. Al permitirlo podrá usar las herramientas de EasyBits
-          con tu cuenta (<span className="text-white">{data.email}</span>): leer y crear
-          archivos, documentos, bases de datos, sitios y cajas de cómputo, y borrar lo que
-          le pidas.
+        <p className="mt-4 text-center">
+          <span className="inline-block rounded-full border-2 border-white/30 px-3 py-1 text-sm text-white">
+            {data.email}
+          </span>
         </p>
-        <p className="mt-4 text-sm text-tale text-center">
-          Regresarás a <span className="font-mono text-white">{data.returnHost}</span>. Puedes
-          quitarle el acceso cuando quieras en tu panel de EasyBits (Developer → Claude.ai →
-          Apps conectadas).
+        <p className="mt-6 text-white/90 text-center">
+          Podrá leer, crear y borrar tus archivos, documentos, bases de datos, sitios y cajas.
+        </p>
+        <p className="mt-3 text-sm text-white/70 text-center">
+          Vuelves a <span className="font-mono text-white">{data.returnHost}</span>. Lo
+          desconectas cuando quieras en Developer → Claude.ai.
         </p>
         <Form method="post" reloadDocument className="mt-8 flex flex-wrap justify-center gap-3">
           {Object.entries(data.hidden).map(([k, v]) => (
             <input key={k} type="hidden" name={k} value={v} />
           ))}
-          <BrutalButton type="submit" name="decision" value="deny" mode="ghost">
+          <BrutalButton
+            type="submit"
+            name="decision"
+            value="deny"
+            containerClassName="bg-white"
+            className="bg-black text-white border-white"
+          >
             Cancelar
           </BrutalButton>
-          <BrutalButton type="submit" name="decision" value="approve">
+          <BrutalButton
+            type="submit"
+            name="decision"
+            value="approve"
+            containerClassName="bg-white"
+            className="text-black border-white"
+          >
             Permitir
           </BrutalButton>
         </Form>
