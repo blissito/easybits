@@ -1,0 +1,45 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "easybits",
+  "version": "1.0.0",
+  "description": "Create documents, PDFs and websites, manage your files and SQL databases, and research the web from ChatGPT.",
+  "author": {
+    "name": "EasyBits",
+    "email": "soporte@easybits.cloud",
+    "url": "https://www.easybits.cloud"
+  },
+  "homepage": "https://www.easybits.cloud",
+  "keywords": [
+    "documents",
+    "pdf",
+    "websites",
+    "files",
+    "databases"
+  ],
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "EasyBits",
+        "shortDescription": "Docs, sites, files and data",
+        "longDescription": "EasyBits (easybits.cloud) is a cloud workspace for AI agents. This app gives ChatGPT your EasyBits account: upload and organize files served from a CDN, create and edit multi-page documents and export them as PDF, publish websites and landing pages with your brand kit, collect submissions with forms, and keep structured data in SQLite databases you can query with SQL. It can also search the web, read pages and extract structured records. Everything is saved in your account, so you can share it with a link or keep editing it in EasyBits. Sign-in uses your EasyBits account through OAuth; the app only sees what your account sees, and you can disconnect it at any time.",
+        "developerName": "EasyBits",
+        "category": "Productivity",
+        "capabilities": [
+          "Read",
+          "Write"
+        ],
+        "websiteURL": "https://www.easybits.cloud",
+        "supportURL": "https://www.easybits.cloud/en/docs",
+        "privacyPolicyURL": "https://www.easybits.cloud/aviso-de-privacidad/",
+        "termsOfServiceURL": "https://www.easybits.cloud/terminos-y-condiciones/",
+        "defaultPrompt": [
+          "List my EasyBits files",
+          "Create a database with my customers from this CSV and show the top 10",
+          "Make a one-page PDF flyer with my brand kit"
+        ],
+        "composerIcon": "./assets/icon.png",
+        "logo": "./assets/icon.png"
+      }
+    }
+  }
+}
