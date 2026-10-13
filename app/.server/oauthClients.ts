@@ -34,10 +34,12 @@ export async function findOAuthClient(clientId: string) {
  *
  * Match EXACTO contra lo registrado, con una sola excepción: el loopback de una app nativa
  * (RFC 8252 §7.3). Ahí el puerto lo elige la app al vuelo, así que se registra con `*`
- * (`http://127.0.0.1:*\/cb`) y se compara todo MENOS el puerto. Sólo 127.0.0.1 / [::1]
- * (`localhost` puede resolverse a otra cosa), mismo path y sin query ni fragmento: un
- * match más laxo convierte el authorize en un open-redirect que entrega el code.
+ * (`http://127.0.0.1:*\/cb`) y se compara todo MENOS el puerto. Mismo host loopback que el
+ * registrado (`localhost` sólo si se registró `localhost`), mismo path y sin query ni
+ * fragmento: un match más laxo convierte el authorize en un open-redirect que entrega el code.
  */
+const LOOPBACK_HOSTS = new Set(["127.0.0.1", "[::1]", "localhost"]);
+
 export function isRedirectAllowed(registered: string[], redirectUri: string): boolean {
   if (!redirectUri) return false;
   if (registered.includes(redirectUri)) return true;
@@ -47,7 +49,18 @@ export function isRedirectAllowed(registered: string[], redirectUri: string): bo
   } catch {
     return false;
   }
-  if (u.protocol !== "http:" || (u.hostname !== "127.0.0.1" && u.hostname !== "[::1]")) return false;
+  if (u.protocol !== "http:" || !LOOPBACK_HOSTS.has(u.hostname)) return false;
   if (u.search || u.hash || u.username || u.password) return false;
-  return registered.includes(`http://${u.hostname}:*${u.pathname}`);
+  if (registered.includes(`http://${u.hostname}:*${u.pathname}`)) return true;
+  // Un cliente DCR (Claude Code, MCP Inspector) registra su loopback con el puerto de ESE
+  // arranque y en el siguiente vuelve con otro: vale si el registrado es el mismo host
+  // loopback y el mismo path, cambie o no el puerto.
+  return registered.some((r) => {
+    try {
+      const reg = new URL(r);
+      return reg.protocol === "http:" && reg.hostname === u.hostname && reg.pathname === u.pathname && !reg.search;
+    } catch {
+      return false;
+    }
+  });
 }

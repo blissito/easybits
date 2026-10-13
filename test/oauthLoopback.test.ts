@@ -34,7 +34,8 @@ describe("isRedirectAllowed", () => {
     const dcr = ["http://127.0.0.1:33418/callback", "https://claude.ai/api/mcp/auth_callback"];
     expect(isRedirectAllowed(dcr, "http://127.0.0.1:33418/callback")).toBe(true);
     expect(isRedirectAllowed(dcr, "https://claude.ai/api/mcp/auth_callback")).toBe(true);
-    // Sin `*` registrado no hay comodín de puerto.
-    expect(isRedirectAllowed(dcr, "http://127.0.0.1:40000/callback")).toBe(false);
+    // RFC 8252 §7.3: en loopback el puerto no cuenta (Claude Code vuelve con otro).
+    expect(isRedirectAllowed(dcr, "http://127.0.0.1:40000/callback")).toBe(true);
+    expect(isRedirectAllowed(dcr, "http://127.0.0.1:40000/otro")).toBe(false);
   });
 });

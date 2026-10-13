@@ -1,4 +1,4 @@
-import { Form, redirect, useLoaderData } from "react-router";
+import { Form, data, redirect, useLoaderData } from "react-router";
 import { BrandLogo } from "~/components/common/BrandLogo";
 import { BrutalButton } from "~/components/common/BrutalButton";
 import { db } from "~/.server/db";
@@ -47,20 +47,24 @@ function readParams(source: URLSearchParams | FormData): Params | null {
   return params;
 }
 
-/** Valida cliente, redirect, PKCE y resource. Devuelve el error como Response o el cliente. */
+// Error ANTES de confiar en el redirect: se pinta aquí con su 400. (Un `Response.json`
+// devuelto desde el loader de una ruta con componente salía como 500 «Unexpected Server Error».)
+function errorPage(error: string, description: string) {
+  return data({ oauthError: error, description }, { status: 400 });
+}
+
+/** Valida cliente, redirect, PKCE y resource. Devuelve el error o el cliente. */
 async function validate(params: Params | null, responseType: string | null, resource: string | null) {
   if (!params || responseType !== "code") {
-    return { error: Response.json({ error: "invalid_request" }, { status: 400 }) };
+    return { error: errorPage("invalid_request", "Faltan parámetros o response_type no es «code».") };
   }
   if (params.codeChallengeMethod !== "S256") {
-    return {
-      error: Response.json({ error: "invalid_request", error_description: "only S256 supported" }, { status: 400 }),
-    };
+    return { error: errorPage("invalid_request", "Sólo se acepta PKCE S256.") };
   }
   const client = await findOAuthClient(params.clientId);
-  if (!client) return { error: Response.json({ error: "invalid_client" }, { status: 400 }) };
+  if (!client) return { error: errorPage("invalid_client", "Esta aplicación no está registrada.") };
   if (!isRedirectAllowed(client.redirectUris, params.redirectUri)) {
-    return { error: Response.json({ error: "invalid_redirect_uri" }, { status: 400 }) };
+    return { error: errorPage("invalid_redirect_uri", "La dirección de regreso no coincide con la registrada.") };
   }
   // A partir de aquí el redirect es de confianza: los errores viajan al cliente.
   if (!isOwnResource(resource)) {
@@ -153,7 +157,23 @@ export default function OauthAuthorize() {
     returnHost: string;
     email: string;
     hidden: Record<string, string>;
+    oauthError?: string;
+    description?: string;
   };
+  if (data.oauthError) {
+    return (
+      <main className="min-h-svh bg-black text-white grid place-items-center px-6 py-10">
+        <div className="max-w-md w-full text-center">
+          <div className="flex justify-center mb-6">
+            <BrandLogo size="hero" />
+          </div>
+          <h1 className="text-2xl font-bold tracking-tight">No se pudo conectar la aplicación</h1>
+          <p className="mt-4 text-tale">{data.description}</p>
+          <p className="mt-2 text-sm text-tale font-mono">{data.oauthError}</p>
+        </div>
+      </main>
+    );
+  }
   return (
     <main className="min-h-svh bg-black text-white grid place-items-center px-6 py-10">
       <div className="max-w-md w-full">
