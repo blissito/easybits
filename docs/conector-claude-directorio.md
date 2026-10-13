@@ -2,7 +2,9 @@
 
 URL que se envía al portal (claude.ai/directory/manage): **`https://www.easybits.cloud/api/mcp/claude`**.
 Es el toolset strict `claude` (`CLAUDE_DIRECTORY_ALLOWLIST` en `app/.server/mcp/toolGroups.ts`).
-La URL de siempre (`/api/mcp`, toolsets y llaves `eb_…`) no cambia para nadie.
+La URL de siempre (`/api/mcp`, toolsets y llaves `eb_…`) no cambia para nadie. El catálogo completo es
+`/api/mcp/all` (mismo OAuth, metadata propia); se documenta en `/docs#claude` → «URL completa» y
+**no** se envía ni se menciona en el portal. App de ChatGPT: [chatgpt-app-directorio.md](chatgpt-app-directorio.md).
 
 ## Piezas
 

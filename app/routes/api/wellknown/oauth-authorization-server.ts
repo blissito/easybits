@@ -13,6 +13,8 @@ export async function loader() {
     response_types_supported: ["code"],
     grant_types_supported: ["authorization_code", "refresh_token"],
     code_challenge_methods_supported: ["S256"],
+    // RFC 9207: toda vuelta del authorize lleva `iss` (ChatGPT lo pide para su redirect fijo).
+    authorization_response_iss_parameter_supported: true,
     token_endpoint_auth_methods_supported: ["client_secret_post", "none"],
     scopes_supported: ["mcp"],
     service_documentation: `${BASE_URL}/en/docs#claude`,

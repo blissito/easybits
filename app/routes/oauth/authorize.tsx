@@ -77,6 +77,8 @@ function redirectBack(params: Params, query: Record<string, string>) {
   const url = new URL(params.redirectUri);
   for (const [k, v] of Object.entries(query)) url.searchParams.set(k, v);
   if (params.state) url.searchParams.set("state", params.state);
+  // RFC 9207: el cliente comprueba que el code (o el error) viene de este servidor.
+  url.searchParams.set("iss", BASE_URL);
   return redirect(url.toString());
 }
 

@@ -24,7 +24,7 @@ const SECTIONS: Record<string, string> = {
 
 Conecta EasyBits a Claude (claude.ai, Claude Desktop, Claude Code) o a cualquier cliente MCP con OAuth, sin copiar llaves.
 
-**URL del conector:** \`https://www.easybits.cloud/api/mcp/claude\` — la del directorio de conectores de Claude. Si quieres el catálogo completo (cajas, flota, video, hosting), agrega como conector personalizado \`https://www.easybits.cloud/api/mcp\` o un toolset (\`/api/mcp/sandbox\`, \`/api/mcp/docs\`; ver \`tool-groups\`).
+**URL del conector:** \`https://www.easybits.cloud/api/mcp/claude\` — la del directorio de conectores de Claude. Para el catálogo completo ve «URL completa» abajo.
 
 ### Conectar
 1. En Claude: **Ajustes → Conectores → Agregar conector personalizado** y pega la URL.
@@ -38,6 +38,14 @@ En Claude Code: \`claude mcp add --transport http easybits https://www.easybits.
 Con \`/api/mcp/claude\`: archivos y CDN, documentos y PDFs, sitios publicados, formularios, brand kits, bases de datos SQL e investigación web (buscar, leer y extraer páginas). Cada herramienta declara \`readOnlyHint\` o \`destructiveHint\`: las que borran o sobrescriben piden confirmación en Claude.
 
 Lo que esa URL **no** trae: generar imágenes, video o voz con IA, links de pago y hosting, secretos y webhooks, cajas de cómputo y agentes de la flota. Tampoco se alcanzan por \`run_tool\`.
+
+### URL completa
+\`https://www.easybits.cloud/api/mcp/all\` trae **todas** las herramientas: cajas de cómputo, agentes de la flota, imagen, video y voz, hosting, pagos, correo y secretos. Misma cuenta y mismo OAuth (con su propia metadata de recurso en \`/.well-known/oauth-protected-resource/api/mcp/all\`). No está en el directorio: conéctala a mano por URL.
+- **Claude** (claude.ai o Desktop): Ajustes → Conectores → Agregar conector personalizado → pega la URL.
+- **Claude Code:** \`claude mcp add --transport http easybits https://www.easybits.cloud/api/mcp/all\` y \`/mcp\` para autorizar.
+- **Managed Agents:** agrega el servidor MCP por URL y guarda la autorización OAuth en un vault.
+
+También puedes pedir sólo un grupo (\`/api/mcp/sandbox\`, \`/api/mcp/docs\`…; ver \`tool-groups\`) o usar una llave de API en \`Authorization: Bearer\`.
 
 Ejemplos:
 - «Sube este CSV a una base de datos de EasyBits y dime los 10 clientes con más compras.»

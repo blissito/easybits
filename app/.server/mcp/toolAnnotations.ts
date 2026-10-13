@@ -106,9 +106,10 @@ const NOT_READ_ONLY = new Set([
 const READ_ONLY_PATTERN = /^(list|get|search|describe)_|_(list|status)$/;
 /** Prefijos/fragmentos que destruyen. */
 const DESTRUCTIVE_PATTERN = /(^|_)(delete|destroy|revoke|remove|unpublish|unexpose)(_|$)|^update_|^edit_/;
-/** Tocan sistemas fuera de EasyBits (internet, correo, otros servicios). */
+/** Tocan sistemas fuera de EasyBits (internet, correo, otros servicios) o publican algo que
+ * cualquiera puede abrir (deploy, liga para compartir, formulario público). */
 const OPEN_WORLD_PATTERN =
-  /^(web_|research_|screenshot_url|audit_page|send_|create_broadcast|extract_brand_kit_from_url|sandbox_git_|sandbox_domain_|search_stock_photo|search_icon|ghosty_spawn|goose_spawn|agent_|call_)/;
+  /^(web_|research_|screenshot_url|audit_page|send_|create_broadcast|extract_brand_kit_from_url|sandbox_git_|sandbox_domain_|search_stock_photo|search_icon|ghosty_spawn|goose_spawn|agent_|call_|deploy_|create_share_link$|create_form$)/;
 
 const ACRONYMS: Record<string, string> = {
   ai: "AI",

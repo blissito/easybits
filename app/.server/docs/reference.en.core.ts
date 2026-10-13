@@ -373,7 +373,7 @@ export const EN_CLAUDE = `## Claude connector
 
 Connect EasyBits to Claude (claude.ai, Claude Desktop, Claude Code) or any OAuth-capable MCP client, without copying keys.
 
-**Connector URL:** \`https://www.easybits.cloud/api/mcp/claude\`, the one listed in Claude's connectors directory. For the full catalog (sandboxes, fleet, video, hosting), add \`https://www.easybits.cloud/api/mcp\` or a toolset (\`/api/mcp/sandbox\`, \`/api/mcp/docs\`; see \`tool-groups\`) as a custom connector.
+**Connector URL:** \`https://www.easybits.cloud/api/mcp/claude\`, the one listed in Claude's connectors directory. For the full catalog see "Full URL" below.
 
 ### Connect
 1. In Claude: **Settings → Connectors → Add custom connector** and paste the URL.
@@ -387,6 +387,14 @@ In Claude Code: \`claude mcp add --transport http easybits https://www.easybits.
 With \`/api/mcp/claude\`: files and CDN, documents and PDFs, published websites, forms, brand kits, SQL databases and web research (search, read and extract pages). Every tool declares \`readOnlyHint\` or \`destructiveHint\`: tools that delete or overwrite ask for confirmation in Claude.
 
 What that URL does **not** include: AI image, video or voice generation, payment links and hosting, secrets and webhooks, compute sandboxes and fleet agents. They are not reachable through \`run_tool\` either.
+
+### Full URL
+\`https://www.easybits.cloud/api/mcp/all\` exposes **every** tool: compute sandboxes, fleet agents, image, video and voice, hosting, payments, email and secrets. Same account and same OAuth (with its own resource metadata at \`/.well-known/oauth-protected-resource/api/mcp/all\`). It is not in the directory: connect it by URL.
+- **Claude** (claude.ai or Desktop): Settings → Connectors → Add custom connector → paste the URL.
+- **Claude Code:** \`claude mcp add --transport http easybits https://www.easybits.cloud/api/mcp/all\`, then \`/mcp\` to authorize.
+- **Managed Agents:** add the MCP server by URL and store the OAuth authorization in a vault.
+
+You can also request a single group (\`/api/mcp/sandbox\`, \`/api/mcp/docs\`…; see \`tool-groups\`) or use an API key in \`Authorization: Bearer\`.
 
 Examples:
 - "Upload this CSV to an EasyBits database and tell me the top 10 customers by purchases."
