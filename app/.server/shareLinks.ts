@@ -220,7 +220,8 @@ export async function listShareLinks(input: {
   const where: Prisma.ShareLinkWhereInput = { ownerId: input.ownerId };
   if (input.resourceType) where.resourceType = input.resourceType;
   if (input.resourceId) where.resourceId = input.resourceId;
-  if (!input.includeRevoked) where.revokedAt = null;
+  // Mongo: un campo nunca escrito no es `null` para Prisma; sin el isSet la lista salía vacía.
+  if (!input.includeRevoked) where.OR = [{ revokedAt: null }, { revokedAt: { isSet: false } }];
   return db.shareLink.findMany({
     where,
     orderBy: { createdAt: "desc" },

@@ -4742,7 +4742,8 @@ The template generates a dark-themed multi-page scorecard with: domain header, o
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await reorderPages(ctx, params.documentId, params.pageIds);
       const auto = params.autoDeploy !== false ? await autoDeployIfPublished(ctx, params.documentId) : { autoDeployed: false as const };
-      return { content: [{ type: "text", text: JSON.stringify({ ...result, ...auto }, null, 2) }] };
+      // reorderPages devuelve un arreglo: esparcirlo daba {"0":…,"1":…}.
+      return { content: [{ type: "text", text: JSON.stringify({ pages: result, ...auto }, null, 2) }] };
     })
   );
 

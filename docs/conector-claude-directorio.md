@@ -53,15 +53,37 @@ agrega al allowlist y se revisa contra la política del directorio.
 
 ## Instrucciones para revisores (sin contraseñas)
 
+Cuenta de revisión con datos de muestra: **`claude-review@easybits.cloud`**. La contraseña NO va en
+el repo: se pega a mano en el campo de credenciales del portal (la tiene bliss en
+`~/easybits-reviewer.txt`, 0600). Script que la crea o rota: `scripts/seed-claude-reviewer.ts`.
+
 1. En Claude: Settings → Connectors → Add custom connector → `https://www.easybits.cloud/api/mcp/claude`.
-2. Claude abre EasyBits: entra con Google o crea una cuenta gratis con tu correo (liga mágica, sin contraseña).
-3. En la pantalla de consentimiento pulsa **Allow**.
-4. Prueba: «List my EasyBits files», «Create a database called demo with a customers table, insert 3 rows and query them», «Create a one-page document titled Hello and export it as PDF».
-5. Si necesitan una cuenta con datos de muestra, la sembramos a su correo de revisión: escribir a soporte@easybits.cloud.
+2. Claude abre EasyBits. Si no hay sesión, entrar en **https://www.easybits.cloud/login/revisor** con el
+   correo y la contraseña de arriba (sólo cuentas de revisión; las demás entran con Google o liga
+   mágica) y volver a pulsar Connect.
+3. En la pantalla de consentimiento pulsa **Permitir**.
+4. Datos que ya tiene la cuenta: archivos `customers-sample.csv` y `sample-gradient.png`, el documento
+   «Quarterly sales summary (sample)», la base `sample_store` (tabla `customers`), el sitio
+   «Sample site (EasyBits demo)» (`/s/claude-review-sample/`) con el formulario «Contact» y un envío de
+   muestra, y el brand kit «Sample brand» (default).
+5. Prompts sugeridos: «List my EasyBits files», «Query sample_store: top 3 customers by total_purchases»,
+   «Show the submissions of my Contact form», «Create a one-page document titled Hello with my default
+   brand kit and export it as PDF».
+
+La cuenta está en plan gratis (Byte): ninguna tool del toolset `claude` cobra ni manda correo a
+terceros (el aviso de envío de formulario sólo llega al dueño, que es esta misma cuenta).
+
+### Self-test (2026-10-13)
+
+Flujo OAuth real (login de revisor → DCR → PKCE S256 → `resource=/api/mcp/claude`), `initialize`,
+`tools/list` (81) y `tools/call` de las 81 tools en prod; las destructivas sobre recursos creados en
+la misma prueba. Arreglado de paso: `list_share_links` salía vacío sin `includeRevoked` (Mongo:
+campo sin escribir ≠ `null`), `reorder_pages` devolvía `{"0":…,"1":…}` y
+`extract_brand_kit_from_url` guardaba `logoUrl: "data:text/plain;base64,"` cuando el candidato no era
+imagen. Token revocado al final (401) y cliente DCR temporal borrado.
 
 ## Pendiente
 
-- Cuenta de revisor con datos de muestra (archivos, una base y un documento).
 - Probar como conector propio en claude.ai y en MCP Inspector.
 - Envío en el portal (lo hace bliss: casillas legales).
 - Si se republica el registro MCP (`server.json`), decidir si el listado apunta a `/api/mcp/claude`.

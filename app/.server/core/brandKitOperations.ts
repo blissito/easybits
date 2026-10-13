@@ -483,7 +483,8 @@ export async function extractFromUrl(
       if (res.ok) {
         const ct = (res.headers.get("content-type") || "image/png").split(";")[0].trim();
         const buf = Buffer.from(await res.arrayBuffer());
-        dataUrl = `data:${ct};base64,${buf.toString("base64")}`;
+        // Sólo imágenes con bytes: un text/html o un cuerpo vacío dejaba el kit con «data:text/plain;base64,».
+        if (ct.startsWith("image/") && buf.length > 0) dataUrl = `data:${ct};base64,${buf.toString("base64")}`;
       }
     } else if (candidate?.kind === "svg") {
       const svg = candidate.value;
@@ -511,6 +512,7 @@ export async function extractFromUrl(
       dataUrl = `data:image/png;base64,${cropped.toString("base64")}`;
     }
     if (dataUrl) logoUrl = await uploadLogoToStorage(dataUrl, userId);
+    if (logoUrl?.startsWith("data:")) logoUrl = undefined;
   } catch {
     // Best-effort; leave logoUrl undefined if upload fails.
   }
