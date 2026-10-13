@@ -666,14 +666,15 @@ export const EMAIL_ALLOWLIST = new Set<string>([
  */
 export const CLAUDE_DIRECTORY_ALLOWLIST = new Set<string>([
   // Archivos (transform/optimize son recortes y compresión deterministas, no IA generativa)
-  "list_files", "get_file", "search_files", "upload_file", "duplicate_file",
+  "list_files", "get_file", "search_files", "upload_file", "update_file", "duplicate_file",
   "delete_file", "restore_file", "list_deleted_files",
   "transform_image", "optimize_image", "describe_image",
   "create_share_link", "list_share_links", "revoke_share_link",
   // Documentos
   "get_docs", "list_documents", "get_document", "create_document", "update_document", "delete_document",
   "duplicate_document", "add_page", "delete_page", "reorder_pages",
-  "get_page_html", "set_page_html", "get_section_html", "set_section_html",
+  "get_page_html", "set_page_html", "replace_html", "get_section_html", "set_section_html",
+  "pdf_to_images", "regenerate_document_page",
   "get_node_outline", "patch_node", "structured_doc", "change_document_format", "apply_brand_kit",
   "wait_for_document", "get_page_screenshot", "get_document_pdf", "export_document",
   "deploy_document", "unpublish_document",
@@ -693,6 +694,23 @@ export const CLAUDE_DIRECTORY_ALLOWLIST = new Set<string>([
   // Cuenta
   "get_usage_stats",
 ]);
+
+/**
+ * Retoques de descripción SÓLO en `/api/mcp/claude`: la definición de la tool es una y la
+ * misma, aquí sólo se quita la frase que manda al modelo a una tool que este endpoint no
+ * tiene (generar imágenes, llaves) o que nombra a un proveedor. El directorio lo cuenta como
+ * instrucción a fuentes externas. `test/claudeDirectoryGroup.test.ts` falla si vuelve a pasar.
+ */
+export const CLAUDE_DIRECTORY_DESCRIPTION_EDITS: Record<string, Array<[string, string]>> = {
+  search_files: [["Requires an AI key (set_ai_key).", "Requires an AI key configured in the EasyBits dashboard."]],
+  create_document: [[" TIP: For quotations/invoices use create_quotation — single-step tool.", ""]],
+  describe_image: [
+    [" Usa gemini-2.5-flash (vision).", ""],
+    [", describir un asset antes de editarlo con edit_image.", "."],
+  ],
+  search_stock_photo: [[" (para generar usa `create_or_edit_image`)", ""]],
+  search_icon: [["; para ilustraciones generadas, `create_or_edit_image`.", "."]],
+};
 
 export const PUBLIC_SAFE_ALLOWLIST = new Set<string>([
   "upload_file",

@@ -60,4 +60,27 @@ describe("toolset claude — directorio de conectores", () => {
     const v = visibles(["claude", "all"]);
     expect(v.has("create_or_edit_image")).toBe(false);
   });
+
+  it("ninguna descripción manda a una tool que este endpoint no tiene ni nombra proveedores", async () => {
+    const todas = Object.keys(getRegisteredTools(createMcpServer(["all"])));
+    const server = createMcpServer(["claude"]);
+    const list = (server.server as any)._requestHandlers.get("tools/list");
+    const { tools } = await list({ method: "tools/list", params: {} }, {});
+    const aqui = new Set<string>(tools.map((t: { name: string }) => t.name));
+    const ajenas = todas.filter((n) => !aqui.has(n));
+    const ajena = new RegExp(`\\b(${ajenas.join("|")})\\b`);
+    const proveedor = /gemini|gpt-image|openai|fal\.ai|runway|kokoro|elevenlabs/i;
+    const malas: string[] = [];
+    for (const t of tools) {
+      const texto = JSON.stringify({ d: t.description, s: t.inputSchema });
+      const m = texto.match(ajena) ?? texto.match(proveedor);
+      if (m) malas.push(`${t.name} → ${m[0]}`);
+    }
+    expect(malas).toEqual([]);
+  });
+
+  it("la URL completa (`all`) conserva las descripciones originales", () => {
+    const all = getRegisteredTools(createMcpServer(["all"])) as Record<string, { description?: string }>;
+    expect(all["search_icon"].description).toContain("create_or_edit_image");
+  });
 });

@@ -27,7 +27,7 @@ import { MAX_SANDBOX_TTL_SECONDS } from "../../lib/plans";
 import { filePreviewHtml, fileUploadHtml, fileListHtml } from "./apps/html";
 import { registerStructuredDocTool } from "./structured/tool";
 import { applyToolAnnotations } from "./toolAnnotations";
-import { GROUP_ALLOWLISTS, GROUP_HIDDEN_SCOPE, DYNAMIC_ONLY_TOOLS, TOOL_GROUPS, isStrictGroup, type ToolGroupKey } from "./toolGroups";
+import { CLAUDE_DIRECTORY_DESCRIPTION_EDITS, GROUP_ALLOWLISTS, GROUP_HIDDEN_SCOPE, DYNAMIC_ONLY_TOOLS, TOOL_GROUPS, isStrictGroup, type ToolGroupKey } from "./toolGroups";
 import { importHtml, type ImportHtmlInput } from "./tools/importHtml";
 import { safeImageBlock } from "./safeImageBlock";
 import { offloadOversizedRead } from "./offloadOversizedRead";
@@ -610,6 +610,16 @@ export function createMcpServer(groups?: string[], denyTools?: string[]) {
     for (const name of denySet) {
       const tool = all[name];
       if (tool && typeof tool.disable === "function") tool.disable();
+    }
+  }
+
+  // `/api/mcp/claude`: misma tool, descripción sin pistas hacia lo que ahí no existe.
+  if (enabled.has("claude")) {
+    const all = (server as any)._registeredTools as Record<string, { description?: string }>;
+    for (const [name, edits] of Object.entries(CLAUDE_DIRECTORY_DESCRIPTION_EDITS)) {
+      const tool = all[name];
+      if (!tool?.description) continue;
+      for (const [from, to] of edits) tool.description = tool.description.replace(from, to);
     }
   }
 
