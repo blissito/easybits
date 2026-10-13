@@ -135,9 +135,10 @@ const Content = () => {
           aplicación el resultado de cada herramienta que invoca; no le envía
           su contraseña ni sus llaves de API, y los tokens de acceso caducan en
           una hora. El tratamiento que esa aplicación haga de la información se
-          rige por su propio aviso de privacidad. Puede retirar el acceso
-          desconectando la aplicación en cualquier momento o escribiendo a
-          soporte@easybits.cloud.
+          rige por su propio aviso de privacidad. Puede retirar el acceso en
+          cualquier momento desde su panel (Developer → Claude.ai → Apps
+          conectadas), desconectando la aplicación o escribiendo a
+          soporte@easybits.cloud; el acceso se corta al instante.
         </p>
         <p className="my-4">
           When you connect an external app (for example Claude, by Anthropic)
@@ -148,8 +149,9 @@ const Content = () => {
           to that app the result of each tool it calls; it never shares your
           password or API keys, and access tokens expire after one hour. The
           app&apos;s own handling of that data is governed by its privacy
-          policy. You can revoke access at any time by disconnecting the app or
-          by writing to soporte@easybits.cloud.
+          policy. You can revoke access at any time from your dashboard (Developer
+          → Claude.ai → Connected apps), by disconnecting the app, or by
+          writing to soporte@easybits.cloud; access stops immediately.
         </p>
         <h3 className="font-title font-bold text-2xl text-brand_dark mt-6">
           6. Derechos ARCO

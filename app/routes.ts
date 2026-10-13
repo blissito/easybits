@@ -560,6 +560,7 @@ export default [
   route("/oauth/register", "routes/api/oauth/register.ts"),
   route("/oauth/authorize", "routes/oauth/authorize.tsx"),
   route("/oauth/token", "routes/api/oauth/token.ts"),
+  route("/oauth/revoke", "routes/api/oauth/revoke.ts"),
 
   // Skills instalables: `npx skills add https://easybits.cloud` (RFC 8615). Alias agent-skills.
   // RFC 9727 y SEP-2127: catálogo de APIs y tarjeta del MCP (Agent Readiness).

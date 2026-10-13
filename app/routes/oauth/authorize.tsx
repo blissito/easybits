@@ -170,8 +170,9 @@ export default function OauthAuthorize() {
           le pidas.
         </p>
         <p className="mt-4 text-sm text-tale text-center">
-          Regresarás a <span className="font-mono text-white">{data.returnHost}</span>. Para
-          quitarle el acceso, desconéctala desde esa aplicación.
+          Regresarás a <span className="font-mono text-white">{data.returnHost}</span>. Puedes
+          quitarle el acceso cuando quieras en tu panel de EasyBits (Developer → Claude.ai →
+          Apps conectadas).
         </p>
         <Form method="post" reloadDocument className="mt-8 flex flex-wrap justify-center gap-3">
           {Object.entries(data.hidden).map(([k, v]) => (

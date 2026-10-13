@@ -49,7 +49,7 @@ Ejemplos:
 - \`resource\` (RFC 8707) validado en authorize y token: sólo se emiten tokens para este MCP (\`invalid_target\` si no).
 - Toda aplicación registrada por DCR pasa por la pantalla de consentimiento; los redirects son https o loopback y se comparan exactos.
 - Access token de 1 hora y refresh token de un solo uso (rotación).
-- El conector ve sólo lo que tu cuenta ve. Para quitarle el acceso, desconéctalo en Claude.
+- El conector ve sólo lo que tu cuenta ve. Para quitarle el acceso: **Panel → Developer → Claude.ai → Apps conectadas** (corta el acceso al instante), o desconéctalo en Claude. Los clientes pueden revocar con \`POST /oauth/revoke\` (RFC 7009).
 
 ### Endpoints
 | Endpoint | Spec |
@@ -58,6 +58,7 @@ Ejemplos:
 | \`/.well-known/oauth-authorization-server\` | RFC 8414 |
 | \`/oauth/register\` | RFC 7591 |
 | \`/oauth/authorize\`, \`/oauth/token\` | OAuth 2.1 + PKCE |
+| \`/oauth/revoke\` | RFC 7009 |
 
 Sin token, \`POST /api/mcp/claude\` (y cualquier \`/api/mcp…\`) responde \`401\` con \`WWW-Authenticate: Bearer resource_metadata="…"\`.
 

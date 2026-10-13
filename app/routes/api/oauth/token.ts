@@ -86,7 +86,7 @@ export async function action({ request }: { request: Request }) {
   });
 
   const scope = authCode.scope || "mcp";
-  const { token, expiresIn } = issueAccessToken(authCode.userId, scope);
+  const { token, expiresIn } = issueAccessToken(authCode.userId, scope, clientId);
   const refreshToken = await issueRefreshToken(authCode.userId, clientId, scope);
 
   return Response.json({

@@ -673,6 +673,7 @@ ghosty --yolo` },
                     ["/oauth/register", "RFC 7591", "Dynamic Client Registration — https or loopback redirects only; public (PKCE) or client_secret_post"],
                     ["/oauth/authorize", "OAuth 2.1", "User consent + code issuance (PKCE S256 required)"],
                     ["/oauth/token", "OAuth 2.1", "Exchanges code + verifier for a 1-hour JWT access token"],
+                    ["/oauth/revoke", "RFC 7009", "Revokes the whole grant (refresh + access). Users can also disconnect apps in Developer → Claude.ai"],
                   ].map(([endpoint, spec, desc]) => (
                     <tr key={endpoint} className="border-t border-gray-200">
                       <td className="px-4 py-2 font-mono text-xs">{endpoint}</td>

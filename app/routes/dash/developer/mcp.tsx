@@ -1,6 +1,9 @@
-import { useLoaderData } from "react-router";
+import { useFetcher, useLoaderData } from "react-router";
 import { useMemo, useState } from "react";
+import { LuUnplug } from "react-icons/lu";
 import { getUserOrRedirect } from "~/.server/getters";
+import { listConnectedApps, revokeGrant } from "~/.server/oauth";
+import { ConfirmDialog } from "~/components/common/ConfirmDialog";
 import { TOOL_GROUPS, type ToolGroupKey } from "~/.server/mcp/toolGroups";
 import type { Route } from "./+types/mcp";
 
@@ -12,7 +15,7 @@ export const meta = () => [
 ];
 
 export const loader = async ({ request }: Route.LoaderArgs) => {
-  await getUserOrRedirect(request);
+  const user = await getUserOrRedirect(request);
   // Expose the registry metadata (labels, descriptions, recommended flag)
   // to the client. Allowlists stay server-side.
   const groups = TOOL_GROUPS.map(g => ({
@@ -22,7 +25,24 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
     recommended: Boolean(g.recommended),
     toolCount: g.toolCount,
   }));
-  return { groups, baseUrl: MCP_BASE_URL };
+  const apps = (await listConnectedApps(user.id)).map((a) => ({
+    clientId: a.clientId,
+    clientName: a.clientName,
+    connectedAt: a.connectedAt.toISOString(),
+    lastUsedAt: a.lastUsedAt.toISOString(),
+  }));
+  return { groups, baseUrl: MCP_BASE_URL, apps };
+};
+
+// Desconectar = revocar la concesión: sus refresh y, por el `cid`, el access en curso.
+export const action = async ({ request }: Route.ActionArgs) => {
+  const user = await getUserOrRedirect(request);
+  const form = await request.formData();
+  if (form.get("intent") !== "disconnect") return { error: "intent inválido" };
+  const clientId = String(form.get("clientId") || "");
+  if (!clientId) return { error: "falta clientId" };
+  await revokeGrant(user.id, clientId);
+  return { ok: true };
 };
 
 type GroupMeta = {
@@ -34,7 +54,9 @@ type GroupMeta = {
 };
 
 export default function McpPage() {
-  const { groups, baseUrl } = useLoaderData<typeof loader>();
+  const { groups, baseUrl, apps } = useLoaderData<typeof loader>();
+  const fetcher = useFetcher<typeof action>();
+  const [disconnectTarget, setDisconnectTarget] = useState<{ clientId: string; clientName: string } | null>(null);
 
   const initial = (groups.find(g => g.recommended)?.key ?? "core") as ToolGroupKey;
   const [selected, setSelected] = useState<Set<ToolGroupKey>>(new Set([initial]));
@@ -168,6 +190,62 @@ export default function McpPage() {
           <Step n={5}>Listo. Prueba con un prompt tipo: <i>"Crea un documento de 1 página sobre X usando mi brand kit"</i>.</Step>
         </ol>
       </section>
+
+      {/* Apps conectadas */}
+      <section className="mb-8" id="apps-conectadas">
+        <h3 className="text-sm font-bold uppercase tracking-wide mb-3">Apps conectadas</h3>
+        <p className="text-xs text-gray-500 mb-3">
+          Aplicaciones a las que diste acceso a tu cuenta por OAuth (Claude, Claude Code, otros
+          clientes MCP). Desconectar revoca su acceso al instante.
+        </p>
+        {apps.length === 0 ? (
+          <p className="text-sm text-gray-400 border-2 border-dashed border-gray-200 rounded-xl px-4 py-6 text-center">
+            Ninguna app conectada
+          </p>
+        ) : (
+          <ul className="border-2 border-black rounded-xl divide-y divide-gray-200">
+            {apps.map((a) => (
+              <li key={a.clientId} className="flex items-center gap-3 px-4 py-3 text-sm">
+                <div className="min-w-0">
+                  <p className="font-semibold truncate">{a.clientName}</p>
+                  <p className="text-xs text-gray-500">
+                    Conectada el {new Date(a.connectedAt).toLocaleDateString()} · último acceso{" "}
+                    {new Date(a.lastUsedAt).toLocaleString()}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setDisconnectTarget({ clientId: a.clientId, clientName: a.clientName })}
+                  disabled={fetcher.state !== "idle" && fetcher.formData?.get("clientId") === a.clientId}
+                  className="ml-auto text-gray-500 hover:text-red-500 shrink-0 transition-colors disabled:opacity-40"
+                  title={`Desconectar ${a.clientName}`}
+                  aria-label={`Desconectar ${a.clientName}`}
+                >
+                  <LuUnplug className="w-4 h-4" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <ConfirmDialog
+        isOpen={!!disconnectTarget}
+        title="Desconectar app"
+        message={
+          disconnectTarget
+            ? `¿Desconectar «${disconnectTarget.clientName}»? Pierde el acceso a tu cuenta al instante; para volver a usarla tendrás que conectarla otra vez.`
+            : ""
+        }
+        confirmLabel="Desconectar"
+        onConfirm={() => {
+          if (!disconnectTarget) return;
+          fetcher.submit({ intent: "disconnect", clientId: disconnectTarget.clientId }, { method: "post" });
+          setDisconnectTarget(null);
+        }}
+        onCancel={() => setDisconnectTarget(null)}
+        destructive
+      />
 
       {/* FAQ / Gotchas */}
       <section className="mb-8">
