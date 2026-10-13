@@ -20,6 +20,47 @@ export const HOSTING_TIERS_MD = SELLABLE_TIERS.map((k) => {
 }).join("\n");
 
 const SECTIONS: Record<string, string> = {
+  claude: `## Conector de Claude
+
+Conecta EasyBits a Claude (claude.ai, Claude Desktop, Claude Code) o a cualquier cliente MCP con OAuth, sin copiar llaves.
+
+**URL del conector:** \`https://www.easybits.cloud/api/mcp\` (o un toolset: \`/api/mcp/sandbox\`, \`/api/mcp/docs\`; ver \`tool-groups\`).
+
+### Conectar
+1. En Claude: **Ajustes → Conectores → Agregar conector personalizado** y pega la URL.
+2. Claude te manda a EasyBits: inicia sesión (o crea tu cuenta gratis).
+3. La pantalla de consentimiento dice qué aplicación pide acceso y a qué dominio regresas. Pulsa **Permitir**.
+4. Listo: Claude ve las herramientas de tu cuenta.
+
+En Claude Code: \`claude mcp add --transport http easybits https://www.easybits.cloud/api/mcp\` y \`/mcp\` para autorizar.
+
+### Qué puede hacer
+Lo mismo que tu cuenta, a través de herramientas MCP: archivos y CDN, documentos y PDFs, bases de datos SQL, sitios y dominios, cajas de cómputo (sandboxes), búsqueda y lectura web, voz y video. Cada herramienta declara \`readOnlyHint\` o \`destructiveHint\`: las que borran, sobrescriben o ejecutan código piden confirmación en Claude.
+
+Ejemplos:
+- «Sube este CSV a una base de datos de EasyBits y dime los 10 clientes con más compras.»
+- «Crea una caja de Node, clona mi repo y corre los tests.»
+- «Publica esta landing en un sitio de EasyBits y dame la URL.»
+
+### Seguridad
+- OAuth 2.1 con PKCE S256 obligatorio, registro dinámico de clientes (RFC 7591) y metadata descubrible (RFC 8414 y RFC 9728).
+- \`resource\` (RFC 8707) validado en authorize y token: sólo se emiten tokens para este MCP (\`invalid_target\` si no).
+- Toda aplicación registrada por DCR pasa por la pantalla de consentimiento; los redirects son https o loopback y se comparan exactos.
+- Access token de 1 hora y refresh token de un solo uso (rotación).
+- El conector ve sólo lo que tu cuenta ve. Para quitarle el acceso, desconéctalo en Claude.
+
+### Endpoints
+| Endpoint | Spec |
+|---|---|
+| \`/.well-known/oauth-protected-resource/api/mcp\` | RFC 9728 |
+| \`/.well-known/oauth-authorization-server\` | RFC 8414 |
+| \`/oauth/register\` | RFC 7591 |
+| \`/oauth/authorize\`, \`/oauth/token\` | OAuth 2.1 + PKCE |
+
+Sin token, \`POST /api/mcp\` responde \`401\` con \`WWW-Authenticate: Bearer resource_metadata="…"\`.
+
+**Privacidad:** https://www.easybits.cloud/aviso-de-privacidad#aplicaciones-conectadas · **Soporte:** soporte@easybits.cloud
+`,
   quickstart: `## Inicio rápido
 
 **URL base:** \`https://www.easybits.cloud/api/v2\`
@@ -2826,7 +2867,7 @@ export type DocsLocale = "es" | "en";
 
 // Secciones con traducción. Las generadas (tool-groups, all-mcp-tools) se reusan en EN:
 // los nombres de tools son el contrato. Cualquier otra cae al ES con un aviso.
-export const EN_SECTION_KEYS = ["about", "quickstart", "cli", "web", "agents", "eve", "hosting", "databases", "files", "errors", "tool-groups"] as const;
+export const EN_SECTION_KEYS = ["about", "quickstart", "claude", "cli", "web", "agents", "eve", "hosting", "databases", "files", "errors", "tool-groups"] as const;
 
 const HEADER_EN = `# EasyBits API Reference
 

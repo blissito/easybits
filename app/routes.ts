@@ -558,7 +558,7 @@ export default [
   // Cierre del flujo OAuth para clientes MCP: el CLI redirige aquí al terminar.
   route("/oauth/listo", "routes/oauth/listo.tsx"),
   route("/oauth/register", "routes/api/oauth/register.ts"),
-  route("/oauth/authorize", "routes/api/oauth/authorize.ts"),
+  route("/oauth/authorize", "routes/oauth/authorize.tsx"),
   route("/oauth/token", "routes/api/oauth/token.ts"),
 
   // Skills instalables: `npx skills add https://easybits.cloud` (RFC 8615). Alias agent-skills.

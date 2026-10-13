@@ -16,5 +16,8 @@ export async function loader({ request }: { request: Request }) {
     resource: `${BASE_URL}${resourcePath}`,
     authorization_servers: [BASE_URL],
     bearer_methods_supported: ["header"],
+    scopes_supported: ["mcp"],
+    resource_name: "EasyBits",
+    resource_documentation: `${BASE_URL}/en/docs#claude`,
   });
 }

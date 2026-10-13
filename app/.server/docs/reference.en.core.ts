@@ -369,6 +369,48 @@ Query errors come as \`{ "error": "…", "code": "<code>" }\`:
 - Name: alphanumeric, dashes, underscores, max 64 chars
 - Batch: max 20 statements per request
 `;
+export const EN_CLAUDE = `## Claude connector
+
+Connect EasyBits to Claude (claude.ai, Claude Desktop, Claude Code) or any OAuth-capable MCP client, without copying keys.
+
+**Connector URL:** \`https://www.easybits.cloud/api/mcp\` (or a toolset: \`/api/mcp/sandbox\`, \`/api/mcp/docs\`; see \`tool-groups\`).
+
+### Connect
+1. In Claude: **Settings → Connectors → Add custom connector** and paste the URL.
+2. Claude sends you to EasyBits: sign in (or create a free account).
+3. The consent screen shows which app is asking for access and which domain you will return to. Click **Allow**.
+4. Done: Claude can see your account's tools.
+
+In Claude Code: \`claude mcp add --transport http easybits https://www.easybits.cloud/api/mcp\`, then \`/mcp\` to authorize.
+
+### What it can do
+The same as your account, through MCP tools: files and CDN, documents and PDFs, SQL databases, websites and domains, compute sandboxes, web search and reading, voice and video. Every tool declares \`readOnlyHint\` or \`destructiveHint\`: tools that delete, overwrite or run code ask for confirmation in Claude.
+
+Examples:
+- "Upload this CSV to an EasyBits database and tell me the top 10 customers by purchases."
+- "Create a Node sandbox, clone my repo and run the tests."
+- "Publish this landing page as an EasyBits site and give me the URL."
+
+### Security
+- OAuth 2.1 with mandatory PKCE S256, dynamic client registration (RFC 7591) and discoverable metadata (RFC 8414 and RFC 9728).
+- \`resource\` (RFC 8707) is validated at authorize and token: tokens are only issued for this MCP (\`invalid_target\` otherwise).
+- Every app registered through DCR goes through the consent screen; redirects must be https or loopback and are matched exactly.
+- 1-hour access tokens and single-use (rotating) refresh tokens.
+- The connector only sees what your account sees. To revoke it, disconnect it in Claude.
+
+### Endpoints
+| Endpoint | Spec |
+|---|---|
+| \`/.well-known/oauth-protected-resource/api/mcp\` | RFC 9728 |
+| \`/.well-known/oauth-authorization-server\` | RFC 8414 |
+| \`/oauth/register\` | RFC 7591 |
+| \`/oauth/authorize\`, \`/oauth/token\` | OAuth 2.1 + PKCE |
+
+Without a token, \`POST /api/mcp\` returns \`401\` with \`WWW-Authenticate: Bearer resource_metadata="…"\`.
+
+**Privacy:** https://www.easybits.cloud/aviso-de-privacidad#aplicaciones-conectadas · **Support:** soporte@easybits.cloud
+`;
+
 export const EN_ERRORS = `## Error Codes
 
 | Status | Meaning |

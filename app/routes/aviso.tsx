@@ -118,6 +118,39 @@ const Content = () => {
           proveedores que prestan servicios en nuestro nombre bajo cláusulas de
           confidencialidad.
         </p>
+        <h3
+          id="aplicaciones-conectadas"
+          className="font-title font-bold text-2xl text-brand_dark mt-6"
+        >
+          5 bis. Aplicaciones conectadas (Claude y otros clientes MCP) /
+          Connected apps
+        </h3>
+        <p className="my-4">
+          Cuando usted conecta una aplicación externa (por ejemplo Claude, de
+          Anthropic) a su cuenta mediante el conector MCP de EasyBits, la
+          autoriza expresamente en una pantalla de consentimiento. A partir de
+          ese momento la aplicación puede leer y modificar, en su nombre, los
+          recursos de su cuenta que usted le pida (archivos, documentos, bases
+          de datos, sitios, cajas de cómputo). EasyBits sólo entrega a esa
+          aplicación el resultado de cada herramienta que invoca; no le envía
+          su contraseña ni sus llaves de API, y los tokens de acceso caducan en
+          una hora. El tratamiento que esa aplicación haga de la información se
+          rige por su propio aviso de privacidad. Puede retirar el acceso
+          desconectando la aplicación en cualquier momento o escribiendo a
+          soporte@easybits.cloud.
+        </p>
+        <p className="my-4">
+          When you connect an external app (for example Claude, by Anthropic)
+          to your account through the EasyBits MCP connector, you explicitly
+          authorize it on a consent screen. The app can then read and change,
+          on your behalf, the account resources you ask it to (files,
+          documents, databases, sites, compute sandboxes). EasyBits only returns
+          to that app the result of each tool it calls; it never shares your
+          password or API keys, and access tokens expire after one hour. The
+          app&apos;s own handling of that data is governed by its privacy
+          policy. You can revoke access at any time by disconnecting the app or
+          by writing to soporte@easybits.cloud.
+        </p>
         <h3 className="font-title font-bold text-2xl text-brand_dark mt-6">
           6. Derechos ARCO
         </h3>

@@ -129,3 +129,24 @@ export async function tryVerifyOAuthJwt(raw: string): Promise<User | null> {
     return null;
   }
 }
+
+/**
+ * RFC 8707: el `resource` que un cliente pide en authorize/token. Sólo emitimos tokens
+ * para nosotros mismos, así que vale el MCP (`/api/mcp` o `/api/mcp/<toolset>`) o el
+ * origen; cualquier otro es `invalid_target`. Sin `resource` también vale (clientes viejos).
+ */
+export function isOwnResource(resource: string | null | undefined): boolean {
+  if (!resource) return true;
+  let u: URL;
+  try {
+    u = new URL(resource);
+  } catch {
+    return false;
+  }
+  const own = new URL(BASE_URL);
+  // easybits.cloud y www.easybits.cloud son el mismo servidor.
+  const host = (h: string) => h.replace(/^www\./, "");
+  if (u.protocol !== own.protocol || host(u.host) !== host(own.host)) return false;
+  const path = u.pathname.replace(/\/+$/, "");
+  return path === "" || path === "/api/mcp" || path.startsWith("/api/mcp/");
+}

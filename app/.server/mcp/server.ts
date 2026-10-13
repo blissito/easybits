@@ -26,6 +26,7 @@ import { SANDBOX_TEMPLATES } from "../sandbox/schemas";
 import { MAX_SANDBOX_TTL_SECONDS } from "../../lib/plans";
 import { filePreviewHtml, fileUploadHtml, fileListHtml } from "./apps/html";
 import { registerStructuredDocTool } from "./structured/tool";
+import { applyToolAnnotations } from "./toolAnnotations";
 import { GROUP_ALLOWLISTS, GROUP_HIDDEN_SCOPE, DYNAMIC_ONLY_TOOLS, TOOL_GROUPS, isStrictGroup, type ToolGroupKey } from "./toolGroups";
 import { importHtml, type ImportHtmlInput } from "./tools/importHtml";
 import { safeImageBlock } from "./safeImageBlock";
@@ -644,6 +645,8 @@ export function createMcpServer(groups?: string[], denyTools?: string[]) {
   // envelope as the other 158 tools.
   installUnknownToolGuard(server);
 
+  // Título + readOnly/destructive en TODAS (requisito del directorio de Claude).
+  applyToolAnnotations(server);
   return server;
 }
 
@@ -2160,7 +2163,8 @@ How to embed safely (the only reliable rule):
       method: z.enum(["GET", "POST", "PATCH", "DELETE"]).optional().describe("HTTP method (default GET)"),
       body: z.any().optional().describe("Request body for POST/PATCH"),
     },
-    { destructiveHint: false, idempotentHint: false, openWorldHint: false },
+    // Acepta DELETE (desvincular WhatsApp, borrar CLAUDE.md): destructiva.
+    { destructiveHint: true, idempotentHint: false, openWorldHint: false },
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await sandboxAdmin(ctx, params.sandboxId, {

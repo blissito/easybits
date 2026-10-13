@@ -1,6 +1,7 @@
 import { db } from "~/.server/db";
 import {
   issueAccessToken,
+  isOwnResource,
   issueRefreshToken,
   rotateRefreshToken,
   sha256,
@@ -22,6 +23,11 @@ export async function action({ request }: { request: Request }) {
   const clientId = String(form.get("client_id") || "");
   const codeVerifier = String(form.get("code_verifier") || "");
   const clientSecret = form.get("client_secret");
+
+  // RFC 8707: sólo emitimos tokens para nuestro propio MCP.
+  if (!isOwnResource(form.get("resource") as string | null)) {
+    return Response.json({ error: "invalid_target" }, { status: 400 });
+  }
 
   // Refresh grant: cambia un refresh token (rotándolo) por un nuevo par
   // access+refresh. Permite reconectar sin reabrir el navegador.

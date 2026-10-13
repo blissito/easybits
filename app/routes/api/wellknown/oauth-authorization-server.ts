@@ -13,5 +13,6 @@ export async function loader() {
     code_challenge_methods_supported: ["S256"],
     token_endpoint_auth_methods_supported: ["client_secret_post", "none"],
     scopes_supported: ["mcp"],
+    service_documentation: `${BASE_URL}/en/docs#claude`,
   });
 }

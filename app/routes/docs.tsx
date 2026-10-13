@@ -670,7 +670,7 @@ ghosty --yolo` },
                   {[
                     ["/.well-known/oauth-protected-resource[/<resource path>]", "RFC 9728", "Tells clients which Authorization Server protects /api/mcp. Ask for the toolset path (e.g. /api/mcp/sandbox) and it answers for that exact resource"],
                     ["/.well-known/oauth-authorization-server", "RFC 8414", "Advertises authorize, token, and registration endpoints"],
-                    ["/oauth/register", "RFC 7591", "Dynamic Client Registration — client_id + secret issued on POST"],
+                    ["/oauth/register", "RFC 7591", "Dynamic Client Registration — https or loopback redirects only; public (PKCE) or client_secret_post"],
                     ["/oauth/authorize", "OAuth 2.1", "User consent + code issuance (PKCE S256 required)"],
                     ["/oauth/token", "OAuth 2.1", "Exchanges code + verifier for a 1-hour JWT access token"],
                   ].map(([endpoint, spec, desc]) => (
@@ -694,7 +694,7 @@ ghosty --yolo` },
 5. Client → POST /oauth/register { redirect_uris, client_name }
                 ← { client_id, client_secret }
 6. Browser opens /oauth/authorize?client_id=...&code_challenge=... (S256)
-7. User logs in (if no session) → code issued → redirect back to client
+7. User logs in (if no session) → consent screen → code issued → redirect back to client
 8. Client → POST /oauth/token with code + code_verifier
                 ← { access_token (JWT), expires_in: 3600 }
 9. Client → POST /api/mcp with Authorization: Bearer <access_token>`}
@@ -702,8 +702,8 @@ ghosty --yolo` },
 
             <h3 className="text-lg font-bold mt-8 mb-3">Notes</h3>
             <ul className="list-disc list-inside space-y-1 text-sm text-gray-700 mb-6">
-              <li>Access tokens are <strong>HS256 JWTs</strong>, valid for 1 hour. No refresh token — reauthorize is a single click when you already have a session.</li>
-              <li><strong>Auto-approval</strong>: once logged in, the authorize screen redirects back immediately. The user already expressed consent by initiating the flow from the connector.</li>
+              <li>Access tokens are <strong>HS256 JWTs</strong>, valid for 1 hour, with a single-use rotating refresh token.</li>
+              <li><strong>Consent screen</strong>: every client registered through DCR sees which app is asking and which domain it returns to before a code is issued. <code className="bg-gray-100 px-1 rounded">resource</code> (RFC 8707) is validated: tokens are only issued for this MCP. Full guide: <a href="/en/docs#claude" className="underline">Claude connector</a>.</li>
               <li><strong>Additive</strong>: API key Bearer auth keeps working unchanged. The handler tries JWT verification first and silently falls through to API key validation.</li>
               <li><strong>PKCE S256 is mandatory</strong>. Plain and no-PKCE flows are rejected.</li>
               <li>Scope: a single <code className="bg-gray-100 px-1 rounded">mcp</code> scope — the authorized session has full access to the MCP handler.</li>
