@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Form, redirect, useNavigation, useActionData, useLoaderData, useSearchParams } from "react-router";
 import { BrutalButton } from "~/components/common/BrutalButton";
+import { PromptSuggestions } from "~/components/sitios/PromptSuggestions";
 import { getUserOrRedirect } from "~/.server/getters";
 import type { AuthContext } from "~/.server/apiAuth";
 import { createSite, engineChoicesFor, type SiteKind } from "~/.server/core/siteOperations";
@@ -49,6 +50,7 @@ export default function NewSite() {
   const result = useActionData<typeof action>();
   const micro = HOSTING_CATALOG.micro;
   const [sleep, setSleep] = useState(true);
+  const [prompt, setPrompt] = useState("");
   return (
     <article className="pt-20 px-4 sm:px-8 pb-24 md:pl-36 w-full max-w-2xl mx-auto">
       <h1 className="text-2xl sm:text-4xl font-black tracking-tight uppercase mb-6">Nuevo sitio</h1>
@@ -133,8 +135,16 @@ export default function NewSite() {
         </div>
         <label className="block">
           <span className="text-sm font-bold">¿Qué quieres que construya?</span>
-          <textarea name="prompt" rows={4} placeholder="Un sitio para mi estudio de arquitectura con portafolio de proyectos, equipo y formulario de contacto…" className="mt-1 w-full px-4 py-2.5 border-2 border-black rounded-xl focus:outline-none" />
+          <textarea
+            name="prompt"
+            rows={4}
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            placeholder="Un sitio para mi estudio de arquitectura con portafolio de proyectos, equipo y formulario de contacto…"
+            className="mt-1 w-full px-4 py-2.5 border-2 border-black rounded-xl focus:outline-none"
+          />
         </label>
+        <PromptSuggestions kind={kind} value={prompt} onPick={setPrompt} />
         {result && "error" in result && <p className="text-sm text-red-600">{result.error}</p>}
         <BrutalButton type="submit" isDisabled={nav.state !== "idle"}>
           {nav.state !== "idle" ? "Creando…" : "Crear y empezar"}
