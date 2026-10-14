@@ -89,7 +89,10 @@ import {
   removeCustomDomain,
   listCustomDomains,
   setDomainApex,
+  autoConfigureDomainDns,
+  undoDomainDns,
 } from "../core/customDomainOperations";
+import { mailmaskConnection } from "../core/mailmaskOperations";
 import { getDocsMarkdown, VALID_SECTIONS } from "../docs/reference";
 import {
   listWebhooks,
@@ -5706,6 +5709,32 @@ function registerSiteTools(server: McpServer) {
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       return ok({ domain: await verifyCustomDomain(params.domainId, ctx.user.id) });
+    })
+  );
+
+  server.tool(
+    "configure_domain_dns",
+    "Write the DNS records a custom domain needs (TXT verify, wildcard CNAME, and root A + www when a site is on the root) straight into the user's Mailmask DNS zone through their Mailmask connection, then verify. Saves what was there before so `undo_domain_dns` can restore it. If Mailmask isn't connected yet, returns `{ error: 'MailmaskNotConnected', connectUrl }`: the user must open that URL once in a browser to consent.",
+    { domainId: z.string().describe("The domain ID (from list_domains)") },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      if (!(await mailmaskConnection(ctx.user.id)).connected) {
+        return fail("MailmaskNotConnected", {
+          connectUrl: `${process.env.APP_URL || "https://www.easybits.cloud"}/dash/integrations/mailmask/connect?domain=${params.domainId}`,
+        });
+      }
+      return ok(await autoConfigureDomainDns(params.domainId, ctx.user.id));
+    })
+  );
+
+  server.tool(
+    "undo_domain_dns",
+    "Undo the DNS records EasyBits wrote in Mailmask for a domain (configure_domain_dns): restores the previous values and leaves alone any record the user changed afterwards (reported in `skipped`). Does not delete the domain itself.",
+    { domainId: z.string().describe("The domain ID (from list_domains)") },
+    { destructiveHint: true, idempotentHint: true, openWorldHint: true },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      return ok(await undoDomainDns(params.domainId, ctx.user.id));
     })
   );
 

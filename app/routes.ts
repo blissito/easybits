@@ -166,6 +166,9 @@ export default [
       // «Importar desde GitHub»: instalar la App ghosty-studio y volver.
       route("hosting/github/connect", "routes/dash/hosting-github-connect.ts"),
       route("hosting/github/callback", "routes/dash/hosting-github-callback.ts"),
+      // Conector Mailmask (EasyBits como cliente OAuth): DNS automático de dominios propios.
+      route("integrations/mailmask/connect", "routes/dash/mailmask-connect.ts"),
+      route("integrations/mailmask/callback", "routes/dash/mailmask-callback.ts"),
       // Panel de la flota: roster de agentes, canales, capacidades, skills y ensayo.
       route("flota", "routes/dash/flota.tsx"),
       // La vista anterior (acordeón + modal de capacidades) sigue accesible mientras
@@ -474,6 +477,8 @@ export default [
     route("domains", "routes/api/v2/domains.ts"),
     route("domains/:domainId/verify", "routes/api/v2/domain-verify.ts"),
     route("domains/:domainId/apex", "routes/api/v2/domain-apex.ts"),
+    // DNS automático vía el conector Mailmask: POST configura, DELETE deshace.
+    route("domains/:domainId/dns-auto", "routes/api/v2/domain-dns-auto.ts"),
     route("themes", "routes/api/v2/themes.ts"),
     route("brand-kits", "routes/api/v2/brand-kits.ts"),
     route("brand-kits/:id", "routes/api/v2/brand-kit.ts"),

@@ -2,6 +2,12 @@ import { db } from "~/.server/db";
 import { randomBytes } from "crypto";
 import { resolve } from "dns/promises";
 import { createHost, removeHost } from "~/lib/fly_certs/certs_getters";
+import {
+  easybitsDnsRecords,
+  mailmaskUndoRecords,
+  mailmaskWriteRecords,
+  type DnsManaged,
+} from "./mailmaskOperations";
 
 export async function addCustomDomain(userId: string, domain: string) {
   // Normalize and validate
@@ -71,6 +77,13 @@ export async function removeCustomDomain(domainId: string, userId: string) {
   });
   if (!domain) throw new Error("Domain not found");
 
+  // Registros que EasyBits escribió en Mailmask: se deshacen (restaurando lo que había).
+  if (domain.dnsProvider === "mailmask" && domain.dnsManaged) {
+    await mailmaskUndoRecords(userId, domain.dnsManaged as unknown as DnsManaged).catch((e) =>
+      console.error("[removeCustomDomain] mailmask undo:", e?.message ?? e)
+    );
+  }
+
   // Unlink all websites using this domain
   await db.website.updateMany({
     where: { customDomainId: domainId },
@@ -137,7 +150,63 @@ export async function setDomainApex(
     console.error("[setDomainApex] cert error:", e);
   }
 
+  // DNS administrado por Mailmask: la raíz y www también se escriben (o se deshacen) solos.
+  if (domain.dnsProvider === "mailmask" && domain.dnsManaged) {
+    try {
+      const managed = domain.dnsManaged as unknown as DnsManaged;
+      const apexNames = new Set([domain.domain, `www.${domain.domain}`]);
+      const next = websiteId
+        ? await mailmaskWriteRecords(userId, domain.domain, easybitsDnsRecords(domain.domain, domain.txtToken, true).filter((r) => apexNames.has(r.name)), managed)
+        : (await mailmaskUndoRecords(userId, managed, (r) => apexNames.has(r.name))).rest;
+      await db.customDomain.update({ where: { id: domainId }, data: { dnsManaged: (next ?? null) as any, dnsProvider: next ? "mailmask" : null } });
+    } catch (e) {
+      console.error("[setDomainApex] mailmask:", (e as Error)?.message ?? e);
+    }
+  }
+
   return updated;
+}
+
+/**
+ * «Configurar con Mailmask»: escribe en la zona de Mailmask del usuario los registros que pide
+ * EasyBits (guardando lo que había) y verifica. La conexión OAuth ya debe existir.
+ * Route 53 propaga en segundos, pero el resolver puede tardar: si aún no verifica, queda
+ * escrito y basta con «Verificar» después.
+ */
+export async function autoConfigureDomainDns(domainId: string, userId: string) {
+  const domain = await db.customDomain.findFirst({ where: { id: domainId, ownerId: userId } });
+  if (!domain) throw new Error("Domain not found");
+  const want = easybitsDnsRecords(domain.domain, domain.txtToken, !!domain.apexWebsiteId);
+  const managed = await mailmaskWriteRecords(
+    userId,
+    domain.domain,
+    want,
+    domain.dnsProvider === "mailmask" ? (domain.dnsManaged as unknown as DnsManaged) : null
+  );
+  await db.customDomain.update({ where: { id: domainId }, data: { dnsProvider: "mailmask", dnsManaged: managed as any } });
+  let verified = domain.verified;
+  for (const wait of verified ? [] : [0, 4000, 8000]) {
+    if (wait) await new Promise((r) => setTimeout(r, wait));
+    try {
+      await verifyCustomDomain(domainId, userId);
+      verified = true;
+      break;
+    } catch {
+      // DNS aún propagando.
+    }
+  }
+  if (verified && domain.verified) await createHost(`*.${domain.domain}`).catch(() => undefined);
+  return { verified, zone: managed.zone, records: want.map((r) => `${r.type} ${r.name}`) };
+}
+
+/** Deshace lo que EasyBits escribió en Mailmask para este dominio (sin borrar el dominio). */
+export async function undoDomainDns(domainId: string, userId: string) {
+  const domain = await db.customDomain.findFirst({ where: { id: domainId, ownerId: userId } });
+  if (!domain) throw new Error("Domain not found");
+  if (domain.dnsProvider !== "mailmask" || !domain.dnsManaged) return { ok: true, nothing: true, skipped: [] as string[] };
+  const { rest, skipped } = await mailmaskUndoRecords(userId, domain.dnsManaged as unknown as DnsManaged);
+  await db.customDomain.update({ where: { id: domainId }, data: { dnsProvider: rest ? "mailmask" : null, dnsManaged: (rest ?? null) as any } });
+  return { ok: true, nothing: false, skipped };
 }
 
 export async function listCustomDomains(userId: string) {

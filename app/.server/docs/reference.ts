@@ -849,10 +849,10 @@ Flow: \`add_domain\` → add DNS → \`verify_domain\` → (optional) \`set_doma
 
 Certificates are issued automatically on the first HTTPS request (wildcard registered on verify; root + www when a site is assigned). They can take a few minutes after DNS propagates.
 
-**DNS hosted in Mailmask?** Skip the copy-paste: Mailmask writes (and can undo) all these records and runs the verify for you — UI at \`mailmask.studio/app?domain=<domain>&easybits=1\`, or from an agent with Mailmask's MCP tools \`publish_easybits_site\` / \`unpublish_easybits_site\`.
+**DNS hosted in Mailmask?** Skip the copy-paste. Connect Mailmask once (OAuth consent in the browser, \`/dash/integrations/mailmask/connect\`) and EasyBits writes these records into your Mailmask zone and verifies: \`POST /api/v2/domains/:domainId/dns-auto\` · MCP \`configure_domain_dns({ domainId })\`. It saves what was there before, so \`DELETE …/dns-auto\` / \`undo_domain_dns\` restores it (records you changed afterwards are left alone), and deleting the domain undoes them too. Without a connection the call returns \`MailmaskNotConnected\` with a \`connectUrl\`.
 
 REST: \`GET/POST/DELETE /domains\`, \`POST /domains/:domainId/verify\`, \`POST /domains/:domainId/apex\` \`{ websiteId | null }\`.
-MCP: \`list_domains\`, \`add_domain\`, \`verify_domain\`, \`set_domain_website\`, \`delete_domain\`.
+MCP: \`list_domains\`, \`add_domain\`, \`verify_domain\`, \`set_domain_website\`, \`delete_domain\`, \`configure_domain_dns\`, \`undo_domain_dns\`.
 
 ### List websites
 \`GET /websites\`

@@ -2420,6 +2420,46 @@ paths:
         "400": { $ref: "#/components/responses/BadRequest" }
         "401": { $ref: "#/components/responses/Unauthorized" }
 
+  /api/v2/domains/{domainId}/dns-auto:
+    parameters:
+      - $ref: "#/components/parameters/domainId"
+    post:
+      tags: [Domains]
+      operationId: configureDomainDns
+      summary: Escribir los registros DNS vía Mailmask
+      description: "Con la cuenta de Mailmask del usuario conectada (OAuth, una vez desde el navegador), escribe en su zona TXT de verificación, CNAME comodín y — si hay sitio en el raíz — A + www; guarda lo que había antes y verifica. Sin conexión responde 409 `MailmaskNotConnected` con `connectUrl`."
+      responses:
+        "200":
+          description: Registros escritos.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  verified: { type: boolean }
+                  zone: { type: string }
+                  records: { type: array, items: { type: string } }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "409": { description: "Mailmask no conectado; trae `connectUrl`." }
+    delete:
+      tags: [Domains]
+      operationId: undoDomainDns
+      summary: Deshacer los registros escritos vía Mailmask
+      description: "Restaura los valores previos; lo que el usuario cambió después se deja y se reporta en `skipped`."
+      responses:
+        "200":
+          description: Registros restaurados.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  nothing: { type: boolean }
+                  skipped: { type: array, items: { type: string } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
   # ───────────────────────── Account ─────────────────────────
   /api/v2/me:
     get:

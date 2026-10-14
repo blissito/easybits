@@ -261,6 +261,7 @@ model User {
   videoProjects        VideoProject[]
   shareLinks           ShareLink[]
   secrets              Secret[]
+  providerConnections  ProviderConnection[]
   agents               Agent[]
   computeKeys          ComputeKey[]
   sandboxes            Sandbox[]
@@ -721,6 +722,10 @@ model CustomDomain {
   websites  Website[]
   /// Sitio servido en el dominio raíz (midominio.com y www.midominio.com). Null = sin apex.
   apexWebsiteId String?  @db.ObjectId
+  /// Quién escribió sus registros DNS automáticamente ("mailmask") y qué había antes en cada
+  /// (name,type), para deshacerlo sin pisar lo del usuario. Null = configurado a mano.
+  dnsProvider   String?
+  dnsManaged    Json?
   apexWebsite   Website? @relation("DomainApex", fields: [apexWebsiteId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -1034,6 +1039,26 @@ model PostView {
 
   @@index([slug, ts])
   @@index([ts])
+}
+
+// Conexión OAuth de un usuario con un servicio externo (EasyBits como CLIENTE, estilo
+// conector de Claude). Tokens cifrados con encryptSecret (no van al vault: el usuario no
+// debe verlos ni editarlos en Secretos). Hoy: "mailmask" (DNS de dominios propios).
+model ProviderConnection {
+  id           String    @id @default(auto()) @map("_id") @db.ObjectId
+  userId       String    @db.ObjectId
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider     String
+  accessToken  String
+  refreshToken String?
+  expiresAt    DateTime?
+  scope        String?
+  meta         Json?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@unique([userId, provider])
+  @@index([userId])
 }
 
 model AppConfig {

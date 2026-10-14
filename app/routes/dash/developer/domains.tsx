@@ -1,4 +1,4 @@
-import { useFetcher, useLoaderData } from "react-router";
+import { useFetcher, useLoaderData, useSearchParams } from "react-router";
 import { getUserOrRedirect } from "~/.server/getters";
 import { BrutalButton } from "~/components/common/BrutalButton";
 import { useState, useEffect } from "react";
@@ -8,7 +8,20 @@ import {
   removeCustomDomain,
   listCustomDomains,
   setDomainApex,
+  autoConfigureDomainDns,
+  undoDomainDns,
 } from "~/.server/core/customDomainOperations";
+import { mailmaskConnection, disconnectMailmask } from "~/.server/core/mailmaskOperations";
+
+const MAILMASK_NOTICE: Record<string, string> = {
+  connected: "Mailmask conectado. Ya puedes configurar tus dominios con un clic.",
+  configured: "Listo: Mailmask escribió los registros y el dominio quedó verificado.",
+  written: "Registros escritos en Mailmask. El DNS tarda unos minutos: dale «Verificar» en un rato.",
+  nozone: "Mailmask quedó conectado, pero el DNS de ese dominio no está en tu cuenta de Mailmask.",
+  denied: "Cancelaste la conexión con Mailmask.",
+  state: "La conexión con Mailmask expiró. Vuelve a intentar.",
+  error: "No se pudo conectar con Mailmask. Vuelve a intentar.",
+};
 import { listWebsites } from "~/.server/core/operations";
 import type { AuthContext } from "~/.server/apiAuth";
 import { FLY_EDGE_IPS } from "~/lib/fly_certs/edge_ips";
@@ -41,7 +54,8 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
     { user, scopes: ["READ"] } as unknown as AuthContext,
     { limit: 200 }
   );
-  return { domains, inRoute53, websites: websites.map((w) => ({ id: w.id, name: w.name, slug: w.slug })) };
+  const mailmask = await mailmaskConnection(user.id).catch(() => ({ connected: false as const }));
+  return { domains, inRoute53, mailmask, websites: websites.map((w) => ({ id: w.id, name: w.name, slug: w.slug })) };
 };
 
 export const action = async ({ request }: Route.ActionArgs) => {
@@ -66,6 +80,23 @@ export const action = async ({ request }: Route.ActionArgs) => {
       await setDomainApex(domainId, user.id, websiteId);
       return { ok: true };
     }
+    if (intent === "mailmask-auto") {
+      const r = await autoConfigureDomainDns(form.get("domainId") as string, user.id);
+      return { ok: true, notice: r.verified ? MAILMASK_NOTICE.configured : MAILMASK_NOTICE.written };
+    }
+    if (intent === "mailmask-undo") {
+      const r = await undoDomainDns(form.get("domainId") as string, user.id);
+      return {
+        ok: true,
+        notice: r.skipped.length
+          ? `Registros restaurados. No toqué ${r.skipped.join(", ")} porque los cambiaste después.`
+          : "Registros restaurados a como estaban antes.",
+      };
+    }
+    if (intent === "mailmask-disconnect") {
+      await disconnectMailmask(user.id);
+      return { ok: true, notice: "Mailmask desconectado." };
+    }
     if (intent === "remove") {
       const domainId = form.get("domainId") as string;
       await removeCustomDomain(domainId, user.id);
@@ -78,12 +109,15 @@ export const action = async ({ request }: Route.ActionArgs) => {
 };
 
 export default function DomainsPage() {
-  const { domains, websites, inRoute53 } = useLoaderData<typeof loader>();
+  const { domains, websites, inRoute53, mailmask } = useLoaderData<typeof loader>();
+  const [params] = useSearchParams();
+  const urlNotice = MAILMASK_NOTICE[params.get("mailmask") ?? ""] ?? null;
   const fetcher = useFetcher();
   const [newDomain, setNewDomain] = useState("");
 
   const isSubmitting = fetcher.state !== "idle";
   const actionError = (fetcher.data as any)?.error;
+  const notice = ((fetcher.data as any)?.notice as string | undefined) ?? urlNotice;
 
   useEffect(() => {
     if ((fetcher.data as any)?.ok) setNewDomain("");
@@ -96,6 +130,19 @@ export default function DomainsPage() {
         Publica sitios en tu propio dominio: en subdominios (slug.tudominio.com) o en el dominio raíz (tudominio.com)
       </p>
 
+      {notice && !actionError && (
+        <p className="mb-4 rounded-lg border-2 border-black bg-brand-500/10 px-3 py-2 text-sm">{notice}</p>
+      )}
+      {mailmask.connected && (
+        <div className="mb-4 flex items-center gap-2 text-xs text-gray-500">
+          <span className="font-bold text-green-700">● Mailmask conectado</span>
+          {mailmask.scope && <span>· permiso: {mailmask.scope === "dns" ? "sólo DNS" : "cuenta completa"}</span>}
+          <fetcher.Form method="post" className="inline">
+            <input type="hidden" name="intent" value="mailmask-disconnect" />
+            <button type="submit" className="underline hover:text-black">Desconectar</button>
+          </fetcher.Form>
+        </div>
+      )}
       {actionError && (
         <div className="mb-4 p-3 bg-red-50 border-2 border-red-300 rounded-xl text-sm font-bold text-red-700">
           {actionError}
@@ -168,8 +215,22 @@ export default function DomainsPage() {
                 </div>
               </div>
 
-              {/* Atajo: si el DNS vive en Mailmask, ahí se escriben (y se deshacen) solos. */}
-              {!d.verified && (
+              {/* Conector Mailmask: si el DNS vive ahí, EasyBits escribe (y deshace) los registros solo. */}
+              {d.dnsProvider === "mailmask" ? (
+                <div className="mb-3 rounded-lg border-2 border-black bg-green-50 p-3 text-sm flex items-center gap-3 flex-wrap">
+                  <p className="flex-1 min-w-0 text-gray-700">
+                    <strong>DNS administrado por Mailmask.</strong> EasyBits escribió estos registros por ti
+                    {d.verified ? "." : "; si aún no verifica, el DNS está propagando."}
+                  </p>
+                  <fetcher.Form method="post" className="shrink-0">
+                    <input type="hidden" name="intent" value="mailmask-undo" />
+                    <input type="hidden" name="domainId" value={d.id} />
+                    <button type="submit" disabled={isSubmitting} className="text-sm font-bold underline hover:text-black">
+                      Deshacer registros
+                    </button>
+                  </fetcher.Form>
+                </div>
+              ) : !d.verified && (
                 <div
                   className={`mb-3 rounded-lg border-2 p-3 text-sm flex items-center gap-3 flex-wrap ${
                     inRoute53[d.id] ? "border-black bg-brand-500/10" : "border-gray-200"
@@ -177,16 +238,27 @@ export default function DomainsPage() {
                 >
                   <p className="flex-1 min-w-0 text-gray-700">
                     {inRoute53[d.id] ? <strong>Parece que tu DNS está en Mailmask. </strong> : "¿Tu DNS está en Mailmask? "}
-                    Configura estos registros en un clic, y si cambias de idea se deshacen igual.
+                    {mailmask.connected
+                      ? "EasyBits escribe los registros por ti y los puedes deshacer."
+                      : "Conéctalo una vez y EasyBits escribe los registros por ti (y los puede deshacer)."}
                   </p>
-                  <a
-                    href={`https://www.mailmask.studio/app?domain=${encodeURIComponent(d.domain)}&easybits=1`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="shrink-0 inline-flex items-center h-9 px-3 rounded-lg border-2 border-black bg-white font-bold text-sm hover:bg-brand-500/10"
-                  >
-                    Configurar con Mailmask ↗
-                  </a>
+                  {mailmask.connected ? (
+                    <fetcher.Form method="post" className="shrink-0">
+                      <input type="hidden" name="intent" value="mailmask-auto" />
+                      <input type="hidden" name="domainId" value={d.id} />
+                      <BrutalButton type="submit" disabled={isSubmitting} size="chip">
+                        {isSubmitting ? "Configurando…" : "Configurar automático"}
+                      </BrutalButton>
+                    </fetcher.Form>
+                  ) : (
+                    // Navegación completa: es un ida y vuelta por el consentimiento de Mailmask.
+                    <a
+                      href={`/dash/integrations/mailmask/connect?domain=${d.id}`}
+                      className="shrink-0 inline-flex items-center h-9 px-3 rounded-lg border-2 border-black bg-white font-bold text-sm hover:bg-brand-500/10"
+                    >
+                      Conectar Mailmask y configurar
+                    </a>
+                  )}
                 </div>
               )}
 
