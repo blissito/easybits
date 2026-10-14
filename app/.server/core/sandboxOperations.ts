@@ -2936,6 +2936,23 @@ export interface DomainVerification {
 // and that https://<domain> serves with a valid cert (which also confirms Caddy
 // minted the on-demand cert and routing works). Lets the agent tell the user
 // "ya quedó" vs "falta el CNAME / espera la propagación".
+/**
+ * ¿El dominio ya apunta a nosotros? Sólo DNS y con tope de tiempo, para la lista de sitios:
+ * el chequeo completo (`verifySandboxDomain`, HTTPS con 8 s) sería demasiado lento por tarjeta.
+ * Un dominio que no apunta aquí no puede ser el nombre del sitio: la tarjeta lo presentaba
+ * como tal y la liga no abría nada.
+ */
+export async function domainPointsHere(domain: string, ms = 1500): Promise<boolean> {
+  const check = (async () => {
+    const cname = await dns.resolveCname(domain).catch(() => [] as string[]);
+    if (cname.some((c) => c.replace(/\.$/, "").toLowerCase() === SANDBOX_CNAME_TARGET)) return true;
+    const a = await dns.resolve4(domain).catch(() => [] as string[]);
+    return a.includes(SANDBOX_PUBLIC_IP);
+  })();
+  const timeout = new Promise<boolean>((r) => setTimeout(() => r(false), ms));
+  return Promise.race([check, timeout]);
+}
+
 export async function verifySandboxDomain(
   ctx: AuthContext,
   domain: string

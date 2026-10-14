@@ -12,6 +12,7 @@ import {
   suspendSandbox,
   resumeSandbox,
   verifySandboxDomain,
+  domainPointsHere,
 } from "~/.server/core/sandboxOperations";
 import { listReleases, applyRelease, readMachineLogs } from "~/.server/core/releaseOperations";
 import {
@@ -30,7 +31,7 @@ import {
 import { ConfirmDialog } from "~/components/common/ConfirmDialog";
 import {
   LuExternalLink, LuLink, LuKeyRound, LuHistory, LuScrollText,
-  LuPlay, LuPause, LuRotateCcw, LuTrash2, LuPlus, LuCircleCheck, LuGithub,
+  LuPlay, LuPause, LuRotateCcw, LuTrash2, LuPlus, LuCircleCheck, LuGithub, LuRefreshCw,
 } from "react-icons/lu";
 
 export const meta = () => [
@@ -83,10 +84,14 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
       const row = extra[m.sandboxId];
       const port = (row?.runspec as any)?.port ?? 3000;
       const domains = await listSandboxDomains(ctx, m.sandboxId).catch(() => []);
+      const names: string[] = domains.map((d: any) => d.domain);
+      const pointing = await Promise.all(names.map((d) => domainPointsHere(d)));
       return {
         ...m,
         currentReleaseId: row?.currentReleaseId ?? null,
-        domains: domains.map((d: any) => d.domain),
+        domains: names,
+        // Los que ya apuntan aquí: sólo esos pueden ser el título y la liga del sitio.
+        liveDomains: names.filter((_, i) => pointing[i]),
         // La dirección que el host publica para esa caja y ese puerto.
         url: `https://sb-${m.sandboxId.replace(/^sb_/, "")}-${port}.sandboxes.easybits.cloud`,
       };
@@ -213,7 +218,9 @@ function title(machine: any) {
   const main = mainDomain(machine);
   if (main) return main;
   const name = machine.name ?? "";
-  return !name || /^sb_[0-9a-f-]{8}/i.test(name) ? "Sitio sin dominio" : name;
+  if (name && !/^sb_[0-9a-f-]{8}/i.test(name)) return name;
+  // Sin dominio propio funcionando, su dirección de EasyBits es la que sí abre.
+  return machine.url ? new URL(machine.url).host : "Sitio sin dominio";
 }
 
 /**
@@ -222,7 +229,8 @@ function title(machine: any) {
  * sitio). Sin esto la tarjeta mostraba el primer dominio que se dio de alta.
  */
 function mainDomain(machine: any): string | undefined {
-  const domains: string[] = machine.domains ?? [];
+  // Sólo los que ya apuntan aquí: uno que «falta el DNS» no abre nada.
+  const domains: string[] = machine.liveDomains ?? [];
   const rank = (d: string) => (d.startsWith("www.") ? 1 : 0) + d.split(".").length * 2;
   return [...domains].sort((a, b) => rank(a) - rank(b))[0];
 }
@@ -758,6 +766,8 @@ function DnsRecord({ dns }: { dns: { type: string; name: string; value: string }
 function Domains({ machine, detail, fetcher, confirm }: any) {
   const [value, setValue] = useState("");
   const added = fetcher.data?.domain;
+  const checking = fetcher.state !== "idle" && fetcher.formData?.get("intent") === "detail";
+  const recheck = () => fetcher.submit({ intent: "detail", sandboxId: machine.sandboxId }, { method: "post" });
   const send = () => {
     if (!value.trim()) return;
     fetcher.submit(
@@ -795,8 +805,20 @@ function Domains({ machine, detail, fetcher, confirm }: any) {
                   {d.domain}
                 </a>
                 <span className="text-[11px] text-metal shrink-0">
-                  {live ? "funcionando" : "falta el DNS"}
+                  {live ? "funcionando" : d.check?.dns?.resolved ? "falta el certificado" : "falta el DNS"}
                 </span>
+                {/* Vuelve a preguntar al DNS y al HTTPS: el registro se crea fuera de
+                    aquí y nadie sabe cuándo termina de propagar. */}
+                <button
+                  type="button"
+                  onClick={recheck}
+                  disabled={checking}
+                  className="flex items-center gap-1 text-[11px] font-semibold text-dark hover:text-brand-600 shrink-0 disabled:opacity-50"
+                  title="Volver a revisar el DNS y el HTTPS"
+                >
+                  <LuRefreshCw className={`w-3 h-3 ${checking ? "animate-spin" : ""}`} />
+                  {checking ? "revisando…" : "Revisar"}
+                </button>
                 <button
                   onClick={() =>
                     confirm({
@@ -827,7 +849,10 @@ function Domains({ machine, detail, fetcher, confirm }: any) {
                     {d.dns.type} · {d.dns.name} → {d.dns.value}
                   </p>
                 ) : (
-                  <DnsRecord dns={d.dns} />
+                  <>
+                    {d.check?.hint && <p className="mt-1.5 text-[11px] text-amber-700">{d.check.hint}</p>}
+                    <DnsRecord dns={d.dns} />
+                  </>
                 ))}
             </li>
           );
