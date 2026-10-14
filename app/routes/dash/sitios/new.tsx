@@ -7,6 +7,7 @@ import type { AuthContext } from "~/.server/apiAuth";
 import { createSite, engineChoicesFor, type SiteKind } from "~/.server/core/siteOperations";
 import { DEFAULT_SITE_ENGINE } from "~/lib/fleetEngines";
 import { HOSTING_CATALOG, sleepPrice } from "~/lib/hostingCatalog";
+import { SITE_STACKS, isSiteStack, type SiteStackId } from "~/lib/siteStacks";
 import type { Route } from "./+types/new";
 
 export const meta = () => [{ title: "Nuevo sitio — EasyBits" }, { name: "robots", content: "noindex" }];
@@ -25,7 +26,8 @@ export const action = async ({ request }: Route.ActionArgs) => {
   const prompt = String(form.get("prompt") || "").trim();
   const engine = String(form.get("engine") || DEFAULT_SITE_ENGINE);
   const secretValue = String(form.get("secretValue") || "");
-  const stack = kind === "webapp" && form.get("stack") === "tanstack" ? "tanstack" : null;
+  const stackRaw = form.get("stack");
+  const stack = kind === "webapp" && isSiteStack(stackRaw) ? stackRaw : null;
   try {
     // Ya no hay "siempre prendida": toda web app nueva duerme sin visitas.
     const { site, checkoutUrl } = await createSite(ctx, { kind, name, engine, secretValue, sleep: true, stack });
@@ -54,7 +56,7 @@ export default function NewSite() {
   const result = useActionData<typeof action>();
   const micro = HOSTING_CATALOG.micro;
   const [prompt, setPrompt] = useState("");
-  const [stack, setStack] = useState<"tanstack" | "node">("tanstack");
+  const [stack, setStack] = useState<SiteStackId | "node">("tanstack");
   return (
     <article className="pt-20 px-4 sm:px-8 pb-24 md:pl-36 w-full max-w-2xl mx-auto">
       <h1 className="text-2xl sm:text-4xl font-black tracking-tight uppercase mb-6">Nuevo sitio</h1>
@@ -81,13 +83,11 @@ export default function NewSite() {
         {kind === "webapp" && (
           <div>
             <span className="text-sm font-bold">Stack</span>
-            <div className="mt-1 grid grid-cols-2 gap-2">
-              {(
-                [
-                  ["tanstack", "TanStack Start", "React con SSR, rutas por archivo y funciones de servidor. Arranca con una base lista."],
-                  ["node", "Node libre", "El agente elige el servidor (Express, Hono, React Router) según lo que pidas."],
-                ] as const
-              ).map(([k, title, desc]) => (
+            <div className="mt-1 grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {[
+                ...SITE_STACKS.map((s) => [s.id, s.label, s.desc] as const),
+                ["node", "Node libre", "Sin base: el agente elige el servidor (Express, Hono, React Router)."] as const,
+              ].map(([k, title, desc]) => (
                 <button
                   key={k}
                   type="button"

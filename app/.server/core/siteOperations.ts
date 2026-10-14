@@ -17,7 +17,8 @@ import { createWebsite } from "./operations";
 import { buyMachine } from "./machineOperations";
 import { launchApp, setRunspec } from "./releaseOperations";
 import { exposeSandboxPort, writeFile } from "./sandboxOperations";
-import { TANSTACK_RUNSPEC, TANSTACK_STARTER_FILES } from "~/.server/starters/tanstackStart";
+import { STARTER_RUNSPEC, starterFiles, starterPrompt } from "~/.server/starters";
+import { isSiteStack, type SiteStackId } from "~/lib/siteStacks";
 import { pushSiteToGithub, siteRepo } from "./githubSiteOperations";
 import { markSelfPushed } from "./pushDeployOperations";
 
@@ -57,7 +58,11 @@ export const SITES_STARTER_TOKENS = 500_000;
 const DEFAULT_RUNSPEC = { appDir: "/app", buildCommand: "(npm ci || npm install) && npm run build --if-present", startCommand: "npm start", port: 3000 };
 export type SiteKind = "static" | "webapp";
 /** Stack de una webapp: null = Node libre (el agente elige Express/Hono/RRv7). */
-export type SiteStack = "tanstack" | null;
+export type SiteStack = SiteStackId | null;
+
+function siteStack(site: { stack?: string | null }): SiteStack {
+  return isSiteStack(site.stack) ? site.stack : null;
+}
 
 const BUILDER_SYSTEM = [
   "Eres el constructor de sitios de EasyBits. Construyes sitios web y web apps por encargo, dentro del sitio que te indica cada turno (sección SITIO ACTUAL).",
@@ -260,14 +265,14 @@ export async function createSite(
  * enganchar la caja que nació en el webhook del checkout (antes ésa quedaba sin nada).
  */
 async function prepareSiteMachine(ctx: AuthContext, sandboxId: string, stack: SiteStack) {
-  const runspec = stack === "tanstack" ? TANSTACK_RUNSPEC : DEFAULT_RUNSPEC;
+  const runspec = stack ? STARTER_RUNSPEC : DEFAULT_RUNSPEC;
   // Runspec desde el día cero: sin él `restart_machine` falla y el agente pierde un
   // turno descubriéndolo (pasó en la primera prueba).
   await setRunspec(ctx, sandboxId, runspec).catch(() => {});
   // La vista previa es la URL pública de la caja y `restart_machine` no expone nada.
   await exposeSandboxPort(ctx, sandboxId, runspec.port).catch(() => {});
-  if (stack === "tanstack") {
-    for (const [path, content] of Object.entries(TANSTACK_STARTER_FILES)) {
+  if (stack) {
+    for (const [path, content] of Object.entries(starterFiles(stack))) {
       await writeFile(ctx, sandboxId, { path: `${runspec.appDir}/${path}`, content });
     }
   }
@@ -286,7 +291,7 @@ export async function attachNewestMachine(ctx: AuthContext, siteId: string) {
   });
   if (!box) return site;
   await db.site.update({ where: { id: siteId }, data: { sandboxId: box.sandboxId } });
-  await prepareSiteMachine(ctx, box.sandboxId, site.stack === "tanstack" ? "tanstack" : null).catch((e) =>
+  await prepareSiteMachine(ctx, box.sandboxId, siteStack(site)).catch((e) =>
     console.error("[sites] prepareSiteMachine", box.sandboxId, e)
   );
   return getSite(ctx, siteId);
@@ -326,17 +331,12 @@ export function siteTurnPrompt(site: Awaited<ReturnType<typeof getSite>>, select
       `No crees otro website: usa SIEMPRE ese websiteId.`
     );
   } else if (site.kind === "webapp" && site.sandboxId) {
+    const stack = siteStack(site);
     lines.push(
       `Es una WEB APP en su propia máquina: sandboxId="${site.sandboxId}". El código vive en /app.`,
       `Escribe archivos con sandbox_files_write y corre comandos con sandbox_exec (npm install, etc.).`,
-      ...(site.stack === "tanstack"
-        ? [
-            `Stack: TanStack Start (React, SSR, rutas por archivo) — ya hay un starter funcionando en /app; NO cambies de stack ni reescribas vite.config.ts/server.mjs/package.json scripts.`,
-            `Antes de tu primer cambio lee la doc oficial de la versión instalada: sandbox_exec("cat /app/node_modules/@tanstack/react-start/skills/react-start/SKILL.md") (si no existe node_modules, corre antes "cd /app && npm install"). No escribas APIs de memoria: Start cambió mucho (ya no usa Vinxi ni app.config.ts).`,
-            `Rutas en /app/src/routes (createFileRoute; __root.tsx es el layout y conserva el script del selector EB_PICKER). Lógica de servidor (DB, secretos, APIs) con createServerFn de @tanstack/react-start. Estilos con Tailwind (clases; ya está configurado en src/styles.css).`,
-            `Cada sección/elemento de bloque lleva un atributo data-eb-id ÚNICO y estable (ej. data-eb-id="hero"); consérvalos al editar y cambia SOLO lo que se pide.`,
-            `Para que la vista previa refleje cambios: sandbox_exec("cd /app && npm install && npm run build") y luego restart_machine({ sandboxId }) (restart NO compila). Si el build falla, corrígelo antes de terminar el turno.`,
-          ]
+      ...(stack
+        ? starterPrompt(stack)
         : [
             `Stack por default: Node con un servidor en el puerto 3000 (Express/Hono/RRv7 según pida), package.json con scripts build y start.`,
             `Para que la vista previa refleje cambios: tras editar, llama restart_machine({ sandboxId }).`,
