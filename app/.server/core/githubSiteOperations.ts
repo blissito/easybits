@@ -70,7 +70,7 @@ export async function connectSiteToGithub(
   if (!inst) return { ok: false, needsInstall: true };
 
   const repo = await createUserRepo(userToken, repoNameFor(site.name), `${site.name} — creado con EasyBits`);
-  await ensureRepoInInstallation(userToken, inst.id, repo.id);
+  await ensureRepoInInstallation(userToken, inst.id, repo.id, repo.fullName);
 
   // Un /app clonado con --depth 1 no se puede empujar a un repo vacío ("shallow
   // update not allowed"): en ese caso, y si no hay repo, se empieza historia nueva.

@@ -204,6 +204,17 @@ export type CreatedRepo = { id: number; fullName: string; name: string; cloneUrl
  * Si el nombre ya existe prueba `nombre-2` … `nombre-9`.
  */
 export async function createUserRepo(userToken: string, baseName: string, description?: string): Promise<CreatedRepo> {
+  // Un intento anterior que murió después de crear el repo lo dejó VACÍO y con nuestra
+  // descripción: se reusa en vez de sembrar `nombre-2`, `nombre-3`… con cada reintento.
+  const login = await githubLogin(userToken).catch(() => "");
+  if (login && description) {
+    const r = await fetch(`${API}/repos/${login}/${baseName}`, { headers: { ...H, Authorization: `Bearer ${userToken}` } });
+    if (r.ok) {
+      const j = (await r.json()) as any;
+      if (j.size === 0 && j.description === description)
+        return { id: Number(j.id), fullName: j.full_name, name: j.name, cloneUrl: j.clone_url, htmlUrl: j.html_url };
+    }
+  }
   for (let i = 1; i <= 9; i++) {
     const name = i === 1 ? baseName : `${baseName}-${i}`;
     const res = await fetch(`${API}/user/repos`, {
@@ -230,16 +241,28 @@ export async function createUserRepo(userToken: string, baseName: string, descri
 }
 
 /**
- * Si la instalación es de "repos seleccionados", el repo recién creado NO entra
- * solo: sin esto el token de instalación no puede empujar y el webhook no lo ve.
+ * El repo nuevo tiene que estar en la instalación: sin eso el token de instalación no
+ * puede empujar y el webhook no lo ve.
+ *
+ * Medido en prod (2026-10-14): un repo que la App crea con token de usuario ENTRA SOLO a
+ * una instalación de "repos seleccionados", y el PUT de abajo contesta 403 con ese token
+ * (GitHub sólo lo acepta con PAT clásico). Así que primero se comprueba; el PUT queda de
+ * respaldo y su error sólo cuenta si el repo de verdad no está.
  */
-export async function ensureRepoInInstallation(userToken: string, installationId: number, repoId: number): Promise<void> {
+export async function ensureRepoInInstallation(userToken: string, installationId: number, repoId: number, fullName: string): Promise<void> {
+  const has = async () =>
+    (await installationRepos(installationId).catch(() => [] as InstallationRepo[])).some(
+      (r) => r.fullName.toLowerCase() === fullName.toLowerCase()
+    );
+  if (await has()) return;
   const res = await fetch(`${API}/user/installations/${installationId}/repositories/${repoId}`, {
     method: "PUT",
     headers: { ...H, Authorization: `Bearer ${userToken}` },
   });
-  // 204 = agregado; 304 = ya estaba (instalación "all" o repetido).
-  if (!res.ok && res.status !== 304) throw new Error(`GitHub no agregó el repo a la App (${res.status}).`);
+  if (res.ok || res.status === 304 || (await has())) return;
+  throw new Error(
+    `El repo ${fullName} no quedó al alcance de la App (${res.status}). Agrégalo en GitHub → Settings → Applications → Ghosty Studio → Repository access, y vuelve a conectar.`
+  );
 }
 
 /** "dueño/repo" desde cualquier URL de GitHub (https, .git, ssh). null si no es de GitHub. */
