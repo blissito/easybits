@@ -23,8 +23,23 @@ import { runspecSchema, setRunspec } from "./releaseOperations";
 import { getSite } from "./siteOperations";
 
 const APP_DIR = "/app";
-// Lo que nunca debe subir: dependencias, builds y cualquier secreto local.
-const GITIGNORE = ["node_modules/", ".env", ".env.*", "easybits.json", "dist/", "build/", ".DS_Store"].join("\n") + "\n";
+// Lo que nunca debe subir: dependencias, secretos locales y lo que genera la plataforma.
+// `easybits.json` SÍ sube: es el runspec (build/start/puerto), como un fly.toml.
+const MUST_IGNORE = ["node_modules/", ".env", ".env.*", ".easybits-start.sh", ".DS_Store"];
+
+/**
+ * Asegura las líneas de MUST_IGNORE en /app/.gitignore aunque el agente ya haya escrito el
+ * suyo (pasó en la primera prueba: `[ -f ] ||` dejaba fuera `.easybits-start.sh`) y saca del
+ * índice lo que ya se hubiera colado. Idempotente: corre antes de cada commit.
+ */
+function gitignoreSteps(): string[] {
+  const gi = `${APP_DIR}/.gitignore`;
+  return [
+    `touch ${gi}`,
+    ...MUST_IGNORE.map((l) => `grep -qxF '${l}' ${gi} || printf '%s\\n' '${l}' >> ${gi}`),
+    `git -C ${APP_DIR} rm -r -q --cached --ignore-unmatch ${MUST_IGNORE.map((l) => `'${l.replace(/\/$/, "")}'`).join(" ")} >/dev/null 2>&1 || true`,
+  ];
+}
 
 /** El repo al que está conectado un sitio, o null. */
 export function siteRepo(runspec: unknown): { repo: string; fullName: string | null; installationId: number } | null {
@@ -80,7 +95,7 @@ export async function connectSiteToGithub(
     pre: [
       `mkdir -p ${APP_DIR}`,
       `if [ ! -d ${APP_DIR}/.git ] || [ "$(git -C ${APP_DIR} rev-parse --is-shallow-repository 2>/dev/null)" = "true" ]; then rm -rf ${APP_DIR}/.git && git -C ${APP_DIR} init -q -b main; fi`,
-      `[ -f ${APP_DIR}/.gitignore ] || printf '%s' '${GITIGNORE}' > ${APP_DIR}/.gitignore`,
+      ...gitignoreSteps(),
     ],
   });
   await gitCommit(ctx, site.sandboxId, { dir: APP_DIR, message: `${site.name}: primera versión desde EasyBits` });
@@ -103,6 +118,7 @@ export async function pushSiteToGithub(
   source: { repo: string; installationId: number },
   message: string
 ): Promise<string | null> {
+  await runGit(ctx, sandboxId, { dir: APP_DIR, args: "status --short >/dev/null", pre: gitignoreSteps() });
   const commit = await gitCommit(ctx, sandboxId, { dir: APP_DIR, message });
   const name = repoPathFromUrl(source.repo)?.split("/")[1];
   const token = await installationToken(source.installationId, { onlyRepo: name });
