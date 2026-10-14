@@ -164,10 +164,16 @@ export const FLEET_ENGINES: FleetEngine[] = [
     label: "Ghosty · Gemini",
     model: "Gemini 3",
     provider: "google",
-    // Sin template en el host todavía (spike: Gemini CLI vs Antigravity CLI). Se lista
-    // para que el selector lo muestre como "próximamente"; engineCreatable() = false.
+    // Template `gemini-worker` horneado en A y B (sandbox-host, 2026-10-09): Gemini CLI
+    // por ACP DENTRO de la caja, SSE hacia fuera como los demás. El spawn inyecta
+    // GEMINI_API_KEY del vault del dueño; el modelo va en GEMINI_MODEL.
     template: "gemini-worker",
-    models: [{ id: "gemini-3-pro", label: "Gemini 3 Pro", ready: false }],
+    modelEnv: "GEMINI_MODEL",
+    models: [
+      { id: "gemini-3-pro-preview", label: "Gemini 3 Pro (tope)" },
+      { id: "gemini-3-flash-preview", label: "Gemini 3 Flash (rápido)" },
+    ],
+    defaultModel: "gemini-3-pro-preview",
     secret: { name: "GEMINI_API_KEY", kind: "apiKey", placeholder: "AIza..." },
     billing: "byok",
   },

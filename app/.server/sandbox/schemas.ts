@@ -10,7 +10,7 @@ import { TIER_ORDER } from "../../lib/hostingCatalog";
 export const SANDBOX_TEMPLATES = [
   "ubuntu", "python", "node", "node-agent", "bun", "dev-box", "claude-code", "goose",
   "ghostyclaw", "ghosty-lite", "open-ghosty", "lang-ghosty", "rust-ghosty",
-  "ghosty-gc", "ghosty-chat", "claude-worker", "codex-worker",
+  "ghosty-gc", "ghosty-chat", "claude-worker", "codex-worker", "gemini-worker",
   "cagent-ghosty", "openclaw", "chat-openai", "chat-anthropic",
   "ghosty-studio",
   "code-interpreter", "desktop-ghosty", "computer-ghosty", "computer-ghosty-gemini",

@@ -53,6 +53,7 @@ export const TEMPLATE_CATALOG: Record<SandboxTemplate, TemplateInfo> = {
   "computer-ghosty-gemini": { kind: "agent", summary: "Computer-use con Gemini.", summaryEn: "Computer-use on Gemini." },
   "claude-worker": { kind: "internal", summary: "Worker de la flota (Claude). Lo crea la plataforma.", summaryEn: "Fleet worker (Claude). Created by the platform." },
   "codex-worker": { kind: "internal", summary: "Worker de la flota (Codex). Lo crea la plataforma.", summaryEn: "Fleet worker (Codex). Created by the platform." },
+  "gemini-worker": { kind: "internal", summary: "Worker de la flota (Gemini). Lo crea la plataforma.", summaryEn: "Fleet worker (Gemini). Created by the platform." },
   "livekit-svc": { kind: "service", summary: "Sala de videollamada + grabación HD (Studio).", summaryEn: "Video call room + HD recording (Studio)." },
   "whisper-svc": { kind: "service", summary: "STT whisper; parte de la caja voice.", summaryEn: "whisper STT; part of the voice box." },
   "kokoro-svc": { kind: "service", summary: "TTS kokoro; parte de la caja voice.", summaryEn: "kokoro TTS; part of the voice box." },

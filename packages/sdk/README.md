@@ -485,6 +485,7 @@ Use `eb.listTemplates()` for the live catalog with required env. Kinds: `base`
 | `hyperframes-svc` | service | HyperFrames video rendering. |
 | `claude-worker` | internal | Fleet worker (Claude). Created by the platform. |
 | `codex-worker` | internal | Fleet worker (Codex). Created by the platform. |
+| `gemini-worker` | internal | Fleet worker (Gemini). Created by the platform. |
 <!-- /generated -->
 
 For one-off snippets without persistent state, use `sbx.runCode(code, { lang })`.

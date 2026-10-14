@@ -3484,6 +3484,7 @@ function tuiCommandFor(template: string, agentId: string, embedToken: string): s
 const EASYBITS_TOOLED_TEMPLATES = new Set<string>([
   "claude-worker",
   "codex-worker",
+  "gemini-worker",
   "ghosty-gc",
   "ghosty-lite",
   "open-ghosty",
@@ -3499,6 +3500,7 @@ const EASYBITS_TOOLED_TEMPLATES = new Set<string>([
 const EASYBITS_MINTING_TEMPLATES = new Set<string>([
   "claude-worker",
   "codex-worker",
+  "gemini-worker",
   "ghosty-gc",
   // ghosty-lite: la EASYBITS_API_KEY es a la vez su cerebro (provider `easybits` →
   // proxy medido) y su acceso al MCP. Sin ella arranca mudo Y sin LLM, así que se

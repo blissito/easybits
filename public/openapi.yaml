@@ -2740,6 +2740,7 @@ components:
           - hyperframes-svc
           - claude-worker
           - codex-worker
+          - gemini-worker
           # /generated
         timeoutSeconds:
           type: integer
