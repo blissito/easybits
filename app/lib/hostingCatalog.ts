@@ -145,13 +145,14 @@ export function tierPrice(tier: HostingTier, mode: CpuMode): number {
  * Modo "duerme sin visitas": la VM entera (disco + proceso en memoria) se
  * suspende tras SLEEP_IDLE_SECONDS sin tráfico y la primera visita la despierta
  * (~200 ms, el proxy público del host hace el resume). Sin visitas no ocupa RAM
- * ni CPU, sólo disco → la mitad del precio shared. Sólo existe con CPU shared.
+ * ni CPU, sólo disco. Desde 2026-10-14 es el ÚNICO modo que se vende (ya no hay
+ * "siempre prendida") y cuesta lo mismo que shared: micro $99. Sólo con CPU shared.
  */
 export const SLEEP_IDLE_SECONDS = 300;
 
-/** Precio MXN/mes del tier en modo "duerme" (mitad de shared, redondeado hacia abajo: micro $49). */
+/** Precio MXN/mes del tier en modo "duerme" (= precio shared: micro $99). */
 export function sleepPrice(tier: HostingTier): number {
-  return Math.floor(tier.priceShared / 2);
+  return tier.priceShared;
 }
 
 /** Total MXN/month for a machine: tier price + disk add-ons. */

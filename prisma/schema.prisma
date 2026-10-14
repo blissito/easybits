@@ -1542,7 +1542,7 @@ model Sandbox {
                            // passthrough (pairing/CLAUDE.md) to flagship agents.
   cpuMode         String   @default("shared") // "shared" | "reserved"
   // Modo "duerme sin visitas": el host la suspende tras SLEEP_IDLE_SECONDS sin
-  // tráfico y la primera visita la despierta. Mitad de precio (hostingCatalog.sleepPrice).
+  // tráfico y la primera visita la despierta. Precio en hostingCatalog.sleepPrice.
   // ⚠️ Mongo: filas viejas no tienen el campo → filtrar con `sleep: true`, nunca `{not: true}`.
   sleep           Boolean  @default(false)
   diskAddonsGB    Int      @default(0)        // stackable 100GB NVMe units * 100

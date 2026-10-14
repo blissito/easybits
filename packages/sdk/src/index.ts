@@ -2930,7 +2930,7 @@ export class Sandbox {
     return this.req(`/machines/${this.sandboxId}`, { method: "DELETE" });
   }
   /**
-   * Switch a permanent machine between "sleeps when idle" (half price, wakes on
+   * Switch a permanent machine between "sleeps when idle" (wakes on
    * the next request) and always-on. Re-prices billing. Sleep needs template "node".
    */
   async setSleep(sleep: boolean): Promise<this> {
@@ -3738,7 +3738,7 @@ export interface CreatePermanentParams {
   cpuMode?: "shared" | "reserved";
   /**
    * Sleep when idle: suspends after 5 min without traffic; the next request
-   * wakes it (~200 ms, memory intact). Half price. Requires template "node".
+   * wakes it (~200 ms, memory intact). Requires template "node".
    */
   sleep?: boolean;
   /** Extra NVMe in multiples of 100GB (+$99/mo each). */
