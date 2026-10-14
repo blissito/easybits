@@ -25,9 +25,10 @@ export const action = async ({ request }: Route.ActionArgs) => {
   const prompt = String(form.get("prompt") || "").trim();
   const engine = String(form.get("engine") || DEFAULT_SITE_ENGINE);
   const secretValue = String(form.get("secretValue") || "");
+  const stack = kind === "webapp" && form.get("stack") === "tanstack" ? "tanstack" : null;
   try {
     // Ya no hay "siempre prendida": toda web app nueva duerme sin visitas.
-    const { site, checkoutUrl } = await createSite(ctx, { kind, name, engine, secretValue, sleep: true });
+    const { site, checkoutUrl } = await createSite(ctx, { kind, name, engine, secretValue, sleep: true, stack });
     // El primer mensaje viaja por la URL y el editor lo manda solo al abrir.
     const q = new URLSearchParams();
     if (prompt) q.set("prompt", prompt);
@@ -53,6 +54,7 @@ export default function NewSite() {
   const result = useActionData<typeof action>();
   const micro = HOSTING_CATALOG.micro;
   const [prompt, setPrompt] = useState("");
+  const [stack, setStack] = useState<"tanstack" | "node">("tanstack");
   return (
     <article className="pt-20 px-4 sm:px-8 pb-24 md:pl-36 w-full max-w-2xl mx-auto">
       <h1 className="text-2xl sm:text-4xl font-black tracking-tight uppercase mb-6">Nuevo sitio</h1>
@@ -76,6 +78,30 @@ export default function NewSite() {
           ))}
         </div>
         <input type="hidden" name="kind" value={kind} />
+        {kind === "webapp" && (
+          <div>
+            <span className="text-sm font-bold">Stack</span>
+            <div className="mt-1 grid grid-cols-2 gap-2">
+              {(
+                [
+                  ["tanstack", "TanStack Start", "React con SSR, rutas por archivo y funciones de servidor. Arranca con una base lista."],
+                  ["node", "Node libre", "El agente elige el servidor (Express, Hono, React Router) según lo que pidas."],
+                ] as const
+              ).map(([k, title, desc]) => (
+                <button
+                  key={k}
+                  type="button"
+                  onClick={() => setStack(k)}
+                  className={`text-left p-3 rounded-xl border-2 transition-all ${stack === k ? "border-black bg-brand-500/10" : "border-gray-200 hover:border-gray-400"}`}
+                >
+                  <p className="font-bold text-sm">{title}</p>
+                  <p className="text-[11px] text-gray-500 mt-1">{desc}</p>
+                </button>
+              ))}
+            </div>
+            <input type="hidden" name="stack" value={stack} />
+          </div>
+        )}
 
         <label className="block">
           <span className="text-sm font-bold">Nombre</span>

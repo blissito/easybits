@@ -239,7 +239,9 @@ export default function SiteEditor() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [firstPrompt]);
 
-  const previewUrl = site.previewUrl ? `${site.previewUrl}${site.kind === "static" ? "?eb_edit=1" : ""}` : null;
+  // Static carga el picker desde /s/:slug; una webapp TanStack lo carga su __root
+  // (starter). En Node libre el parámetro no hace nada.
+  const previewUrl = site.previewUrl ? `${site.previewUrl}?eb_edit=1` : null;
   // Web app recién creada: mientras corre su PRIMER turno nada escucha todavía en el
   // puerto y el host contesta su error en JSON. No se monta el iframe hasta que el
   // turno termine (al terminar sube previewKey y carga la app ya arrancada).

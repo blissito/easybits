@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { runspecSchema } from "~/.server/core/releaseOperations";
+import { runspecSchema, launchSpec, mergeRunspec } from "~/.server/core/releaseOperations";
 
 // setRunspec mezcla el patch sobre el runspec guardado. La trampa es de JS,
 // no de zod: `{...{a:1}, ...{a:undefined}}` deja `a` en undefined, o sea que
@@ -63,5 +63,26 @@ describe("mergeRunspec y rollback (bugs vistos en la entrega de Acali)", async (
   it("volver a un release anterior a los secretos conserva los secretNames de hoy", () => {
     const spec = releaseSpecKeepingSecrets({ appDir: "/app" }, { appDir: "/app", secretNames: ["JWT_SECRET", "SESSION_SECRET"] });
     expect(spec.secretNames).toEqual(["JWT_SECRET", "SESSION_SECRET"]);
+  });
+});
+
+// «Publicar» en /dash/sitios llama launchApp sólo con sandboxId. Sus defaults
+// le quitaban el `--if-present` al build guardado y reimponían el puerto 3000.
+describe("launchSpec: lo guardado gana a los defaults", () => {
+  const stored = { appDir: "/app", buildCommand: "npm run build --if-present", startCommand: "node server.mjs", port: 8080 };
+
+  it("sin params conserva build, puerto y no inventa startCommand", () => {
+    const spec = launchSpec({}, stored);
+    expect(spec.buildCommand).toBe("npm run build --if-present");
+    expect(spec.port).toBe(8080);
+    expect(mergeRunspec(stored, Object.fromEntries(Object.entries(spec).filter(([, v]) => v !== undefined))).startCommand).toBe("node server.mjs");
+  });
+
+  it("los params explícitos ganan a lo guardado", () => {
+    expect(launchSpec({ port: 5000, buildCommand: "make" }, stored)).toMatchObject({ port: 5000, buildCommand: "make" });
+  });
+
+  it("caja sin runspec: defaults de siempre", () => {
+    expect(launchSpec({}, null)).toMatchObject({ appDir: "/app", port: 3000, startCommand: "npm start" });
   });
 });

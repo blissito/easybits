@@ -1218,6 +1218,35 @@ export type LaunchStep = "provision" | "boot" | "clone" | "build" | "release";
  *  - `sandboxId`: the agent already wrote the app into that box; do the rest.
  * Exactly one of them.
  */
+/**
+ * Runspec de un launch: lo que dicen los params, luego lo que la máquina ya tiene
+ * guardado, y al final los defaults. Pura para poder fijarla en tests.
+ */
+export function launchSpec(
+  params: Partial<Runspec>,
+  stored: Partial<Runspec> | null
+): Runspec {
+  const spec = runspecSchema.parse({
+    appDir: params.appDir ?? stored?.appDir ?? "/app",
+    // `npm ci` exige package-lock.json y falla en seco sin él — un cliente que
+    // no commiteó el lock veía su primer deploy morir sin explicación. El
+    // fallback a `npm install` cubre ese caso sin perder el determinismo
+    // cuando el lock sí está.
+    buildCommand: params.buildCommand ?? stored?.buildCommand ?? "(npm ci || npm install) && npm run build",
+    startCommand: params.startCommand,
+    unit: params.unit,
+    port: params.port ?? stored?.port ?? 3000,
+    dataPaths: params.dataPaths,
+    prebuilt: params.prebuilt,
+    env: params.env,
+    secretNames: params.secretNames,
+  });
+  // Neither a unit nor a start command means nothing would actually serve.
+  // (Si la máquina ya tiene unit o startCommand guardados, el merge los conserva.)
+  if (!spec.unit && !spec.startCommand && !stored?.unit && !stored?.startCommand) spec.startCommand = "npm start";
+  return spec;
+}
+
 export async function launchApp(
   ctx: AuthContext,
   params: {
@@ -1282,23 +1311,13 @@ export async function launchApp(
   // Sólo se compra caja si no dieron una.
   const needsNewBox = !params.sandboxId;
 
-  const spec = runspecSchema.parse({
-    appDir: params.appDir ?? "/app",
-    // `npm ci` exige package-lock.json y falla en seco sin él — un cliente que
-    // no commiteó el lock veía su primer deploy morir sin explicación. El
-    // fallback a `npm install` cubre ese caso sin perder el determinismo
-    // cuando el lock sí está.
-    buildCommand: params.buildCommand ?? "(npm ci || npm install) && npm run build",
-    startCommand: params.startCommand,
-    unit: params.unit,
-    port: params.port ?? 3000,
-    dataPaths: params.dataPaths,
-    prebuilt: params.prebuilt,
-    env: params.env,
-    secretNames: params.secretNames,
-  });
-  // Neither a unit nor a start command means nothing would actually serve.
-  if (!spec.unit && !spec.startCommand) spec.startCommand = "npm start";
+  // Sobre una máquina que ya tiene runspec, lo guardado gana a los defaults: si no,
+  // «Publicar» (que sólo manda sandboxId) le quitaba el `--if-present` al build y
+  // reimponía el puerto 3000 a una app configurada en otro.
+  const stored = params.sandboxId
+    ? ((await db.sandbox.findUnique({ where: { sandboxId: params.sandboxId }, select: { runspec: true } }))?.runspec as Partial<Runspec> | null)
+    : null;
+  const spec = launchSpec(params, stored);
 
   // Only a box WE created gets torn down on failure — never the caller's.
   let sandboxId = params.sandboxId!;
