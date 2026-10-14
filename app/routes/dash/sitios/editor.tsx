@@ -88,6 +88,7 @@ export default function SiteEditor() {
   // Móvil: una columna a la vez (chat | vista previa). En desktop van lado a lado.
   const [mobileTab, setMobileTab] = useState<"chat" | "preview">("chat");
   const [previewKey, setPreviewKey] = useState(0);
+  const [turnDone, setTurnDone] = useState(false);
   const bodyRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const checkout = params.get("checkout");
@@ -208,6 +209,7 @@ export default function SiteEditor() {
         patch((p) => ({ ...p, text: `⚠️ ${err instanceof Error ? err.message : "error de red"}` }));
       } finally {
         setBusy(false);
+        setTurnDone(true);
         setPreviewKey((k) => k + 1);
         // Saldo fresco tras el turno (el proxy medido ya descontó).
         fetch(`/api/v2/sites/${site.id}/chat`).then((r) => (r.ok ? r.json() : null)).then((d) => d?.tokens && setTokens(d.tokens)).catch(() => {});
@@ -227,6 +229,11 @@ export default function SiteEditor() {
   }, [firstPrompt]);
 
   const previewUrl = site.previewUrl ? `${site.previewUrl}${site.kind === "static" ? "?eb_edit=1" : ""}` : null;
+  // Web app recién creada: mientras corre su PRIMER turno nada escucha todavía en el
+  // puerto y el host contesta su error en JSON. No se monta el iframe hasta que el
+  // turno termine (al terminar sube previewKey y carga la app ya arrancada).
+  const firstBuild =
+    site.kind === "webapp" && busy && !turnDone && msgs.filter((m) => m.role === "user").length <= 1;
   const launch = fetcher.data && "launch" in fetcher.data ? fetcher.data.launch : null;
   const actionError = fetcher.data && "error" in fetcher.data ? fetcher.data.error : null;
 
@@ -358,6 +365,12 @@ export default function SiteEditor() {
               <input type="hidden" name="intent" value="attach" />
               <button type="submit" className="text-sm underline text-gray-500">Ya pagué, vincular máquina</button>
             </fetcher.Form>
+          </div>
+        ) : firstBuild ? (
+          <div className="flex-1 flex flex-col items-center justify-center gap-2 text-center px-6 pb-12 md:pb-0">
+            <span className="h-8 w-8 rounded-full border-4 border-gray-200 border-t-black animate-spin" />
+            <p className="font-bold">Construyendo tu app…</p>
+            <p className="text-sm text-gray-500 max-w-sm">La vista previa aparece cuando el agente termine de escribir el código y arranque el servidor.</p>
           </div>
         ) : previewUrl ? (
           <iframe key={previewKey} ref={iframeRef} src={previewUrl} title="Vista previa" className="flex-1 w-full bg-white pb-12 md:pb-0" />
