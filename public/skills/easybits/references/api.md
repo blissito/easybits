@@ -54,6 +54,7 @@ Body: `{ template, timeoutSeconds?, suspendOnIdle?, hardTtlSeconds?, persistent?
 | `hyperframes-svc` | service | HyperFrames video rendering. |
 | `claude-worker` | internal | Fleet worker (Claude). Created by the platform. |
 | `codex-worker` | internal | Fleet worker (Codex). Created by the platform. |
+| `gemini-worker` | internal | Fleet worker (Gemini). Created by the platform. |
 <!-- /generated -->
 
 ⚠️ Without `suspendOnIdle: true` the box is **destroyed** when `timeoutSeconds` (default 300 s)

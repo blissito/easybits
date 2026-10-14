@@ -78,6 +78,7 @@ the platform, not by you):
 | `hyperframes-svc` | service | HyperFrames video rendering. |
 | `claude-worker` | internal | Fleet worker (Claude). Created by the platform. |
 | `codex-worker` | internal | Fleet worker (Codex). Created by the platform. |
+| `gemini-worker` | internal | Fleet worker (Gemini). Created by the platform. |
 <!-- /generated -->
 
 ## Rules
