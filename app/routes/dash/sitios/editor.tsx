@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Link, data, useFetcher, useLoaderData, useSearchParams } from "react-router";
+import { Link, data, redirect, useFetcher, useLoaderData, useSearchParams } from "react-router";
+import { db } from "~/.server/db";
 import { Streamdown } from "streamdown";
 import { ChatComposer } from "~/components/sitios/ChatComposer";
 import { getUserOrRedirect } from "~/.server/getters";
@@ -21,6 +22,13 @@ export const meta = () => [{ title: "Sitio — EasyBits" }, { name: "robots", co
 
 export const loader = async ({ request, params }: Route.LoaderArgs) => {
   const user = await getUserOrRedirect(request);
+  // Las integraciones (MailMask) sólo conocen el id del Website que publica el sitio: si el
+  // id no es de un Site del usuario pero sí de su Website, se manda al editor de ese Site.
+  const own = await db.site.findFirst({ where: { id: params.id!, ownerId: user.id }, select: { id: true } }).catch(() => null);
+  if (!own) {
+    const bySite = await db.site.findFirst({ where: { websiteId: params.id!, ownerId: user.id }, select: { id: true } }).catch(() => null);
+    if (bySite) throw redirect(`/dash/sitios/${bySite.id}`);
+  }
   const site = await getSite({ user, scopes: ["READ"] } as AuthContext, params.id!);
   const gh = siteRepo(site.sandbox?.runspec);
   return {
