@@ -1545,6 +1545,10 @@ model Sandbox {
   // tráfico y la primera visita la despierta. Precio en hostingCatalog.sleepPrice.
   // ⚠️ Mongo: filas viejas no tienen el campo → filtrar con `sleep: true`, nunca `{not: true}`.
   sleep           Boolean  @default(false)
+  // Miniatura de la home para /dash/hosting: se toma UNA vez por release publicado
+  // (previewReleaseId), no en cada visita al panel (despertaría la máquina).
+  previewUrl       String?
+  previewReleaseId String?
   diskAddonsGB    Int      @default(0)        // stackable 100GB NVMe units * 100
   name            String?
   status          String   @default("provisioning") // provisioning|running|suspended|error|lost|destroyed|pending_deletion|transferred (viva, pero ya es de otra plataforma: fuera del monitor, respaldos y listados)

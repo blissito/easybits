@@ -4,7 +4,8 @@ import type { Route } from "./+types/hosting";
 import { getUserOrRedirect } from "~/.server/getters";
 import { db } from "~/.server/db";
 import type { AuthContext } from "~/.server/apiAuth";
-import { listPermanent, releasePermanent, setMachineSleep } from "~/.server/core/machineOperations";
+import { getPermanent, listPermanent, releasePermanent, setMachineSleep } from "~/.server/core/machineOperations";
+import { captureScreenshot } from "~/.server/core/fleetRender";
 import {
   listSandboxDomains,
   addSandboxDomain,
@@ -75,7 +76,7 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
   // es justamente lo que se viene a mirar.
   const rows = await db.sandbox.findMany({
     where: { sandboxId: { in: machines.map((m: any) => m.sandboxId) } },
-    select: { sandboxId: true, currentReleaseId: true, runspec: true },
+    select: { sandboxId: true, currentReleaseId: true, runspec: true, previewUrl: true, previewReleaseId: true },
   });
   const extra = Object.fromEntries(rows.map((r) => [r.sandboxId, r]));
 
@@ -89,6 +90,8 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
       return {
         ...m,
         currentReleaseId: row?.currentReleaseId ?? null,
+        previewUrl: row?.previewUrl ?? null,
+        previewReleaseId: row?.previewReleaseId ?? null,
         domains: names,
         // Los que ya apuntan aquí: sólo esos pueden ser el título y la liga del sitio.
         liveDomains: names.filter((_, i) => pointing[i]),
@@ -187,6 +190,26 @@ export const action = async ({ request }: Route.ActionArgs) => {
       return data({ ok: await resumeSandbox(ctx, id) });
     case "release":
       return data({ ok: await releasePermanent(ctx, id) });
+    case "preview": {
+      // Miniatura de la home del release actual. La dirección se arma AQUÍ (nunca del
+      // cliente): la URL pública de la caja con su puerto.
+      const m = await getPermanent(ctx, id);
+      const row = await db.sandbox.findUnique({ where: { sandboxId: id }, select: { currentReleaseId: true, runspec: true } });
+      if (!row?.currentReleaseId) return data({ preview: null });
+      const port = (row.runspec as any)?.port ?? 3000;
+      const url = `https://sb-${m.sandboxId.replace(/^sb_/, "")}-${port}.sandboxes.easybits.cloud`;
+      const shot = await captureScreenshot(ctx, {
+        url,
+        viewport: { width: 1280, height: 800 },
+        emulate: { deviceScaleFactor: 1, isMobile: false, hasTouch: false },
+        fullPage: false,
+        waitMs: 800,
+        fileName: `preview-${m.sandboxId}`,
+      }).catch(() => null);
+      if (!shot) return data({ preview: null });
+      await db.sandbox.update({ where: { sandboxId: id }, data: { previewUrl: shot.url, previewReleaseId: row.currentReleaseId } });
+      return data({ preview: shot.url });
+    }
     case "sleep":
       return data({ ok: !!(await setMachineSleep(ctx, id, String(form.get("sleep")) === "1")) });
     default:
@@ -620,9 +643,34 @@ function MachineCard({
     onToggle();
   };
 
+  // Miniatura de la home: se pide sola cuando falta o es de un release anterior. Fetcher
+  // propio para no pisar el del detalle/mutaciones.
+  const pv = useFetcher<any>();
+  const stale = !!machine.currentReleaseId && machine.previewReleaseId !== machine.currentReleaseId;
+  useEffect(() => {
+    if (stale && machine.status === "running" && pv.state === "idle" && !pv.data)
+      pv.submit({ intent: "preview", sandboxId: machine.sandboxId }, { method: "post" });
+  }, [stale, machine.status]);
+  const previewSrc = (pv.data?.preview as string | undefined) ?? machine.previewUrl;
+
   return (
     <article className="w-full min-w-0 rounded-2xl border-[2px] border-black bg-white overflow-hidden transition-shadow hover:shadow-[4px_4px_0_0_#000]">
       <div className="flex items-center gap-3 p-3 md:p-4 min-w-0">
+        {machine.currentReleaseId && (
+          <a
+            href={address}
+            target="_blank"
+            rel="noreferrer"
+            className="relative shrink-0 hidden sm:block w-28 aspect-[16/10] rounded-lg border-[2px] border-black overflow-hidden bg-gray-100"
+            title="Abrir el sitio"
+          >
+            {previewSrc ? (
+              <img src={previewSrc} alt={`Vista de ${title(machine)}`} loading="lazy" className="w-full h-full object-cover object-top" />
+            ) : (
+              <span className={`absolute inset-0 ${pv.state !== "idle" ? "animate-pulse bg-gray-200" : ""}`} />
+            )}
+          </a>
+        )}
         <span
           className={`w-2.5 h-2.5 rounded-full shrink-0 ${DOT[machine.status] ?? "bg-gray-300"}`}
           title={machine.status}
