@@ -162,18 +162,22 @@ export const FLEET_ENGINES: FleetEngine[] = [
   {
     id: "gemini",
     label: "Ghosty · Gemini",
-    model: "Gemini 3",
+    model: "3.8 Flash · 3.1 Pro",
     provider: "google",
     // Template `gemini-worker` horneado en A y B (sandbox-host, 2026-10-09): Gemini CLI
     // por ACP DENTRO de la caja, SSE hacia fuera como los demás. El spawn inyecta
     // GEMINI_API_KEY del vault del dueño; el modelo va en GEMINI_MODEL.
     template: "gemini-worker",
     modelEnv: "GEMINI_MODEL",
+    // ⚠️ Los ids de Gemini caducan rápido: `gemini-3-pro-preview` ya responde 404 (oct 2026).
+    // Verificar contra GET /v1beta/models antes de cambiar. Default = 3.8 Flash: el mejor
+    // en webdev de la familia según la comunidad (Arena WebDev/Website Arena, oct 2026), más
+    // rápido y barato; 3.1 Pro se satura seguido ("high demand").
     models: [
-      { id: "gemini-3-pro-preview", label: "Gemini 3 Pro (tope)" },
-      { id: "gemini-3-flash-preview", label: "Gemini 3 Flash (rápido)" },
+      { id: "gemini-3.8-flash", label: "Gemini 3.8 Flash (mejor en HTML)" },
+      { id: "gemini-3.1-pro-preview", label: "Gemini 3.1 Pro (razonamiento)" },
     ],
-    defaultModel: "gemini-3-pro-preview",
+    defaultModel: "gemini-3.8-flash",
     secret: { name: "GEMINI_API_KEY", kind: "apiKey", placeholder: "AIza..." },
     billing: "byok",
   },
