@@ -22,11 +22,26 @@ export const meta = () => [
 export const loader = async ({ request }: Route.LoaderArgs) => {
   const user = await getUserOrRedirect(request);
   const domains = await listCustomDomains(user.id);
+  // Heurística barata para resaltar «Configurar con Mailmask»: Mailmask hospeda zonas en
+  // Route 53, así que NS `awsdns-*` lo hacen probable (no seguro: puede ser otra cuenta de AWS).
+  // Se sube por las etiquetas hasta dar con la zona (custom.fancyfiles.app → fancyfiles.app).
+  const { resolveNs } = await import("node:dns/promises");
+  const route53 = async (domain: string) => {
+    const labels = domain.split(".");
+    for (let i = 0; i < labels.length - 1; i++) {
+      const ns = await resolveNs(labels.slice(i).join(".")).catch(() => null);
+      if (ns?.length) return ns.some((n) => /awsdns/i.test(n));
+    }
+    return false;
+  };
+  const inRoute53 = Object.fromEntries(
+    await Promise.all(domains.filter((d) => !d.verified).map(async (d) => [d.id, await route53(d.domain)] as const))
+  );
   const { items: websites } = await listWebsites(
     { user, scopes: ["READ"] } as unknown as AuthContext,
     { limit: 200 }
   );
-  return { domains, websites: websites.map((w) => ({ id: w.id, name: w.name, slug: w.slug })) };
+  return { domains, inRoute53, websites: websites.map((w) => ({ id: w.id, name: w.name, slug: w.slug })) };
 };
 
 export const action = async ({ request }: Route.ActionArgs) => {
@@ -63,7 +78,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
 };
 
 export default function DomainsPage() {
-  const { domains, websites } = useLoaderData<typeof loader>();
+  const { domains, websites, inRoute53 } = useLoaderData<typeof loader>();
   const fetcher = useFetcher();
   const [newDomain, setNewDomain] = useState("");
 
@@ -152,6 +167,28 @@ export default function DomainsPage() {
                   </fetcher.Form>
                 </div>
               </div>
+
+              {/* Atajo: si el DNS vive en Mailmask, ahí se escriben (y se deshacen) solos. */}
+              {!d.verified && (
+                <div
+                  className={`mb-3 rounded-lg border-2 p-3 text-sm flex items-center gap-3 flex-wrap ${
+                    inRoute53[d.id] ? "border-black bg-brand-500/10" : "border-gray-200"
+                  }`}
+                >
+                  <p className="flex-1 min-w-0 text-gray-700">
+                    {inRoute53[d.id] ? <strong>Parece que tu DNS está en Mailmask. </strong> : "¿Tu DNS está en Mailmask? "}
+                    Configura estos registros en un clic, y si cambias de idea se deshacen igual.
+                  </p>
+                  <a
+                    href={`https://www.mailmask.studio/app?domain=${encodeURIComponent(d.domain)}&easybits=1`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="shrink-0 inline-flex items-center h-9 px-3 rounded-lg border-2 border-black bg-white font-bold text-sm hover:bg-brand-500/10"
+                  >
+                    Configurar con Mailmask ↗
+                  </a>
+                </div>
+              )}
 
               {/* DNS Instructions */}
               {!d.verified && (

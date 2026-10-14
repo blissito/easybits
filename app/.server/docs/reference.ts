@@ -849,6 +849,8 @@ Flow: \`add_domain\` → add DNS → \`verify_domain\` → (optional) \`set_doma
 
 Certificates are issued automatically on the first HTTPS request (wildcard registered on verify; root + www when a site is assigned). They can take a few minutes after DNS propagates.
 
+**DNS hosted in Mailmask?** Skip the copy-paste: Mailmask writes (and can undo) all these records and runs the verify for you — UI at \`mailmask.studio/app?domain=<domain>&easybits=1\`, or from an agent with Mailmask's MCP tools \`publish_easybits_site\` / \`unpublish_easybits_site\`.
+
 REST: \`GET/POST/DELETE /domains\`, \`POST /domains/:domainId/verify\`, \`POST /domains/:domainId/apex\` \`{ websiteId | null }\`.
 MCP: \`list_domains\`, \`add_domain\`, \`verify_domain\`, \`set_domain_website\`, \`delete_domain\`.
 
