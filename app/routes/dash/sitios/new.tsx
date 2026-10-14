@@ -98,7 +98,7 @@ export default function NewSite() {
         )}
         <label className="block">
           <span className="text-sm font-bold">Nombre</span>
-          <input name="name" required placeholder="Tacos La Esquina" className="mt-1 w-full px-4 py-2.5 border-2 border-black rounded-xl focus:outline-none" />
+          <input name="name" required placeholder="Estudio Orbe" className="mt-1 w-full px-4 py-2.5 border-2 border-black rounded-xl focus:outline-none" />
         </label>
         {/* ¿Quién lo construye? Motores del registro de la flota. Medido = tokens de tu
             cuenta; BYOK = tu llave (se pide una vez y queda en tu vault). */}
@@ -133,7 +133,7 @@ export default function NewSite() {
         </div>
         <label className="block">
           <span className="text-sm font-bold">¿Qué quieres que construya?</span>
-          <textarea name="prompt" rows={4} placeholder="Una landing para mi taquería con menú, horarios, mapa y botón de WhatsApp…" className="mt-1 w-full px-4 py-2.5 border-2 border-black rounded-xl focus:outline-none" />
+          <textarea name="prompt" rows={4} placeholder="Un sitio para mi estudio de arquitectura con portafolio de proyectos, equipo y formulario de contacto…" className="mt-1 w-full px-4 py-2.5 border-2 border-black rounded-xl focus:outline-none" />
         </label>
         {result && "error" in result && <p className="text-sm text-red-600">{result.error}</p>}
         <BrutalButton type="submit" isDisabled={nav.state !== "idle"}>
