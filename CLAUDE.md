@@ -53,7 +53,7 @@ Brenda, no son de la migración) sin preguntar. Y rotar el token de Fly que se i
 
 ## Deploy
 - **Ya NO vive en Fly** (desde 2026-10-08, commit `79866b4d`; las apps `easybits*` de Fly están borradas). Producción es la caja **app-host** del fierro A de sandbox-host.
-- Push a `main` → `.github/workflows/deploy.yml` construye la imagen y la publica en GHCR → la caja la jala sola (`app-deploy.timer`, ≤60 s) con salud y rollback → el workflow espera a que `https://www.easybits.cloud/api/version` reporte el SHA. Si no llega: `journalctl -u app-deploy` en la caja.
+- Push a `main` → `.github/workflows/deploy.yml`: `verify` (typecheck, check:docs, check:skills, vitest) y `build` (imagen `:<sha>` en GHCR) en paralelo → `release` mueve `:main` SÓLO si verify pasó y el commit sigue siendo la punta → la caja la jala sola (`app-deploy.timer`, ≤60 s) con salud y rollback → el workflow espera a que `https://www.easybits.cloud/api/version` reporte el SHA. Si no llega: `journalctl -u app-deploy` en la caja.
 - Dockerfile uses layer caching (deps cached separately from source)
 - Runtime packages MUST be in `dependencies` (not `devDependencies`) — `npm prune --omit=dev` runs in Docker
 

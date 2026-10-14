@@ -1,5 +1,9 @@
 # Producción vive en sandbox-host (fierro A, caja app-host) desde 2026-10-08: este workflow sólo
 # publica la imagen en GHCR; la caja la jala sola (app-deploy.timer, ≤60 s) con salud y rollback.
+#
+# Tres jobs: `verify` y `build` corren EN PARALELO; `release` (needs: ambos) mueve el tag
+# `:main` —el único que mira la caja— a la imagen de este commit. Así Verify es un CANDADO
+# sin alargar el deploy: un rojo deja prod en el commit anterior y se ve en Actions.
 
 name: Deploy
 on:
@@ -10,9 +14,9 @@ on:
   # recuperar de un deploy a medias o para medir el pipeline).
   workflow_dispatch:
 jobs:
-  # Vigilancia de desfase (typecheck, vitest, bloques generados, skills). Corre EN
-  # PARALELO y NO bloquea el deploy (decisión deliberada): un rojo se ve en Actions,
-  # no detiene prod. Para convertirlo en gate: `needs: verify` en deploy.
+  # Typecheck, vitest, bloques generados, skills. Antes NO bloqueaba el deploy y estuvo en
+  # rojo nueve commits seguidos (2026-10-14) sin que nadie lo viera: un check que no detiene
+  # nada se ignora. Ahora es requisito de `release`.
   verify:
     name: Verify (typecheck, tests, docs)
     runs-on: ubuntu-latest
@@ -32,10 +36,9 @@ jobs:
         env:
           CI: "true"
 
-  deploy:
-    name: Deploy app
+  build:
+    name: Build image
     runs-on: ubuntu-latest
-    concurrency: deploy-group
     # packages:write → la imagen va a GHCR, de donde la jala la caja de sandbox-host.
     permissions:
       contents: read
@@ -68,9 +71,9 @@ jobs:
         with:
           context: .
           push: true
+          # Sólo el tag del SHA: `:main` lo mueve `release` cuando verify pasa.
           tags: |
             ghcr.io/blissito/easybits:${{ github.sha }}
-            ghcr.io/blissito/easybits:main
           # CACHEBUST = SHA del commit → fuerza recompilar la fuente en cada push
           # (las deps siguen cacheadas). Sin esto el gha cache a veces servía un
           # binario viejo y tools nuevas (ej. call_create) "desaparecían".
@@ -91,8 +94,49 @@ jobs:
           # entero en cada deploy — cambiar 33s de export por varios minutos.
           cache-to: type=gha,mode=max
 
+  release:
+    name: Release (verify ✓ → :main)
+    needs: [verify, build]
+    runs-on: ubuntu-latest
+    concurrency: deploy-group
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      # Un release viejo que termina DESPUÉS de uno nuevo regresaría prod a un commit
+      # anterior: sólo se publica si este SHA sigue siendo la punta de main.
+      - name: Skip if main moved on
+        id: tip
+        run: |
+          tip=$(git ls-remote https://github.com/${{ github.repository }}.git refs/heads/main | cut -f1)
+          if [ "${{ github.event_name }}" = "push" ] && [ "$tip" != "${{ github.sha }}" ]; then
+            echo "::notice::main ya va en ${tip:0:8}; no publico ${GITHUB_SHA:0:8}"
+            echo "stale=1" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Log in to GHCR
+        if: steps.tip.outputs.stale != '1'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        if: steps.tip.outputs.stale != '1'
+        uses: docker/setup-buildx-action@v3
+
+      # Retag sin reconstruir: segundos.
+      - name: Point :main at this commit
+        if: steps.tip.outputs.stale != '1'
+        run: |
+          docker buildx imagetools create \
+            -t ghcr.io/blissito/easybits:main \
+            ghcr.io/blissito/easybits:${{ github.sha }}
+
       # La caja confirma el rollout: /api/version devuelve el SHA del build.
       - name: Wait for rollout
+        if: steps.tip.outputs.stale != '1'
         run: |
           for i in $(seq 1 50); do
             v=$(curl -fsS -m 5 https://www.easybits.cloud/api/version 2>/dev/null || true)
