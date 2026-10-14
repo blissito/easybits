@@ -53,11 +53,11 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
   const cookieHeader = request.headers.get("Cookie") || "";
   if (cookieHeader.includes("eb_share=")) {
     return data(
-      { isAdmin, isShareSession: false, impersonating, unreadCount },
+      { isAdmin, isShareSession: false, impersonating, unreadCount, picture: user.picture ?? null },
       { headers: { "Set-Cookie": clearShareCookie() } }
     );
   }
-  return { isAdmin, isShareSession: false, impersonating, unreadCount };
+  return { isAdmin, isShareSession: false, impersonating, unreadCount, picture: user.picture ?? null };
 };
 
 export default function DashLayout({ loaderData }: Route.ComponentProps) {
@@ -65,6 +65,7 @@ export default function DashLayout({ loaderData }: Route.ComponentProps) {
   const isShareSession = loaderData?.isShareSession ?? false;
   const impersonating = loaderData?.impersonating ?? null;
   const unreadCount = loaderData?.unreadCount ?? 0;
+  const picture = (loaderData as { picture?: string | null } | undefined)?.picture ?? null;
   if (isShareSession) {
     return (
       <main className="flex relative min-h-svh bg-pattern">
@@ -85,7 +86,7 @@ export default function DashLayout({ loaderData }: Route.ComponentProps) {
         />
       )}
       <HeaderMobile isAdmin={isAdmin} />
-      <SideBar isAdmin={isAdmin} unreadCount={unreadCount} />
+      <SideBar isAdmin={isAdmin} unreadCount={unreadCount} picture={picture} />
       <Outlet />
     </main>
   );

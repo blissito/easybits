@@ -20,19 +20,40 @@ interface MenuItemProps {
   external?: boolean;
 }
 
+/** La foto del usuario en lugar del ícono genérico de «Perfil». Si la URL ya no carga
+ *  (las de Google caducan), regresa al ícono. */
+function Avatar({ src }: { src: string }) {
+  const [broken, setBroken] = useState(false);
+  if (broken) return <img className="scale" src="/images/profile.svg" />;
+  return (
+    <img
+      src={src}
+      alt="Tu perfil"
+      referrerPolicy="no-referrer"
+      onError={() => setBroken(true)}
+      className="scale w-8 h-8 rounded-full object-cover border-[2px] border-white"
+    />
+  );
+}
+
+const withAvatar = (items: typeof ITEMS.bottomItems, picture?: string | null) =>
+  picture ? items.map((i) => (i.path === "/dash/perfil" ? { ...i, icon: <Avatar src={picture} /> } : i)) : items;
+
 export const SideBar = ({
   isAdmin = false,
   unreadCount = 0,
+  picture = null,
 }: {
   isAdmin?: boolean;
   unreadCount?: number;
+  picture?: string | null;
 }) => {
   return (
     <>
       <section className="mobile-menu-btn fixed right-4 bottom-16 z-20 block md:hidden">
-        <FoldMenu />
+        <FoldMenu picture={picture} />
       </section>
-      <SideBarWeb isAdmin={isAdmin} unreadCount={unreadCount} />
+      <SideBarWeb isAdmin={isAdmin} unreadCount={unreadCount} picture={picture} />
     </>
   );
 };
@@ -40,9 +61,11 @@ export const SideBar = ({
 const SideBarWeb = ({
   isAdmin = false,
   unreadCount = 0,
+  picture = null,
 }: {
   isAdmin?: boolean;
   unreadCount?: number;
+  picture?: string | null;
 }) => {
   const location = useLocation();
   const middleItems = isAdmin
@@ -88,7 +111,7 @@ const SideBarWeb = ({
 
       {/* Bottom */}
       <ul className="flex flex-col items-center pb-0 gap-3 w-full mt-auto">
-        {ITEMS.bottomItems.map((item, key) => (
+        {withAvatar(ITEMS.bottomItems, picture).map((item, key) => (
           <SideBarItem key={key} {...item} />
         ))}
       </ul>
@@ -181,7 +204,7 @@ const SideBarItem = ({
   return <Link to={path}>{content}</Link>;
 };
 
-const FoldMenu = () => {
+const FoldMenu = ({ picture = null }: { picture?: string | null }) => {
   const [isFold, setIsFold] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -203,7 +226,7 @@ const FoldMenu = () => {
   const allItems = [
     ...ITEMS.sections.flatMap((s) => s.items),
     ...ITEMS.middleItems.map((i) => ({ ...i, external: i.path.startsWith("http") })),
-    ...ITEMS.bottomItems,
+    ...withAvatar(ITEMS.bottomItems, picture),
   ];
 
   return (
