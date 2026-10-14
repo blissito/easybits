@@ -8,6 +8,7 @@ export const SITE_STACKS = [
   { id: "nuxt", label: "Nuxt", desc: "Vue con SSR, páginas por archivo y rutas de servidor." },
   { id: "sveltekit", label: "SvelteKit", desc: "Svelte 5, ligero, con load y actions en el servidor." },
   { id: "astro", label: "Astro", desc: "Sitios de contenido con poco JavaScript y endpoints." },
+  { id: "elysia", label: "Elysia", desc: "API rápida y tipada con HTML del servidor (sobre Node)." },
 ] as const;
 
 export type SiteStackId = (typeof SITE_STACKS)[number]["id"];

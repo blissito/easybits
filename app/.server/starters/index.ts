@@ -48,6 +48,11 @@ const RULES: Record<SiteStackId, string[]> = {
     `OJO, cambió: la config va en vite.config.ts como sveltekit({ adapter: adapter() }); svelte.config.js YA NO existe y el build falla si lo creas. tsconfig.json extiende "$app/tsconfig". La doc https://svelte.dev/llms-small.txt todavía enseña lo viejo en esa parte.`,
     `Rutas en /app/src/routes: +page.svelte, +page.server.ts (load y actions corren en el servidor), +server.ts para endpoints. Adaptador node: no lo cambies.`,
   ],
+  elysia: [
+    `Stack: Elysia 1.4 sobre Node 24 con el adaptador @elysiajs/node (NO hay Bun en esta máquina: nada de Bun.* ni bun install). Node corre el TypeScript directo (imports relativos con extensión .ts, sólo sintaxis borrable: nada de enum ni namespace).`,
+    `Doc oficial: sandbox_exec("curl -sL https://elysiajs.com/llms.txt") es el índice.`,
+    `Todo en /app/src: index.ts registra rutas (.get/.post con validación t.Object de elysia); las páginas devuelven page(título, html) de src/layout.ts y TODO dato del usuario pasa por esc(). Tailwind va por CDN (clases directas, sin build). Archivos estáticos en /app/public. "npm run build" sólo corre tsc: si falla, corrígelo.`,
+  ],
   astro: [
     `Stack: Astro 7 con output "server" y el adaptador @astrojs/node (standalone).`,
     `Doc oficial: sandbox_exec("curl -sL https://docs.astro.build/en/<ruta>/") (por ejemplo guides/routing, guides/endpoints). No hay llms.txt.`,
@@ -64,6 +69,7 @@ const PICKER_FILE: Record<SiteStackId, string> = {
   nuxt: "nuxt.config.ts (app.head.script)",
   sveltekit: "src/app.html",
   astro: "src/layouts/Layout.astro",
+  elysia: "src/layout.ts",
 };
 
 /** Líneas del prompt por turno para una webapp con starter. */
@@ -71,7 +77,7 @@ export function starterPrompt(stack: SiteStackId): string[] {
   return [
     `Ya hay un starter FUNCIONANDO en /app: NO cambies de stack ni reescribas la config ni los scripts de package.json (build/start ya están probados en esta caja). Mantén las versiones; no escribas APIs de memoria.`,
     ...RULES[stack],
-    stack === "remix"
+    stack === "remix" || stack === "elysia"
       ? `Conserva el script del selector de EasyBits en ${PICKER_FILE[stack]}.`
       : `Estilos con Tailwind 4 (clases; ya configurado). Conserva el script del selector de EasyBits en ${PICKER_FILE[stack]}.`,
     `Cada sección/elemento de bloque lleva un atributo data-eb-id ÚNICO y estable (ej. data-eb-id="hero"); consérvalos al editar y cambia SOLO lo que se pide.`,
