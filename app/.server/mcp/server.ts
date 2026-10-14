@@ -1765,7 +1765,7 @@ How to embed safely (the only reliable rule):
 
   server.tool(
     "set_machine_sleep",
-    "Switch an always-on machine between 'sleeps when idle' (suspends after 5 min without traffic, next request wakes it in ~200 ms with memory intact, half price) and 'always on'. Re-prices billing. Sleep requires template 'node' and shared CPU.",
+    "Put a machine in 'sleeps when idle' mode (suspends after 5 min without traffic, next request wakes it in ~200 ms with memory intact, half price). Re-prices billing. One-way: going back to always-on is no longer offered. Requires template 'node' and shared CPU.",
     {
       sandboxId: z.string().describe("Sandbox ID of the machine"),
       sleep: z.boolean().describe("true = sleep when idle (half price); false = always on"),

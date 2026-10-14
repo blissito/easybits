@@ -25,9 +25,9 @@ export const action = async ({ request }: Route.ActionArgs) => {
   const prompt = String(form.get("prompt") || "").trim();
   const engine = String(form.get("engine") || DEFAULT_SITE_ENGINE);
   const secretValue = String(form.get("secretValue") || "");
-  const sleep = String(form.get("sleep") ?? "1") !== "0";
   try {
-    const { site, checkoutUrl } = await createSite(ctx, { kind, name, engine, secretValue, sleep });
+    // Ya no hay "siempre prendida": toda web app nueva duerme sin visitas.
+    const { site, checkoutUrl } = await createSite(ctx, { kind, name, engine, secretValue, sleep: true });
     // El primer mensaje viaja por la URL y el editor lo manda solo al abrir.
     const q = new URLSearchParams();
     if (prompt) q.set("prompt", prompt);
@@ -49,7 +49,6 @@ export default function NewSite() {
   const nav = useNavigation();
   const result = useActionData<typeof action>();
   const micro = HOSTING_CATALOG.micro;
-  const [sleep, setSleep] = useState(true);
   const [prompt, setPrompt] = useState("");
   return (
     <article className="pt-20 px-4 sm:px-8 pb-24 md:pl-36 w-full max-w-2xl mx-auto">
@@ -59,7 +58,7 @@ export default function NewSite() {
           {(
             [
               ["static", "Sitio estático", "Landing, portafolio, catálogo. Incluido en tu plan."],
-              ["webapp", "Web app", `Con servidor y base de datos. Su propia máquina desde $${sleepPrice(micro)} MXN/mes.`],
+              ["webapp", "Web app", `Con servidor y base de datos. Su propia máquina por $${sleepPrice(micro)} MXN/mes: se duerme cuando nadie entra y despierta en menos de un segundo.`],
             ] as const
           ).map(([k, title, desc]) => (
             <button
@@ -74,30 +73,7 @@ export default function NewSite() {
           ))}
         </div>
         <input type="hidden" name="kind" value={kind} />
-        {kind === "webapp" && (
-          <div>
-            <span className="text-sm font-bold">¿Cómo vive tu máquina?</span>
-            <div className="mt-1 grid grid-cols-2 gap-2">
-              {(
-                [
-                  [true, "Duerme sin visitas", `$${sleepPrice(micro)} MXN/mes. Se apaga sola cuando nadie entra y despierta en menos de un segundo con la primera visita.`],
-                  [false, "Siempre prendida", `$${micro.priceShared} MXN/mes. Para tareas de fondo, websockets o crons dentro de la app.`],
-                ] as const
-              ).map(([v, title, desc]) => (
-                <button
-                  key={title}
-                  type="button"
-                  onClick={() => setSleep(v)}
-                  className={`text-left p-3 rounded-xl border-2 transition-all ${sleep === v ? "border-black bg-brand-500/10" : "border-gray-200 hover:border-gray-400"}`}
-                >
-                  <p className="font-bold text-sm">{title}</p>
-                  <p className="text-[11px] text-gray-500 mt-1">{desc}</p>
-                </button>
-              ))}
-            </div>
-            <input type="hidden" name="sleep" value={sleep ? "1" : "0"} />
-          </div>
-        )}
+
         <label className="block">
           <span className="text-sm font-bold">Nombre</span>
           <input name="name" required placeholder="Estudio Orbe" className="mt-1 w-full px-4 py-2.5 border-2 border-black rounded-xl focus:outline-none" />

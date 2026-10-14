@@ -258,6 +258,10 @@ export async function setMachineSleep(
   if (!tier) fail(400, "UnknownTier", `Tier desconocido: "${row.tier}".`);
   const mode = (row.cpuMode === "reserved" ? "reserved" : "shared") as CpuMode;
   if (!!row.sleep === sleep) return getPermanent(ctx, sandboxId);
+  // Desde 2026-10-14 "siempre prendida" ya no se vende: se puede pasar a dormir, no volver.
+  if (!sleep) {
+    fail(422, "AlwaysOnDiscontinued", "Ya no ofrecemos máquinas siempre prendidas: esta máquina se queda en modo duerme.");
+  }
   assertCanProvision(ctx, tier, mode, sleep);
   assertSleepTemplate(sleep, row.template ?? undefined);
 

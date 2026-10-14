@@ -645,22 +645,18 @@ function MachineCard({
             {machine.currentReleaseId ? "" : " · sin publicar"}
             {" · "}
             {machine.sleep ? "duerme sin visitas 💤" : "siempre prendida"}
-            {/* Sólo `node` puede dormir (el host necesita su /busy para saber que está ociosa). */}
-            {tier && machine.template === "node" && machine.cpuMode !== "reserved" && (
+            {/* "Siempre prendida" ya no se vende: sólo se ofrece pasar a dormir (sólo `node`
+                puede, el host necesita su /busy para saber que está ociosa). */}
+            {tier && !machine.sleep && machine.template === "node" && machine.cpuMode !== "reserved" && (
               <button
                 type="button"
                 disabled={fetcher.state !== "idle"}
                 onClick={() =>
-                  fetcher.submit(
-                    { intent: "sleep", sandboxId: machine.sandboxId, sleep: machine.sleep ? "0" : "1" },
-                    { method: "post" }
-                  )
+                  fetcher.submit({ intent: "sleep", sandboxId: machine.sandboxId, sleep: "1" }, { method: "post" })
                 }
                 className="ml-1 underline underline-offset-2 hover:text-dark disabled:opacity-50"
               >
-                {machine.sleep
-                  ? `mantener prendida ($${tier.priceShared} MXN/mes)`
-                  : `que duerma ($${sleepPrice(tier)} MXN/mes)`}
+                {`que duerma ($${sleepPrice(tier)} MXN/mes)`}
               </button>
             )}
           </p>
