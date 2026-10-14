@@ -5,7 +5,7 @@
 import type { SiteStackId } from "~/lib/siteStacks";
 import { STARTER_FILES } from "./files";
 
-// Los cinco arrancan con `npm start` (el script de cada package.json) y respetan PORT.
+// Todos arrancan con `npm start` (el script de cada package.json) y respetan PORT.
 export const STARTER_RUNSPEC = {
   appDir: "/app",
   buildCommand: "(npm ci || npm install) && npm run build",
@@ -28,6 +28,16 @@ const RULES: Record<SiteStackId, string[]> = {
     `Antes de tu primer cambio lee sandbox_exec("cat /app/node_modules/next/AGENTS.md") y la guía que toque en /app/node_modules/next/dist/docs/ (01-app/…): esta versión rompe APIs que conoces.`,
     `Páginas en /app/app (page.tsx, layout.tsx). Server Components por default; lógica de servidor en el componente o en Server Actions ("use server"); endpoints en app/api/*/route.ts.`,
   ],
+  "react-router": [
+    `Stack: React Router 8 en modo framework (el sucesor de Remix 2; los paquetes @remix-run/* ya no se usan).`,
+    `Antes de tu primer cambio lee sandbox_exec("cat /app/.agents/skills/react-router/SKILL.md /app/.agents/skills/react-router/references/framework-mode.md").`,
+    `Rutas declaradas en /app/app/routes.ts (index/route de @react-router/dev/routes) con su módulo en app/routes/. Lógica de servidor en loader/action; tipos de cada ruta en "./+types/<ruta>" (los genera el build). Layout y documento en app/root.tsx.`,
+  ],
+  remix: [
+    `Stack: Remix 3 — NO es React ni React Router: componentes propios de remix/component (JSX con jsxImportSource remix/component, estilos con mix={css({...})}, sin Tailwind), router por controladores y sin paso de build (Node corre el TypeScript directo).`,
+    `Antes de tu primer cambio lee sandbox_exec("cat /app/AGENTS.md /app/.agents/skills/remix/SKILL.md") y busca lo que necesites en /app/node_modules/remix/INDEX.md (guías y READMEs de cada API). Nada de hooks de React.`,
+    `Rutas en /app/app/routes.ts, acciones en app/actions/controller.tsx (y app/actions/<ruta>/controller.tsx), documento en app/actions/document.tsx. Lo interactivo en el navegador va en app/actions/public/ con clientEntry (ejemplo: prompt-button.tsx). Para HTML crudo usa unsafeHTML(). "npm run build" sólo corre el typecheck: si falla, corrígelo.`,
+  ],
   nuxt: [
     `Stack: Nuxt 4 (Vue 3, SSR).`,
     `Doc oficial: sandbox_exec("curl -sL https://nuxt.com/llms.txt") es el índice; cada página se lee agregando .md a su URL.`,
@@ -49,6 +59,8 @@ const RULES: Record<SiteStackId, string[]> = {
 const PICKER_FILE: Record<SiteStackId, string> = {
   tanstack: "src/routes/__root.tsx",
   next: "app/layout.tsx",
+  "react-router": "app/root.tsx",
+  remix: "app/actions/document.tsx",
   nuxt: "nuxt.config.ts (app.head.script)",
   sveltekit: "src/app.html",
   astro: "src/layouts/Layout.astro",
@@ -59,7 +71,9 @@ export function starterPrompt(stack: SiteStackId): string[] {
   return [
     `Ya hay un starter FUNCIONANDO en /app: NO cambies de stack ni reescribas la config ni los scripts de package.json (build/start ya están probados en esta caja). Mantén las versiones; no escribas APIs de memoria.`,
     ...RULES[stack],
-    `Estilos con Tailwind 4 (clases; ya configurado). Conserva el script del selector de EasyBits en ${PICKER_FILE[stack]}.`,
+    stack === "remix"
+      ? `Conserva el script del selector de EasyBits en ${PICKER_FILE[stack]}.`
+      : `Estilos con Tailwind 4 (clases; ya configurado). Conserva el script del selector de EasyBits en ${PICKER_FILE[stack]}.`,
     `Cada sección/elemento de bloque lleva un atributo data-eb-id ÚNICO y estable (ej. data-eb-id="hero"); consérvalos al editar y cambia SOLO lo que se pide.`,
     `Para que la vista previa refleje cambios: sandbox_exec("cd /app && npm install && npm run build") y luego restart_machine({ sandboxId }) (restart NO compila). Si el build falla, corrígelo antes de terminar el turno.`,
   ];

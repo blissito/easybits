@@ -255,7 +255,13 @@ export async function createSite(
   const site = await db.site.create({
     data: { ownerId: ctx.user.id, kind: "webapp", name, sandboxId, engine: engine.id, stack: opts.stack ?? null },
   });
-  if (sandboxId) await prepareSiteMachine(ctx, sandboxId, opts.stack ?? null);
+  // La máquina ya se compró: si sembrar falla, el sitio igual nace (el agente puede
+  // escribir el código) en vez de dejar una caja cobrada sin sitio.
+  if (sandboxId) {
+    await prepareSiteMachine(ctx, sandboxId, opts.stack ?? null).catch((e) =>
+      console.error("[sites] prepareSiteMachine", sandboxId, e)
+    );
+  }
   return { site, checkoutUrl: "checkoutUrl" in bought ? bought.checkoutUrl : undefined };
 }
 
@@ -272,8 +278,14 @@ async function prepareSiteMachine(ctx: AuthContext, sandboxId: string, stack: Si
   // La vista previa es la URL pública de la caja y `restart_machine` no expone nada.
   await exposeSandboxPort(ctx, sandboxId, runspec.port).catch(() => {});
   if (stack) {
-    for (const [path, content] of Object.entries(starterFiles(stack))) {
-      await writeFile(ctx, sandboxId, { path: `${runspec.appDir}/${path}`, content });
+    // En tandas de 8: un starter trae ~30 archivos (en serie eran segundos de espera).
+    const entries = Object.entries(starterFiles(stack));
+    for (let i = 0; i < entries.length; i += 8) {
+      await Promise.all(
+        entries.slice(i, i + 8).map(([path, content]) =>
+          writeFile(ctx, sandboxId, { path: `${runspec.appDir}/${path}`, content })
+        )
+      );
     }
   }
 }
@@ -338,7 +350,7 @@ export function siteTurnPrompt(site: Awaited<ReturnType<typeof getSite>>, select
       ...(stack
         ? starterPrompt(stack)
         : [
-            `Stack por default: Node con un servidor en el puerto 3000 (Express/Hono/RRv7 según pida), package.json con scripts build y start.`,
+            `Stack por default: Node con un servidor en el puerto 3000 (Express/Hono según pida), package.json con scripts build y start.`,
             `Para que la vista previa refleje cambios: tras editar, llama restart_machine({ sandboxId }).`,
           ]),
       `Para PUBLICAR (build + release versionado) llama launch_app({ sandboxId }) — solo cuando el usuario lo pida o al terminar la primera versión.`,

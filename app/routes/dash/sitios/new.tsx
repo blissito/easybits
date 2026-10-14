@@ -86,7 +86,7 @@ export default function NewSite() {
             <div className="mt-1 grid grid-cols-2 sm:grid-cols-3 gap-2">
               {[
                 ...SITE_STACKS.map((s) => [s.id, s.label, s.desc] as const),
-                ["node", "Node libre", "Sin base: el agente elige el servidor (Express, Hono, React Router)."] as const,
+                ["node", "Node libre", "Sin base: el agente elige el servidor (Express, Hono, Fastify)."] as const,
               ].map(([k, title, desc]) => (
                 <button
                   key={k}
