@@ -93,6 +93,20 @@ export function parseCustomHost(hostname: string): CustomHost {
  * - <slug>.midominio.com → website del dueño por slug (sin cambios).
  */
 async function handleCustomDomain(request: Request, hostname: string, url: URL): Promise<Response | null> {
+  // Coincidencia EXACTA primero: un dominio propio puede ser subdominio de otro también dado
+  // de alta (custom.fancyfiles.app y fancyfiles.app). Sin esto, el parseo por etiquetas lo
+  // leía como «slug custom de fancyfiles.app» y su sitio raíz daba 404 (14-oct).
+  const host = hostname.toLowerCase();
+  const bare = host.startsWith("www.") ? host.slice(4) : host;
+  const exact = await db.customDomain.findFirst({
+    where: { domain: { in: bare === host ? [host] : [host, bare] }, verified: true, apexWebsiteId: { not: null } },
+    select: { domain: true, apexWebsite: { select: { id: true, ownerId: true, status: true } } },
+  });
+  if (exact?.apexWebsite && exact.apexWebsite.status !== "DELETED") {
+    if (host !== exact.domain) return Response.redirect(`https://${exact.domain}${url.pathname}${url.search}`, 301);
+    return serveWebsiteFile(exact.apexWebsite, request, url);
+  }
+
   const parsed = parseCustomHost(hostname);
   if (parsed.kind === "none") return null;
 

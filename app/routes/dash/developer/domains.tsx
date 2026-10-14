@@ -77,8 +77,14 @@ export const action = async ({ request }: Route.ActionArgs) => {
     if (intent === "set-apex") {
       const domainId = form.get("domainId") as string;
       const websiteId = (form.get("websiteId") as string) || null;
-      await setDomainApex(domainId, user.id, websiteId);
-      return { ok: true };
+      const d = await setDomainApex(domainId, user.id, websiteId);
+      return {
+        ok: true,
+        savedId: domainId,
+        notice: websiteId
+          ? `Listo: «${d.apexWebsite?.name ?? "el sitio"}» ya responde en https://${d.domain} y www.${d.domain}${d.dnsProvider === "mailmask" ? " (Mailmask escribió el A y el www)" : ""}. El primer acceso tarda unos segundos mientras se emite el certificado.`
+          : `Listo: ${d.domain} ya no sirve ningún sitio en la raíz.`,
+      };
     }
     if (intent === "mailmask-auto") {
       const r = await autoConfigureDomainDns(form.get("domainId") as string, user.id);
@@ -322,7 +328,11 @@ export default function DomainsPage() {
                     ))}
                   </select>
                   <BrutalButton type="submit" disabled={isSubmitting} size="chip">
-                    Guardar
+                    {isSubmitting && fetcher.formData?.get("intent") === "set-apex" && fetcher.formData?.get("domainId") === d.id
+                      ? "Guardando…"
+                      : (fetcher.data as any)?.savedId === d.id
+                        ? "Guardado ✓"
+                        : "Guardar"}
                   </BrutalButton>
                   {d.apexWebsite && (
                     <a
