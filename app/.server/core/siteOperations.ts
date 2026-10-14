@@ -74,7 +74,21 @@ export async function ensureBuilderAgent(ctx: AuthContext, engineId: string = DE
     where: { ownerId: ctx.user.id, name: builderNameFor(engine.id) },
     select: { id: true, token: true, workerTemplate: true, persona: true },
   });
+  const siteModel = engine.siteModel ?? engine.defaultModel;
   if (existing) {
+    // Builder con el modelo viejo (el default del motor o ninguno): se sube al de sitios. El env
+    // se refresca solo al despertar la caja (spawnEnvHash), sin reciclarla. Uno que el dueño
+    // cambió a mano a otro modelo se respeta.
+    if (engine.modelEnv && siteModel) {
+      const persona = (existing.persona as { env?: Record<string, string> } | null) ?? {};
+      const cur = persona.env?.[engine.modelEnv];
+      if (cur !== siteModel && (!cur || cur === engine.defaultModel)) {
+        await db.fleetAgent.update({
+          where: { id: existing.id },
+          data: { persona: { ...persona, env: { ...(persona.env ?? {}), [engine.modelEnv]: siteModel } } },
+        });
+      }
+    }
     // Builder easybits nacido antes del motor medido (claude-worker): se migra en sitio
     // y se recicla su caja (el env es spawn-baked; la VM viva seguiría con el motor viejo).
     if (engine.id === DEFAULT_SITE_ENGINE && existing.workerTemplate !== BUILDER_TEMPLATE) {
@@ -98,7 +112,7 @@ export async function ensureBuilderAgent(ctx: AuthContext, engineId: string = DE
     // hosting (launch_app/restart_machine). Sin lo demás: es un constructor.
     EASYBITS_TOOL_GROUP: "scripting,sitios,sandbox,hosting",
   };
-  if (engine.modelEnv && engine.defaultModel) env[engine.modelEnv] = engine.defaultModel;
+  if (engine.modelEnv && siteModel) env[engine.modelEnv] = siteModel;
   const created = await createFleetAgent(ctx, {
     name: builderNameFor(engine.id),
     systemPrompt: BUILDER_SYSTEM,

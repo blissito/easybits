@@ -44,7 +44,10 @@ export default function NewSite() {
   // ?kind=webapp llega desde /dash/hosting ("Crear app nueva").
   const [kind, setKind] = useState<SiteKind>(searchParams.get("kind") === "webapp" ? "webapp" : "static");
   const { engines } = useLoaderData<typeof loader>();
-  const [engineId, setEngineId] = useState(DEFAULT_SITE_ENGINE);
+  // Claude (Opus 5.5, #1 de WebDev Arena) cuando ya tiene su llave; si no, el medido, que no pide nada.
+  const [engineId, setEngineId] = useState(() =>
+    engines.some((e) => e.id === "claude" && e.creatable && !e.needsSecret) ? "claude" : DEFAULT_SITE_ENGINE
+  );
   const engine = engines.find((e) => e.id === engineId);
   const nav = useNavigation();
   const result = useActionData<typeof action>();

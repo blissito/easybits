@@ -56,6 +56,12 @@ export type FleetEngine = {
   models: EngineModel[];
   /** Modelo preseleccionado (debe ser uno `ready`). */
   defaultModel?: string;
+  /**
+   * Modelo del CREADOR DE SITIOS (/dash/sitios): el mejor del proveedor generando HTML según
+   * la comunidad (WebDev Arena). Ausente = defaultModel. Separado de defaultModel para no
+   * mover el modelo de los agentes de flota de todo el mundo.
+   */
+  siteModel?: string;
   /** null = motor sin credencial (proxy medido de EasyBits). */
   secret?: FleetEngineSecret | null;
   /**
@@ -81,19 +87,23 @@ export const FLEET_ENGINES: FleetEngine[] = [
   {
     id: "claude",
     label: "Ghosty · Claude",
-    model: "Opus · Fable · Sonnet",
+    model: "Opus 5.5 · Sonnet 5.5",
     provider: "anthropic",
     template: "claude-worker",
     // El spawn lee ANTHROPIC_MODEL de persona.env (gana sobre FLEET_DEFAULT_MODEL).
     modelEnv: "ANTHROPIC_MODEL",
     // Haiku queda fuera: es el tier rápido, poco confiable en multi-tool + code-mode.
     models: [
-      { id: "claude-opus-4-8", label: "Opus 4.8 (tope)" },
+      { id: "claude-opus-5-5", label: "Opus 5.5 (tope · #1 en HTML)" },
+      { id: "claude-sonnet-5-5", label: "Sonnet 5.5" },
+      { id: "claude-opus-4-8", label: "Opus 4.8" },
       { id: "claude-fable-5", label: "Fable 5" },
       { id: "claude-sonnet-5", label: "Sonnet 5 (balance)" },
       { id: "claude-sonnet-4-6", label: "Sonnet 4.6" },
     ],
     defaultModel: "claude-sonnet-5",
+    // WebDev Arena (8-oct-2026): Opus 5.5 #1 (1813), Sonnet 5.5 #3 (1774).
+    siteModel: "claude-opus-5-5",
     secret: { name: "CLAUDE_CODE_OAUTH_TOKEN", kind: "oauth", placeholder: "sk-ant-oat..." },
     billing: "byok", // suscripción Max del dueño: tarifa plana, no pay-per-token
     vision: true, // Claude es multimodal → ve la imagen con Read; no necesita see_image.
@@ -143,18 +153,20 @@ export const FLEET_ENGINES: FleetEngine[] = [
   {
     id: "codex",
     label: "Ghosty · Codex",
-    model: "Sol · Terra · Luna",
+    model: "GPT-6 Astra · Sol · Luna",
     provider: "openai",
     template: "codex-worker",
     // codex-worker HORNEADO y registrado en el host OVH (Fase 2, 2026-07-12) → modelos
     // ready. El spawn inyecta OPENAI_API_KEY del vault; el worker corre @openai/codex-sdk.
     modelEnv: "CODEX_MODEL",
+    // ids verificados contra GET /v1/models (2026-10-14).
     models: [
-      { id: "gpt-5.6-sol", label: "Sol (tope)" },
-      { id: "gpt-5.6-terra", label: "Terra (balance)" },
-      { id: "gpt-5.6-luna", label: "Luna (rápido)" },
+      { id: "gpt-6-astra", label: "GPT-6 Astra (tope · HTML)" },
+      { id: "gpt-6.1-sol", label: "GPT-6.1 Sol" },
+      { id: "gpt-6-luna", label: "GPT-6 Luna (rápido)" },
+      { id: "gpt-5.6-sol", label: "GPT-5.6 Sol" },
     ],
-    defaultModel: "gpt-5.6-sol",
+    defaultModel: "gpt-6-astra",
     // Codex headless usa OPENAI_API_KEY (doc oficial); el spawn la inyecta como tal.
     secret: { name: "OPENAI_API_KEY", kind: "apiKey", placeholder: "sk-..." },
     billing: "byok",
