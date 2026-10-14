@@ -26,7 +26,11 @@ import { acceptPush } from "./pushDeployOperations";
 import { launchApp, runspecSchema, type LaunchStep } from "./releaseOperations";
 
 export async function claimInstallations(userId: string, code: string) {
-  const userToken = await exchangeUserCode(code);
+  return (await claimInstallationsWithToken(userId, await exchangeUserCode(code))).length;
+}
+
+/** Igual que claimInstallations pero con el token ya canjeado (el code sirve UNA vez). */
+export async function claimInstallationsWithToken(userId: string, userToken: string) {
   const installs = await userInstallations(userToken);
   for (const i of installs) {
     await db.githubInstallation.upsert({
@@ -35,7 +39,7 @@ export async function claimInstallations(userId: string, code: string) {
       update: { account: i.account, accountType: i.accountType },
     });
   }
-  return installs.length;
+  return installs;
 }
 
 export type ImportableRepo = InstallationRepo & { installationId: number; account: string };
@@ -242,10 +246,14 @@ export async function handleAppWebhook(
     where: { persistent: true, status: { notIn: ["destroyed", "pending_deletion", "transferred"] } },
     select: { sandboxId: true, ownerId: true, runspec: true, status: true },
   });
+  const repoId = Number(payload.repository?.id) || undefined;
   const targets = rows.filter((r) => {
     const spec = runspecSchema.safeParse(r.runspec ?? {});
     const src = spec.success ? spec.data.source : undefined;
-    return src?.installationId === installationId && repoPathFromUrl(src.repo) === repoPath;
+    if (src?.installationId !== installationId) return false;
+    // Por id cuando lo hay: un repo renombrado sigue desplegando (el nombre cambia, el id no).
+    if (src.repoId && repoId) return src.repoId === repoId;
+    return repoPathFromUrl(src.repo) === repoPath;
   });
 
   const results = targets.map((r) => ({ sandboxId: r.sandboxId, ...acceptPush(r.sandboxId, r, payload).body }));

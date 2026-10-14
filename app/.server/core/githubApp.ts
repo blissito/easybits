@@ -120,7 +120,10 @@ export function authorizeUrl(state: string): string {
   return `https://github.com/login/oauth/authorize?${q}`;
 }
 
-/** Canjea el `code` user-to-server. Sólo se usa para saber qué instalaciones son del usuario; no se guarda. */
+/**
+ * Canjea el `code` user-to-server. Se usa para saber qué instalaciones son del
+ * usuario y, en «Conectar a GitHub» de un sitio, para crear su repo. Nunca se guarda.
+ */
 export async function exchangeUserCode(code: string): Promise<string> {
   const res = await fetch("https://github.com/login/oauth/access_token", {
     method: "POST",
@@ -184,6 +187,59 @@ export async function installationRepos(installationId: number): Promise<Install
     if (repos.length < 100) break;
   }
   return out;
+}
+
+/** Login del dueño del token de usuario. */
+export async function githubLogin(userToken: string): Promise<string> {
+  const res = await fetch(`${API}/user`, { headers: { ...H, Authorization: `Bearer ${userToken}` } });
+  if (!res.ok) throw new Error(`GitHub /user: ${res.status}`);
+  return String(((await res.json()) as { login?: string }).login ?? "");
+}
+
+export type CreatedRepo = { id: number; fullName: string; name: string; cloneUrl: string; htmlUrl: string };
+
+/**
+ * Crea un repo privado VACÍO en la cuenta del usuario (token user-to-server).
+ * Requiere que la App tenga `Administration: write`; sin eso GitHub contesta 403.
+ * Si el nombre ya existe prueba `nombre-2` … `nombre-9`.
+ */
+export async function createUserRepo(userToken: string, baseName: string, description?: string): Promise<CreatedRepo> {
+  for (let i = 1; i <= 9; i++) {
+    const name = i === 1 ? baseName : `${baseName}-${i}`;
+    const res = await fetch(`${API}/user/repos`, {
+      method: "POST",
+      headers: { ...H, Authorization: `Bearer ${userToken}`, "content-type": "application/json" },
+      body: JSON.stringify({ name, private: true, auto_init: false, description }),
+    });
+    if (res.ok) {
+      const r = (await res.json()) as any;
+      return { id: Number(r.id), fullName: r.full_name, name: r.name, cloneUrl: r.clone_url, htmlUrl: r.html_url };
+    }
+    const body = (await res.json().catch(() => ({}))) as { message?: string; errors?: { message?: string }[] };
+    const taken = res.status === 422 && JSON.stringify(body).includes("already exists");
+    if (taken) continue;
+    const e: any = new Error(
+      res.status === 403
+        ? "GitHub no dejó crear el repo: la App necesita el permiso «Administration: write» (acepta los permisos nuevos en GitHub)."
+        : `GitHub no creó el repo (${res.status}${body.message ? `: ${body.message}` : ""}).`
+    );
+    e.code = res.status === 403 ? "GithubRepoPermission" : "GithubRepoCreate";
+    throw e;
+  }
+  throw new Error(`Ya existen repos llamados ${baseName} … ${baseName}-9 en tu cuenta.`);
+}
+
+/**
+ * Si la instalación es de "repos seleccionados", el repo recién creado NO entra
+ * solo: sin esto el token de instalación no puede empujar y el webhook no lo ve.
+ */
+export async function ensureRepoInInstallation(userToken: string, installationId: number, repoId: number): Promise<void> {
+  const res = await fetch(`${API}/user/installations/${installationId}/repositories/${repoId}`, {
+    method: "PUT",
+    headers: { ...H, Authorization: `Bearer ${userToken}` },
+  });
+  // 204 = agregado; 304 = ya estaba (instalación "all" o repetido).
+  if (!res.ok && res.status !== 304) throw new Error(`GitHub no agregó el repo a la App (${res.status}).`);
 }
 
 /** "dueño/repo" desde cualquier URL de GitHub (https, .git, ssh). null si no es de GitHub. */

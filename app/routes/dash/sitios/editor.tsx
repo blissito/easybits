@@ -4,14 +4,29 @@ import { Streamdown } from "streamdown";
 import { getUserOrRedirect } from "~/.server/getters";
 import type { AuthContext } from "~/.server/apiAuth";
 import { attachNewestMachine, deleteSite, getSite, publishSite, siteEngineFor } from "~/.server/core/siteOperations";
+import { githubAppEnabled } from "~/.server/core/githubApp";
+import { siteRepo } from "~/.server/core/githubSiteOperations";
 import type { Route } from "./+types/editor";
+
+const GITHUB_NOTICE: Record<string, string> = {
+  connected: "Listo: tu app ya vive en su repo de GitHub. «Publicar» sube cada cambio, y un push desde tu compu se despliega solo.",
+  perm: "GitHub no dejó crear el repo: acepta los permisos nuevos de la App (Administration y Contents) y vuelve a intentar.",
+  state: "La conexión con GitHub expiró. Vuelve a intentar.",
+  error: "No se pudo conectar con GitHub. Vuelve a intentar.",
+  off: "La conexión con GitHub no está disponible ahora.",
+};
 
 export const meta = () => [{ title: "Sitio — EasyBits" }, { name: "robots", content: "noindex" }];
 
 export const loader = async ({ request, params }: Route.LoaderArgs) => {
   const user = await getUserOrRedirect(request);
   const site = await getSite({ user, scopes: ["READ"] } as AuthContext, params.id!);
-  return { site, engineLabel: siteEngineFor(site).label.replace(/^Ghosty · /, "") };
+  const gh = siteRepo(site.sandbox?.runspec);
+  return {
+    site,
+    engineLabel: siteEngineFor(site).label.replace(/^Ghosty · /, ""),
+    github: { enabled: githubAppEnabled(), repo: gh?.fullName ?? null },
+  };
 };
 
 export const action = async ({ request, params }: Route.ActionArgs) => {
@@ -59,8 +74,9 @@ function fmtTokens(n: number) {
 type Selection = { id: string; tag: string } | null;
 
 export default function SiteEditor() {
-  const { site, engineLabel } = useLoaderData<typeof loader>();
+  const { site, engineLabel, github } = useLoaderData<typeof loader>();
   const [params, setParams] = useSearchParams();
+  const githubNotice = GITHUB_NOTICE[params.get("github") ?? ""] ?? null;
   const fetcher = useFetcher<typeof action>();
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
@@ -314,6 +330,18 @@ export default function SiteEditor() {
                   {fetcher.state !== "idle" ? "Publicando…" : "Publicar"}
                 </button>
               </fetcher.Form>
+              {github.repo ? (
+                <a href={`https://github.com/${github.repo}`} target="_blank" rel="noreferrer" className="text-gray-500 hover:text-black font-mono text-xs">
+                  {github.repo} ↗
+                </a>
+              ) : (
+                github.enabled && (
+                  // Navegación completa: es un ida y vuelta por GitHub.
+                  <a href={`/dash/hosting/github/connect?site=${site.id}`} className="text-gray-500 hover:text-black">
+                    Conectar a GitHub
+                  </a>
+                )
+              )}
               <Link to="/dash/hosting" className="text-gray-500 hover:text-black">Dominios y versiones</Link>
             </>
           )}
@@ -323,8 +351,11 @@ export default function SiteEditor() {
         {launch && (
           <p className="px-4 py-2 text-xs bg-green-50 border-b-2 border-green-300">
             Publicado v{launch.version} → <a className="underline" href={launch.url} target="_blank" rel="noreferrer">{launch.url}</a>
+            {(launch as { github?: string | null }).github &&
+              ` · subido a ${(launch as { github?: string }).github}${(launch as { sha?: string | null }).sha ? ` (${(launch as { sha?: string }).sha})` : ""}`}
           </p>
         )}
+        {githubNotice && <p className="px-4 py-2 text-xs bg-brand-500/10 border-b-2 border-brand-500/30">{githubNotice}</p>}
         {actionError && <p className="px-4 py-2 text-xs bg-red-50 border-b-2 border-red-300">{actionError}</p>}
         {site.kind === "webapp" && !site.sandboxId ? (
           <div className="flex-1 flex flex-col items-center justify-center gap-3 text-center px-6">

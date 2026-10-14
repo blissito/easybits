@@ -157,6 +157,14 @@ export async function handleGithubHook(
  * Decide si un push toca a esta máquina y, si sí, lo encola. Lo comparten el
  * webhook manual por máquina y el webhook único de la GitHub App.
  */
+// Commits que EasyBits mismo empujó y ya desplegó en el acto («Publicar» de un
+// sitio conectado a GitHub). Su webhook llega segundos después: sin esto se
+// re-clonaría y re-construiría la misma versión. En memoria, como `running`.
+const selfPushed = new Map<string, string>();
+export function markSelfPushed(sandboxId: string, sha: string) {
+  selfPushed.set(sandboxId, sha);
+}
+
 export function acceptPush(
   sandboxId: string,
   row: { ownerId: string; runspec: unknown; status: string },
@@ -175,6 +183,12 @@ export function acceptPush(
   // a que esté arriba de todos modos.
   if (["suspended", "pending_deletion", "destroyed", "lost"].includes(row.status)) {
     return { status: 409, body: { error: "MachineNotRunning", status: row.status } };
+  }
+
+  const after = String(payload.after ?? payload.head_commit?.id ?? "");
+  if (after && selfPushed.get(sandboxId) === after) {
+    selfPushed.delete(sandboxId);
+    return { status: 200, body: { ignored: "published from EasyBits", commit: after.slice(0, 7) } };
   }
 
   const commit: Commit = {

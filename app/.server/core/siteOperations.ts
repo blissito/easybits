@@ -17,6 +17,8 @@ import { createWebsite } from "./operations";
 import { buyMachine } from "./machineOperations";
 import { launchApp, setRunspec } from "./releaseOperations";
 import { exposeSandboxPort } from "./sandboxOperations";
+import { pushSiteToGithub, siteRepo } from "./githubSiteOperations";
+import { markSelfPushed } from "./pushDeployOperations";
 
 export const BUILDER_NAME = "Sitios Builder";
 // Motor por default: `easybits` = ghosty-gc contra el proxy medido (/api/v2/llm/v1),
@@ -262,6 +264,15 @@ export async function attachNewestMachine(ctx: AuthContext, siteId: string) {
 export async function publishSite(ctx: AuthContext, siteId: string) {
   const site = await getSite(ctx, siteId);
   if (site.kind !== "webapp" || !site.sandboxId) throw new Response("Nothing to publish", { status: 400 });
+  // Conectado a GitHub: primero se sube el código (el repo es la fuente de verdad) y
+  // luego se publica en el acto. El webhook de ESE commit se ignora (markSelfPushed).
+  const gh = siteRepo(site.sandbox?.runspec);
+  if (gh) {
+    const sha = await pushSiteToGithub(ctx, site.sandboxId, gh, "Publicado desde EasyBits");
+    if (sha) markSelfPushed(site.sandboxId, sha);
+    const launch = await launchApp(ctx, { sandboxId: site.sandboxId, message: `Publicado desde /dash/sitios${sha ? ` (${sha.slice(0, 7)})` : ""}` });
+    return { ...launch, github: gh.fullName, sha: sha?.slice(0, 7) ?? null };
+  }
   return launchApp(ctx, { sandboxId: site.sandboxId, message: "Publicado desde /dash/sitios" });
 }
 
@@ -289,6 +300,12 @@ export function siteTurnPrompt(site: Awaited<ReturnType<typeof getSite>>, select
       `Para que la vista previa refleje cambios: tras editar, llama restart_machine({ sandboxId }). Para PUBLICAR (build + release versionado) llama launch_app({ sandboxId }) — solo cuando el usuario lo pida o al terminar la primera versión.`,
       `No crees máquinas nuevas ni uses otro sandboxId.`
     );
+    const gh = siteRepo(site.sandbox?.runspec);
+    if (gh) {
+      lines.push(
+        `Esta web app está CONECTADA a GitHub (${gh.fullName}, rama main). NO llames launch_app ni hagas git push tú: publicar es el botón «Publicar» del usuario, que sube /app a GitHub y despliega. Si el usuario empuja cambios desde su compu, /app se re-clona del repo: lo que hayas editado sin publicar se pierde, así que al terminar un cambio pídele que publique.`
+      );
+    }
   } else if (site.kind === "webapp") {
     lines.push("La máquina de esta web app aún no existe (pago pendiente). Explica al usuario que complete el pago desde el panel; NO crees una máquina.");
   }

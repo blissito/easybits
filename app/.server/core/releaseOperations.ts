@@ -151,6 +151,8 @@ export const runspecSchema = z.object({
        * lectura. Excluyente con `tokenRef`.
        */
       installationId: z.number().int().positive().optional(),
+      /** Id numérico del repo en GitHub: sobrevive a un renombre (el webhook matchea por él). */
+      repoId: z.number().int().positive().optional(),
     })
     .optional(),
 });

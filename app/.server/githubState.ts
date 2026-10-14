@@ -12,3 +12,15 @@ export const githubStateCookie = createCookie("gh_install_state", {
   secure: process.env.NODE_ENV !== "development",
   secrets: [process.env.JWT_SECRET ?? "dev"],
 });
+
+/**
+ * El valor de la cookie: el nonce, y opcionalmente el sitio que pidió «Conectar a
+ * GitHub» (así el callback sabe que tiene que crear su repo y a dónde volver).
+ * Acepta el formato viejo (sólo el nonce como string).
+ */
+export type GithubState = { n: string; site?: string };
+export function readGithubState(raw: unknown): GithubState | null {
+  if (typeof raw === "string" && raw) return { n: raw };
+  if (raw && typeof raw === "object" && typeof (raw as GithubState).n === "string") return raw as GithubState;
+  return null;
+}
