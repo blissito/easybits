@@ -30,7 +30,12 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
     orderBy: { createdAt: "desc" },
   });
 
-  return data({ websites });
+  // `?id=` (desde MailMask o el editor): ese sitio va primero y resaltado; con ~100 en la
+  // lista, buscarlo a ojo no es opción.
+  const focusId = new URL(request.url).searchParams.get("id");
+  const focus = focusId ? websites.findIndex((w) => w.id === focusId) : -1;
+  if (focus > 0) websites.unshift(...websites.splice(focus, 1));
+  return data({ websites, focusId: focus >= 0 ? focusId : null });
 };
 
 export const action = async ({ request }: Route.ActionArgs) => {
@@ -93,11 +98,14 @@ export const action = async ({ request }: Route.ActionArgs) => {
 };
 
 export default function WebsitesPage() {
-  const { websites } = useLoaderData<typeof loader>();
+  const { websites, focusId } = useLoaderData<typeof loader>();
   const [deployingId, setDeployingId] = useState<string | null>(null);
   const [newSite, setNewSite] = useState<CreatedWebsite | null>(null);
   const deleteFetcher = useFetcher();
   const revalidator = useRevalidator();
+  useEffect(() => {
+    if (focusId) document.getElementById("website-focus")?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [focusId]);
 
   const siteUrl = (slug: string, subdomainEnabled: boolean) =>
     subdomainEnabled
@@ -184,7 +192,8 @@ export default function WebsitesPage() {
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, x: -20, transition: { duration: 0.2 } }}
                     transition={{ duration: 0.3, delay: i * 0.05 }}
-                    className={`border-2 border-black rounded-xl p-4 space-y-3 bg-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] ${isDeleting ? "opacity-50" : ""}`}
+                    id={site.id === focusId ? "website-focus" : undefined}
+                    className={`border-2 border-black rounded-xl p-4 space-y-3 bg-white shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] ${isDeleting ? "opacity-50" : ""} ${site.id === focusId ? "ring-4 ring-[#7c3aed]" : ""}`}
                   >
                     <div className="flex items-center justify-between">
                       <div>

@@ -30,7 +30,7 @@ export const loader = async ({ request, params }: Route.LoaderArgs) => {
     if (bySite) throw redirect(`/dash/sitios/${bySite.id}`);
     // Un Website publicado por otra vía (documentos, MCP) no tiene editor: su casa es la lista.
     const web = await db.website.findFirst({ where: { id: params.id!, ownerId: user.id }, select: { id: true } }).catch(() => null);
-    if (web) throw redirect("/dash/developer/websites");
+    if (web) throw redirect(`/dash/developer/websites?id=${encodeURIComponent(web.id)}`);
   }
   const site = await getSite({ user, scopes: ["READ"] } as AuthContext, params.id!);
   const gh = siteRepo(site.sandbox?.runspec);
