@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Form, redirect, useNavigation, useActionData, useLoaderData, useSearchParams } from "react-router";
 import { BrutalButton } from "~/components/common/BrutalButton";
 import { PromptSuggestions } from "~/components/sitios/PromptSuggestions";
+import { BrandLogo } from "~/components/sitios/BrandLogo";
 import { getUserOrRedirect } from "~/.server/getters";
 import type { AuthContext } from "~/.server/apiAuth";
 import { createSite, engineChoicesFor, type SiteKind } from "~/.server/core/siteOperations";
@@ -94,7 +95,7 @@ export default function NewSite() {
                   onClick={() => setStack(k)}
                   className={`text-left p-3 rounded-xl border-2 transition-all ${stack === k ? "border-black bg-brand-500/10" : "border-gray-200 hover:border-gray-400"}`}
                 >
-                  <p className="font-bold text-sm">{title}</p>
+                  <p className="font-bold text-sm flex items-center gap-2"><BrandLogo id={k} />{title}</p>
                   <p className="text-[11px] text-gray-500 mt-1">{desc}</p>
                 </button>
               ))}
@@ -120,7 +121,7 @@ export default function NewSite() {
                 onClick={() => setEngineId(e.id)}
                 className={`text-left p-3 rounded-xl border-2 transition-all disabled:opacity-40 disabled:cursor-not-allowed ${engineId === e.id ? "border-black bg-brand-500/10" : "border-gray-200 hover:border-gray-400"}`}
               >
-                <p className="font-bold text-sm">{e.label}</p>
+                <p className="font-bold text-sm flex items-center gap-2"><BrandLogo id={e.id} />{e.label}</p>
                 <p className="text-[11px] text-gray-500 truncate">{e.model}</p>
                 <p className="text-[10px] mt-1 font-semibold">
                   {!e.creatable ? "próximamente" : e.metered ? "tokens de tu cuenta" : e.needsSecret ? "pide tu llave" : "tu llave ✓"}
