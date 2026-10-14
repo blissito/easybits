@@ -6,7 +6,9 @@ hooks, streams and delivery queue in a database instead of on the box's disk.
 
 It is a port of `@workflow/world-postgres@5.0.0-beta.44` (Drizzle) to `@libsql/client` +
 Drizzle SQLite, with graphile-worker replaced by a polling queue table with per-message
-leases. Targets `@workflow/world@5.0.0-beta.37` (the line eve 0.65 vendors). For eve ≤ 0.63 (world
+leases. Targets `@workflow/world@5.0.4` and declares spec version 8, which eve 0.66.3 and later
+accept (current eve bundles `@workflow/core` 5.2). eve 0.66.2 and older only accept up to spec
+version 7: for eve 0.64 to 0.66.2 pin `@easybits.cloud/eve-world@0.1.2`, and for eve ≤ 0.63 (world
 beta.35) pin `@easybits.cloud/eve-world@0.1.1`.
 
 ## Install
@@ -15,7 +17,7 @@ beta.35) pin `@easybits.cloud/eve-world@0.1.1`.
 npm i @easybits.cloud/eve-world
 ```
 
-It depends on `@workflow/world@5.0.0-beta.37` (eve 0.65 vendors its own copy, so it no longer
+It depends on `@workflow/world@5.0.4` (eve vendors its own copy, so it no longer
 installs one for you).
 
 ## Use with eve
@@ -85,11 +87,16 @@ the same key returns the existing message id.
 - SQLite is single-writer; throughput is bounded by write serialization on the namespace.
 - No `LISTEN/NOTIFY`, no `FOR UPDATE`; ordering guarantees come from `BEGIN IMMEDIATE` transactions.
 - Payloads are stored as CBOR blobs; attributes as JSON text (merged in JS inside a transaction).
+- With a local `file:` database, concurrent writes from one process can fail with `SQLITE_BUSY`:
+  libsql waits for the SQLite lock synchronously, so it blocks the event loop the transaction
+  holding the lock needs. Use sqld for anything that runs steps in parallel.
 
 ## Development
 
 ```sh
 npm test                                                   # vitest against a file: DB
+WORKFLOW_LIBSQL_URL=http://127.0.0.1:8080 npm test          # also the concurrent-append test, against sqld
+WORKFLOW_LIBSQL_URL=http://127.0.0.1:8080 npm run test:spec # @workflow/world-testing conformance suite
 WORKFLOW_LIBSQL_URL=file:/tmp/w.db npm run smoke           # smoke without eve
 WORKFLOW_LIBSQL_URL=libsql://host:8100 WORKFLOW_LIBSQL_AUTH_TOKEN=… npm run smoke
 ```

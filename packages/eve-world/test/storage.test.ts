@@ -134,6 +134,32 @@ describe('runs y eventos', () => {
     expect((res as any).cursor).toBeNull();
   });
 
+  // Contra sqld (WORKFLOW_LIBSQL_URL remoto). Con `file:` dos transacciones
+  // concurrentes del mismo proceso chocan en SQLITE_BUSY: libsql espera el lock
+  // de forma síncrona y el pool no encola transacciones.
+  const remoteUrl = process.env.WORKFLOW_LIBSQL_URL?.match(/^(https?|wss?|libsql):/) ? process.env.WORKFLOW_LIBSQL_URL : undefined;
+  it.skipIf(!remoteUrl)('appends concurrentes del mismo run toman slots únicos y densos', async () => {
+    ctx = makeWorld({ url: remoteUrl });
+    const { run } = await createRun(ctx.world);
+    const runId = run!.runId;
+    await ctx.world.events.create(runId, { eventType: 'run_started', specVersion: SPEC_VERSION_CURRENT });
+    // fan-out paralelo: todos creen que la bitácora tiene 2 eventos
+    const n = 8;
+    const results = await Promise.all(
+      Array.from({ length: n }, (_, i) =>
+        ctx.world.events.create(
+          runId,
+          { eventType: 'step_created', correlationId: `${runId}-s${i}`, specVersion: SPEC_VERSION_CURRENT, eventData: { stepName: `s${i}`, input: bytes('') } },
+          { eventCount: 2 }
+        )
+      )
+    );
+    const ids = results.map((r) => r.event!.eventId).sort();
+    expect(ids).toEqual(Array.from({ length: n }, (_, i) => slotToEventId(i + 3)));
+    const list = await ctx.world.events.list({ runId });
+    expect(list.data.map((e) => e.eventId)).toEqual(Array.from({ length: n + 2 }, (_, i) => slotToEventId(i + 1)));
+  });
+
   it('runs.list, getMany y atributos', async () => {
     ctx = makeWorld();
     const a = await createRun(ctx.world);
