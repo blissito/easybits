@@ -149,6 +149,8 @@ export async function loader({ params, request }: Route.LoaderArgs) {
           ? normalizePublicAssetUrl(file.url)
           : await client.getReadUrl(file.storageKey);
         const upstream = await fetch(readUrl);
+        // Un error del almacenamiento NUNCA se reenvía (traía el XML de S3 con llave y bucket).
+        if (!upstream.ok) throw new Response("Not found", { status: 404 });
         // Rewrite any legacy Tigris gateway URLs baked into the stored HTML
         // (e.g. <img src="…fly.storage.tigris.dev…">) to the working t3 host.
         const html = normalizePublicAssetUrl(await upstream.text());
@@ -168,6 +170,7 @@ export async function loader({ params, request }: Route.LoaderArgs) {
     ? normalizePublicAssetUrl(file.url)
     : await client.getReadUrl(file.storageKey);
   const upstream = await fetch(readUrl);
+  if (!upstream.ok) throw new Response("Not found", { status: 404 });
 
   const contentType = getContentType(splat);
   const cacheControl = isImmutable(splat)

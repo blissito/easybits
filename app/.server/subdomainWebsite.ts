@@ -1,6 +1,6 @@
 import { db } from "./db";
 import { trackTelemetryVisit } from "./telemetry";
-import { getPlatformDefaultClient } from "./storage";
+import { getReadClientForPlatformFile } from "./storage";
 import { getContentType } from "~/utils/mime";
 
 function isImmutable(path: string): boolean {
@@ -204,9 +204,8 @@ async function serveWebsiteFile(
     });
     if (file) {
       // SPA fallback — proxy index.html (no redirect, keeps URL clean)
-      const client = getPlatformDefaultClient();
-      const readUrl = await client.getReadUrl(file.storageKey);
-      const upstream = await fetch(readUrl);
+      const upstream = await fetchSiteFile(file);
+      if (!upstream) return notFound();
       return new Response(upstream.body, {
         headers: {
           "Content-Type": "text/html; charset=utf-8",
@@ -214,19 +213,16 @@ async function serveWebsiteFile(
         },
       });
     }
-    return new Response("Not found", { status: 404 });
+    return notFound();
   }
 
   if (!file) {
-    return new Response("Not found", { status: 404 });
+    return notFound();
   }
 
   // Proxy all files (no 302 redirects — avoids CORS/iframe issues)
-  const client = getPlatformDefaultClient();
-  const readUrl = file.access === "public" && file.url
-    ? file.url
-    : await client.getReadUrl(file.storageKey);
-  const upstream = await fetch(readUrl);
+  const upstream = await fetchSiteFile(file);
+  if (!upstream) return notFound();
   const contentType = getContentType(splat);
   const cacheControl = isImmutable(splat)
     ? "public, max-age=31536000, immutable"
@@ -239,4 +235,28 @@ async function serveWebsiteFile(
       "Access-Control-Allow-Origin": "*",
     },
   });
+}
+
+/**
+ * Lee el archivo de un sitio del bucket donde DE VERDAD vive. Antes el fallback SPA leía
+ * todo del bucket privado (`mcp/`) y un index.html público salía como `NoSuchKey`: el XML
+ * crudo de S3 —con la llave y el nombre del bucket— se reenviaba al visitante (14-oct).
+ * Cualquier respuesta no-2xx del almacenamiento cuenta como "no existe".
+ */
+async function fetchSiteFile(file: { url: string | null; storageKey: string; access: string | null }): Promise<globalThis.Response | null> {
+  const readUrl =
+    file.access === "public" && file.url ? file.url : await getReadClientForPlatformFile(file).getReadUrl(file.storageKey);
+  const upstream = await fetch(readUrl).catch(() => null);
+  if (!upstream?.ok) {
+    if (upstream) console.error(`[sites] storage ${upstream.status} para ${file.storageKey}`);
+    return null;
+  }
+  return upstream;
+}
+
+function notFound() {
+  return new Response(
+    `<!doctype html><html lang="es"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Página no encontrada</title><body style="font-family:system-ui,sans-serif;display:grid;place-items:center;min-height:100vh;margin:0;background:#fafafa;color:#111"><div style="text-align:center"><h1 style="font-size:2rem;margin:0 0 .5rem">404</h1><p style="margin:0 0 1.5rem;color:#555">Esta página no existe.</p><a href="/" style="color:#7c3aed;font-weight:600">Ir al inicio</a></div></body></html>`,
+    { status: 404, headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-cache" } }
+  );
 }
