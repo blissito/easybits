@@ -242,7 +242,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
       // return { error: "Este dominio ya está en uso, intenta con otro" };
     }
     user?.domain && (await removeHost(user.domain));
-    const domainResult = (await createHost(domain)) as CertificateResponse;
+    const domainResult = (await createHost(domain)) as unknown as CertificateResponse;
 
     if (domainResult) {
       await db.user.update({
@@ -291,7 +291,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
     await removeHost(`${currentUser.host}.${domain}`);
     const hostResult = (await createHost(
       `${host}.${domain}`
-    )) as CertificateResponse;
+    )) as unknown as CertificateResponse;
 
     const {
       addCertificate: { certificate },

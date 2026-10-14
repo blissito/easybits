@@ -1,7 +1,8 @@
-// IPs públicas de la app `easybits` en Fly (fly ips list -a easybits).
-// El apex de un dominio no puede ser CNAME: el usuario apunta A/AAAA aquí.
+// A dónde apunta un cliente su dominio (desde 2026-10-08 EasyBits vive en el fierro A de
+// sandbox-host, ya no en Fly). El apex no puede ser CNAME: va A a la IP del fierro. Sin IPv6:
+// el fierro no publica AAAA. El nombre del export se queda por compatibilidad.
 export const FLY_EDGE_IPS = {
-  v4: "66.241.125.82",
-  v6: "2a09:8280:1::5c:8bf9:0",
-  cnameTarget: "easybits.fly.dev",
+  v4: "54.38.94.14",
+  v6: null as string | null,
+  cnameTarget: "cname.sandboxes.easybits.cloud",
 } as const;

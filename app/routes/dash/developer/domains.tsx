@@ -179,12 +179,14 @@ export default function DomainsPage() {
                       <span className="text-gray-400 mx-1">&rarr;</span>
                       <span className="font-mono text-xs">{FLY_EDGE_IPS.v4}</span>
                     </div>
-                    <div className="flex gap-2">
-                      <span className="font-mono text-xs bg-gray-200 px-2 py-0.5 rounded">AAAA</span>
-                      <span className="font-mono text-xs">{d.domain}</span>
-                      <span className="text-gray-400 mx-1">&rarr;</span>
-                      <span className="font-mono text-xs">{FLY_EDGE_IPS.v6}</span>
-                    </div>
+                    {FLY_EDGE_IPS.v6 && (
+                      <div className="flex gap-2">
+                        <span className="font-mono text-xs bg-gray-200 px-2 py-0.5 rounded">AAAA</span>
+                        <span className="font-mono text-xs">{d.domain}</span>
+                        <span className="text-gray-400 mx-1">&rarr;</span>
+                        <span className="font-mono text-xs">{FLY_EDGE_IPS.v6}</span>
+                      </div>
+                    )}
                   </div>
                   <p className="text-xs text-gray-500 mt-2">
                     Despues de agregar los registros, haz clic en "Verificar". La propagacion DNS puede tardar hasta 48h.
@@ -227,7 +229,7 @@ export default function DomainsPage() {
               )}
               {d.verified && !d.apexWebsite && (
                 <p className="text-xs text-gray-500 mt-1">
-                  Para el dominio raíz necesitas los registros A/AAAA hacia {FLY_EDGE_IPS.v4} / {FLY_EDGE_IPS.v6} y CNAME www &rarr; {FLY_EDGE_IPS.cnameTarget}.
+                  Para el dominio raíz necesitas el registro A hacia {FLY_EDGE_IPS.v4} y CNAME www &rarr; {FLY_EDGE_IPS.cnameTarget}.
                 </p>
               )}
 

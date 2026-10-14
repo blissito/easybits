@@ -843,12 +843,11 @@ Flow: \`add_domain\` → add DNS → \`verify_domain\` → (optional) \`set_doma
 | DNS record | Name | Value | Needed for |
 |---|---|---|---|
 | TXT | \`_easybits-verify.midominio.com\` | the \`txtToken\` returned by \`add_domain\` | verification |
-| CNAME | \`*.midominio.com\` | \`easybits.fly.dev\` | subdomains |
-| A | \`midominio.com\` | \`66.241.125.82\` | root domain |
-| AAAA | \`midominio.com\` | \`2a09:8280:1::5c:8bf9:0\` | root domain |
-| CNAME | \`www.midominio.com\` | \`easybits.fly.dev\` | root domain |
+| CNAME | \`*.midominio.com\` | \`cname.sandboxes.easybits.cloud\` | subdomains |
+| A | \`midominio.com\` | \`54.38.94.14\` | root domain |
+| CNAME | \`www.midominio.com\` | \`cname.sandboxes.easybits.cloud\` | root domain |
 
-Certificates are issued on Fly automatically (wildcard on verify; root + www when a site is assigned). They can take a few minutes after DNS propagates.
+Certificates are issued automatically on the first HTTPS request (wildcard registered on verify; root + www when a site is assigned). They can take a few minutes after DNS propagates.
 
 REST: \`GET/POST/DELETE /domains\`, \`POST /domains/:domainId/verify\`, \`POST /domains/:domainId/apex\` \`{ websiteId | null }\`.
 MCP: \`list_domains\`, \`add_domain\`, \`verify_domain\`, \`set_domain_website\`, \`delete_domain\`.

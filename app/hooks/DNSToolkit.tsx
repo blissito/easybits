@@ -273,7 +273,7 @@ const IPsInfo = ({ user }: { user: User }) => {
         <span className="col-span-1">Valor</span>{" "}
       </section>
       {/* Content */}
-      <section className="border border-black border-b-0 p-1 grid grid-cols-3 text-xs gap-2">
+      <section className="border border-black rounded-b-lg p-1 grid grid-cols-3 text-xs gap-2">
         <span>A</span>
         <div className="flex items-center">
           <p className="truncate"> {user.domain}</p>
@@ -281,21 +281,8 @@ const IPsInfo = ({ user }: { user: User }) => {
         </div>
 
         <div className="col-span-1 w-max items-center flex">
-          <p className="truncate"> 66.241.125.82</p>
-          <CopyButton className="ml-1" text={"66.241.125.82"} />
-        </div>
-      </section>
-      {/* Content */}
-      <section className="border border-black rounded-b-lg p-1 grid grid-cols-3 text-xs gap-2">
-        <span>AAAA</span>
-        <div className="flex items-center">
-          <p className="truncate"> {user.domain}</p>
-          <CopyButton className="ml-1" text={user.domain ?? ""} />
-        </div>
-
-        <div className="col-span-1 w-max items-center flex">
-          <p className="truncate"> 2a09:8280:1::5c:8bf9:0</p>
-          <CopyButton className="ml-1" text={"2a09:8280:1::5c:8bf9:0"} />
+          <p className="truncate"> 54.38.94.14</p>
+          <CopyButton className="ml-1" text={"54.38.94.14"} />
         </div>
       </section>
     </article>

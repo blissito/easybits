@@ -54,13 +54,10 @@ export async function verifyCustomDomain(domainId: string, userId: string) {
     );
   }
 
-  // Create wildcard cert on Fly
-  try {
-    await createHost(`*.${domain.domain}`);
-  } catch (e) {
-    console.error("Failed to create wildcard cert:", e);
-    // Non-fatal — cert may already exist or take time to provision
-  }
+  // Alta del comodín en la caja de EasyBits: sin esto el Caddy del fierro no emite el cert y
+  // <slug>.<dominio> no llega a la app (ver lib/fly_certs/certs_getters).
+  const ok = await createHost(`*.${domain.domain}`);
+  if (!ok) throw new Error("No se pudo dar de alta el dominio en el servidor. Intenta de nuevo en un momento.");
 
   return db.customDomain.update({
     where: { id: domainId },
@@ -96,12 +93,10 @@ export function apexHostnames(domain: string): [string, string] {
 }
 
 async function createApexCerts(domain: string) {
-  if (!process.env.FLY_API_TOKEN) return;
   for (const h of apexHostnames(domain)) await createHost(h);
 }
 
 async function removeApexCerts(domain: string) {
-  if (!process.env.FLY_API_TOKEN) return;
   for (const h of apexHostnames(domain)) await removeHost(h);
 }
 

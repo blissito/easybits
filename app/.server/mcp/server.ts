@@ -5691,7 +5691,7 @@ function registerSiteTools(server: McpServer) {
 
   server.tool(
     "add_domain",
-    "Register a custom domain (e.g. `midominio.com`). Returns `{ domain }` with `txtToken`. DNS the user must add: TXT `_easybits-verify.<domain>` = txtToken; CNAME `*.<domain>` → easybits.fly.dev. To use the ROOT domain too: A `<domain>` → 66.241.125.82, AAAA → 2a09:8280:1::5c:8bf9:0, CNAME `www` → easybits.fly.dev. Then call `verify_domain`.",
+    "Register a custom domain (e.g. `midominio.com`). Returns `{ domain }` with `txtToken`. DNS the user must add: TXT `_easybits-verify.<domain>` = txtToken; CNAME `*.<domain>` → cname.sandboxes.easybits.cloud. To use the ROOT domain too: A `<domain>` → 54.38.94.14, CNAME `www` → cname.sandboxes.easybits.cloud. Then call `verify_domain`.",
     { domain: z.string().describe("Root domain, without protocol (midominio.com)") },
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
