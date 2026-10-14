@@ -97,11 +97,11 @@ export function buildDocumentHtml(
   const pdfButton = options?.pdfUrl
     ? `<a href="${options.pdfUrl}" target="_blank" rel="noreferrer" style="font-size:13px;color:#9870ED;background:none;border:none;cursor:pointer;font-weight:600;text-decoration:none;display:flex;align-items:center;gap:4px;">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-        PDF
+        <span class="pdf-label">PDF</span>
       </a>`
     : `<button onclick="window.print()" style="font-size:13px;color:#9870ED;background:none;border:none;cursor:pointer;font-weight:600;display:flex;align-items:center;gap:4px;">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-        PDF
+        <span class="pdf-label">PDF</span>
       </button>`;
 
   const branding =
@@ -115,7 +115,7 @@ export function buildDocumentHtml(
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>${title}</title>
   ${options?.description ? `<meta name="description" content="${escapeAttr(options.description)}">` : ""}
   <meta property="og:title" content="${escapeAttr(title)}">
@@ -154,7 +154,34 @@ export function buildDocumentHtml(
       display: flex; align-items: center; justify-content: space-between;
       font-family: 'Inter', sans-serif;
     }
-    .doc-toolbar h1 { font-size: 14px; font-weight: 600; color: #fff; }
+    .doc-toolbar h1 { font-size: 14px; font-weight: 600; color: #fff; margin: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .doc-toolbar { gap: 12px; }
+    .mobile-nav { display: none; }
+    /* Celular: una página a la vez, navegación abajo al alcance del pulgar. */
+    @media (max-width: 640px) {
+      .doc-toolbar { padding: 8px 12px; padding-top: max(8px, env(safe-area-inset-top)); }
+      .doc-toolbar .page-nav { display: none; }
+      .pdf-label { display: none; }
+      .side-nav { display: none !important; }
+      /* !important: la regla base de .flipbook-container va DESPUÉS en este CSS y la pisaba. */
+      .flipbook-container { padding: 8px !important; align-items: center !important; }
+      #page-hint { bottom: calc(76px + env(safe-area-inset-bottom)) !important; font-size: 12px !important; white-space: nowrap; padding: 6px 14px !important; }
+      .mobile-nav {
+        display: flex; align-items: center; justify-content: center; gap: 20px;
+        position: sticky; bottom: 0; z-index: 100;
+        background: #111; border-top: 1px solid #333;
+        padding: 8px 12px; padding-bottom: max(8px, env(safe-area-inset-bottom));
+        font-family: 'Inter', sans-serif; color: #ccc; font-size: 14px; user-select: none;
+      }
+      .mobile-nav button {
+        width: 44px; height: 44px; border-radius: 12px; border: 1px solid #444;
+        background: #1f1f1f; color: #fff; font-size: 22px; line-height: 1;
+        display: flex; align-items: center; justify-content: center;
+        -webkit-tap-highlight-color: transparent;
+      }
+      .mobile-nav button:disabled { opacity: 0.3; }
+      .doc-branding { display: none; }
+    }
     .doc-toolbar-right { display: flex; align-items: center; gap: 16px; }
     .page-nav {
       display: flex; align-items: center; gap: 8px;
@@ -251,9 +278,15 @@ export function buildDocumentHtml(
   <button id="side-next" class="side-nav right" aria-label="Siguiente">&#8250;</button>
 </div>
 
+<nav class="mobile-nav" aria-label="Páginas">
+  <button id="m-prev" aria-label="Página anterior">&#8249;</button>
+  <span id="m-indicator">1 / ${totalPages}</span>
+  <button id="m-next" aria-label="Página siguiente">&#8250;</button>
+</nav>
+
 <!-- Page turn hint -->
 <div id="page-hint" style="position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.75);color:#fff;padding:8px 20px;border-radius:20px;font-size:13px;z-index:200;pointer-events:none;transition:opacity 0.5s;display:flex;align-items:center;gap:8px;">
-  <span style="font-size:18px;">&#8592;</span> Desliza o usa las flechas para navegar <span style="font-size:18px;">&#8594;</span>
+  <span style="font-size:18px;">&#8592;</span> <span id="hint-text">Desliza o usa las flechas para navegar</span> <span style="font-size:18px;">&#8594;</span>
 </div>
 
 ${branding}
@@ -276,9 +309,19 @@ ${branding}
   // Landscape decks get more room (capped at 1100); portrait at 612 like before.
   var MAX_W = IS_LANDSCAPE ? 1100 : 612;
 
+  var IS_MOBILE = window.matchMedia('(max-width: 640px)').matches;
+  function chromeHeight() {
+    // Lo que de verdad ocupa la interfaz (barra de arriba + la de abajo en celular + aire),
+    // no 120 px fijos: en el celular la barra del navegador cambia el alto visible.
+    var top = document.querySelector('.doc-toolbar');
+    var bottom = document.querySelector('.mobile-nav');
+    var hb = bottom && getComputedStyle(bottom).display !== 'none' ? bottom.getBoundingClientRect().height : 0;
+    return (top ? top.getBoundingClientRect().height : 0) + hb + (IS_MOBILE ? 16 : 48);
+  }
   function computeSize() {
-    var availableW = window.innerWidth - 32;
-    var availableH = window.innerHeight - 120; // toolbar + padding
+    var vh = (window.visualViewport && window.visualViewport.height) || window.innerHeight;
+    var availableW = window.innerWidth - (IS_MOBILE ? 16 : 32);
+    var availableH = vh - chromeHeight();
     var w = Math.min(availableW, MAX_W);
     var h = Math.round(w * ASPECT);
     if (h > availableH) {
@@ -302,7 +345,9 @@ ${branding}
     maxHeight: Math.round(MAX_W * ASPECT),
     showCover: !IS_LANDSCAPE, // single-page first only makes sense for portrait books
     mobileScrollSupport: false,
-    usePortrait: !IS_LANDSCAPE,
+    // En celular SIEMPRE una página a la vez (también los decks horizontales): se desliza.
+    usePortrait: !IS_LANDSCAPE || IS_MOBILE,
+    swipeDistance: 30,
     startPage: 0,
     drawShadow: true,
     flippingTime: 600,
@@ -330,15 +375,38 @@ ${branding}
   var nextBtn = document.getElementById('next-btn');
   var sidePrev = document.getElementById('side-prev');
   var sideNext = document.getElementById('side-next');
+  var mPrev = document.getElementById('m-prev');
+  var mNext = document.getElementById('m-next');
+  var mIndicator = document.getElementById('m-indicator');
   var total = ${totalPages};
+
+  // Centrado: en vista de libro abierto (dos páginas), la portada cae en la mitad DERECHA y
+  // una contraportada sola en la IZQUIERDA → en pantalla ancha quedaba medio libro vacío y la
+  // hoja descentrada (14-oct). Se recorre media página hacia el lado vacío.
+  el.style.transition = 'transform 0.4s ease';
+  function centerBook() {
+    var spread = false;
+    try { spread = flip.getOrientation && flip.getOrientation() === 'landscape'; } catch (e) {}
+    var idx = flip.getCurrentPageIndex();
+    var shift = 0;
+    if (spread && !IS_LANDSCAPE) {
+      if (idx === 0) shift = -W / 2;
+      else if (idx === total - 1 && total % 2 === 0) shift = W / 2;
+    }
+    el.style.transform = shift ? 'translateX(' + shift + 'px)' : '';
+  }
 
   function updateNav() {
     var current = flip.getCurrentPageIndex() + 1;
+    centerBook();
     indicator.textContent = current + ' / ' + total;
     prevBtn.disabled = current <= 1;
     nextBtn.disabled = current >= total;
     sidePrev.disabled = current <= 1;
     sideNext.disabled = current >= total;
+    mIndicator.textContent = current + ' / ' + total;
+    mPrev.disabled = current <= 1;
+    mNext.disabled = current >= total;
   }
 
   flip.on('flip', updateNav);
@@ -348,6 +416,8 @@ ${branding}
   nextBtn.addEventListener('click', function() { flip.flipNext(); });
   sidePrev.addEventListener('click', function() { flip.flipPrev(); });
   sideNext.addEventListener('click', function() { flip.flipNext(); });
+  mPrev.addEventListener('click', function() { flip.flipPrev(); });
+  mNext.addEventListener('click', function() { flip.flipNext(); });
 
   document.addEventListener('keydown', function(e) {
     if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { flip.flipPrev(); }
@@ -356,19 +426,32 @@ ${branding}
 
   // Dismiss hint after first flip or after 4 seconds
   var hint = document.getElementById('page-hint');
+  if (window.matchMedia('(pointer: coarse)').matches) {
+    var ht = document.getElementById('hint-text');
+    if (ht) ht.textContent = 'Desliza para cambiar de página';
+  }
   function hideHint() { if (hint) { hint.style.opacity = '0'; setTimeout(function() { hint.remove(); }, 500); } }
   flip.on('flip', function() { hideHint(); });
   setTimeout(hideHint, 4000);
 
-  // Responsive resize
-  window.addEventListener('resize', function() {
-    var s = computeSize();
-    W = s.w;
-    H = s.h;
-    flip.updateSetting({ width: W, height: H });
-    flip.update();
-    scalePages();
-  });
+  // Responsive resize (rotar el celular, la barra del navegador que aparece/desaparece).
+  var resizeTimer;
+  function onResize() {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(function() {
+      IS_MOBILE = window.matchMedia('(max-width: 640px)').matches;
+      var s = computeSize();
+      W = s.w;
+      H = s.h;
+      flip.updateSetting({ width: W, height: H });
+      flip.update();
+      scalePages();
+      centerBook();
+    }, 150);
+  }
+  window.addEventListener('resize', onResize);
+  window.addEventListener('orientationchange', onResize);
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', onResize);
 })();
 <\/script>
 </body>
