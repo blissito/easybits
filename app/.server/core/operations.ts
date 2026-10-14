@@ -259,6 +259,23 @@ export async function uploadFile(
 ) {
   requireScope(ctx, "WRITE");
 
+  // Subidas que esta llave tiene vetadas por nombre (ver ApiKey.blockUploadPattern).
+  const blocked = (ctx.apiKey as { blockUploadPattern?: string | null } | undefined)?.blockUploadPattern;
+  if (blocked) {
+    let re: RegExp | null = null;
+    try {
+      re = new RegExp(blocked);
+    } catch {
+      re = null;
+    }
+    if (re?.test(opts.fileName)) {
+      throw new Response(JSON.stringify({ error: "Uploads of this kind are disabled for this API key" }), {
+        status: 403,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+  }
+
   // Effective workspace: a workspace-scoped key forces its own workspace; an
   // account key may target one explicitly via opts. `requireWorkspace` guards
   // against a scoped key trying to write to a different workspace via opts.

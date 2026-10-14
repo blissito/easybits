@@ -506,6 +506,11 @@ model ApiKey {
   // Última vez que la llave autenticó una request (sellado a lo más 1 vez/hora).
   // Es la única evidencia de que el usuario conectó de verdad su agente.
   lastUsedAt DateTime?
+  // Regex de nombres de archivo que esta llave NO puede subir (403). Para cortar subidas
+  // automáticas de un cliente sin revocarle la llave (que usa también para tools): p.ej.
+  // las fotos de WhatsApp de nanoclaw `^img-\d+-[a-z0-9]{4}\.jpg$`, que ante el 403 cae
+  // solo a mandarlas en base64 (2026-10-14, llave «nanoclaw» del droplet de David).
+  blockUploadPattern String?
   createdAt DateTime     @default(now())
   updatedAt DateTime     @updatedAt
 
