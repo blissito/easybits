@@ -27,6 +27,7 @@ import {
   suspendSandbox,
   resumeSandbox,
   suspendSandboxRaw,
+  setSandboxIdlePolicy,
   type SandboxRecord,
   SandboxHostError,
 } from "./sandboxOperations";
@@ -36,12 +37,15 @@ import {
   removeMachineSubscriptionItem,
   createMachineCheckout,
   cancelMachineSubscription,
+  updateMachineSubscriptionItem,
+  repriceStandaloneMachineSubscription,
 } from "../stripe_machines";
 import {
   resolveTier,
   reservedAvailable,
   machineMonthly,
   resourcesFor,
+  SLEEP_IDLE_SECONDS,
   type CpuMode,
   type HostingTier,
 } from "../../lib/hostingCatalog";
@@ -64,6 +68,8 @@ export interface PermanentSandbox {
   persistent: boolean;
   tier: string;
   cpuMode: CpuMode;
+  /** Modo "duerme sin visitas" (se suspende sola; la primera visita la despierta). */
+  sleep: boolean;
   diskAddonsGB: number;
   name: string | null;
   status: string;
@@ -89,6 +95,7 @@ interface SandboxRow {
   persistent: boolean;
   tier: string;
   cpuMode: string;
+  sleep?: boolean | null;
   diskAddonsGB: number;
   name: string | null;
   status: string;
@@ -109,10 +116,11 @@ function toPermanent(row: SandboxRow, host?: SandboxRecord, shared = false): Per
     persistent: row.persistent,
     tier: row.tier,
     cpuMode: mode,
+    sleep: !!row.sleep,
     diskAddonsGB: row.diskAddonsGB,
     name: row.name,
     status: row.status,
-    monthlyMxn: tier ? machineMonthly(tier, mode, row.diskAddonsGB) : 0,
+    monthlyMxn: tier ? machineMonthly(tier, mode, row.diskAddonsGB, !!row.sleep) : 0,
     vcpus: res.vcpus,
     memoryMb: res.memoryMb,
     diskMb: res.diskMb,
@@ -141,7 +149,10 @@ function fail(status: number, error: string, message: string, extra?: object): n
  * the sale. The plan still gates AI, storage and fleet; it just stopped gating
  * hosting. What remains here are capability gates, not commercial ones.
  */
-function assertCanProvision(_ctx: AuthContext, tier: HostingTier, mode: CpuMode): void {
+function assertCanProvision(_ctx: AuthContext, tier: HostingTier, mode: CpuMode, sleep = false): void {
+  if (sleep && mode === "reserved") {
+    fail(422, "SleepRequiresSharedCpu", "El modo duerme sólo existe con CPU shared.");
+  }
   if (mode === "reserved") {
     if (!reservedAvailable(tier)) {
       fail(422, "ReservedNotAvailableForTier",
@@ -167,7 +178,8 @@ async function attachBilling(
   mode: CpuMode,
   diskAddonsGB: number,
   host: SandboxRecord | undefined,
-  onRollback: () => Promise<void>
+  onRollback: () => Promise<void>,
+  sleep = false
 ): Promise<PermanentSandbox> {
   // Cortesía: la caja existe y se opera igual, pero no cuelga de ninguna
   // suscripción. Sin esto el cobro falla y el rollback destruye la máquina
@@ -181,7 +193,7 @@ async function attachBilling(
     fail(403, "MachineSubscriptionRequired",
       "No encontramos una suscripción de plan activa. Suscríbete a un plan para crear sandboxes.");
   }
-  const monthlyMxn = machineMonthly(tier, mode, diskAddonsGB);
+  const monthlyMxn = machineMonthly(tier, mode, diskAddonsGB, sleep);
   try {
     const subItemId = await addMachineSubscriptionItem({
       subscriptionId: subscription.id,
@@ -203,6 +215,71 @@ async function attachBilling(
   }
 }
 
+// El host decide si la caja está ociosa preguntando `/busy` a su runtime; una
+// plantilla sin runtime (ubuntu) contesta "no sé" y NUNCA dormiría, aunque le
+// cobráramos como si sí. Sólo `node` (stateless, pensada para dormir entre visitas).
+function assertSleepTemplate(sleep: boolean, template?: string): void {
+  if (sleep && (template ?? "ubuntu") !== "node") {
+    fail(422, "SleepRequiresNodeTemplate", 'El modo duerme requiere la plantilla "node".');
+  }
+}
+
+// Siesta en el host: se suspende tras SLEEP_IDLE_SECONDS sin tráfico y el proxy
+// público la despierta con la siguiente visita. Sin hard TTL: es una caja vendida.
+async function applySleepPolicy(ctx: AuthContext, sandboxId: string, sleep: boolean): Promise<void> {
+  await setSandboxIdlePolicy(
+    ctx,
+    sandboxId,
+    sleep ? { suspendOnIdle: true, idleTtlSeconds: SLEEP_IDLE_SECONDS } : { suspendOnIdle: false }
+  ).catch((e) => {
+    console.error(`[hosting] no se pudo ${sleep ? "activar" : "quitar"} la siesta de ${sandboxId}:`, e);
+    throw e;
+  });
+}
+
+/**
+ * Cambia una máquina existente entre "siempre prendida" y "duerme sin visitas".
+ * Reprecia el cobro (item del plan o suscripción propia) y aplica la siesta en el
+ * host. Primero el host: si falla, no se toca el cobro.
+ */
+export async function setMachineSleep(
+  ctx: AuthContext,
+  sandboxId: string,
+  sleep: boolean
+): Promise<PermanentSandbox> {
+  requireScope(ctx, "WRITE");
+  const row = await db.sandbox.findUnique({ where: { sandboxId } });
+  const mine =
+    !!row && (row.ownerId === ctx.user.id || (await can(ctx, row.ownerId, SCOPES.MACHINES)));
+  if (!row || !mine || row.status === "destroyed" || row.status === "pending_deletion") {
+    fail(404, "MachineNotFound", "Sandbox no encontrado.");
+  }
+  const tier = resolveTier(row.tier);
+  if (!tier) fail(400, "UnknownTier", `Tier desconocido: "${row.tier}".`);
+  const mode = (row.cpuMode === "reserved" ? "reserved" : "shared") as CpuMode;
+  if (!!row.sleep === sleep) return getPermanent(ctx, sandboxId);
+  assertCanProvision(ctx, tier, mode, sleep);
+  assertSleepTemplate(sleep, row.template ?? undefined);
+
+  const ownerCtx = { user: { id: row.ownerId }, scopes: ["WRITE"] } as AuthContext;
+  await applySleepPolicy(ownerCtx, sandboxId, sleep);
+  const monthlyMxn = machineMonthly(tier, mode, row.diskAddonsGB, sleep);
+  try {
+    if (row.stripeSubItemId) {
+      await updateMachineSubscriptionItem(row.stripeSubItemId, monthlyMxn, { tier: tier.key, cpuMode: mode });
+    } else if (row.stripeSubscriptionId) {
+      await repriceStandaloneMachineSubscription(row.stripeSubscriptionId, monthlyMxn);
+    }
+  } catch (e) {
+    // Revertir la siesta: nunca dejar una caja con un modo distinto al que se cobra.
+    await applySleepPolicy(ownerCtx, sandboxId, !!row.sleep).catch(() => undefined);
+    fail(502, "MachineBillingFailed",
+      `No se pudo actualizar el cobro: ${e instanceof Error ? e.message : String(e)}`);
+  }
+  await db.sandbox.update({ where: { sandboxId }, data: { sleep } });
+  return getPermanent(ctx, sandboxId);
+}
+
 /**
  * Start payment for a machine bought WITHOUT a platform plan.
  *
@@ -215,6 +292,7 @@ export async function startMachineCheckout(
   params: {
     tier: string;
     cpuMode?: CpuMode;
+    sleep?: boolean;
     diskAddonsGB?: number;
     template?: SandboxTemplate;
     name?: string;
@@ -227,9 +305,11 @@ export async function startMachineCheckout(
   if (!tier) fail(400, "UnknownTier", `Tier desconocido: "${params.tier}".`);
   const mode: CpuMode = params.cpuMode === "reserved" ? "reserved" : "shared";
   const diskAddonsGB = params.diskAddonsGB ?? 0;
-  assertCanProvision(ctx, tier, mode);
+  const sleep = !!params.sleep;
+  assertCanProvision(ctx, tier, mode, sleep);
+  assertSleepTemplate(sleep, params.template);
 
-  const monthlyMxn = machineMonthly(tier, mode, diskAddonsGB);
+  const monthlyMxn = machineMonthly(tier, mode, diskAddonsGB, sleep);
   const base = process.env.APP_URL || "https://www.easybits.cloud";
   const user = ctx.user as { id: string; email?: string | null; stripeId?: string | null; stripeIds?: string[] };
   const { url } = await createMachineCheckout({
@@ -239,6 +319,7 @@ export async function startMachineCheckout(
     monthlyMxn,
     tier: tier.key,
     cpuMode: mode,
+    sleep,
     diskAddonsGB,
     template: params.template,
     name: params.name,
@@ -261,6 +342,7 @@ export async function provisionPaidMachine(params: {
   subscriptionId: string;
   tier: string;
   cpuMode: CpuMode;
+  sleep?: boolean;
   diskAddonsGB: number;
   template?: string;
   name?: string;
@@ -297,7 +379,7 @@ export async function provisionPaidMachine(params: {
     sandbox = await createSandboxRaw(ctx, {
       template,
       name: params.name,
-      metadata: { eb_persistent: "1", eb_tier: tier.key, eb_cpu_mode: params.cpuMode },
+      metadata: { eb_persistent: "1", eb_tier: tier.key, eb_cpu_mode: params.cpuMode, ...(params.sleep ? { eb_sleep: "1" } : {}) },
       vcpus: res.vcpus,
       memoryMb: res.memoryMb,
       diskMb: res.diskMb,
@@ -322,6 +404,7 @@ export async function provisionPaidMachine(params: {
       tier: tier.key,
       template,
       cpuMode: params.cpuMode,
+      sleep: !!params.sleep,
       diskAddonsGB: params.diskAddonsGB,
       name: params.name ?? null,
       status: sandbox.status === "running" ? "running" : "provisioning",
@@ -330,6 +413,7 @@ export async function provisionPaidMachine(params: {
     },
   });
   await lockBox(ctx, sandbox.sandboxId);
+  if (params.sleep) await applySleepPolicy(ctx, sandbox.sandboxId, true).catch(() => undefined); // ya logueado; cobra menos, no más
   return { sandboxId: sandbox.sandboxId };
 }
 
@@ -367,6 +451,7 @@ export async function buyMachine(
   params: {
     tier: string;
     cpuMode?: CpuMode;
+    sleep?: boolean;
     diskAddonsGB?: number;
     template?: SandboxTemplate;
     name?: string;
@@ -396,6 +481,7 @@ export async function createPermanent(
   params: {
     tier: string;
     cpuMode?: CpuMode;
+    sleep?: boolean;
     diskAddonsGB?: number;
     template?: SandboxTemplate;
     name?: string;
@@ -412,8 +498,10 @@ export async function createPermanent(
   const mode: CpuMode = params.cpuMode === "reserved" ? "reserved" : "shared";
   const diskAddonsGB = params.diskAddonsGB ?? 0;
   const template = (params.template ?? "ubuntu") as SandboxTemplate;
+  const sleep = !!params.sleep;
 
-  assertCanProvision(ctx, tier, mode);
+  assertCanProvision(ctx, tier, mode, sleep);
+  assertSleepTemplate(sleep, template);
 
   const res = resourcesFor(tier, diskAddonsGB);
   let sandbox: SandboxRecord;
@@ -421,7 +509,7 @@ export async function createPermanent(
     sandbox = await createSandboxRaw(ctx, {
       template,
       name: params.name,
-      metadata: { eb_persistent: "1", eb_tier: tier.key, eb_cpu_mode: mode },
+      metadata: { eb_persistent: "1", eb_tier: tier.key, eb_cpu_mode: mode, ...(sleep ? { eb_sleep: "1" } : {}) },
       vcpus: res.vcpus,
       memoryMb: res.memoryMb,
       diskMb: res.diskMb,
@@ -453,6 +541,7 @@ export async function createPermanent(
       tier: tier.key,
       template,
       cpuMode: mode,
+      sleep,
       diskAddonsGB,
       name: params.name ?? null,
       status: sandbox.status === "running" ? "running" : "provisioning",
@@ -465,7 +554,8 @@ export async function createPermanent(
 
   const result = await attachBilling(ctx, row as SandboxRow, tier, mode, diskAddonsGB, sandbox, async () => {
     await destroySandbox(ctx, sandbox.sandboxId).catch(() => undefined);
-  });
+  }, sleep);
+  if (sleep) await applySleepPolicy(ctx, sandbox.sandboxId, true).catch(() => undefined); // ya logueado; cobra menos, no más
   // Billing attached → lock the box against destroy/suspend. Done AFTER billing
   // so the rollback above (a normal destroy) still works on failure. Only the
   // operator token can override the lock now (releasePermanent uses it).
@@ -577,8 +667,12 @@ export async function makePermanent(
 }
 
 // Map a sandbox status to our status. 404 / lost → "lost".
-function sandboxToStatus(sb: SandboxRecord): string {
+// Una máquina en modo duerme suspendida por el host está SANA (la próxima visita
+// la despierta): cuenta como "running". "suspended" en la fila queda reservado a
+// la suspensión por falta de pago (suspendOwnerSandboxes).
+function sandboxToStatus(sb: SandboxRecord, sleep = false): string {
   if (sb.status === "running") return "running";
+  if (sleep && sb.status === "suspended") return "running";
   if (sb.status === "starting") return "provisioning";
   if (sb.status === "error") return "error";
   return "lost";
@@ -590,7 +684,7 @@ async function selfHeal(ctx: AuthContext, row: SandboxRow): Promise<{ row: Sandb
   if (!RECONCILE.has(row.status)) return { row };
   try {
     const host = await getSandbox(ctx, row.sandboxId);
-    const real = sandboxToStatus(host);
+    const real = sandboxToStatus(host, !!row.sleep);
     if (real !== row.status) {
       await db.sandbox.update({ where: { sandboxId: row.sandboxId }, data: { status: real } }).catch(() => undefined);
       return { row: { ...row, status: real }, host };

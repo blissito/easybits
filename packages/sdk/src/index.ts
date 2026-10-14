@@ -2746,6 +2746,7 @@ export class Sandbox {
   persistent?: boolean;
   tier?: string;
   cpuMode?: "shared" | "reserved";
+  sleep?: boolean;
   monthlyMxn?: number;
   /** Long operation in progress (snapshot/fork); undefined when idle. */
   activity?: SandboxActivity;
@@ -2766,6 +2767,7 @@ export class Sandbox {
     this.persistent = record.persistent;
     this.tier = record.tier;
     this.cpuMode = record.cpuMode;
+    this.sleep = record.sleep;
     this.monthlyMxn = record.monthlyMxn;
     this.activity = record.activity;
     this.req = req;
@@ -2778,6 +2780,7 @@ export class Sandbox {
     this.persistent = rec.persistent;
     this.tier = rec.tier;
     this.cpuMode = rec.cpuMode;
+    this.sleep = rec.sleep;
     this.monthlyMxn = rec.monthlyMxn;
     return this;
   }
@@ -2925,6 +2928,17 @@ export class Sandbox {
   /** Release a permanent machine: stops billing (prorated) and destroys the VM. */
   release(): Promise<{ ok: true }> {
     return this.req(`/machines/${this.sandboxId}`, { method: "DELETE" });
+  }
+  /**
+   * Switch a permanent machine between "sleeps when idle" (half price, wakes on
+   * the next request) and always-on. Re-prices billing. Sleep needs template "node".
+   */
+  async setSleep(sleep: boolean): Promise<this> {
+    const rec = await this.req<SandboxRecord>(`/machines/${this.sandboxId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ sleep }),
+    });
+    return this.applyMachine(rec);
   }
 
   // ── Execution ──
@@ -3499,6 +3513,8 @@ export interface SandboxRecord {
   persistent?: boolean;
   tier?: string;
   cpuMode?: "shared" | "reserved";
+  /** Machine sleeps when idle (wakes on the next request). */
+  sleep?: boolean;
   monthlyMxn?: number;
   /**
    * Long operation running on the box right now; absent otherwise. While set,
@@ -3720,6 +3736,11 @@ export interface CreatePermanentParams {
   /** Catalog tier key (see eb.machines.tiers()). */
   tier: string;
   cpuMode?: "shared" | "reserved";
+  /**
+   * Sleep when idle: suspends after 5 min without traffic; the next request
+   * wakes it (~200 ms, memory intact). Half price. Requires template "node".
+   */
+  sleep?: boolean;
   /** Extra NVMe in multiples of 100GB (+$99/mo each). */
   diskAddonsGB?: number;
   template?: SandboxTemplate;

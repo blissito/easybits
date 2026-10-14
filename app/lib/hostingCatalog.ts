@@ -141,10 +141,24 @@ export function tierPrice(tier: HostingTier, mode: CpuMode): number {
   return tier.priceShared;
 }
 
+/**
+ * Modo "duerme sin visitas": la VM entera (disco + proceso en memoria) se
+ * suspende tras SLEEP_IDLE_SECONDS sin tráfico y la primera visita la despierta
+ * (~200 ms, el proxy público del host hace el resume). Sin visitas no ocupa RAM
+ * ni CPU, sólo disco → la mitad del precio shared. Sólo existe con CPU shared.
+ */
+export const SLEEP_IDLE_SECONDS = 300;
+
+/** Precio MXN/mes del tier en modo "duerme" (mitad de shared, redondeado hacia abajo: micro $49). */
+export function sleepPrice(tier: HostingTier): number {
+  return Math.floor(tier.priceShared / 2);
+}
+
 /** Total MXN/month for a machine: tier price + disk add-ons. */
-export function machineMonthly(tier: HostingTier, mode: CpuMode, diskAddonsGB = 0): number {
+export function machineMonthly(tier: HostingTier, mode: CpuMode, diskAddonsGB = 0, sleep = false): number {
   const units = Math.max(0, Math.round(diskAddonsGB / DISK_ADDON_GB));
-  return tierPrice(tier, mode) + units * DISK_ADDON_PRICE;
+  const base = sleep && mode === "shared" ? sleepPrice(tier) : tierPrice(tier, mode);
+  return base + units * DISK_ADDON_PRICE;
 }
 
 /** Resolve the host create payload resources for a tier + disk add-ons. */

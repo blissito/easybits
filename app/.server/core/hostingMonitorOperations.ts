@@ -67,10 +67,14 @@ export async function checkHostedDomains(opts: { heal?: boolean } = {}): Promise
     // "provisioning" también: hay filas que se quedaron ahí con la caja ya
     // sirviendo (normi035, réplica -r1). Lo que decide es el host.
     where: { persistent: true, status: { in: ["running", "provisioning"] } },
-    select: { sandboxId: true, ownerId: true, name: true, runspec: true },
+    select: { sandboxId: true, ownerId: true, name: true, runspec: true, sleep: true },
   });
   const probed: DomainProbe[] = [];
   for (const row of rows) {
+    // Modo duerme: el sondeo la despertaría cada 5 min (nunca dormiría) y un 503
+    // de capacidad al despertar se reportaría como caída. La salud la dan las
+    // visitas reales y el Restart=always de su unit.
+    if (row.sleep) continue;
     let md: Record<string, string> = {};
     try {
       const sb = await callHost<SandboxRecord>("GET", `/v1/sandbox/${row.sandboxId}`, undefined, row.ownerId);

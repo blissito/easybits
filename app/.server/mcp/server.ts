@@ -178,6 +178,7 @@ import {
 } from "../core/sandboxOperations";
 import {
   buyMachine,
+  setMachineSleep,
   createPermanent,
   makePermanent,
   listPermanent,
@@ -1748,6 +1749,7 @@ How to embed safely (the only reliable rule):
     {
       tier: z.enum(TIER_ORDER as unknown as [string, ...string[]]).describe("Catalog tier key (see list_machine_tiers)"),
       cpuMode: z.enum(["shared", "reserved"]).optional().describe("shared (default, best-effort) or reserved (guaranteed CPU floor, only focus+)"),
+      sleep: z.boolean().optional().describe("Sleep when idle: the VM suspends after 5 min without traffic and the next request wakes it (~200 ms, memory intact). Half price. Requires template 'node' and shared CPU. Not for background jobs/crons/websockets."),
       diskAddonsGB: z.number().int().min(0).max(2000).optional().describe("Extra NVMe in multiples of 100GB (+$99/mo each)"),
       template: z.string().optional().describe("Base image template (default 'ubuntu'). Managed-runtime templates (e.g. 'ghostyclaw') boot a configured agent when `env` is provided."),
       name: z.string().max(64).optional().describe("Human-friendly label"),
@@ -1758,6 +1760,20 @@ How to embed safely (the only reliable rule):
       const ctx = extra.authInfo as unknown as AuthContext;
       const result = await buyMachine(ctx, params as Parameters<typeof buyMachine>[1]);
       return ok(result.checkoutUrl ? result : result.machine);
+    })
+  );
+
+  server.tool(
+    "set_machine_sleep",
+    "Switch an always-on machine between 'sleeps when idle' (suspends after 5 min without traffic, next request wakes it in ~200 ms with memory intact, half price) and 'always on'. Re-prices billing. Sleep requires template 'node' and shared CPU.",
+    {
+      sandboxId: z.string().describe("Sandbox ID of the machine"),
+      sleep: z.boolean().describe("true = sleep when idle (half price); false = always on"),
+    },
+    { destructiveHint: false, idempotentHint: true, openWorldHint: false },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      return ok(await setMachineSleep(ctx, params.sandboxId, params.sleep));
     })
   );
 

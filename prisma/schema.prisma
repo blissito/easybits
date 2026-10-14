@@ -1541,6 +1541,10 @@ model Sandbox {
   template        String?  // host template (e.g. "ghostyclaw"). Gates the admin
                            // passthrough (pairing/CLAUDE.md) to flagship agents.
   cpuMode         String   @default("shared") // "shared" | "reserved"
+  // Modo "duerme sin visitas": el host la suspende tras SLEEP_IDLE_SECONDS sin
+  // tráfico y la primera visita la despierta. Mitad de precio (hostingCatalog.sleepPrice).
+  // ⚠️ Mongo: filas viejas no tienen el campo → filtrar con `sleep: true`, nunca `{not: true}`.
+  sleep           Boolean  @default(false)
   diskAddonsGB    Int      @default(0)        // stackable 100GB NVMe units * 100
   name            String?
   status          String   @default("provisioning") // provisioning|running|suspended|error|lost|destroyed|pending_deletion|transferred (viva, pero ya es de otra plataforma: fuera del monitor, respaldos y listados)

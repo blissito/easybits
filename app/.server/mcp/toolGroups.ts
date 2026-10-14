@@ -569,6 +569,7 @@ export const FLEET_ALLOWLIST = new Set<string>([
 export const HOSTING_ALLOWLIST = new Set<string>([
   "list_machine_tiers",
   "create_machine",
+  "set_machine_sleep",
   "make_permanent",
   "list_machines",
   "release_machine",

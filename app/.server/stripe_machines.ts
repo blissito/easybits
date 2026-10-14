@@ -107,6 +107,7 @@ export async function createMachineCheckout(params: {
   monthlyMxn: number;
   tier: string;
   cpuMode: string;
+  sleep?: boolean;
   diskAddonsGB: number;
   template?: string;
   name?: string;
@@ -138,6 +139,7 @@ export async function createMachineCheckout(params: {
       eb_user_id: params.userId,
       eb_tier: params.tier,
       eb_cpu_mode: params.cpuMode,
+      ...(params.sleep ? { eb_sleep: "1" } : {}),
       eb_disk_addons: String(params.diskAddonsGB),
       ...(params.template ? { eb_template: params.template } : {}),
       ...(params.name ? { eb_name: params.name } : {}),
@@ -217,6 +219,20 @@ export async function updateMachineSubscriptionItem(
     }),
     proration_behavior: "create_prorations",
   });
+}
+
+/**
+ * Re-price a STANDALONE machine subscription (the machine is the subscription,
+ * one line item). Used when switching sleep mode.
+ */
+export async function repriceStandaloneMachineSubscription(
+  subscriptionId: string,
+  monthlyMxn: number
+): Promise<void> {
+  const sub = await getStripe().subscriptions.retrieve(subscriptionId);
+  const item = sub.items.data[0];
+  if (!item) throw new Error(`Subscription ${subscriptionId} has no items`);
+  await updateMachineSubscriptionItem(item.id, monthlyMxn);
 }
 
 /** Remove a machine item (on destroy), prorating the unused remainder. */

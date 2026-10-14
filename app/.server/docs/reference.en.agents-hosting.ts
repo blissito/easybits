@@ -443,9 +443,13 @@ __HOSTING_TIERS_MD__
 For a 24/7 Node app the real floor is \`micro\`: \`nano\` (256MB) runs a static binary or a side project, but does NOT survive a Node build. Disk add-on: +100GB NVMe = $99/month (stackable). **Reserved** CPU (guaranteed floor) only from focus up.
 
 ### Create a permanent sandbox
-\`POST /machines\` · Body: \`{ tier, cpuMode?, diskAddonsGB?, template?, name? }\`
+\`POST /machines\` · Body: \`{ tier, cpuMode?, sleep?, diskAddonsGB?, template?, name? }\`
 MCP: \`create_machine({ tier })\` · SDK: \`eb.sandboxes.createPermanent({ tier })\` (or \`eb.machines.create({ tier })\`)
 Returns the record with \`sandboxId\`, \`tier\`, \`monthlyMxn\`, \`status\`. You operate it like any other sandbox (exec, files, expose_port, domains) by its \`sandboxId\`.
+
+### Sleep when idle (half price)
+\`sleep: true\` at create, or later: \`PATCH /machines/:sandboxId\` · Body: \`{ sleep }\` · MCP: \`set_machine_sleep({ sandboxId, sleep })\` · SDK: \`sb.setSleep(true)\`
+The whole VM (disk + in-memory process) suspends after 5 min without traffic and the next request wakes it in ~200 ms right where it left off — no cold start. Half the shared price (micro $49 MXN/month). Requires template \`node\` and shared CPU. Not for crons, queues or websockets that must run with no visitors: keep those always on. After waking, outbound connections (external DB) may be dead: the app must reconnect.
 
 ### Promote an ephemeral to permanent
 \`POST /machines\` · Body: \`{ fromSandboxId, tier }\`

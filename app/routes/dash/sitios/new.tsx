@@ -1,11 +1,11 @@
 import { useState } from "react";
-import { Form, redirect, useNavigation, useActionData, useLoaderData } from "react-router";
+import { Form, redirect, useNavigation, useActionData, useLoaderData, useSearchParams } from "react-router";
 import { BrutalButton } from "~/components/common/BrutalButton";
 import { getUserOrRedirect } from "~/.server/getters";
 import type { AuthContext } from "~/.server/apiAuth";
 import { createSite, engineChoicesFor, type SiteKind } from "~/.server/core/siteOperations";
 import { DEFAULT_SITE_ENGINE } from "~/lib/fleetEngines";
-import { HOSTING_CATALOG } from "~/lib/hostingCatalog";
+import { HOSTING_CATALOG, sleepPrice } from "~/lib/hostingCatalog";
 import type { Route } from "./+types/new";
 
 export const meta = () => [{ title: "Nuevo sitio — EasyBits" }, { name: "robots", content: "noindex" }];
@@ -24,8 +24,9 @@ export const action = async ({ request }: Route.ActionArgs) => {
   const prompt = String(form.get("prompt") || "").trim();
   const engine = String(form.get("engine") || DEFAULT_SITE_ENGINE);
   const secretValue = String(form.get("secretValue") || "");
+  const sleep = String(form.get("sleep") ?? "1") !== "0";
   try {
-    const { site, checkoutUrl } = await createSite(ctx, { kind, name, engine, secretValue });
+    const { site, checkoutUrl } = await createSite(ctx, { kind, name, engine, secretValue, sleep });
     // El primer mensaje viaja por la URL y el editor lo manda solo al abrir.
     const q = new URLSearchParams();
     if (prompt) q.set("prompt", prompt);
@@ -38,13 +39,16 @@ export const action = async ({ request }: Route.ActionArgs) => {
 };
 
 export default function NewSite() {
-  const [kind, setKind] = useState<SiteKind>("static");
+  const [searchParams] = useSearchParams();
+  // ?kind=webapp llega desde /dash/hosting ("Crear app nueva").
+  const [kind, setKind] = useState<SiteKind>(searchParams.get("kind") === "webapp" ? "webapp" : "static");
   const { engines } = useLoaderData<typeof loader>();
   const [engineId, setEngineId] = useState(DEFAULT_SITE_ENGINE);
   const engine = engines.find((e) => e.id === engineId);
   const nav = useNavigation();
   const result = useActionData<typeof action>();
   const micro = HOSTING_CATALOG.micro;
+  const [sleep, setSleep] = useState(true);
   return (
     <article className="pt-20 px-4 sm:px-8 pb-24 md:pl-36 w-full max-w-2xl mx-auto">
       <h1 className="text-2xl sm:text-4xl font-black tracking-tight uppercase mb-6">Nuevo sitio</h1>
@@ -53,7 +57,7 @@ export default function NewSite() {
           {(
             [
               ["static", "Sitio estático", "Landing, portafolio, catálogo. Incluido en tu plan."],
-              ["webapp", "Web app", `Con servidor y base de datos. Su propia máquina desde $${micro.priceShared} MXN/mes.`],
+              ["webapp", "Web app", `Con servidor y base de datos. Su propia máquina desde $${sleepPrice(micro)} MXN/mes.`],
             ] as const
           ).map(([k, title, desc]) => (
             <button
@@ -68,6 +72,30 @@ export default function NewSite() {
           ))}
         </div>
         <input type="hidden" name="kind" value={kind} />
+        {kind === "webapp" && (
+          <div>
+            <span className="text-sm font-bold">¿Cómo vive tu máquina?</span>
+            <div className="mt-1 grid grid-cols-2 gap-2">
+              {(
+                [
+                  [true, "Duerme sin visitas", `$${sleepPrice(micro)} MXN/mes. Se apaga sola cuando nadie entra y despierta en menos de un segundo con la primera visita.`],
+                  [false, "Siempre prendida", `$${micro.priceShared} MXN/mes. Para tareas de fondo, websockets o crons dentro de la app.`],
+                ] as const
+              ).map(([v, title, desc]) => (
+                <button
+                  key={title}
+                  type="button"
+                  onClick={() => setSleep(v)}
+                  className={`text-left p-3 rounded-xl border-2 transition-all ${sleep === v ? "border-black bg-brand-500/10" : "border-gray-200 hover:border-gray-400"}`}
+                >
+                  <p className="font-bold text-sm">{title}</p>
+                  <p className="text-[11px] text-gray-500 mt-1">{desc}</p>
+                </button>
+              ))}
+            </div>
+            <input type="hidden" name="sleep" value={sleep ? "1" : "0"} />
+          </div>
+        )}
         <label className="block">
           <span className="text-sm font-bold">Nombre</span>
           <input name="name" required placeholder="Tacos La Esquina" className="mt-1 w-full px-4 py-2.5 border-2 border-black rounded-xl focus:outline-none" />

@@ -331,6 +331,7 @@ export async function action({ request }: ActionFunctionArgs) {
               subscriptionId: subId,
               tier: md.eb_tier,
               cpuMode: (md.eb_cpu_mode === "reserved" ? "reserved" : "shared") as "shared" | "reserved",
+              sleep: md.eb_sleep === "1",
               diskAddonsGB: Number(md.eb_disk_addons || 0),
               template: md.eb_template || undefined,
               name: md.eb_name || undefined,

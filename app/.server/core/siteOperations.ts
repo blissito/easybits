@@ -199,7 +199,7 @@ function sandboxUrl(sandboxId: string, port: number) {
  */
 export async function createSite(
   ctx: AuthContext,
-  opts: { kind: SiteKind; name: string; tier?: string; engine?: string; secretValue?: string }
+  opts: { kind: SiteKind; name: string; tier?: string; engine?: string; secretValue?: string; sleep?: boolean }
 ): Promise<{ site: { id: string }; checkoutUrl?: string }> {
   requireScope(ctx, "WRITE");
   const name = opts.name.trim() || "Mi sitio";
@@ -225,7 +225,8 @@ export async function createSite(
     });
     return { site };
   }
-  const bought = await buyMachine(ctx, { tier: opts.tier ?? "micro", template: "node", name });
+  // Por default duerme sin visitas: el caso típico es una landing con backend y poco tráfico.
+  const bought = await buyMachine(ctx, { tier: opts.tier ?? "micro", template: "node", name, sleep: opts.sleep ?? true });
   const sandboxId = "machine" in bought && bought.machine ? bought.machine.sandboxId : null;
   const site = await db.site.create({
     data: { ownerId: ctx.user.id, kind: "webapp", name, sandboxId, engine: engine.id },

@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
-import { useFetcher, useRevalidator, data } from "react-router";
+import { Link, useFetcher, useRevalidator, data } from "react-router";
 import type { Route } from "./+types/hosting";
 import { getUserOrRedirect } from "~/.server/getters";
 import { db } from "~/.server/db";
 import type { AuthContext } from "~/.server/apiAuth";
-import { listPermanent, releasePermanent } from "~/.server/core/machineOperations";
+import { listPermanent, releasePermanent, setMachineSleep } from "~/.server/core/machineOperations";
 import {
   listSandboxDomains,
   addSandboxDomain,
@@ -20,7 +20,7 @@ import {
   setMachineSecrets,
   unsetMachineSecret,
 } from "~/.server/core/releaseOperations";
-import { HOSTING_CATALOG } from "~/lib/hostingCatalog";
+import { HOSTING_CATALOG, sleepPrice } from "~/lib/hostingCatalog";
 import { githubAppEnabled } from "~/.server/core/githubApp";
 import {
   getDeployment,
@@ -187,6 +187,8 @@ export const action = async ({ request }: Route.ActionArgs) => {
       return data({ ok: await resumeSandbox(ctx, id) });
     case "release":
       return data({ ok: await releasePermanent(ctx, id) });
+    case "sleep":
+      return data({ ok: !!(await setMachineSleep(ctx, id, String(form.get("sleep")) === "1")) });
     default:
       return data({ error: "intent desconocido" }, { status: 400 });
   }
@@ -295,13 +297,22 @@ export default function Hosting({ loaderData }: Route.ComponentProps) {
     // estructura que packs.tsx y el resto del dash.
     <section className="w-full min-w-0 md:pl-20 pt-14 md:pt-0">
       <div className="max-w-4xl mx-auto px-4 md:px-6 py-8 md:py-10 min-w-0">
-      <header className="mb-6">
-        <h1 className="text-2xl md:text-3xl font-bold text-dark">Hosting</h1>
-        <p className="mt-1 text-sm text-metal">
-          {machines.length === 0
-            ? "Todavía no tienes sitios publicados."
-            : `${machines.length} ${machines.length === 1 ? "sitio" : "sitios"}`}
-        </p>
+      <header className="mb-6 flex items-start justify-between gap-3 flex-wrap">
+        <div className="min-w-0">
+          <h1 className="text-2xl md:text-3xl font-bold text-dark">Hosting</h1>
+          <p className="mt-1 text-sm text-metal">
+            {machines.length === 0
+              ? "Todavía no tienes sitios publicados."
+              : `${machines.length} ${machines.length === 1 ? "sitio" : "sitios"}`}
+          </p>
+        </div>
+        {/* Sin repo: el creador de sitios arma el stack en su máquina y publica desde ahí. */}
+        <Link
+          to="/dash/sitios/new?kind=webapp"
+          className="inline-flex items-center gap-2 h-9 px-3 rounded-lg border-[2px] border-black bg-white text-sm font-semibold hover:bg-brand-500/10"
+        >
+          <LuPlus /> Crear app nueva
+        </Link>
       </header>
 
       {github.enabled && <GithubImport github={github} machines={machines} />}
@@ -632,6 +643,26 @@ function MachineCard({
             {" · "}
             {tier ? `${tier.vcpus} vCPU · ${tier.memoryMb / 1024} GB` : machine.tier}
             {machine.currentReleaseId ? "" : " · sin publicar"}
+            {" · "}
+            {machine.sleep ? "duerme sin visitas 💤" : "siempre prendida"}
+            {/* Sólo `node` puede dormir (el host necesita su /busy para saber que está ociosa). */}
+            {tier && machine.template === "node" && machine.cpuMode !== "reserved" && (
+              <button
+                type="button"
+                disabled={fetcher.state !== "idle"}
+                onClick={() =>
+                  fetcher.submit(
+                    { intent: "sleep", sandboxId: machine.sandboxId, sleep: machine.sleep ? "0" : "1" },
+                    { method: "post" }
+                  )
+                }
+                className="ml-1 underline underline-offset-2 hover:text-dark disabled:opacity-50"
+              >
+                {machine.sleep
+                  ? `mantener prendida ($${tier.priceShared} MXN/mes)`
+                  : `que duerma ($${sleepPrice(tier)} MXN/mes)`}
+              </button>
+            )}
           </p>
         </div>
 

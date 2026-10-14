@@ -86,6 +86,8 @@ export const MACHINE_TIERS = TIER_ORDER;
 export const MachineCreateBody = z.object({
   tier: z.enum(MACHINE_TIERS),
   cpuMode: z.enum(["shared", "reserved"]).optional(),
+  // "Duerme sin visitas": mitad de precio, requiere template "node" y CPU shared.
+  sleep: z.boolean().optional(),
   diskAddonsGB: z.number().int().min(0).max(2000).multipleOf(100).optional(),
   template: z.enum(SANDBOX_TEMPLATES).optional(),
   name: z.string().max(64).optional(),
@@ -99,6 +101,8 @@ export const MachineResizeBody = z.object({
   tier: z.enum(MACHINE_TIERS).optional(),
   cpuMode: z.enum(["shared", "reserved"]).optional(),
 });
+
+export const MachineSleepBody = z.object({ sleep: z.boolean() });
 
 export const MachineDiskBody = z.object({
   addGB: z.number().int().positive().max(2000).multipleOf(100),
