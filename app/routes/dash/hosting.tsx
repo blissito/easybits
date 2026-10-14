@@ -698,6 +698,63 @@ function MachineCard({
   );
 }
 
+function CopyButton({ value }: { value: string }) {
+  const [done, setDone] = useState(false);
+  return (
+    <button
+      type="button"
+      onClick={() =>
+        navigator.clipboard
+          ?.writeText(value)
+          .then(() => {
+            setDone(true);
+            setTimeout(() => setDone(false), 1500);
+          })
+          .catch(() => {})
+      }
+      className={`shrink-0 border-[2px] border-black rounded-md px-2 py-0.5 text-[11px] font-bold transition-colors ${done ? "bg-emerald" : "bg-white hover:bg-grayLight"}`}
+    >
+      {done ? "Copiado ✓" : "Copiar"}
+    </button>
+  );
+}
+
+// Lo que la mayoría de los paneles de DNS piden en «Nombre/Host»: sólo la parte de
+// antes del dominio («factory»), o «@» en el dominio raíz. Pegar el nombre completo en
+// GoDaddy o Hostinger acaba como factory.hectorbliss.com.hectorbliss.com.
+function hostOf(dns: { type: string; name: string }) {
+  if (dns.type === "A") return "@";
+  return dns.name.split(".").slice(0, -2).join(".") || "@";
+}
+
+/** El registro DNS como tres renglones copiables: el paso que ocurre fuera de aquí,
+ *  explicado para quien nunca ha tocado un panel de DNS. */
+function DnsRecord({ dns }: { dns: { type: string; name: string; value: string } }) {
+  const host = hostOf(dns);
+  const rows: [string, string, string?][] = [
+    ["Tipo", dns.type],
+    ["Nombre / Host", host, host !== dns.name ? `Si tu proveedor pide el nombre completo: ${dns.name}` : undefined],
+    ["Apunta a / Valor", dns.value],
+  ];
+  return (
+    <div className="mt-2 grid gap-1.5 min-w-0">
+      <p className="text-[11px] text-metal">
+        En el panel de DNS de tu dominio, crea un registro nuevo con estos datos:
+      </p>
+      {rows.map(([label, value, hint]) => (
+        <div key={label} className="flex items-center gap-2 min-w-0">
+          <span className="w-28 shrink-0 text-[11px] text-metal">{label}</span>
+          <div className="min-w-0 flex-1">
+            <code className="block font-mono text-xs text-dark break-all">{value}</code>
+            {hint && <span className="block text-[10px] text-metal break-all">{hint}</span>}
+          </div>
+          <CopyButton value={value} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function Domains({ machine, detail, fetcher, confirm }: any) {
   const [value, setValue] = useState("");
   const added = fetcher.data?.domain;
@@ -764,17 +821,20 @@ function Domains({ machine, detail, fetcher, confirm }: any) {
               {/* El registro se enseña siempre, no sólo al darlo de alta: es el
                   paso que ocurre fuera de aquí, y el que hay que consultar
                   justo cuando algo no funciona. */}
-              {d.dns && (
-                <p className="mt-1.5 font-mono text-[11px] text-metal break-all">
-                  {d.dns.type} · {d.dns.name} → {d.dns.value}
-                </p>
-              )}
+              {d.dns &&
+                (live ? (
+                  <p className="mt-1.5 font-mono text-[11px] text-metal break-all">
+                    {d.dns.type} · {d.dns.name} → {d.dns.value}
+                  </p>
+                ) : (
+                  <DnsRecord dns={d.dns} />
+                ))}
             </li>
           );
         })}
       </ul>
 
-      <div className="flex gap-2 min-w-0">
+      <div className="flex gap-2 min-w-0 max-w-sm">
         <input
           value={value}
           onChange={(e) => setValue(e.target.value)}
@@ -793,11 +853,9 @@ function Domains({ machine, detail, fetcher, confirm }: any) {
           que ocurre fuera de aquí. */}
       {added?.dns && (
         <div className="p-3 rounded-lg border-[2px] border-black bg-amber-50 text-sm min-w-0">
-          <p className="font-semibold text-dark mb-1">Falta crear este registro en tu DNS:</p>
-          <p className="font-mono text-xs break-all">
-            {added.dns.type} · {added.dns.name} → {added.dns.value}
-          </p>
-          <p className="mt-1 text-xs text-metal">{added.dns.note}</p>
+          <p className="font-semibold text-dark">Falta crear este registro en tu DNS:</p>
+          <DnsRecord dns={added.dns} />
+          <p className="mt-2 text-xs text-metal">{added.dns.note}</p>
         </div>
       )}
     </div>
