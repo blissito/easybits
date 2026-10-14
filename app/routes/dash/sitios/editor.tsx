@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, data, useFetcher, useLoaderData, useSearchParams } from "react-router";
 import { Streamdown } from "streamdown";
+import { ChatComposer } from "~/components/sitios/ChatComposer";
 import { getUserOrRedirect } from "~/.server/getters";
 import type { AuthContext } from "~/.server/apiAuth";
 import { attachNewestMachine, deleteSite, getSite, publishSite, siteEngineFor } from "~/.server/core/siteOperations";
@@ -293,26 +294,15 @@ export default function SiteEditor() {
             <button type="button" className="ml-auto text-gray-400 hover:text-black" onClick={() => setAttached(null)}>✕</button>
           </div>
         )}
-        <form
-          className="p-3 pb-16 md:pb-3 border-t border-gray-200 flex gap-2"
-          onSubmit={(e) => { e.preventDefault(); void send(input); }}
-          onDragOver={(e) => e.preventDefault()}
-          onDrop={(e) => { e.preventDefault(); attachFile(e.dataTransfer.files?.[0]); }}
-        >
-          <label className="px-2 flex items-center border-2 border-black rounded-xl cursor-pointer text-gray-500 hover:text-black" title="Adjuntar imagen o mockup (o pega/arrastra)">
-            🖼
-            <input type="file" accept="image/png,image/jpeg,image/webp" className="hidden" onChange={(e) => { attachFile(e.target.files?.[0]); e.target.value = ""; }} />
-          </label>
-          <input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder={attached ? "¿Qué hago con esta imagen?" : selection ? "¿Qué cambio en ese elemento?" : "Escribe un cambio… (arrastra un mockup)"}
-            className="flex-1 px-4 py-2.5 border-2 border-black rounded-xl text-sm focus:outline-none"
-          />
-          <button type="submit" disabled={busy || (!input.trim() && !attached)} className="px-4 py-2 rounded-xl bg-black text-white text-sm font-bold disabled:opacity-40">
-            {busy ? "…" : "Enviar"}
-          </button>
-        </form>
+        <ChatComposer
+          value={input}
+          onChange={setInput}
+          onSend={() => void send(input)}
+          onFile={attachFile}
+          busy={busy}
+          canSend={!!input.trim() || !!attached}
+          placeholder={attached ? "¿Qué hago con esta imagen?" : selection ? "¿Qué cambio en ese elemento?" : "Escribe un cambio… (arrastra un mockup)"}
+        />
       </aside>
 
       {/* Preview */}
