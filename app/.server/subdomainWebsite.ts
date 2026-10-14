@@ -96,19 +96,27 @@ async function handleCustomDomain(request: Request, hostname: string, url: URL):
   // Coincidencia EXACTA primero: un dominio propio puede ser subdominio de otro también dado
   // de alta (custom.fancyfiles.app y fancyfiles.app). Sin esto, el parseo por etiquetas lo
   // leía como «slug custom de fancyfiles.app» y su sitio raíz daba 404 (14-oct).
-  const host = hostname.toLowerCase();
-  const bare = host.startsWith("www.") ? host.slice(4) : host;
-  const exact = await db.customDomain.findFirst({
-    where: { domain: { in: bare === host ? [host] : [host, bare] }, verified: true, apexWebsiteId: { not: null } },
-    select: { domain: true, apexWebsite: { select: { id: true, ownerId: true, status: true } } },
-  });
-  if (exact?.apexWebsite && exact.apexWebsite.status !== "DELETED") {
-    if (host !== exact.domain) return Response.redirect(`https://${exact.domain}${url.pathname}${url.search}`, 301);
-    return serveWebsiteFile(exact.apexWebsite, request, url);
-  }
-
   const parsed = parseCustomHost(hostname);
   if (parsed.kind === "none") return null;
+
+  const host = hostname.toLowerCase();
+  // Sólo hosts que PUEDEN ser dominio propio de 3+ etiquetas: nada de localhost/IPs (el
+  // prerender del build no tiene BD: consultarla tumbó el deploy) ni de *.easybits.cloud.
+  const candidate =
+    host.split(".").length >= 3 && !/^[\d.]+$/.test(host) && !host.endsWith(".easybits.cloud") && host !== "easybits.cloud";
+  if (candidate) {
+    const bare = host.startsWith("www.") ? host.slice(4) : host;
+    const exact = await db.customDomain
+      .findFirst({
+        where: { domain: { in: bare === host ? [host] : [host, bare] }, verified: true, apexWebsiteId: { not: null } },
+        select: { domain: true, apexWebsite: { select: { id: true, ownerId: true, status: true } } },
+      })
+      .catch(() => null);
+    if (exact?.apexWebsite && exact.apexWebsite.status !== "DELETED") {
+      if (host !== exact.domain) return Response.redirect(`https://${exact.domain}${url.pathname}${url.search}`, 301);
+      return serveWebsiteFile(exact.apexWebsite, request, url);
+    }
+  }
 
   if (parsed.kind === "apex" || parsed.kind === "www") {
     const apex = await db.customDomain.findFirst({
