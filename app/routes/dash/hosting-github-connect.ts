@@ -18,6 +18,10 @@ export async function loader({ request }: Route.LoaderArgs) {
   const state = `${STATE_PREFIX}${nonce}`;
   const add = params.get("add") === "1";
   return redirect(add ? installUrl(state) : authorizeUrl(state), {
-    headers: { "Set-Cookie": await githubStateCookie.serialize(site ? { n: nonce, site } : nonce) },
+    headers: {
+      "Set-Cookie": await githubStateCookie.serialize(
+        site ? { n: nonce, site, pub: params.get("visibility") === "public" } : nonce
+      ),
+    },
   });
 }

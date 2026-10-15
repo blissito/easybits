@@ -199,11 +199,11 @@ export async function githubLogin(userToken: string): Promise<string> {
 export type CreatedRepo = { id: number; fullName: string; name: string; cloneUrl: string; htmlUrl: string };
 
 /**
- * Crea un repo privado VACÍO en la cuenta del usuario (token user-to-server).
+ * Crea un repo VACÍO (privado salvo que el dueño elija público) en la cuenta del usuario (token user-to-server).
  * Requiere que la App tenga `Administration: write`; sin eso GitHub contesta 403.
  * Si el nombre ya existe prueba `nombre-2` … `nombre-9`.
  */
-export async function createUserRepo(userToken: string, baseName: string, description?: string): Promise<CreatedRepo> {
+export async function createUserRepo(userToken: string, baseName: string, description?: string, isPrivate = true): Promise<CreatedRepo> {
   // Un intento anterior que murió después de crear el repo lo dejó VACÍO y con nuestra
   // descripción: se reusa en vez de sembrar `nombre-2`, `nombre-3`… con cada reintento.
   const login = await githubLogin(userToken).catch(() => "");
@@ -220,7 +220,7 @@ export async function createUserRepo(userToken: string, baseName: string, descri
     const res = await fetch(`${API}/user/repos`, {
       method: "POST",
       headers: { ...H, Authorization: `Bearer ${userToken}`, "content-type": "application/json" },
-      body: JSON.stringify({ name, private: true, auto_init: false, description }),
+      body: JSON.stringify({ name, private: isPrivate, auto_init: false, description }),
     });
     if (res.ok) {
       const r = (await res.json()) as any;

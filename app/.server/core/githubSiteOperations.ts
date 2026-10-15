@@ -71,7 +71,8 @@ export type ConnectResult =
 export async function connectSiteToGithub(
   ctx: AuthContext,
   siteId: string,
-  userToken: string
+  userToken: string,
+  opts: { isPrivate?: boolean } = {}
 ): Promise<ConnectResult> {
   const site = await getSite(ctx, siteId);
   if (site.kind !== "webapp" || !site.sandboxId) throw new Error("Sólo una web app con máquina se conecta a GitHub.");
@@ -84,7 +85,7 @@ export async function connectSiteToGithub(
   const inst = installs.find((i) => i.account.toLowerCase() === login.toLowerCase());
   if (!inst) return { ok: false, needsInstall: true };
 
-  const repo = await createUserRepo(userToken, repoNameFor(site.name), `${site.name} — creado con EasyBits`);
+  const repo = await createUserRepo(userToken, repoNameFor(site.name), `${site.name} — creado con EasyBits`, opts.isPrivate ?? true);
   await ensureRepoInInstallation(userToken, inst.id, repo.id, repo.fullName);
 
   // Un /app clonado con --depth 1 no se puede empujar a un repo vacío ("shallow

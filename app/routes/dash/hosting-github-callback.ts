@@ -28,7 +28,7 @@ export async function loader({ request }: Route.LoaderArgs) {
     const userToken = await exchangeUserCode(code);
     if (st.site) {
       const ctx = { user, scopes: ["READ", "WRITE"] } as AuthContext;
-      const r = await connectSiteToGithub(ctx, st.site, userToken);
+      const r = await connectSiteToGithub(ctx, st.site, userToken, { isPrivate: !st.pub });
       // La App no está en su cuenta: a instalarla con el MISMO state (la cookie
       // sigue viva) y GitHub regresa aquí con otro code.
       if (!r.ok) return redirect(installUrl(state));

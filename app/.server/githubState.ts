@@ -18,7 +18,8 @@ export const githubStateCookie = createCookie("gh_install_state", {
  * GitHub» (así el callback sabe que tiene que crear su repo y a dónde volver).
  * Acepta el formato viejo (sólo el nonce como string).
  */
-export type GithubState = { n: string; site?: string };
+// `pub`: visibilidad que eligió el dueño para el repo del sitio (sin elegir = privado).
+export type GithubState = { n: string; site?: string; pub?: boolean };
 export function readGithubState(raw: unknown): GithubState | null {
   if (typeof raw === "string" && raw) return { n: raw };
   if (raw && typeof raw === "object" && typeof (raw as GithubState).n === "string") return raw as GithubState;

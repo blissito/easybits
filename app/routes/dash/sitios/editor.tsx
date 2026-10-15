@@ -111,6 +111,15 @@ export default function SiteEditor() {
   // Móvil: una columna a la vez (chat | vista previa). En desktop van lado a lado.
   const [mobileTab, setMobileTab] = useState<"chat" | "preview">("chat");
   const [previewKey, setPreviewKey] = useState(0);
+  // «Conectar a GitHub» crea un repo en la cuenta del dueño: se confirma antes y él elige la visibilidad.
+  const [ghDialog, setGhDialog] = useState(false);
+  const [ghPublic, setGhPublic] = useState(true);
+  useEffect(() => {
+    if (!ghDialog) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setGhDialog(false);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [ghDialog]);
   const [turnDone, setTurnDone] = useState(false);
   const bodyRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -284,6 +293,38 @@ export default function SiteEditor() {
 
   return (
     <div className="fixed inset-0 md:pl-28 pt-16 md:pt-0 flex bg-white overflow-hidden">
+      {ghDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" onClick={() => setGhDialog(false)}>
+          <div role="dialog" aria-modal="true" aria-labelledby="gh-title" className="w-full max-w-md rounded-2xl border-2 border-black bg-white p-6 shadow-[6px_6px_0_#000]" onClick={(e) => e.stopPropagation()}>
+            <h2 id="gh-title" className="text-lg font-bold">Conectar a GitHub</h2>
+            <p className="mt-2 text-sm text-gray-600">
+              Se va a crear un repo nuevo en tu cuenta de GitHub con el código de «{site.name}». Después, cada «Publicar» sube los cambios y un push desde tu compu se despliega solo.
+            </p>
+            <fieldset className="mt-4 space-y-2 text-sm">
+              <legend className="font-bold">¿Quién puede ver el código?</legend>
+              {[
+                { v: true, label: "Público", hint: "Cualquiera puede verlo en GitHub." },
+                { v: false, label: "Privado", hint: "Sólo tú y quien invites." },
+              ].map((o) => (
+                <label key={o.label} className={`flex cursor-pointer items-start gap-3 rounded-xl border-2 p-3 ${ghPublic === o.v ? "border-black" : "border-gray-200"}`}>
+                  <input type="radio" name="gh-visibility" checked={ghPublic === o.v} onChange={() => setGhPublic(o.v)} className="mt-1 text-brand-500 focus:ring-brand-500" />
+                  <span>
+                    <span className="font-bold">{o.label}</span>
+                    <span className="block text-gray-500">{o.hint}</span>
+                  </span>
+                </label>
+              ))}
+            </fieldset>
+            <div className="mt-5 flex justify-end gap-2">
+              <button type="button" onClick={() => setGhDialog(false)} className="rounded-lg px-3 py-1.5 font-bold text-gray-600 hover:text-black">Cancelar</button>
+              {/* Navegación completa: es un ida y vuelta por GitHub. */}
+              <a href={`/dash/hosting/github/connect?site=${site.id}&visibility=${ghPublic ? "public" : "private"}`} className="rounded-lg bg-brand-500 px-3 py-1.5 font-bold text-white">
+                Crear repo {ghPublic ? "público" : "privado"}
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Chat */}
       <aside className={`${mobileTab === "chat" ? "flex" : "hidden"} md:flex w-full md:max-w-sm flex-col md:border-r border-gray-200 bg-white min-w-0`}>
         <header className="px-4 py-3 border-b border-gray-200 flex items-center gap-2">
@@ -378,10 +419,9 @@ export default function SiteEditor() {
                 </a>
               ) : (
                 github.enabled && (
-                  // Navegación completa: es un ida y vuelta por GitHub.
-                  <a href={`/dash/hosting/github/connect?site=${site.id}`} className="text-gray-500 hover:text-black">
+                  <button type="button" onClick={() => setGhDialog(true)} className="text-gray-500 hover:text-black">
                     Conectar a GitHub
-                  </a>
+                  </button>
                 )
               )}
               <Link to="/dash/hosting" className="text-gray-500 hover:text-black">Dominios y versiones</Link>
