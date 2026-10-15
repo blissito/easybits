@@ -6,7 +6,7 @@ import { ChatComposer } from "~/components/sitios/ChatComposer";
 import { DeleteSiteArt, GithubRepoArt } from "~/components/sitios/DialogArt";
 import { Modal } from "~/components/common/Modal";
 import { BrutalButton } from "~/components/common/BrutalButton";
-import { LuArrowDown, LuCheck, LuTrash2 } from "react-icons/lu";
+import { LuArrowDown, LuCheck, LuMousePointerClick, LuTrash2 } from "react-icons/lu";
 import { partirNarracion } from "~/lib/narracion";
 import { getUserOrRedirect } from "~/.server/getters";
 import type { AuthContext } from "~/.server/apiAuth";
@@ -168,6 +168,10 @@ export default function SiteEditor() {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [selection, setSelection] = useState<Selection>(null);
+  // «Señalar»: con el modo apagado la vista previa se usa como la app real (clics, links).
+  const [pointing, setPointing] = useState(true);
+  const pointingRef = useRef(pointing);
+  pointingRef.current = pointing;
   const [tokens, setTokens] = useState<{ remaining: number; limit: number } | null>(null);
   const [attached, setAttached] = useState<Attached | null>(null);
   // Móvil: una columna a la vez (chat | vista previa). En desktop van lado a lado.
@@ -181,6 +185,16 @@ export default function SiteEditor() {
   const [turnDone, setTurnDone] = useState(false);
   const bodyRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const togglePointing = () => {
+    const on = !pointing;
+    setPointing(on);
+    if (!on) setSelection(null);
+    iframeRef.current?.contentWindow?.postMessage({ type: "eb-pointing", on }, "*");
+  };
+  const clearSelection = () => {
+    setSelection(null);
+    iframeRef.current?.contentWindow?.postMessage({ type: "eb-deselect" }, "*");
+  };
   const checkout = params.get("checkout");
 
   // En móvil el editor ocupa toda la pantalla: fuera el botón hamburguesa (estorbaba
@@ -243,6 +257,7 @@ export default function SiteEditor() {
       const d = e.data;
       if (d?.type === "eb-selected" && typeof d.id === "string") setSelection({ id: d.id, tag: String(d.tag || "div") });
       if (d?.type === "eb-deselected") setSelection(null);
+      if (d?.type === "eb-picker-ready") (e.source as Window | null)?.postMessage({ type: "eb-pointing", on: pointingRef.current }, "*");
     };
     window.addEventListener("message", onMsg);
     return () => window.removeEventListener("message", onMsg);
@@ -506,7 +521,7 @@ export default function SiteEditor() {
           <div className="px-4 py-2 text-xs bg-amber-50 border-t-2 border-amber-300 flex items-center gap-2">
             <span className="font-mono">&lt;{selection.tag} #{selection.id}&gt;</span>
             <span className="text-gray-500">seleccionado</span>
-            <button type="button" className="ml-auto text-gray-400 hover:text-black" onClick={() => setSelection(null)}>✕</button>
+            <button type="button" className="ml-auto text-gray-400 hover:text-black" onClick={clearSelection}>✕</button>
           </div>
         )}
         {attached && (
@@ -557,6 +572,16 @@ export default function SiteEditor() {
             </>
           )}
           {site.kind === "static" && <Link to="/dash/developer/domains" className="text-gray-500 hover:text-black">Dominio propio</Link>}
+          <button
+            type="button"
+            onClick={togglePointing}
+            aria-pressed={pointing}
+            title={pointing ? "Señalar encendido: clic en la vista previa elige un elemento. Clic aquí para usar la app normal" : "Señalar apagado: la vista previa funciona como la app. Clic aquí para elegir elementos"}
+            className={`flex items-center gap-1 px-2 py-1 rounded-lg border-2 ${pointing ? "border-brand-500 text-brand-500 bg-brand-500/10" : "border-gray-200 text-gray-500 hover:text-black"}`}
+          >
+            <LuMousePointerClick className="h-4 w-4" />
+            <span className="text-xs font-bold">Señalar</span>
+          </button>
           <button type="button" onClick={() => setPreviewKey((k) => k + 1)} className="text-gray-500 hover:text-black" title="Recargar">⟳</button>
           <button type="button" onClick={() => setDelDialog(true)} className="text-gray-500 hover:text-red-600" title="Eliminar sitio" aria-label="Eliminar sitio">
             <LuTrash2 className="h-4 w-4" />

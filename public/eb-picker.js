@@ -2,11 +2,14 @@
 // Se inyecta en /s/<slug>/?eb_edit=1. Resalta al pasar el mouse el ancestro más
 // cercano con data-eb-id; al hacer clic lo selecciona y avisa al padre por
 // postMessage {type:"eb-selected", id, tag}. Un solo seleccionado; Escape lo quita.
+// El padre lo apaga/enciende con {type:"eb-pointing", on}; al cargar avisa "eb-picker-ready"
+// para que el padre le mande el estado actual (el script llega después del iframe).
 // Port mínimo de dyad/worker/dyad-component-selector-client.js (Apache-2).
 (function () {
   if (window.top === window) return; // solo dentro del iframe del editor
   var COLOR = "#7c3aed";
   var selected = null;
+  var on = true;
   var hover = mk("2px dashed " + COLOR, "rgba(124,58,237,.06)");
   var sel = mk("2px solid " + COLOR, "rgba(124,58,237,.10)");
   var label = document.createElement("div");
@@ -32,13 +35,13 @@
     if (selected) place(sel, selected);
   }
   document.addEventListener("mousemove", function (e) {
-    var el = target(e);
+    var el = on && target(e);
     if (!el || el === selected) { hover.style.display = "none"; return; }
     place(hover, el);
   }, true);
   document.addEventListener("mouseleave", function () { hover.style.display = "none"; }, true);
   document.addEventListener("click", function (e) {
-    var el = target(e);
+    var el = on && target(e);
     if (!el) return;
     e.preventDefault(); e.stopPropagation();
     selected = el;
@@ -56,5 +59,10 @@
   window.addEventListener("resize", reposition);
   window.addEventListener("message", function (e) {
     if (e.data && e.data.type === "eb-deselect") { selected = null; sel.style.display = "none"; }
+    if (e.data && e.data.type === "eb-pointing") {
+      on = !!e.data.on;
+      if (!on) { selected = null; sel.style.display = "none"; hover.style.display = "none"; }
+    }
   });
+  window.parent.postMessage({ type: "eb-picker-ready" }, "*");
 })();
