@@ -465,3 +465,27 @@ body::selection {
 /* Páginas de pantalla completa en móvil (editor de sitios) esconden el botón
    hamburguesa: tapaba el "Enviar" del chat. La página pone la clase en <body>. */
 body.hide-mobile-menu .mobile-menu-btn { display: none; }
+
+/* Markdown del chat de /dash/sitios (portado de `.ghosty-md` de ghosty.studio, paleta
+   clara): párrafos con aire, listas con viñeta propia, código legible y nada que
+   ensanche la columna. */
+.eb-md { font-size: 15px; line-height: 1.6; }
+.eb-md p { margin: 0 0 0.9rem 0; }
+.eb-md > :last-child, .eb-md p:last-child { margin-bottom: 0; }
+.eb-md h1, .eb-md h2, .eb-md h3 { margin: 1rem 0 0.5rem 0; font-weight: 700; line-height: 1.3; }
+.eb-md h1 { font-size: 1.15rem; } .eb-md h2 { font-size: 1.05rem; } .eb-md h3 { font-size: 1rem; }
+.eb-md h1:first-child, .eb-md h2:first-child, .eb-md h3:first-child { margin-top: 0; }
+.eb-md ul, .eb-md ol { padding-left: 0; margin: 0.5rem 0 0.9rem 0; list-style: none; }
+.eb-md ol { counter-reset: eb-list 0; }
+.eb-md li { position: relative; padding-left: 1.25rem; margin: 0 0 0.35rem 0; }
+.eb-md ul > li::before { content: "•"; position: absolute; left: 0.3rem; color: #9ca3af; }
+.eb-md ol > li { counter-increment: eb-list 1; }
+.eb-md ol > li::before { content: counter(eb-list) "."; position: absolute; left: 0; color: #9ca3af; font-weight: 600; }
+.eb-md strong { font-weight: 700; }
+.eb-md a { color: #7c3aed; text-decoration: underline; text-underline-offset: 2px; word-break: break-all; }
+.eb-md code { background: #f3f4f6; padding: 0.1rem 0.35rem; border-radius: 0.3rem; font-size: 0.82em; font-family: ui-monospace, monospace; word-break: break-word; }
+.eb-md pre { background: #f9fafb; border: 1px solid #e5e7eb; padding: 0.75rem; border-radius: 0.6rem; font-size: 0.8rem; overflow-x: auto; max-width: 100%; margin: 0.6rem 0; }
+.eb-md pre code { background: none; padding: 0; }
+.eb-md table { display: block; max-width: 100%; overflow-x: auto; font-size: 0.85rem; }
+.eb-md blockquote { border-left: 3px solid #e5e7eb; padding-left: 0.75rem; color: #6b7280; margin: 0.6rem 0; }
+.eb-paso code { background: #f3f4f6; padding: 0 0.3rem; border-radius: 0.25rem; font-size: 0.85em; font-family: ui-monospace, monospace; }

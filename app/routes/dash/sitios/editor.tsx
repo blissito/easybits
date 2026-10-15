@@ -6,7 +6,8 @@ import { ChatComposer } from "~/components/sitios/ChatComposer";
 import { DeleteSiteArt, GithubRepoArt } from "~/components/sitios/DialogArt";
 import { Modal } from "~/components/common/Modal";
 import { BrutalButton } from "~/components/common/BrutalButton";
-import { LuTrash2 } from "react-icons/lu";
+import { LuArrowDown, LuCheck, LuTrash2 } from "react-icons/lu";
+import { partirNarracion } from "~/lib/narracion";
 import { getUserOrRedirect } from "~/.server/getters";
 import type { AuthContext } from "~/.server/apiAuth";
 import { attachNewestMachine, deleteSite, getSite, publishSite, siteEngineFor } from "~/.server/core/siteOperations";
@@ -83,7 +84,9 @@ export const action = async ({ request, params }: Route.ActionArgs) => {
   }
 };
 
-type Msg = { role: "user" | "bot"; text: string; tools?: string[]; imageUrl?: string; quota?: boolean };
+// `cortes`: largo del texto cuando arrancó cada herramienta — separa la narración
+// («Reviso…», «Instalo…») de la respuesta final (ver ~/lib/narracion).
+type Msg = { role: "user" | "bot"; text: string; tools?: string[]; cortes?: number[]; imageUrl?: string; quota?: boolean };
 type Attached = { base64: string; ext: string; url: string; name: string };
 
 // Tools del turno agrupadas y contraídas: "3 búsquedas · 2 acciones" en vez de una
@@ -103,6 +106,58 @@ function fmtTokens(n: number) {
   return String(n);
 }
 type Selection = { id: string; tag: string } | null;
+
+/** La respuesta del agente sin burbuja (como ghosty.studio): pasos con palomita, la
+ *  respuesta en markdown con aire y las herramientas contraídas en una línea. */
+function BotMessage({ msg, live }: { msg: Msg; live: boolean }) {
+  const { pasos, resto } = partirNarracion(msg.text, msg.cortes);
+  return (
+    <div className="min-w-0 text-[15px] leading-6 text-gray-900">
+      {msg.tools && msg.tools.length > 0 && (
+        <details className="group mb-3 text-xs text-gray-400">
+          <summary className="inline-flex cursor-pointer select-none items-center gap-1.5 rounded-full border border-gray-200 px-2.5 py-1 hover:text-gray-600">
+            ⚙ {summarizeTools(msg.tools)}
+          </summary>
+          <p className="mt-2 font-mono text-[11px] leading-5 break-all">{msg.tools.join(" · ")}</p>
+        </details>
+      )}
+      {pasos.length > 0 && (
+        <ul className="mb-4 flex flex-col gap-2">
+          {pasos.map((p, i) => (
+            <li key={i} className="eb-paso flex items-start gap-2.5 text-[14px] leading-[21px] text-gray-500">
+              <span className="mt-[2px] grid size-[18px] shrink-0 place-items-center rounded-full bg-brand-500/15 text-brand-500">
+                <LuCheck className="h-3 w-3" strokeWidth={3} />
+              </span>
+              <span className="min-w-0 break-words">{p.split(/`([^`]+)`/).map((t, j) => (j % 2 ? <code key={j}>{t}</code> : t))}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {resto ? (
+        <div className="eb-md min-w-0 break-words">
+          <Streamdown linkSafety={{ enabled: false }}>{resto}</Streamdown>
+        </div>
+      ) : (
+        live && (
+          <span className="inline-flex items-center gap-2 text-sm text-gray-400">
+            <span className="flex gap-1">
+              {[0, 150, 300].map((d) => (
+                <span key={d} className="h-1.5 w-1.5 animate-bounce rounded-full bg-brand-500/60" style={{ animationDelay: `${d}ms` }} />
+              ))}
+            </span>
+            {pasos.length ? "trabajando…" : "construyendo…"}
+          </span>
+        )
+      )}
+      {msg.quota && (
+        <div className="mt-3 flex gap-2">
+          <Link to="/dash/packs" className="px-3 py-1 rounded-lg bg-black text-white text-xs font-bold">Recargar</Link>
+          <Link to="/planes" className="px-3 py-1 rounded-lg border-2 border-black text-xs font-bold">Subir de plan</Link>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function SiteEditor() {
   const { site, engineLabel, github } = useLoaderData<typeof loader>();
@@ -148,9 +203,39 @@ export default function SiteEditor() {
       .catch(() => {});
   }, [site.id]);
 
+  // ── Scroll (como ghosty.studio): pegado al final mientras la respuesta crece, pero si
+  // la persona sube (rueda, dedo o teclado) se suelta hasta que vuelva abajo; «↓» la regresa.
+  const columnRef = useRef<HTMLDivElement>(null);
+  const siguiendo = useRef(true);
+  const toqueY = useRef<number | null>(null);
+  const [abajo, setAbajo] = useState(true);
+  const soltar = () => { siguiendo.current = false; };
+  const medirAbajo = () => {
+    const el = bodyRef.current;
+    if (!el) return;
+    // A menos de 80 px del final cuenta como estar al día.
+    const alFinal = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+    setAbajo(alFinal);
+    if (alFinal) siguiendo.current = true;
+  };
+  const irAbajo = () => {
+    siguiendo.current = true;
+    bodyRef.current?.scrollTo({ top: bodyRef.current.scrollHeight, behavior: "smooth" });
+  };
   useEffect(() => {
-    bodyRef.current?.scrollTo({ top: bodyRef.current.scrollHeight });
-  }, [msgs]);
+    const sc = bodyRef.current;
+    const col = columnRef.current;
+    if (!sc || !col) return;
+    // Instantáneo, no `smooth`: una animación a medias dispara onScroll lejos del final y
+    // se leería como «la persona subió».
+    const ro = new ResizeObserver(() => {
+      if (siguiendo.current) sc.scrollTop = sc.scrollHeight;
+      else medirAbajo();
+    });
+    ro.observe(col);
+    ro.observe(sc);
+    return () => ro.disconnect();
+  }, []);
 
   // Selección desde la vista previa (picker inyectado en /s/:slug?eb_edit=1).
   useEffect(() => {
@@ -191,6 +276,7 @@ export default function SiteEditor() {
       if (!text) text = "Usa esta imagen como referencia para el sitio.";
       setBusy(true);
       setInput("");
+      siguiendo.current = true;
       const sel = selection;
       const img = attached;
       setSelection(null);
@@ -233,9 +319,15 @@ export default function SiteEditor() {
             try {
               const e = JSON.parse(dl.slice(6));
               if (e.type === "chunk") patch((p) => ({ ...p, text: p.text + e.value }));
-              else if (e.type === "tool" && e.phase === "start") patch((p) => ({ ...p, tools: [...(p.tools ?? []), e.name] }));
+              else if (e.type === "tool" && e.phase === "start")
+                patch((p) => ({
+                  ...p,
+                  tools: [...(p.tools ?? []), e.name],
+                  cortes: p.text.trim() && p.cortes?.[p.cortes.length - 1] !== p.text.length ? [...(p.cortes ?? []), p.text.length] : p.cortes,
+                }));
               // done vacío = el turno se cortó sin respuesta (límite del motor): decirlo, no dejar «construyendo…».
-              else if (e.type === "done") patch((p) => ({ ...p, text: e.value || p.text || "⚠️ El agente no terminó a tiempo y no respondió. Vuelve a intentarlo." }));
+              // Se queda lo que llegó por el stream: los `cortes` se midieron sobre ese texto.
+              else if (e.type === "done") patch((p) => ({ ...p, text: p.text || e.value || "⚠️ El agente no terminó a tiempo y no respondió. Vuelve a intentarlo." }));
               else if (e.type === "error") patch((p) => ({ ...p, text: `⚠️ ${e.message}` }));
               else if (e.type === "capacity") patch((p) => ({ ...p, text: `⏳ ${e.message} — reintenta en unos segundos.` }));
             } catch { /* evento malformado */ }
@@ -368,38 +460,47 @@ export default function SiteEditor() {
             </Link>
           )}
         </header>
-        <div ref={bodyRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
-          {msgs.length === 0 && (
-            <p className="text-sm text-gray-400 text-center mt-10">Describe qué quieres y el agente lo construye.</p>
-          )}
-          {msgs.map((m, i) => (
-            <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
-              <div className={`max-w-[85%] px-3.5 py-2 rounded-2xl text-sm break-words ${m.role === "user" ? "bg-brand-500 text-white rounded-br-md whitespace-pre-wrap" : "bg-gray-50 border-2 border-gray-200 rounded-bl-md"}`}>
-                {m.role === "bot" ? (
-                  <>
-                    {m.tools && m.tools.length > 0 && (
-                      <details className="text-[10px] text-gray-400 mb-1">
-                        <summary className="cursor-pointer select-none">⚙ {summarizeTools(m.tools)}</summary>
-                        <p className="font-mono mt-1 break-all">{m.tools.join(" · ")}</p>
-                      </details>
-                    )}
-                    {m.text ? <Streamdown linkSafety={{ enabled: false }}>{m.text}</Streamdown> : <span className="text-gray-400">construyendo…</span>}
-                    {m.quota && (
-                      <div className="mt-2 flex gap-2">
-                        <Link to="/dash/packs" className="px-3 py-1 rounded-lg bg-black text-white text-xs font-bold">Recargar</Link>
-                        <Link to="/planes" className="px-3 py-1 rounded-lg border-2 border-black text-xs font-bold">Subir de plan</Link>
-                      </div>
-                    )}
-                  </>
+        <div className="relative flex min-h-0 flex-1 flex-col">
+          <div
+            ref={bodyRef}
+            onScroll={medirAbajo}
+            onWheel={(e) => { if (e.deltaY < 0) soltar(); }}
+            onTouchStart={(e) => { toqueY.current = e.touches[0]?.clientY ?? null; }}
+            onTouchMove={(e) => {
+              const y = e.touches[0]?.clientY;
+              if (toqueY.current != null && y != null && y > toqueY.current + 4) soltar();
+            }}
+            onKeyDown={(e) => { if (["ArrowUp", "PageUp", "Home"].includes(e.key)) soltar(); }}
+            className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden"
+          >
+            <div ref={columnRef} className="flex flex-col gap-6 px-4 py-6">
+              {msgs.length === 0 && (
+                <p className="text-sm text-gray-400 text-center mt-10">Describe qué quieres y el agente lo construye.</p>
+              )}
+              {msgs.map((m, i) =>
+                m.role === "user" ? (
+                  <div key={i} className="flex flex-col items-end">
+                    <div className="max-w-[85%] rounded-2xl bg-brand-500 px-4 py-3 text-[15px] leading-[22px] text-white whitespace-pre-wrap break-words">
+                      {m.imageUrl && <img src={m.imageUrl} alt="" className="max-h-40 rounded-lg mb-2 border border-white/30" />}
+                      {m.text}
+                    </div>
+                  </div>
                 ) : (
-                  <>
-                    {m.imageUrl && <img src={m.imageUrl} alt="" className="max-h-40 rounded-lg mb-2 border border-white/30" />}
-                    {m.text}
-                  </>
-                )}
-              </div>
+                  <BotMessage key={i} msg={m} live={busy && i === msgs.length - 1} />
+                )
+              )}
             </div>
-          ))}
+          </div>
+          {!abajo && (
+            <button
+              type="button"
+              onClick={irAbajo}
+              aria-label="Ir al último mensaje"
+              className="absolute bottom-3 left-1/2 z-10 flex h-9 w-9 -translate-x-1/2 items-center justify-center rounded-full border-2 border-black bg-white text-black shadow-[3px_3px_0_#000] transition hover:-translate-y-0.5"
+            >
+              <LuArrowDown className="h-4 w-4" />
+            </button>
+          )}
         </div>
         {selection && (
           <div className="px-4 py-2 text-xs bg-amber-50 border-t-2 border-amber-300 flex items-center gap-2">

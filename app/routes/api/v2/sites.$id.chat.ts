@@ -7,10 +7,26 @@ import { routeMessage, FleetAgentAtCapacity } from "~/.server/core/fleetAgentOpe
 import { ensureBuilderAgent, ensureSiteMachine, getSite, siteGroupId, siteTurnPrompt, siteEngineFor } from "~/.server/core/siteOperations";
 import { engineIsMetered } from "~/lib/fleetEngines";
 import { checkLLMTokenLimit } from "~/.server/llmTokenLimit";
+import { narracionAMarkdown, partirNarracion } from "~/lib/narracion";
 
 // Chat del creador de sitios. Auth = sesión del dueño (el token del builder NUNCA
 // baja al browser). Mismo SSE que fleet-agents/:id/message-stream: `chunk`,
 // `tool`, `done`, `error`, `capacity`. GET = historial (FleetAgentMessage).
+/** Reescribe la fila recién guardada del turno con la narración como `- ✓ …`. Sólo si la
+ *  fila es exactamente lo que llegó por el stream (si no, los cortes no aplican). */
+async function saveNarrated(fleetAgentId: string, groupId: string, reply: string, streamed: string, cortes: number[]) {
+  if (!cortes.length || reply !== streamed) return;
+  const { pasos, resto } = partirNarracion(streamed, cortes);
+  if (!pasos.length) return;
+  const row = await db.fleetAgentMessage.findFirst({
+    where: { fleetAgentId, groupId, role: "agent" },
+    orderBy: { createdAt: "desc" },
+    select: { id: true, text: true },
+  });
+  if (row?.text !== reply) return;
+  await db.fleetAgentMessage.update({ where: { id: row.id }, data: { text: narracionAMarkdown(pasos, resto) } });
+}
+
 async function ctxFor(request: Request) {
   const user = await getUserOrNull(request).catch(() => null);
   if (!user) throw Response.json({ error: "Unauthorized" }, { status: 401 });
@@ -74,6 +90,10 @@ export async function action({ request, params }: Route.ActionArgs) {
         // Si el sembrado al crear el sitio falló (caja aún arrancando), se repite aquí
         // antes de que el agente encuentre /app vacío. Nunca bloquea el turno.
         await ensureSiteMachine(ctx, site).catch((e) => console.error("[sites] ensureSiteMachine", site.sandboxId, e));
+        // Dónde arrancó cada herramienta en el texto: con eso la copia guardada separa la
+        // narración («Reviso…», «Instalo…») de la respuesta, igual que en vivo.
+        let streamed = "";
+        const cortes: number[] = [];
         const reply = await withAdmitRetry(() =>
           routeMessage(
             builder.id,
@@ -93,12 +113,19 @@ export async function action({ request, params }: Route.ActionArgs) {
               appendSystemPrompt: siteTurnPrompt(site, selection),
             },
             {
-              onChunk: (value) => controller.enqueue(sse({ type: "chunk", value })),
-              onTool: (name, ev) => controller.enqueue(sse({ type: "tool", name, phase: ev?.phase, ok: ev?.ok })),
+              onChunk: (value) => {
+                streamed += value;
+                controller.enqueue(sse({ type: "chunk", value }));
+              },
+              onTool: (name, ev) => {
+                if (ev?.phase === "start" && streamed.trim() && cortes[cortes.length - 1] !== streamed.length) cortes.push(streamed.length);
+                controller.enqueue(sse({ type: "tool", name, phase: ev?.phase, ok: ev?.ok }));
+              },
             }
           )
         );
         controller.enqueue(sse({ type: "done", value: reply }));
+        await saveNarrated(builder.id, siteGroupId(site.id), reply, streamed, cortes).catch((e) => console.error("[sites] narración", e));
       } catch (e) {
         if (e instanceof FleetAgentAtCapacity) {
           controller.enqueue(sse({ type: "capacity", message: e.message, retryAfter: 10 }));
