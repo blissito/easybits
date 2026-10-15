@@ -217,10 +217,12 @@ async function attachBilling(
 
 // El host decide si la caja está ociosa preguntando `/busy` a su runtime; una
 // plantilla sin runtime (ubuntu) contesta "no sé" y NUNCA dormiría, aunque le
-// cobráramos como si sí. Sólo `node` (stateless, pensada para dormir entre visitas).
+// cobráramos como si sí. Sólo las marcadas `stateless` en el templates.yaml del host:
+// `node` y `bun` (desde 2026-10-14, para Elysia nativo).
+const SLEEP_TEMPLATES = new Set(["node", "bun"]);
 function assertSleepTemplate(sleep: boolean, template?: string): void {
-  if (sleep && (template ?? "ubuntu") !== "node") {
-    fail(422, "SleepRequiresNodeTemplate", 'El modo duerme requiere la plantilla "node".');
+  if (sleep && !SLEEP_TEMPLATES.has(template ?? "ubuntu")) {
+    fail(422, "SleepRequiresNodeTemplate", 'El modo duerme requiere la plantilla "node" o "bun".');
   }
 }
 

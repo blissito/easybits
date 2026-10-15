@@ -4,7 +4,7 @@ import { getUserOrNull } from "~/.server/getters";
 import type { AuthContext } from "~/.server/apiAuth";
 import { withAdmitRetry } from "~/.server/core/fleetAdmitHold";
 import { routeMessage, FleetAgentAtCapacity } from "~/.server/core/fleetAgentOperations";
-import { ensureBuilderAgent, getSite, siteGroupId, siteTurnPrompt, siteEngineFor } from "~/.server/core/siteOperations";
+import { ensureBuilderAgent, ensureSiteMachine, getSite, siteGroupId, siteTurnPrompt, siteEngineFor } from "~/.server/core/siteOperations";
 import { engineIsMetered } from "~/lib/fleetEngines";
 import { checkLLMTokenLimit } from "~/.server/llmTokenLimit";
 
@@ -71,6 +71,9 @@ export async function action({ request, params }: Route.ActionArgs) {
         try { controller.enqueue(encoder.encode(`: ka\n\n`)); } catch { /* cerrado */ }
       }, 15_000);
       try {
+        // Si el sembrado al crear el sitio falló (caja aún arrancando), se repite aquí
+        // antes de que el agente encuentre /app vacío. Nunca bloquea el turno.
+        await ensureSiteMachine(ctx, site).catch((e) => console.error("[sites] ensureSiteMachine", site.sandboxId, e));
         const reply = await withAdmitRetry(() =>
           routeMessage(
             builder.id,

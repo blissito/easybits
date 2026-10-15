@@ -5,13 +5,23 @@
 import type { SiteStackId } from "~/lib/siteStacks";
 import { STARTER_FILES } from "./files";
 
-// Todos arrancan con `npm start` (el script de cada package.json) y respetan PORT.
-export const STARTER_RUNSPEC = {
+// Todos arrancan con el script start de su package.json y respetan PORT. Elysia va
+// en la plantilla `bun` (Bun nativo, sin npm ni node en la caja); el resto en `node`.
+const NODE_RUNSPEC = {
   appDir: "/app",
   buildCommand: "(npm ci || npm install) && npm run build",
   startCommand: "npm start",
   port: 3000,
 };
+const BUN_RUNSPEC = { ...NODE_RUNSPEC, buildCommand: "bun install && bun run build", startCommand: "bun run start" };
+
+export function starterTemplate(stack: SiteStackId): "node" | "bun" {
+  return stack === "elysia" ? "bun" : "node";
+}
+
+export function starterRunspec(stack: SiteStackId) {
+  return starterTemplate(stack) === "bun" ? BUN_RUNSPEC : NODE_RUNSPEC;
+}
 
 export function starterFiles(stack: SiteStackId) {
   return STARTER_FILES[stack];
@@ -49,9 +59,9 @@ const RULES: Record<SiteStackId, string[]> = {
     `Rutas en /app/src/routes: +page.svelte, +page.server.ts (load y actions corren en el servidor), +server.ts para endpoints. Adaptador node: no lo cambies.`,
   ],
   elysia: [
-    `Stack: Elysia 1.4 sobre Node 24 con el adaptador @elysiajs/node (NO hay Bun en esta máquina: nada de Bun.* ni bun install). Node corre el TypeScript directo (imports relativos con extensión .ts, sólo sintaxis borrable: nada de enum ni namespace).`,
+    `Stack: Elysia 1.4 sobre Bun 1.3 (nativo). En esta máquina NO hay npm ni node: usa bun install / bun add / bun run.`,
     `Doc oficial: sandbox_exec("curl -sL https://elysiajs.com/llms.txt") es el índice.`,
-    `Todo en /app/src: index.ts registra rutas (.get/.post con validación t.Object de elysia); las páginas devuelven page(título, html) de src/layout.ts y TODO dato del usuario pasa por esc(). Tailwind va por CDN (clases directas, sin build). Archivos estáticos en /app/public. "npm run build" sólo corre tsc: si falla, corrígelo.`,
+    `Todo en /app/src: index.ts registra rutas (.get/.post con validación t.Object de elysia); las páginas devuelven page(título, html) de src/layout.ts y TODO dato del usuario pasa por esc(). Tailwind va por CDN (clases directas, sin build). Archivos estáticos en /app/public. "bun run build" sólo corre tsc: si falla, corrígelo.`,
   ],
   astro: [
     `Stack: Astro 7 con output "server" y el adaptador @astrojs/node (standalone).`,
@@ -81,6 +91,6 @@ export function starterPrompt(stack: SiteStackId): string[] {
       ? `Conserva el script del selector de EasyBits en ${PICKER_FILE[stack]}.`
       : `Estilos con Tailwind 4 (clases; ya configurado). Conserva el script del selector de EasyBits en ${PICKER_FILE[stack]}.`,
     `Cada sección/elemento de bloque lleva un atributo data-eb-id ÚNICO y estable (ej. data-eb-id="hero"); consérvalos al editar y cambia SOLO lo que se pide.`,
-    `Para que la vista previa refleje cambios: sandbox_exec("cd /app && npm install && npm run build") y luego restart_machine({ sandboxId }) (restart NO compila). Si el build falla, corrígelo antes de terminar el turno.`,
+    `Para que la vista previa refleje cambios: sandbox_exec("cd /app && ${stack === "elysia" ? "bun install && bun run build" : "npm install && npm run build"}") y luego restart_machine({ sandboxId }) (restart NO compila). Si el build falla, corrígelo antes de terminar el turno.`,
   ];
 }

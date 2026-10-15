@@ -16,8 +16,8 @@ import { FLEET_ENGINES, DEFAULT_SITE_ENGINE, getEngine, engineCreatable, engineI
 import { createWebsite } from "./operations";
 import { buyMachine } from "./machineOperations";
 import { launchApp, setRunspec } from "./releaseOperations";
-import { exposeSandboxPort, writeFile } from "./sandboxOperations";
-import { STARTER_RUNSPEC, starterFiles, starterPrompt } from "~/.server/starters";
+import { exposeSandboxPort, getSandbox, listFiles, waitUntilRunning, writeFile } from "./sandboxOperations";
+import { starterFiles, starterPrompt, starterRunspec, starterTemplate } from "~/.server/starters";
 import { isSiteStack, type SiteStackId } from "~/lib/siteStacks";
 import { pushSiteToGithub, siteRepo } from "./githubSiteOperations";
 import { markSelfPushed } from "./pushDeployOperations";
@@ -250,7 +250,7 @@ export async function createSite(
     return { site };
   }
   // Por default duerme sin visitas: el caso típico es una landing con backend y poco tráfico.
-  const bought = await buyMachine(ctx, { tier: opts.tier ?? "micro", template: "node", name, sleep: opts.sleep ?? true });
+  const bought = await buyMachine(ctx, { tier: opts.tier ?? "micro", template: opts.stack ? starterTemplate(opts.stack) : "node", name, sleep: opts.sleep ?? true });
   const sandboxId = "machine" in bought && bought.machine ? bought.machine.sandboxId : null;
   const site = await db.site.create({
     data: { ownerId: ctx.user.id, kind: "webapp", name, sandboxId, engine: engine.id, stack: opts.stack ?? null },
@@ -267,27 +267,66 @@ export async function createSite(
 
 /**
  * Deja la caja de una webapp lista para el primer turno: runspec, puerto expuesto y,
- * si el stack lo trae, el starter en /app. Corre al crear el sitio con plan y al
- * enganchar la caja que nació en el webhook del checkout (antes ésa quedaba sin nada).
+ * si el stack lo trae, el starter en /app. Corre al crear el sitio con plan, al
+ * enganchar la caja que nació en el webhook del checkout y antes de cada turno
+ * (`ensureSiteMachine`). Idempotente: decide por lo que YA hay en /app, así que nunca
+ * pisa código —sin package.json siembra el starter; sin easybits.json repite runspec
+ * y puerto—.
  */
 async function prepareSiteMachine(ctx: AuthContext, sandboxId: string, stack: SiteStack) {
-  const runspec = stack ? STARTER_RUNSPEC : DEFAULT_RUNSPEC;
-  // Runspec desde el día cero: sin él `restart_machine` falla y el agente pierde un
-  // turno descubriéndolo (pasó en la primera prueba).
-  await setRunspec(ctx, sandboxId, runspec).catch(() => {});
-  // La vista previa es la URL pública de la caja y `restart_machine` no expone nada.
-  await exposeSandboxPort(ctx, sandboxId, runspec.port).catch(() => {});
-  if (stack) {
+  const saved = (await db.sandbox.findUnique({ where: { sandboxId }, select: { runspec: true } }))?.runspec as
+    | { appDir?: string; port?: number }
+    | null
+    | undefined;
+  const runspec = stack ? starterRunspec(stack) : DEFAULT_RUNSPEC;
+  const appDir = (saved?.appDir ?? runspec.appDir).replace(/\/$/, "");
+  // Recién comprada la caja dice "provisioning" y el host responde 503 "sandbox not
+  // running" a todo: así se perdió el starter de un sitio en prod (2026-10-15) con el
+  // error tragado. Una dormida no se espera: el listado de abajo la despierta.
+  if ((await getSandbox(ctx, sandboxId)).status !== "suspended") {
+    await waitUntilRunning(ctx, sandboxId, { timeoutMs: 90_000 });
+  }
+  const have = await appDirEntries(ctx, sandboxId, appDir);
+  if (!have.has("easybits.json")) {
+    // Runspec desde el día cero: sin él `restart_machine` falla y el agente pierde un
+    // turno descubriéndolo (pasó en la primera prueba). Si ya estaba guardado, solo se
+    // re-escribe su espejo (`{}`): no se pisan cambios posteriores.
+    await setRunspec(ctx, sandboxId, saved ? {} : runspec).catch(() => {});
+    // La vista previa es la URL pública de la caja y `restart_machine` no expone nada.
+    await exposeSandboxPort(ctx, sandboxId, saved?.port ?? runspec.port).catch(() => {});
+  }
+  if (stack && !have.has("package.json")) {
     // En tandas de 8: un starter trae ~30 archivos (en serie eran segundos de espera).
-    const entries = Object.entries(starterFiles(stack));
+    // package.json va AL FINAL: es la marca de "sembrado", así una siembra a medias
+    // se repite completa en vez de quedar dada por buena.
+    const { "package.json": pkg, ...rest } = starterFiles(stack);
+    const entries = Object.entries(rest);
     for (let i = 0; i < entries.length; i += 8) {
       await Promise.all(
         entries.slice(i, i + 8).map(([path, content]) =>
-          writeFile(ctx, sandboxId, { path: `${runspec.appDir}/${path}`, content })
+          writeFile(ctx, sandboxId, { path: `${appDir}/${path}`, content })
         )
       );
     }
+    if (pkg) await writeFile(ctx, sandboxId, { path: `${appDir}/package.json`, content: pkg });
   }
+}
+
+/** Nombres en /app. Un /app inexistente es "vacío"; cualquier otro error se lanza
+ *  para que nadie siembre a ciegas sobre código que no pudo ver. */
+async function appDirEntries(ctx: AuthContext, sandboxId: string, appDir: string) {
+  try {
+    return new Set((await listFiles(ctx, sandboxId, { path: appDir })).entries.map((e) => e.name));
+  } catch (e) {
+    if (/no such file or directory/i.test(String(e))) return new Set<string>();
+    throw e;
+  }
+}
+
+/** Antes de cada turno: re-siembra si la preparación al crear el sitio falló. */
+export async function ensureSiteMachine(ctx: AuthContext, site: { kind: string; sandboxId: string | null; stack?: string | null }) {
+  if (site.kind !== "webapp" || !site.sandboxId) return;
+  await prepareSiteMachine(ctx, site.sandboxId, siteStack(site));
 }
 
 /** Tras el checkout, engancha al sitio la máquina más reciente que no tenga sitio. */
