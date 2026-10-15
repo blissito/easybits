@@ -3,6 +3,10 @@ import { Link, data, redirect, useFetcher, useLoaderData, useSearchParams } from
 import { db } from "~/.server/db";
 import { Streamdown } from "streamdown";
 import { ChatComposer } from "~/components/sitios/ChatComposer";
+import { DeleteSiteArt, GithubRepoArt } from "~/components/sitios/DialogArt";
+import { Modal } from "~/components/common/Modal";
+import { BrutalButton } from "~/components/common/BrutalButton";
+import { LuTrash2 } from "react-icons/lu";
 import { getUserOrRedirect } from "~/.server/getters";
 import type { AuthContext } from "~/.server/apiAuth";
 import { attachNewestMachine, deleteSite, getSite, publishSite, siteEngineFor } from "~/.server/core/siteOperations";
@@ -116,16 +120,6 @@ export default function SiteEditor() {
   const [ghPublic, setGhPublic] = useState(true);
   const [delDialog, setDelDialog] = useState(false);
   const [releaseMachine, setReleaseMachine] = useState(true);
-  useEffect(() => {
-    if (!ghDialog && !delDialog) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      setGhDialog(false);
-      setDelDialog(false);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [ghDialog, delDialog]);
   const [turnDone, setTurnDone] = useState(false);
   const bodyRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -299,70 +293,62 @@ export default function SiteEditor() {
 
   return (
     <div className="fixed inset-0 md:pl-28 pt-16 md:pt-0 flex bg-white overflow-hidden">
-      {delDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" onClick={() => setDelDialog(false)}>
-          <div role="dialog" aria-modal="true" aria-labelledby="del-title" className="w-full max-w-md rounded-2xl border-2 border-black bg-white p-6 shadow-[6px_6px_0_#000]" onClick={(e) => e.stopPropagation()}>
-            <h2 id="del-title" className="text-lg font-bold">¿Eliminar «{site.name}»?</h2>
-            <fetcher.Form method="post" className="mt-2 text-sm text-gray-600">
-              <input type="hidden" name="intent" value="delete" />
-              {site.kind === "webapp" && site.sandboxId ? (
-                <>
-                  <p>Se quita de tu lista de sitios.</p>
-                  <label className={`mt-4 flex cursor-pointer items-start gap-3 rounded-xl border-2 p-3 ${releaseMachine ? "border-black" : "border-gray-200"}`}>
-                    <input type="checkbox" name="releaseMachine" value="1" checked={releaseMachine} onChange={(e) => setReleaseMachine(e.target.checked)} className="mt-1 rounded text-brand-500 focus:ring-brand-500" />
-                    <span>
-                      <span className="font-bold text-black">Liberar también su máquina</span>
-                      <span className="block">Deja de cobrarse y la app sale de línea. Guardamos un respaldo final antes de borrarla.</span>
-                    </span>
-                  </label>
-                  {!releaseMachine && <p className="mt-2 text-amber-700">La máquina sigue encendida y cobrándose; la encuentras en Hosting.</p>}
-                </>
-              ) : (
-                <p>Se quita de tu lista de sitios. La página publicada sigue en su dirección hasta que la borres en Desarrollador › Sitios web.</p>
-              )}
-              {actionError && <p className="mt-3 text-red-600 break-words">{actionError}</p>}
-              <div className="mt-5 flex justify-end gap-2">
-                <button type="button" onClick={() => setDelDialog(false)} className="rounded-lg px-3 py-1.5 font-bold text-gray-600 hover:text-black">Cancelar</button>
-                <button type="submit" disabled={fetcher.state !== "idle"} className="rounded-lg bg-red-600 px-3 py-1.5 font-bold text-white disabled:opacity-50">
-                  {fetcher.state !== "idle" && fetcher.formData?.get("intent") === "delete" ? "Eliminando…" : "Eliminar"}
-                </button>
-              </div>
-            </fetcher.Form>
+      <Modal isOpen={delDialog} onClose={() => setDelDialog(false)} title={`¿Eliminar «${site.name}»?`} className="min-h-0 min-w-0 w-auto max-w-md">
+        <DeleteSiteArt />
+        <fetcher.Form method="post" className="mt-4 text-sm text-gray-600">
+          <input type="hidden" name="intent" value="delete" />
+          {site.kind === "webapp" && site.sandboxId ? (
+            <>
+              <p>Se quita de tu lista de sitios.</p>
+              <label className={`mt-4 flex cursor-pointer items-start gap-3 rounded-xl border-2 p-3 ${releaseMachine ? "border-black" : "border-gray-200"}`}>
+                <input type="checkbox" name="releaseMachine" value="1" checked={releaseMachine} onChange={(e) => setReleaseMachine(e.target.checked)} className="mt-1 rounded text-brand-500 focus:ring-brand-500" />
+                <span>
+                  <span className="font-bold text-black">Liberar también su máquina</span>
+                  <span className="block">Deja de cobrarse y la app sale de línea. Guardamos un respaldo final antes de borrarla.</span>
+                </span>
+              </label>
+              {!releaseMachine && <p className="mt-2 text-amber-700">La máquina sigue encendida y cobrándose; la encuentras en Hosting.</p>}
+            </>
+          ) : (
+            <p>Se quita de tu lista de sitios. La página publicada sigue en su dirección hasta que la borres en Desarrollador › Sitios web.</p>
+          )}
+          {actionError && <p className="mt-3 text-red-600 break-words">{actionError}</p>}
+          <div className="mt-6 flex justify-end gap-3">
+            <BrutalButton mode="ghost" type="button" onClick={() => setDelDialog(false)}>Cancelar</BrutalButton>
+            <BrutalButton mode="danger" type="submit" isDisabled={fetcher.state !== "idle"}>
+              {fetcher.state !== "idle" && fetcher.formData?.get("intent") === "delete" ? "Eliminando…" : "Eliminar"}
+            </BrutalButton>
           </div>
+        </fetcher.Form>
+      </Modal>
+      <Modal isOpen={ghDialog} onClose={() => setGhDialog(false)} title="Conectar a GitHub" className="min-h-0 min-w-0 w-auto max-w-md">
+        <GithubRepoArt />
+        <p className="mt-4 text-sm text-gray-600">
+          Se va a crear un repo nuevo en tu cuenta de GitHub con el código de «{site.name}». Después, cada «Publicar» sube los cambios y un push desde tu compu se despliega solo.
+        </p>
+        <fieldset className="mt-4 space-y-2 text-sm">
+          <legend className="font-bold">¿Quién puede ver el código?</legend>
+          {[
+            { v: true, label: "Público", hint: "Cualquiera puede verlo en GitHub." },
+            { v: false, label: "Privado", hint: "Sólo tú y quien invites." },
+          ].map((o) => (
+            <label key={o.label} className={`flex cursor-pointer items-start gap-3 rounded-xl border-2 p-3 ${ghPublic === o.v ? "border-black" : "border-gray-200"}`}>
+              <input type="radio" name="gh-visibility" checked={ghPublic === o.v} onChange={() => setGhPublic(o.v)} className="mt-1 text-brand-500 focus:ring-brand-500" />
+              <span>
+                <span className="font-bold">{o.label}</span>
+                <span className="block text-gray-500">{o.hint}</span>
+              </span>
+            </label>
+          ))}
+        </fieldset>
+        <div className="mt-6 flex justify-end gap-3">
+          <BrutalButton mode="ghost" type="button" onClick={() => setGhDialog(false)}>Cancelar</BrutalButton>
+          {/* Navegación completa: es un ida y vuelta por GitHub. */}
+          <BrutalButton type="button" onClick={() => { window.location.href = `/dash/hosting/github/connect?site=${site.id}&visibility=${ghPublic ? "public" : "private"}`; }}>
+            Crear repo {ghPublic ? "público" : "privado"}
+          </BrutalButton>
         </div>
-      )}
-      {ghDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" onClick={() => setGhDialog(false)}>
-          <div role="dialog" aria-modal="true" aria-labelledby="gh-title" className="w-full max-w-md rounded-2xl border-2 border-black bg-white p-6 shadow-[6px_6px_0_#000]" onClick={(e) => e.stopPropagation()}>
-            <h2 id="gh-title" className="text-lg font-bold">Conectar a GitHub</h2>
-            <p className="mt-2 text-sm text-gray-600">
-              Se va a crear un repo nuevo en tu cuenta de GitHub con el código de «{site.name}». Después, cada «Publicar» sube los cambios y un push desde tu compu se despliega solo.
-            </p>
-            <fieldset className="mt-4 space-y-2 text-sm">
-              <legend className="font-bold">¿Quién puede ver el código?</legend>
-              {[
-                { v: true, label: "Público", hint: "Cualquiera puede verlo en GitHub." },
-                { v: false, label: "Privado", hint: "Sólo tú y quien invites." },
-              ].map((o) => (
-                <label key={o.label} className={`flex cursor-pointer items-start gap-3 rounded-xl border-2 p-3 ${ghPublic === o.v ? "border-black" : "border-gray-200"}`}>
-                  <input type="radio" name="gh-visibility" checked={ghPublic === o.v} onChange={() => setGhPublic(o.v)} className="mt-1 text-brand-500 focus:ring-brand-500" />
-                  <span>
-                    <span className="font-bold">{o.label}</span>
-                    <span className="block text-gray-500">{o.hint}</span>
-                  </span>
-                </label>
-              ))}
-            </fieldset>
-            <div className="mt-5 flex justify-end gap-2">
-              <button type="button" onClick={() => setGhDialog(false)} className="rounded-lg px-3 py-1.5 font-bold text-gray-600 hover:text-black">Cancelar</button>
-              {/* Navegación completa: es un ida y vuelta por GitHub. */}
-              <a href={`/dash/hosting/github/connect?site=${site.id}&visibility=${ghPublic ? "public" : "private"}`} className="rounded-lg bg-brand-500 px-3 py-1.5 font-bold text-white">
-                Crear repo {ghPublic ? "público" : "privado"}
-              </a>
-            </div>
-          </div>
-        </div>
-      )}
+      </Modal>
       {/* Chat */}
       <aside className={`${mobileTab === "chat" ? "flex" : "hidden"} md:flex w-full md:max-w-sm flex-col md:border-r border-gray-200 bg-white min-w-0`}>
         <header className="px-4 py-3 border-b border-gray-200 flex items-center gap-2">
@@ -467,7 +453,9 @@ export default function SiteEditor() {
           )}
           {site.kind === "static" && <Link to="/dash/developer/domains" className="text-gray-500 hover:text-black">Dominio propio</Link>}
           <button type="button" onClick={() => setPreviewKey((k) => k + 1)} className="text-gray-500 hover:text-black" title="Recargar">⟳</button>
-          <button type="button" onClick={() => setDelDialog(true)} className="text-red-600 hover:text-red-800">Eliminar</button>
+          <button type="button" onClick={() => setDelDialog(true)} className="text-gray-500 hover:text-red-600" title="Eliminar sitio" aria-label="Eliminar sitio">
+            <LuTrash2 className="h-4 w-4" />
+          </button>
         </div>
         {launch && (
           <p className="px-4 py-2 text-xs bg-green-50 border-b-2 border-green-300">
