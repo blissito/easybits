@@ -36,6 +36,8 @@ export function starterFiles(stack: SiteStackId) {
 export const PREVIEW_PORT = 5173;
 export const PREVIEW_UNIT = "easybits-preview";
 export const PREVIEW_SCRIPT = "/etc/easybits-preview.sh";
+// Sube cuando cambia el script o la unit: las cajas con una versión vieja se reinstalan solas en el siguiente turno.
+const PREVIEW_SCRIPT_VERSION = "# eb-preview v2";
 export const PREVIEW_LOG_FILE = "/var/log/easybits-preview.log";
 // Marca de "dependencias instaladas" FUERA de /app: no viaja en releases ni en git, y
 // sobrevive al `npm ci` de «Publicar» (que borra node_modules con el dev corriendo).
@@ -61,12 +63,28 @@ const PREVIEW_COMMAND: Record<SiteStackId, string> = {
 export function previewInstallScript(stack: SiteStackId, appDir: string): string {
   const bun = starterTemplate(stack) === "bun";
   const install = bun ? "bun install" : "(npm ci || npm install)";
+  // Vigilante: cuando cambian muchos archivos a la vez (conectar GitHub, un checkout)
+  // Vite se reinicia solo y TanStack Start puede quedar contestando 404 vacío para
+  // siempre (visto en prod 2026-10-15). Tres 404/sin respuesta seguidos → sale con
+  // error y systemd lo relanza. Un 500 no cuenta: es código a medio escribir.
   const script = [
     "#!/bin/sh",
+    PREVIEW_SCRIPT_VERSION,
     `cd ${appDir}`,
     `[ -f ${PREVIEW_DEPS_MARK} ] || { ${install} && touch ${PREVIEW_DEPS_MARK}; }`,
     `[ -f .easybits.env ] && { set -a; . ./.easybits.env; set +a; }`,
-    `exec ${PREVIEW_COMMAND[stack]}`,
+    `${PREVIEW_COMMAND[stack]} &`,
+    "P=$!",
+    `trap 'kill $P 2>/dev/null' TERM INT`,
+    "command -v curl >/dev/null || { wait $P; exit $?; }",
+    "sleep 60; bad=0",
+    "while kill -0 $P 2>/dev/null; do",
+    `  c=$(curl -s -o /dev/null -m 10 -w '%{http_code}' http://127.0.0.1:$PORT/ || true)`,
+    `  case "$c" in 404|000|"") bad=$((bad+1));; *) bad=0;; esac`,
+    `  [ $bad -ge 3 ] && { echo "[easybits-preview] $c tres veces: reinicio"; kill $P; exit 1; }`,
+    "  sleep 10",
+    "done",
+    "wait $P",
   ].join("\n");
   const unit = [
     "[Unit]",
@@ -92,7 +110,7 @@ export function previewInstallScript(stack: SiteStackId, appDir: string): string
     "",
   ].join("\n");
   // Idempotente: si la unit ya existe no se toca (se llama antes de cada turno).
-  return `test -f /etc/systemd/system/${PREVIEW_UNIT}.service && echo HAD || { ` + [
+  return `grep -qsx ${shQuote(PREVIEW_SCRIPT_VERSION)} ${PREVIEW_SCRIPT} && test -f /etc/systemd/system/${PREVIEW_UNIT}.service && echo HAD || { ` + [
     `printf '%s\\n' ${shQuote(script)} > ${PREVIEW_SCRIPT}`,
     `printf '%s' ${shQuote(unit)} > /etc/systemd/system/${PREVIEW_UNIT}.service`,
     "systemctl daemon-reload",

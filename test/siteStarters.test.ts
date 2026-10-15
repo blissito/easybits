@@ -26,7 +26,7 @@ describe("vista previa en vivo", () => {
     const { SITE_STACKS } = await import("~/lib/siteStacks");
     for (const s of SITE_STACKS) {
       const cmd = previewInstallScript(s.id, "/app");
-      expect(cmd.startsWith(`test -f /etc/systemd/system/${PREVIEW_UNIT}.service && echo HAD ||`)).toBe(true);
+      expect(cmd).toContain(`test -f /etc/systemd/system/${PREVIEW_UNIT}.service && echo HAD || {`);
       expect(cmd).toContain(`PORT=${PREVIEW_PORT}`);
       expect(cmd).toContain("__VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS=.easybits.cloud");
       expect(cmd).not.toContain("/app/.easybits-preview");
