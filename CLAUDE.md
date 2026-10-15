@@ -6,19 +6,6 @@ La plataforma donde un agente ejecuta código en su propia microVM, busca y lee 
 
 ⚠️ **El conteo de tools NO se escribe a mano en ningún lado.** El catálogo (`all-mcp-tools` y `tool-groups` en los docs, y `/api/tools.json`) se DERIVA del servidor MCP en `app/.server/docs/toolCatalog.ts`. Antes había cuatro cifras distintas conviviendo (99 / 118 / 158 / "200+") mientras el servidor registraba 246, y familias enteras como `web_*` no aparecían en su propia documentación. Si añades tools, no actualices prosa: `test/docsCatalog.test.ts` falla si el catálogo se desincroniza.
 
-## ⏰ Pendiente: volar restos de SIIQTEC — `due 2026-10-20`
-
-El 2026-10-06 se borraron por el camino propio de EasyBits los FleetAgents de SIIQTEC ya migrados a
-gs: **tania-0** `6a472561a353eaea9efd9c7b` y **Pia-0** `6a960f535efced3e82971710`. Quedan restos:
-- 22 workers de tania-0 en estado `error` (cajas perdidas): confirmar que el reaper los reconcilió.
-- Archivos/memoria de esos dos agentes que hayan sobrevivido al borrado (`fleet-memory/`, bundles en
-  Tigris): borrarlos.
-- Respaldo local de su config y mensajes en el scratchpad de la sesión de gs
-  (`/private/tmp/claude-501/-Users-bliss-ghosty-studio/…/scratchpad/easybits-siiqtec/`, 0600): borrarlo.
-
-⚠️ No tocar «Ghosty-teams-ambar-613» `6a5fb55f…` ni «Sitios Builder» `6aab068e…` (cuenta personal de
-Brenda, no son de la migración) sin preguntar. Y rotar el token de Fly que se imprimió en esa sesión.
-
 ## Commands
 - `npm run dev` — local dev server
 - `npm run build` — production build
@@ -91,7 +78,6 @@ Brenda, no son de la migración) sin preguntar. Y rotar el token de Fly que se i
 - **⭐ Artifact por FleetAgent (plantilla derivada)**: separación eve-style entre DISCO y OPEN OPTIONS. `fleetArtifactHash(fleetAgent)` = sha256 de `workerTemplate` + seeds (contenido) + manifiesto de skills encendidos — NUNCA prompt/modelo/credenciales (eso va por env). Tras el primer spawn frío, `pickOrSpawn` captura `createTemplateSnapshot(key=fleet:<id>, hash)` **antes del restore/mensaje** (a propósito síncrono: fire-and-forget se llevaría el transcript) y lo guarda en `FleetAgent.metadata.artifact = {derivedId, hash, at, templateVersion}`. Los spawns siguientes van con `createAgent({derivedTemplate})` sin `seedFiles`; ante 404 `DerivedTemplateNotProvisioned` / 409 `DerivedTemplateStale` (rebake del base) / 410 `Gone` se descarta y se cae al spawn normal, que re-captura. Cambio de seeds/skills → hash nuevo → captura nueva + `deleteTemplateSnapshot` del viejo (409 InUse con hijos vivos → se queda). El host no expone `templateVersion` en `/v1/templates`: la caducidad por rebake la detecta el 409. Si un hijo derivado no arranca (visto en prod: `dmsetup create fc-dt-<id>: Device or resource busy` al recrear justo tras un DELETE), se descarta el artifact y se reintenta con spawn normal. Auditoría: `artifact.capture` / `artifact.drop` / `artifact.stale`; el `spawn` lleva `derivedFrom`. Tests: `test/fleetArtifact.test.ts`. **ENCENDIDO por default desde 2026-09-18 (`FLEET_ARTIFACT=off` global o `persona.env.FLEET_ARTIFACT=off` por agente lo apaga)**: la primera medición dio hijo derivado 10-12 s vs 3-4 s el create normal porque el host copiaba el volumen `/data` entero (5.5 s por hijo); con volúmenes sparse (sandbox-host 59a09e2) el hijo mide **1.8-1.9 s** createdAt→running (create normal 1.4-2.1 s) y hereda `/data`. El router replica el derivado a los demás fierros tras capturarlo (be67e77) para que el hijo no quede pegado a un fierro saturado. Probado end-to-end (captura, `derivedFrom`, drop por 404/409/boot fallido).
 - **⚠️ Auditar prompts migrados de nanoclaw**: un agente movido de nanoclaw a la flota puede traer en su `SYSTEM_PROMPT` instrucciones de plumbing LEGACY que contradicen la flota — típico: *"escribo mis cambios en mi archivo `/workspace/group/CLAUDE.md`"* (mecanismo viejo file-based) → el agente **rechaza `set_agent_prompt`** e intenta un archivo inexistente, confabulando "no tengo acceso / es solo nota interna". El preamble runtime que la flota prepende remapea paths/db pero NO el mecanismo de auto-edición. Fix = cirugía a la sección legacy del prompt + recycle. Ver memoria `project_fleet_legacy_prompt_blocks_self_edit` (caso tania-0/siiqtec).
 - ✅ **RESUELTO (2026-08-01) — "el codex-worker no monta MCPs" era `bubblewrap` ausente.** Desde **codex-cli 0.146** el app-server exige `bubblewrap` para aislar los procesos que lanza. Sin él **arranca igual y responde turnos con normalidad**, pero NO levanta NINGÚN servidor MCP —ni stdio ni http— y el agente queda mudo de tools **sin error visible en el chat**: el único rastro es `ERROR codex_app_server: could not find bubblewrap on PATH` enterrado en `journalctl -u codex-worker-runtime`. Fix: `bubblewrap` en el Dockerfile del template + **pin de `@openai/codex@0.146.0`** (un rebake sin pin cambia el MOTOR en silencio — fue exactamente lo que pasó, 0.144→0.146). Método que lo destrabó: (1) control con `claude-worker` misma llave/config, (2) instalar bwrap en una caja VIVA y reprobar → la tool pasó de "no existe" a devolver datos. ⚠️ **Nunca creerle al agente sobre qué tools tiene**: en el mismo diagnóstico Codex negó tener `mcp__render__` y un turno después ese MCP respondió un 503 real del servicio. Ver `feedback_codex_confabulates_tool_inventory`.
-- 🚨 **BLOQUEADOR codex-worker (2026-08-01, HISTÓRICO — ver arriba): NO monta el MCP per-turno de `denikApiKey`.** Con la MISMA key, el MISMO `groupConfigs` y un `groupId` FRESCO: el `claude-worker` llama `list_services` y devuelve datos reales; el `codex-worker` responde `Error: connectors: el que te escribe no tiene integraciones disponibles en este turno`. El binario `denik-mcp` SÍ está en la imagen (`/usr/local/bin/denik-mcp`) y `DENIK_BASE_URL` es correcto → es hueco del TEMPLATE, no de config ni de llave. Mientras no se arregle, **un par Codex no puede servir tráfico con conectores per-turno**. ⚠️ Al diagnosticarlo, la primera respuesta de Codex fue "la herramienta no está habilitada", indistinguible de una confabulación: lo que lo probó fue **hacerlo LLAMAR la tool** y comparar contra claude-worker como control. Ver memoria `project_denik_payment_link_and_set_engine`.
 - **Modelo del worker = FUENTE ÚNICA `FLEET_DEFAULT_MODEL`** (`fleetAgentOperations.ts`, default `claude-sonnet-5`; override por env `FLEET_MODEL` o, por-agente, `persona.env.ANTHROPIC_MODEL`). El worker corre el Agent SDK sin pasar `model` → el CLI honra `ANTHROPIC_MODEL`, que viaja en el **env del spawn** (`buildSpawnEnv`, junto a `FLEET_TOKEN`/OAuth) y en el **env del resume** (ver arriba), NO per-mensaje. Aplica a VMs nuevas y a las suspendidas al despertar; una VM **running** conserva su env hasta que se duerma (reaper o `box-suspend`) — ya no hace falta reciclar. El proxy de fallback (`claude-sonnet-4-6`) es código MUERTO en la flota (sin `ANTHROPIC_API_KEY` → `FALLBACK_ENABLED=false`). El guardrail `MODEL_IDENTITY_SONNET5` (inyectado fresco por turno como el de voz, SOLO si el modelo resuelto == `claude-sonnet-5`) le dice al agente que ES Sonnet 5 y sus rasgos. **Verificar el modelo real** (no el claim del prompt): mandar un turno pidiendo `echo $ANTHROPIC_MODEL` por Bash.
 - **⚠️ Identidad/nombre del bot = DOS campos, no uno**: la persona (`persona.env.SYSTEM_PROMPT` / `ASSISTANT_NAME`) define cómo se presenta el agente, PERO `fleetAgent.assistantName` (columna aparte) es lo que baileys **antepone como prefijo de texto** (`${assistantName}: …`) cuando `hasOwnNumber=false`. `createFleetAgent` hardcodea `assistantName="Ghosty"` → renombrar un asistente exige cambiar AMBOS o el bot dice "Ghosty:" aunque su SYSTEM_PROMPT ya sea otro. Baileys lee ambos FRESCOS de la DB por ráfaga (`baileys.server.ts` L140-145) → cambios aplican al próximo mensaje sin redeploy.
 - **`hasOwnNumber` (Prisma `FleetAgent`, default `false`) = estrategia anti-loop + prefijo**: `true` = línea dedicada → detecta sus ecos por `fromMe`, NO antepone nada; `false` = número compartido/personal → antepone `${assistantName}:` (etiqueta + detección de eco, permite que el dueño se autopruebe). NO auto-derivar del pairing (todo pool parea con un número; `false` es config deliberada). Toggle "Número dedicado" por pool en `/dash/flota` (`pools.tsx` intent `toggle-own-number`).
@@ -267,8 +253,7 @@ GTeams provisiona cada team con la **key de PLATAFORMA** (cuenta fixtergeek, Api
 
 ## Testing
 - Unit: Vitest (`test/` dir) — covers API auth, IAM, storage, Stripe, price validation, MDX, blog
-- E2E: Playwright (`test/e2e-purchase.spec.ts`) — purchase flow (WIP)
-- **Missing test coverage**: Stripe webhook edge cases, free_subscription, IDOR scenarios
+- E2E: Playwright (`test/e2e-purchase.spec.ts`) — purchase flow
 
 ## Presentations
 - Editor: `app/routes/dash/presentations/editor.tsx` (textarea HTML/JSON, drag&drop, iframe preview)
@@ -338,7 +323,7 @@ GTeams provisiona cada team con la **key de PLATAFORMA** (cuenta fixtergeek, Api
 | `__grapes_css__` | Sección fantasma con CSS de GrapesJS | `grapesToSections` extrae `<style>` como sección especial | Filtrada en PageList, deploy, y listado |
 
 ## Cert Management
-- ⚠️ **Heredado de Fly**: compara contra los certs de la app de Fly, que ya no existe (2026-10-08). Hoy los certs los emite el Caddy de sandbox-host (on-demand TLS). Revisar si este cron/panel sigue sirviendo o se retira.
+- ⚠️ **Heredado de Fly**: compara contra los certs de la app de Fly, que ya no existe (2026-10-08). Hoy los certs los emite el Caddy de sandbox-host (on-demand TLS).
 - Audit + cleanup: `app/.server/core/certOperations.ts` — compares Fly certs vs DB (websites, customDomains, users)
 - Cron: `GET /api/cron/purge-certs` — runs in `.github/workflows/purge-cron.yml` alongside purge-files (every 7 days)
 - Admin UI: `/dash/admin/certs` — view valid/orphaned/protected, bulk delete orphans
@@ -353,36 +338,3 @@ El logo de la marca = **icono de ojitos + wordmark "EasyBits" animado**. Aparece
 - **Fuente:** `"Jersey 10"` (Google Font). Import en `app/app.css`: `@import url("https://fonts.googleapis.com/css2?family=Jersey+10&display=swap")`; clase `.font-jersey { font-family: "Jersey 10", serif; }`.
 
 **Transportarlo a HTML plano / contextos sin React (ej. páginas servidas por un box):** usar **Motion One** (`motion` vanilla, misma familia) por CDN — `import { animate, stagger } from "https://cdn.jsdelivr.net/npm/motion@11/+esm"` — y replicar el flip con dos `<div>` de `<span>` por letra + los mismos keyframes (`rotateX`, `y`, `stagger(0.05)`, `duration 0.3`). **Implementación de referencia ya hecha** en `sandbox-host/templates/livekit-svc/room.html` (el estudio de grabación): copiar de ahí el bloque CSS (`#ebWord`/`.ebRow`/`.font-jersey`), el markup (ojitos + dos `.ebRow`) y el `<script type="module">` con Motion One.
-
-## Oportunidad editorial: el libro corto de A2A v1.0
-
-**Verificado el 18 ago 2026: no existe NINGÚN libro sobre el protocolo A2A** (Agent2Agent,
-Linux Foundation). Ni de v0.3 ni de v1.0. Se buscó en O'Reilly, Manning/MEAP, Packt, Apress,
-Amazon y Leanpub. Lo más cercano son libros de agentes que le dedican un capítulo, escritos
-antes del release de v1.0.
-
-**Por qué el hueco es real y no sólo un vacío de catálogo.** La v1.0 (abril 2026) rompió con
-v0.3: métodos PascalCase (`SendMessage` en vez de `message/send`), el AgentCard perdió `url`
-en la raíz a favor de `supportedInterfaces[]`, desapareció el discriminador `kind`, los Part se
-aplanaron a un oneof, los TaskState pasaron a SCREAMING_SNAKE y los eventos de stream perdieron
-`final`. **Casi toda la literatura pedagógica que existe enseña la versión equivocada**: el curso
-de DeepLearning.AI (con Google Cloud e IBM, enero 2026) es anterior al release, igual que casi
-todos los codelabs de Google y todo lo de Udemy. Lo único confiablemente v1.0 es la doc oficial,
-los SDKs de Python/JS/Java y un par de artículos de Medium.
-
-No es un protocolo de nicho: la Linux Foundation reportó en abril 150+ organizaciones y un TSC
-con AWS, Cisco, Google, IBM, Microsoft, Salesforce, SAP y ServiceNow.
-
-**Por qué nos toca a nosotros.** EasyBits va a ser consumidor de A2A, y sandbox-host lo está
-implementando de verdad —no leyéndolo— contra el `a2a.proto` normativo del tag v1.0.1. Ese
-trabajo genera el material: el mapeo de un dialecto propio al cable A2A, las dos contradicciones
-internas de la spec (`securityRequirements` vs `security`; `SubscribeToTask` como GET vs POST),
-qué no tiene equivalente en el protocolo (consumo/facturación, inyección en turno vivo) y cómo se
-resuelve sin inventar campos. Eso no está escrito en ningún lado.
-
-- Referencia técnica ya publicada (base del libro): https://claude.ai/code/artifact/a413ce56-a063-4849-bf6d-fb217c98d75b
-- Implementación de referencia: `sandbox-host/templates/claude-worker/src/a2a/`
-- Fuente normativa: `github.com/a2aproject/A2A`, tag `v1.0.1`, `specification/a2a.proto`
-
-**Ventana:** se cierra cuando O'Reilly o Manning saquen el suyo. El ciclo de un libro técnico es
-de 12 a 18 meses, así que hay margen — pero es margen, no eternidad.
