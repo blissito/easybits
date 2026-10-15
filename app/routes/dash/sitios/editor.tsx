@@ -234,7 +234,8 @@ export default function SiteEditor() {
               const e = JSON.parse(dl.slice(6));
               if (e.type === "chunk") patch((p) => ({ ...p, text: p.text + e.value }));
               else if (e.type === "tool" && e.phase === "start") patch((p) => ({ ...p, tools: [...(p.tools ?? []), e.name] }));
-              else if (e.type === "done") patch((p) => ({ ...p, text: e.value }));
+              // done vacío = el turno se cortó sin respuesta (límite del motor): decirlo, no dejar «construyendo…».
+              else if (e.type === "done") patch((p) => ({ ...p, text: e.value || p.text || "⚠️ El agente no terminó a tiempo y no respondió. Vuelve a intentarlo." }));
               else if (e.type === "error") patch((p) => ({ ...p, text: `⚠️ ${e.message}` }));
               else if (e.type === "capacity") patch((p) => ({ ...p, text: `⏳ ${e.message} — reintenta en unos segundos.` }));
             } catch { /* evento malformado */ }

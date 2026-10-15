@@ -1649,6 +1649,9 @@ export function fleetArtifactHash(
       seeds,
       skills,
       templateVersion: opts.templateVersion ?? null,
+      // ghosty-gc escribe su mcp.json (con ?tools=EASYBITS_TOOLS) en /data al nacer: es
+      // DISCO, no env. Sólo entra si está puesto, para no mover el hash de los demás.
+      ...(persona.env?.EASYBITS_TOOLS ? { ebTools: persona.env.EASYBITS_TOOLS } : {}),
     })
   );
 }

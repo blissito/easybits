@@ -27,6 +27,8 @@ export const BUILDER_NAME = "Sitios Builder";
 // que YA descuenta del bucket de tokens LLM del dueño y responde 402 sin saldo. Los
 // demás motores (claude/deepseek/codex) son BYOK: la llave del dueño, del vault.
 const BUILDER_TEMPLATE = "ghosty-gc";
+// Toolset del MCP de easybits para un builder ghosty-gc (?tools= de su mcp.json).
+const BUILDER_TOOLS = "sitios,sandbox,hosting";
 
 /** Motor de un sitio (null → default medido). */
 export function siteEngineFor(site: { engine?: string | null }): FleetEngine {
@@ -115,6 +117,21 @@ export async function ensureBuilderAgent(ctx: AuthContext, engineId: string = DE
         });
       }
     }
+    // Builder ghosty-gc sin toolset propio: su arranque arma el MCP con EASYBITS_TOOLS
+    // (default `ghosty` = docs/db/imágenes), NO con EASYBITS_TOOL_GROUP → no veía
+    // deploy_website_file ni sandbox_*, gastaba el turno buscándolas y se cortaba a los
+    // 120 s sin responder (14-oct). El mcp.json se escribe en /data al nacer: hay que
+    // reciclar la caja (el hash del artifact ya incluye EASYBITS_TOOLS).
+    if (existing.workerTemplate === BUILDER_TEMPLATE) {
+      const persona = (existing.persona as { env?: Record<string, string> } | null) ?? {};
+      if (persona.env?.EASYBITS_TOOLS !== BUILDER_TOOLS) {
+        await db.fleetAgent.update({
+          where: { id: existing.id },
+          data: { persona: { ...persona, env: { ...(persona.env ?? {}), EASYBITS_TOOLS: BUILDER_TOOLS } } },
+        });
+        await recycleFleetAgentBoxes({ id: existing.id, ownerId: ctx.user.id }).catch(() => {});
+      }
+    }
     // Builder easybits nacido antes del motor medido (claude-worker): se migra en sitio
     // y se recicla su caja (el env es spawn-baked; la VM viva seguiría con el motor viejo).
     if (engine.id === DEFAULT_SITE_ENGINE && existing.workerTemplate !== BUILDER_TEMPLATE) {
@@ -123,7 +140,7 @@ export async function ensureBuilderAgent(ctx: AuthContext, engineId: string = DE
         where: { id: existing.id },
         data: {
           workerTemplate: BUILDER_TEMPLATE,
-          persona: { ...persona, env: { ...(persona.env ?? {}), GHOSTY_LLM: DEFAULT_SITE_ENGINE } },
+          persona: { ...persona, env: { ...(persona.env ?? {}), GHOSTY_LLM: DEFAULT_SITE_ENGINE, EASYBITS_TOOLS: BUILDER_TOOLS } },
         },
       });
       await recycleFleetAgentBoxes({ id: existing.id, ownerId: ctx.user.id }).catch(() => {});
@@ -137,6 +154,8 @@ export async function ensureBuilderAgent(ctx: AuthContext, engineId: string = DE
     // Buckets: sitios (Website + Files), sandbox (archivos/exec en la caja) y
     // hosting (launch_app/restart_machine). Sin lo demás: es un constructor.
     EASYBITS_TOOL_GROUP: "scripting,sitios,sandbox,hosting",
+    // ghosty-gc no lee EASYBITS_TOOL_GROUP: arma su MCP con EASYBITS_TOOLS.
+    EASYBITS_TOOLS: BUILDER_TOOLS,
   };
   if (engine.modelEnv && siteModel) env[engine.modelEnv] = siteModel;
   const created = await createFleetAgent(ctx, {
