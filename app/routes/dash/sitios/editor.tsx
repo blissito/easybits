@@ -75,7 +75,10 @@ export const action = async ({ request, params }: Route.ActionArgs) => {
         return data({ error: "intent desconocido" }, { status: 400 });
     }
   } catch (e) {
-    const message = e instanceof Response ? await e.text().catch(() => e.statusText) : e instanceof Error ? e.message : "error";
+    // Los errores del core llegan como Response con {error, message}: se muestra el message, no el JSON crudo.
+    const raw = e instanceof Response ? await e.text().catch(() => e.statusText) : e instanceof Error ? e.message : "error";
+    let message = raw;
+    try { message = JSON.parse(raw).message || raw; } catch {}
     return data({ error: message }, { status: 400 });
   }
 };

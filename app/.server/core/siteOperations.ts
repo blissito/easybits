@@ -397,14 +397,19 @@ export async function publishSite(ctx: AuthContext, siteId: string) {
 export async function deleteSite(ctx: AuthContext, siteId: string, opts: { releaseMachine?: boolean } = {}) {
   requireScope(ctx, "DELETE");
   const site = await getSite(ctx, siteId);
-  // Soft-delete: el Website/caja siguen vivos (nunca borramos datos del usuario)…
-  await db.site.update({ where: { id: siteId }, data: { deletedAt: new Date() } });
-  // …salvo que el dueño pida liberar la máquina: si no, borrar el sitio dejaba la
-  // caja cobrándose sin nada en el panel que la nombrara. releasePermanent detiene el
-  // cobro y guarda un respaldo final antes de destruirla.
+  // Si el dueño pide liberar la máquina, va ANTES del soft-delete: si falla, el sitio
+  // sigue en la lista y puede reintentar (al revés quedaba borrado y el reintento daba
+  // «Site not found»). releasePermanent detiene el cobro y guarda un respaldo final.
+  // Un 404 es «ya no hay máquina que liberar» (caja de preview sin compra, o ya
+  // liberada desde Hosting): no bloquea el borrado.
   if (opts.releaseMachine && site.kind === "webapp" && site.sandboxId) {
-    await releasePermanent(ctx, site.sandboxId);
+    await releasePermanent(ctx, site.sandboxId).catch((e) => {
+      if (e instanceof Response && e.status === 404) return;
+      throw e;
+    });
   }
+  // Soft-delete: el Website sigue vivo (nunca borramos datos del usuario).
+  await db.site.update({ where: { id: siteId }, data: { deletedAt: new Date() } });
 }
 
 /** Contexto por turno: qué sitio es y cómo tocarlo. Se appendea (capa 3), no pisa. */
