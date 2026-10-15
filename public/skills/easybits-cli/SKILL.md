@@ -1,11 +1,11 @@
 ---
 name: easybits-cli
-description: "Drive EasyBits from the terminal with the easybits CLI (npm @easybits.cloud/cli) - sandboxes, exec, sandbox files, permanent machines and releases, secrets, custom domains, SQL databases, agents (prompt, skills, MCP, files, clone) and files, all with --json and stable exit codes. Use when a coding agent has a shell and needs to create or operate EasyBits resources without writing HTTP calls, or when the user mentions the easybits CLI."
+description: "Drive EasyBits from the terminal with the easybits CLI (npm @easybits.cloud/cli) - sandboxes, exec, sandbox files, permanent machines and releases, secrets, custom domains, site-builder sites, SQL databases, agents (prompt, skills, MCP, files, clone) and files, all with --json and stable exit codes. Use when a coding agent has a shell and needs to create or operate EasyBits resources without writing HTTP calls, or when the user mentions the easybits CLI."
 license: MIT
 compatibility: Needs Node 22+ (npx is enough), network access to https://www.easybits.cloud and an EasyBits API key
 metadata:
   author: easybits
-  version: "1.17"
+  version: "1.18"
 ---
 
 # Use the EasyBits CLI
@@ -141,6 +141,17 @@ easybits domains verify "$ID" shop.example.com                   # exit 1 until 
 easybits domains ls "$ID" --json
 easybits domains rm "$ID" shop.example.com --json --yes
 ```
+
+## Site-builder sites (/dash/sitios)
+
+```bash
+easybits sites ls --json      # { id, name, kind: static|webapp, engine, stack, url, websiteId, sandboxId }
+```
+
+"My sites" means this list: what the user built in /dash/sitios, with the engine that builds
+each one. A static site's files are in its website (`websiteId`); a web app's code is in its
+machine (`sandboxId`, use `machines`/`sandboxes`). `websites ls` is broader: every static
+website of the account, including documents and pages that agents published.
 
 ## Static websites (`/s/<slug>/`)
 

@@ -15,6 +15,7 @@
 //    (2) que esté en el toolGroup correcto en toolGroups.ts, (3) que el
 //    cliente tenga el conector configurado.
 // ─────────────────────────────────────────────────────────────────────────────
+import { listSiteSummaries } from "~/.server/core/siteOperations";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   registerAppTool,
@@ -5609,6 +5610,17 @@ function registerSiteTools(server: McpServer) {
       const nextOffset = (params.offset ?? 0) + result.items.length;
       const nextCursor = nextOffset < result.total ? String(nextOffset) : null;
       return ok(paginate(result.items, { nextCursor, total: result.total }));
+    })
+  );
+
+  server.tool(
+    "list_sites",
+    "List the sites of the site builder (/dash/sitios): static sites and web apps, with the engine that builds each one and its public URL. Returns { items, nextCursor, hasMore, total }; each item is { id, name, kind: 'static'|'webapp', engine, stack, url, websiteId, sandboxId, createdAt }. A static site's files live in its website (websiteId → list_website_files); a web app's code lives in its machine (sandboxId). Different from list_websites, which lists every static website of the account (including documents and pages published by agents).",
+    {},
+    wrapHandler(async (_params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const items = await listSiteSummaries(ctx);
+      return ok(paginate(items, { total: items.length }));
     })
   );
 

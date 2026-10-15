@@ -332,7 +332,8 @@ easybits files upload ./reporte.pdf
 easybits files upload ./logo.png --public   # URL abierta en el CDN; privado por default
 easybits files ls
 easybits files rm FILE_ID --yes   # a la papelera 7 días
-easybits websites ls
+easybits sites ls                      # tus sitios del creador (/dash/sitios): tipo, motor y URL
+easybits websites ls                   # todos los websites estáticos (también documentos y páginas de agentes)
 easybits websites create "Mi tienda" --slug mi-tienda   # slug opcional
 easybits websites slug mi-tienda mi-store               # cambiarlo; la URL vieja responde 301
 easybits providers                     # proveedor de almacenamiento (Tigris por defecto)
@@ -853,6 +854,12 @@ Certificates are issued automatically on the first HTTPS request (wildcard regis
 
 REST: \`GET/POST/DELETE /domains\`, \`POST /domains/:domainId/verify\`, \`POST /domains/:domainId/apex\` \`{ websiteId | null }\`.
 MCP: \`list_domains\`, \`add_domain\`, \`verify_domain\`, \`set_domain_website\`, \`delete_domain\`, \`configure_domain_dns\`, \`undo_domain_dns\`.
+
+### List site-builder sites
+\`GET /sites\`
+The sites of the site builder (/dash/sitios), as the dashboard shows them: static sites and web apps, with the engine that builds each one. Different from \`GET /websites\`, which lists every static website of the account (documents and agent-published pages included).
+Returns: \`{ items: Site[], nextCursor, hasMore, total }\` — each \`{ id, name, kind: "static" | "webapp", engine, stack, url, websiteId, sandboxId, createdAt }\`. A static site's files live in its website (\`websiteId\`); a web app's code lives in its machine (\`sandboxId\`).
+SDK: \`eb.listSites()\` · MCP: \`list_sites\` · CLI: \`easybits sites ls\`
 
 ### List websites
 \`GET /websites\`

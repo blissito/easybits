@@ -46,6 +46,8 @@ tags:
     description: Avisos HTTP firmados con HMAC.
   - name: Domains
     description: Dominios propios para sitios (subdominios y dominio raíz).
+  - name: Sites
+    description: Sitios del creador de sitios (/dash/sitios), estáticos y web apps.
   - name: Account
     description: Identidad, uso y saldo de tokens LLM.
   - name: Docs
@@ -2307,6 +2309,38 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
 
   # ───────────────────────── Domains ─────────────────────────
+  /api/v2/sites:
+    get:
+      tags: [Sites]
+      operationId: listSites
+      summary: Listar sitios del creador (/dash/sitios)
+      description: "Sitios estáticos y web apps del creador de sitios, como los ve el panel, con el motor que construye cada uno. Distinto de los websites: aquí no salen documentos ni páginas publicadas por agentes. Un estático guarda sus archivos en su website (`websiteId`); una web app, su código en su máquina (`sandboxId`)."
+      responses:
+        "200":
+          description: Sitios.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: string }
+                        name: { type: string }
+                        kind: { type: string, enum: [static, webapp] }
+                        engine: { type: string, description: "Motor que lo construye (easybits, claude, gemini…)" }
+                        stack: { type: [string, "null"], description: "Starter de la web app (tanstack, next…); null = Node libre o estático" }
+                        url: { type: [string, "null"] }
+                        websiteId: { type: [string, "null"] }
+                        sandboxId: { type: [string, "null"] }
+                        createdAt: { type: string, format: date-time }
+                  nextCursor: { type: [string, "null"] }
+                  hasMore: { type: boolean }
+                  total: { type: integer }
+        "401": { $ref: "#/components/responses/Unauthorized" }
   /api/v2/domains:
     get:
       tags: [Domains]

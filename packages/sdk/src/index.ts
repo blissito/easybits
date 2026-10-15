@@ -406,6 +406,23 @@ export interface Website {
   url: string;
 }
 
+/** Un sitio del creador de sitios (/dash/sitios): estático o web app, con su motor. */
+export interface Site {
+  id: string;
+  name: string;
+  kind: "static" | "webapp";
+  /** Motor que lo construye (p. ej. "easybits", "claude", "gemini"). */
+  engine: string;
+  /** Stack del starter de una web app (p. ej. "tanstack"); null = Node libre o estático. */
+  stack: string | null;
+  url: string | null;
+  /** Estático: su website (archivos con listWebsiteFiles). */
+  websiteId: string | null;
+  /** Web app: la máquina donde vive su código. */
+  sandboxId: string | null;
+  createdAt: string;
+}
+
 export interface UpdateWebsiteParams {
   name?: string;
   status?: string;
@@ -1384,6 +1401,13 @@ export class EasybitsClient {
   /** Lee una página y sigue sus links internos hasta maxPages. 1 consulta por página. */
   async webCrawl(params: WebCrawlParams): Promise<WebCrawlResult> {
     return this.request<WebCrawlResult>("/web/crawl", { method: "POST", body: JSON.stringify(params) });
+  }
+
+  // ── Sites (/dash/sitios) ────────────────────────────────────
+
+  /** Los sitios del creador de sitios (estáticos y web apps), como los ve el panel. */
+  async listSites(): Promise<{ items: Site[]; nextCursor: string | null; hasMore: boolean; total?: number }> {
+    return this.request("/sites");
   }
 
   // ── Websites ────────────────────────────────────────────────

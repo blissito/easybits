@@ -205,6 +205,34 @@ export async function listSites(ctx: AuthContext) {
   return rows.map((r) => ({ ...r, url: publicUrl(r, r.websiteId ? bySite[r.websiteId] : null) }));
 }
 
+/** Forma pública de un sitio (API v2, MCP `list_sites`, SDK, CLI `sites ls`). */
+export type SiteSummary = {
+  id: string;
+  name: string;
+  kind: "static" | "webapp";
+  engine: string;
+  stack: string | null;
+  url: string | null;
+  websiteId: string | null;
+  sandboxId: string | null;
+  createdAt: string;
+};
+
+/** Los sitios de /dash/sitios tal como los ve el panel, sin campos internos. */
+export async function listSiteSummaries(ctx: AuthContext): Promise<SiteSummary[]> {
+  return (await listSites(ctx)).map((s) => ({
+    id: s.id,
+    name: s.name,
+    kind: s.kind as SiteSummary["kind"],
+    engine: s.engine ?? DEFAULT_SITE_ENGINE,
+    stack: s.stack ?? null,
+    url: s.url,
+    websiteId: s.websiteId ?? null,
+    sandboxId: s.sandboxId ?? null,
+    createdAt: s.createdAt.toISOString(),
+  }));
+}
+
 export async function getSite(ctx: AuthContext, id: string) {
   requireScope(ctx, "READ");
   const site = await db.site.findFirst({ where: { id, ownerId: ctx.user.id, ...NOT_DELETED } });

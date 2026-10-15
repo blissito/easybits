@@ -112,6 +112,8 @@ export const HELP_ES: Record<string, string> = {
   "a copy": "una copia",
   "what would be removed": "lo que se quitaría",
   "Hosting": "Hosting",
+  "Your site-builder sites (/dash/sitios): static and web apps": "Tus sitios del creador (/dash/sitios): estáticos y web apps",
+  "List your sites with their kind, engine and public URL": "Enlista tus sitios con su tipo, motor y URL pública",
   "Permanent machines and their releases (easybits deploy <machine> publishes)": "Máquinas permanentes y sus releases (easybits deploy <máquina> publica)",
   "List your permanent machines": "Enlista tus máquinas permanentes",
   "Publish the machine's current app code as a new release": "Publica el código actual de la app como un release nuevo",

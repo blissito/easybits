@@ -108,7 +108,8 @@ easybits files ls
 easybits files upload ./report.pdf
 easybits files upload ./logo.png --public   # open CDN URL; private by default
 easybits files rm FILE_ID --yes
-easybits websites ls
+easybits sites ls                    # your site-builder sites (/dash/sitios): kind, engine, URL
+easybits websites ls                 # every static website (also documents and agent-published pages)
 easybits websites create "My shop" --slug my-shop   # slug optional
 easybits websites slug my-shop my-store             # change it; the old URL 301s
 easybits providers                   # storage provider (Tigris by default)
@@ -171,6 +172,12 @@ Host *.ghosty
 - Skill: `npx skills add https://easybits.cloud` (includes `easybits-cli`).
 
 Full reference: https://www.easybits.cloud/docs#cli · https://www.easybits.cloud/en/docs/cli.md
+
+## Changes in 0.16.0
+
+- `sites ls`: the sites of the site builder (/dash/sitios) — static sites and web apps,
+  with the engine that builds each one and its public URL (`--json` for agents). Different
+  from `websites ls`, which lists every static website of the account.
 
 ## Changes in 0.15.1
 

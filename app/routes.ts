@@ -543,6 +543,8 @@ export default [
   // auth gate for a room + Yjs binary state persistence (externalized to storage).
   // Chat del creador de sitios (sesión del dueño; SSE)
   route("api/v2/sites/:id/chat", "routes/api/v2/sites.$id.chat.ts"),
+  // Lista de sitios para API/SDK/CLI (Bearer)
+  route("api/v2/sites", "routes/api/v2/sites-collection.ts"),
   route("api/v2/collab/authenticate", "routes/api/v2/collab.authenticate.ts"),
   route("api/v2/collab/:docId/state", "routes/api/v2/collab.$docId.state.ts"),
   // Simple (server-less) document editor — instant seed, no Hocuspocus box. The

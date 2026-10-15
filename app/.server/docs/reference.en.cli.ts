@@ -186,7 +186,8 @@ easybits files upload ./report.pdf
 easybits files upload ./logo.png --public   # open CDN URL; private by default
 easybits files ls
 easybits files rm FILE_ID --yes   # to the trash for 7 days
-easybits websites ls
+easybits sites ls                      # your site-builder sites (/dash/sitios): kind, engine, URL
+easybits websites ls                   # every static website (also documents and agent-published pages)
 easybits websites create "My shop" --slug my-shop   # slug optional
 easybits websites slug my-shop my-store             # change it; the old URL 301s
 easybits providers                     # storage provider (Tigris by default)

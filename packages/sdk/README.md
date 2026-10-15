@@ -94,6 +94,7 @@ const eb = await createClientFromEnv();
 
 | Method | Description |
 |--------|-------------|
+| `listSites()` | List your site-builder sites (/dash/sitios): static and web apps, with engine and URL |
 | `listWebsites()` | List your static websites |
 | `createWebsite(name, { slug? })` | Create a new website (optional custom slug) |
 | `getWebsite(websiteId)` | Get website details |

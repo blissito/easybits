@@ -5,6 +5,7 @@ import { init } from "./init.js";
 import { sshKey, sshProxy } from "./ssh.js";
 import { sandboxes } from "./sandboxes.js";
 import { machines } from "./machines.js";
+import { sites } from "./sites.js";
 import { domains } from "./domains.js";
 import { db } from "./db.js";
 import { agents } from "./agents.js";
@@ -24,6 +25,7 @@ export const COMMANDS: Command[] = [
   agents,
   apply,
   machines,
+  sites,
   domains,
   init,
   db,
