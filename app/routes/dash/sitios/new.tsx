@@ -27,11 +27,12 @@ export const action = async ({ request }: Route.ActionArgs) => {
   const prompt = String(form.get("prompt") || "").trim();
   const engine = String(form.get("engine") || DEFAULT_SITE_ENGINE);
   const secretValue = String(form.get("secretValue") || "");
+  const model = String(form.get("model") || "") || null;
   const stackRaw = form.get("stack");
   const stack = kind === "webapp" && isSiteStack(stackRaw) ? stackRaw : null;
   try {
     // Ya no hay "siempre prendida": toda web app nueva duerme sin visitas.
-    const { site, checkoutUrl } = await createSite(ctx, { kind, name, engine, secretValue, sleep: true, stack });
+    const { site, checkoutUrl } = await createSite(ctx, { kind, name, engine, model, secretValue, sleep: true, stack });
     // El primer mensaje viaja por la URL y el editor lo manda solo al abrir.
     const q = new URLSearchParams();
     if (prompt) q.set("prompt", prompt);
@@ -53,6 +54,9 @@ export default function NewSite() {
     engines.some((e) => e.id === "claude" && e.creatable && !e.needsSecret) ? "claude" : DEFAULT_SITE_ENGINE
   );
   const engine = engines.find((e) => e.id === engineId);
+  const [modelId, setModelId] = useState<string | null>(null);
+  // Al cambiar de motor, el elegido sólo vale si es de ese motor; si no, el default de sitios.
+  const currentModel = engine?.models.some((m) => m.id === modelId) ? modelId : engine?.defaultModel ?? null;
   const nav = useNavigation();
   const result = useActionData<typeof action>();
   const micro = HOSTING_CATALOG.micro;
@@ -130,6 +134,25 @@ export default function NewSite() {
             ))}
           </div>
           <input type="hidden" name="engine" value={engineId} />
+          {/* Modelo del motor elegido (default: el de sitios del motor). */}
+          {engine && engine.models.length > 1 && (
+            <div className="mt-3">
+              <span className="text-sm font-bold">Modelo</span>
+              <div className="mt-1 flex flex-wrap gap-2">
+                {engine.models.map((m) => (
+                  <button
+                    key={m.id}
+                    type="button"
+                    onClick={() => setModelId(m.id)}
+                    className={`px-3 py-1.5 rounded-full border-2 text-xs font-semibold transition-all ${currentModel === m.id ? "border-black bg-brand-500/10" : "border-gray-200 hover:border-gray-400"}`}
+                  >
+                    {m.label}
+                  </button>
+                ))}
+              </div>
+              <input type="hidden" name="model" value={currentModel ?? ""} />
+            </div>
+          )}
           {engine?.needsSecret && engine.creatable && (
             <label className="block mt-3">
               <span className="text-sm font-bold">{engine.secretKind === "oauth" ? "Token OAuth" : "API key"} de {engine.label}</span>

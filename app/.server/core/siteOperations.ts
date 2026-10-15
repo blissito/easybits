@@ -50,6 +50,8 @@ export async function engineChoicesFor(userId: string) {
     needsSecret: !!e.secret && !owned.has(e.secret.name),
     secretPlaceholder: e.secret?.placeholder ?? "",
     secretKind: e.secret?.kind ?? null,
+    models: e.models ?? [],
+    defaultModel: e.siteModel ?? e.defaultModel ?? null,
   }));
 }
 // Regalo de arranque: una cuenta SIN saldo (Byte post-promo) recibe tokens al crear
@@ -76,14 +78,29 @@ function siteGroupId(siteId: string) {
 }
 
 /** El builder de la cuenta para un motor; se crea al primer sitio (lazy). */
-export async function ensureBuilderAgent(ctx: AuthContext, engineId: string = DEFAULT_SITE_ENGINE) {
+export async function ensureBuilderAgent(ctx: AuthContext, engineId: string = DEFAULT_SITE_ENGINE, model?: string | null) {
   const engine = getEngine(engineId) ?? getEngine(DEFAULT_SITE_ENGINE)!;
   const existing = await db.fleetAgent.findFirst({
     where: { ownerId: ctx.user.id, name: builderNameFor(engine.id) },
     select: { id: true, token: true, workerTemplate: true, persona: true },
   });
-  const siteModel = engine.siteModel ?? engine.defaultModel;
+  // `model` = el que eligió el dueño al crear el sitio (sólo si es de la lista del motor).
+  const picked = model && engine.models?.some((m) => m.id === model) ? model : null;
+  const siteModel = picked ?? engine.siteModel ?? engine.defaultModel;
   if (existing) {
+    // Modelo elegido a mano al crear: manda sobre lo que tenga el builder, y se recicla la caja
+    // para que el siguiente turno ya corra con él (el env va horneado al crear la caja).
+    if (picked && engine.modelEnv) {
+      const persona = (existing.persona as { env?: Record<string, string> } | null) ?? {};
+      if (persona.env?.[engine.modelEnv] !== picked) {
+        await db.fleetAgent.update({
+          where: { id: existing.id },
+          data: { persona: { ...persona, env: { ...(persona.env ?? {}), [engine.modelEnv]: picked } } },
+        });
+        await recycleFleetAgentBoxes({ id: existing.id, ownerId: ctx.user.id }).catch(() => {});
+      }
+      return { id: existing.id, token: existing.token };
+    }
     // Builder con el modelo viejo (el default del motor o ninguno): se sube al de sitios. El env
     // se refresca solo al despertar la caja (spawnEnvHash), sin reciclarla. Uno que el dueño
     // cambió a mano a otro modelo se respeta.
@@ -224,7 +241,7 @@ function sandboxUrl(sandboxId: string, port: number) {
  */
 export async function createSite(
   ctx: AuthContext,
-  opts: { kind: SiteKind; name: string; tier?: string; engine?: string; secretValue?: string; sleep?: boolean; stack?: SiteStack }
+  opts: { kind: SiteKind; name: string; tier?: string; engine?: string; model?: string | null; secretValue?: string; sleep?: boolean; stack?: SiteStack }
 ): Promise<{ site: { id: string }; checkoutUrl?: string }> {
   requireScope(ctx, "WRITE");
   const name = opts.name.trim() || "Mi sitio";
@@ -240,7 +257,7 @@ export async function createSite(
       await createSecret(ctx.user.id, { name: engine.secret.name, value: val });
     }
   }
-  await ensureBuilderAgent(ctx, engine.id);
+  await ensureBuilderAgent(ctx, engine.id, opts.model);
   // El regalo solo tiene sentido en el motor medido: BYOK no gasta tokens de la cuenta.
   if (engineIsMetered(engine)) await grantStarterTokensIfNeeded(ctx.user.id).catch(() => {});
   if (opts.kind === "static") {
