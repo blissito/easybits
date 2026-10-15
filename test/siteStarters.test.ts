@@ -19,3 +19,17 @@ describe("starters de /dash/sitios", async () => {
     });
   }
 });
+
+describe("vista previa en vivo", () => {
+  it("cada stack levanta su dev en el puerto de preview, idempotente y sin tocar /app", async () => {
+    const { previewInstallScript, PREVIEW_PORT, PREVIEW_UNIT } = await import("~/.server/starters");
+    const { SITE_STACKS } = await import("~/lib/siteStacks");
+    for (const s of SITE_STACKS) {
+      const cmd = previewInstallScript(s.id, "/app");
+      expect(cmd.startsWith(`test -f /etc/systemd/system/${PREVIEW_UNIT}.service && echo HAD ||`)).toBe(true);
+      expect(cmd).toContain(`PORT=${PREVIEW_PORT}`);
+      expect(cmd).toContain("__VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS=.easybits.cloud");
+      expect(cmd).not.toContain("/app/.easybits-preview");
+    }
+  });
+});

@@ -4,6 +4,7 @@
 // (SvelteKit 3 ya no lee svelte.config.js; TanStack Start sin Nitro no saca .output).
 import type { SiteStackId } from "~/lib/siteStacks";
 import { STARTER_FILES } from "./files";
+import { shQuote } from "~/.server/core/sandboxOperations";
 
 // Todos arrancan con el script start de su package.json y respetan PORT. Elysia va
 // en la plantilla `bun` (Bun nativo, sin npm ni node en la caja); el resto en `node`.
@@ -25,6 +26,80 @@ export function starterRunspec(stack: SiteStackId) {
 
 export function starterFiles(stack: SiteStackId) {
   return STARTER_FILES[stack];
+}
+
+// Vista previa = servidor de desarrollo de cada stack en su propio puerto, aparte del
+// de producción (3000, el que levanta «Publicar»). Cada archivo que escribe el agente
+// aparece en segundos, sin build ni restart_machine: antes la vista previa quedaba en
+// blanco hasta el build de fin de turno. Medido en node:24-slim con 900 MB/1 CPU: el
+// dev responde en 1–5 s tras instalar y un cambio se ve en ~1 s (Next llega a ~840 MB).
+export const PREVIEW_PORT = 5173;
+export const PREVIEW_UNIT = "easybits-preview";
+export const PREVIEW_SCRIPT = "/etc/easybits-preview.sh";
+export const PREVIEW_LOG_FILE = "/var/log/easybits-preview.log";
+// Marca de "dependencias instaladas" FUERA de /app: no viaja en releases ni en git, y
+// sobrevive al `npm ci` de «Publicar» (que borra node_modules con el dev corriendo).
+export const PREVIEW_DEPS_MARK = "/var/lib/easybits-preview.deps";
+
+const PREVIEW_COMMAND: Record<SiteStackId, string> = {
+  tanstack: "vite dev --port $PORT --host",
+  sveltekit: "vite dev --port $PORT --host",
+  "react-router": "react-router dev --port $PORT --host",
+  astro: "astro dev --port $PORT --host",
+  nuxt: "nuxt dev --port $PORT --host",
+  next: "next dev -p $PORT -H 0.0.0.0",
+  remix: "node --watch --import remix/node-tsx server.ts",
+  elysia: "bun --watch src/index.ts",
+};
+
+/**
+ * Comando de shell que instala y arranca la unit de la vista previa. La unit instala
+ * dependencias si faltan (recién sembrado el starter) y lee los secretos de la app
+ * si ya existen. Va con OOMScoreAdjust alto: si la caja se queda sin RAM con la app
+ * publicada corriendo al lado, muere primero el dev.
+ */
+export function previewInstallScript(stack: SiteStackId, appDir: string): string {
+  const bun = starterTemplate(stack) === "bun";
+  const install = bun ? "bun install" : "(npm ci || npm install)";
+  const script = [
+    "#!/bin/sh",
+    `cd ${appDir}`,
+    `[ -f ${PREVIEW_DEPS_MARK} ] || { ${install} && touch ${PREVIEW_DEPS_MARK}; }`,
+    `[ -f .easybits.env ] && { set -a; . ./.easybits.env; set +a; }`,
+    `exec ${PREVIEW_COMMAND[stack]}`,
+  ].join("\n");
+  const unit = [
+    "[Unit]",
+    "Description=EasyBits site preview (dev server)",
+    "After=network.target",
+    "StartLimitIntervalSec=0",
+    "",
+    "[Service]",
+    `WorkingDirectory=${appDir}`,
+    // Vite rechaza Hosts desconocidos: la vista previa llega como sb-<id>-5173.sandboxes.easybits.cloud.
+    `Environment=PORT=${PREVIEW_PORT} NODE_ENV=development NEXT_TELEMETRY_DISABLED=1 __VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS=.easybits.cloud PATH=${appDir}/node_modules/.bin:/root/.bun/bin:/usr/local/bin:/usr/bin:/bin`,
+    `ExecStart=/bin/sh ${PREVIEW_SCRIPT}`,
+    "Restart=always",
+    "RestartSec=3",
+    "MemoryMax=85%",
+    "OOMScoreAdjust=500",
+    "TimeoutStopSec=10",
+    `StandardOutput=append:${PREVIEW_LOG_FILE}`,
+    `StandardError=append:${PREVIEW_LOG_FILE}`,
+    "",
+    "[Install]",
+    "WantedBy=multi-user.target",
+    "",
+  ].join("\n");
+  // Idempotente: si la unit ya existe no se toca (se llama antes de cada turno).
+  return `test -f /etc/systemd/system/${PREVIEW_UNIT}.service && echo HAD || { ` + [
+    `printf '%s\\n' ${shQuote(script)} > ${PREVIEW_SCRIPT}`,
+    `printf '%s' ${shQuote(unit)} > /etc/systemd/system/${PREVIEW_UNIT}.service`,
+    "systemctl daemon-reload",
+    `systemctl enable ${PREVIEW_UNIT} >/dev/null 2>&1 || true`,
+    `systemctl restart ${PREVIEW_UNIT}`,
+    "echo OK",
+  ].join(" && ") + "; }";
 }
 
 const RULES: Record<SiteStackId, string[]> = {
@@ -91,6 +166,8 @@ export function starterPrompt(stack: SiteStackId): string[] {
       ? `Conserva el script del selector de EasyBits en ${PICKER_FILE[stack]}.`
       : `Estilos con Tailwind 4 (clases; ya configurado). Conserva el script del selector de EasyBits en ${PICKER_FILE[stack]}.`,
     `Cada sección/elemento de bloque lleva un atributo data-eb-id ÚNICO y estable (ej. data-eb-id="hero"); consérvalos al editar y cambia SOLO lo que se pide.`,
-    `Para que la vista previa refleje cambios: sandbox_exec("cd /app && ${stack === "elysia" ? "bun install && bun run build" : "npm install && npm run build"}") y luego restart_machine({ sandboxId }) (restart NO compila). Si el build falla, corrígelo antes de terminar el turno.`,
+    `La vista previa es un servidor de desarrollo con recarga en caliente (servicio ${PREVIEW_UNIT}, puerto ${PREVIEW_PORT}): cada archivo que guardas aparece solo. NO corras build ni restart_machine para verla, y no levantes otro servidor.`,
+    `Las dependencias se instalan solas al nacer la caja. Antes de leer node_modules o instalar paquetes espera a que acabe: sandbox_exec("timeout 300 sh -c 'until [ -f ${PREVIEW_DEPS_MARK} ]; do sleep 2; done'"). Para agregar un paquete: ${stack === "elysia" ? "bun add <paquete>" : "npm install <paquete>"} (el dev lo toma).`,
+    `Antes de terminar el turno revisa errores del dev: sandbox_exec("tail -40 ${PREVIEW_LOG_FILE}") y corrígelos. «Publicar» compila y levanta la versión de producción aparte.`,
   ];
 }

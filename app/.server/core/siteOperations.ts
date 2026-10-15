@@ -16,8 +16,8 @@ import { FLEET_ENGINES, DEFAULT_SITE_ENGINE, getEngine, engineCreatable, engineI
 import { createWebsite } from "./operations";
 import { buyMachine } from "./machineOperations";
 import { launchApp, setRunspec } from "./releaseOperations";
-import { exposeSandboxPort, getSandbox, listFiles, waitUntilRunning, writeFile } from "./sandboxOperations";
-import { starterFiles, starterPrompt, starterRunspec, starterTemplate } from "~/.server/starters";
+import { execCommand, exposeSandboxPort, getSandbox, listFiles, waitUntilRunning, writeFile } from "./sandboxOperations";
+import { PREVIEW_PORT, previewInstallScript, starterFiles, starterPrompt, starterRunspec, starterTemplate } from "~/.server/starters";
 import { isSiteStack, type SiteStackId } from "~/lib/siteStacks";
 import { pushSiteToGithub, siteRepo } from "./githubSiteOperations";
 import { markSelfPushed } from "./pushDeployOperations";
@@ -180,7 +180,7 @@ export async function getSite(ctx: AuthContext, id: string) {
   return { ...site, website, sandbox, url: publicUrl(site, website), previewUrl: previewUrl(site, website, sandbox) };
 }
 
-type Row = { kind: string; sandboxId: string | null };
+type Row = { kind: string; sandboxId: string | null; stack?: string | null };
 type Web = {
   slug: string;
   subdomainEnabled: boolean;
@@ -205,7 +205,8 @@ function publicUrl(site: Row, website: Web) {
 function previewUrl(site: Row, website: Web, sandbox: { runspec: unknown } | null) {
   if (site.kind === "static" && website) return `/s/${website.slug}/`;
   if (site.kind === "webapp" && site.sandboxId) {
-    const port = (sandbox?.runspec as { port?: number } | null)?.port ?? 3000;
+    // Con starter, el iframe ve el servidor dev (recarga en caliente); Node libre, la app.
+    const port = siteStack(site) ? PREVIEW_PORT : ((sandbox?.runspec as { port?: number } | null)?.port ?? 3000);
     return sandboxUrl(site.sandboxId, port);
   }
   return null;
@@ -309,6 +310,13 @@ async function prepareSiteMachine(ctx: AuthContext, sandboxId: string, stack: Si
       );
     }
     if (pkg) await writeFile(ctx, sandboxId, { path: `${appDir}/package.json`, content: pkg });
+  }
+  if (stack) {
+    // Vista previa en vivo (servidor dev). Si no queda, el turno sigue: el agente
+    // puede compilar y publicar igual; por eso no se lanza.
+    await exposeSandboxPort(ctx, sandboxId, PREVIEW_PORT).catch(() => {});
+    const r = await execCommand(ctx, sandboxId, { command: previewInstallScript(stack, appDir), timeoutSeconds: 30 }).catch((e) => ({ exitCode: -1, stderr: String(e) }));
+    if (r.exitCode !== 0) console.error("[sites] preview unit", sandboxId, r);
   }
 }
 

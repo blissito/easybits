@@ -41,6 +41,10 @@ export const loader = async ({ request, params }: Route.LoaderArgs) => {
   };
 };
 
+// Sondear la vista previa no cambia nada: sin esto cada sondeo recargaría el loader.
+export const shouldRevalidate = ({ formData, defaultShouldRevalidate }: { formData?: FormData; defaultShouldRevalidate: boolean }) =>
+  formData?.get("intent") === "preview-status" ? false : defaultShouldRevalidate;
+
 export const action = async ({ request, params }: Route.ActionArgs) => {
   const user = await getUserOrRedirect(request);
   const ctx = { user, scopes: ["READ", "WRITE", "DELETE"] } as AuthContext;
@@ -55,6 +59,14 @@ export const action = async ({ request, params }: Route.ActionArgs) => {
       case "delete":
         await deleteSite(ctx, params.id!);
         return data({ deleted: true });
+      case "preview-status": {
+        // El servidor dev tarda lo que la instalación (20–80 s). Se pregunta desde aquí
+        // porque el navegador no puede leer el status de otro origen.
+        const site = await getSite(ctx, params.id!);
+        if (!site.previewUrl?.startsWith("https://")) return data({ ready: false });
+        const res = await fetch(site.previewUrl, { signal: AbortSignal.timeout(5000), redirect: "manual" }).catch(() => null);
+        return data({ ready: !!res && res.status < 400 });
+      }
       default:
         return data({ error: "intent desconocido" }, { status: 400 });
     }
@@ -245,8 +257,28 @@ export default function SiteEditor() {
   // Web app recién creada: mientras corre su PRIMER turno nada escucha todavía en el
   // puerto y el host contesta su error en JSON. No se monta el iframe hasta que el
   // turno termine (al terminar sube previewKey y carga la app ya arrancada).
-  const firstBuild =
-    site.kind === "webapp" && busy && !turnDone && msgs.filter((m) => m.role === "user").length <= 1;
+  // Con starter la vista previa es el servidor dev: se muestra en cuanto responde (no
+  // al terminar el turno) y de ahí en adelante cada cambio aparece solo.
+  const live = site.kind === "webapp" && !!site.sandboxId && !!site.stack;
+  const status = useFetcher<{ ready: boolean }>();
+  const [previewReady, setPreviewReady] = useState(false);
+  useEffect(() => {
+    if (!live || previewReady) return;
+    const poll = () => status.submit({ intent: "preview-status" }, { method: "post" });
+    poll();
+    const t = setInterval(poll, 3000);
+    return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [live, previewReady]);
+  useEffect(() => {
+    if (status.data?.ready && !previewReady) {
+      setPreviewReady(true);
+      setPreviewKey((k) => k + 1);
+    }
+  }, [status.data, previewReady]);
+  const firstBuild = live
+    ? !previewReady
+    : site.kind === "webapp" && busy && !turnDone && msgs.filter((m) => m.role === "user").length <= 1;
   const launch = fetcher.data && "launch" in fetcher.data ? fetcher.data.launch : null;
   const actionError = fetcher.data && "error" in fetcher.data ? fetcher.data.error : null;
 
@@ -382,8 +414,12 @@ export default function SiteEditor() {
         ) : firstBuild ? (
           <div className="flex-1 flex flex-col items-center justify-center gap-2 text-center px-6 pb-12 md:pb-0">
             <span className="h-8 w-8 rounded-full border-4 border-gray-200 border-t-black animate-spin" />
-            <p className="font-bold">Construyendo tu app…</p>
-            <p className="text-sm text-gray-500 max-w-sm">La vista previa aparece cuando el agente termine de escribir el código y arranque el servidor.</p>
+            <p className="font-bold">{live ? "Preparando la vista previa…" : "Construyendo tu app…"}</p>
+            <p className="text-sm text-gray-500 max-w-sm">
+              {live
+                ? "Se están instalando las dependencias. En cuanto arranque verás cada cambio del agente al momento."
+                : "La vista previa aparece cuando el agente termine de escribir el código y arranque el servidor."}
+            </p>
           </div>
         ) : previewUrl ? (
           <iframe key={previewKey} ref={iframeRef} src={previewUrl} title="Vista previa" className="flex-1 w-full bg-white pb-12 md:pb-0" />
