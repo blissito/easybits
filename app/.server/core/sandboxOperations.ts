@@ -1203,6 +1203,10 @@ export async function createSandboxRaw(
     // destroy) still works; callers lock the box via persistSandbox AFTER
     // billing is attached. See createPermanent.
     protected?: boolean;
+    // Nacer de una plantilla derivada por (key, hash); el host la busca del owner y,
+    // si la key es `pub:…`, de la plataforma.
+    templateKey?: string;
+    templateHash?: string;
   }
 ): Promise<SandboxRecord> {
   const rec = await callHost<SandboxRecord>(
@@ -1210,6 +1214,7 @@ export async function createSandboxRaw(
     "/v1/sandbox",
     {
       template: params.template,
+      ...(params.templateKey ? { templateKey: params.templateKey, templateHash: params.templateHash } : {}),
       name: params.name,
       metadata: params.metadata,
       persistent: true,

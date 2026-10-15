@@ -464,6 +464,7 @@ export async function buyMachine(
     env?: Record<string, string>;
     successUrl?: string;
     cancelUrl?: string;
+    derived?: { templateKey: string; templateHash: string };
   }
 ): Promise<
   | { machine: PermanentSandbox; checkoutUrl?: undefined }
@@ -496,6 +497,9 @@ export async function createPermanent(
     // inject it + start the runtime (provisionRuntime) — so a permanent Sandbox
     // hosts a configured agent WITHOUT the deprecated db.agent flow.
     env?: Record<string, string>;
+    // Nacer de una plantilla derivada (p. ej. el starter de un stack con dependencias
+    // instaladas). Es optimización: si el host no la tiene, la caja nace normal.
+    derived?: { templateKey: string; templateHash: string };
   }
 ): Promise<PermanentSandbox> {
   requireScope(ctx, "WRITE");
@@ -512,7 +516,8 @@ export async function createPermanent(
   const res = resourcesFor(tier, diskAddonsGB);
   let sandbox: SandboxRecord;
   try {
-    sandbox = await createSandboxRaw(ctx, {
+    const raw = {
+
       template,
       name: params.name,
       metadata: { eb_persistent: "1", eb_tier: tier.key, eb_cpu_mode: mode, ...(sleep ? { eb_sleep: "1" } : {}) },
@@ -520,7 +525,17 @@ export async function createPermanent(
       memoryMb: res.memoryMb,
       diskMb: res.diskMb,
       cpuMode: mode,
-    });
+    };
+    sandbox = params.derived
+      ? await createSandboxRaw(ctx, { ...raw, ...params.derived }).catch((e) => {
+          // Derivado ausente (404), viejo tras un rebake (409) o de otro base (400): nace normal.
+          if (/Derived|template no coincide/i.test(e instanceof Error ? e.message : String(e))) {
+            console.warn("[machines] derivado no disponible, caja normal:", params.derived, e instanceof Error ? e.message : e);
+            return createSandboxRaw(ctx, raw);
+          }
+          throw e;
+        })
+      : await createSandboxRaw(ctx, raw);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     // Host admission control rejected a reserved box (no reserved-vCPU capacity

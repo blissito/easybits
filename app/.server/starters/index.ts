@@ -5,6 +5,7 @@
 import type { SiteStackId } from "~/lib/siteStacks";
 import { STARTER_FILES } from "./files";
 import { shQuote } from "~/.server/core/sandboxOperations";
+import { createHash } from "node:crypto";
 
 // Todos arrancan con el script start de su package.json y respetan PORT. Elysia va
 // en la plantilla `bun` (Bun nativo, sin npm ni node en la caja); el resto en `node`.
@@ -26,6 +27,28 @@ export function starterRunspec(stack: SiteStackId) {
 
 export function starterFiles(stack: SiteStackId) {
   return STARTER_FILES[stack];
+}
+
+// Snapshot de plataforma por stack: una caja con el starter ya instalado en el ROOTFS
+// (`/opt/eb-starter/<stack>`, porque `/app` es un volumen que nace vacío en cada hijo),
+// capturada como derivado público `pub:site-starter:<stack>`. La máquina del sitio nace de
+// él y `prepareSiteMachine` copia la carpeta a /app (0.8 s medido para 388 MB de Next) en
+// vez de sembrar archivo por archivo e instalar (15–30 s). Lo hornea
+// `scripts/bake-site-starters.mts`; si no existe para este hash, la caja nace normal.
+export const STARTER_DIR = "/opt/eb-starter";
+
+export function starterInstallCommand(stack: SiteStackId): string {
+  return starterTemplate(stack) === "bun" ? "bun install" : "npm install --no-audit --no-fund";
+}
+
+/** Clave del derivado público del stack. El hash cambia con el starter o la instalación. */
+export function starterSnapshot(stack: SiteStackId): { templateKey: string; templateHash: string } {
+  const files = Object.entries(starterFiles(stack)).sort(([a], [b]) => a.localeCompare(b));
+  const templateHash = createHash("sha256")
+    .update(JSON.stringify({ files, install: starterInstallCommand(stack), dir: STARTER_DIR, v: 1 }))
+    .digest("hex")
+    .slice(0, 32);
+  return { templateKey: `pub:site-starter:${stack}`, templateHash };
 }
 
 // Vista previa = servidor de desarrollo de cada stack en su propio puerto, aparte del

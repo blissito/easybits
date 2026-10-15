@@ -17,7 +17,7 @@ import { createWebsite } from "./operations";
 import { buyMachine, releasePermanent } from "./machineOperations";
 import { launchApp, setRunspec } from "./releaseOperations";
 import { execCommand, exposeSandboxPort, getSandbox, listFiles, waitUntilRunning, writeFile } from "./sandboxOperations";
-import { PREVIEW_PORT, previewInstallScript, starterFiles, starterPrompt, starterRunspec, starterTemplate } from "~/.server/starters";
+import { PREVIEW_DEPS_MARK, PREVIEW_PORT, STARTER_DIR, previewInstallScript, starterFiles, starterPrompt, starterRunspec, starterSnapshot, starterTemplate } from "~/.server/starters";
 import { isSiteStack, type SiteStackId } from "~/lib/siteStacks";
 import { pushSiteToGithub, siteRepo } from "./githubSiteOperations";
 import { markSelfPushed } from "./pushDeployOperations";
@@ -320,7 +320,15 @@ export async function createSite(
     return { site };
   }
   // Por default duerme sin visitas: el caso típico es una landing con backend y poco tráfico.
-  const bought = await buyMachine(ctx, { tier: opts.tier ?? "micro", template: opts.stack ? starterTemplate(opts.stack) : "node", name, sleep: opts.sleep ?? true });
+  // Con stack nace del snapshot de plataforma (starter con dependencias ya instaladas).
+  // Sin plan la caja nace después, en el webhook del checkout: ahí va por la ruta lenta.
+  const bought = await buyMachine(ctx, {
+    tier: opts.tier ?? "micro",
+    template: opts.stack ? starterTemplate(opts.stack) : "node",
+    name,
+    sleep: opts.sleep ?? true,
+    ...(opts.stack ? { derived: starterSnapshot(opts.stack) } : {}),
+  });
   const sandboxId = "machine" in bought && bought.machine ? bought.machine.sandboxId : null;
   const site = await db.site.create({
     data: { ownerId: ctx.user.id, kind: "webapp", name, sandboxId, engine: engine.id, stack: opts.stack ?? null },
@@ -365,7 +373,18 @@ async function prepareSiteMachine(ctx: AuthContext, sandboxId: string, stack: Si
     // La vista previa es la URL pública de la caja y `restart_machine` no expone nada.
     await exposeSandboxPort(ctx, sandboxId, saved?.port ?? runspec.port).catch(() => {});
   }
+  // Nacida del snapshot de plataforma: el starter con node_modules ya está en el rootfs;
+  // se copia a /app en <1 s y se marca instalado (la unit de preview no reinstala).
+  let seeded = false;
   if (stack && !have.has("package.json")) {
+    const src = `${STARTER_DIR}/${stack}`;
+    const r = await execCommand(ctx, sandboxId, {
+      command: `[ -d ${src}/node_modules ] && mkdir -p ${appDir} && cp -a ${src}/. ${appDir}/ && mkdir -p $(dirname ${PREVIEW_DEPS_MARK}) && touch ${PREVIEW_DEPS_MARK}`,
+      timeoutSeconds: 60,
+    }).catch(() => null);
+    seeded = r?.exitCode === 0;
+  }
+  if (stack && !seeded && !have.has("package.json")) {
     // En tandas de 8: un starter trae ~30 archivos (en serie eran segundos de espera).
     // package.json va AL FINAL: es la marca de "sembrado", así una siembra a medias
     // se repite completa en vez de quedar dada por buena.
