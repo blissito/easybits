@@ -433,7 +433,12 @@ export async function deleteSite(ctx: AuthContext, siteId: string, opts: { relea
 
 /** Contexto por turno: qué sitio es y cómo tocarlo. Se appendea (capa 3), no pisa. */
 export function siteTurnPrompt(site: Awaited<ReturnType<typeof getSite>>, selection?: { id: string; tag: string } | null) {
-  const lines = [`SITIO ACTUAL: "${site.name}" (${site.kind}).`];
+  const lines = [
+    `SITIO ACTUAL: "${site.name}" (${site.kind}).`,
+    // El usuario sólo ve el chat y la vista previa: sin esto un motor (Gemini) encadenaba
+    // 28 tools sin una palabra y la vista previa no cambiaba hasta el final (14-oct).
+    `El usuario te ve trabajar en vivo: antes de cada grupo de acciones escríbele UNA línea corta de lo que vas a hacer ("Armo el hero con la animación…"). Y que la vista previa cambie pronto: primero deja la página principal mostrando un esqueleto de lo que pidió, luego llena el detalle.`,
+  ];
   if (site.kind === "static" && site.website) {
     lines.push(
       `Es un sitio ESTÁTICO: websiteId="${site.website.id}", slug="${site.website.slug}".`,
