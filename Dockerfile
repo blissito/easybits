@@ -31,6 +31,20 @@ RUN curl -fsSL --retry 3 --retry-delay 2 -o /tmp/mupdf.tgz \
     && rm -rf /tmp/mupdf* \
     && mutool -v
 
+# Dependencias de producción, en una etapa que NO ve el código: su capa sólo cambia
+# cuando cambian package-lock.json, patches/ o el schema de Prisma. Antes node_modules
+# salía del builder (después de `COPY . .`), así que cada push generaba una capa nueva
+# de ~540 MB que se subía a GHCR, la caja la volvía a bajar (~36 s) y se re-copiaba
+# (~21 s) aunque ninguna dependencia hubiera cambiado. Mismos pasos que el builder
+# (npm ci con su postinstall de patch-package → prisma generate → prune).
+FROM node:20-slim AS prod-deps
+WORKDIR /app
+COPY package.json package-lock.json .npmrc ./
+COPY patches ./patches
+RUN npm ci
+COPY prisma ./prisma
+RUN npx prisma generate && npm prune --omit=dev
+
 # Build stage
 FROM node:20-slim AS builder
 WORKDIR /app
@@ -59,9 +73,6 @@ ENV NODE_OPTIONS="--max-old-space-size=4096"
 # CACHEBUST invalidates this layer → warm incremental builds (faster than cold).
 RUN --mount=type=cache,target=/app/node_modules/.vite npm run build
 
-# 4. Prune dev dependencies
-RUN npm prune --omit=dev
-
 # Production stage
 FROM node:20-slim AS runner
 WORKDIR /app
@@ -83,8 +94,9 @@ ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
 COPY --from=typst-dl /typst /usr/local/bin/typst
 COPY --from=mutool /usr/local/bin/mutool /usr/local/bin/mutool
 
+# node_modules ANTES que el build: así su capa se reutiliza entre deploys (ver prod-deps).
+COPY --from=prod-deps /app/node_modules ./node_modules
 COPY --from=builder /app/build ./build
-COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package.json ./package.json
 COPY --from=builder /app/server.mjs ./server.mjs
 COPY --from=builder /app/app/content ./app/content
