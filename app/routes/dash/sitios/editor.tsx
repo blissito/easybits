@@ -321,7 +321,7 @@ export default function SiteEditor() {
           onFile={attachFile}
           busy={busy}
           canSend={!!input.trim() || !!attached}
-          placeholder={attached ? "¿Qué hago con esta imagen?" : selection ? "¿Qué cambio en ese elemento?" : "Escribe un cambio… (arrastra un mockup)"}
+          placeholder={attached ? "¿Qué hago con esta imagen?" : selection ? "¿Qué cambio en ese elemento?" : "Escribe un cambio…"}
         />
       </aside>
 

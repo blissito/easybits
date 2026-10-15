@@ -1,9 +1,10 @@
-import { useEffect, useRef } from "react";
+import TextareaAutosize from "react-textarea-autosize";
 import { LuArrowUp, LuImagePlus, LuLoaderCircle } from "react-icons/lu";
 
 /**
  * Caja de chat estándar (estilo ChatGPT/Claude): un solo contenedor con el textarea que
- * crece hasta 6 renglones, adjuntar a la izquierda y enviar redondo a la derecha.
+ * crece hasta 6 renglones (react-textarea-autosize, el de la comunidad: mide de verdad,
+ * también el placeholder, y encoge al borrar), adjuntar a la izquierda y enviar redondo a la derecha.
  * Enter envía, Shift+Enter hace salto de línea (respeta IME). Soltar o pegar una imagen
  * la adjunta (lo maneja quien la usa con `onFile`).
  */
@@ -26,16 +27,6 @@ export function ChatComposer({
   placeholder: string;
   accept?: string;
 }) {
-  const ref = useRef<HTMLTextAreaElement>(null);
-
-  // Autoalto: se mide desde cero en cada cambio para que también encoja al borrar.
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    el.style.height = "auto";
-    el.style.height = `${Math.min(el.scrollHeight, 6 * 22 + 20)}px`;
-  }, [value]);
-
   const submit = () => {
     if (!busy && canSend) onSend();
   };
@@ -72,9 +63,9 @@ export function ChatComposer({
             />
           </label>
         )}
-        <textarea
-          ref={ref}
-          rows={1}
+        <TextareaAutosize
+          minRows={1}
+          maxRows={6}
           value={value}
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={(e) => {
@@ -84,7 +75,7 @@ export function ChatComposer({
             }
           }}
           placeholder={placeholder}
-          className="flex-1 min-w-0 resize-none bg-transparent px-1 py-1.5 text-sm leading-[22px] placeholder:text-gray-400 focus:outline-none"
+          className="flex-1 min-w-0 resize-none bg-transparent border-0 shadow-none px-1 py-1.5 text-sm leading-[22px] placeholder:text-gray-400 focus:outline-none focus:ring-0 focus:border-0"
         />
         <button
           type="submit"
@@ -95,7 +86,7 @@ export function ChatComposer({
           {busy ? <LuLoaderCircle className="w-4 h-4 animate-spin" /> : <LuArrowUp className="w-4 h-4" />}
         </button>
       </div>
-      <p className="hidden md:block mt-1 px-1 text-[10px] text-gray-400">Enter envía · Shift+Enter salto de línea</p>
+      <p className="hidden md:block mt-1 px-1 text-[10px] text-gray-400">Enter envía · Shift+Enter salto de línea · arrastra o pega un mockup</p>
     </form>
   );
 }
