@@ -91,11 +91,11 @@ export async function ensureBuilderAgent(ctx: AuthContext, engineId: string = DE
     // Modelo elegido a mano al crear: manda sobre lo que tenga el builder, y se recicla la caja
     // para que el siguiente turno ya corra con él (el env va horneado al crear la caja).
     if (picked && engine.modelEnv) {
-      const persona = (existing.persona as { env?: Record<string, string> } | null) ?? {};
+      const persona = (existing.persona as { env?: Record<string, string>; siteModelPicked?: boolean } | null) ?? {};
       if (persona.env?.[engine.modelEnv] !== picked) {
         await db.fleetAgent.update({
           where: { id: existing.id },
-          data: { persona: { ...persona, env: { ...(persona.env ?? {}), [engine.modelEnv]: picked } } },
+          data: { persona: { ...persona, siteModelPicked: true, env: { ...(persona.env ?? {}), [engine.modelEnv]: picked } } },
         });
         await recycleFleetAgentBoxes({ id: existing.id, ownerId: ctx.user.id }).catch(() => {});
       }
@@ -105,9 +105,10 @@ export async function ensureBuilderAgent(ctx: AuthContext, engineId: string = DE
     // se refresca solo al despertar la caja (spawnEnvHash), sin reciclarla. Uno que el dueño
     // cambió a mano a otro modelo se respeta.
     if (engine.modelEnv && siteModel) {
-      const persona = (existing.persona as { env?: Record<string, string> } | null) ?? {};
+      const persona = (existing.persona as { env?: Record<string, string>; siteModelPicked?: boolean } | null) ?? {};
       const cur = persona.env?.[engine.modelEnv];
-      if (cur !== siteModel && (!cur || cur === engine.defaultModel)) {
+      // Uno que el dueño eligió (al crear un sitio) nunca se sube solo.
+      if (!persona.siteModelPicked && cur !== siteModel && (!cur || cur === engine.defaultModel)) {
         await db.fleetAgent.update({
           where: { id: existing.id },
           data: { persona: { ...persona, env: { ...(persona.env ?? {}), [engine.modelEnv]: siteModel } } },
@@ -117,7 +118,7 @@ export async function ensureBuilderAgent(ctx: AuthContext, engineId: string = DE
     // Builder easybits nacido antes del motor medido (claude-worker): se migra en sitio
     // y se recicla su caja (el env es spawn-baked; la VM viva seguiría con el motor viejo).
     if (engine.id === DEFAULT_SITE_ENGINE && existing.workerTemplate !== BUILDER_TEMPLATE) {
-      const persona = (existing.persona as { env?: Record<string, string> } | null) ?? {};
+      const persona = (existing.persona as { env?: Record<string, string>; siteModelPicked?: boolean } | null) ?? {};
       await db.fleetAgent.update({
         where: { id: existing.id },
         data: {
@@ -146,6 +147,10 @@ export async function ensureBuilderAgent(ctx: AuthContext, engineId: string = DE
     oauthSecretName: engine.secret?.kind === "oauth" ? engine.secret.name : undefined,
     idleSuspendMin: 2,
   });
+  if (picked) {
+    const row = await db.fleetAgent.findUnique({ where: { id: created.id }, select: { persona: true } });
+    await db.fleetAgent.update({ where: { id: created.id }, data: { persona: { ...((row?.persona as object | null) ?? {}), siteModelPicked: true } } });
+  }
   return { id: created.id, token: created.token };
 }
 
