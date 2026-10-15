@@ -861,6 +861,12 @@ The sites of the site builder (/dash/sitios), as the dashboard shows them: stati
 Returns: \`{ items: Site[], nextCursor, hasMore, total }\` — each \`{ id, name, kind: "static" | "webapp", engine, stack, url, websiteId, sandboxId, createdAt }\`. A static site's files live in its website (\`websiteId\`); a web app's code lives in its machine (\`sandboxId\`).
 SDK: \`eb.listSites()\` · MCP: \`list_sites\` · CLI: \`easybits sites ls\`
 
+### Site theme
+\`GET /sites/:id/theme\` · \`POST /sites/:id/theme\` \`{ themeId }\` | \`{ colors }\`
+Change a site-builder site's colors without a model turn (same as the «Tema» button). Sites use color tokens (\`primary\`, \`primary-light\`, \`primary-dark\`, \`secondary\`, \`accent\`, \`surface\`, \`surface-alt\`, \`surface-deep\`, \`on-surface\`, \`on-surface-muted\`, \`on-surface-deep\`, \`on-primary\`, \`on-secondary\`, \`on-accent\`) as Tailwind classes; the theme file inside the site is the source of truth (web app: \`eb-theme.css\`, hot-reloads in the preview; static: the \`eb-theme\` block of \`index.html\`). \`themeId\` is a palette (\`minimal\`, \`calido\`, \`oceano\`, \`noche\`, \`dracula\`, \`nord\`, \`tokyo-night\`, \`github-light\`…); \`colors\` must carry every token as \`#rrggbb\`.
+Returns: GET \`{ supported, colors }\` · POST \`{ colors }\`. \`409 no_tokens\` = the site predates themes (literal colors): ask the builder to adapt it first. Remix and Elysia web apps don't support themes yet.
+SDK: \`eb.getSiteTheme(id)\` · \`eb.setSiteTheme(id, { themeId })\` · MCP: \`site_set_theme\`
+
 ### List websites
 \`GET /websites\`
 Returns: \`{ items: Website[] }\`

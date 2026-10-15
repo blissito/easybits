@@ -6,6 +6,7 @@ import { ChatComposer } from "~/components/sitios/ChatComposer";
 import { DeleteSiteArt, GithubRepoArt } from "~/components/sitios/DialogArt";
 import { Modal } from "~/components/common/Modal";
 import { BrutalButton } from "~/components/common/BrutalButton";
+import { ThemePicker } from "~/components/sitios/ThemePicker";
 import { LuArrowDown, LuCheck, LuMousePointerClick, LuTrash2 } from "react-icons/lu";
 import { partirNarracion } from "~/lib/narracion";
 import { getUserOrRedirect } from "~/.server/getters";
@@ -191,6 +192,9 @@ export default function SiteEditor() {
     if (!on) setSelection(null);
     iframeRef.current?.contentWindow?.postMessage({ type: "eb-pointing", on }, "*");
   };
+  // Sitio anterior a los temas: un turno del agente lo pasa a tokens (el botón «Tema» lo ofrece).
+  const ADAPT_PROMPT =
+    "Adapta el sitio a temas: crea el archivo/bloque de tema con los tokens indicados en tus instrucciones (si es web app, que el CSS principal lo importe) y reemplaza TODOS los colores literales (clases de color de Tailwind, hex, rgb) por las clases de los tokens que más se parezcan. No cambies textos ni estructura.";
   const clearSelection = () => {
     setSelection(null);
     iframeRef.current?.contentWindow?.postMessage({ type: "eb-deselect" }, "*");
@@ -572,6 +576,12 @@ export default function SiteEditor() {
             </>
           )}
           {site.kind === "static" && <Link to="/dash/developer/domains" className="text-gray-500 hover:text-black">Dominio propio</Link>}
+          <ThemePicker
+            siteId={site.id}
+            disabled={busy}
+            onPreview={(colors) => iframeRef.current?.contentWindow?.postMessage({ type: "eb-theme", colors }, "*")}
+            onAdapt={() => void send(ADAPT_PROMPT)}
+          />
           <button
             type="button"
             onClick={togglePointing}

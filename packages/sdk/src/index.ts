@@ -1410,6 +1410,16 @@ export class EasybitsClient {
     return this.request("/sites");
   }
 
+  /** Tema actual del sitio: `supported:false` si el sitio es anterior a los temas. */
+  async getSiteTheme(siteId: string): Promise<{ supported: boolean; colors: Record<string, string> | null }> {
+    return this.request(`/sites/${siteId}/theme`);
+  }
+
+  /** Cambia el tema sin turno del modelo: una paleta (`themeId`) o todos los tokens (`colors`, #rrggbb). */
+  async setSiteTheme(siteId: string, theme: { themeId: string } | { colors: Record<string, string> }): Promise<{ colors: Record<string, string> }> {
+    return this.request(`/sites/${siteId}/theme`, { method: "POST", body: JSON.stringify(theme) });
+  }
+
   // ── Websites ────────────────────────────────────────────────
 
   async listWebsites(): Promise<{ items: Website[] }> {

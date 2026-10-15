@@ -13,11 +13,12 @@ import { createFleetAgent, recycleFleetAgentBoxes } from "./fleetAgentOperations
 import { checkLLMTokenLimit, recargarLLMTokens } from "~/.server/llmTokenLimit";
 import { createSecret, listSecrets } from "./secretOperations";
 import { FLEET_ENGINES, DEFAULT_SITE_ENGINE, getEngine, engineCreatable, engineIsMetered, type FleetEngine } from "~/lib/fleetEngines";
-import { createWebsite } from "./operations";
+import { createWebsite, deployWebsiteFile } from "./operations";
 import { buyMachine, releasePermanent } from "./machineOperations";
 import { launchApp, setRunspec } from "./releaseOperations";
-import { execCommand, exposeSandboxPort, getSandbox, listFiles, waitUntilRunning, writeFile } from "./sandboxOperations";
-import { PREVIEW_DEPS_MARK, PREVIEW_PORT, STARTER_DIR, previewInstallScript, starterFiles, starterPrompt, starterRunspec, starterSnapshot, starterTemplate } from "~/.server/starters";
+import { execCommand, exposeSandboxPort, getSandbox, listFiles, readFile, waitUntilRunning, writeFile } from "./sandboxOperations";
+import { DEFAULT_SITE_THEME, SITE_THEMES, parseThemeColors, replaceStaticTheme, themeBlockStatic, themeCssTw4, validThemeColors, type ThemeColors } from "~/lib/siteTheme";
+import { PREVIEW_DEPS_MARK, PREVIEW_PORT, STARTER_DIR, previewInstallScript, starterFiles, starterPrompt, starterRunspec, stackThemeFiles, themeRule, starterSnapshot, starterTemplate } from "~/.server/starters";
 import { isSiteStack, type SiteStackId } from "~/lib/siteStacks";
 import { pushSiteToGithub, siteRepo } from "./githubSiteOperations";
 import { markSelfPushed } from "./pushDeployOperations";
@@ -478,6 +479,67 @@ export async function deleteSite(ctx: AuthContext, siteId: string, opts: { relea
   await db.site.update({ where: { id: siteId }, data: { deletedAt: new Date() } });
 }
 
+// ─── Tema (botón «Tema»): el archivo de tema DENTRO del sitio es la fuente de verdad ─────────
+
+const noTokens = () =>
+  new Response(
+    JSON.stringify({ error: "no_tokens", message: "Este sitio se hizo antes de los temas: sus colores no usan tokens. Pídele al agente «Adaptar a temas»." }),
+    { status: 409, headers: { "Content-Type": "application/json" } }
+  );
+
+/** Dónde vive el tema del sitio y cómo leerlo/escribirlo. null = el sitio no usa tokens. */
+async function themeSource(ctx: AuthContext, site: Awaited<ReturnType<typeof getSite>>) {
+  if (site.kind === "static" && site.website) {
+    const website = await db.website.findUnique({ where: { id: site.website.id }, select: { id: true, prefix: true } });
+    const file = website
+      ? await db.file.findFirst({ where: { ownerId: ctx.user.id, name: `${website.prefix}index.html`, status: { not: "DELETED" } }, select: { url: true } })
+      : null;
+    const html = file?.url ? await fetch(file.url).then((r) => (r.ok ? r.text() : null)).catch(() => null) : null;
+    if (!html || !replaceStaticTheme(html, DEFAULT_SITE_THEME.colors)) return null;
+    return {
+      colors: parseThemeColors(html),
+      write: (colors: ThemeColors) =>
+        deployWebsiteFile(ctx, { websiteId: website!.id, fileName: "index.html", contentType: "text/html", content: replaceStaticTheme(html, colors)! }),
+    };
+  }
+  const stack = site.kind === "webapp" && site.sandboxId ? siteStack(site) : null;
+  const files = stack ? stackThemeFiles(stack) : null;
+  if (!files) return null;
+  const sandboxId = site.sandboxId!;
+  // Sólo si el CSS principal importa el archivo: si no, escribirlo no cambiaría nada.
+  const [main, theme] = await Promise.all([
+    readFile(ctx, sandboxId, { path: `/app/${files.main}` }).catch(() => null),
+    readFile(ctx, sandboxId, { path: `/app/${files.theme}` }).catch(() => null),
+  ]);
+  if (!main?.content.includes(files.importLine) || !theme) return null;
+  return {
+    colors: parseThemeColors(theme.content),
+    write: (colors: ThemeColors) => writeFile(ctx, sandboxId, { path: `/app/${files.theme}`, content: themeCssTw4(colors) }),
+  };
+}
+
+/** Colores actuales del sitio, o `supported:false` si se hizo antes de los temas. */
+export async function getSiteTheme(ctx: AuthContext, siteId: string): Promise<{ supported: boolean; colors: ThemeColors | null }> {
+  const src = await themeSource(ctx, await getSite(ctx, siteId));
+  return { supported: !!src, colors: src?.colors ?? null };
+}
+
+/** Cambia el tema sin modelo: una paleta (`themeId`) o colores completos (`colors`). */
+export async function setSiteTheme(ctx: AuthContext, siteId: string, input: { themeId?: string; colors?: unknown }): Promise<{ colors: ThemeColors }> {
+  requireScope(ctx, "WRITE");
+  const colors = input.themeId ? SITE_THEMES.find((t) => t.id === input.themeId)?.colors ?? null : validThemeColors(input.colors);
+  if (!colors) {
+    throw new Response(JSON.stringify({ error: "invalid_theme", message: "Tema inválido: manda themeId de la lista o todos los colores en #rrggbb." }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+  const src = await themeSource(ctx, await getSite(ctx, siteId));
+  if (!src) throw noTokens();
+  await src.write(colors);
+  return { colors };
+}
+
 /** Contexto por turno: qué sitio es y cómo tocarlo. Se appendea (capa 3), no pisa. */
 export function siteTurnPrompt(site: Awaited<ReturnType<typeof getSite>>, selection?: { id: string; tag: string } | null) {
   const lines = [
@@ -491,7 +553,11 @@ export function siteTurnPrompt(site: Awaited<ReturnType<typeof getSite>>, select
       `Es un sitio ESTÁTICO: websiteId="${site.website.id}", slug="${site.website.slug}".`,
       `Escribe/actualiza el HTML con deploy_website_file({ websiteId, fileName: "index.html", contentType: "text/html", content }). Assets extra (css/js/img) con el mismo tool y su fileName. Para leer lo que ya hay: list_website_files + get_file.`,
       `Reglas del HTML: documento completo con <script src="https://cdn.tailwindcss.com"></script>, responsive, y CADA sección/elemento de bloque (header, section, article, footer, nav, form, cada card) lleva un atributo data-eb-id ÚNICO y estable (ej. data-eb-id="hero", "precios-card-2"). Conserva los data-eb-id existentes al editar; cambia SOLO lo que se pide.`,
-      `No crees otro website: usa SIEMPRE ese websiteId.`
+      `No crees otro website: usa SIEMPRE ese websiteId.`,
+      // Tema: el bloque va tal cual justo después del script de Tailwind; el botón «Tema» lo
+      // reescribe sin modelo (replaceStaticTheme lo busca por sus ids).
+      `Justo después del script de Tailwind, el <head> lleva ESTE bloque de tema tal cual (si ya existe, consérvalo idéntico):\n${themeBlockStatic(DEFAULT_SITE_THEME.colors)}`,
+      themeRule("el bloque eb-theme del <head>")
     );
   } else if (site.kind === "webapp" && site.sandboxId) {
     const stack = siteStack(site);

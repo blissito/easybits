@@ -51,7 +51,7 @@ const PREFIX_GROUPS: Array<[RegExp, string]> = [
   [/^(image|edit_image|create_or_edit_image|transform_image|optimize_image|describe_image|search_icon|search_stock)/, "design"],
   [/^(brand|template|theme)/, "brand"],
   [/^(website|deploy_website|upload_website|inject_html)/, "sites"],
-  [/^list_sites$/, "sites"],
+  [/^(list_sites|site_set_theme)$/, "sites"],
   [/_domain$|_domain_dns$|^list_domains$/, "sites"],
   [/^(payment|checkout)/, "payments"],
   [/^(email|contact|broadcast|newsletter)/, "email"],

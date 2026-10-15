@@ -4,6 +4,7 @@
 // postMessage {type:"eb-selected", id, tag}. Un solo seleccionado; Escape lo quita.
 // El padre lo apaga/enciende con {type:"eb-pointing", on}; al cargar avisa "eb-picker-ready"
 // para que el padre le mande el estado actual (el script llega después del iframe).
+// {type:"eb-theme", colors} pinta los tokens --color-* del tema en vivo.
 // Port mínimo de dyad/worker/dyad-component-selector-client.js (Apache-2).
 (function () {
   if (window.top === window) return; // solo dentro del iframe del editor
@@ -62,6 +63,12 @@
     if (e.data && e.data.type === "eb-pointing") {
       on = !!e.data.on;
       if (!on) { selected = null; sel.style.display = "none"; hover.style.display = "none"; }
+    }
+    // Botón «Tema»: aplica los tokens en vivo (el servidor reescribe el archivo de tema aparte).
+    if (e.data && e.data.type === "eb-theme" && e.data.colors) {
+      for (var k in e.data.colors) {
+        if (/^[a-z][a-z0-9-]*$/.test(k)) document.documentElement.style.setProperty("--color-" + k, String(e.data.colors[k]));
+      }
     }
   });
   window.parent.postMessage({ type: "eb-picker-ready" }, "*");

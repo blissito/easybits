@@ -15,7 +15,7 @@
 //    (2) que esté en el toolGroup correcto en toolGroups.ts, (3) que el
 //    cliente tenga el conector configurado.
 // ─────────────────────────────────────────────────────────────────────────────
-import { listSiteSummaries } from "~/.server/core/siteOperations";
+import { getSiteTheme, listSiteSummaries, setSiteTheme } from "~/.server/core/siteOperations";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   registerAppTool,
@@ -5621,6 +5621,21 @@ function registerSiteTools(server: McpServer) {
       const ctx = extra.authInfo as unknown as AuthContext;
       const items = await listSiteSummaries(ctx);
       return ok(paginate(items, { total: items.length }));
+    })
+  );
+
+  server.tool(
+    "site_set_theme",
+    "Change the color theme of a site-builder site (/dash/sitios) without a model turn — same as the «Tema» button. Pass `themeId` (a palette: minimal, calido, oceano, noche, dracula, nord, tokyo-night, github-light, catppuccin-latte…) or `colors` with ALL tokens as #rrggbb (primary, primary-light, primary-dark, secondary, accent, surface, surface-alt, surface-deep, on-surface, on-surface-muted, on-surface-deep, on-primary, on-secondary, on-accent). Omit both to read the current theme: returns { supported, colors }. Rewrites the site's theme file (web app: eb-theme.css, hot-reloads; static: the eb-theme block of index.html). Error no_tokens = the site predates themes (its colors are literal): ask the builder agent to adapt it to tokens first.",
+    {
+      siteId: z.string().describe("Site id (from list_sites)"),
+      themeId: z.string().optional().describe("Palette id"),
+      colors: z.record(z.string()).optional().describe("Every token as #rrggbb"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      if (!params.themeId && !params.colors) return ok(await getSiteTheme(ctx, params.siteId));
+      return ok(await setSiteTheme(ctx, params.siteId, { themeId: params.themeId, colors: params.colors }));
     })
   );
 

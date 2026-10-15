@@ -6,6 +6,7 @@ import type { SiteStackId } from "~/lib/siteStacks";
 import { STARTER_FILES } from "./files";
 import { shQuote } from "~/.server/core/sandboxOperations";
 import { createHash } from "node:crypto";
+import { DEFAULT_SITE_THEME, THEME_TOKENS, themeCssTw4 } from "~/lib/siteTheme";
 
 // Todos arrancan con el script start de su package.json y respetan PORT. Elysia va
 // en la plantilla `bun` (Bun nativo, sin npm ni node en la caja); el resto en `node`.
@@ -25,8 +26,36 @@ export function starterRunspec(stack: SiteStackId) {
   return starterTemplate(stack) === "bun" ? BUN_RUNSPEC : NODE_RUNSPEC;
 }
 
+// CSS principal (Tailwind 4) de cada stack. Junto a él vive `eb-theme.css` con los tokens
+// del tema (`@theme`), que el botón «Tema» reescribe sin modelo. Remix y Elysia no usan
+// Tailwind 4: sin tema por ahora.
+const MAIN_CSS: Record<SiteStackId, string | null> = {
+  tanstack: "src/styles.css",
+  next: "app/globals.css",
+  "react-router": "app/app.css",
+  nuxt: "app/assets/main.css",
+  sveltekit: "src/app.css",
+  astro: "src/styles/global.css",
+  remix: null,
+  elysia: null,
+};
+const THEME_IMPORT = `@import "./eb-theme.css";`;
+
+/** Ruta (relativa a /app) del archivo de tema del stack, y el CSS que debe importarlo. */
+export function stackThemeFiles(stack: SiteStackId): { theme: string; main: string; importLine: string } | null {
+  const main = MAIN_CSS[stack];
+  if (!main) return null;
+  return { theme: main.replace(/[^/]+$/, "eb-theme.css"), main, importLine: THEME_IMPORT };
+}
+
 export function starterFiles(stack: SiteStackId) {
-  return STARTER_FILES[stack];
+  const files = { ...STARTER_FILES[stack] };
+  const t = stackThemeFiles(stack);
+  if (t) {
+    files[t.main] = `${files[t.main].trimEnd()}\n${t.importLine}\n`;
+    files[t.theme] = themeCssTw4(DEFAULT_SITE_THEME.colors);
+  }
+  return files;
 }
 
 // Snapshot de plataforma por stack: una caja con el starter ya instalado en el ROOTFS
@@ -198,6 +227,11 @@ const PICKER_FILE: Record<SiteStackId, string> = {
   elysia: "src/layout.ts",
 };
 
+/** Regla de colores: sólo tokens del tema, para que el botón «Tema» cambie todo el sitio. */
+export function themeRule(where: string): string {
+  return `COLORES: usa SÓLO los tokens del tema (${THEME_TOKENS.join(", ")}) como clases: bg-primary, text-on-primary, bg-surface, text-on-surface, text-on-surface-muted, bg-surface-alt, bg-surface-deep, border-primary, hover:bg-primary-dark… Nunca colores literales de Tailwind (bg-amber-700, text-gray-500) ni hex/rgb en el código: el usuario cambia el tema con un botón y todo lo que no use tokens se queda con el color viejo. El tema vive en ${where}; NO lo edites (es del botón «Tema») salvo que el usuario te pida cambiar colores.`;
+}
+
 /** Líneas del prompt por turno para una webapp con starter. */
 export function starterPrompt(stack: SiteStackId): string[] {
   return [
@@ -206,6 +240,7 @@ export function starterPrompt(stack: SiteStackId): string[] {
     stack === "remix" || stack === "elysia"
       ? `Conserva el script del selector de EasyBits en ${PICKER_FILE[stack]}.`
       : `Estilos con Tailwind 4 (clases; ya configurado). Conserva el script del selector de EasyBits en ${PICKER_FILE[stack]}.`,
+    ...(stackThemeFiles(stack) ? [themeRule(`/app/${stackThemeFiles(stack)!.theme}`)] : []),
     `Cada sección/elemento de bloque lleva un atributo data-eb-id ÚNICO y estable (ej. data-eb-id="hero"); consérvalos al editar y cambia SOLO lo que se pide.`,
     `La vista previa es un servidor de desarrollo con recarga en caliente (servicio ${PREVIEW_UNIT}, puerto ${PREVIEW_PORT}): cada archivo que guardas aparece solo. NO corras build ni restart_machine para verla, y no levantes otro servidor.`,
     `Las dependencias se instalan solas al nacer la caja. Antes de leer node_modules o instalar paquetes espera a que acabe: sandbox_exec("timeout 300 sh -c 'until [ -f ${PREVIEW_DEPS_MARK} ]; do sleep 2; done'"). Para agregar un paquete: ${stack === "elysia" ? "bun add <paquete>" : "npm install <paquete>"} (el dev lo toma).`,
