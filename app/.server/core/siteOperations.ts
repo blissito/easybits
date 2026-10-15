@@ -428,7 +428,10 @@ export function siteTurnPrompt(site: Awaited<ReturnType<typeof getSite>>, select
       `Es una WEB APP en su propia máquina: sandboxId="${site.sandboxId}". El código vive en /app.`,
       // Cada tool remota cuesta ~450 ms (medido) y reescribir un archivo entero cuesta tokens
       // de salida: se le enseñan las tools de edición quirúrgica de la caja.
-      `Trabaja con las tools de la caja: lee con sandbox_files_read/sandbox_files_list; para CAMBIAR un archivo existente usa sandbox_files_edit (oldString→newString) o sandbox_apply_patch si son varios cambios o archivos en una sola llamada — NO lo reescribas entero con sandbox_files_write, que es solo para archivos nuevos. Errores del servidor: sandbox_logs. Junta comandos relacionados en un solo sandbox_exec (npm install, etc.).`,
+      `Trabaja con las tools de la caja: lee con sandbox_files_read/sandbox_files_list; para CAMBIAR un archivo existente usa sandbox_files_edit (oldString→newString) o sandbox_apply_patch si son varios cambios o archivos en una sola llamada — NO lo reescribas entero con sandbox_files_write, que es solo para archivos nuevos. Errores del servidor: sandbox_logs. Junta comandos relacionados en un solo sandbox_exec.`,
+      // sandbox_exec es bloqueante (tope 600 s) y no da señales de vida: un npm install o un
+      // build largo se quedaba mudo o se cortaba. Mismo patrón que execLong en gs.
+      `Comandos LARGOS (npm install de varios paquetes, build, tests): lánzalos con sandbox_exec_background y sigue su avance con sandbox_exec_status (cuéntale al usuario lo que va pasando); si se queda sin escribir nada varios minutos, revisa y mátalo con sandbox_exec_kill. Si perdiste el execId, sandbox_exec_list. Nunca uses nohup ni & dentro de sandbox_exec.`,
       ...(stack
         ? starterPrompt(stack)
         : [
