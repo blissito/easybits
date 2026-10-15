@@ -131,6 +131,27 @@ export const action = async ({ request }: Route.ActionArgs) => {
   const intent = String(form.get("intent") || "");
   const id = String(form.get("sandboxId") || "");
 
+  try {
+    return await runIntent(ctx, user, intent, id, form);
+  } catch (e) {
+    // Sin esto cualquier error del host (p. ej. 409 de dominio) tumbaba la página
+    // entera con el 404 genérico, sin decir qué pasó.
+    console.error("[hosting]", intent, id, e);
+    return data({ error: hostingErrorMessage(e) }, { status: 400 });
+  }
+};
+
+function hostingErrorMessage(e: unknown): string {
+  const status = (e as { status?: number })?.status;
+  const body = String((e as { body?: string })?.body ?? (e instanceof Error ? e.message : ""));
+  if (status === 409 && /domain already in use/i.test(body))
+    return "Ese dominio ya está conectado a otra máquina. Quítalo de allá primero y vuelve a agregarlo aquí.";
+  if (e instanceof Response) return e.statusText || "No se pudo completar.";
+  const m = body.match(/"error"\s*:\s*"([^"]+)"/);
+  return m?.[1] ?? (e instanceof Error ? e.message : "No se pudo completar.");
+}
+
+async function runIntent(ctx: AuthContext, user: Awaited<ReturnType<typeof getUserOrRedirect>>, intent: string, id: string, form: FormData) {
   switch (intent) {
     case "detail": {
       // En paralelo y tolerante: una caja dormida no responde logs, y eso no
@@ -215,7 +236,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
     default:
       return data({ error: "intent desconocido" }, { status: 400 });
   }
-};
+}
 
 function serializeDeployment(d: any) {
   return {
@@ -948,6 +969,10 @@ function Domains({ machine, detail, fetcher, confirm }: any) {
           </span>
         </Btn>
       </div>
+
+      {fetcher.state === "idle" && fetcher.data?.error && (
+        <p className="text-sm text-red-600 break-words">{fetcher.data.error}</p>
+      )}
 
       {/* Sin el registro, añadir el dominio no sirve de nada: es el único paso
           que ocurre fuera de aquí. */}
