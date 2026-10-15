@@ -426,7 +426,9 @@ export function siteTurnPrompt(site: Awaited<ReturnType<typeof getSite>>, select
     const stack = siteStack(site);
     lines.push(
       `Es una WEB APP en su propia máquina: sandboxId="${site.sandboxId}". El código vive en /app.`,
-      `Escribe archivos con sandbox_files_write y corre comandos con sandbox_exec (npm install, etc.).`,
+      // Cada tool remota cuesta ~450 ms (medido) y reescribir un archivo entero cuesta tokens
+      // de salida: se le enseñan las tools de edición quirúrgica de la caja.
+      `Trabaja con las tools de la caja: lee con sandbox_files_read/sandbox_files_list; para CAMBIAR un archivo existente usa sandbox_files_edit (oldString→newString) o sandbox_apply_patch si son varios cambios o archivos en una sola llamada — NO lo reescribas entero con sandbox_files_write, que es solo para archivos nuevos. Errores del servidor: sandbox_logs. Junta comandos relacionados en un solo sandbox_exec (npm install, etc.).`,
       ...(stack
         ? starterPrompt(stack)
         : [
