@@ -28,6 +28,9 @@ async function bake(stack: SiteStackId) {
     template: starterTemplate(stack),
     name: `bake-${stack}`,
     timeoutSeconds: 1800,
+    // En el fierro A (`local`): ahí toda caja nace en frío con su .cow. En B un create
+    // clona el dorado de su forma y un clon no se puede capturar (501 DerivedTemplateUnsupported).
+    metadata: { placement: "local", placement_strict: "1" },
     vcpus: 2,
     memoryMb: 2048,
   });
