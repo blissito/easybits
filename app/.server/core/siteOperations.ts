@@ -14,7 +14,7 @@ import { checkLLMTokenLimit, recargarLLMTokens } from "~/.server/llmTokenLimit";
 import { createSecret, listSecrets } from "./secretOperations";
 import { FLEET_ENGINES, DEFAULT_SITE_ENGINE, getEngine, engineCreatable, engineIsMetered, type FleetEngine } from "~/lib/fleetEngines";
 import { createWebsite } from "./operations";
-import { buyMachine } from "./machineOperations";
+import { buyMachine, releasePermanent } from "./machineOperations";
 import { launchApp, setRunspec } from "./releaseOperations";
 import { execCommand, exposeSandboxPort, getSandbox, listFiles, waitUntilRunning, writeFile } from "./sandboxOperations";
 import { PREVIEW_PORT, previewInstallScript, starterFiles, starterPrompt, starterRunspec, starterTemplate } from "~/.server/starters";
@@ -394,11 +394,17 @@ export async function publishSite(ctx: AuthContext, siteId: string) {
   return launchApp(ctx, { sandboxId: site.sandboxId, message: "Publicado desde /dash/sitios" });
 }
 
-export async function deleteSite(ctx: AuthContext, siteId: string) {
+export async function deleteSite(ctx: AuthContext, siteId: string, opts: { releaseMachine?: boolean } = {}) {
   requireScope(ctx, "DELETE");
-  await getSite(ctx, siteId);
-  // Soft-delete: el Website/caja siguen vivos (nunca borramos datos del usuario).
+  const site = await getSite(ctx, siteId);
+  // Soft-delete: el Website/caja siguen vivos (nunca borramos datos del usuario)…
   await db.site.update({ where: { id: siteId }, data: { deletedAt: new Date() } });
+  // …salvo que el dueño pida liberar la máquina: si no, borrar el sitio dejaba la
+  // caja cobrándose sin nada en el panel que la nombrara. releasePermanent detiene el
+  // cobro y guarda un respaldo final antes de destruirla.
+  if (opts.releaseMachine && site.kind === "webapp" && site.sandboxId) {
+    await releasePermanent(ctx, site.sandboxId);
+  }
 }
 
 /** Contexto por turno: qué sitio es y cómo tocarlo. Se appendea (capa 3), no pisa. */

@@ -57,8 +57,8 @@ export const action = async ({ request, params }: Route.ActionArgs) => {
       case "publish":
         return data({ launch: await publishSite(ctx, params.id!) });
       case "delete":
-        await deleteSite(ctx, params.id!);
-        return data({ deleted: true });
+        await deleteSite(ctx, params.id!, { releaseMachine: form.get("releaseMachine") === "1" });
+        return redirect("/dash/sitios");
       case "preview-status": {
         // El servidor dev tarda lo que la instalación (20–80 s). Se pregunta desde aquí
         // porque el navegador no puede leer el status de otro origen.
@@ -114,12 +114,18 @@ export default function SiteEditor() {
   // «Conectar a GitHub» crea un repo en la cuenta del dueño: se confirma antes y él elige la visibilidad.
   const [ghDialog, setGhDialog] = useState(false);
   const [ghPublic, setGhPublic] = useState(true);
+  const [delDialog, setDelDialog] = useState(false);
+  const [releaseMachine, setReleaseMachine] = useState(true);
   useEffect(() => {
-    if (!ghDialog) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setGhDialog(false);
+    if (!ghDialog && !delDialog) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      setGhDialog(false);
+      setDelDialog(false);
+    };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [ghDialog]);
+  }, [ghDialog, delDialog]);
   const [turnDone, setTurnDone] = useState(false);
   const bodyRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -293,6 +299,38 @@ export default function SiteEditor() {
 
   return (
     <div className="fixed inset-0 md:pl-28 pt-16 md:pt-0 flex bg-white overflow-hidden">
+      {delDialog && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" onClick={() => setDelDialog(false)}>
+          <div role="dialog" aria-modal="true" aria-labelledby="del-title" className="w-full max-w-md rounded-2xl border-2 border-black bg-white p-6 shadow-[6px_6px_0_#000]" onClick={(e) => e.stopPropagation()}>
+            <h2 id="del-title" className="text-lg font-bold">¿Eliminar «{site.name}»?</h2>
+            <fetcher.Form method="post" className="mt-2 text-sm text-gray-600">
+              <input type="hidden" name="intent" value="delete" />
+              {site.kind === "webapp" && site.sandboxId ? (
+                <>
+                  <p>Se quita de tu lista de sitios.</p>
+                  <label className={`mt-4 flex cursor-pointer items-start gap-3 rounded-xl border-2 p-3 ${releaseMachine ? "border-black" : "border-gray-200"}`}>
+                    <input type="checkbox" name="releaseMachine" value="1" checked={releaseMachine} onChange={(e) => setReleaseMachine(e.target.checked)} className="mt-1 rounded text-brand-500 focus:ring-brand-500" />
+                    <span>
+                      <span className="font-bold text-black">Liberar también su máquina</span>
+                      <span className="block">Deja de cobrarse y la app sale de línea. Guardamos un respaldo final antes de borrarla.</span>
+                    </span>
+                  </label>
+                  {!releaseMachine && <p className="mt-2 text-amber-700">La máquina sigue encendida y cobrándose; la encuentras en Hosting.</p>}
+                </>
+              ) : (
+                <p>Se quita de tu lista de sitios. La página publicada sigue en su dirección hasta que la borres en Desarrollador › Sitios web.</p>
+              )}
+              {actionError && <p className="mt-3 text-red-600 break-words">{actionError}</p>}
+              <div className="mt-5 flex justify-end gap-2">
+                <button type="button" onClick={() => setDelDialog(false)} className="rounded-lg px-3 py-1.5 font-bold text-gray-600 hover:text-black">Cancelar</button>
+                <button type="submit" disabled={fetcher.state !== "idle"} className="rounded-lg bg-red-600 px-3 py-1.5 font-bold text-white disabled:opacity-50">
+                  {fetcher.state !== "idle" && fetcher.formData?.get("intent") === "delete" ? "Eliminando…" : "Eliminar"}
+                </button>
+              </div>
+            </fetcher.Form>
+          </div>
+        </div>
+      )}
       {ghDialog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" onClick={() => setGhDialog(false)}>
           <div role="dialog" aria-modal="true" aria-labelledby="gh-title" className="w-full max-w-md rounded-2xl border-2 border-black bg-white p-6 shadow-[6px_6px_0_#000]" onClick={(e) => e.stopPropagation()}>
@@ -429,6 +467,7 @@ export default function SiteEditor() {
           )}
           {site.kind === "static" && <Link to="/dash/developer/domains" className="text-gray-500 hover:text-black">Dominio propio</Link>}
           <button type="button" onClick={() => setPreviewKey((k) => k + 1)} className="text-gray-500 hover:text-black" title="Recargar">⟳</button>
+          <button type="button" onClick={() => setDelDialog(true)} className="text-red-600 hover:text-red-800">Eliminar</button>
         </div>
         {launch && (
           <p className="px-4 py-2 text-xs bg-green-50 border-b-2 border-green-300">
