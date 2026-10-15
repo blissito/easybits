@@ -2363,7 +2363,7 @@ paths:
       tags: [Domains]
       operationId: addDomain
       summary: Registrar dominio propio
-      description: "Devuelve `txtToken`. DNS: TXT `_easybits-verify.<dominio>` = txtToken; CNAME `*.<dominio>` → easybits.fly.dev. Para el dominio raíz además A `<dominio>` → 66.241.125.82, AAAA → 2a09:8280:1::5c:8bf9:0 y CNAME `www` → easybits.fly.dev. Luego verificar."
+      description: "Devuelve `txtToken`. DNS: TXT `_easybits-verify.<dominio>` = txtToken; CNAME `*.<dominio>` → cname.sandboxes.easybits.cloud. Para el dominio raíz además A `<dominio>` → 54.38.94.14 y CNAME `www` → cname.sandboxes.easybits.cloud (sin AAAA). Luego verificar. Si tu DNS vive en Mailmask, `POST /api/v2/domains/{domainId}/dns-auto` (MCP `configure_domain_dns`) escribe estos registros por ti."
       requestBody:
         required: true
         content:

@@ -2602,7 +2602,7 @@ function TestChatDrawer({
                     m.text ? (
                       // Streamdown = markdown streaming-aware: renderiza markdown parcial
                       // sin romperse mientras el bot streamea token-por-token.
-                      <Streamdown>{m.text}</Streamdown>
+                      <Streamdown linkSafety={{ enabled: false }}>{m.text}</Streamdown>
                     ) : (
                       <span className="text-gray-400">escribiendo…</span>
                     )

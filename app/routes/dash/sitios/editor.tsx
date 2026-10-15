@@ -383,7 +383,7 @@ export default function SiteEditor() {
                         <p className="font-mono mt-1 break-all">{m.tools.join(" · ")}</p>
                       </details>
                     )}
-                    {m.text ? <Streamdown>{m.text}</Streamdown> : <span className="text-gray-400">construyendo…</span>}
+                    {m.text ? <Streamdown linkSafety={{ enabled: false }}>{m.text}</Streamdown> : <span className="text-gray-400">construyendo…</span>}
                     {m.quota && (
                       <div className="mt-2 flex gap-2">
                         <Link to="/dash/packs" className="px-3 py-1 rounded-lg bg-black text-white text-xs font-bold">Recargar</Link>
