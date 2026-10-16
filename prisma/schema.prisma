@@ -1539,6 +1539,15 @@ model FleetAgentRoute {
 // worker. The Agent SDK's own .jsonl transcript (on the worker volume) drives
 // native resume + auto-compact; this table is the portable record (audit,
 // funnel, stateless-replay fallback). One row per inbound/outbound turn.
+// Liderazgo entre instancias de la app durante un deploy con traslape: sólo el dueño del
+// lease corre lo que no se puede duplicar (sockets de WhatsApp, reaper de la flota). Se
+// renueva cada 10 s y vence a los 30 s; al drenar se suelta para que la nueva tome el turno.
+model AppLease {
+  id        String   @id @map("_id") // "singletons"
+  holder    String
+  expiresAt DateTime
+}
+
 // Un turno de agente que vive APARTE de la petición HTTP (hoy: el chat de /dash/sitios).
 // Si el navegador recarga, se re-engancha por aquí; si el proceso muere a media obra, el
 // barrido lo cierra como «interrumpido» guardando lo que alcanzó a escribir (y ofrece

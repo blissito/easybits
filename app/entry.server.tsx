@@ -8,6 +8,7 @@ import type { RenderToPipeableStreamOptions } from "react-dom/server";
 import { renderToPipeableStream } from "react-dom/server";
 import { handleSubdomainWebsite } from "~/.server/subdomainWebsite";
 import { markdownForRequest } from "~/.server/docs/acceptMarkdown";
+import { startLifecycle } from "~/.server/lifecycle.server";
 
 // Process-level safety net (covers BOTH `react-router dev` and prod `server.mjs`):
 // a single unhandled rejection — e.g. a Mongo "write conflict" from concurrent
@@ -24,6 +25,9 @@ if (!globalThis.__ebProcessGuards) {
     console.error("[uncaughtException]", err instanceof Error ? err.stack : err)
   );
 }
+
+// Liderazgo + drenado para deploys sin caída (ver lifecycle.server.ts).
+startLifecycle();
 
 export const streamTimeout = 5_000;
 

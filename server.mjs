@@ -148,8 +148,22 @@ async function run() {
     ? app.listen(port, process.env.HOST, onListen)
     : app.listen(port, onListen);
 
+  // Deploy sin caída: dejar de aceptar conexiones, drenar (lifecycle.server.ts: soltar
+  // WhatsApp/reaper al nuevo líder y esperar los turnos de Sitios) y salir. El tope lo da
+  // quien nos mata (app@.service: docker stop -t APP_DRAIN_S); se deja margen.
+  const drainCapMs = Number(process.env.APP_DRAIN_MS) || 25_000;
   ["SIGTERM", "SIGINT"].forEach((signal) => {
-    process.once(signal, () => server?.close(console.error));
+    process.once(signal, async () => {
+      console.log(`[easybits] ${signal}: drenando (tope ${Math.round(drainCapMs / 1000)} s)`);
+      server?.close();
+      server?.closeIdleConnections?.();
+      try {
+        await globalThis.__ebDrain?.(drainCapMs);
+      } catch (e) {
+        console.error("[easybits] drenado", e);
+      }
+      process.exit(0);
+    });
   });
 }
 

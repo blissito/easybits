@@ -1,3 +1,4 @@
+import { isLeader, registerDrain } from "~/.server/lifecycle.server";
 // Baileys surface — IN-PROCESS WhatsApp socket(s) for Pools, running inside the
 // EasyBits Fly app. One socket per connected fleetAgent. Receives GROUP messages,
 // routes them to the fleetAgent's ephemeral VMs via routeMessage, sends the reply back.
@@ -850,6 +851,9 @@ export function ensureRehydrated(): Promise<void> {
     rehydrated = true;
     return Promise.resolve();
   }
+  // Deploy con traslape: sólo el líder (lifecycle.server.ts) abre sockets y corre el
+  // reaper. Sin marcar `rehydrated`: cuando esta instancia gane el lease, lo hace.
+  if (!isLeader()) return Promise.resolve();
   if (rehydrating) return rehydrating;
   rehydrating = (async () => {
     try {
@@ -891,18 +895,26 @@ let drainHandlersInstalled = false;
 function installDrainHandlers() {
   if (drainHandlersInstalled) return;
   drainHandlersInstalled = true;
-  // Just flip `shuttingDown` (stop starting new turns) and observe the in-flight
-  // ones finishing. We deliberately DON'T process.exit(): the kill_timeout window
-  // lets in-flight turns AND any HTTP request (e.g. a long document generation)
-  // ride out naturally; an early exit would cut those. Fly SIGKILLs at the end.
-  const onSignal = (sig: string) => {
-    if (shuttingDown) return;
-    shuttingDown = true;
-    log("surface", `${sig} → draining (no new turns; kill_timeout 30s window)`);
-    void drainSurface();
-  };
-  process.once("SIGTERM", () => onSignal("SIGTERM"));
-  process.once("SIGINT", () => onSignal("SIGINT"));
+  // El SIGTERM lo maneja lifecycle.server.ts: esto corre ANTES de soltar el liderazgo.
+  // No se empiezan turnos nuevos, se esperan los que van y se cierran los sockets SIN
+  // logout (la base sigue diciendo «connected» y el nuevo líder los reabre con las
+  // mismas credenciales). Dos sockets vivos a la vez pelearían la sesión de WhatsApp.
+  registerDrain(
+    async () => {
+      if (shuttingDown) return;
+      shuttingDown = true;
+      log("surface", "SIGTERM → draining (no new turns)");
+      await drainSurface(50_000);
+      if (reaperTimer) clearInterval(reaperTimer);
+      reaperTimer = null;
+      for (const [id, cur] of sockets) {
+        try { cur.sock.ev.removeAllListeners("connection.update"); cur.sock.end(undefined); } catch {}
+        sockets.delete(id);
+      }
+      log("surface", "sockets cerrados para el nuevo líder");
+    },
+    { singleton: true }
+  );
 }
 async function drainSurface(graceMs = 28_000): Promise<void> {
   const deadline = Date.now() + graceMs;
@@ -921,6 +933,8 @@ let reaperTicks = 0;
 function startReaper() {
   if (reaperTimer) return;
   reaperTimer = setInterval(async () => {
+    // Durante un deploy con traslape la instancia vieja ya no manda: su reaper se calla.
+    if (!isLeader()) return;
     reaperTicks++;
     try {
       const { reapIdleFleetAgents } = await import("~/.server/core/fleetAgentOperations");

@@ -3070,6 +3070,12 @@ async function runTurn(
     // gap right after pickOrSpawn (lastMessageAt bump). Cleared in finally so a
     // thrown turn doesn't pin the VM busy forever.
     busyVms.add(worker.id);
+    // `busyVms` vive en memoria de ESTE proceso: en un deploy con traslape el reaper del
+    // nuevo líder no lo ve y dormiría la VM a media obra (suspende a los 2–3 min de
+    // `lastMessageAt`). El latido mantiene la VM «reciente» mientras el turno corre.
+    const vmBeat = setInterval(() => {
+      void db.agent.update({ where: { id: worker.id }, data: { lastMessageAt: new Date() } }).catch(() => {});
+    }, 45_000);
     try {
       await db.agent.update({ where: { id: worker.id }, data: { lastMessageAt: new Date() } }).catch(() => {});
       // Write the inbound image onto THIS worker (re-done on a self-heal retry so
@@ -3308,6 +3314,7 @@ async function runTurn(
       track.memoryFresh = memoryFresh;
       track.sessionUuid = placed.sessionUuid;
     } finally {
+      clearInterval(vmBeat);
       busyVms.delete(worker.id);
     }
   }

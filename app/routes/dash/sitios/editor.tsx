@@ -436,17 +436,19 @@ export default function SiteEditor() {
           return [...m.slice(0, -1), fn(last)];
         });
       try {
-        const res = await fetch(`/api/v2/sites/${site.id}/chat`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            text,
-            selection: sel,
-            image: img ? { base64: img.base64, ext: img.ext } : undefined,
-            turnId: crypto.randomUUID(),
-            continueTurnId: opts?.continueTurnId,
-          }),
+        const body = JSON.stringify({
+          text,
+          selection: sel,
+          image: img ? { base64: img.base64, ext: img.ext } : undefined,
+          turnId: crypto.randomUUID(),
+          continueTurnId: opts?.continueTurnId,
         });
+        // 503 = esta instancia se está apagando por un deploy: reintentar (mismo turnId) cae en la nueva.
+        let res = await fetch(`/api/v2/sites/${site.id}/chat`, { method: "POST", headers: { "Content-Type": "application/json" }, body });
+        for (let i = 0; i < 10 && res.status === 503; i++) {
+          await new Promise((r) => setTimeout(r, 3000));
+          res = await fetch(`/api/v2/sites/${site.id}/chat`, { method: "POST", headers: { "Content-Type": "application/json" }, body });
+        }
         if (res.status === 409) {
           // Ya hay un turno corriendo (otra pestaña): nos enganchamos a ése.
           patch((p) => ({ ...p, text: "" }));

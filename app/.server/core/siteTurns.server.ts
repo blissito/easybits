@@ -14,6 +14,7 @@ import { ensureSiteMachine, siteGroupId, siteTurnPrompt, type getSite } from "./
 import { recordFleetTurnUsage } from "./fleetUsage";
 import { getEngineForAgent } from "~/lib/fleetEngines";
 import { narracionAMarkdown, partirNarracion } from "~/lib/narracion";
+import { isDraining, registerDrain } from "~/.server/lifecycle.server";
 
 type Site = Awaited<ReturnType<typeof getSite>>;
 export type TurnEvent = { type: string; [k: string]: unknown };
@@ -40,6 +41,13 @@ type Live = {
 // globalThis: el dev server recarga módulos y perdería los turnos en curso.
 const g = globalThis as unknown as { __ebSiteTurns?: Map<string, Live> };
 const live = (g.__ebSiteTurns ??= new Map<string, Live>()); // por groupId
+
+/** Esta instancia se está apagando (deploy): el navegador reintenta y cae en la nueva. */
+export class AppDraining extends Error {
+  constructor() {
+    super("La plataforma se está actualizando; reintenta en unos segundos");
+  }
+}
 
 export class TurnBusy extends Error {
   constructor(readonly activeTurnId: string) {
@@ -75,6 +83,7 @@ export async function startSiteTurn(
   builder: { id: string },
   input: { text: string; selection: Selection; image?: { base64: string; ext: string }; turnId?: string; continueTurnId?: string }
 ): Promise<{ turnId: string }> {
+  if (isDraining()) throw new AppDraining();
   const groupId = siteGroupId(site.id);
   if (input.turnId) {
     const same = await db.fleetTurn.findUnique({ where: { turnId: input.turnId }, select: { turnId: true, groupId: true } });
@@ -356,8 +365,15 @@ async function interruptTurn(row: TurnRow, why: string) {
 }
 
 // Al arrancar el proceso (p. ej. tras un deploy) se cierran los turnos que dejó el anterior.
+// Al drenar (deploy con traslape) se espera a que terminen los que corren AQUÍ.
 const gs = globalThis as unknown as { __ebSiteTurnSweep?: ReturnType<typeof setInterval> };
 if (!gs.__ebSiteTurnSweep) {
+  registerDrain(async () => {
+    while ([...live.values()].some((l) => !l.finished)) {
+      console.log(`[sites] drenando: ${[...live.values()].filter((l) => !l.finished).length} turno(s) en curso`);
+      await new Promise((r) => setTimeout(r, 5_000));
+    }
+  });
   setTimeout(() => void sweepSiteTurns().catch(() => undefined), 35_000);
   gs.__ebSiteTurnSweep = setInterval(() => void sweepSiteTurns().catch(() => undefined), 60_000);
 }

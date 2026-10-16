@@ -104,4 +104,6 @@ COPY --from=builder /app/app/content ./app/content
 ARG GIT_SHA=dev
 ENV GIT_SHA=$GIT_SHA
 ENV NODE_ENV=production
-CMD ["npm", "run", "start"]
+# node directo (no npm → cross-env → node): así el SIGTERM del deploy le llega a node y
+# drena (server.mjs). El contenedor corre con --init para cosechar zombis.
+CMD ["node", "server.mjs", "./build/server/index.js"]

@@ -3,7 +3,7 @@ import { db } from "~/.server/db";
 import { getUserOrNull } from "~/.server/getters";
 import type { AuthContext } from "~/.server/apiAuth";
 import { ensureBuilderAgent, getSite, siteGroupId, siteEngineFor } from "~/.server/core/siteOperations";
-import { startSiteTurn, subscribeSiteTurn, siteTurnStatus, TurnBusy, TERMINAL_TURN_EVENTS, type TurnEvent } from "~/.server/core/siteTurns.server";
+import { AppDraining, startSiteTurn, subscribeSiteTurn, siteTurnStatus, TurnBusy, TERMINAL_TURN_EVENTS, type TurnEvent } from "~/.server/core/siteTurns.server";
 import { engineIsMetered } from "~/lib/fleetEngines";
 import { checkLLMTokenLimit } from "~/.server/llmTokenLimit";
 
@@ -118,6 +118,9 @@ export async function action({ request, params }: Route.ActionArgs) {
       continueTurnId,
     });
   } catch (e) {
+    if (e instanceof AppDraining) {
+      return Response.json({ error: "draining", message: e.message }, { status: 503, headers: { "Retry-After": "3" } });
+    }
     if (e instanceof TurnBusy) {
       return Response.json({ error: "turn_busy", message: e.message, activeTurnId: e.activeTurnId }, { status: 409 });
     }
