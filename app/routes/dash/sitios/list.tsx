@@ -1,4 +1,6 @@
-import { Link, useLoaderData, useNavigate } from "react-router";
+import { useEffect } from "react";
+import { Link, useLoaderData, useNavigate, useSearchParams } from "react-router";
+import toast from "react-hot-toast";
 import { BrutalButton } from "~/components/common/BrutalButton";
 import { getUserOrRedirect } from "~/.server/getters";
 import type { AuthContext } from "~/.server/apiAuth";
@@ -19,6 +21,14 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
 export default function SitesList() {
   const { sites } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
+  // Confirmación de «Eliminar» en el editor: qué se borró y si su máquina dejó de cobrarse.
+  const [params, setParams] = useSearchParams();
+  useEffect(() => {
+    const name = params.get("eliminado");
+    if (!name) return;
+    toast.success(params.get("liberada") ? `«${name}» eliminado. Su máquina se liberó y ya no se cobra.` : `«${name}» eliminado.`, { duration: 6000 });
+    setParams({}, { replace: true });
+  }, [params, setParams]);
   return (
     <article className="pt-20 px-4 sm:px-8 pb-24 md:pl-36 w-full max-w-7xl mx-auto overflow-x-hidden">
       <div className="flex items-center justify-between mb-6 sm:mb-10 gap-3">

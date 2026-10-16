@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, data, redirect, useFetcher, useLoaderData, useSearchParams } from "react-router";
+import toast from "react-hot-toast";
 import { db } from "~/.server/db";
 import { Streamdown } from "streamdown";
 import { ChatComposer } from "~/components/sitios/ChatComposer";
@@ -64,9 +65,13 @@ export const action = async ({ request, params }: Route.ActionArgs) => {
         return data({ launch: await publishSite(ctx, params.id!) });
       case "admin-login":
         return data({ adminUrl: await siteAdminLoginUrl(ctx, params.id!) });
-      case "delete":
-        await deleteSite(ctx, params.id!, { releaseMachine: form.get("releaseMachine") === "1" });
-        return redirect("/dash/sitios");
+      case "delete": {
+        // La lista confirma qué se borró y si la máquina dejó de cobrarse.
+        const { name, kind } = await getSite(ctx, params.id!);
+        const released = kind === "webapp" && form.get("releaseMachine") === "1";
+        await deleteSite(ctx, params.id!, { releaseMachine: released });
+        return redirect(`/dash/sitios?eliminado=${encodeURIComponent(name)}${released ? "&liberada=1" : ""}`);
+      }
       case "preview-status": {
         // El servidor dev tarda lo que la instalación (20–80 s). Se pregunta desde aquí
         // porque el navegador no puede leer el status de otro origen.
@@ -172,6 +177,8 @@ export default function SiteEditor() {
   useEffect(() => {
     const url = admin.data && "adminUrl" in admin.data ? admin.data.adminUrl : null;
     if (url && iframeRef.current) iframeRef.current.src = url;
+    // Antes un fallo aquí no decía nada y el botón parecía no hacer nada.
+    if (admin.data && "error" in admin.data) toast.error(`No pudimos entrar como admin: ${admin.data.error}`);
   }, [admin.data]);
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
