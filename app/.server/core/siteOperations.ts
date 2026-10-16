@@ -669,7 +669,9 @@ export function siteTurnPrompt(site: Awaited<ReturnType<typeof getSite>>, select
             `Stack por default: Node con un servidor en el puerto 3000 (Express/Hono según pida), package.json con scripts build y start.`,
             `Para que la vista previa refleje cambios: tras editar, llama restart_machine({ sandboxId }).`,
           ]),
-      `Para PUBLICAR (build + release versionado) llama launch_app({ sandboxId }) — solo cuando el usuario lo pida o al terminar la primera versión.`,
+      site.sandbox?.workBox
+        ? `NO publiques ni llames launch_app: esta app aún no se publica y eso lo hace el dueño con el botón «Publicar» del editor (ahí empieza a cobrarse su máquina). Al terminar, dile que puede verla en la vista previa y publicarla con ese botón.`
+        : `Para PUBLICAR (build + release versionado) llama launch_app({ sandboxId }) — solo cuando el usuario lo pida o al terminar la primera versión.`,
       `No crees máquinas nuevas ni uses otro sandboxId.`
     );
     const gh = siteRepo(site.sandbox?.runspec);

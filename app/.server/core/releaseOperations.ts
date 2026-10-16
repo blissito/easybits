@@ -1314,9 +1314,21 @@ export async function launchApp(
   // Sobre una máquina que ya tiene runspec, lo guardado gana a los defaults: si no,
   // «Publicar» (que sólo manda sandboxId) le quitaba el `--if-present` al build y
   // reimponía el puerto 3000 a una app configurada en otro.
-  const stored = params.sandboxId
-    ? ((await db.sandbox.findUnique({ where: { sandboxId: params.sandboxId }, select: { runspec: true } }))?.runspec as Partial<Runspec> | null)
+  const target = params.sandboxId
+    ? await db.sandbox.findUnique({ where: { sandboxId: params.sandboxId }, select: { runspec: true, workBox: true } })
     : null;
+  // Caja de trabajo de una web app sin publicar (la paga EasyBits): publicarla es el botón
+  // «Publicar» del dueño, que primero la vuelve máquina cobrada (promoteWorkBox). Sin esto
+  // el agente del builder la publicaba solo y quedaba sirviendo producción gratis (16-oct).
+  if (target?.workBox) {
+    const e: any = new Error(
+      "Esta web app todavía no está publicada: la publica su dueño con el botón «Publicar» del editor (ahí empieza a cobrarse su máquina). No la publiques tú; dile que ya puede publicarla."
+    );
+    e.code = "WorkBoxNotPublished";
+    e.status = 402;
+    throw e;
+  }
+  const stored = (target?.runspec as Partial<Runspec> | null) ?? null;
   const spec = launchSpec(params, stored);
 
   // Only a box WE created gets torn down on failure — never the caller's.
