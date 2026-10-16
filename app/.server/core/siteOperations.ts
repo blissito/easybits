@@ -15,7 +15,7 @@ import { checkLLMTokenLimit, recargarLLMTokens } from "~/.server/llmTokenLimit";
 import { createSecret, getMachineSecretValue, listSecrets } from "./secretOperations";
 import { FLEET_ENGINES, DEFAULT_SITE_ENGINE, getEngine, engineCreatable, engineIsMetered, type FleetEngine } from "~/lib/fleetEngines";
 import { createWebsite, deployWebsiteFile } from "./operations";
-import { buyMachine, releasePermanent } from "./machineOperations";
+import { createWorkBox, promoteWorkBox, releasePermanent } from "./machineOperations";
 import { launchApp, setMachineSecrets, setRunspec } from "./releaseOperations";
 import { createDatabase } from "./databaseOperations";
 import { SECRETS_FILE, writeSecretsFile } from "./secretsFile";
@@ -249,7 +249,7 @@ export async function getSite(ctx: AuthContext, id: string) {
       })
     : null;
   const sandbox = site.sandboxId
-    ? await db.sandbox.findUnique({ where: { sandboxId: site.sandboxId }, select: { status: true, runspec: true, currentReleaseId: true } })
+    ? await db.sandbox.findUnique({ where: { sandboxId: site.sandboxId }, select: { status: true, runspec: true, currentReleaseId: true, workBox: true, tier: true } })
     : null;
   const stack = siteStack(site);
   return {
@@ -332,28 +332,22 @@ export async function createSite(
     });
     return { site };
   }
-  // Por default duerme sin visitas: el caso típico es una landing con backend y poco tráfico.
-  // Con stack nace del snapshot de plataforma (starter con dependencias ya instaladas).
-  // Sin plan la caja nace después, en el webhook del checkout: ahí va por la ruta lenta.
-  const bought = await buyMachine(ctx, {
-    tier: opts.tier ?? "micro",
+  // Construir no se cobra: la web app nace en una caja de trabajo de 4 GB que paga
+  // EasyBits y duerme sola; se cobra al publicar (publishSite → promoteWorkBox). Con
+  // stack nace del snapshot de plataforma (starter con dependencias ya instaladas).
+  const { sandboxId } = await createWorkBox(ctx, {
     template: opts.stack ? starterTemplate(opts.stack) : "node",
     name,
-    sleep: opts.sleep ?? true,
     ...(opts.stack ? { derived: starterSnapshot(opts.stack) } : {}),
   });
-  const sandboxId = "machine" in bought && bought.machine ? bought.machine.sandboxId : null;
   const site = await db.site.create({
     data: { ownerId: ctx.user.id, kind: "webapp", name, sandboxId, engine: engine.id, stack: opts.stack ?? null },
   });
-  // La máquina ya se compró: si sembrar falla, el sitio igual nace (el agente puede
-  // escribir el código) en vez de dejar una caja cobrada sin sitio.
-  if (sandboxId) {
-    await prepareSiteMachine(ctx, site.id, sandboxId, opts.stack ?? null).catch((e) =>
-      console.error("[sites] prepareSiteMachine", sandboxId, e)
-    );
-  }
-  return { site, checkoutUrl: "checkoutUrl" in bought ? bought.checkoutUrl : undefined };
+  // Si sembrar falla, el sitio igual nace: el agente puede escribir el código.
+  await prepareSiteMachine(ctx, site.id, sandboxId, opts.stack ?? null).catch((e) =>
+    console.error("[sites] prepareSiteMachine", sandboxId, e)
+  );
+  return { site, checkoutUrl: undefined as string | undefined };
 }
 
 /**
@@ -537,6 +531,16 @@ export async function attachNewestMachine(ctx: AuthContext, siteId: string) {
 export async function publishSite(ctx: AuthContext, siteId: string) {
   const site = await getSite(ctx, siteId);
   if (site.kind !== "webapp" || !site.sandboxId) throw new Response("Nothing to publish", { status: 400 });
+  // Primera publicación: la caja de trabajo (gratis) pasa a cobrarse. Sin plan, el pago
+  // va por checkout y al volver al editor se publica sola (?publicar=1).
+  if (site.sandbox?.workBox) {
+    const base = process.env.APP_URL || "https://www.easybits.cloud";
+    const promo = await promoteWorkBox(ctx, site.sandboxId, {
+      successUrl: `${base}/dash/sitios/${site.id}?publicar=1`,
+      cancelUrl: `${base}/dash/sitios/${site.id}`,
+    });
+    if ("checkoutUrl" in promo) return { checkoutUrl: promo.checkoutUrl, monthlyMxn: promo.monthlyMxn };
+  }
   // Conectado a GitHub: primero se sube el código (el repo es la fuente de verdad) y
   // luego se publica en el acto. El webhook de ESE commit se ignora (markSelfPushed).
   const gh = siteRepo(site.sandbox?.runspec);
@@ -557,7 +561,8 @@ export async function deleteSite(ctx: AuthContext, siteId: string, opts: { relea
   // «Site not found»). releasePermanent detiene el cobro y guarda un respaldo final.
   // Un 404 es «ya no hay máquina que liberar» (caja de preview sin compra, o ya
   // liberada desde Hosting): no bloquea el borrado.
-  if (opts.releaseMachine && site.kind === "webapp" && site.sandboxId) {
+  // Una caja de trabajo (sin publicar) la paga EasyBits: se libera siempre con el sitio.
+  if ((opts.releaseMachine || site.sandbox?.workBox) && site.kind === "webapp" && site.sandboxId) {
     await releasePermanent(ctx, site.sandboxId).catch((e) => {
       if (e instanceof Response && e.status === 404) return;
       throw e;

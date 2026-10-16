@@ -49,7 +49,8 @@ import {
   type CpuMode,
   type HostingTier,
 } from "../../lib/hostingCatalog";
-import { getUserPlan, isPaidPlan, type PlanKey } from "../../lib/plans";
+import { getUserPlan, isPaidPlan, PLANS, type PlanKey } from "../../lib/plans";
+import { isAdminUser } from "../getters";
 import type { SandboxTemplate } from "../sandbox/schemas";
 import { can, delegatedAccountIds, SCOPES } from "../delegation";
 import { backupMachine, extendBackupsForDeletedMachine } from "./machineBackupOperations";
@@ -482,6 +483,177 @@ export async function buyMachine(
   return startMachineCheckout(ctx, params);
 }
 
+/** Crea la caja desde una plantilla derivada si existe; si no, nace normal. */
+async function createMaybeDerived(
+  ctx: AuthContext,
+  raw: Parameters<typeof createSandboxRaw>[1],
+  derived?: { templateKey: string; templateHash: string }
+): Promise<SandboxRecord> {
+  if (!derived) return createSandboxRaw(ctx, raw);
+  return createSandboxRaw(ctx, { ...raw, ...derived }).catch((e) => {
+    // Derivado ausente (404), viejo tras un rebake (409) o de otro base (400): nace normal.
+    if (/Derived|template no coincide/i.test(e instanceof Error ? e.message : String(e))) {
+      console.warn("[machines] derivado no disponible, caja normal:", derived, e instanceof Error ? e.message : e);
+      return createSandboxRaw(ctx, raw);
+    }
+    throw e;
+  });
+}
+
+// --- caja de trabajo de las web apps (/dash/sitios) -------------------------
+//
+// Mientras se construye, la web app vive en una caja GRANDE que paga EasyBits (dev
+// server + lo que el agente instala/compila/prueba no cabe en 1 GB: «Prueba admin»
+// se cayó por memoria el 16-oct). Duerme sin turnos ni visitas. Al publicar,
+// promoteWorkBox la vuelve una máquina vendida: misma caja, misma URL, se cobra lo
+// que mide. Patrón de la industria: desarrollar va incluido, producción se cobra.
+export const WORK_BOX_TIER = "plus";
+
+/** Cuántas web apps sin publicar puede tener la cuenta: el mismo cupo que sus agentes. */
+async function assertWorkBoxBudget(ctx: AuthContext): Promise<void> {
+  if (isAdminUser(ctx.user) || (ctx.user as { courtesyHosting?: boolean }).courtesyHosting) return;
+  const planKey = getUserPlan(ctx.user);
+  const max = PLANS[planKey].concurrentSandboxes;
+  const open = await db.sandbox.count({
+    where: { ownerId: ctx.user.id, workBox: true, status: { notIn: ["destroyed", "pending_deletion"] } },
+  });
+  if (open < max) return;
+  fail(403, "WorkBoxLimitReached",
+    `Tu plan ${PLANS[planKey].name} permite ${max} ${max === 1 ? "web app" : "web apps"} sin publicar a la vez. Publica o borra una para empezar otra, o sube de plan.`);
+}
+
+/** Caja de trabajo de una web app: sin cobro, 4 GB, duerme sola. */
+export async function createWorkBox(
+  ctx: AuthContext,
+  params: { template: SandboxTemplate; name?: string; derived?: { templateKey: string; templateHash: string } }
+): Promise<{ sandboxId: string }> {
+  requireScope(ctx, "WRITE");
+  await assertWorkBoxBudget(ctx);
+  const tier = resolveTier(WORK_BOX_TIER)!;
+  const res = resourcesFor(tier, 0);
+  let sandbox: SandboxRecord;
+  try {
+    sandbox = await createMaybeDerived(
+      ctx,
+      { template: params.template, name: params.name, metadata: { eb_work: "1" }, vcpus: res.vcpus, memoryMb: res.memoryMb, diskMb: res.diskMb, cpuMode: "shared" },
+      params.derived
+    );
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (/CapacityReached|RAM cap/i.test(msg)) fail(503, "HostCapacityReached", "No hay capacidad disponible ahora mismo. Intenta en unos minutos.");
+    fail(502, "MachineProvisionFailed", `No se pudo crear la caja de trabajo: ${msg}`);
+  }
+  await db.sandbox.create({
+    data: {
+      ownerId: ctx.user.id,
+      sandboxId: sandbox.sandboxId,
+      persistent: false,
+      workBox: true,
+      tier: tier.key,
+      template: params.template,
+      cpuMode: "shared",
+      sleep: true,
+      name: params.name ?? null,
+      status: sandbox.status === "running" ? "running" : "provisioning",
+      backupScope: "data",
+    },
+  });
+  await applySleepPolicy(ctx, sandbox.sandboxId, true).catch(() => undefined); // ya logueado
+  // Candado desde que nace: sin él el host la destruye dormida al re-hornear la plantilla
+  // `node` (sweepObsoleteTemplateBoxes) o por antigüedad, con el código del usuario adentro.
+  // Dormir sigue funcionando; borrarla va con el token de operador (releasePermanent).
+  await lockBox(ctx, sandbox.sandboxId);
+  return { sandboxId: sandbox.sandboxId };
+}
+
+/** Deja la caja de trabajo como máquina vendida: fila, marca en el host y candado. */
+async function finalizeWorkBox(
+  ctx: AuthContext,
+  sandboxId: string,
+  billing: { stripeSubItemId?: string; stripeSubscriptionId?: string }
+): Promise<void> {
+  const row = await db.sandbox.update({
+    where: { sandboxId },
+    data: { workBox: false, persistent: true, ...billing },
+  });
+  // Sin eb_tier una máquina vendida que cae en `lost` puede perder el disco en el barrido.
+  await setSandboxTierMetadata(ctx, sandboxId, { tier: row.tier, cpuMode: row.cpuMode ?? "shared" }).catch((e) =>
+    console.error(`[hosting] CRITICAL: ${sandboxId} se promovió pero el host NO quedó marcado con eb_tier:`, e instanceof Error ? e.message : e)
+  );
+  await lockBox(ctx, sandboxId);
+}
+
+/**
+ * Publicar por primera vez una web app: su caja de trabajo pasa a cobrarse. Con plan
+ * (o cortesía) se promueve en el acto; sin plan devuelve `checkoutUrl` y la promueve el
+ * webhook (promotePaidWorkBox). Una caja que ya no es de trabajo regresa `promoted:true`.
+ */
+export async function promoteWorkBox(
+  ctx: AuthContext,
+  sandboxId: string,
+  opts: { successUrl?: string; cancelUrl?: string } = {}
+): Promise<{ promoted: true } | { checkoutUrl: string; monthlyMxn: number }> {
+  requireScope(ctx, "WRITE");
+  const row = await db.sandbox.findUnique({ where: { sandboxId } });
+  if (!row || row.ownerId !== ctx.user.id || row.status === "destroyed") fail(404, "MachineNotFound", "Sandbox no encontrado.");
+  if (!row.workBox) return { promoted: true };
+  const tier = resolveTier(row.tier);
+  if (!tier) fail(400, "UnknownTier", `Tier desconocido: "${row.tier}".`);
+  const mode = (row.cpuMode === "reserved" ? "reserved" : "shared") as CpuMode;
+  const monthlyMxn = machineMonthly(tier, mode, row.diskAddonsGB, !!row.sleep);
+  if ((ctx.user as { courtesyHosting?: boolean }).courtesyHosting) {
+    await finalizeWorkBox(ctx, sandboxId, {});
+    return { promoted: true };
+  }
+  const subscription = await getActivePlanSubscription(ctx.user).catch(() => null);
+  if (subscription) {
+    let subItemId: string;
+    try {
+      subItemId = await addMachineSubscriptionItem({ subscriptionId: subscription.id, monthlyMxn, machineId: sandboxId, tier: tier.key, cpuMode: mode });
+    } catch (e) {
+      // La caja sigue de trabajo e intacta: reintentar Publicar basta.
+      fail(502, "MachineBillingFailed", `No se pudo crear el cobro: ${e instanceof Error ? e.message : String(e)}`);
+    }
+    await finalizeWorkBox(ctx, sandboxId, { stripeSubItemId: subItemId });
+    return { promoted: true };
+  }
+  const base = process.env.APP_URL || "https://www.easybits.cloud";
+  const user = ctx.user as { id: string; email?: string | null; stripeId?: string | null; stripeIds?: string[] };
+  const { url } = await createMachineCheckout({
+    userId: user.id,
+    email: user.email ?? null,
+    customerId: user.stripeId || user.stripeIds?.[0] || null,
+    monthlyMxn,
+    tier: tier.key,
+    cpuMode: mode,
+    sleep: !!row.sleep,
+    diskAddonsGB: row.diskAddonsGB,
+    template: row.template ?? undefined,
+    name: row.name ?? undefined,
+    sandboxId,
+    successUrl: opts.successUrl || `${base}/dash/hosting?paid=1`,
+    cancelUrl: opts.cancelUrl || `${base}/dash/hosting?canceled=1`,
+  });
+  return { checkoutUrl: url, monthlyMxn };
+}
+
+/** Webhook del checkout de una caja de trabajo: la promueve. Idempotente por suscripción. */
+export async function promotePaidWorkBox(params: { ownerId: string; subscriptionId: string; sandboxId: string }): Promise<boolean> {
+  const row = await db.sandbox.findUnique({ where: { sandboxId: params.sandboxId } });
+  if (!row || row.ownerId !== params.ownerId) {
+    console.error(`[hosting] CRITICAL: pago ${params.subscriptionId} para la caja ${params.sandboxId}, que no existe o no es de ${params.ownerId}. Necesita un humano.`);
+    return false;
+  }
+  if (row.stripeSubscriptionId === params.subscriptionId) return true; // replay
+  if (!row.workBox || row.status === "destroyed") {
+    console.error(`[hosting] CRITICAL: pago ${params.subscriptionId} para ${params.sandboxId}, que ya no es caja de trabajo (status ${row.status}). Necesita un humano.`);
+    return false;
+  }
+  const ctx = { user: { id: params.ownerId }, scopes: ["WRITE"] } as AuthContext;
+  await finalizeWorkBox(ctx, params.sandboxId, { stripeSubscriptionId: params.subscriptionId });
+  return true;
+}
+
 /** Provision a fresh always-on machine. */
 export async function createPermanent(
   ctx: AuthContext,
@@ -526,16 +698,7 @@ export async function createPermanent(
       diskMb: res.diskMb,
       cpuMode: mode,
     };
-    sandbox = params.derived
-      ? await createSandboxRaw(ctx, { ...raw, ...params.derived }).catch((e) => {
-          // Derivado ausente (404), viejo tras un rebake (409) o de otro base (400): nace normal.
-          if (/Derived|template no coincide/i.test(e instanceof Error ? e.message : String(e))) {
-            console.warn("[machines] derivado no disponible, caja normal:", params.derived, e instanceof Error ? e.message : e);
-            return createSandboxRaw(ctx, raw);
-          }
-          throw e;
-        })
-      : await createSandboxRaw(ctx, raw);
+    sandbox = await createMaybeDerived(ctx, raw, params.derived);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     // Host admission control rejected a reserved box (no reserved-vCPU capacity
@@ -734,6 +897,8 @@ export async function listPermanent(ctx: AuthContext): Promise<PermanentSandbox[
       // `transferred`: la caja sigue viva pero ya es de otra plataforma.
       status: { notIn: ["destroyed", "pending_deletion", "transferred"] },
       ownerId: { in: [ctx.user.id, ...delegatedOwners] },
+      // Las cajas de trabajo de sitios sin publicar no se cobran: no son máquinas aún.
+      OR: [{ workBox: false }, { workBox: { isSet: false } }],
     },
     orderBy: { createdAt: "desc" },
   });
@@ -909,7 +1074,8 @@ async function lockBox(ctx: AuthContext, sandboxId: string): Promise<boolean> {
  */
 export async function reconcileProtection(): Promise<{ checked: number; relocked: number }> {
   const rows = await db.sandbox.findMany({
-    where: { persistent: true, status: { notIn: ["destroyed", "pending_deletion", "transferred"] } },
+    // Las cajas de trabajo (sin publicar) también van con candado: ver createWorkBox.
+    where: { OR: [{ persistent: true }, { workBox: true }], status: { notIn: ["destroyed", "pending_deletion", "transferred"] } },
     select: { sandboxId: true, ownerId: true },
   });
   let relocked = 0;

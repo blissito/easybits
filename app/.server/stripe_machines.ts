@@ -113,6 +113,8 @@ export async function createMachineCheckout(params: {
   name?: string;
   successUrl: string;
   cancelUrl: string;
+  // Promover una caja que YA existe (la de trabajo de un sitio) en vez de crear otra.
+  sandboxId?: string;
 }): Promise<{ url: string; sessionId: string }> {
   const product = await ensureHostingProduct();
   const session = await getStripe().checkout.sessions.create({
@@ -143,6 +145,7 @@ export async function createMachineCheckout(params: {
       eb_disk_addons: String(params.diskAddonsGB),
       ...(params.template ? { eb_template: params.template } : {}),
       ...(params.name ? { eb_name: params.name } : {}),
+      ...(params.sandboxId ? { eb_sandbox_id: params.sandboxId } : {}),
     },
     // … and on the subscription itself, so a later cancellation still knows
     // which machine it belongs to.

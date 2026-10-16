@@ -39,7 +39,10 @@ export const action = async ({ request }: Route.ActionArgs) => {
     if (checkoutUrl) q.set("checkout", checkoutUrl);
     return redirect(`/dash/sitios/${site.id}${q.size ? `?${q}` : ""}`);
   } catch (e) {
-    const message = e instanceof Response ? await e.text().catch(() => e.statusText) : e instanceof Error ? e.message : "error";
+    const raw = e instanceof Response ? await e.text().catch(() => e.statusText) : e instanceof Error ? e.message : "error";
+    // Los errores del core llegan como {error, message}: se muestra el message, no el JSON.
+    let message = raw;
+    try { message = JSON.parse(raw).message ?? raw; } catch { /* texto plano */ }
     return { error: message };
   }
 };
@@ -59,7 +62,8 @@ export default function NewSite() {
   const currentModel = engine?.models.some((m) => m.id === modelId) ? modelId : engine?.defaultModel ?? null;
   const nav = useNavigation();
   const result = useActionData<typeof action>();
-  const micro = HOSTING_CATALOG.micro;
+  // La web app se construye gratis en una caja de trabajo; al publicar se cobra esa máquina.
+  const work = HOSTING_CATALOG.plus;
   const [prompt, setPrompt] = useState("");
   const [stack, setStack] = useState<SiteStackId | "node">("tanstack");
   return (
@@ -70,7 +74,7 @@ export default function NewSite() {
           {(
             [
               ["static", "Sitio estático", "Landing, portafolio, catálogo. Incluido en tu plan."],
-              ["webapp", "Web app", `Con servidor y base de datos. Su propia máquina por $${sleepPrice(micro)} MXN/mes: se duerme cuando nadie entra y despierta en menos de un segundo.`],
+              ["webapp", "Web app", `Con servidor y base de datos. Construirla es gratis; al publicar, su máquina cuesta $${sleepPrice(work)} MXN/mes, se duerme cuando nadie entra y despierta en menos de un segundo.`],
             ] as const
           ).map(([k, title, desc]) => (
             <button

@@ -62,6 +62,11 @@ describe("countsAgainstPlan", () => {
     expect(mod.countsAgainstPlan({ status: "running", metadata: { eb_tier: "micro" } } as any)).toBe(false);
     expect(mod.countsAgainstPlan({ status: "stopped", metadata: {} } as any)).toBe(false);
   });
+
+  it("la caja de trabajo de una web app sin publicar no le quita lugar a los agentes", () => {
+    expect(mod.countsAgainstPlan({ status: "suspended", metadata: { eb_work: "1" } } as any)).toBe(false);
+    expect(mod.countsAsAgentBox({ status: "running", metadata: { eb_work: "1" } } as any)).toBe(false);
+  });
 });
 
 describe("assertAccountBoxBudget", () => {

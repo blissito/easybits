@@ -886,7 +886,7 @@ export async function callHost<T>(
  * menos para sus agentes (un Mega con su micro quedaba en 1 de 2).
  */
 export function countsAsAgentBox(s: Pick<SandboxRecord, "status" | "metadata">): boolean {
-  return (s.status === "running" || s.status === "starting") && !s.metadata?.eb_tier;
+  return (s.status === "running" || s.status === "starting") && !s.metadata?.eb_tier && !s.metadata?.eb_work;
 }
 
 /**
@@ -895,8 +895,10 @@ export function countsAsAgentBox(s: Pick<SandboxRecord, "status" | "metadata">):
  * aquí: lo que se limita es cuántas EXISTEN, no cuántas están despiertas. Las máquinas de
  * hosting (`eb_tier`) se cobran aparte y no cuentan.
  */
+// `eb_work`: caja de trabajo de una web app sin publicar (createWorkBox); tiene su propio
+// cupo por plan y no le quita lugar a los agentes.
 export function countsAgainstPlan(s: Pick<SandboxRecord, "status" | "metadata">): boolean {
-  return (s.status === "running" || s.status === "starting" || s.status === "suspended") && !s.metadata?.eb_tier;
+  return (s.status === "running" || s.status === "starting" || s.status === "suspended") && !s.metadata?.eb_tier && !s.metadata?.eb_work;
 }
 
 /**

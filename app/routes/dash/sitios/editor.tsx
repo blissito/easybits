@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Link, data, redirect, useFetcher, useLoaderData, useSearchParams } from "react-router";
+import { Link, data, redirect, useFetcher, useLoaderData, useRevalidator, useSearchParams } from "react-router";
 import toast from "react-hot-toast";
+import { resolveTier, sleepPrice } from "~/lib/hostingCatalog";
 import { db } from "~/.server/db";
 import { Streamdown } from "streamdown";
 import { ChatComposer } from "~/components/sitios/ChatComposer";
@@ -41,8 +42,11 @@ export const loader = async ({ request, params }: Route.LoaderArgs) => {
   }
   const site = await getSite({ user, scopes: ["READ"] } as AuthContext, params.id!);
   const gh = siteRepo(site.sandbox?.runspec);
+  // Caja de trabajo (sin publicar): construir es gratis y al publicar se cobra lo que mide.
+  const workTier = site.sandbox?.workBox ? resolveTier(site.sandbox.tier) : null;
   return {
     site,
+    publishPrice: workTier ? sleepPrice(workTier) : null,
     engineLabel: siteEngineFor(site).label.replace(/^Ghosty · /, ""),
     github: { enabled: githubAppEnabled(), repo: gh?.fullName ?? null },
   };
@@ -67,8 +71,9 @@ export const action = async ({ request, params }: Route.ActionArgs) => {
         return data({ adminUrl: await siteAdminLoginUrl(ctx, params.id!) });
       case "delete": {
         // La lista confirma qué se borró y si la máquina dejó de cobrarse.
-        const { name, kind } = await getSite(ctx, params.id!);
-        const released = kind === "webapp" && form.get("releaseMachine") === "1";
+        const { name, kind, sandbox } = await getSite(ctx, params.id!);
+        // Una caja de trabajo nunca se cobró: se borra con el sitio y no hay cobro que avisar.
+        const released = kind === "webapp" && !sandbox?.workBox && form.get("releaseMachine") === "1";
         await deleteSite(ctx, params.id!, { releaseMachine: released });
         return redirect(`/dash/sitios?eliminado=${encodeURIComponent(name)}${released ? "&liberada=1" : ""}`);
       }
@@ -191,7 +196,8 @@ function BotMessage({ msg, live }: { msg: Msg; live: boolean }) {
 }
 
 export default function SiteEditor() {
-  const { site, engineLabel, github } = useLoaderData<typeof loader>();
+  const { site, engineLabel, github, publishPrice } = useLoaderData<typeof loader>();
+  const revalidator = useRevalidator();
   const [params, setParams] = useSearchParams();
   const githubNotice = GITHUB_NOTICE[params.get("github") ?? ""] ?? null;
   const fetcher = useFetcher<typeof action>();
@@ -441,7 +447,28 @@ export default function SiteEditor() {
   const firstBuild = live
     ? !previewReady
     : site.kind === "webapp" && busy && !turnDone && msgs.filter((m) => m.role === "user").length <= 1;
-  const launch = fetcher.data && "launch" in fetcher.data ? fetcher.data.launch : null;
+  const published = fetcher.data && "launch" in fetcher.data ? fetcher.data.launch : null;
+  // Sin plan, la primera publicación regresa el checkout de la máquina: se va a pagar.
+  const payUrl = published && "checkoutUrl" in published && published.checkoutUrl ? published.checkoutUrl : null;
+  useEffect(() => {
+    if (payUrl) window.location.href = payUrl;
+  }, [payUrl]);
+  const launch = published && "version" in published ? published : null;
+  // De vuelta del pago (?publicar=1): el webhook promueve la caja en segundos. Se espera a
+  // que deje de ser de trabajo y se publica solo, una vez.
+  const paidReturn = params.get("publicar") === "1";
+  const autoPublished = useRef(false);
+  useEffect(() => {
+    if (!paidReturn || autoPublished.current) return;
+    if (!site.sandbox?.workBox) {
+      autoPublished.current = true;
+      setParams({}, { replace: true });
+      fetcher.submit({ intent: "publish" }, { method: "post" });
+      return;
+    }
+    const t = setTimeout(() => revalidator.revalidate(), 2000);
+    return () => clearTimeout(t);
+  }, [paidReturn, site.sandbox?.workBox, revalidator, fetcher, setParams]);
   const actionError = fetcher.data && "error" in fetcher.data ? fetcher.data.error : null;
 
   return (
@@ -450,7 +477,9 @@ export default function SiteEditor() {
         <DeleteSiteArt />
         <fetcher.Form method="post" className="mt-4 text-sm text-gray-600">
           <input type="hidden" name="intent" value="delete" />
-          {site.kind === "webapp" && site.sandboxId ? (
+          {site.kind === "webapp" && site.sandboxId && site.sandbox?.workBox ? (
+            <p>Se quita de tu lista de sitios y se borra la app que el agente estaba construyendo (aún no se publicaba, así que no se cobraba).</p>
+          ) : site.kind === "webapp" && site.sandboxId ? (
             <>
               <p>Se quita de tu lista de sitios.</p>
               <label className={`mt-4 flex cursor-pointer items-start gap-3 rounded-xl border-2 p-3 ${releaseMachine ? "border-black" : "border-gray-200"}`}>
@@ -595,8 +624,13 @@ export default function SiteEditor() {
             <>
               <fetcher.Form method="post">
                 <input type="hidden" name="intent" value="publish" />
-                <button type="submit" disabled={fetcher.state !== "idle"} className="px-3 py-1.5 rounded-lg bg-brand-500 text-white font-bold disabled:opacity-40">
-                  {fetcher.state !== "idle" ? "Publicando…" : "Publicar"}
+                <button
+                  type="submit"
+                  disabled={fetcher.state !== "idle" || paidReturn}
+                  title={publishPrice ? `Construir es gratis. Al publicar, esta máquina empieza a cobrarse: $${publishPrice} MXN/mes, duerme cuando nadie entra.` : undefined}
+                  className="px-3 py-1.5 rounded-lg bg-brand-500 text-white font-bold disabled:opacity-40"
+                >
+                  {fetcher.state !== "idle" || paidReturn ? "Publicando…" : publishPrice ? `Publicar · $${publishPrice}/mes` : "Publicar"}
                 </button>
               </fetcher.Form>
               {github.repo ? (

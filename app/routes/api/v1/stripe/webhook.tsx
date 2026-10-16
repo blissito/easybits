@@ -324,6 +324,22 @@ export async function action({ request }: ActionFunctionArgs) {
             logger.error("Machine checkout missing subscription or user", { sessionId: session.id });
             break;
           }
+          // Publicar una web app de /dash/sitios: la caja ya existe (la de trabajo), se promueve.
+          if (md.eb_sandbox_id) {
+            try {
+              const { promotePaidWorkBox } = await import("~/.server/core/machineOperations");
+              const ok = await promotePaidWorkBox({ ownerId: md.eb_user_id, subscriptionId: subId, sandboxId: md.eb_sandbox_id });
+              logger.info("Work box promoted from checkout", { sandboxId: md.eb_sandbox_id, subscriptionId: subId, ok });
+            } catch (e) {
+              logger.error("Work box promotion from checkout FAILED", {
+                sessionId: session.id,
+                subscriptionId: subId,
+                sandboxId: md.eb_sandbox_id,
+                error: e instanceof Error ? e.message : String(e),
+              });
+            }
+            break;
+          }
           try {
             const { provisionPaidMachine } = await import("~/.server/core/machineOperations");
             const created = await provisionPaidMachine({

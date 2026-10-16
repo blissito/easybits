@@ -1595,6 +1595,11 @@ model Sandbox {
   // Releasing must cancel the right one; never assume the item.
   stripeSubItemId String?
   stripeSubscriptionId String?
+  // Caja de TRABAJO de una web app de /dash/sitios sin publicar: la paga EasyBits mientras
+  // el agente construye (createWorkBox). Va con persistent:false para quedar fuera de
+  // respaldos, monitor, protección y /dash/hosting; al publicar, promoteWorkBox la vuelve
+  // una máquina vendida (misma caja, misma URL) y esto pasa a false.
+  workBox         Boolean?
   // adminToken: Bearer for the box's in-VM admin API (:8787), persisted at
   // create when a managed-runtime template (ghostyclaw) is provisioned with env.
   // Used by the sandbox admin passthrough (/api/v2/sandbox/:id/admin) for
