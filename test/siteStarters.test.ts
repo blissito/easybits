@@ -33,3 +33,26 @@ describe("vista previa en vivo", () => {
     }
   });
 });
+
+describe("base y login de las web apps", () => {
+  it("tanstack trae Better Auth montado sobre la base del sitio, con deps exactas", async () => {
+    const { starterFiles, stackHasAuth } = await import("~/.server/starters");
+    expect(stackHasAuth("tanstack")).toBe(true);
+    expect(stackHasAuth("next")).toBe(false);
+    const files = starterFiles("tanstack");
+    const deps = JSON.parse(files["package.json"]).dependencies;
+    for (const d of ["better-auth", "@libsql/client", "@libsql/kysely-libsql", "kysely"]) expect(deps[d]).toMatch(/^\d+\.\d+\.\d+$/);
+    expect(files["src/lib/db.ts"]).toContain("EASYBITS_DB_URL");
+    expect(files["src/lib/auth.ts"]).toContain("runMigrations");
+    expect(files["src/routes/api/auth/$.ts"]).toContain("auth.handler");
+    expect(files[".gitignore"]).toContain("local.db");
+  });
+
+  it("meshNamespace = ownerPrefix + nsReal del host (sha256 del owner, 8 bytes)", async () => {
+    const { meshNamespace } = await import("~/.server/core/databaseOperations");
+    // printf '64f1a2b3c4d5e6f708192a3b' | shasum -a 256 | cut -c1-16
+    expect(meshNamespace("64f1a2b3c4d5e6f708192a3b", "site-abc")).toBe("oaff1139deaecbb5d__site-abc");
+    expect(() => meshNamespace("x", "a__b")).toThrow();
+    expect(() => meshNamespace("x", "a/b")).toThrow();
+  });
+});

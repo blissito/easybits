@@ -85,9 +85,20 @@ export async function listDatabases(ctx: AuthContext) {
   return { items: databases };
 }
 
+/**
+ * Namespace que el mesh de sandbox-host deriva para la base `name` de un dueño
+ * (`ownerPrefix` + `nsReal` en internal/api/dbproxy.go). Una caja abre
+ * `http://172.20.0.1:8090/v1/db/<name>/` y el host firma el JWT por petición, así
+ * que si la fila Database usa ESTE namespace, la caja y el dashboard ven la misma base.
+ */
+export function meshNamespace(ownerId: string, name: string): string {
+  if (!/^[A-Za-z0-9_-]+$/.test(name) || name.includes("__")) throw new Error(`nombre de base inválido para el mesh: ${name}`);
+  return "o" + crypto.createHash("sha256").update(ownerId).digest("hex").slice(0, 16) + "__" + name;
+}
+
 export async function createDatabase(
   ctx: AuthContext,
-  opts: { name: string; description?: string }
+  opts: { name: string; description?: string; siteId?: string }
 ) {
   requireScope(ctx, "WRITE");
 
@@ -106,9 +117,12 @@ export async function createDatabase(
     );
   }
 
+  // Las bases de los sitios no cuentan (Prisma+Mongo: un campo AUSENTE no matchea null).
   const planKey = getUserPlan(ctx.user);
   const maxDbs = DB_LIMITS[planKey];
-  const count = await db.database.count({ where: { userId: ctx.user.id } });
+  const count = opts.siteId
+    ? 0
+    : await db.database.count({ where: { userId: ctx.user.id, OR: [{ siteId: null }, { siteId: { isSet: false } }] } });
   if (count >= maxDbs) {
     throw new Response(
       JSON.stringify({ error: `Max ${maxDbs} databases on plan ${planKey}. Upgrade at https://www.easybits.cloud/planes` }),
@@ -134,10 +148,11 @@ export async function createDatabase(
   // siguiente (toda insertaba "" → colisión → 500 global). Incidente 2026-07-08:
   // un solo huérfano tumbó el provisioning de TODOS los teams. Ahora el namespace
   // va desde el create (nunca ""), y si sqld falla borramos la fila (sin fantasma).
-  const namespace = crypto.randomBytes(12).toString("hex"); // 24-hex = ObjectId válido
+  // La de un sitio usa el namespace del mesh (no es ObjectId: el id va aparte).
+  const namespace = opts.siteId ? meshNamespace(ctx.user.id, name) : crypto.randomBytes(12).toString("hex"); // 24-hex = ObjectId válido
   const database = await db.database.create({
     data: {
-      id: namespace,
+      ...(opts.siteId ? { siteId: opts.siteId } : { id: namespace }),
       name,
       namespace,
       description: opts.description || null,

@@ -799,6 +799,10 @@ model Database {
   description String?
   userId      String   @db.ObjectId
   user        User     @relation(fields: [userId], references: [id])
+  // Base de una web app de /dash/sitios (la crea el sitio, no el usuario): no cuenta
+  // contra DB_LIMITS y su namespace es el del mesh (meshNamespace) para que la caja la
+  // abra por /v1/db sin credenciales. Falta decidir dónde se cobra.
+  siteId      String?  @db.ObjectId
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

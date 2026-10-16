@@ -6,6 +6,7 @@
 // buckets sitios+sandbox+hosting). No hay loop de coding propio: el chat del
 // dashboard entra a routeMessage con groupId `site:<id>` y un appendSystemPrompt
 // por turno que le dice al agente QUÉ sitio está tocando y cómo.
+import crypto from "node:crypto";
 import { db } from "~/.server/db";
 import type { AuthContext } from "~/.server/apiAuth";
 import { requireScope } from "~/.server/apiAuth";
@@ -15,10 +16,13 @@ import { createSecret, listSecrets } from "./secretOperations";
 import { FLEET_ENGINES, DEFAULT_SITE_ENGINE, getEngine, engineCreatable, engineIsMetered, type FleetEngine } from "~/lib/fleetEngines";
 import { createWebsite, deployWebsiteFile } from "./operations";
 import { buyMachine, releasePermanent } from "./machineOperations";
-import { launchApp, setRunspec } from "./releaseOperations";
+import { launchApp, setMachineSecrets, setRunspec } from "./releaseOperations";
+import { createDatabase } from "./databaseOperations";
+import { SECRETS_FILE, writeSecretsFile } from "./secretsFile";
+import { MESH_DB_PASSTHROUGH } from "./sandboxOperations";
 import { execCommand, exposeSandboxPort, getSandbox, listFiles, readFile, waitUntilRunning, writeFile } from "./sandboxOperations";
 import { DEFAULT_SITE_THEME, SITE_THEMES, parseThemeColors, replaceStaticTheme, themeBlockStatic, themeCssTw4, validThemeColors, type ThemeColors } from "~/lib/siteTheme";
-import { PREVIEW_DEPS_MARK, PREVIEW_PORT, STARTER_DIR, previewInstallScript, starterFiles, starterPrompt, starterRunspec, stackThemeFiles, themeRule, starterSnapshot, starterTemplate } from "~/.server/starters";
+import { PREVIEW_DEPS_MARK, PREVIEW_PORT, PREVIEW_UNIT, STARTER_DIR, stackHasAuth, previewInstallScript, starterFiles, starterPrompt, starterRunspec, stackThemeFiles, themeRule, starterSnapshot, starterTemplate } from "~/.server/starters";
 import { isSiteStack, type SiteStackId } from "~/lib/siteStacks";
 import { pushSiteToGithub, siteRepo } from "./githubSiteOperations";
 import { markSelfPushed } from "./pushDeployOperations";
@@ -337,7 +341,7 @@ export async function createSite(
   // La máquina ya se compró: si sembrar falla, el sitio igual nace (el agente puede
   // escribir el código) en vez de dejar una caja cobrada sin sitio.
   if (sandboxId) {
-    await prepareSiteMachine(ctx, sandboxId, opts.stack ?? null).catch((e) =>
+    await prepareSiteMachine(ctx, site.id, sandboxId, opts.stack ?? null).catch((e) =>
       console.error("[sites] prepareSiteMachine", sandboxId, e)
     );
   }
@@ -352,9 +356,9 @@ export async function createSite(
  * pisa código —sin package.json siembra el starter; sin easybits.json repite runspec
  * y puerto—.
  */
-async function prepareSiteMachine(ctx: AuthContext, sandboxId: string, stack: SiteStack) {
+async function prepareSiteMachine(ctx: AuthContext, siteId: string, sandboxId: string, stack: SiteStack) {
   const saved = (await db.sandbox.findUnique({ where: { sandboxId }, select: { runspec: true } }))?.runspec as
-    | { appDir?: string; port?: number }
+    | { appDir?: string; port?: number; secretNames?: string[] }
     | null
     | undefined;
   const runspec = stack ? starterRunspec(stack) : DEFAULT_RUNSPEC;
@@ -400,12 +404,59 @@ async function prepareSiteMachine(ctx: AuthContext, sandboxId: string, stack: Si
     }
     if (pkg) await writeFile(ctx, sandboxId, { path: `${appDir}/package.json`, content: pkg });
   }
+  // Base y login del sitio: va ANTES de la unit de la vista previa para que arranque con
+  // los secretos. Si falla, el sitio sigue (el agente puede trabajar sin base).
+  if (stack && stackHasAuth(stack)) {
+    await prepareSiteBackend(ctx, siteId, sandboxId, appDir, saved?.secretNames ?? [], have.has(SECRETS_FILE)).catch((e) =>
+      console.error("[sites] prepareSiteBackend", sandboxId, e)
+    );
+  }
   if (stack) {
     // Vista previa en vivo (servidor dev). Si no queda, el turno sigue: el agente
     // puede compilar y publicar igual; por eso no se lanza.
     await exposeSandboxPort(ctx, sandboxId, PREVIEW_PORT).catch(() => {});
     const r = await execCommand(ctx, sandboxId, { command: previewInstallScript(stack, appDir), timeoutSeconds: 30 }).catch((e) => ({ exitCode: -1, stderr: String(e) }));
     if (r.exitCode !== 0) console.error("[sites] preview unit", sandboxId, r);
+  }
+}
+
+const SITE_SECRETS = ["BETTER_AUTH_SECRET", "EASYBITS_DB_URL"];
+
+/** Nombre de la base de un sitio. Es también el nombre que la caja pide al mesh. */
+export function siteDatabaseName(siteId: string) {
+  return `site-${siteId}`;
+}
+
+/**
+ * Base libSQL del sitio + secretos de su login. La caja la abre por el passthrough del
+ * mesh (`EASYBITS_DB_URL`): el host firma un JWT de 10 min en cada petición, así que en la
+ * caja no hay gate key, llave ni token que renovar. La fila Database usa el namespace del
+ * mesh para que el dashboard y `db_query` vean la misma base. Idempotente.
+ */
+async function prepareSiteBackend(
+  ctx: AuthContext,
+  siteId: string,
+  sandboxId: string,
+  appDir: string,
+  secretNames: string[],
+  hasSecretsFile: boolean
+) {
+  const name = siteDatabaseName(siteId);
+  const exists = await db.database.findUnique({ where: { userId_name: { userId: ctx.user.id, name } } });
+  if (!exists) await createDatabase(ctx, { name, siteId, description: "Base de datos de la web app (login y datos)" });
+  const missing = SITE_SECRETS.filter((n) => !secretNames.includes(n));
+  if (missing.length) {
+    const values: Record<string, string> = {
+      EASYBITS_DB_URL: `${MESH_DB_PASSTHROUGH}/${name}/`,
+      BETTER_AUTH_SECRET: crypto.randomBytes(32).toString("base64url"),
+    };
+    await setMachineSecrets(ctx, sandboxId, Object.fromEntries(missing.map((n) => [n, values[n]])), { restart: false });
+  }
+  // La vista previa lee .easybits.env al arrancar, pero ese archivo sólo lo escribían
+  // build y arranque («Publicar»): sin esto el dev nacía sin base ni secreto de login.
+  if (missing.length || !hasSecretsFile) {
+    await writeSecretsFile(ctx, sandboxId, { dir: appDir, names: [...new Set([...secretNames, ...SITE_SECRETS])] });
+    await execCommand(ctx, sandboxId, { command: `systemctl try-restart ${PREVIEW_UNIT} || true`, timeoutSeconds: 20 }).catch(() => {});
   }
 }
 
@@ -421,9 +472,9 @@ async function appDirEntries(ctx: AuthContext, sandboxId: string, appDir: string
 }
 
 /** Antes de cada turno: re-siembra si la preparación al crear el sitio falló. */
-export async function ensureSiteMachine(ctx: AuthContext, site: { kind: string; sandboxId: string | null; stack?: string | null }) {
+export async function ensureSiteMachine(ctx: AuthContext, site: { id: string; kind: string; sandboxId: string | null; stack?: string | null }) {
   if (site.kind !== "webapp" || !site.sandboxId) return;
-  await prepareSiteMachine(ctx, site.sandboxId, siteStack(site));
+  await prepareSiteMachine(ctx, site.id, site.sandboxId, siteStack(site));
 }
 
 /** Tras el checkout, engancha al sitio la máquina más reciente que no tenga sitio. */
@@ -439,7 +490,7 @@ export async function attachNewestMachine(ctx: AuthContext, siteId: string) {
   });
   if (!box) return site;
   await db.site.update({ where: { id: siteId }, data: { sandboxId: box.sandboxId } });
-  await prepareSiteMachine(ctx, box.sandboxId, siteStack(site)).catch((e) =>
+  await prepareSiteMachine(ctx, siteId, box.sandboxId, siteStack(site)).catch((e) =>
     console.error("[sites] prepareSiteMachine", box.sandboxId, e)
   );
   return getSite(ctx, siteId);

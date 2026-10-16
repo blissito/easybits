@@ -4,6 +4,7 @@
 // (SvelteKit 3 ya no lee svelte.config.js; TanStack Start sin Nitro no saca .output).
 import type { SiteStackId } from "~/lib/siteStacks";
 import { STARTER_FILES } from "./files";
+import { AUTH_DEPS, AUTH_FILES } from "./auth";
 import { shQuote } from "~/.server/core/sandboxOperations";
 import { createHash } from "node:crypto";
 import { DEFAULT_SITE_THEME, THEME_TOKENS, themeCssTw4 } from "~/lib/siteTheme";
@@ -48,8 +49,21 @@ export function stackThemeFiles(stack: SiteStackId): { theme: string; main: stri
   return { theme: main.replace(/[^/]+$/, "eb-theme.css"), main, importLine: THEME_IMPORT };
 }
 
+/** ¿El starter del stack trae base de datos del sitio y login (Better Auth)? */
+export function stackHasAuth(stack: SiteStackId): boolean {
+  return !!AUTH_FILES[stack];
+}
+
 export function starterFiles(stack: SiteStackId) {
-  const files = { ...STARTER_FILES[stack] };
+  const files = { ...STARTER_FILES[stack], ...AUTH_FILES[stack] };
+  const deps = AUTH_DEPS[stack];
+  if (deps) {
+    const pkg = JSON.parse(files["package.json"]);
+    pkg.dependencies = Object.fromEntries(Object.entries({ ...pkg.dependencies, ...deps }).sort(([a], [b]) => a.localeCompare(b)));
+    files["package.json"] = JSON.stringify(pkg, null, 2) + "\n";
+    // Fuera de EasyBits db.ts cae a un archivo local: que no se suba al repo.
+    if (files[".gitignore"]) files[".gitignore"] += "local.db*\n";
+  }
   const t = stackThemeFiles(stack);
   if (t) {
     files[t.main] = `${files[t.main].trimEnd()}\n${t.importLine}\n`;
@@ -177,6 +191,7 @@ const RULES: Record<SiteStackId, string[]> = {
     `Stack: TanStack Start 1.169 (React 19, SSR, rutas por archivo).`,
     `Antes de tu primer cambio lee la doc de la versión instalada: sandbox_exec("cat /app/node_modules/@tanstack/react-start/skills/react-start/SKILL.md"). Start ya no usa Vinxi ni app.config.ts.`,
     `Rutas en /app/src/routes (createFileRoute; __root.tsx es el layout). Lógica de servidor (DB, secretos, APIs) con createServerFn de @tanstack/react-start. No toques server.mjs: sirve el build.`,
+    `BASE DE DATOS Y LOGIN YA INCLUIDOS (de EasyBits, no propongas Supabase, Firebase ni otra base): src/lib/db.ts exporta db (@libsql/client, SQLite) conectada a la base de este sitio — db.execute({ sql, args }) sólo en el servidor; crea tus tablas con CREATE TABLE IF NOT EXISTS. src/lib/auth.ts es Better Auth 1.7 (correo y contraseña; tablas user/session/account/verification, no las toques a mano), src/lib/session.ts trae getUser() para loaders y beforeLoad (protege una ruta con redirect a /login), src/lib/auth-client.ts es el cliente del navegador y /login ya funciona. No cambies EASYBITS_DB_URL ni BETTER_AUTH_SECRET. Aún no hay envío de correo: nada de verificación por correo ni "olvidé mi contraseña" todavía.`,
   ],
   next: [
     `Stack: Next.js 16 (App Router, React 19).`,
