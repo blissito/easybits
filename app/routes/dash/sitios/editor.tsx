@@ -325,22 +325,79 @@ export default function SiteEditor() {
     return () => window.removeEventListener("message", onMsg);
   }, []);
 
-  // Imagen adjunta (mockup/referencia): drop, paste o botón. Solo png/jpg/webp, ≤5 MB.
-  const attachFile = useCallback((file: File | null | undefined) => {
+  // Imagen adjunta (mockup/referencia): soltarla en la columna del chat, pegarla o botón.
+  // Se reduce aquí (máx. 2048 px, WebP): una captura Retina pesa >5 MB y antes se
+  // rechazaba en silencio. Cualquier imagen que el navegador sepa abrir sirve.
+  const attachFile = useCallback(async (file: File | null | undefined) => {
     if (!file) return;
-    const ext = (file.type.split("/")[1] || "").replace("jpeg", "jpg");
-    if (!/^(png|jpg|webp)$/.test(ext) || file.size > 5 * 1024 * 1024) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const url = String(reader.result);
-      setAttached({ base64: url.split(",")[1] ?? "", ext, url, name: file.name });
+    if (!file.type.startsWith("image/")) {
+      toast.error("Sólo se pueden adjuntar imágenes.");
+      return;
+    }
+    try {
+      const bmp = await createImageBitmap(file);
+      const scale = Math.min(1, 2048 / Math.max(bmp.width, bmp.height));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(bmp.width * scale);
+      canvas.height = Math.round(bmp.height * scale);
+      canvas.getContext("2d")!.drawImage(bmp, 0, 0, canvas.width, canvas.height);
+      bmp.close();
+      const url = canvas.toDataURL("image/webp", 0.85);
+      const webp = url.startsWith("data:image/webp");
+      // Safari viejo no codifica WebP: cae a JPEG.
+      const finalUrl = webp ? url : canvas.toDataURL("image/jpeg", 0.85);
+      const base64 = finalUrl.split(",")[1] ?? "";
+      if (base64.length > 7_000_000) {
+        toast.error("La imagen es demasiado grande incluso reducida.");
+        return;
+      }
+      setAttached({ base64, ext: webp ? "webp" : "jpg", url: finalUrl, name: file.name });
+    } catch {
+      toast.error("No pudimos abrir esa imagen. Prueba con PNG o JPG.");
+    }
+  }, []);
+  // Soltar una imagen en cualquier parte de la columna del chat (no sólo en la caja de texto).
+  const [dragging, setDragging] = useState(false);
+  const dragDepth = useRef(0);
+  const hasFiles = (e: React.DragEvent) => Array.from(e.dataTransfer?.types ?? []).includes("Files");
+  const dropProps = {
+    onDragEnter: (e: React.DragEvent) => {
+      if (!hasFiles(e)) return;
+      e.preventDefault();
+      dragDepth.current++;
+      setDragging(true);
+    },
+    onDragOver: (e: React.DragEvent) => {
+      if (hasFiles(e)) e.preventDefault();
+    },
+    onDragLeave: () => {
+      dragDepth.current = Math.max(0, dragDepth.current - 1);
+      if (!dragDepth.current) setDragging(false);
+    },
+    onDrop: (e: React.DragEvent) => {
+      if (!hasFiles(e)) return;
+      e.preventDefault();
+      dragDepth.current = 0;
+      setDragging(false);
+      void attachFile(Array.from(e.dataTransfer.files).find((f) => f.type.startsWith("image/")) ?? e.dataTransfer.files[0]);
+    },
+  };
+  // Soltar fuera de la columna no debe abrir la imagen en la pestaña (se perdía el editor).
+  useEffect(() => {
+    const stop = (e: DragEvent) => {
+      if (Array.from(e.dataTransfer?.types ?? []).includes("Files")) e.preventDefault();
     };
-    reader.readAsDataURL(file);
+    window.addEventListener("dragover", stop);
+    window.addEventListener("drop", stop);
+    return () => {
+      window.removeEventListener("dragover", stop);
+      window.removeEventListener("drop", stop);
+    };
   }, []);
   useEffect(() => {
     const onPaste = (e: ClipboardEvent) => {
       const f = Array.from(e.clipboardData?.files ?? []).find((x) => x.type.startsWith("image/"));
-      if (f) { e.preventDefault(); attachFile(f); }
+      if (f) { e.preventDefault(); void attachFile(f); }
     };
     document.addEventListener("paste", onPaste);
     return () => document.removeEventListener("paste", onPaste);
@@ -604,7 +661,15 @@ export default function SiteEditor() {
         </div>
       </Modal>
       {/* Chat */}
-      <aside className={`${mobileTab === "chat" ? "flex" : "hidden"} md:flex w-full md:max-w-sm flex-col md:border-r border-gray-200 bg-white min-w-0`}>
+      <aside
+        {...dropProps}
+        className={`${mobileTab === "chat" ? "flex" : "hidden"} relative md:flex w-full md:max-w-sm flex-col md:border-r border-gray-200 bg-white min-w-0`}
+      >
+        {dragging && (
+          <div className="pointer-events-none absolute inset-2 z-20 grid place-items-center rounded-2xl border-2 border-dashed border-brand-500 bg-brand-500/10 text-sm font-bold text-brand-500">
+            Suelta la imagen aquí
+          </div>
+        )}
         <header className="px-4 py-3 border-b border-gray-200 flex items-center gap-2">
           <Link to="/dash/sitios" className="text-gray-400 hover:text-black">←</Link>
           <div className="min-w-0 flex-1">
