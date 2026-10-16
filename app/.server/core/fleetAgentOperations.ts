@@ -2764,7 +2764,7 @@ export async function routeMessage(
   opts: RouteMessageOpts = {}
 ): Promise<string> {
   const track: TurnTrack = {
-    turnId: randomUUID(),
+    turnId: opts.turnId ?? randomUUID(),
     startedAt: new Date(),
     agent: null,
     sessionUuid: "",
@@ -2811,6 +2811,9 @@ export async function emitTurnAdmissionFailure(fleetAgentId: string, groupId: st
 }
 
 type RouteMessageOpts = {
+  /** Id del turno si quien llama ya lo tiene (p. ej. el FleetTurn de Sitios): así el
+   *  webhook `turn.completed` y la fila del turno hablan del mismo turno. */
+  turnId?: string;
   skipRateLimit?: boolean;
   hasMedia?: boolean;
   skipUserLog?: boolean;

@@ -1539,6 +1539,34 @@ model FleetAgentRoute {
 // worker. The Agent SDK's own .jsonl transcript (on the worker volume) drives
 // native resume + auto-compact; this table is the portable record (audit,
 // funnel, stateless-replay fallback). One row per inbound/outbound turn.
+// Un turno de agente que vive APARTE de la petición HTTP (hoy: el chat de /dash/sitios).
+// Si el navegador recarga, se re-engancha por aquí; si el proceso muere a media obra, el
+// barrido lo cierra como «interrumpido» guardando lo que alcanzó a escribir (y ofrece
+// «Continuar»). `text`/`tools`/`cortes` se refrescan con el latido mientras corre.
+model FleetTurn {
+  id              String    @id @default(auto()) @map("_id") @db.ObjectId
+  turnId          String    @unique
+  surface         String    // "sites"
+  ownerId         String    @db.ObjectId
+  fleetAgentId    String    @db.ObjectId
+  groupId         String
+  siteId          String?   @db.ObjectId
+  state           String    // running | done | error | capacity | interrupted
+  userText        String
+  text            String    @default("")
+  cortes          Int[]
+  tools           String[]
+  instance        String    // proceso dueño (pid + arranque): sólo él lo tiene en memoria
+  heartbeatAt     DateTime  @default(now())
+  error           String?
+  continuesTurnId String?
+  startedAt       DateTime  @default(now())
+  endedAt         DateTime?
+
+  @@index([groupId, startedAt])
+  @@index([state, heartbeatAt])
+}
+
 model FleetAgentMessage {
   id           String   @id @default(auto()) @map("_id") @db.ObjectId
   fleetAgentId String   @db.ObjectId

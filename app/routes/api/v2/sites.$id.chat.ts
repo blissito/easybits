@@ -2,40 +2,69 @@ import type { Route } from "./+types/sites.$id.chat";
 import { db } from "~/.server/db";
 import { getUserOrNull } from "~/.server/getters";
 import type { AuthContext } from "~/.server/apiAuth";
-import { withAdmitRetry } from "~/.server/core/fleetAdmitHold";
-import { routeMessage, FleetAgentAtCapacity } from "~/.server/core/fleetAgentOperations";
-import { ensureBuilderAgent, ensureSiteMachine, getSite, siteGroupId, siteTurnPrompt, siteEngineFor } from "~/.server/core/siteOperations";
+import { ensureBuilderAgent, getSite, siteGroupId, siteEngineFor } from "~/.server/core/siteOperations";
+import { startSiteTurn, subscribeSiteTurn, siteTurnStatus, TurnBusy, TERMINAL_TURN_EVENTS, type TurnEvent } from "~/.server/core/siteTurns.server";
 import { engineIsMetered } from "~/lib/fleetEngines";
 import { checkLLMTokenLimit } from "~/.server/llmTokenLimit";
-import { narracionAMarkdown, partirNarracion } from "~/lib/narracion";
 
 // Chat del creador de sitios. Auth = sesión del dueño (el token del builder NUNCA
-// baja al browser). Mismo SSE que fleet-agents/:id/message-stream: `chunk`,
-// `tool`, `done`, `error`, `capacity`. GET = historial (FleetAgentMessage).
-/** Reescribe la fila recién guardada del turno con la narración como `- ✓ …`. Sólo si la
- *  fila es exactamente lo que llegó por el stream (si no, los cortes no aplican). */
-async function saveNarrated(fleetAgentId: string, groupId: string, reply: string, streamed: string, cortes: number[]) {
-  if (!cortes.length || reply !== streamed) return;
-  const { pasos, resto } = partirNarracion(streamed, cortes);
-  if (!pasos.length) return;
-  const row = await db.fleetAgentMessage.findFirst({
-    where: { fleetAgentId, groupId, role: "agent" },
-    orderBy: { createdAt: "desc" },
-    select: { id: true, text: true },
-  });
-  if (row?.text !== reply) return;
-  await db.fleetAgentMessage.update({ where: { id: row.id }, data: { text: narracionAMarkdown(pasos, resto) } });
-}
-
+// baja al browser). El turno vive APARTE de la petición (siteTurns.server.ts): el POST lo
+// arranca y se suscribe; si el navegador se va, el turno sigue y `GET ?attach=1` se
+// re-engancha (snapshot + en vivo). Eventos SSE: `chunk`, `tool`, `snapshot`, `done`,
+// `error`, `capacity`, `interrupted`, `idle`. GET sin attach = historial + estado del turno.
 async function ctxFor(request: Request) {
   const user = await getUserOrNull(request).catch(() => null);
   if (!user) throw Response.json({ error: "Unauthorized" }, { status: 401 });
   return { user, scopes: ["READ", "WRITE"] } as AuthContext;
 }
 
+/** SSE suscrito al turno del sitio; se cierra con el evento final o cuando el navegador se va. */
+function turnStream(request: Request, groupId: string, snapshot: boolean) {
+  const encoder = new TextEncoder();
+  let unsubscribe: (() => void) | null = null;
+  let heartbeat: ReturnType<typeof setInterval> | null = null;
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      let closed = false;
+      const close = () => {
+        if (closed) return;
+        closed = true;
+        unsubscribe?.();
+        if (heartbeat) clearInterval(heartbeat);
+        try { controller.close(); } catch { /* ya cerrado */ }
+      };
+      const send = (e: TurnEvent) => {
+        if (closed) return;
+        try { controller.enqueue(encoder.encode(`data: ${JSON.stringify(e)}\n\n`)); } catch { return close(); }
+        if (TERMINAL_TURN_EVENTS.has(e.type) || e.type === "idle") close();
+      };
+      controller.enqueue(encoder.encode(`retry: 2000\n\n`));
+      // Keep-alive: un cold spawn tarda ~30 s sin emitir nada.
+      heartbeat = setInterval(() => {
+        try { controller.enqueue(encoder.encode(`: ka\n\n`)); } catch { close(); }
+      }, 15_000);
+      unsubscribe = subscribeSiteTurn(groupId, send, { snapshot });
+      request.signal.addEventListener("abort", close);
+    },
+    cancel() {
+      unsubscribe?.();
+      if (heartbeat) clearInterval(heartbeat);
+    },
+  });
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache, no-transform",
+      Connection: "keep-alive",
+      "X-Accel-Buffering": "no",
+    },
+  });
+}
+
 export async function loader({ request, params }: Route.LoaderArgs) {
   const ctx = await ctxFor(request);
   const site = await getSite(ctx, params.id!);
+  if (new URL(request.url).searchParams.get("attach")) return turnStream(request, siteGroupId(site.id), true);
   const engine = siteEngineFor(site);
   const builder = await ensureBuilderAgent(ctx, engine.id);
   const rows = await db.fleetAgentMessage.findMany({
@@ -46,7 +75,8 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   });
   // Saldo solo aplica al motor medido; BYOK paga a su proveedor.
   const lim = engineIsMetered(engine) ? await checkLLMTokenLimit(ctx.user.id) : null;
-  return Response.json({ messages: rows, tokens: lim ? { remaining: lim.remaining, limit: lim.limit } : null });
+  const turn = await siteTurnStatus(siteGroupId(site.id));
+  return Response.json({ messages: rows, tokens: lim ? { remaining: lim.remaining, limit: lim.limit } : null, ...turn });
 }
 
 export async function action({ request, params }: Route.ActionArgs) {
@@ -78,72 +108,21 @@ export async function action({ request, params }: Route.ActionArgs) {
   if (image && image.base64.length > 7_000_000) {
     return Response.json({ error: "image_too_large", message: "La imagen supera 5 MB." }, { status: 413 });
   }
-  const encoder = new TextEncoder();
-  const sse = (obj: unknown) => encoder.encode(`data: ${JSON.stringify(obj)}\n\n`);
-  const stream = new ReadableStream<Uint8Array>({
-    async start(controller) {
-      // Keep-alive: un cold spawn tarda ~30s sin emitir nada.
-      const heartbeat = setInterval(() => {
-        try { controller.enqueue(encoder.encode(`: ka\n\n`)); } catch { /* cerrado */ }
-      }, 15_000);
-      try {
-        // Si el sembrado al crear el sitio falló (caja aún arrancando), se repite aquí
-        // antes de que el agente encuentre /app vacío. Nunca bloquea el turno.
-        const machine = (await ensureSiteMachine(ctx, site).catch((e) => console.error("[sites] ensureSiteMachine", site.sandboxId, e))) ?? {};
-        // Dónde arrancó cada herramienta en el texto: con eso la copia guardada separa la
-        // narración («Reviso…», «Instalo…») de la respuesta, igual que en vivo.
-        let streamed = "";
-        const cortes: number[] = [];
-        const reply = await withAdmitRetry(() =>
-          routeMessage(
-            builder.id,
-            {
-              groupId: siteGroupId(site.id),
-              sender: "sitios",
-              // La selección va EN el texto (no solo en el system append): en una
-              // sesión caliente el appendSystemPrompt por turno no siempre llega.
-              text: [
-                selection
-                  ? `[Elemento seleccionado en la vista previa: <${selection.tag} data-eb-id="${selection.id}">. Modifica SOLO ese nodo.]`
-                  : "",
-                image ? "[El usuario adjuntó una imagen (mockup/referencia): mírala antes de responder y úsala como guía visual.]" : "",
-                text,
-              ].filter(Boolean).join("\n"),
-              image,
-              appendSystemPrompt: siteTurnPrompt(site, selection, machine),
-            },
-            {
-              onChunk: (value) => {
-                streamed += value;
-                controller.enqueue(sse({ type: "chunk", value }));
-              },
-              onTool: (name, ev) => {
-                if (ev?.phase === "start" && streamed.trim() && cortes[cortes.length - 1] !== streamed.length) cortes.push(streamed.length);
-                controller.enqueue(sse({ type: "tool", name, phase: ev?.phase, ok: ev?.ok }));
-              },
-            }
-          )
-        );
-        controller.enqueue(sse({ type: "done", value: reply }));
-        await saveNarrated(builder.id, siteGroupId(site.id), reply, streamed, cortes).catch((e) => console.error("[sites] narración", e));
-      } catch (e) {
-        if (e instanceof FleetAgentAtCapacity) {
-          controller.enqueue(sse({ type: "capacity", message: e.message, retryAfter: 10 }));
-        } else {
-          controller.enqueue(sse({ type: "error", message: e instanceof Error ? e.message : "error" }));
-        }
-      } finally {
-        clearInterval(heartbeat);
-        controller.close();
-      }
-    },
-  });
-  return new Response(stream, {
-    headers: {
-      "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache, no-transform",
-      Connection: "keep-alive",
-      "X-Accel-Buffering": "no",
-    },
-  });
+  const continueTurnId = typeof body?.continueTurnId === "string" ? body.continueTurnId : undefined;
+  try {
+    await startSiteTurn(ctx, site, builder, {
+      text,
+      selection,
+      image,
+      turnId: typeof body?.turnId === "string" ? body.turnId : undefined,
+      continueTurnId,
+    });
+  } catch (e) {
+    if (e instanceof TurnBusy) {
+      return Response.json({ error: "turn_busy", message: e.message, activeTurnId: e.activeTurnId }, { status: 409 });
+    }
+    throw e;
+  }
+  // Suscribirse sin snapshot: el turno acaba de nacer y el navegador ya pintó su burbuja.
+  return turnStream(request, siteGroupId(site.id), false);
 }

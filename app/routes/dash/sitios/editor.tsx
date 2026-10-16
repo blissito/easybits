@@ -212,6 +212,8 @@ export default function SiteEditor() {
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
+  // Turno que se cortó por un reinicio de la plataforma: se ofrece «Continuar».
+  const [cutTurn, setCutTurn] = useState<string | null>(null);
   const [selection, setSelection] = useState<Selection>(null);
   // «Señalar»: con el modo apagado la vista previa se usa como la app real (clics, links).
   const [pointing, setPointing] = useState(true);
@@ -256,11 +258,25 @@ export default function SiteEditor() {
   useEffect(() => {
     fetch(`/api/v2/sites/${site.id}/chat`)
       .then((r) => (r.ok ? r.json() : { messages: [] }))
-      .then((d: { messages?: Array<{ role: string; text: string }>; tokens?: { remaining: number; limit: number } }) => {
+      .then((d: {
+        messages?: Array<{ role: string; text: string }>;
+        tokens?: { remaining: number; limit: number };
+        activeTurn?: { turnId: string } | null;
+        lastTurn?: { turnId: string; state: string } | null;
+      }) => {
         if (d.tokens) setTokens(d.tokens);
         // No pisar un turno que ya arrancó (el primer prompt se manda antes de
         // que llegue el historial).
-        setMsgs((cur) => (cur.length ? cur : (d.messages ?? []).map((m) => ({ role: m.role === "user" ? "user" : "bot", text: m.text }))));
+        let fresh = false;
+        setMsgs((cur) => {
+          if (cur.length) return cur;
+          fresh = true;
+          const hist: Msg[] = (d.messages ?? []).map((m) => ({ role: m.role === "user" ? "user" : "bot", text: m.text }));
+          // Turno en curso (recargaste a media obra): su burbuja se llena con el snapshot.
+          return d.activeTurn ? [...hist, { role: "bot", text: "", tools: [] }] : hist;
+        });
+        if (d.lastTurn?.state === "interrupted" && !d.activeTurn) setCutTurn(d.lastTurn.turnId);
+        if (d.activeTurn && fresh) void attach();
       })
       .catch(() => {});
   }, [site.id]);
@@ -332,10 +348,79 @@ export default function SiteEditor() {
     return () => document.removeEventListener("paste", onPaste);
   }, [attachFile]);
 
+  // Aplica un evento del turno a la burbuja del agente. true = el turno terminó.
+  const patchLast = useCallback((fn: (prev: Msg) => Msg) =>
+    setMsgs((m) => {
+      const last = m[m.length - 1];
+      if (!last || last.role !== "bot") return m;
+      return [...m.slice(0, -1), fn(last)];
+    }), []);
+  const applyEvent = useCallback((e: { type: string; [k: string]: any }): boolean => {
+    if (e.type === "chunk") patchLast((p) => ({ ...p, text: p.text + e.value }));
+    else if (e.type === "snapshot") patchLast((p) => ({ ...p, text: e.text ?? "", tools: e.tools ?? [], cortes: e.cortes ?? [] }));
+    else if (e.type === "tool" && e.phase === "start")
+      patchLast((p) => ({
+        ...p,
+        tools: [...(p.tools ?? []), e.name],
+        cortes: p.text.trim() && p.cortes?.[p.cortes.length - 1] !== p.text.length ? [...(p.cortes ?? []), p.text.length] : p.cortes,
+      }));
+    // done vacío = el turno se cortó sin respuesta (límite del motor): decirlo, no dejar «construyendo…».
+    // Se queda lo que llegó por el stream: los `cortes` se midieron sobre ese texto.
+    else if (e.type === "done") patchLast((p) => ({ ...p, text: p.text || e.value || "⚠️ El agente no terminó a tiempo y no respondió. Vuelve a intentarlo." }));
+    else if (e.type === "error") patchLast((p) => ({ ...p, text: [p.text, `⚠️ ${e.message}`].filter(Boolean).join("\n\n") }));
+    else if (e.type === "capacity") patchLast((p) => ({ ...p, text: `⏳ ${e.message} — reintenta en unos segundos.` }));
+    else if (e.type === "interrupted") {
+      patchLast((p) => ({ ...p, text: [p.text, "_Se interrumpió por un reinicio de la plataforma._"].filter(Boolean).join("\n\n") }));
+      setCutTurn(e.turnId ?? null);
+    }
+    return ["done", "error", "capacity", "interrupted", "idle"].includes(e.type);
+  }, [patchLast]);
+
+  /** Lee un SSE del turno. true = llegó el evento final; false = se cortó antes (deploy, red). */
+  const consume = useCallback(async (res: Response): Promise<boolean> => {
+    if (!res.body) return false;
+    const reader = res.body.getReader();
+    const dec = new TextDecoder();
+    let buf = "";
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) return false;
+      buf += dec.decode(value, { stream: true });
+      let nl: number;
+      while ((nl = buf.indexOf("\n\n")) !== -1) {
+        const dl = buf.slice(0, nl).split("\n").find((l) => l.startsWith("data: "));
+        buf = buf.slice(nl + 2);
+        if (!dl) continue;
+        try {
+          if (applyEvent(JSON.parse(dl.slice(6)))) return true;
+        } catch { /* evento malformado */ }
+      }
+    }
+  }, [applyEvent]);
+
+  /** Re-engancharse al turno en curso (recarga, otra pestaña o un deploy que cortó el stream). */
+  const attach = useCallback(async () => {
+    setBusy(true);
+    try {
+      for (let i = 0; i < 40; i++) {
+        const res = await fetch(`/api/v2/sites/${site.id}/chat?attach=1`).catch(() => null);
+        if (res?.ok && (await consume(res).catch(() => false))) return;
+        // Se cortó sin evento final: el servidor se está reiniciando. Reintentar.
+        await new Promise((r) => setTimeout(r, 3000));
+      }
+      patchLast((p) => ({ ...p, text: [p.text, "⚠️ Perdimos la conexión con el agente. Recarga la página."].filter(Boolean).join("\n\n") }));
+    } finally {
+      setBusy(false);
+      setTurnDone(true);
+      setPreviewKey((k) => k + 1);
+    }
+  }, [site.id, consume, patchLast]);
+
   const send = useCallback(
-    async (text: string) => {
+    async (text: string, opts?: { continueTurnId?: string }) => {
       text = text.trim();
       if ((!text && !attached) || busy) return;
+      setCutTurn(null);
       if (!text) text = "Usa esta imagen como referencia para el sitio.";
       setBusy(true);
       setInput("");
@@ -355,8 +440,20 @@ export default function SiteEditor() {
         const res = await fetch(`/api/v2/sites/${site.id}/chat`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text, selection: sel, image: img ? { base64: img.base64, ext: img.ext } : undefined }),
+          body: JSON.stringify({
+            text,
+            selection: sel,
+            image: img ? { base64: img.base64, ext: img.ext } : undefined,
+            turnId: crypto.randomUUID(),
+            continueTurnId: opts?.continueTurnId,
+          }),
         });
+        if (res.status === 409) {
+          // Ya hay un turno corriendo (otra pestaña): nos enganchamos a ése.
+          patch((p) => ({ ...p, text: "" }));
+          await attach();
+          return;
+        }
         if (res.status === 402) {
           setTokens((t) => (t ? { ...t, remaining: 0 } : { remaining: 0, limit: 0 }));
           patch((p) => ({ ...p, quota: true, text: "Se acabaron tus tokens LLM." }));
@@ -367,35 +464,7 @@ export default function SiteEditor() {
           patch((p) => ({ ...p, text: `⚠️ ${err?.message || `Error ${res.status}`}` }));
           return;
         }
-        const reader = res.body.getReader();
-        const dec = new TextDecoder();
-        let buf = "";
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buf += dec.decode(value, { stream: true });
-          let nl: number;
-          while ((nl = buf.indexOf("\n\n")) !== -1) {
-            const dl = buf.slice(0, nl).split("\n").find((l) => l.startsWith("data: "));
-            buf = buf.slice(nl + 2);
-            if (!dl) continue;
-            try {
-              const e = JSON.parse(dl.slice(6));
-              if (e.type === "chunk") patch((p) => ({ ...p, text: p.text + e.value }));
-              else if (e.type === "tool" && e.phase === "start")
-                patch((p) => ({
-                  ...p,
-                  tools: [...(p.tools ?? []), e.name],
-                  cortes: p.text.trim() && p.cortes?.[p.cortes.length - 1] !== p.text.length ? [...(p.cortes ?? []), p.text.length] : p.cortes,
-                }));
-              // done vacío = el turno se cortó sin respuesta (límite del motor): decirlo, no dejar «construyendo…».
-              // Se queda lo que llegó por el stream: los `cortes` se midieron sobre ese texto.
-              else if (e.type === "done") patch((p) => ({ ...p, text: p.text || e.value || "⚠️ El agente no terminó a tiempo y no respondió. Vuelve a intentarlo." }));
-              else if (e.type === "error") patch((p) => ({ ...p, text: `⚠️ ${e.message}` }));
-              else if (e.type === "capacity") patch((p) => ({ ...p, text: `⏳ ${e.message} — reintenta en unos segundos.` }));
-            } catch { /* evento malformado */ }
-          }
-        }
+        if (!(await consume(res))) await attach();
       } catch (err) {
         patch((p) => ({ ...p, text: `⚠️ ${err instanceof Error ? err.message : "error de red"}` }));
       } finally {
@@ -406,7 +475,7 @@ export default function SiteEditor() {
         fetch(`/api/v2/sites/${site.id}/chat`).then((r) => (r.ok ? r.json() : null)).then((d) => d?.tokens && setTokens(d.tokens)).catch(() => {});
       }
     },
-    [busy, selection, attached, site.id]
+    [busy, selection, attached, site.id, consume, attach]
   );
 
   // Primer mensaje que llegó desde /new por la URL: se manda solo y se limpia.
@@ -574,6 +643,15 @@ export default function SiteEditor() {
                 ) : (
                   <BotMessage key={i} msg={m} live={busy && i === msgs.length - 1} />
                 )
+              )}
+              {cutTurn && !busy && (
+                <button
+                  type="button"
+                  onClick={() => void send("Continuar", { continueTurnId: cutTurn })}
+                  className="self-start rounded-lg border-2 border-black bg-white px-3 py-1.5 text-sm font-bold shadow-[3px_3px_0_#000] transition hover:-translate-y-0.5"
+                >
+                  Continuar donde se quedó
+                </button>
               )}
             </div>
           </div>
