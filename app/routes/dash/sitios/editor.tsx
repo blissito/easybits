@@ -214,6 +214,7 @@ export default function SiteEditor() {
   const [busy, setBusy] = useState(false);
   // Turno que se cortó por un reinicio de la plataforma: se ofrece «Continuar».
   const [cutTurn, setCutTurn] = useState<string | null>(null);
+  const sentRef = useRef(false);
   const [selection, setSelection] = useState<Selection>(null);
   // «Señalar»: con el modo apagado la vista previa se usa como la app real (clics, links).
   const [pointing, setPointing] = useState(true);
@@ -267,16 +268,13 @@ export default function SiteEditor() {
         if (d.tokens) setTokens(d.tokens);
         // No pisar un turno que ya arrancó (el primer prompt se manda antes de
         // que llegue el historial).
-        let fresh = false;
-        setMsgs((cur) => {
-          if (cur.length) return cur;
-          fresh = true;
-          const hist: Msg[] = (d.messages ?? []).map((m) => ({ role: m.role === "user" ? "user" : "bot", text: m.text }));
-          // Turno en curso (recargaste a media obra): su burbuja se llena con el snapshot.
-          return d.activeTurn ? [...hist, { role: "bot", text: "", tools: [] }] : hist;
-        });
+        // Si esta pestaña ya mandó algo (el primer prompt sale antes del historial), manda ella.
+        if (sentRef.current) return;
+        const hist: Msg[] = (d.messages ?? []).map((m) => ({ role: m.role === "user" ? "user" : "bot", text: m.text }));
+        // Turno en curso (recargaste a media obra): su burbuja se llena con el snapshot.
+        setMsgs(d.activeTurn ? [...hist, { role: "bot", text: "", tools: [] }] : hist);
         if (d.lastTurn?.state === "interrupted" && !d.activeTurn) setCutTurn(d.lastTurn.turnId);
-        if (d.activeTurn && fresh) void attach();
+        if (d.activeTurn) void attach();
       })
       .catch(() => {});
   }, [site.id]);
@@ -420,6 +418,7 @@ export default function SiteEditor() {
     async (text: string, opts?: { continueTurnId?: string }) => {
       text = text.trim();
       if ((!text && !attached) || busy) return;
+      sentRef.current = true;
       setCutTurn(null);
       if (!text) text = "Usa esta imagen como referencia para el sitio.";
       setBusy(true);
