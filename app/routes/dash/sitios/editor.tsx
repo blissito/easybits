@@ -11,7 +11,7 @@ import { LuArrowDown, LuCheck, LuMousePointerClick, LuTrash2 } from "react-icons
 import { partirNarracion } from "~/lib/narracion";
 import { getUserOrRedirect } from "~/.server/getters";
 import type { AuthContext } from "~/.server/apiAuth";
-import { attachNewestMachine, deleteSite, getSite, publishSite, siteEngineFor } from "~/.server/core/siteOperations";
+import { attachNewestMachine, deleteSite, getSite, publishSite, siteAdminLoginUrl, siteEngineFor } from "~/.server/core/siteOperations";
 import { githubAppEnabled } from "~/.server/core/githubApp";
 import { siteRepo } from "~/.server/core/githubSiteOperations";
 import type { Route } from "./+types/editor";
@@ -62,6 +62,8 @@ export const action = async ({ request, params }: Route.ActionArgs) => {
         return data({ site: await attachNewestMachine(ctx, params.id!) });
       case "publish":
         return data({ launch: await publishSite(ctx, params.id!) });
+      case "admin-login":
+        return data({ adminUrl: await siteAdminLoginUrl(ctx, params.id!) });
       case "delete":
         await deleteSite(ctx, params.id!, { releaseMachine: form.get("releaseMachine") === "1" });
         return redirect("/dash/sitios");
@@ -165,6 +167,12 @@ export default function SiteEditor() {
   const [params, setParams] = useSearchParams();
   const githubNotice = GITHUB_NOTICE[params.get("github") ?? ""] ?? null;
   const fetcher = useFetcher<typeof action>();
+  // «Entrar como admin»: el servidor firma un enlace de un solo uso y la vista previa lo abre.
+  const admin = useFetcher<typeof action>();
+  useEffect(() => {
+    const url = admin.data && "adminUrl" in admin.data ? admin.data.adminUrl : null;
+    if (url && iframeRef.current) iframeRef.current.src = url;
+  }, [admin.data]);
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -592,6 +600,17 @@ export default function SiteEditor() {
             <LuMousePointerClick className="h-4 w-4" />
             <span className="text-xs font-bold">Señalar</span>
           </button>
+          {site.hasAdmin && (
+            <button
+              type="button"
+              disabled={admin.state !== "idle"}
+              onClick={() => admin.submit({ intent: "admin-login" }, { method: "post" })}
+              title="Entra a tu app como admin, sin contraseña"
+              className="text-gray-500 hover:text-black disabled:opacity-40"
+            >
+              {admin.state !== "idle" ? "Entrando…" : "Entrar como admin"}
+            </button>
+          )}
           <button type="button" onClick={() => setPreviewKey((k) => k + 1)} className="text-gray-500 hover:text-black" title="Recargar">⟳</button>
           <button type="button" onClick={() => setDelDialog(true)} className="text-gray-500 hover:text-red-600" title="Eliminar sitio" aria-label="Eliminar sitio">
             <LuTrash2 className="h-4 w-4" />

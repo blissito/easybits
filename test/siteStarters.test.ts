@@ -56,3 +56,14 @@ describe("base y login de las web apps", () => {
     expect(() => meshNamespace("x", "a/b")).toThrow();
   });
 });
+
+describe("admin del sitio sin contraseña", () => {
+  it("el starter firma con el mismo formato que siteAdminLoginUrl", async () => {
+    const { starterFiles } = await import("~/.server/starters");
+    const f = starterFiles("tanstack");
+    expect(f["src/lib/eb-admin.ts"]).toContain("eb-admin-login.${nonce}.${exp}");
+    expect(f["src/lib/auth.ts"]).toContain("ensureAdmin");
+    const src = (await import("node:fs")).readFileSync("app/.server/core/siteOperations.ts", "utf8");
+    expect(src).toContain("eb-admin-login.${nonce}.${exp}");
+  });
+});

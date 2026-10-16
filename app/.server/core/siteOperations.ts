@@ -12,7 +12,7 @@ import type { AuthContext } from "~/.server/apiAuth";
 import { requireScope } from "~/.server/apiAuth";
 import { createFleetAgent, recycleFleetAgentBoxes } from "./fleetAgentOperations";
 import { checkLLMTokenLimit, recargarLLMTokens } from "~/.server/llmTokenLimit";
-import { createSecret, listSecrets } from "./secretOperations";
+import { createSecret, getMachineSecretValue, listSecrets } from "./secretOperations";
 import { FLEET_ENGINES, DEFAULT_SITE_ENGINE, getEngine, engineCreatable, engineIsMetered, type FleetEngine } from "~/lib/fleetEngines";
 import { createWebsite, deployWebsiteFile } from "./operations";
 import { buyMachine, releasePermanent } from "./machineOperations";
@@ -251,7 +251,15 @@ export async function getSite(ctx: AuthContext, id: string) {
   const sandbox = site.sandboxId
     ? await db.sandbox.findUnique({ where: { sandboxId: site.sandboxId }, select: { status: true, runspec: true, currentReleaseId: true } })
     : null;
-  return { ...site, website, sandbox, url: publicUrl(site, website), previewUrl: previewUrl(site, website, sandbox) };
+  const stack = siteStack(site);
+  return {
+    ...site,
+    website,
+    sandbox,
+    url: publicUrl(site, website),
+    previewUrl: previewUrl(site, website, sandbox),
+    hasAdmin: site.kind === "webapp" && !!stack && stackHasAuth(stack),
+  };
 }
 
 type Row = { kind: string; sandboxId: string | null; stack?: string | null };
@@ -420,7 +428,7 @@ async function prepareSiteMachine(ctx: AuthContext, siteId: string, sandboxId: s
   }
 }
 
-const SITE_SECRETS = ["BETTER_AUTH_SECRET", "EASYBITS_DB_URL"];
+const SITE_SECRETS = ["ADMIN_EMAIL", "BETTER_AUTH_SECRET", "EASYBITS_DB_URL"];
 
 /** Nombre de la base de un sitio. Es también el nombre que la caja pide al mesh. */
 export function siteDatabaseName(siteId: string) {
@@ -447,6 +455,8 @@ async function prepareSiteBackend(
   const missing = SITE_SECRETS.filter((n) => !secretNames.includes(n));
   if (missing.length) {
     const values: Record<string, string> = {
+      // El dueño es el admin de su app: el starter crea esa cuenta en la primera migración.
+      ADMIN_EMAIL: ctx.user.email,
       EASYBITS_DB_URL: `${MESH_DB_PASSTHROUGH}/${name}/`,
       BETTER_AUTH_SECRET: crypto.randomBytes(32).toString("base64url"),
     };
@@ -458,6 +468,26 @@ async function prepareSiteBackend(
     await writeSecretsFile(ctx, sandboxId, { dir: appDir, names: [...new Set([...secretNames, ...SITE_SECRETS])] });
     await execCommand(ctx, sandboxId, { command: `systemctl try-restart ${PREVIEW_UNIT} || true`, timeoutSeconds: 20 }).catch(() => {});
   }
+}
+
+/**
+ * Enlace para que el dueño entre a su app como admin, sin contraseña: lo valida el plugin
+ * `eb-admin` del starter (src/lib/eb-admin.ts) con el mismo BETTER_AUTH_SECRET. Vale 2 min
+ * y una sola vez. Apunta a la vista previa, que es lo que el dueño tiene enfrente.
+ */
+export async function siteAdminLoginUrl(ctx: AuthContext, siteId: string) {
+  requireScope(ctx, "WRITE");
+  const site = await getSite(ctx, siteId);
+  const stack = siteStack(site);
+  if (site.kind !== "webapp" || !site.sandboxId || !stack || !stackHasAuth(stack) || !site.previewUrl) {
+    throw new Response("Este sitio no tiene login de admin", { status: 400 });
+  }
+  const secret = await getMachineSecretValue(ctx.user.id, site.sandboxId, "BETTER_AUTH_SECRET");
+  if (!secret) throw new Response("La máquina aún no tiene su login listo", { status: 409 });
+  const nonce = crypto.randomBytes(16).toString("hex");
+  const exp = String(Date.now() + 60_000);
+  const sig = crypto.createHmac("sha256", secret).update(`eb-admin-login.${nonce}.${exp}`).digest("hex");
+  return `${site.previewUrl}/api/auth/eb/admin-login?nonce=${nonce}&exp=${exp}&sig=${sig}`;
 }
 
 /** Nombres en /app. Un /app inexistente es "vacío"; cualquier otro error se lanza
