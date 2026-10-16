@@ -463,7 +463,9 @@ export default function SiteEditor() {
           patch((p) => ({ ...p, text: `⚠️ ${err?.message || `Error ${res.status}`}` }));
           return;
         }
-        if (!(await consume(res))) await attach();
+        // El turno vive en el servidor: si el stream se corta (deploy, red) nos re-enganchamos.
+        const finished = await consume(res).catch(() => false);
+        if (!finished) await attach();
       } catch (err) {
         patch((p) => ({ ...p, text: `⚠️ ${err instanceof Error ? err.message : "error de red"}` }));
       } finally {
