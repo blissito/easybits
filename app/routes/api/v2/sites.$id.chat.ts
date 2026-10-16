@@ -89,7 +89,7 @@ export async function action({ request, params }: Route.ActionArgs) {
       try {
         // Si el sembrado al crear el sitio falló (caja aún arrancando), se repite aquí
         // antes de que el agente encuentre /app vacío. Nunca bloquea el turno.
-        await ensureSiteMachine(ctx, site).catch((e) => console.error("[sites] ensureSiteMachine", site.sandboxId, e));
+        const machine = (await ensureSiteMachine(ctx, site).catch((e) => console.error("[sites] ensureSiteMachine", site.sandboxId, e))) ?? {};
         // Dónde arrancó cada herramienta en el texto: con eso la copia guardada separa la
         // narración («Reviso…», «Instalo…») de la respuesta, igual que en vivo.
         let streamed = "";
@@ -110,7 +110,7 @@ export async function action({ request, params }: Route.ActionArgs) {
                 text,
               ].filter(Boolean).join("\n"),
               image,
-              appendSystemPrompt: siteTurnPrompt(site, selection),
+              appendSystemPrompt: siteTurnPrompt(site, selection, machine),
             },
             {
               onChunk: (value) => {

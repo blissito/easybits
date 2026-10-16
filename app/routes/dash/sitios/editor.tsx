@@ -117,8 +117,31 @@ type Selection = { id: string; tag: string } | null;
 
 /** La respuesta del agente sin burbuja (como ghosty.studio): pasos con palomita, la
  *  respuesta en markdown con aire y las herramientas contraídas en una línea. */
+// Qué está haciendo el agente, en palabras, según su última herramienta: hay modelos
+// (Gemini) que encadenan lecturas sin narrar y el chat se quedaba en «construyendo…».
+function liveStatus(tools: string[] | undefined, pasos: number) {
+  const t = tools?.[tools.length - 1] ?? "";
+  if (/write|edit|patch|deploy|theme/.test(t)) return "Haciendo cambios en tu app";
+  if (/exec|bg|logs|restart|launch/.test(t)) return /launch/.test(t) ? "Publicando" : "Probando que todo funcione";
+  if (/read|list|get|search|discover/.test(t)) return "Revisando tu app";
+  return pasos ? "Trabajando" : "Pensando";
+}
+
+/** Segundos desde que el mensaje empezó a vivir (sólo cuenta mientras está en vivo). */
+function useElapsed(live: boolean) {
+  const [start] = useState(() => Date.now());
+  const [, tick] = useState(0);
+  useEffect(() => {
+    if (!live) return;
+    const t = setInterval(() => tick((n) => n + 1), 1000);
+    return () => clearInterval(t);
+  }, [live]);
+  return Math.round((Date.now() - start) / 1000);
+}
+
 function BotMessage({ msg, live }: { msg: Msg; live: boolean }) {
   const { pasos, resto } = partirNarracion(msg.text, msg.cortes);
+  const secs = useElapsed(live);
   return (
     <div className="min-w-0 text-[15px] leading-6 text-gray-900">
       {msg.tools && msg.tools.length > 0 && (
@@ -153,7 +176,7 @@ function BotMessage({ msg, live }: { msg: Msg; live: boolean }) {
                 <span key={d} className="h-1.5 w-1.5 animate-bounce rounded-full bg-brand-500/60" style={{ animationDelay: `${d}ms` }} />
               ))}
             </span>
-            {pasos.length ? "trabajando…" : "construyendo…"}
+            {liveStatus(msg.tools, pasos.length)}…{secs >= 5 ? ` ${secs} s` : ""}
           </span>
         )
       )}

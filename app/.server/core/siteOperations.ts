@@ -364,7 +364,7 @@ export async function createSite(
  * pisa código —sin package.json siembra el starter; sin easybits.json repite runspec
  * y puerto—.
  */
-async function prepareSiteMachine(ctx: AuthContext, siteId: string, sandboxId: string, stack: SiteStack) {
+async function prepareSiteMachine(ctx: AuthContext, siteId: string, sandboxId: string, stack: SiteStack): Promise<{ auth?: boolean }> {
   const saved = (await db.sandbox.findUnique({ where: { sandboxId }, select: { runspec: true } }))?.runspec as
     | { appDir?: string; port?: number; secretNames?: string[] }
     | null
@@ -426,6 +426,13 @@ async function prepareSiteMachine(ctx: AuthContext, siteId: string, sandboxId: s
     const r = await execCommand(ctx, sandboxId, { command: previewInstallScript(stack, appDir), timeoutSeconds: 30 }).catch((e) => ({ exitCode: -1, stderr: String(e) }));
     if (r.exitCode !== 0) console.error("[sites] preview unit", sandboxId, r);
   }
+  // ¿La app trae el login del starter? Los sitios creados antes de él no: el prompt no debe
+  // anunciárselo (el agente afirmaba «ya tienes usuarios» sin tenerlos).
+  if (stack && stackHasAuth(stack)) {
+    const lib = await appDirEntries(ctx, sandboxId, `${appDir}/src/lib`).catch(() => null);
+    return { auth: lib ? lib.has("auth.ts") : undefined };
+  }
+  return {};
 }
 
 const SITE_SECRETS = ["ADMIN_EMAIL", "BETTER_AUTH_SECRET", "EASYBITS_DB_URL"];
@@ -503,8 +510,8 @@ async function appDirEntries(ctx: AuthContext, sandboxId: string, appDir: string
 
 /** Antes de cada turno: re-siembra si la preparación al crear el sitio falló. */
 export async function ensureSiteMachine(ctx: AuthContext, site: { id: string; kind: string; sandboxId: string | null; stack?: string | null }) {
-  if (site.kind !== "webapp" || !site.sandboxId) return;
-  await prepareSiteMachine(ctx, site.id, site.sandboxId, siteStack(site));
+  if (site.kind !== "webapp" || !site.sandboxId) return {};
+  return prepareSiteMachine(ctx, site.id, site.sandboxId, siteStack(site));
 }
 
 /** Tras el checkout, engancha al sitio la máquina más reciente que no tenga sitio. */
@@ -622,7 +629,7 @@ export async function setSiteTheme(ctx: AuthContext, siteId: string, input: { th
 }
 
 /** Contexto por turno: qué sitio es y cómo tocarlo. Se appendea (capa 3), no pisa. */
-export function siteTurnPrompt(site: Awaited<ReturnType<typeof getSite>>, selection?: { id: string; tag: string } | null) {
+export function siteTurnPrompt(site: Awaited<ReturnType<typeof getSite>>, selection?: { id: string; tag: string } | null, machine: { auth?: boolean } = {}) {
   const lines = [
     `SITIO ACTUAL: "${site.name}" (${site.kind}).`,
     // El usuario sólo ve el chat y la vista previa: sin esto un motor (Gemini) encadenaba
@@ -652,7 +659,7 @@ export function siteTurnPrompt(site: Awaited<ReturnType<typeof getSite>>, select
       // build largo se quedaba mudo o se cortaba. Mismo patrón que execLong en gs.
       `Comandos LARGOS (npm install de varios paquetes, build, tests): lánzalos con sandbox_exec_background y sigue su avance con sandbox_exec_status (cuéntale al usuario lo que va pasando); si se queda sin escribir nada varios minutos, revisa y mátalo con sandbox_exec_kill. Si perdiste el execId, sandbox_exec_list. Nunca uses nohup ni & dentro de sandbox_exec.`,
       ...(stack
-        ? starterPrompt(stack)
+        ? starterPrompt(stack, machine.auth)
         : [
             `Stack por default: Node con un servidor en el puerto 3000 (Express/Hono según pida), package.json con scripts build y start.`,
             `Para que la vista previa refleje cambios: tras editar, llama restart_machine({ sandboxId }).`,

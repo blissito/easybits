@@ -191,7 +191,6 @@ const RULES: Record<SiteStackId, string[]> = {
     `Stack: TanStack Start 1.169 (React 19, SSR, rutas por archivo).`,
     `Antes de tu primer cambio lee la doc de la versión instalada: sandbox_exec("cat /app/node_modules/@tanstack/react-start/skills/react-start/SKILL.md"). Start ya no usa Vinxi ni app.config.ts.`,
     `Rutas en /app/src/routes (createFileRoute; __root.tsx es el layout). Lógica de servidor (DB, secretos, APIs) con createServerFn de @tanstack/react-start. No toques server.mjs: sirve el build.`,
-    `BASE DE DATOS Y LOGIN YA INCLUIDOS (de EasyBits, no propongas Supabase, Firebase ni otra base): src/lib/db.ts exporta db (@libsql/client, SQLite) conectada a la base de este sitio — db.execute({ sql, args }) sólo en el servidor; crea tus tablas con CREATE TABLE IF NOT EXISTS. src/lib/auth.ts es Better Auth 1.7 (correo y contraseña; tablas user/session/account/verification, no las toques a mano), src/lib/session.ts trae getUser() para loaders y beforeLoad (protege una ruta con redirect a /login), src/lib/auth-client.ts es el cliente del navegador y /login ya funciona. El dueño del sitio ya es admin (user.role === "admin", su correo está en ADMIN_EMAIL) y entra desde EasyBits sin contraseña: para pantallas o permisos de admin revisa ese rol, y no toques src/lib/eb-admin.ts. No cambies EASYBITS_DB_URL, BETTER_AUTH_SECRET ni ADMIN_EMAIL. Aún no hay envío de correo: nada de verificación por correo ni "olvidé mi contraseña" todavía.`,
   ],
   next: [
     `Stack: Next.js 16 (App Router, React 19).`,
@@ -247,8 +246,26 @@ export function themeRule(where: string): string {
   return `COLORES: usa SÓLO los tokens del tema (${THEME_TOKENS.join(", ")}) como clases: bg-primary, text-on-primary, bg-surface, text-on-surface, text-on-surface-muted, bg-surface-alt, bg-surface-deep, border-primary, hover:bg-primary-dark… Nunca colores literales de Tailwind (bg-amber-700, text-gray-500) ni hex/rgb en el código: el usuario cambia el tema con un botón y todo lo que no use tokens se queda con el color viejo. El tema vive en ${where}; NO lo edites (es del botón «Tema») salvo que el usuario te pida cambiar colores.`;
 }
 
-/** Líneas del prompt por turno para una webapp con starter. */
-export function starterPrompt(stack: SiteStackId): string[] {
+// Base y login del starter. Va aparte de RULES porque sólo aplica si la caja DE VERDAD tiene
+// los archivos: un sitio creado antes del login (15-oct) no los trae, y anunciárselos hacía
+// que el agente afirmara «tu sitio ya cuenta con usuarios» sin tenerlos (16-oct).
+const AUTH_RULE: Partial<Record<SiteStackId, string>> = {
+  tanstack: `BASE DE DATOS Y LOGIN YA INCLUIDOS (de EasyBits, no propongas Supabase, Firebase ni otra base): src/lib/db.ts exporta db (@libsql/client, SQLite) conectada a la base de este sitio — db.execute({ sql, args }) sólo en el servidor; crea tus tablas con CREATE TABLE IF NOT EXISTS. src/lib/auth.ts es Better Auth 1.7 (correo y contraseña; tablas user/session/account/verification, no las toques a mano), src/lib/session.ts trae getUser() para loaders y beforeLoad (protege una ruta con redirect a /login), src/lib/auth-client.ts es el cliente del navegador y /login ya funciona. El dueño del sitio ya es admin (user.role === "admin", su correo está en ADMIN_EMAIL) y entra desde EasyBits sin contraseña: para pantallas o permisos de admin revisa ese rol, y no toques src/lib/eb-admin.ts. No cambies EASYBITS_DB_URL, BETTER_AUTH_SECRET ni ADMIN_EMAIL. Aún no hay envío de correo: nada de verificación por correo ni "olvidé mi contraseña" todavía.`,
+};
+const OTHER_AUTH_RULE = `Si piden otra librería de login o base de datos (Auth.js, NextAuth, Clerk, Supabase, Firebase…): contesta ESO primero, en una línea y sin tecnicismos (qué trae ya su app o qué haría falta) y pregunta si aun así la quieren. Nunca respondas como si no lo hubieran pedido.`;
+
+/**
+ * Líneas del prompt por turno para una webapp con starter. `auth`: si la caja tiene los
+ * archivos de login del starter (true), si no (false) o si no se pudo ver (undefined).
+ */
+export function starterPrompt(stack: SiteStackId, auth?: boolean): string[] {
+  const authLines = !AUTH_RULE[stack]
+    ? []
+    : auth === true
+      ? [AUTH_RULE[stack]!, OTHER_AUTH_RULE]
+      : auth === false
+        ? [`Este sitio se creó ANTES de que el login viniera incluido: NO tiene cuentas de usuario ni login. No digas que los tiene. Si lo piden, constrúyelo con better-auth sobre @libsql/client: el entorno ya trae EASYBITS_DB_URL (la base del sitio, con authToken = SANDBOX_MESH_TOKEN de /etc/sandbox-env/env), BETTER_AUTH_SECRET y ADMIN_EMAIL (el dueño, que debe quedar como admin).`, OTHER_AUTH_RULE]
+        : [`Antes de afirmar que esta app tiene login o cuentas, revisa que exista /app/src/lib/auth.ts.`, OTHER_AUTH_RULE];
   return [
     `Ya hay un starter FUNCIONANDO en /app: NO cambies de stack ni reescribas la config ni los scripts de package.json (build/start ya están probados en esta caja). Mantén las versiones; no escribas APIs de memoria.`,
     ...RULES[stack],
@@ -260,5 +277,6 @@ export function starterPrompt(stack: SiteStackId): string[] {
     `La vista previa es un servidor de desarrollo con recarga en caliente (servicio ${PREVIEW_UNIT}, puerto ${PREVIEW_PORT}): cada archivo que guardas aparece solo. NO corras build ni restart_machine para verla, y no levantes otro servidor.`,
     `Las dependencias se instalan solas al nacer la caja. Antes de leer node_modules o instalar paquetes espera a que acabe: sandbox_exec("timeout 300 sh -c 'until [ -f ${PREVIEW_DEPS_MARK} ]; do sleep 2; done'"). Para agregar un paquete: ${stack === "elysia" ? "bun add <paquete>" : "npm install <paquete>"} (el dev lo toma).`,
     `Antes de terminar el turno revisa errores del dev: sandbox_exec("tail -40 ${PREVIEW_LOG_FILE}") y corrígelos. «Publicar» compila y levanta la versión de producción aparte.`,
+    ...authLines,
   ];
 }
