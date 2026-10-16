@@ -597,7 +597,8 @@ export function siteTurnPrompt(site: Awaited<ReturnType<typeof getSite>>, select
     `SITIO ACTUAL: "${site.name}" (${site.kind}).`,
     // El usuario sólo ve el chat y la vista previa: sin esto un motor (Gemini) encadenaba
     // 28 tools sin una palabra y la vista previa no cambiaba hasta el final (14-oct).
-    `El usuario te ve trabajar en vivo: antes de cada grupo de acciones escríbele UNA línea corta de lo que vas a hacer ("Armo el hero con la animación…"). Y que la vista previa cambie pronto: primero deja la página principal mostrando un esqueleto de lo que pidió, luego llena el detalle.`,
+    `El usuario te ve trabajar en vivo: antes de cada grupo de acciones escríbele UNA línea corta de lo que vas a hacer ("Armo la portada con tu foto…"). Y que la vista previa cambie pronto: primero deja la página principal mostrando un esqueleto de lo que pidió, luego llena el detalle.`,
+    `Quien lee NO es programador: narra y responde con lo que va a VER o poder HACER ("Ya puedes crear tu cuenta", "Cada quien ve sólo sus tareas"), nunca cómo está hecho. Prohibido en el chat: nombres de frameworks o paquetes, starter, doc, tsc/TypeScript, errores de compilación, rutas o URLs internas (/tareas, /login), funciones de servidor, sesión, capa de datos, scripts, logs. Si algo técnico falla, arréglalo en silencio; sólo avisa lo que le afecta a la persona.`,
   ];
   if (site.kind === "static" && site.website) {
     lines.push(

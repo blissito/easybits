@@ -98,7 +98,7 @@ function summarizeTools(tools: string[]) {
     const label = /search|discover/.test(t) ? "búsqueda" : /read|list|get/.test(t) ? "lectura" : "acción";
     counts.set(label, (counts.get(label) ?? 0) + 1);
   }
-  return [...counts].map(([k, n]) => `${n} ${k}${n === 1 ? "" : k === "acción" ? "es" : "s"}`).join(" · ");
+  return [...counts].map(([k, n]) => `${n} ${n === 1 ? k : k === "acción" ? "acciones" : `${k}s`}`).join(" · ");
 }
 
 function fmtTokens(n: number) {
