@@ -104,13 +104,29 @@ jobs:
       packages: write
     steps:
       # Un release viejo que termina DESPUÉS de uno nuevo regresaría prod a un commit
-      # anterior: sólo se publica si este SHA sigue siendo la punta de main.
-      - name: Skip if main moved on
+      # anterior: sólo se publica si este SHA es MÁS NUEVO que el que sirve prod.
+      # Antes se exigía ser la punta de main, y con pushes cada ~2 min (más rápido que lo
+      # que tarda un deploy) ningún run llegaba a serlo: prod se quedó congelado el
+      # 2026-10-17 aunque cada run salía verde. Los releases corren en serie
+      # (deploy-group) y cada uno espera a que prod reporte su SHA, así que la comparación
+      # siempre es contra lo que de verdad está publicado.
+      - name: Skip if prod is already newer
         id: tip
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          tip=$(git ls-remote https://github.com/${{ github.repository }}.git refs/heads/main | cut -f1)
-          if [ "${{ github.event_name }}" = "push" ] && [ "$tip" != "${{ github.sha }}" ]; then
-            echo "::notice::main ya va en ${tip:0:8}; no publico ${GITHUB_SHA:0:8}"
+          [ "${{ github.event_name }}" = "push" ] || exit 0
+          prod=$(curl -fsS -m 10 https://www.easybits.cloud/api/version 2>/dev/null || true)
+          if ! echo "$prod" | grep -qE '^[0-9a-f]{40}$'; then
+            echo "::notice::prod no reporta un SHA ('${prod:0:40}'); publico ${GITHUB_SHA:0:8}"
+            exit 0
+          fi
+          [ "$prod" = "${{ github.sha }}" ] && { echo "stale=1" >> "$GITHUB_OUTPUT"; exit 0; }
+          # ahead = este commit desciende del de prod (más nuevo) → publicar.
+          status=$(curl -fsS -m 10 -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/compare/$prod...${{ github.sha }}" | jq -r .status)
+          if [ "$status" != "ahead" ]; then
+            echo "::notice::prod va en ${prod:0:8} ($status respecto a ${GITHUB_SHA:0:8}); no publico"
             echo "stale=1" >> "$GITHUB_OUTPUT"
           fi
 
