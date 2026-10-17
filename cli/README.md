@@ -229,6 +229,26 @@ Host *.ghosty
 
 Full reference: https://www.easybits.cloud/docs#cli · https://www.easybits.cloud/en/docs/cli.md
 
+## Changes in 0.17.0
+
+- `sites create --prompt … [--kind webapp|static] [--stack …] [--template …]` and
+  `sites theme get|set <site> [--theme <id> | --colors <file|->]`; a site goes by name or id.
+  Unknown stacks or templates are rejected before calling the API.
+- Machines: `machines get|restart|tiers`, `machines runspec get|set` (merges; `--file` takes the
+  output of `runspec get --json`), `machines backups|backup`, `machines redeploy` (recovery and
+  resize: `--tier … --replace`) and `machines rm` (release). `launch --machine --tier` now points to
+  `machines redeploy`.
+- `easybits secrets ls|set|rm`: your account vault (new REST `GET/POST /api/v2/secrets`,
+  `DELETE /api/v2/secrets/:name`). Values come from a dotenv file or stdin, never argv.
+- Sandboxes: `files rm|mv|mkdir`, `bg start|ls|status|kill` (background processes) and
+  `git clone|status|commit|push|pull|checkout|log` (`--git-token '$secret:NAME'`).
+- `easybits fleet ls|get|capabilities|configure|message`: fleet agents with your account credential.
+- `easybits domains …` now manages your account's domains (`/api/v2/domains`); a sandbox's
+  domains moved to `sandboxes domains` (the old form still works and says so on stderr).
+- `easybits web search|fetch|extract|extract-status|crawl`.
+- `init` defaults to `--app-dir /app`, like `machines launch` (it was `/srv/app`).
+- The update notice checks npm at most once an hour (the docs said once a day).
+
 ## Changes in 0.16.0
 
 - `sites ls`: the sites of the site builder (/dash/sitios) — static sites and web apps,
