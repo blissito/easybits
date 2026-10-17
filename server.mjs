@@ -73,7 +73,26 @@ const BOT_PROBE_PATTERNS = [
   /\.php(\?|$)/i,
   /\.(asp|aspx|jsp|cgi)(\?|$)/i,
   /\.(bak|old|sql|zip|tar|gz|env)(\?|$)/i,
+  // Rutas de funciones serverless y shell-injection que ningún endpoint usa.
+  /^\/var\/task\//,
+  /\$\(/,
 ];
+
+// Un escáner esquivó la lista de arriba codificando los puntos (`/setup%2ephp`,
+// `/%2eenv`): Express no decodifica `req.path`, cada sonda caía a React Router (~2.5 s
+// con consultas a Mongo) y a ~36 req/s tuvo el CPU al 60 % y el pool de Prisma lleno
+// (2026-10-16: crear un sitio tardaba 92 s; /api/health 1.3 s). Ninguna ruta legítima
+// lleva un punto codificado; el resto se compara también decodificado.
+function isBotProbe(rawPath) {
+  if (/%2e/i.test(rawPath)) return true;
+  let decoded = rawPath;
+  try {
+    decoded = decodeURIComponent(rawPath);
+  } catch {
+    return true; // codificación inválida: nadie legítimo la manda
+  }
+  return BOT_PROBE_PATTERNS.some((p) => p.test(rawPath) || p.test(decoded));
+}
 
 async function run() {
   const port =
@@ -106,7 +125,7 @@ async function run() {
 
   // Block bot/scanner probes before logging or React Router
   app.use((req, res, next) => {
-    if (BOT_PROBE_PATTERNS.some((p) => p.test(req.path))) {
+    if (isBotProbe(req.path)) {
       res.status(404).end();
       return;
     }
