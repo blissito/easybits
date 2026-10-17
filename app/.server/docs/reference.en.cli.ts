@@ -120,6 +120,18 @@ easybits secrets rm GITHUB_TOKEN --yes
 
 The vault of your account (the same as /dash/developer/secrets and the \`secret_*\` MCP tools). A secret is used by name: \`$secret:NAME\` in an agent's MCP config or \`--repo-token\`, \`machines launch --secret NAME\`. Names are \`[A-Z_][A-Z0-9_]*\`; the same name replaces the value. Values never go in argv (\`ps\` and your shell history see it). \`machines secrets\` is different: values for ONE machine, which win over the vault.
 
+### Platform crons (admins only)
+
+\`\`\`bash
+easybits crons ls                                           # status, schedule, last and next run
+easybits crons runs backup-machines                         # last 50 runs, with the full error
+easybits crons run purge-notifications                      # run now, in the background
+easybits crons pause check-hosting                          # its runs answer skipped
+easybits crons resume check-hosting
+\`\`\`
+
+EasyBits' scheduled jobs (backups, purges, web app expiry): the same as the \`/dash/admin/crons\` panel. Needs a key with the \`ADMIN\` scope **and** being a platform superuser; any other account gets 403. The schedule lives in code and is not edited from here.
+
 ### Domains
 
 Two kinds. Your **account's** domains serve your websites at \`<slug>.example.com\` and, if you assign one, at the root:

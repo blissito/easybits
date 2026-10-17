@@ -5,7 +5,7 @@ license: MIT
 compatibility: Needs Node 22+ (npx is enough), network access to https://www.easybits.cloud and an EasyBits API key
 metadata:
   author: easybits
-  version: "1.20"
+  version: "1.21"
 ---
 
 # Use the EasyBits CLI
@@ -173,6 +173,20 @@ easybits secrets rm GITHUB_TOKEN --yes --json
 Use a stored secret by name: `$secret:NAME` (agent MCP headers, `--repo-token`), or
 `machines launch --secret NAME`. Never put a value in argv. Never print or log a value you were
 given; if the person pastes one in chat, store it and refer to it by name from then on.
+
+## Platform crons (platform admins only)
+
+```bash
+easybits crons ls --json                                     # {items:[{key, name, schedule, status, paused, running, nextRunAt, lastRun}]}
+easybits crons runs backup-machines --json                   # {items:[{startedAt, ok, status, durationMs, trigger, summary, error}]}
+easybits crons run purge-notifications --json                # runs now in the background (trigger "manual")
+easybits crons pause check-hosting --json                    # scheduled runs answer {"skipped":"paused"}
+easybits crons resume check-hosting --json
+```
+
+Needs a key with the ADMIN scope and a platform-superuser account; otherwise 403 — don't retry,
+tell the person. `status`: al-dia (ok), tarde (late), fallo (failed), pausado, nuevo (no runs yet).
+Schedules live in code: you can't change them from the CLI.
 
 ## Domains
 

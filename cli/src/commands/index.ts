@@ -17,6 +17,7 @@ import { doctor } from "./doctor.js";
 import { webCmd } from "./web.js";
 import { keys, webhooks } from "./webhooks.js";
 import { secrets } from "./secrets.js";
+import { crons } from "./crons.js";
 import { documents } from "./documents.js";
 import { video } from "./video.js";
 
@@ -28,6 +29,7 @@ export const COMMANDS: Command[] = [
   doctor,
   usage,
   secrets,
+  crons,
   sandboxes,
   agents,
   fleet,

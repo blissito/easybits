@@ -123,6 +123,13 @@ easybits secrets set --dotenv .env.production   # KEY=VALUE lines; - reads stdin
 printf '%s' "$TOKEN" | easybits secrets set GITHUB_TOKEN   # one value from stdin
 easybits secrets rm GITHUB_TOKEN --yes
 
+# Platform crons (platform admins only; key with the ADMIN scope)
+easybits crons ls
+easybits crons runs backup-machines
+easybits crons run purge-notifications
+easybits crons pause check-hosting
+easybits crons resume check-hosting
+
 # Databases
 easybits db ls
 easybits db create leads
@@ -274,6 +281,11 @@ Host *.ghosty
 - Skill: `npx skills add https://easybits.cloud` (includes `easybits-cli`).
 
 Full reference: https://www.easybits.cloud/docs#cli · https://www.easybits.cloud/en/docs/cli.md
+
+## Changes in 0.17.1
+
+- `easybits crons ls|runs|run|pause|resume`: EasyBits' scheduled jobs, the same as the
+  /dash/admin/crons panel (platform admins only; key with the ADMIN scope).
 
 ## Changes in 0.17.0
 

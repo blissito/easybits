@@ -289,6 +289,12 @@ export const HELP_ES: Record<string, string> = {
   "Release a machine: stops billing, takes a last backup and destroys it": "Libera una máquina: deja de cobrarse, toma un último respaldo y la destruye",
   "The hosting catalog: sizes and monthly prices in MXN": "El catálogo de hosting: tamaños y precio mensual en MXN",
   // secrets (vault de la cuenta)
+  "Platform scheduled jobs (admins only): status, history, run now, pause": "Tareas programadas de la plataforma (sólo admins): estado, historial, ejecutar ahora, pausar",
+  "List the scheduled jobs with status, schedule, last and next run": "Enlista las tareas programadas con estado, horario, última y próxima corrida",
+  "Show a job's last 50 runs, with the full error when one failed": "Muestra las últimas 50 corridas de una tarea, con el error completo si alguna falló",
+  "Run a job now in the background (recorded with trigger manual)": "Corre una tarea ya, en segundo plano (queda registrada como manual)",
+  "Pause a job: scheduled runs answer skipped until you resume it": "Pausa una tarea: sus corridas programadas responden skipped hasta que la reanudes",
+  "Resume a paused job": "Reanuda una tarea en pausa",
   "Your account's secrets vault: names only; used as $secret:NAME": "La bóveda de secretos de tu cuenta: sólo nombres; se usan como $secret:NOMBRE",
   "List the names in your vault (values never come back)": "Enlista los nombres de tu bóveda (los valores nunca regresan)",
   "Save or replace secrets from a dotenv file, or one value from stdin": "Guarda o reemplaza secretos desde un archivo dotenv, o un valor por stdin",

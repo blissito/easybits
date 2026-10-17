@@ -266,6 +266,18 @@ easybits secrets rm GITHUB_TOKEN --yes
 
 La bóveda de tu cuenta (la misma de /dash/developer/secrets y de las tools MCP \`secret_*\`). Un secreto se usa por nombre: \`$secret:NOMBRE\` en el MCP de un agente o en \`--repo-token\`, \`machines launch --secret NOMBRE\`. Los nombres son \`[A-Z_][A-Z0-9_]*\`; el mismo nombre reemplaza el valor. Los valores nunca van en argv (\`ps\` y el historial de tu shell los ven). \`machines secrets\` es otra cosa: valores para UNA máquina, que ganan sobre la bóveda.
 
+### Crons de la plataforma (sólo administradores)
+
+\`\`\`bash
+easybits crons ls                                           # estado, horario, última y próxima corrida
+easybits crons runs backup-machines                         # últimas 50 corridas, con el error completo
+easybits crons run purge-notifications                      # ejecutar ahora, en segundo plano
+easybits crons pause check-hosting                          # sus corridas responden skipped
+easybits crons resume check-hosting
+\`\`\`
+
+Las tareas programadas de EasyBits (respaldos, purgas, caducidad de web apps): lo mismo que el panel \`/dash/admin/crons\`. Pide una llave con alcance \`ADMIN\` **y** ser superusuario de la plataforma; cualquier otra cuenta recibe 403. El horario vive en el código y no se edita desde aquí.
+
 ### Dominios
 
 Dos clases. Los de tu **cuenta** sirven tus sitios en \`<slug>.tienda.com\` y, si le asignas uno, en la raíz:
