@@ -4,6 +4,7 @@ import { getUserOrRedirect, isAdminUser } from "~/.server/getters";
 import { CronRunError, listCronOverview, setCronPaused, startManualRun } from "~/.server/cron";
 import type { CronOverview, CronRunView } from "~/.server/cron";
 import { BrutalButton } from "~/components/common/BrutalButton";
+import { SKILLS_ADD_CMD } from "~/components/docs/SkillsInstall";
 import type { Route } from "./+types/crons";
 
 export const meta = () => [
@@ -282,10 +283,15 @@ export default function CronsAdmin() {
 
   return (
     <div className="max-w-6xl">
-      <h2 className="text-2xl font-black mb-1">Crons</h2>
-      <p className="text-sm text-gray-500 mb-6">
-        Tareas programadas de la plataforma. El horario vive en el código (app/lib/cronJobs.ts) y cambia con un deploy.
-      </p>
+      <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
+        <div>
+          <h2 className="text-2xl font-black mb-1">Crons</h2>
+          <p className="text-sm text-gray-500">
+            Tareas programadas de la plataforma. El horario vive en el código (app/lib/cronJobs.ts) y cambia con un deploy.
+          </p>
+        </div>
+        <CopySkillsCommand />
+      </div>
       <div className="border-2 border-black rounded-xl overflow-x-auto shadow-[3px_3px_0_#000]">
         <table className="w-full text-sm">
           <thead className="bg-gray-100">
@@ -306,5 +312,30 @@ export default function CronsAdmin() {
       </div>
       {open && <RunsDrawer job={open} running={open.running} onClose={() => setOpenKey(null)} />}
     </div>
+  );
+}
+
+/** Tu agente opera estos crons por la API de admin: instala los skills de EasyBits con un comando. */
+function CopySkillsCommand() {
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(SKILLS_ADD_CMD);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* sin portapapeles (http o permisos): el comando sigue a la vista */
+    }
+  };
+  return (
+    <button
+      type="button"
+      onClick={copy}
+      title="Copia el comando para instalar los skills de EasyBits en tu agente"
+      className="flex items-center gap-3 rounded-xl border-2 border-black bg-white px-3 py-2 text-left shadow-[3px_3px_0_#000] transition hover:-translate-y-0.5 active:translate-y-0 active:shadow-none"
+    >
+      <code className="font-mono text-xs">{SKILLS_ADD_CMD}</code>
+      <span className="rounded-lg bg-black px-2 py-1 text-[11px] font-bold text-white">{copied ? "✓ Copiado" : "Copiar"}</span>
+    </button>
   );
 }
