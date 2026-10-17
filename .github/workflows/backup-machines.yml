@@ -13,9 +13,11 @@ jobs:
         run: |
           curl -fsS --max-time 1800 -X GET \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "X-Cron-Trigger: github" \
             https://easybits.cloud/api/cron/backup-machines
       - name: Rotate expired backups
         run: |
           curl -fsS --max-time 600 -X GET \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "X-Cron-Trigger: github" \
             https://easybits.cloud/api/cron/prune-backups

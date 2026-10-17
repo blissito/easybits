@@ -1893,6 +1893,14 @@ Qué pasa en cada push:
 
 ### Dashboard (UI)
 También se administran desde \`/dash/hosting\`: cada sitio con su estado y su dirección, y al abrirlo cuatro pestañas — **Dominios** (con el registro DNS que hay que crear y si ya resuelve), **Versiones** (con vuelta atrás en un clic), **Variables** y **Registro** (las últimas líneas del log). Desde ahí también se pausa y se da de baja.
+
+### Tareas programadas de la plataforma (sólo administradores)
+Los respaldos diarios de máquinas, su rotación, el monitor de hosting (cada 5 min) y las purgas semanales son tareas programadas de EasyBits. Su horario vive en el código y cada corrida queda registrada (hora, duración, quién la disparó, resumen y error). Se ven y operan en \`/dash/admin/crons\` o por API. Requieren scope \`ADMIN\` **y** ser administrador de la plataforma; cualquier otra cuenta recibe 403.
+
+- \`GET /api/v2/admin/crons\` — \`{ items }\`: por tarea \`key\`, \`name\`, \`path\`, \`cron\`, \`schedule\` (en palabras), \`status\` (\`al-dia\` · \`tarde\` · \`fallo\` · \`pausado\` · \`nuevo\`), \`paused\`, \`running\`, \`nextRunAt\`, \`lastRun\` y \`recent\` (últimas 20, la más reciente al final). «tarde» = pasó la hora programada y sigue dentro de la gracia (10 % del periodo, mínimo 5 min); «fallo» = pasó la gracia o la última corrida terminó con error.
+- \`GET /api/v2/admin/crons/:key/runs\` — últimas 50 corridas con el error completo.
+- \`POST /api/v2/admin/crons/:key/run\` — la corre en segundo plano (\`trigger: "manual"\`) y responde 202 al instante. 409 si ya está corriendo o en pausa.
+- \`POST /api/v2/admin/crons/:key/pause\` — \`{ "paused": true | false }\`. En pausa, la ruta responde \`{ "skipped": "paused" }\` sin correr.
 `,
 
   databases: `## Databases (SQLite-as-a-Service)

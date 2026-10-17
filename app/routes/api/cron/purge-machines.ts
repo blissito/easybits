@@ -1,4 +1,5 @@
 import { data } from "react-router";
+import { withCronRun } from "~/.server/cron";
 import {
   purgeExpiredMachines,
   reconcileProtection,
@@ -17,14 +18,16 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
   if (!expected || secret !== expected) {
     throw data({ error: "Unauthorized" }, { status: 401 });
   }
-  const result = await purgeExpiredMachines();
-  // Re-apply the destroy lock on every billed machine. Cheap and idempotent,
-  // and it closes the window where a failed protect call left a paid box
-  // deletable by the host's stale sweep.
-  const protection = await reconcileProtection();
-  // Re-suspend released boxes that are still running. Their billing is already
-  // cancelled, so one stuck here costs fleet capacity for free until the grace
-  // window closes — and a host restart can revive one at any time.
-  const released = await reconcileReleasedBoxes();
-  return data({ ...result, protection, released });
+  return withCronRun("purge-machines", request, async () => {
+    const result = await purgeExpiredMachines();
+    // Re-apply the destroy lock on every billed machine. Cheap and idempotent,
+    // and it closes the window where a failed protect call left a paid box
+    // deletable by the host's stale sweep.
+    const protection = await reconcileProtection();
+    // Re-suspend released boxes that are still running. Their billing is already
+    // cancelled, so one stuck here costs fleet capacity for free until the grace
+    // window closes — and a host restart can revive one at any time.
+    const released = await reconcileReleasedBoxes();
+    return data({ ...result, protection, released });
+  });
 };

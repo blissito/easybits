@@ -1,4 +1,5 @@
 import { data } from "react-router";
+import { withCronRun } from "~/.server/cron";
 import {
   pruneExpiredBackups,
   purgeDeletedMachineArtifacts,
@@ -16,11 +17,12 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
   if (!expected || secret !== expected) {
     throw data({ error: "Unauthorized" }, { status: 401 });
   }
-
-  const result = await pruneExpiredBackups();
-  // Y lo que quedó de máquinas ya destruidas: su último backup es intocable
-  // para la rotación normal (nunca llega uno más nuevo), así que sin esto el
-  // bucket sólo crece con cada cliente que se da de baja.
-  const purged = await purgeDeletedMachineArtifacts();
-  return data({ ...result, purged });
+  return withCronRun("prune-backups", request, async () => {
+    const result = await pruneExpiredBackups();
+    // Y lo que quedó de máquinas ya destruidas: su último backup es intocable
+    // para la rotación normal (nunca llega uno más nuevo), así que sin esto el
+    // bucket sólo crece con cada cliente que se da de baja.
+    const purged = await purgeDeletedMachineArtifacts();
+    return data({ ...result, purged });
+  });
 };

@@ -11,4 +11,5 @@ jobs:
         run: |
           curl -fsS -X GET \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "X-Cron-Trigger: github" \
             https://easybits.cloud/api/cron/backup-agents

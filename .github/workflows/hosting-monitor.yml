@@ -11,4 +11,5 @@ jobs:
         run: |
           curl -fsS --max-time 280 \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "X-Cron-Trigger: github" \
             https://easybits.cloud/api/cron/check-hosting

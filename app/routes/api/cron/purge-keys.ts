@@ -1,4 +1,5 @@
 import { data } from "react-router";
+import { withCronRun } from "~/.server/cron";
 import { purgeRevokedApiKeys } from "~/.server/iam";
 import type { Route } from "./+types/purge-keys";
 
@@ -21,8 +22,9 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
   if (!expected || secret !== expected) {
     throw data({ error: "Unauthorized" }, { status: 401 });
   }
-
-  const result = await purgeRevokedApiKeys();
-  console.info(`[purge-keys] purged=${result.purged}`);
-  return data(result);
+  return withCronRun("purge-keys", request, async () => {
+    const result = await purgeRevokedApiKeys();
+    console.info(`[purge-keys] purged=${result.purged}`);
+    return data(result);
+  });
 };

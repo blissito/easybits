@@ -6,6 +6,11 @@ vi.mock("~/.server/core/operations", () => ({
   purgeDeletedFiles: mockPurgeDeletedFiles,
 }));
 
+// El registro de corridas (CronRun) se prueba en cron.test.ts; aquí pasa directo.
+vi.mock("~/.server/cron", () => ({
+  withCronRun: (_job: string, _req: Request, fn: () => Promise<unknown>) => fn(),
+}));
+
 // Dynamic import so mocks are in place
 const { loader } = await import("~/routes/api/cron/purge-files");
 

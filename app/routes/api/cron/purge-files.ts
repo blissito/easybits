@@ -1,4 +1,5 @@
 import { data } from "react-router";
+import { withCronRun } from "~/.server/cron";
 import { purgeDeletedFiles } from "~/.server/core/operations";
 import type { Route } from "./+types/purge-files";
 
@@ -21,7 +22,8 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
   if (!expected || secret !== expected) {
     throw data({ error: "Unauthorized" }, { status: 401 });
   }
-
-  const result = await purgeDeletedFiles();
-  return data(result);
+  return withCronRun("purge-files", request, async () => {
+    const result = await purgeDeletedFiles();
+    return data(result);
+  });
 };

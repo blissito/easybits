@@ -1,4 +1,5 @@
 import { data } from "react-router";
+import { withCronRun } from "~/.server/cron";
 import { backupPermanentAgents } from "~/.server/core/backupOperations";
 import type { Route } from "./+types/backup-agents";
 
@@ -13,7 +14,8 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
   if (!expected || secret !== expected) {
     throw data({ error: "Unauthorized" }, { status: 401 });
   }
-
-  const result = await backupPermanentAgents();
-  return data(result);
+  return withCronRun("backup-agents", request, async () => {
+    const result = await backupPermanentAgents();
+    return data(result);
+  });
 };

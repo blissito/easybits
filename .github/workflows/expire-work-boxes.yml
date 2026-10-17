@@ -12,4 +12,5 @@ jobs:
         run: |
           curl -fsS --max-time 1800 -X GET \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "X-Cron-Trigger: github" \
             https://easybits.cloud/api/cron/expire-work-boxes

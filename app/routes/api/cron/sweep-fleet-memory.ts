@@ -1,11 +1,12 @@
 import { data } from "react-router";
+import { withCronRun } from "~/.server/cron";
 import { sweepOrphanFleetMemory } from "~/.server/core/fleetAgentOperations";
 import type { Route } from "./+types/sweep-fleet-memory";
 
-// Fallback scheduler for the orphan fleet-memory blob sweep. The in-process sweep
-// runs inside startReaper() (baileys.server.ts, every ~30min) which only boots
-// when the WhatsApp integration is active. For deployments that don't run Baileys
-// (or as a safety net), an external scheduler can hit this periodically.
+// Barrido de blobs de memoria huérfanos de la flota. El barrido in-process corre dentro
+// de startReaper() (baileys.server.ts, cada ~30 min) en la instancia que gana el lease
+// de líder (lifecycle.server.ts), haya o no WhatsApp conectado. Esta ruta es la corrida
+// semanal programada y la red de seguridad si no hay líder (EB_BACKGROUND=off, dev).
 // Auth: Authorization: Bearer ${CRON_SECRET} (same as purge-files/reap-embed-agents).
 export const loader = async ({ request }: Route.LoaderArgs) => {
   const expected = process.env.CRON_SECRET;
@@ -15,7 +16,8 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
   if (!expected || secret !== expected) {
     throw data({ error: "Unauthorized" }, { status: 401 });
   }
-
-  const result = await sweepOrphanFleetMemory();
-  return data(result);
+  return withCronRun("sweep-fleet-memory", request, async () => {
+    const result = await sweepOrphanFleetMemory();
+    return data(result);
+  });
 };

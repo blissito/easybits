@@ -208,6 +208,7 @@ export default [
           index("routes/dash/admin/users.tsx"),
           route("certs", "routes/dash/admin/certs.tsx"),
           route("metrics", "routes/dash/admin/metrics.tsx"),
+          route("crons", "routes/dash/admin/crons.tsx"),
       route("blog", "routes/dash/admin/blog.tsx"),
         ]),
       ]),
@@ -238,6 +239,7 @@ export default [
   route("api/cron/reap-service-boxes", "routes/api/cron/reap-service-boxes.ts"),
   route("api/cron/purge-notifications", "routes/api/cron/purge-notifications.ts"),
   route("api/cron/check-hosting", "routes/api/cron/check-hosting.ts"),
+  route("api/cron/schedule", "routes/api/cron/schedule.ts"),
   // Webhooks (inbound from external providers)
   route("api/webhooks/mercadopago", "routes/api/webhooks/mercadopago.ts"),
   // Unsubscribe (public)
@@ -325,6 +327,8 @@ export default [
     route("sandbox/:id/admin", "routes/api/v2/sandbox-admin.ts"),
     // Adopción formal: transfiere DB + caja del team de plataforma → user (ADMIN).
     route("admin/adopt-team", "routes/api/v2/admin.adopt-team.ts"),
+    route("admin/crons", "routes/api/v2/admin.crons.ts"),
+    route("admin/crons/:key/:action", "routes/api/v2/admin.crons.$key.$action.ts"),
     // Raw sandboxes (microVMs) — backs @easybits.cloud/sdk eb.sandboxes.*
     route("sandboxes", "routes/api/v2/sandboxes-collection.ts"),
     route("sandboxes/:id", "routes/api/v2/sandbox.ts"),

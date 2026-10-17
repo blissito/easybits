@@ -1,4 +1,5 @@
 import { data } from "react-router";
+import { withCronRun } from "~/.server/cron";
 import { expireIdleWorkBoxes } from "~/.server/core/workBoxExpiry";
 import type { Route } from "./+types/expire-work-boxes";
 
@@ -11,8 +12,10 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
   if (!expected || secret !== expected) {
     throw data({ error: "Unauthorized" }, { status: 401 });
   }
-  const result = await expireIdleWorkBoxes();
-  if (result.failed.length) console.error("[expire-work-boxes] fallaron:", JSON.stringify(result.failed));
-  console.log(`[expire-work-boxes] revisadas ${result.checked} · avisadas ${result.warned.length} · archivadas ${result.archived.length}`);
-  return Response.json(result);
+  return withCronRun("expire-work-boxes", request, async () => {
+    const result = await expireIdleWorkBoxes();
+    if (result.failed.length) console.error("[expire-work-boxes] fallaron:", JSON.stringify(result.failed));
+    console.log(`[expire-work-boxes] revisadas ${result.checked} · avisadas ${result.warned.length} · archivadas ${result.archived.length}`);
+    return Response.json(result);
+  });
 };

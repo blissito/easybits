@@ -2030,3 +2030,34 @@ model LessonProgress {
 
   @@unique([userId, lessonId])
 }
+
+// ── Crons ──────────────────────────────────────────────────────────────────────
+// Una fila por corrida de una tarea /api/cron/* (la escribe withCronRun en
+// app/.server/cron.ts). EasyBits es la fuente de verdad sin importar quién dispare:
+// Restate (eb-cron), GitHub Actions o el botón «Ejecutar ahora» del panel. Sin
+// `finishedAt` = sigue corriendo (o la app murió a la mitad). Retención 90 días
+// (purge-notifications).
+model CronRun {
+  id         String    @id @default(auto()) @map("_id") @db.ObjectId
+  job        String
+  trigger    String // restate | github | manual
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+  ok         Boolean?
+  status     Int?
+  durationMs Int?
+  summary    String?
+  error      String?
+
+  @@index([job, startedAt])
+  @@index([startedAt])
+}
+
+// Pausa por tarea. Una tarea en pausa responde { skipped: "paused" } sin correr.
+model CronJobState {
+  id       String    @id @default(auto()) @map("_id") @db.ObjectId
+  job      String    @unique
+  paused   Boolean   @default(false)
+  pausedBy String?
+  pausedAt DateTime?
+}

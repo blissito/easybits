@@ -11,29 +11,35 @@ jobs:
         run: |
           curl -fsS -X GET \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "X-Cron-Trigger: github" \
             https://easybits.cloud/api/cron/purge-files
       - name: Purge orphaned certs
         run: |
           curl -fsS -X GET \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "X-Cron-Trigger: github" \
             https://easybits.cloud/api/cron/purge-certs
       - name: Purge revoked API keys
         run: |
           curl -fsS -X GET \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "X-Cron-Trigger: github" \
             https://easybits.cloud/api/cron/purge-keys
       - name: Hard-delete machines past their 7-day soft-delete grace
         run: |
           curl -fsS -X GET \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "X-Cron-Trigger: github" \
             https://easybits.cloud/api/cron/purge-machines
       - name: Purge notifications older than 90 days
         run: |
           curl -fsS -X GET \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "X-Cron-Trigger: github" \
             https://easybits.cloud/api/cron/purge-notifications
       - name: Sweep orphaned fleet-memory blobs
         run: |
           curl -fsS -X GET \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "X-Cron-Trigger: github" \
             https://easybits.cloud/api/cron/sweep-fleet-memory

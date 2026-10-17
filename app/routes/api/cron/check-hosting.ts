@@ -1,4 +1,5 @@
 import { data } from "react-router";
+import { withCronRun } from "~/.server/cron";
 import { checkHostedDomains, notifyHostingIncidents } from "~/.server/core/hostingMonitorOperations";
 import type { Route } from "./+types/check-hosting";
 
@@ -11,11 +12,13 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
   if (!expected || secret !== expected) {
     throw data({ error: "Unauthorized" }, { status: 401 });
   }
-  const heal = new URL(request.url).searchParams.get("heal") !== "0";
-  const { probed, down } = await checkHostedDomains({ heal });
-  if (down.length) {
-    console.error(`[check-hosting] ${down.length} down:`, down.map((d) => `${d.domain}→${d.action ?? "-"}/${d.ok ? "up" : "DOWN"}`).join(", "));
-  }
-  const notified = await notifyHostingIncidents(down);
-  return data({ probed: probed.length, down, notified: notified.sent });
+  return withCronRun("check-hosting", request, async () => {
+    const heal = new URL(request.url).searchParams.get("heal") !== "0";
+    const { probed, down } = await checkHostedDomains({ heal });
+    if (down.length) {
+      console.error(`[check-hosting] ${down.length} down:`, down.map((d) => `${d.domain}→${d.action ?? "-"}/${d.ok ? "up" : "DOWN"}`).join(", "));
+    }
+    const notified = await notifyHostingIncidents(down);
+    return data({ probed: probed.length, down, notified: notified.sent });
+  });
 };

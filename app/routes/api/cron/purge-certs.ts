@@ -1,4 +1,5 @@
 import { data } from "react-router";
+import { withCronRun } from "~/.server/cron";
 import { purgeOrphanedCerts } from "~/.server/core/certOperations";
 import type { Route } from "./+types/purge-certs";
 
@@ -18,14 +19,15 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
   if (!expected || secret !== expected) {
     throw data({ error: "Unauthorized" }, { status: 401 });
   }
+  return withCronRun("purge-certs", request, async () => {
+    // Fuera de Fly (sandbox-host) no hay certs de Fly que purgar: el comodín lo emite acme.sh.
+    // 200 para que el workflow semanal no se ponga rojo.
+    if (!process.env.FLY_API_TOKEN) {
+      return data({ skipped: "no FLY_API_TOKEN" });
+    }
 
-  // Fuera de Fly (sandbox-host) no hay certs de Fly que purgar: el comodín lo emite acme.sh.
-  // 200 para que el workflow semanal no se ponga rojo.
-  if (!process.env.FLY_API_TOKEN) {
-    return data({ skipped: "no FLY_API_TOKEN" });
-  }
-
-  const result = await purgeOrphanedCerts();
-  console.info(`[purge-certs] total=${result.totalFlyCerts} orphans=${result.orphanedCerts.length} purged=${result.purged}`);
-  return data(result);
+    const result = await purgeOrphanedCerts();
+    console.info(`[purge-certs] total=${result.totalFlyCerts} orphans=${result.orphanedCerts.length} purged=${result.purged}`);
+    return data(result);
+  });
 };

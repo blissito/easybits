@@ -578,6 +578,14 @@ What happens on every push:
 
 ### Dashboard (UI)
 They are also managed from \`/dash/hosting\`: each site with its status and its address, and when you open one, four tabs — **Domains** (with the DNS record to create and whether it resolves yet), **Versions** (with one-click rollback), **Variables** and **Log** (the last lines of the log). From there you can also pause and cancel.
+
+### Platform scheduled jobs (platform admins only)
+Daily machine backups, their rotation, the hosting monitor (every 5 min) and the weekly purges are EasyBits scheduled jobs. Their schedule lives in code and every run is recorded (time, duration, who triggered it, summary and error). They are viewed and operated at \`/dash/admin/crons\` or through the API. They require the \`ADMIN\` scope **and** being a platform admin; any other account gets 403.
+
+- \`GET /api/v2/admin/crons\` — \`{ items }\`: per job \`key\`, \`name\`, \`path\`, \`cron\`, \`schedule\` (in words, Spanish), \`status\` (\`al-dia\` up to date · \`tarde\` late · \`fallo\` failed · \`pausado\` paused · \`nuevo\` no runs yet), \`paused\`, \`running\`, \`nextRunAt\`, \`lastRun\` and \`recent\` (last 20, newest last). Late = the scheduled time passed and it is still within the grace period (10% of the period, at least 5 min); failed = the grace period passed or the last run ended with an error.
+- \`GET /api/v2/admin/crons/:key/runs\` — last 50 runs with the full error.
+- \`POST /api/v2/admin/crons/:key/run\` — runs it in the background (\`trigger: "manual"\`) and answers 202 right away. 409 if it is already running or paused.
+- \`POST /api/v2/admin/crons/:key/pause\` — \`{ "paused": true | false }\`. While paused, the route answers \`{ "skipped": "paused" }\` without running.
 `;
 
 export const EN_EVE = `## eve (Vercel) on EasyBits
