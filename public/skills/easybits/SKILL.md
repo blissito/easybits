@@ -5,7 +5,7 @@ license: MIT
 compatibility: Needs curl or any HTTP client, network access to https://www.easybits.cloud and an EasyBits API key
 metadata:
   author: easybits
-  version: "1.4"
+  version: "1.5"
 ---
 
 # Use EasyBits from a coding agent
@@ -78,6 +78,21 @@ agents you talk to), `easybits-mcp` (the MCP server), `easybits-docs` (reading t
 - **Money moves:** `POST /machines` and `POST /machines/launch` start a monthly charge (or
   return a `checkoutUrl` when there is no plan). Say the tier and the MXN price before calling.
 - Currency is MXN; plans gate storage, AI and fleet. Hosting bills on its own subscription.
+
+## Recipe: scheduled reports from an app's data
+
+A deployed app's database (`DATABASE_URL=http://172.20.0.1:8090/v1/db/<app>/`) is reachable
+**only from inside its machine**, so never try to query it from outside or with `db_query`.
+Do this instead:
+1. Add a route to the app (e.g. `POST /api/reports/<name>`) that runs the SQL and returns the
+   numbers; protect it with a machine secret (`easybits machines secrets set <machine> --dotenv -`,
+   then `machines restart`). **Numbers come from SQL, never from you adding rows.**
+2. Output: JSON/CSV, or a PDF with `structured_doc`; store or email it from the app.
+3. Trigger: an in-app timer only if the machine doesn't sleep; otherwise call the URL from outside
+   with the secret (it wakes the box) — e.g. a GitHub Actions schedule or a Ghosty scheduled turn
+   (`ghosty schedule add <agent> "…" --at <ISO> --every 24h`).
+4. If an agent writes the summary, it reads the route's numbers and only interprets them.
+Full walkthrough: https://www.easybits.cloud/docs/hosting.md (section "Reportes programados").
 
 ## After changes
 

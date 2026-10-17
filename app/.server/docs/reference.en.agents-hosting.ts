@@ -544,6 +544,44 @@ The values are stored encrypted in your vault and the runspec keeps only the LIS
 
 They take effect on the **next deploy**, not on the fly. Rotating a secret means changing it here and deploying again. If the runspec declares one that is not in the vault, the deploy fails naming which one — better than watching the app die on connect.
 
+### Scheduled reports from your app's data
+
+Typical case: every morning you want an operations report (sales, orders by status, appointments) built from **your app's** database. The rule that drives the design: a deployed app's database sits behind the host (\`DATABASE_URL=http://172.20.0.1:8090/v1/db/<app>/\`, the host signs each request) and **is only reachable from inside its machine**. So the report is computed in the app; whatever is outside only decides **when**.
+
+**1. A report route in your app**, protected with a secret of that machine:
+
+\`\`\`bash
+printf 'REPORT_SECRET=%s\\n' "$(openssl rand -hex 24)" | easybits machines secrets set <machine> --dotenv -
+easybits machines restart <machine>     # secrets apply on restart or redeploy
+\`\`\`
+
+\`\`\`ts
+// With the client your app already uses for its database (e.g. @libsql/client with DATABASE_URL).
+app.post("/api/reports/operations", async (req, res) => {
+  if (req.headers.authorization !== \`Bearer \${process.env.REPORT_SECRET}\`) return res.status(401).end();
+  const { rows } = await db.execute(
+    "SELECT status, COUNT(*) AS orders, SUM(total) AS amount FROM orders WHERE created >= date('now','-1 day') GROUP BY status"
+  );
+  res.json({ period: "last 24 h", rows });
+});
+\`\`\`
+
+**The numbers are computed by code (SQL), never by a model.** A model adding up loose rows will sooner or later invent a figure.
+
+**2. The output.** JSON or CSV in the response; a PDF with \`structured_doc\` (REST/MCP, no browser); store it in the app's bucket or in EasyBits Files and, if needed, email it from the app.
+
+**3. What triggers it:**
+- **A timer inside the app** (node-cron or \`setInterval\`): only works if the machine **does not sleep** (\`sleep\` off). With sleep on, the timer stops with the box.
+- **From outside, calling the URL** with the secret: works even if the machine sleeps (the request wakes it). For example a GitHub Actions \`schedule:\` workflow with \`curl -fsS -X POST -H "Authorization: Bearer $REPORT_SECRET" https://<your-domain>/api/reports/operations\`.
+
+**4. With an agent ("almost an automation").** A Ghosty agent with a scheduled turn calls that route and writes the summary for whoever reads it (what went up, what got stuck, what to check):
+
+\`\`\`bash
+ghosty schedule add <agent> "Call POST https://<your-domain>/api/reports/operations (Bearer \$secret:REPORT_SECRET) and send me yesterday's summary" --at 2026-10-18T08:00-06:00 --every 24h
+\`\`\`
+
+The agent gets the numbers already computed: it interprets and writes, it does not count.
+
 ### Deploy from GitHub on every push
 One GitHub webhook and you are done: every push to the machine's branch redeploys it. No workflow, no Actions.
 

@@ -2008,6 +2008,44 @@ Los valores se guardan cifrados en tu bóveda y en el runspec queda solo la LIST
 
 Surten efecto en el **siguiente despliegue**, no al vuelo. Rotar un secreto es cambiarlo aquí y volver a desplegar. Si el runspec declara uno que no está en la bóveda, el deploy falla diciendo cuál — mejor que ver la app morir al conectar.
 
+### Reportes programados con los datos de tu app
+
+Caso típico: cada mañana quieres un reporte de la operación (ventas, pedidos por estado, citas) sacado de la base de **tu app**. La regla que manda: la base de una app desplegada vive detrás del host (\`DATABASE_URL=http://172.20.0.1:8090/v1/db/<app>/\`, el host firma cada petición) y **sólo se alcanza desde dentro de su máquina**. Así que el reporte se calcula en la app; lo de fuera sólo decide **cuándo**.
+
+**1. Una ruta de reporte en tu app**, protegida con un secreto propio de esa máquina:
+
+\`\`\`bash
+printf 'REPORT_SECRET=%s\\n' "$(openssl rand -hex 24)" | easybits machines secrets set <maquina> --dotenv -
+easybits machines restart <maquina>     # los secretos aplican al reiniciar o redesplegar
+\`\`\`
+
+\`\`\`ts
+// Con el cliente que ya usa tu app para su base (p. ej. @libsql/client con DATABASE_URL).
+app.post("/api/reportes/operacion", async (req, res) => {
+  if (req.headers.authorization !== \`Bearer \${process.env.REPORT_SECRET}\`) return res.status(401).end();
+  const { rows } = await db.execute(
+    "SELECT estado, COUNT(*) AS pedidos, SUM(total) AS monto FROM pedidos WHERE creado >= date('now','-1 day') GROUP BY estado"
+  );
+  res.json({ periodo: "últimas 24 h", filas: rows });
+});
+\`\`\`
+
+**Los números los calcula el código (SQL), nunca un modelo.** Un modelo que suma filas sueltas tarde o temprano inventa una cifra.
+
+**2. La salida.** JSON o CSV en la respuesta; un PDF con \`structured_doc\` (REST/MCP, sin navegador); guárdalo en el bucket de la app o en Files de EasyBits y, si hace falta, mándalo por correo desde la app.
+
+**3. Quién lo dispara:**
+- **Temporizador dentro de la app** (node-cron o \`setInterval\`): sirve sólo si la máquina **no duerme** (\`sleep\` apagado). Con sleep, el temporizador se detiene con la caja.
+- **Desde fuera, llamando la URL** con el secreto: funciona aunque la máquina duerma (la petición la despierta). Por ejemplo, un workflow \`schedule:\` de GitHub Actions con \`curl -fsS -X POST -H "Authorization: Bearer $REPORT_SECRET" https://<tu-dominio>/api/reportes/operacion\`.
+
+**4. Con un agente («casi automatización»).** Un agente de Ghosty con turno programado llama esa ruta y redacta el resumen para quien lo lee (qué subió, qué se atoró, qué revisar):
+
+\`\`\`bash
+ghosty schedule add <agente> "Llama POST https://<tu-dominio>/api/reportes/operacion (Bearer \$secret:REPORT_SECRET) y mándame el resumen de ayer" --at 2026-10-18T08:00-06:00 --every 24h
+\`\`\`
+
+El agente recibe los números ya calculados: interpreta y redacta, no cuenta.
+
 ### Desplegar desde GitHub en cada push
 Un webhook de GitHub y listo: cada push a la rama de la máquina la redespliega sola. Sin workflow, sin Actions.
 
