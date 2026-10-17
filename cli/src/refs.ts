@@ -2,7 +2,7 @@
 // recurso y cómo se empata un nombre contra la lista. La parte con red vive en resolve.ts.
 // Sin imports a propósito: el test lo carga directo con --experimental-strip-types.
 
-export type RefKind = "agent" | "sandbox" | "db" | "site";
+export type RefKind = "agent" | "sandbox" | "db" | "site" | "fleet";
 
 /** Lo mínimo de cada recurso para empatar: id, nombre y (si hay) estado. */
 export type NamedRef = { id: string; name?: string | null; status?: string | null };
@@ -14,6 +14,7 @@ const ID_FORMAT: Record<RefKind, RegExp> = {
   db: /^[0-9a-f]{24}$/i,
   sandbox: /^sb_[0-9a-z-]+$/i,
   site: /^[0-9a-f]{24}$/i,
+  fleet: /^[0-9a-f]{24}$/i,
 };
 
 export const looksLikeId = (kind: RefKind, ref: string) => ID_FORMAT[kind].test(ref);
@@ -65,6 +66,10 @@ export const REF_ARGS: Record<string, { index: number; kind: RefKind }> = {
   "db query": { index: 0, kind: "db" },
   "db photos": { index: 1, kind: "db" },
   "sites theme": { index: 1, kind: "site" },
+  "fleet get": { index: 0, kind: "fleet" },
+  "fleet capabilities": { index: 0, kind: "fleet" },
+  "fleet configure": { index: 0, kind: "fleet" },
+  "fleet message": { index: 0, kind: "fleet" },
 };
 
 export type MatchResult =

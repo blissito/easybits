@@ -373,6 +373,22 @@ easybits agents create --like ayudante --name ayudante-2 --copy-files --dry-run
 
 Clonar (\`--like\` / \`--from\`) copia template, prompt, servidores MCP y skills (con \`--copy-files\`, también los archivos), **nunca el env**: las llaves del motor van con \`--dotenv\`. \`export\` enmascara los secretos del MCP salvo con \`--show-secrets\`; las referencias \`$secret:NOMBRE\` viajan tal cual.
 
+### Agentes de flota
+
+\`\`\`bash
+easybits fleet ls
+easybits fleet get soporte                                   # motor, modelo, esfuerzo, modo de número, canales, prompt
+easybits fleet get soporte --prompt-out PROMPT.md            # un prompt largo va a un archivo
+easybits fleet capabilities soporte --json                   # catálogo + estado: motores, modelos, buckets, MCPs, skills, canales
+easybits fleet configure soporte --prompt-file PROMPT.md     # system prompt para todos los canales
+easybits fleet configure soporte --model claude-sonnet-5-5 --effort high --recycle
+easybits fleet configure soporte --name Nik --own-number on
+easybits fleet message soporte "¿qué horarios tienen?" --config-group web
+easybits fleet message soporte "¿y el sábado?" --group cli-1234 --config-group web   # la misma conversación
+\`\`\`
+
+Un agente de flota rutea cada conversación (WhatsApp, WABA, Teams, web) a una caja efímera; se crea y se ligan sus canales en /dash/flota. El CLI usa la credencial de tu cuenta, nunca el token del agente. \`configure\` aplica un cambio a la vez (el motor antes que el modelo; \`--recycle\` al final): el cambio llega a las cajas dormidas al despertar y a una corriendo cuando se duerme, o de inmediato con \`--recycle\` (\`--engine\` recicla solo). \`--name\` cambia el nombre visible y el nombre con el que se presenta. \`message\` manda un turno e imprime la respuesta; sin \`--group\` abre una conversación nueva \`cli-<uuid>\` y te dice su id en stderr. **Pasa \`--config-group\`** (\`web\`, \`waba:<id>\`, un grupo de WhatsApp) para cargar las tools, el MCP y el prompt de ese canal: sin él, el turno puede correr sin los conectores del canal.
+
 ### El agente como archivo
 
 \`\`\`bash

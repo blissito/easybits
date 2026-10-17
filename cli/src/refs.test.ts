@@ -49,7 +49,7 @@ test("inexistente", () => {
 test("la tabla sólo apunta a tipos conocidos", () => {
   for (const [key, spec] of Object.entries(REF_ARGS)) {
     assert.match(key, /^[a-z]+ [a-z]+$/);
-    assert.ok(["agent", "sandbox", "db", "site"].includes(spec.kind), key);
+    assert.ok(["agent", "sandbox", "db", "site", "fleet"].includes(spec.kind), key);
     assert.ok(spec.index >= 0 && spec.index <= 1, key);
   }
 });

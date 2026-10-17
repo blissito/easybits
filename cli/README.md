@@ -147,6 +147,13 @@ easybits apply ./helper --create --name helper-2  # a new agent from the folder
 easybits agents create --like helper --name helper-2 [--copy-files] --dry-run   # clone its setup, never its env
 easybits agents create --from helper.json --name helper-3
 
+# Fleet agents (one agent, many conversations: WhatsApp, WABA, Teams, web)
+easybits fleet ls
+easybits fleet get soporte                          # engine, model, effort, channels, prompt
+easybits fleet capabilities soporte --json          # engines, models, tool buckets, MCPs, skills, channels
+easybits fleet configure soporte --prompt-file PROMPT.md --model claude-sonnet-5-5 --recycle
+easybits fleet message soporte "¿qué horarios tienen?" --config-group web   # prints the reply
+
 # Files, websites, account
 easybits files ls
 easybits files upload ./report.pdf

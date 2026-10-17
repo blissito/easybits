@@ -12,10 +12,11 @@ const LS_HINT: Record<RefKind, string> = {
   sandbox: "easybits sandboxes ls",
   db: "easybits db ls",
   site: "easybits sites ls",
+  fleet: "easybits fleet ls",
 };
 
-const NOUN = (): Record<RefKind, string> => ({ agent: t("agent", "agente"), sandbox: t("sandbox or machine", "sandbox o máquina"), db: t("database", "base de datos"), site: t("site", "sitio") });
-const NOUNS = (): Record<RefKind, string> => ({ agent: t("agents", "agentes"), sandbox: t("sandboxes", "sandboxes"), db: t("databases", "bases de datos"), site: t("sites", "sitios") });
+const NOUN = (): Record<RefKind, string> => ({ agent: t("agent", "agente"), sandbox: t("sandbox or machine", "sandbox o máquina"), db: t("database", "base de datos"), site: t("site", "sitio"), fleet: t("fleet agent", "agente de flota") });
+const NOUNS = (): Record<RefKind, string> => ({ agent: t("agents", "agentes"), sandbox: t("sandboxes", "sandboxes"), db: t("databases", "bases de datos"), site: t("sites", "sitios"), fleet: t("fleet agents", "agentes de flota") });
 
 // Una lista por tipo y por corrida: dos referencias del mismo tipo no piden dos veces.
 const cache = new Map<RefKind, Promise<NamedRef[]>>();
@@ -26,6 +27,7 @@ export function listRefs(ctx: Ctx, kind: RefKind): Promise<NamedRef[]> {
     p = (async () => {
       const eb = await getClient(ctx);
       if (kind === "agent") return (await eb.listAgents()).map((a) => ({ id: a.agentId, name: a.name, status: a.status }));
+      if (kind === "fleet") return (await api<{ pools: Array<{ id: string; name?: string | null }> }>(ctx, "GET", "/fleet-agents")).pools.map((p) => ({ id: p.id, name: p.name }));
       if (kind === "site") return (await api<{ items: NamedRef[] }>(ctx, "GET", "/sites")).items.map((s) => ({ id: s.id, name: s.name }));
       if (kind === "db") return (await eb.listDatabases()).items.map((d) => ({ id: d.id, name: d.name }));
       return (await eb.sandboxes.list()).map((s) => ({ id: s.sandboxId, name: s.name, status: s.status }));

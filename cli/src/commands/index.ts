@@ -9,6 +9,7 @@ import { sites } from "./sites.js";
 import { domains } from "./domains.js";
 import { db } from "./db.js";
 import { agents } from "./agents.js";
+import { fleet } from "./fleet.js";
 import { apply } from "./spec.js";
 import { completion } from "./completion.js";
 import { docs } from "./docs.js";
@@ -26,6 +27,7 @@ export const COMMANDS: Command[] = [
   secrets,
   sandboxes,
   agents,
+  fleet,
   apply,
   machines,
   sites,

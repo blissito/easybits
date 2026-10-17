@@ -333,6 +333,23 @@ easybits apply ./helper --create --name helper-2 --yes --json   # {agentId, plan
 - `failed` in the result = stopped at that step (exit 1); `backup` is the file to roll back with
   `easybits apply <backup> --agent <agent> --yes`.
 
+## Fleet agents (WhatsApp, WABA, Teams, web)
+
+```bash
+easybits fleet ls --json                                  # [{id, name, assistantName, workerTemplate, hasOwnNumber, createdAt}]
+easybits fleet get soporte --json                         # {systemPrompt, model, effort, engine, channels, skills, customMcps…}
+easybits fleet capabilities soporte --json                # full catalog + per-channel state
+easybits fleet configure soporte --prompt-file PROMPT.md --json   # {applied:[actions]}
+easybits fleet configure soporte --model claude-sonnet-5-5 --effort high --recycle --json
+easybits fleet message soporte "test question" --config-group web --json   # {reply, groupId}
+```
+
+- `--config-group` decides which channel's tools/MCP/prompt load; omit it and the agent may answer
+  without its connectors (looks like a broken MCP). Reuse `groupId` to continue a conversation.
+- Changes reach running boxes only after `--recycle` (or when they sleep). Verify with a
+  `fleet message` turn instead of trusting the agent's own claims about its tools.
+- Fleet agents are different from `agents` (one box per agent, ghosty-lite/goose).
+
 ## More
 
 - `easybits --help`, `easybits <command> <sub> --help` or `easybits help <command> <sub>`

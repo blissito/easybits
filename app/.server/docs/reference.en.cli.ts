@@ -227,6 +227,22 @@ easybits agents create --like helper --name helper-2 --copy-files --dry-run
 
 Cloning (\`--like\` / \`--from\`) copies template, prompt, MCP servers and skills (\`--copy-files\`: the files too), **never the env**: pass the engine keys with \`--dotenv\`. \`export\` masks MCP secrets unless \`--show-secrets\`; \`$secret:NAME\` references travel as is.
 
+### Fleet agents
+
+\`\`\`bash
+easybits fleet ls
+easybits fleet get soporte                                   # engine, model, effort, number mode, channels, prompt
+easybits fleet get soporte --prompt-out PROMPT.md            # a long prompt goes to a file
+easybits fleet capabilities soporte --json                   # catalog + state: engines, models, buckets, MCPs, skills, channels
+easybits fleet configure soporte --prompt-file PROMPT.md     # system prompt for every channel
+easybits fleet configure soporte --model claude-sonnet-5-5 --effort high --recycle
+easybits fleet configure soporte --name Nik --own-number on
+easybits fleet message soporte "what are your hours?" --config-group web
+easybits fleet message soporte "and saturday?" --group cli-1234 --config-group web   # same conversation
+\`\`\`
+
+A fleet agent routes each conversation (WhatsApp, WABA, Teams, web) to a short-lived box; create one and pair its channels at /dash/flota. The CLI uses your account credential, never the agent's token. \`configure\` applies one change at a time (engine before model; \`--recycle\` last): a change reaches sleeping boxes when they wake and a running one when it sleeps, or right away with \`--recycle\` (\`--engine\` recycles by itself). \`--name\` changes both the display name and the name the agent goes by. \`message\` sends one turn and prints the reply; without \`--group\` it starts a new \`cli-<uuid>\` conversation and tells you its id on stderr. **Pass \`--config-group\`** (\`web\`, \`waba:<id>\`, a WhatsApp group) to load that channel's tools, MCP and prompt: without it the turn may run without the channel's connectors.
+
 ### The agent as a file
 
 \`\`\`bash
