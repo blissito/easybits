@@ -862,6 +862,7 @@ model Site {
   expiryWarnedAt  DateTime? // webapp sin publicar: cuándo se avisó por correo que se archiva (workBoxExpiry.ts)
   archivedAt      DateTime? // webapp archivada por inactividad: su caja se destruyó; abrirla la revive
   archiveBackupId String?   // SandboxBackup (scope "site-archive") con /app, para revivirla
+  domain          String?   // webapp: dominio con el que se sirve (p. ej. aguas.easybits.cloud); la ruta la resuelve el router
   deletedAt  DateTime?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt

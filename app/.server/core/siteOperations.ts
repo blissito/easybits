@@ -281,7 +281,7 @@ export async function getSite(ctx: AuthContext, id: string) {
   };
 }
 
-type Row = { kind: string; sandboxId: string | null; stack?: string | null };
+type Row = { kind: string; sandboxId: string | null; stack?: string | null; domain?: string | null };
 type Web = {
   slug: string;
   subdomainEnabled: boolean;
@@ -297,6 +297,7 @@ function publicUrl(site: Row, website: Web) {
       ? `https://${website.slug}.easybits.cloud`
       : `https://www.easybits.cloud/s/${website.slug}/`;
   }
+  if (site.kind === "webapp" && site.domain) return `https://${site.domain}`;
   if (site.kind === "webapp" && site.sandboxId) return sandboxUrl(site.sandboxId, 3000);
   return null;
 }
