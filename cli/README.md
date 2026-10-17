@@ -182,6 +182,22 @@ easybits websites slug my-shop my-store             # change it; the old URL 301
 easybits providers                   # storage provider (Tigris by default)
 easybits usage
 
+# Documents: pages of HTML you write (page = number 1… or id)
+easybits documents ls --search quote
+easybits documents create --name "ACME quote" --html cover.html --html prices.html
+easybits documents create --name "Carousel" --format ig-feed   # one blank 1080x1350 page
+easybits documents get "ACME quote"                # format, URL and pages
+easybits documents pages ls "ACME quote"
+easybits documents pages get "ACME quote" 2 --out prices.html
+easybits documents pages set "ACME quote" 2 prices.html        # - reads stdin
+easybits documents add-page "ACME quote" annex.html --after 2
+easybits documents rm-page "ACME quote" 3 --yes
+easybits documents reorder "ACME quote" 1 3 2
+easybits documents deploy "ACME quote"             # public URL (+ PDF)
+easybits documents export pdf "ACME quote" --out quote.pdf
+easybits documents export png Carousel --out ./slides   # one PNG per page, exact size
+easybits documents rm "ACME quote" --yes
+
 # MCP, SSH, docs
 easybits whoami        # account and where the credential comes from
 easybits doctor        # Node, CLI version, credential, API; exits 1 on a problem
@@ -192,7 +208,7 @@ easybits docs cli      # a docs section as markdown (--en for English)
 easybits docs --open   # open the docs in your browser
 ```
 
-**Names or ids.** Wherever a command takes an agent, a sandbox/machine, a database or a site, you can
+**Names or ids.** Wherever a command takes an agent, a sandbox/machine, a database, a site or a document, you can
 pass its name instead of the id (`easybits sb exec scratch -- ls`, `easybits sb domains ls shop`).
 The match is exact and case-insensitive; if two share the name the CLI exits 2 and lists the ids.
 

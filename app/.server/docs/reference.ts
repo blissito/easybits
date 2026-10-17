@@ -337,6 +337,29 @@ jq .colors tema.json | easybits sites theme set mi-consultorio --colors -   # o 
 
 \`theme\` es el botón «Tema» del editor: reescribe el archivo de tema del sitio (web app: \`eb-theme.css\`; estático: el bloque \`eb-theme\` de \`index.html\`) y la vista previa lo toma. \`--colors\` necesita todos los tokens (\`primary\`, \`primary-light\`, \`primary-dark\`, \`secondary\`, \`accent\`, \`surface\`, \`surface-alt\`, \`surface-deep\`, \`on-surface\`, \`on-surface-muted\`, \`on-surface-deep\`, \`on-primary\`, \`on-secondary\`, \`on-accent\`); una paleta desconocida responde \`invalid_theme\` y un sitio anterior a los temas responde \`no_tokens\` (409).
 
+### Documentos
+
+Páginas de HTML que tú escribes (el editor de \`/dash/documents\`), publicadas en una URL pública y exportadas a PDF o PNG. El CLI no genera con IA: escribe el HTML de cada página y fíjalo.
+
+\`\`\`bash
+easybits documents ls --search cotización                # los más nuevos primero; --limit hasta 100
+easybits documents create --name "Cotización ACME" --html portada.html --html precios.html   # una página por archivo
+easybits documents create --name "Carrusel" --format ig-feed   # una página en blanco de 1080x1350
+easybits documents get "Cotización ACME"                 # formato, URL y páginas (por nombre o id)
+easybits documents pages ls "Cotización ACME"
+easybits documents pages get "Cotización ACME" 2 --out precios.html
+easybits documents pages set "Cotización ACME" 2 precios.html   # - lee stdin
+easybits documents add-page "Cotización ACME" anexo.html --after 2 --label Anexo
+easybits documents rm-page "Cotización ACME" 3 --yes
+easybits documents reorder "Cotización ACME" 1 3 2       # todas las páginas, por número o id
+easybits documents deploy "Cotización ACME"              # URL pública (+ PDF)
+easybits documents export pdf "Cotización ACME" --out cotizacion.pdf
+easybits documents export png Carrusel --out ./slides --pages 1,2
+easybits documents rm "Cotización ACME" --yes
+\`\`\`
+
+Una página se indica por su número (1 = la primera, como en el editor) o por su id. \`--format\` es \`letter\` (default), \`ig-feed\`, \`li-feed\`, \`ig-square\`, \`fb-square\`, \`ig-story\`, \`wsp-status\`, \`tiktok\`, \`slide-16-9\` o \`WxH\` en px (100-10000); sin \`--html\` el documento arranca con una página en blanco de ese tamaño. Las páginas pasan por el mismo camino que \`set_page_html\`: un HTML completo (doctype, \`<style>\`) se normaliza a página. \`export\` renderiza en el servidor (Chromium), así que los tamaños salen exactos sin importar tu máquina: \`pdf\` escribe un archivo (default \`<nombre>.pdf\`), \`png\` un archivo por página en una carpeta (default \`.\`) y además los guarda en tus Files. \`rm\` borra el documento para siempre.
+
 ### Bases de datos
 
 \`\`\`bash
@@ -438,7 +461,7 @@ Una sola regla, como \`gh\`: \`easybits <sustantivo> <verbo>\`. Las formas vieja
 
 ### Nombres en vez de ids
 
-Todo comando que recibe un agente, un sandbox o máquina, una base de datos o un sitio acepta su **nombre** además del id: \`easybits sb exec pruebas -- ls\`, \`easybits sb domains ls tienda\`, \`easybits machines deploy tienda -m "v2"\`. Un id (\`sb_…\`, o el id de 24 caracteres de agentes, bases y sitios) pasa directo; un nombre se busca exacto, sin distinguir mayúsculas, en tu lista (una petición por corrida). Si dos comparten el nombre, el CLI sale con 2 y enlista los ids; si ninguno coincide, sale con 1 y te dice qué \`ls\` correr.
+Todo comando que recibe un agente, un sandbox o máquina, una base de datos, un sitio o un documento acepta su **nombre** además del id: \`easybits sb exec pruebas -- ls\`, \`easybits sb domains ls tienda\`, \`easybits machines deploy tienda -m "v2"\`. Un id (\`sb_…\`, o el id de 24 caracteres de agentes, bases, sitios y documentos) pasa directo; un nombre se busca exacto, sin distinguir mayúsculas, en tu lista (una petición por corrida). Si dos comparten el nombre, el CLI sale con 2 y enlista los ids; si ninguno coincide, sale con 1 y te dice qué \`ls\` correr.
 
 ### Archivos, sitios y cuenta
 

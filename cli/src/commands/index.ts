@@ -17,6 +17,7 @@ import { doctor } from "./doctor.js";
 import { webCmd } from "./web.js";
 import { keys, webhooks } from "./webhooks.js";
 import { secrets } from "./secrets.js";
+import { documents } from "./documents.js";
 
 // El orden aquí es el orden de la ayuda.
 export const COMMANDS: Command[] = [
@@ -37,6 +38,7 @@ export const COMMANDS: Command[] = [
   db,
   files,
   websites,
+  documents,
   providers,
   webCmd,
   webhooks,

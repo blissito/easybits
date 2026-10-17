@@ -1,6 +1,6 @@
 ---
 name: easybits-cli
-description: "Drive EasyBits from the terminal with the easybits CLI (npm @easybits.cloud/cli) - sandboxes, exec, sandbox files, permanent machines and releases, secrets, custom domains, site-builder sites, SQL databases, agents (prompt, skills, MCP, files, clone) and files, all with --json and stable exit codes. Use when a coding agent has a shell and needs to create or operate EasyBits resources without writing HTTP calls, or when the user mentions the easybits CLI."
+description: "Drive EasyBits from the terminal with the easybits CLI (npm @easybits.cloud/cli) - sandboxes, exec, sandbox files, permanent machines and releases, secrets, custom domains, site-builder sites, documents (HTML pages → URL, PDF, PNG), SQL databases, agents (prompt, skills, MCP, files, clone) and files, all with --json and stable exit codes. Use when a coding agent has a shell and needs to create or operate EasyBits resources without writing HTTP calls, or when the user mentions the easybits CLI."
 license: MIT
 compatibility: Needs Node 22+ (npx is enough), network access to https://www.easybits.cloud and an EasyBits API key
 metadata:
@@ -77,9 +77,9 @@ at another server (default https://www.easybits.cloud).
 4. Put flags after the subcommand: `easybits sb create --template node`, not
    `easybits --template node sb create`.
 5. Deletes need `--yes`: `sb destroy`, `machines rm`, `agents destroy`, `db rm`, `domains rm`, `files rm`,
-   `agents files rm`, `agents skills rm`.
+   `agents files rm`, `agents skills rm`, `documents rm|rm-page`.
    With `--json` (or no terminal) they never prompt; without `--yes` they exit 2.
-6. Names work where ids do: any agent, sandbox/machine, database or site argument takes its name
+6. Names work where ids do: any agent, sandbox/machine, database, site or document argument takes its name
    (`easybits agents get helper`, `easybits sb exec scratch -- ls`, `easybits db query leads …`).
    Exact match, case-insensitive. Two with the same name → exit 2, `error` says so and `hint`
    lists the ids: retry with one. For destructive commands prefer the id you got back on create.
@@ -256,6 +256,35 @@ easybits websites slug my-shop my-store --json                  # by id or curre
 
 Slug: lowercase a-z, 0-9 and single hyphens, 3-60 chars, not reserved (api, admin, www…), unique.
 Errors come back as `slug_invalid` (exit 1, HTTP 400) or `slug_taken` (HTTP 409): pick another.
+
+## Documents (/dash/documents)
+
+You write each page's HTML; the CLI never generates it with AI (no "generate"/"refine" here on
+purpose: write the HTML, then set it).
+
+```bash
+easybits documents ls --search quote --json   # {total, items:[{id, name, pageCount, shareUrl, pdfUrl, …}]}
+easybits documents create --name "ACME quote" --html cover.html --html prices.html --json
+                                              # {id, name, format, pages:[{id,label}], editorUrl}
+easybits documents create --name "Carousel" --format ig-feed --json   # one blank 1080x1350 page
+easybits documents get "$DOC" --json          # full record: metadata.format, sections[{id,order,html,label}]
+easybits documents pages ls "$DOC" --json     # [{n, id, label, size}]
+easybits documents pages get "$DOC" 2 --out page2.html
+easybits documents pages set "$DOC" 2 page2.html --json   # {success, pageId, noop?}; - reads stdin
+easybits documents add-page "$DOC" annex.html --after 2 --label Annex --json
+easybits documents rm-page "$DOC" 3 --yes --json
+easybits documents reorder "$DOC" 1 3 2 --json            # every page once, by number or id
+easybits documents deploy "$DOC" --json       # {url, slug, websiteId, pdfUrl}
+easybits documents export pdf "$DOC" --out doc.pdf --json # {file, bytes}
+easybits documents export png "$DOC" --out ./slides --json   # {files:[{file, url, bytes}]}
+easybits documents rm "$DOC" --yes --json
+```
+
+Pages are 1-based numbers (as in the editor) or ids. `--format`: letter (default), ig-feed,
+li-feed, ig-square, fb-square, ig-story, wsp-status, tiktok, slide-16-9, or `WxH` px. Design each
+page edge to edge at that size; a full HTML document is normalized into a page. Edit one page at a
+time with `pages get` → change the file → `pages set`, and verify with `export png` before
+`deploy`. `export` renders on the server, so sizes are exact.
 
 ## Databases (libSQL)
 

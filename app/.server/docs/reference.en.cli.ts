@@ -191,6 +191,29 @@ jq .colors theme.json | easybits sites theme set my-clinic --colors -   # or eve
 
 \`theme\` is the editor's «Tema» button: it rewrites the site's theme file (web app: \`eb-theme.css\`; static: the \`eb-theme\` block of \`index.html\`) and the preview picks it up. \`--colors\` needs every token (\`primary\`, \`primary-light\`, \`primary-dark\`, \`secondary\`, \`accent\`, \`surface\`, \`surface-alt\`, \`surface-deep\`, \`on-surface\`, \`on-surface-muted\`, \`on-surface-deep\`, \`on-primary\`, \`on-secondary\`, \`on-accent\`); an unknown palette answers \`invalid_theme\` and a site older than themes answers \`no_tokens\` (409).
 
+### Documents
+
+Pages of HTML you write (the \`/dash/documents\` editor), published at a public URL and exported to PDF or PNG. The CLI does not generate with AI: write each page's HTML and set it.
+
+\`\`\`bash
+easybits documents ls --search quote                     # newest first; --limit up to 100
+easybits documents create --name "ACME quote" --html cover.html --html prices.html   # one page per file
+easybits documents create --name "Carousel" --format ig-feed   # one blank 1080x1350 page
+easybits documents get "ACME quote"                      # format, URL and pages (by name or id)
+easybits documents pages ls "ACME quote"
+easybits documents pages get "ACME quote" 2 --out prices.html
+easybits documents pages set "ACME quote" 2 prices.html  # - reads stdin
+easybits documents add-page "ACME quote" annex.html --after 2 --label Annex
+easybits documents rm-page "ACME quote" 3 --yes
+easybits documents reorder "ACME quote" 1 3 2            # every page, by number or id
+easybits documents deploy "ACME quote"                   # public URL (+ PDF)
+easybits documents export pdf "ACME quote" --out quote.pdf
+easybits documents export png Carousel --out ./slides --pages 1,2
+easybits documents rm "ACME quote" --yes
+\`\`\`
+
+A page is given by its number (1 = the first, as in the editor) or its id. \`--format\` is \`letter\` (default), \`ig-feed\`, \`li-feed\`, \`ig-square\`, \`fb-square\`, \`ig-story\`, \`wsp-status\`, \`tiktok\`, \`slide-16-9\` or \`WxH\` in px (100-10000); without \`--html\` the document starts with one blank page of that size. Pages go through the same path as \`set_page_html\`: a full HTML document (doctype, \`<style>\`) is normalized into a page. \`export\` renders on the server (Chromium), so sizes are exact whatever your machine: \`pdf\` writes one file (default \`<name>.pdf\`), \`png\` one file per page into a folder (default \`.\`) and also keeps them in your Files. \`rm\` deletes the document for good.
+
 ### Databases
 
 \`\`\`bash
@@ -292,7 +315,7 @@ One rule, like \`gh\`: \`easybits <noun> <verb>\`. Older spellings keep working 
 
 ### Names instead of ids
 
-Every command that takes an agent, a sandbox or machine, a database or a site accepts its **name** as well as its id: \`easybits sb exec scratch -- ls\`, \`easybits sb domains ls shop\`, \`easybits machines deploy shop -m "v2"\`. An id (\`sb_…\`, or the 24-character id of agents, databases and sites) passes straight through; a name is matched exactly, case-insensitive, against your list (one request per run). If two share the name the CLI exits 2 and lists the ids; if none matches it exits 1 with the \`ls\` to run.
+Every command that takes an agent, a sandbox or machine, a database, a site or a document accepts its **name** as well as its id: \`easybits sb exec scratch -- ls\`, \`easybits sb domains ls shop\`, \`easybits machines deploy shop -m "v2"\`. An id (\`sb_…\`, or the 24-character id of agents, databases, sites and documents) passes straight through; a name is matched exactly, case-insensitive, against your list (one request per run). If two share the name the CLI exits 2 and lists the ids; if none matches it exits 1 with the \`ls\` to run.
 
 ### Files, websites and account
 

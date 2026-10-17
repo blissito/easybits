@@ -13,28 +13,34 @@ const LS_HINT: Record<RefKind, string> = {
   db: "easybits db ls",
   site: "easybits sites ls",
   fleet: "easybits fleet ls",
+  document: "easybits documents ls",
+  video: "easybits video projects ls",
 };
 
-const NOUN = (): Record<RefKind, string> => ({ agent: t("agent", "agente"), sandbox: t("sandbox or machine", "sandbox o máquina"), db: t("database", "base de datos"), site: t("site", "sitio"), fleet: t("fleet agent", "agente de flota") });
-const NOUNS = (): Record<RefKind, string> => ({ agent: t("agents", "agentes"), sandbox: t("sandboxes", "sandboxes"), db: t("databases", "bases de datos"), site: t("sites", "sitios"), fleet: t("fleet agents", "agentes de flota") });
+const NOUN = (): Record<RefKind, string> => ({ agent: t("agent", "agente"), sandbox: t("sandbox or machine", "sandbox o máquina"), db: t("database", "base de datos"), site: t("site", "sitio"), fleet: t("fleet agent", "agente de flota"), document: t("document", "documento"), video: t("video project", "proyecto de video") });
+const NOUNS = (): Record<RefKind, string> => ({ agent: t("agents", "agentes"), sandbox: t("sandboxes", "sandboxes"), db: t("databases", "bases de datos"), site: t("sites", "sitios"), fleet: t("fleet agents", "agentes de flota"), document: t("documents", "documentos"), video: t("video projects", "proyectos de video") });
 
 // Una lista por tipo y por corrida: dos referencias del mismo tipo no piden dos veces.
-const cache = new Map<RefKind, Promise<NamedRef[]>>();
+const cache = new Map<string, Promise<NamedRef[]>>();
 
-export function listRefs(ctx: Ctx, kind: RefKind): Promise<NamedRef[]> {
-  let p = cache.get(kind);
+export function listRefs(ctx: Ctx, kind: RefKind, ref?: string): Promise<NamedRef[]> {
+  const key = kind === "document" ? `document:${ref}` : kind;
+  let p = cache.get(key);
   if (!p) {
     p = (async () => {
       const eb = await getClient(ctx);
       if (kind === "agent") return (await eb.listAgents()).map((a) => ({ id: a.agentId, name: a.name, status: a.status }));
       if (kind === "fleet") return (await api<{ pools: Array<{ id: string; name?: string | null }> }>(ctx, "GET", "/fleet-agents")).pools.map((p) => ({ id: p.id, name: p.name }));
+      // Documentos: la lista pagina (100 máx.), así que se busca por el nombre en el servidor.
+      if (kind === "document") return (await api<{ items: NamedRef[] }>(ctx, "GET", `/documents?limit=100&search=${encodeURIComponent(ref ?? "")}`)).items.map((d) => ({ id: d.id, name: d.name }));
+      if (kind === "video") return (await api<{ items: NamedRef[] }>(ctx, "GET", "/video-projects?limit=100")).items.map((v) => ({ id: v.id, name: v.name, status: v.status }));
       if (kind === "site") return (await api<{ items: NamedRef[] }>(ctx, "GET", "/sites")).items.map((s) => ({ id: s.id, name: s.name }));
       if (kind === "db") return (await eb.listDatabases()).items.map((d) => ({ id: d.id, name: d.name }));
       return (await eb.sandboxes.list()).map((s) => ({ id: s.sandboxId, name: s.name, status: s.status }));
     })();
     // Si falla (p. ej. 401 que luego se refresca), el reintento vuelve a pedir.
-    p.catch(() => cache.delete(kind));
-    cache.set(kind, p);
+    p.catch(() => cache.delete(key));
+    cache.set(key, p);
   }
   return p;
 }
@@ -42,7 +48,7 @@ export function listRefs(ctx: Ctx, kind: RefKind): Promise<NamedRef[]> {
 /** Nombre o id → id. Lanza CliError si no existe o si hay varios con ese nombre. */
 export async function resolveRef(ctx: Ctx, kind: RefKind, ref: string): Promise<string> {
   if (looksLikeId(kind, ref)) return ref;
-  const r = matchRef(kind, ref, await listRefs(ctx, kind));
+  const r = matchRef(kind, ref, await listRefs(ctx, kind, ref));
   if (r.ok) return r.id;
   if (r.reason === "not_found") {
     throw new CliError(t(`No ${NOUN()[kind]} with id or name "${ref}".`, `No hay ${NOUN()[kind]} con id o nombre "${ref}".`), EXIT.API, `${t("List them with", "Enlístalos con")}: ${LS_HINT[kind]}`, "not_found", 404);

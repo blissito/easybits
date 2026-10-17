@@ -2,7 +2,7 @@
 // recurso y cómo se empata un nombre contra la lista. La parte con red vive en resolve.ts.
 // Sin imports a propósito: el test lo carga directo con --experimental-strip-types.
 
-export type RefKind = "agent" | "sandbox" | "db" | "site" | "fleet";
+export type RefKind = "agent" | "sandbox" | "db" | "site" | "fleet" | "document" | "video";
 
 /** Lo mínimo de cada recurso para empatar: id, nombre y (si hay) estado. */
 export type NamedRef = { id: string; name?: string | null; status?: string | null };
@@ -15,6 +15,8 @@ const ID_FORMAT: Record<RefKind, RegExp> = {
   sandbox: /^sb_[0-9a-z-]+$/i,
   site: /^[0-9a-f]{24}$/i,
   fleet: /^[0-9a-f]{24}$/i,
+  document: /^[0-9a-f]{24}$/i,
+  video: /^[0-9a-f]{24}$/i,
 };
 
 export const looksLikeId = (kind: RefKind, ref: string) => ID_FORMAT[kind].test(ref);
@@ -70,6 +72,18 @@ export const REF_ARGS: Record<string, { index: number; kind: RefKind }> = {
   "fleet capabilities": { index: 0, kind: "fleet" },
   "fleet configure": { index: 0, kind: "fleet" },
   "fleet message": { index: 0, kind: "fleet" },
+  "documents get": { index: 0, kind: "document" },
+  "documents pages": { index: 1, kind: "document" },
+  "documents add-page": { index: 0, kind: "document" },
+  "documents rm-page": { index: 0, kind: "document" },
+  "documents reorder": { index: 0, kind: "document" },
+  "documents deploy": { index: 0, kind: "document" },
+  "documents export": { index: 1, kind: "document" },
+  "documents rm": { index: 0, kind: "document" },
+  "video projects": { index: 1, kind: "video" },
+  "video scenes": { index: 1, kind: "video" },
+  "video music": { index: 1, kind: "video" },
+  "video render": { index: 0, kind: "video" },
 };
 
 export type MatchResult =
