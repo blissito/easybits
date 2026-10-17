@@ -96,6 +96,7 @@ const SECTIONS = [
   { id: "agentes-en-tu-app", label: "Agentes en tu app" },
   { id: "eve", label: "eve (Vercel)" },
   { id: "hosting", label: "Sandboxes permanentes" },
+  { id: "crons", label: "Crons (admin)" },
   { id: "databases", label: "Bases de datos" },
   { id: "secrets", label: "Secretos" },
   { id: "llm", label: "LLM (OpenAI-compatible)" },
@@ -106,7 +107,7 @@ const SECTIONS = [
 ] as const;
 
 // Sections that show the "Nuevo" badge in the nav (recently shipped).
-const NEW_SECTIONS = new Set<string>(["cli", "eve", "agentes-en-tu-app", "ghosty-lite", "flota", "video-projects", "calls", "secrets", "images", "web"]);
+const NEW_SECTIONS = new Set<string>(["crons", "cli", "eve", "agentes-en-tu-app", "ghosty-lite", "flota", "video-projects", "calls", "secrets", "images", "web"]);
 
 export default function DocsPage({ loaderData }: Route.ComponentProps) {
   const { toolCount, groupCounts, groups, templates, cliMarkdown, sandboxErrorsMarkdown, databaseErrorsMarkdown, cronsMarkdown } = loaderData;
