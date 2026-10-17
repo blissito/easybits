@@ -502,12 +502,12 @@ async function createMaybeDerived(
 
 // --- caja de trabajo de las web apps (/dash/sitios) -------------------------
 //
-// Mientras se construye, la web app vive en una caja GRANDE que paga EasyBits (dev
-// server + lo que el agente instala/compila/prueba no cabe en 1 GB: «Prueba admin»
-// se cayó por memoria el 16-oct). Duerme sin turnos ni visitas. Al publicar,
+// Mientras se construye, la web app vive en una caja que paga EasyBits, del tamaño que
+// pide su stack (workBoxTierKey en hostingCatalog.ts: dev server + lo que el agente
+// instala/compila/prueba no cabe en 1 GB; «Prueba admin» se cayó por memoria el 16-oct).
+// Duerme sin turnos ni visitas. Al publicar,
 // promoteWorkBox la vuelve una máquina vendida: misma caja, misma URL, se cobra lo
 // que mide. Patrón de la industria: desarrollar va incluido, producción se cobra.
-export const WORK_BOX_TIER = "plus";
 
 /** Cuántas web apps sin publicar puede tener la cuenta: el mismo cupo que sus agentes. */
 async function assertWorkBoxBudget(ctx: AuthContext): Promise<void> {
@@ -522,14 +522,14 @@ async function assertWorkBoxBudget(ctx: AuthContext): Promise<void> {
     `Tu plan ${PLANS[planKey].name} permite ${max} ${max === 1 ? "web app" : "web apps"} sin publicar a la vez. Publica o borra una para empezar otra, o sube de plan.`);
 }
 
-/** Caja de trabajo de una web app: sin cobro, 4 GB, duerme sola. */
+/** Caja de trabajo de una web app: sin cobro, duerme sola. Tamaño: workBoxTierKey(stack). */
 export async function createWorkBox(
   ctx: AuthContext,
-  params: { template: SandboxTemplate; name?: string; derived?: { templateKey: string; templateHash: string } }
+  params: { template: SandboxTemplate; name?: string; derived?: { templateKey: string; templateHash: string }; tier?: string }
 ): Promise<{ sandboxId: string }> {
   requireScope(ctx, "WRITE");
   await assertWorkBoxBudget(ctx);
-  const tier = resolveTier(WORK_BOX_TIER)!;
+  const tier = resolveTier(params.tier ?? "plus")!;
   const res = resourcesFor(tier, 0);
   let sandbox: SandboxRecord;
   try {

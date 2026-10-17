@@ -7,7 +7,7 @@ import { getUserOrRedirect } from "~/.server/getters";
 import type { AuthContext } from "~/.server/apiAuth";
 import { createSite, engineChoicesFor, type SiteKind } from "~/.server/core/siteOperations";
 import { DEFAULT_SITE_ENGINE } from "~/lib/fleetEngines";
-import { HOSTING_CATALOG, sleepPrice } from "~/lib/hostingCatalog";
+import { HOSTING_CATALOG, sleepPrice, workBoxTierKey } from "~/lib/hostingCatalog";
 import { SITE_STACKS, isSiteStack, type SiteStackId } from "~/lib/siteStacks";
 import { SITE_TEMPLATES, isSiteTemplate, stackHasTemplates, templateFor, type SiteTemplateKey } from "~/lib/siteTemplates";
 import type { Route } from "./+types/new";
@@ -65,11 +65,11 @@ export default function NewSite() {
   const currentModel = engine?.models.some((m) => m.id === modelId) ? modelId : engine?.defaultModel ?? null;
   const nav = useNavigation();
   const result = useActionData<typeof action>();
-  // La web app se construye gratis en una caja de trabajo; al publicar se cobra esa máquina.
-  const work = HOSTING_CATALOG.plus;
   // ?prompt= llega del hero de la home (sin sesión → login → aquí, ya escrito).
   const [prompt, setPrompt] = useState(() => searchParams.get("prompt") ?? "");
   const [stack, setStack] = useState<SiteStackId | "node">("tanstack");
+  // La caja de trabajo mide lo que pide el stack; al publicar se cobra ese tamaño.
+  const work = HOSTING_CATALOG[workBoxTierKey(stack === "node" ? null : stack)];
   // Plantilla de la caja dorada: la que toca al prompt hasta que se elige otra ("none" = desde cero).
   const [templatePick, setTemplatePick] = useState<SiteTemplateKey | "none" | null>(null);
   const template = templatePick ?? templateFor(prompt);

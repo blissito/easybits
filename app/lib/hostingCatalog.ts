@@ -156,6 +156,16 @@ export const SLEEP_IDLE_SECONDS = 300;
 export const WORK_BOX_IDLE_DAYS = 7;
 export const WORK_BOX_WARN_DAYS = 5;
 
+// Tamaño de la caja de trabajo según el stack. Medido el 16-oct con TanStack (servidor dev
+// prendido + build + tsc + npm install, y build+tsc a la vez): micro (1 GB, sin swap) se
+// congela; lite (2 GB) pasa con pico de 1,180 MB. Next/Nuxt no se han medido (sólo el dev de
+// Next llega a ~840 MB): siguen en plus. Al publicar se cobra el tier de la caja (promoteWorkBox),
+// esté o no en HIDDEN_TIERS: lite se vende para web apps sin aparecer en el catálogo de hosting.
+const WORK_BOX_TIER_BY_STACK: Record<string, TierKey> = { tanstack: "lite", "react-router": "lite" };
+export function workBoxTierKey(stack?: string | null): TierKey {
+  return (stack && WORK_BOX_TIER_BY_STACK[stack]) || "plus";
+}
+
 /** Precio MXN/mes del tier en modo "duerme" (= precio shared: micro $99). */
 export function sleepPrice(tier: HostingTier): number {
   return tier.priceShared;

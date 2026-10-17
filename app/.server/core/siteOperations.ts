@@ -16,6 +16,7 @@ import { createSecret, getMachineSecretValue, listSecrets } from "./secretOperat
 import { FLEET_ENGINES, DEFAULT_SITE_ENGINE, getEngine, engineCreatable, engineIsMetered, type FleetEngine } from "~/lib/fleetEngines";
 import { createWebsite, deployWebsiteFile } from "./operations";
 import { createWorkBox, promoteWorkBox, releasePermanent } from "./machineOperations";
+import { workBoxTierKey } from "~/lib/hostingCatalog";
 import { restoreFromBackup } from "./machineBackupOperations";
 import { launchApp, setMachineSecrets, setRunspec } from "./releaseOperations";
 import { createDatabase } from "./databaseOperations";
@@ -338,12 +339,13 @@ export async function createSite(
     });
     return { site };
   }
-  // Construir no se cobra: la web app nace en una caja de trabajo de 4 GB que paga
+  // Construir no se cobra: la web app nace en una caja de trabajo (lite o plus según el stack) que paga
   // EasyBits y duerme sola; se cobra al publicar (publishSite → promoteWorkBox). Con
   // stack nace del snapshot de plataforma (starter con dependencias ya instaladas).
   const { sandboxId } = await createWorkBox(ctx, {
     template: opts.stack ? starterTemplate(opts.stack) : "node",
     name,
+    tier: workBoxTierKey(opts.stack),
     ...(opts.stack ? { derived: starterSnapshot(opts.stack) } : {}),
   });
   const site = await db.site.create({
@@ -563,6 +565,7 @@ export async function reviveSite(ctx: AuthContext, siteId: string): Promise<{ sa
   const { sandboxId } = await createWorkBox(ctx, {
     template: stack ? starterTemplate(stack) : "node",
     name: site.name,
+    tier: workBoxTierKey(stack),
     ...(stack ? { derived: starterSnapshot(stack) } : {}),
   });
   await db.site.update({ where: { id: site.id }, data: { sandboxId } });
