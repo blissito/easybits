@@ -473,6 +473,11 @@ easybits files rm FILE_ID --yes   # a la papelera 7 días
 easybits websites ls                   # todos los websites estáticos (también documentos y páginas de agentes)
 easybits websites create "Mi tienda" --slug mi-tienda   # slug opcional
 easybits websites slug mi-tienda mi-store               # cambiarlo; la URL vieja responde 301
+easybits websites get mi-store                          # por slug o id: archivos, tamaño, URL
+easybits websites deploy mi-store ./dist                # sube una carpeta con sus rutas (--dry-run la enlista)
+easybits websites upload mi-store ./hero.jpg --path img/hero.jpg
+easybits websites files ls mi-store                     # rutas dentro del sitio
+easybits websites rm mi-store                           # teclea el slug para confirmar (--yes sin terminal)
 easybits providers                     # proveedor de almacenamiento (Tigris por defecto)
 easybits usage
 \`\`\`

@@ -1890,6 +1890,18 @@ export async function uploadWebsiteFile(
     });
   }
 
+  // Igual que deployWebsiteFile: sin esto `websites ls` (y el panel) mostraban 0 archivos
+  // para un sitio subido entero por URL firmada (p. ej. `easybits websites deploy`).
+  const stats = await db.file.aggregate({
+    where: { name: { startsWith: website.prefix }, ownerId: ctx.user.id, status: "DONE" },
+    _count: true,
+    _sum: { size: true },
+  });
+  await db.website.update({
+    where: { id: website.id },
+    data: { fileCount: stats._count, totalSize: stats._sum.size ?? 0 },
+  });
+
   return { file, putUrl };
 }
 

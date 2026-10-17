@@ -1,3 +1,5 @@
+import { existsSync, readFileSync, statSync } from "node:fs";
+import { basename } from "node:path";
 import { resolveBaseUrl } from "@easybits.cloud/sdk";
 import type { Command, Ctx } from "../types.js";
 import { bool, need, readStdin, str } from "../args.js";
@@ -7,6 +9,8 @@ import { api } from "../api.js";
 import { getClient, resolveApiKey, resolveCredential } from "../client.js";
 import { fetchEmail, oauthLogin, readRc, writeRc } from "../auth.js";
 import { t } from "../i18n.js";
+import { YES_OPTION, confirm, requireYesIfHeadless } from "../prompt.js";
+import { mimeOf, sitePath, walkSite } from "../sitefiles.js";
 
 export const login: Command = {
   name: "login",
@@ -102,8 +106,8 @@ export const usage: Command = {
 export const websites: Command = {
   name: "websites",
   group: "Storage",
-  summary: "Static websites: list, create, change slug",
-  synopsis: "websites <ls|create|slug>",
+  summary: "Static websites: list, create, upload, deploy a folder, delete",
+  synopsis: "websites",
   subs: {
     ls: {
       aliases: ["list"],
@@ -146,11 +150,143 @@ export const websites: Command = {
         emit(ctx, website, () => console.log(t(`Slug changed → ${website.url}`, `Slug cambiado → ${website.url}`)));
       },
     },
+    get: {
+      aliases: ["show"],
+      summary: "Show one website (by slug or id)",
+      usage: "easybits websites get <website>",
+      examples: ["easybits websites get mi-tienda", "easybits websites get mi-tienda --json"],
+      async run(ctx) {
+        const w = await api<WebsiteDetail>(ctx, "GET", `/websites/${await resolveWebsiteId(ctx, need(ctx, 0, "website", this.usage))}`);
+        emit(ctx, w, () => {
+          console.log(`ID:        ${w.id}`);
+          console.log(`${t("Name:     ", "Nombre:   ")} ${w.name}`);
+          console.log(`Slug:      ${w.slug}`);
+          console.log(`${t("Status:   ", "Estado:   ")} ${w.status}`);
+          console.log(`${t("Files:    ", "Archivos: ")} ${w.fileCount ?? 0} (${fmtBytes(w.totalSize ?? 0)})`);
+          console.log(`URL:       ${w.url}`);
+          console.log(`${t("Created:  ", "Creado:   ")} ${fmtDate(w.createdAt)}`);
+        });
+      },
+    },
+    files: {
+      summary: "List a website's files (paths inside the site)",
+      usage: "easybits websites files [ls] <website>",
+      examples: ["easybits websites files ls mi-tienda", "easybits websites files mi-tienda --json"],
+      async run(ctx) {
+        // `files ls <sitio>` y `files <sitio>` son lo mismo (como `sandboxes files ls`).
+        if (ctx.args[0] === "ls" || ctx.args[0] === "list") ctx.args.shift();
+        const id = await resolveWebsiteId(ctx, need(ctx, 0, "website", this.usage));
+        const w = await api<WebsiteDetail>(ctx, "GET", `/websites/${id}`);
+        const items: SiteFile[] = [];
+        for (let cursor: string | undefined; ; ) {
+          const page = await api<{ items: SiteFile[]; nextCursor?: string; hasMore?: boolean }>(ctx, "GET", `/websites/${id}/files?limit=100${cursor ? `&cursor=${cursor}` : ""}`);
+          items.push(...page.items);
+          if (!page.hasMore || !page.nextCursor) break;
+          cursor = page.nextCursor;
+        }
+        const rows = items
+          .map((f) => ({ ...f, path: w.prefix && f.name.startsWith(w.prefix) ? f.name.slice(w.prefix.length) : f.name }))
+          .sort((a, b) => a.path.localeCompare(b.path));
+        emit(ctx, rows, () =>
+          table(
+            rows.map((f) => ({ ...f, size: fmtBytes(f.size), createdAt: fmtDate(f.createdAt) })),
+            [["path", "PATH"], ["size", "SIZE"], ["contentType", "TYPE"], ["createdAt", "CREATED"]],
+            t(`No files yet. Upload a folder: easybits websites deploy ${w.slug} ./dist`, `Todavía no hay archivos. Sube una carpeta: easybits websites deploy ${w.slug} ./dist`),
+          ),
+        );
+      },
+    },
+    upload: {
+      summary: "Upload one file to a website (public; replaces the same path)",
+      usage: "easybits websites upload <website> <local-file> [--path <path-in-site>]",
+      options: { path: { type: "string", value: "path", description: "Path inside the site (default: the file name), e.g. img/hero.jpg" } },
+      examples: ["easybits websites upload mi-tienda ./index.html", "easybits websites upload mi-tienda ./hero.jpg --path img/hero.jpg"],
+      async run(ctx) {
+        const ref = need(ctx, 0, "website", this.usage);
+        const local = need(ctx, 1, "local-file", this.usage);
+        if (!existsSync(local) || !statSync(local).isFile()) throw usageError(t(`File not found: ${local}`, `No existe el archivo: ${local}`), this.usage);
+        const path = sitePath(str(ctx, "path") ?? basename(local));
+        if (!path) throw usageError(t("--path must be a relative path inside the site (no ..).", "--path debe ser una ruta relativa dentro del sitio (sin ..)."), this.usage);
+        const size = statSync(local).size;
+        if (size === 0) throw usageError(t(`${local} is empty.`, `${local} está vacío.`), this.usage);
+        const id = await resolveWebsiteId(ctx, ref);
+        const r = await putSiteFile(ctx, id, path, local, size);
+        emit(ctx, r, () => console.log(t(`Uploaded ${path} (${fmtBytes(size)}) → ${r.url}`, `Subido ${path} (${fmtBytes(size)}) → ${r.url}`)));
+      },
+    },
+    deploy: {
+      summary: "Upload a whole folder (e.g. your build) keeping its paths; same paths are replaced",
+      usage: "easybits websites deploy <website> <dir> [--dry-run]",
+      options: { "dry-run": { type: "boolean", description: "List what would be uploaded; upload nothing" } },
+      examples: ["easybits websites deploy mi-tienda ./dist", "easybits websites deploy mi-tienda ./dist --dry-run"],
+      async run(ctx) {
+        const ref = need(ctx, 0, "website", this.usage);
+        const dir = need(ctx, 1, "dir", this.usage);
+        if (!existsSync(dir) || !statSync(dir).isDirectory()) throw usageError(t(`Not a folder: ${dir}`, `No es una carpeta: ${dir}`), this.usage);
+        const all = walkSite(dir);
+        const files = all.filter((f) => f.size > 0);
+        const empty = all.filter((f) => f.size === 0).map((f) => f.path);
+        if (!files.length) throw usageError(t(`Nothing to upload in ${dir} (hidden files and node_modules are skipped).`, `Nada que subir en ${dir} (se saltan los ocultos y node_modules).`), this.usage);
+        if (!files.some((f) => f.path === "index.html")) console.error(t("Note: no index.html at the top of the folder; /s/<slug>/ will not have a home page.", "Ojo: no hay index.html en la raíz de la carpeta; /s/<slug>/ no tendrá página de inicio."));
+        const id = await resolveWebsiteId(ctx, ref);
+        if (bool(ctx, "dry-run")) {
+          emit(ctx, { websiteId: id, files: files.map(({ path, size }) => ({ path, size })), skippedEmpty: empty }, () => {
+            for (const f of files) console.log(`  ${f.path}  ${fmtBytes(f.size)}`);
+            console.log(t(`${files.length} files, ${fmtBytes(files.reduce((s, f) => s + f.size, 0))}. Nothing uploaded (--dry-run).`, `${files.length} archivos, ${fmtBytes(files.reduce((s, f) => s + f.size, 0))}. No se subió nada (--dry-run).`));
+          });
+          return;
+        }
+        // De 4 en 4: rápido sin saturar la API ni el storage.
+        const done: Awaited<ReturnType<typeof putSiteFile>>[] = [];
+        let next = 0;
+        const worker = async () => {
+          while (next < files.length) {
+            const f = files[next++];
+            done.push(await putSiteFile(ctx, id, f.path, f.local, f.size));
+            if (!ctx.json) process.stderr.write(`  ${f.path}\n`);
+          }
+        };
+        await Promise.all(Array.from({ length: Math.min(4, files.length) }, worker));
+        const w = await api<WebsiteDetail>(ctx, "GET", `/websites/${id}`);
+        emit(ctx, { websiteId: id, url: w.url, uploaded: done.sort((a, b) => a.path.localeCompare(b.path)), skippedEmpty: empty }, () => {
+          if (empty.length) console.error(t(`Skipped empty files: ${empty.join(", ")}`, `Se saltaron archivos vacíos: ${empty.join(", ")}`));
+          console.log(t(`Deployed ${done.length} files → ${w.url}`, `Publicados ${done.length} archivos → ${w.url}`));
+        });
+      },
+    },
+    rm: {
+      aliases: ["delete", "remove"],
+      summary: "Delete a website and its files (asks you to type the slug)",
+      usage: "easybits websites rm <website> [--yes]",
+      options: { ...YES_OPTION },
+      examples: ["easybits websites rm mi-tienda", "easybits websites rm mi-tienda --yes"],
+      async run(ctx) {
+        const ref = need(ctx, 0, "website", this.usage);
+        requireYesIfHeadless(ctx);
+        const id = await resolveWebsiteId(ctx, ref);
+        const w = await api<WebsiteDetail>(ctx, "GET", `/websites/${id}`);
+        // Se lleva todos sus archivos: se teclea el slug (como `gh repo delete`).
+        await confirm(ctx, t(`Delete website ${w.slug} (${w.fileCount ?? 0} files) at ${w.url}?`, `¿Borrar el sitio ${w.slug} (${w.fileCount ?? 0} archivos) en ${w.url}?`), { typeName: w.slug });
+        const r = await api<{ ok: boolean }>(ctx, "DELETE", `/websites/${id}`);
+        emit(ctx, { ...r, id, slug: w.slug }, () => console.log(t(`Deleted ${w.slug}`, `Borrado ${w.slug}`)));
+      },
+    },
   },
   defaultSub: "ls",
 };
 
 type WebsiteRow = { id: string; name: string; slug: string; url: string };
+type WebsiteDetail = WebsiteRow & { status: string; fileCount?: number; totalSize?: number; prefix?: string; createdAt: string };
+type SiteFile = { id: string; name: string; size: number; contentType: string; status: string; createdAt: string };
+
+/** Reserva la ruta en el sitio y sube los bytes a la URL firmada que devuelve la API. */
+async function putSiteFile(ctx: Ctx, websiteId: string, path: string, local: string, size: number) {
+  const contentType = mimeOf(path);
+  const r = await api<{ file: { id: string; url?: string }; putUrl: string }>(ctx, "POST", `/websites/${websiteId}/files`, { fileName: path, contentType, size });
+  const res = await fetch(r.putUrl, { method: "PUT", body: readFileSync(local), headers: { "Content-Type": contentType } });
+  if (!res.ok) throw new CliError(t(`Upload of ${path} failed: storage answered ${res.status}`, `Falló la subida de ${path}: el almacenamiento contestó ${res.status}`), EXIT.API, undefined, "upload_failed", res.status);
+  return { path, fileId: r.file.id, url: r.file.url, size, contentType };
+}
 
 /** Un id de Mongo (24 hex) pasa directo; si no, se busca por slug en tus sitios. */
 export function matchWebsite(ref: string, items: WebsiteRow[]): string | null {

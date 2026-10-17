@@ -327,6 +327,11 @@ easybits files rm FILE_ID --yes   # to the trash for 7 days
 easybits websites ls                   # every static website (also documents and agent-published pages)
 easybits websites create "My shop" --slug my-shop   # slug optional
 easybits websites slug my-shop my-store             # change it; the old URL 301s
+easybits websites get my-store                      # slug or id: files, size, URL
+easybits websites deploy my-store ./dist            # upload a folder keeping its paths (--dry-run lists it)
+easybits websites upload my-store ./hero.jpg --path img/hero.jpg
+easybits websites files ls my-store                 # paths inside the site
+easybits websites rm my-store                       # type the slug to confirm (--yes without a terminal)
 easybits providers                     # storage provider (Tigris by default)
 easybits usage
 \`\`\`

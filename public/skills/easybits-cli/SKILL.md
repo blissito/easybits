@@ -252,7 +252,15 @@ website of the account, including documents and pages that agents published.
 easybits websites ls --json
 easybits websites create "My shop" --slug my-shop --json       # slug optional; generated if omitted
 easybits websites slug my-shop my-store --json                  # by id or current slug; old URL 301s
+easybits websites deploy my-store ./dist --json                  # {websiteId, url, uploaded: [{path, fileId, url}], skippedEmpty}
+easybits websites upload my-store ./hero.jpg --path img/hero.jpg --json
+easybits websites files ls my-store --json                       # [{path, size, contentType, …}]
+easybits websites get my-store --json
+easybits websites rm my-store --json --yes                       # deletes the site and its files
 ```
+
+`deploy` keeps relative paths (`css/app.css`), so link a site's own files relatively. It skips
+hidden files (`.env`), `.git` and `node_modules`; an existing path is replaced, nothing is pruned.
 
 Slug: lowercase a-z, 0-9 and single hyphens, 3-60 chars, not reserved (api, admin, www…), unique.
 Errors come back as `slug_invalid` (exit 1, HTTP 400) or `slug_taken` (HTTP 409): pick another.
