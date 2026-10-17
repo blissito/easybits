@@ -48,7 +48,9 @@ export const loader = async () => {
   const databasesMd = await getDocsMarkdown("databases");
   const sandboxErrorsMarkdown = [skillLine(agentsMd), slice(agentsMd, "### Actividad y errores de una caja", "\n### ")].join("\n\n");
   const databaseErrorsMarkdown = [skillLine(databasesMd), slice(databasesMd, "### Errores", "\n### ")].join("\n\n");
-  return { toolCount: catalog.length, groupCounts, groups, templates, cliMarkdown, sandboxErrorsMarkdown, databaseErrorsMarkdown };
+  // Crons de la plataforma (panel y API de admin): misma fuente que /docs/hosting.md.
+  const cronsMarkdown = slice(await getDocsMarkdown("hosting"), "### Tareas programadas de la plataforma", "\n### ");
+  return { toolCount: catalog.length, groupCounts, groups, templates, cliMarkdown, sandboxErrorsMarkdown, databaseErrorsMarkdown, cronsMarkdown };
 };
 
 // El gemelo markdown de esta página (/docs.md) y que la caché distinga por Accept:
@@ -107,7 +109,7 @@ const SECTIONS = [
 const NEW_SECTIONS = new Set<string>(["cli", "eve", "agentes-en-tu-app", "ghosty-lite", "flota", "video-projects", "calls", "secrets", "images", "web"]);
 
 export default function DocsPage({ loaderData }: Route.ComponentProps) {
-  const { toolCount, groupCounts, groups, templates, cliMarkdown, sandboxErrorsMarkdown, databaseErrorsMarkdown } = loaderData;
+  const { toolCount, groupCounts, groups, templates, cliMarkdown, sandboxErrorsMarkdown, databaseErrorsMarkdown, cronsMarkdown } = loaderData;
   const location = useLocation();
 
   // Estado inicial DETERMINISTA (igual en server y cliente) para no causar un
@@ -3626,6 +3628,12 @@ POST /api/v2/machines/launch  { "sandboxId": "sb_...", "archiveUrl": "...",
             <div className="bg-blue-50 border-2 border-blue-300 rounded-xl p-4 text-sm mt-4">
               El runner de GitHub es Linux x64, igual que la microVM, así que los módulos nativos compilan para el destino correcto. <strong>Construir en una Mac sí rompe</strong>: un <code className="bg-gray-100 px-1 rounded">node_modules</code> con sharp o better-sqlite3 compilado en macOS revienta en Linux. Cada despliegue publica un release, así que historial y rollback siguen funcionando igual.
             </div>
+            {/* Crons de la plataforma — desde reference.ts */}
+            {cronsMarkdown && (
+              <div id="crons" className="mt-8">
+                <Markdown>{cronsMarkdown}</Markdown>
+              </div>
+            )}
           </section>
 
           {/* Bases de datos (SQLite-as-a-Service) */}
