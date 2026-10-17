@@ -76,7 +76,7 @@ at another server (default https://www.easybits.cloud).
    it exits 0 and reports `exitCode`, `stdout`, `stderr`. Put the command after `--`.
 4. Put flags after the subcommand: `easybits sb create --template node`, not
    `easybits --template node sb create`.
-5. Deletes need `--yes`: `sb destroy`, `agents destroy`, `db rm`, `domains rm`, `files rm`,
+5. Deletes need `--yes`: `sb destroy`, `machines rm`, `agents destroy`, `db rm`, `domains rm`, `files rm`,
    `agents files rm`, `agents skills rm`.
    With `--json` (or no terminal) they never prompt; without `--yes` they exit 2.
 6. Names work where ids do: any agent, sandbox/machine, database or site argument takes its name
@@ -130,8 +130,22 @@ easybits machines secrets set "$ID" --dotenv .env.production     # KEY=VALUE lin
 printf 'DATABASE_URL=%s\n' "$DATABASE_URL" | easybits machines secrets set "$ID" --dotenv -
 easybits machines secrets unset "$ID" DATABASE_URL
 easybits machines secrets ls "$ID" --json           # names only; values are never readable
+easybits machines restart "$ID" --json              # apply new secrets/runspec: restart, no build (exit 1 if it fails)
+easybits machines get "$ID" --json                  # {tier, vcpus, memoryMb, diskMb, monthlyMxn, sleep, status…}
+easybits machines tiers --json                      # catalog {tiers:[{key, vcpus, memoryMb, diskMb, priceShared, priceReserved, minPlan}], diskAddon}
+easybits machines runspec get "$ID" --json          # {runspec:{appDir, buildCommand, startCommand, unit, port, prebuilt, dataPaths, excludes, env}}
+easybits machines runspec set "$ID" --data /app/data --json   # merges; --file rs.json|- takes `runspec get --json` output
+easybits machines backups "$ID" --json              # {items:[{id, stamp, status, bytes, consistency, expiresAt}]}
+easybits machines backup "$ID" --json               # take one now
+easybits machines redeploy "$ID" --tier focus --replace --yes --json   # resize/recover: NEW machine from the newest release
+easybits machines rm "$ID" --yes --json             # release: stops billing, last backup, destroys it
 easybits init --port 3000                           # GitHub Actions: deploy on every push
 ```
+
+- Nothing is backed up until the runspec has `dataPaths` (`runspec set --data <path>`).
+- `redeploy` makes a NEW machine (new id) with no data; `--replace` releases the old one once the
+  new one runs, otherwise both are billed. `rm` and `redeploy --replace` are irreversible: confirm
+  with the person first, then pass `--yes`.
 
 ## Domains
 

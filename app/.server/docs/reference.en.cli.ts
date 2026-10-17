@@ -79,10 +79,21 @@ easybits machines secrets ls sb_abc123
 easybits machines secrets set sb_abc123 --dotenv .env.production   # KEY=VALUE lines
 printf 'API_KEY=%s\\n' "$API_KEY" | easybits machines secrets set sb_abc123 --dotenv -
 easybits machines secrets unset sb_abc123 API_KEY
+easybits machines restart sb_abc123                      # restart the app with the current secrets and runspec (seconds, no build)
+easybits machines get shop                               # tier, size, MXN/month, whether it sleeps
+easybits machines tiers                                  # the catalog: sizes and monthly prices in MXN
+easybits machines runspec get shop
+easybits machines runspec set shop --data /app/data --start 'node server.js' --port 8080   # merges with what is there
+easybits machines backups shop                           # daily data backups, kept 7 days
+easybits machines backup shop                            # take one now
+easybits machines redeploy shop --tier focus --replace   # resize: a new machine from the newest release
+easybits machines rm shop --yes                          # release: stops billing, last backup, destroys the box
 easybits init --port 3000                                # GitHub Actions workflow: deploy on every push
 \`\`\`
 
 \`easybits deploy <machine>\` is short for \`machines deploy <machine>\`. Secrets go in a dotenv file or on stdin (\`--dotenv -\`), never in argv: \`ps\` and your shell history would see them. \`secrets ls\` shows names only; values are never readable.
+
+**Runspec** = how the app is built, started and backed up: \`appDir\`, \`buildCommand\`, \`startCommand\` or \`unit\`, \`port\`, \`prebuilt\`, \`dataPaths\`, \`excludes\`, \`env\` (non-secret). \`runspec set\` merges (env by key) and applies on the next deploy or restart; \`--file rs.json\` takes the output of \`runspec get --json\` as is, and flags win over it. **Without \`--data\` (dataPaths) nothing is backed up.** \`redeploy\` is recovery and resize at once (there is no in-place resize): it builds a NEW machine from \`--release\` (default: the newest) at \`--tier\`; \`--replace\` releases the old one once the new one runs (it asks you to type the id), otherwise you pay for both. The new machine starts with no data. \`rm\` asks you to type the id too: it stops billing, takes a last backup and destroys the box.
 
 ### Domains
 
@@ -247,7 +258,7 @@ Deliberate exception: \`sandboxes exec\` without \`--json\` exits with the remot
 
 ### Deletes: \`--yes\`
 
-\`sandboxes destroy\`, \`agents destroy\`, \`db rm\`, \`domains rm\` and \`files rm\` ask before acting in a terminal: \`[y/N]\`, or typing the name/id for irreversible ones (a database, an agent, a permanent sandbox). **Without a terminal or with \`--json\` they never prompt**: pass \`--yes\` (\`-y\`) or they exit \`2\` with a hint holding the exact command.
+Every \`rm\` and \`destroy\` (\`sandboxes destroy\`, \`machines rm\`, \`agents destroy\`, \`db rm\`, \`domains rm\`, \`files rm\`…) and \`machines redeploy --replace\` ask before acting in a terminal: \`[y/N]\`, or typing the name/id for irreversible ones (a database, an agent, a machine or permanent sandbox). **Without a terminal or with \`--json\` they never prompt**: pass \`--yes\` (\`-y\`) or they exit \`2\` with a hint holding the exact command.
 
 At most once an hour it checks npm and, in a terminal, the CLI says on stderr when a newer version is out (never with \`--json\`; \`EASYBITS_NO_UPDATE_CHECK=1\` or \`CI\` turn it off).
 

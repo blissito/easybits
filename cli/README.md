@@ -61,6 +61,15 @@ easybits machines rollback sb_abc123 rel_789
 easybits machines secrets ls sb_abc123
 easybits machines secrets set sb_abc123 --dotenv .env.production   # - reads stdin
 easybits machines secrets unset sb_abc123 DATABASE_URL
+easybits machines restart shop       # restart the app with the current secrets/runspec (no build)
+easybits machines get shop           # tier, size, MXN/month, whether it sleeps
+easybits machines tiers              # the catalog: sizes and prices in MXN
+easybits machines runspec get shop
+easybits machines runspec set shop --data /app/data --start 'node server.js' --port 8080   # merges
+easybits machines backups shop       # daily data backups (7 days)
+easybits machines backup shop        # one now
+easybits machines redeploy shop --tier focus --replace   # resize: new machine from the newest release
+easybits machines rm shop --yes      # release: stops billing, last backup, destroys the box
 easybits init --port 3000            # GitHub Actions workflow that deploys on every push
 
 # Domains
@@ -142,8 +151,8 @@ Help and messages follow your locale (`LANG=es_*` → Spanish) or `--lang es|en`
 Every command has help with examples: `easybits <command> <subcommand> --help`
 (or `easybits help <command> <subcommand>`). A typo gets a "Did you mean" suggestion.
 
-**Destructive commands** (`db rm`, `agents destroy`, `sandboxes destroy`, `domains rm`,
-`files rm`) ask before acting in a terminal: `[y/N]`, or typing the name/id for
+**Destructive commands** (every `rm` and `destroy`: `machines rm`, `db rm`, `agents destroy`,
+`sandboxes destroy`, `domains rm`, `files rm`…) ask before acting in a terminal: `[y/N]`, or typing the name/id for
 irreversible ones (a database, an agent, a permanent sandbox). Without a terminal they
 never prompt — and neither do they with `--json`: pass `--yes` / `-y`, or they exit `2`.
 

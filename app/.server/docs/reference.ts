@@ -225,10 +225,21 @@ easybits machines secrets ls sb_abc123
 easybits machines secrets set sb_abc123 --dotenv .env.production   # líneas KEY=VALUE
 printf 'API_KEY=%s\\n' "$API_KEY" | easybits machines secrets set sb_abc123 --dotenv -
 easybits machines secrets unset sb_abc123 API_KEY
+easybits machines restart sb_abc123                      # reinicia la app con los secretos y el runspec actuales (segundos, sin build)
+easybits machines get tienda                             # tier, tamaño, MXN/mes, si duerme
+easybits machines tiers                                  # el catálogo: tamaños y precio mensual en MXN
+easybits machines runspec get tienda
+easybits machines runspec set tienda --data /app/data --start 'node server.js' --port 8080   # se mezcla con lo que hay
+easybits machines backups tienda                         # respaldos diarios de datos, 7 días
+easybits machines backup tienda                          # uno ya
+easybits machines redeploy tienda --tier focus --replace # cambiar tamaño: máquina nueva desde el release más nuevo
+easybits machines rm tienda --yes                        # liberar: deja de cobrarse, último respaldo, destruye la caja
 easybits init --port 3000                                # workflow de GitHub Actions: deploy en cada push
 \`\`\`
 
 \`easybits deploy <máquina>\` es el atajo de \`machines deploy <máquina>\`. Los secretos van en un archivo dotenv o por stdin (\`--dotenv -\`), nunca en argv: ahí los ven \`ps\` y el historial de tu shell. \`secrets ls\` sólo muestra nombres; los valores no se pueden leer.
+
+**Runspec** = cómo se construye, arranca y respalda la app: \`appDir\`, \`buildCommand\`, \`startCommand\` o \`unit\`, \`port\`, \`prebuilt\`, \`dataPaths\`, \`excludes\`, \`env\` (no secreto). \`runspec set\` se mezcla (el env por llave) y aplica en el siguiente deploy o reinicio; \`--file rs.json\` acepta tal cual la salida de \`runspec get --json\`, y las banderas ganan sobre él. **Sin \`--data\` (dataPaths) no se respalda nada.** \`redeploy\` es recuperación y cambio de tamaño a la vez (no hay resize en caliente): construye una máquina NUEVA desde \`--release\` (default: el más nuevo) con \`--tier\`; \`--replace\` libera la vieja cuando la nueva corre (te pide teclear el id), si no, pagas las dos. La nueva nace sin datos. \`rm\` también pide teclear el id: deja de cobrarse, toma un último respaldo y destruye la caja.
 
 ### Dominios
 
@@ -393,7 +404,7 @@ Excepción deliberada: \`sandboxes exec\` sin \`--json\` sale con el código del
 
 ### Borrados: \`--yes\`
 
-\`sandboxes destroy\`, \`agents destroy\`, \`db rm\`, \`domains rm\` y \`files rm\` preguntan antes de actuar en una terminal: \`[y/N]\`, o teclear el nombre/id en lo irreversible (una base, un agente, una caja permanente). **Sin terminal o con \`--json\` nunca preguntan**: pasa \`--yes\` (\`-y\`) o salen con \`2\` y la pista con el comando exacto.
+Todo \`rm\` y \`destroy\` (\`sandboxes destroy\`, \`machines rm\`, \`agents destroy\`, \`db rm\`, \`domains rm\`, \`files rm\`…) y \`machines redeploy --replace\` preguntan antes de actuar en una terminal: \`[y/N]\`, o teclear el nombre/id en lo irreversible (una base, un agente, una máquina o caja permanente). **Sin terminal o con \`--json\` nunca preguntan**: pasa \`--yes\` (\`-y\`) o salen con \`2\` y la pista con el comando exacto.
 
 Como mucho una vez por hora revisa npm y, en una terminal, el CLI avisa en stderr cuando hay versión nueva (nunca con \`--json\`; \`EASYBITS_NO_UPDATE_CHECK=1\` o \`CI\` lo apagan).
 

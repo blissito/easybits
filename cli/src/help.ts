@@ -27,7 +27,7 @@ and print the new one on stderr (never with --json).
 Names or ids: agents, sandboxes/machines, databases and sites take either
 (exact, case-insensitive; two with the same name → exit 2 with the ids).
 
-Deletes (sandboxes destroy, agents destroy, db rm, domains rm, files rm, agents files|skills rm)
+Deletes (every rm and destroy: sandboxes, machines, agents, db, domains, files…)
 ask first; without a terminal or with --json pass -y/--yes, or they exit 2.
 Agent writes (agents set|create|files|skills|mcp) take --dry-run: show the change, touch nothing.
 
@@ -49,7 +49,7 @@ viejas siguen funcionando y avisan la nueva en stderr (nunca con --json).
 Nombres o ids: agentes, sandboxes/máquinas, bases y sitios aceptan cualquiera de los dos
 (exacto, sin distinguir mayúsculas; dos con el mismo nombre → sale con 2 y los ids).
 
-Los borrados (sandboxes destroy, agents destroy, db rm, domains rm, files rm, agents files|skills rm)
+Los borrados (todo rm y destroy: sandboxes, máquinas, agentes, db, dominios, archivos…)
 preguntan antes; sin terminal o con --json pasa -y/--yes, o salen con 2.
 Lo que escribe en un agente (agents set|create|files|skills|mcp) acepta --dry-run: enseña el
 cambio y no toca nada.

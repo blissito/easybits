@@ -1,15 +1,97 @@
-import type { Command } from "../types.js";
+import type { Command, Ctx } from "../types.js";
+import type { Runspec } from "@easybits.cloud/sdk";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { basename } from "node:path";
-import { ENV_FILE_OPTION, bool, int, list, need, pairs, readEnvFile, str } from "../args.js";
+import { ENV_FILE_OPTION, bool, int, list, need, pairs, readEnvFile, readStdin, str } from "../args.js";
 import { emit, fmtBytes, fmtDate, table } from "../output.js";
 import { getClient } from "../client.js";
 import { CliError, usageError } from "../errors.js";
 import { sandboxRecord } from "./sandboxes.js";
 import { resolveRef } from "../resolve.js";
+import { api } from "../api.js";
+import { YES_OPTION, confirm, requireYesIfHeadless } from "../prompt.js";
 import { t } from "../i18n.js";
 
 const SECRETS_USAGE = "easybits machines secrets <ls|set|unset> <machine> [--dotenv <path> | NAME]";
+const RUNSPEC_USAGE =
+  "easybits machines runspec <get|set> <machine> [--file <file.json|->] [--app-dir <dir>] [--build <cmd>] [--start <cmd>] [--unit <name>] [--port <port>] [--prebuilt on|off] [--data <path>]... [--exclude <path>]... [--env K=V]...";
+
+/** GET /api/v2/machines/:id: la máquina con su tamaño y precio. */
+type MachineInfo = {
+  sandboxId: string;
+  name: string | null;
+  status: string;
+  tier: string;
+  cpuMode: string;
+  sleep: boolean;
+  diskAddonsGB: number;
+  monthlyMxn: number;
+  vcpus: number;
+  memoryMb: number;
+  diskMb: number;
+  createdAt: string;
+  template: string | null;
+  shared: boolean;
+  runtimeStatus: string | null;
+  deletionScheduledAt: string | null;
+};
+
+function printMachine(m: MachineInfo) {
+  console.log(`ID:        ${m.sandboxId}`);
+  if (m.name) console.log(`${t("Name:     ", "Nombre:   ")} ${m.name}`);
+  console.log(`${t("Status:   ", "Estado:   ")} ${m.status}${m.runtimeStatus ? ` (${m.runtimeStatus})` : ""}`);
+  console.log(`Tier:      ${m.tier} · ${m.vcpus} vCPU ${m.cpuMode} · ${fmtBytes(m.memoryMb * 1024 * 1024)} RAM · ${fmtBytes(m.diskMb * 1024 * 1024)}${m.diskAddonsGB ? ` + ${m.diskAddonsGB} GB` : ""}`);
+  console.log(`${t("Price:    ", "Precio:   ")} $${m.monthlyMxn} MXN/${t("month", "mes")}`);
+  console.log(`${t("Sleeps:   ", "Duerme:   ")} ${m.sleep ? t("yes, without visits", "sí, sin visitas") : t("no, always on", "no, siempre prendida")}`);
+  console.log(`${t("Created:  ", "Creada:   ")} ${fmtDate(m.createdAt)}`);
+  if (m.shared) console.log(t("Shared with you by its owner.", "Su dueño la compartió contigo."));
+  if (m.deletionScheduledAt) console.log(t(`Scheduled for deletion: ${fmtDate(m.deletionScheduledAt)}`, `Programada para borrarse: ${fmtDate(m.deletionScheduledAt)}`));
+}
+
+function printRunspec(r: Runspec) {
+  for (const [k, v] of Object.entries(r)) {
+    if (v == null) continue;
+    const shown = Array.isArray(v) ? v.join(", ") : typeof v === "object" ? Object.keys(v).join(", ") : String(v);
+    console.log(`${k.padEnd(16)}${shown}`);
+  }
+}
+
+/** El runspec a mezclar: --file primero y las banderas encima (lo explícito gana). Puro salvo la lectura. */
+export async function runspecFrom(ctx: Ctx): Promise<Partial<Runspec>> {
+  let spec: Record<string, unknown> = {};
+  const file = str(ctx, "file");
+  if (file) {
+    const text = file === "-" ? (await readStdin()).toString("utf8") : existsSync(file) ? readFileSync(file, "utf8") : null;
+    if (text == null) throw usageError(t(`File not found: ${file}`, `No existe el archivo: ${file}`), RUNSPEC_USAGE);
+    try {
+      const parsed = JSON.parse(text);
+      // Acepta tal cual la salida de `runspec get --json` ({ runspec: {...} }).
+      spec = parsed && typeof parsed === "object" && "runspec" in parsed ? parsed.runspec ?? {} : parsed;
+    } catch {
+      throw usageError(t(`${file === "-" ? "stdin" : file} is not valid JSON.`, `${file === "-" ? "stdin" : file} no es JSON válido.`), RUNSPEC_USAGE);
+    }
+  }
+  const set = (k: string, v: unknown) => {
+    if (v !== undefined) spec[k] = v;
+  };
+  set("appDir", str(ctx, "app-dir"));
+  set("buildCommand", str(ctx, "build"));
+  set("startCommand", str(ctx, "start"));
+  set("unit", str(ctx, "unit"));
+  set("port", int(ctx, "port", RUNSPEC_USAGE));
+  const prebuilt = str(ctx, "prebuilt");
+  if (prebuilt != null) {
+    if (prebuilt !== "on" && prebuilt !== "off") throw usageError(t("--prebuilt is on or off.", "--prebuilt es on u off."), RUNSPEC_USAGE);
+    spec.prebuilt = prebuilt === "on";
+  }
+  const data = list(ctx, "data");
+  if (data.length) spec.dataPaths = data;
+  const excludes = list(ctx, "exclude");
+  if (excludes.length) spec.excludes = excludes;
+  const env = pairs(list(ctx, "env"), RUNSPEC_USAGE);
+  if (Object.keys(env).length) spec.env = env;
+  return spec as Partial<Runspec>;
+}
 
 export const machines: Command = {
   name: "machines",
@@ -74,7 +156,10 @@ export const machines: Command = {
         }
         if (repo && archiveUrl) throw usageError(t("--repo and --archive are exclusive.", "--repo y --archive se excluyen."), this.usage);
         if (machineRef && str(ctx, "tier")) {
-          throw usageError(t("--tier is only for a new machine (resize = redeploy_machine).", "--tier sólo aplica a una máquina nueva (cambiar tamaño = redeploy_machine)."), this.usage);
+          throw usageError(
+            t("--tier is only for a new machine. To resize: easybits machines redeploy <machine> --tier <tier> --replace", "--tier sólo aplica a una máquina nueva. Para cambiar tamaño: easybits machines redeploy <máquina> --tier <tier> --replace"),
+            this.usage,
+          );
         }
 
         const eb = await getClient(ctx);
@@ -199,6 +284,183 @@ export const machines: Command = {
         const r = await eb.machines.rollback(id, rel);
         emit(ctx, r, () => console.log(t(`Rolled back to v${r.version} (exit ${r.exitCode})`, `De vuelta en v${r.version} (salida ${r.exitCode})`)));
         if (r.exitCode !== 0) process.exitCode = 1;
+      },
+    },
+    get: {
+      summary: "Show a machine: tier, size, price, status and whether it sleeps",
+      usage: "easybits machines get <machine>",
+      examples: ["easybits machines get shop", "easybits machines get shop --json"],
+      async run(ctx) {
+        const id = need(ctx, 0, "machine", this.usage);
+        const m = await api<MachineInfo>(ctx, "GET", `/machines/${encodeURIComponent(id)}`);
+        emit(ctx, m, () => printMachine(m));
+      },
+    },
+    restart: {
+      summary: "Restart the app's process with the current secrets and runspec (seconds, no build)",
+      usage: "easybits machines restart <machine>",
+      examples: ["easybits machines restart shop", "easybits machines secrets set shop --dotenv .env && easybits machines restart shop"],
+      async run(ctx) {
+        const id = need(ctx, 0, "machine", this.usage);
+        const r = await api<{ ok: boolean; restarted: boolean; startOutput?: string; exitCode: number }>(ctx, "POST", `/machines/${encodeURIComponent(id)}/restart`);
+        emit(ctx, r, () => {
+          console.log(r.exitCode === 0 ? t(`Restarted ${id}`, `Reiniciada ${id}`) : t(`Restart failed (exit ${r.exitCode})`, `Falló el reinicio (salida ${r.exitCode})`));
+          if (r.exitCode !== 0 && r.startOutput) console.log(r.startOutput.slice(-2000));
+        });
+        if (r.exitCode !== 0) process.exitCode = 1;
+      },
+    },
+    redeploy: {
+      summary: "Build a NEW machine from a release: recover a lost one, or change its tier (resize)",
+      usage: "easybits machines redeploy <machine> [--release <id>] [--tier <tier>] [--name <name>] [--cpu-mode shared|reserved] [--replace] [--yes]",
+      options: {
+        release: { type: "string", value: "id", description: "Release to build from (default: the machine's newest)" },
+        tier: { type: "string", value: "tier", description: "Size of the new machine (default: same as the release's)" },
+        name: { type: "string", value: "name", description: "Label for the new machine" },
+        "cpu-mode": { type: "string", value: "mode", description: "shared (default) or reserved" },
+        replace: { type: "boolean", description: "Release the old machine once the new one runs (otherwise you pay for both)" },
+        ...YES_OPTION,
+      },
+      examples: [
+        "easybits machines redeploy shop --tier focus --replace   # resize",
+        "easybits machines redeploy sb_abc123 --release rel_789   # recover from a release",
+      ],
+      async run(ctx) {
+        const id = need(ctx, 0, "machine", this.usage);
+        const replace = bool(ctx, "replace");
+        if (replace) requireYesIfHeadless(ctx);
+        const eb = await getClient(ctx);
+        let releaseId = str(ctx, "release");
+        if (!releaseId) {
+          const { items } = await eb.machines.releases(id, { limit: 1 });
+          releaseId = items[0]?.releaseId;
+          if (!releaseId) throw new CliError(t(`${id} has no releases to build from.`, `${id} no tiene releases de dónde construir.`), 1, t("Publish one first: easybits machines deploy <machine>", "Publica uno antes: easybits machines deploy <máquina>"), "no_release");
+        }
+        const cpuMode = str(ctx, "cpu-mode");
+        if (cpuMode && cpuMode !== "shared" && cpuMode !== "reserved") throw usageError(t("--cpu-mode is shared or reserved.", "--cpu-mode es shared o reserved."), this.usage);
+        if (replace) {
+          // La nueva nace SIN datos: el disco de la vieja sólo queda en sus respaldos.
+          await confirm(
+            ctx,
+            t(`Build a new machine from ${releaseId} and RELEASE ${id} once it runs? The new one starts with no data (${id}'s data stays in its backups).`, `¿Construir una máquina nueva desde ${releaseId} y LIBERAR ${id} cuando corra? La nueva nace sin datos (los de ${id} quedan en sus respaldos).`),
+            { typeName: id },
+          );
+        }
+        const r = await eb.machines.redeploy(releaseId, {
+          tier: str(ctx, "tier"),
+          name: str(ctx, "name"),
+          cpuMode: cpuMode as "shared" | "reserved" | undefined,
+          replaceSandboxId: replace ? id : undefined,
+        });
+        emit(ctx, r, () => {
+          console.log(t(`New machine ${r.sandboxId} from ${r.releaseId} (exit ${r.exitCode})`, `Máquina nueva ${r.sandboxId} desde ${r.releaseId} (salida ${r.exitCode})`));
+          if (r.replaced) console.log(t(`Released ${r.replaced}.`, `Liberada ${r.replaced}.`));
+          console.log(t("It starts with no data: restore a backup if the app keeps any.", "Nace sin datos: restaura un respaldo si la app guarda alguno."));
+        });
+        if (r.exitCode !== 0) process.exitCode = 1;
+      },
+    },
+    backups: {
+      summary: "List the daily data backups, newest first (kept 7 days)",
+      usage: "easybits machines backups <machine> [--limit <n>]",
+      options: { limit: { type: "string", value: "n", description: "How many" } },
+      examples: ["easybits machines backups shop", "easybits machines backups shop --json"],
+      async run(ctx) {
+        const id = need(ctx, 0, "machine", this.usage);
+        const eb = await getClient(ctx);
+        const r = await eb.machines.backups(id, { limit: int(ctx, "limit", this.usage) });
+        emit(ctx, r, () =>
+          table(
+            r.items.map((b) => ({ ...b, size: fmtBytes(b.bytes), createdAt: fmtDate(b.createdAt), expiresAt: fmtDate(b.expiresAt) })),
+            [["id", "ID"], ["stamp", "DAY"], ["status", "STATUS"], ["size", "SIZE"], ["consistency", "CONSISTENCY"], ["expiresAt", "EXPIRES"]],
+            t("No backups yet. Declare what to copy (runspec dataPaths), then: easybits machines backup <machine>", "Todavía no hay respaldos. Declara qué copiar (dataPaths del runspec) y luego: easybits machines backup <máquina>"),
+          ),
+        );
+      },
+    },
+    backup: {
+      summary: "Take a data backup now instead of waiting for tonight's",
+      usage: "easybits machines backup <machine>",
+      examples: ["easybits machines backup shop"],
+      async run(ctx) {
+        const id = need(ctx, 0, "machine", this.usage);
+        const eb = await getClient(ctx);
+        const b = await eb.machines.backup(id);
+        emit(ctx, b, () => console.log(t(`Backup ${b.id} (${b.status}, ${fmtBytes(b.bytes)}, ${b.consistency})`, `Respaldo ${b.id} (${b.status}, ${fmtBytes(b.bytes)}, ${b.consistency})`)));
+      },
+    },
+    runspec: {
+      summary: "How the app is built, started and backed up (set merges with what is there)",
+      usage: RUNSPEC_USAGE,
+      options: {
+        file: { type: "string", value: "file.json|-", description: "Runspec as JSON (- reads stdin); flags win over it" },
+        "app-dir": { type: "string", value: "dir", description: "Where the app lives in the machine" },
+        build: { type: "string", value: "cmd", description: "Build command" },
+        start: { type: "string", value: "cmd", description: "Start command (used when there is no systemd unit)" },
+        unit: { type: "string", value: "name", description: "systemd unit to restart (preferred over --start)" },
+        port: { type: "string", value: "port", description: "Port the app listens on" },
+        prebuilt: { type: "string", value: "on|off", description: "on: releases ship the build and a deploy only starts it" },
+        data: { type: "string", multiple: true, value: "path", description: "Path the nightly backup copies (repeatable). Without it nothing is backed up" },
+        exclude: { type: "string", multiple: true, value: "path", description: "Path kept out of the release (repeatable)" },
+        env: { type: "string", multiple: true, value: "K=V", description: "Environment variable, non-secret (repeatable)" },
+      },
+      examples: [
+        "easybits machines runspec get shop",
+        "easybits machines runspec set shop --data /app/data --data /app/uploads",
+        "easybits machines runspec set shop --start 'node server.js' --port 8080 --prebuilt on",
+        "easybits machines runspec get shop --json | jq .runspec > rs.json   # edit, then:",
+        "easybits machines runspec set shop --file rs.json",
+      ],
+      async run(ctx) {
+        const action = need(ctx, 0, "get|set", RUNSPEC_USAGE);
+        const id = need(ctx, 1, "machine", RUNSPEC_USAGE);
+        const eb = await getClient(ctx);
+        if (action === "get") {
+          const r = await eb.machines.runspec(id);
+          emit(ctx, r, () => (r.runspec ? printRunspec(r.runspec) : console.log(t("No runspec yet: a machine made with launch has one.", "Todavía sin runspec: una máquina hecha con launch ya lo trae."))));
+          return;
+        }
+        if (action !== "set") throw usageError(t(`Unknown runspec action "${action}".`, `Acción de runspec desconocida "${action}".`), RUNSPEC_USAGE);
+        const spec = await runspecFrom(ctx);
+        if (!Object.keys(spec).length) throw usageError(t("Nothing to set: pass --file or a flag (--data, --start, --port…).", "Nada que cambiar: pasa --file o una bandera (--data, --start, --port…)."), RUNSPEC_USAGE);
+        const r = await eb.machines.setRunspec(id, spec as Runspec);
+        emit(ctx, r, () => {
+          console.log(t("Runspec saved. It applies on the next deploy or restart.", "Runspec guardado. Aplica en el siguiente deploy o reinicio."));
+          printRunspec(r);
+        });
+      },
+    },
+    rm: {
+      aliases: ["destroy", "delete"],
+      summary: "Release a machine: stops billing, takes a last backup and destroys it",
+      usage: "easybits machines rm <machine> [--yes]",
+      options: { ...YES_OPTION },
+      examples: ["easybits machines rm shop", "easybits machines rm sb_abc123 --yes --json"],
+      async run(ctx) {
+        const id = need(ctx, 0, "machine", this.usage);
+        requireYesIfHeadless(ctx);
+        await confirm(ctx, t(`Release machine ${id}? Billing stops and the box is destroyed (a last backup is kept).`, `¿Liberar la máquina ${id}? Se deja de cobrar y la caja se destruye (queda un último respaldo).`), { typeName: id });
+        const r = await api<{ ok: true; destroyed: true; backupId?: string }>(ctx, "DELETE", `/machines/${encodeURIComponent(id)}`);
+        emit(ctx, { ...r, sandboxId: id }, () => {
+          console.log(t(`Released ${id}.`, `Liberada ${id}.`));
+          console.log(r.backupId ? t(`Last backup: ${r.backupId}`, `Último respaldo: ${r.backupId}`) : t("No final backup (nothing declared in dataPaths, or it failed).", "Sin respaldo final (nada declarado en dataPaths, o falló)."));
+        });
+      },
+    },
+    tiers: {
+      summary: "The hosting catalog: sizes and monthly prices in MXN",
+      usage: "easybits machines tiers",
+      examples: ["easybits machines tiers", "easybits machines tiers --json"],
+      async run(ctx) {
+        const eb = await getClient(ctx);
+        const r = await eb.machines.tiers();
+        emit(ctx, r, () => {
+          table(
+            r.tiers.map((x) => ({ ...x, memory: fmtBytes(x.memoryMb * 1024 * 1024), disk: fmtBytes(x.diskMb * 1024 * 1024), reserved: x.priceReserved ?? "-" })),
+            [["key", "TIER"], ["vcpus", "VCPUS"], ["memory", "MEMORY"], ["disk", "DISK"], ["priceShared", "MXN/MONTH"], ["reserved", "RESERVED"], ["minPlan", "PLAN"]],
+          );
+          console.log(t(`Extra disk: ${r.diskAddon.gb} GB for $${r.diskAddon.price} MXN/month each.`, `Disco extra: ${r.diskAddon.gb} GB por $${r.diskAddon.price} MXN/mes cada uno.`));
+        });
       },
     },
     secrets: {
