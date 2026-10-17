@@ -90,6 +90,14 @@ const eb = await createClientFromEnv();
 | `updateWebhook(webhookId, params)` | Update URL, events, or status |
 | `deleteWebhook(webhookId)` | Permanently delete a webhook |
 
+### Secrets (account vault)
+
+| Method | Description |
+|--------|-------------|
+| `listSecrets()` | Names in your vault (`{ items:[{id,name,createdAt,lastUsedAt}] }`); values are never returned |
+| `setSecret(name, value)` | Store or replace a secret (`[A-Z_][A-Z0-9_]*`); used by name as `$secret:NAME` |
+| `deleteSecret(name)` | Delete it; whatever references it stops resolving |
+
 ### Websites
 
 | Method | Description |

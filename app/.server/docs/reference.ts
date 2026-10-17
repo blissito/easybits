@@ -241,6 +241,17 @@ easybits init --port 3000                                # workflow de GitHub Ac
 
 **Runspec** = cómo se construye, arranca y respalda la app: \`appDir\`, \`buildCommand\`, \`startCommand\` o \`unit\`, \`port\`, \`prebuilt\`, \`dataPaths\`, \`excludes\`, \`env\` (no secreto). \`runspec set\` se mezcla (el env por llave) y aplica en el siguiente deploy o reinicio; \`--file rs.json\` acepta tal cual la salida de \`runspec get --json\`, y las banderas ganan sobre él. **Sin \`--data\` (dataPaths) no se respalda nada.** \`redeploy\` es recuperación y cambio de tamaño a la vez (no hay resize en caliente): construye una máquina NUEVA desde \`--release\` (default: el más nuevo) con \`--tier\`; \`--replace\` libera la vieja cuando la nueva corre (te pide teclear el id), si no, pagas las dos. La nueva nace sin datos. \`rm\` también pide teclear el id: deja de cobrarse, toma un último respaldo y destruye la caja.
 
+### Secretos de la cuenta (vault)
+
+\`\`\`bash
+easybits secrets ls                                         # nombres y fechas; los valores nunca regresan
+easybits secrets set --dotenv .env.production               # renglones KEY=VALUE (- lee stdin)
+printf '%s' "$TOKEN" | easybits secrets set GITHUB_TOKEN    # un valor por stdin
+easybits secrets rm GITHUB_TOKEN --yes
+\`\`\`
+
+La bóveda de tu cuenta (la misma de /dash/developer/secrets y de las tools MCP \`secret_*\`). Un secreto se usa por nombre: \`$secret:NOMBRE\` en el MCP de un agente o en \`--repo-token\`, \`machines launch --secret NOMBRE\`. Los nombres son \`[A-Z_][A-Z0-9_]*\`; el mismo nombre reemplaza el valor. Los valores nunca van en argv (\`ps\` y el historial de tu shell los ven). \`machines secrets\` es otra cosa: valores para UNA máquina, que ganan sobre la bóveda.
+
 ### Dominios
 
 \`\`\`bash
@@ -1854,6 +1865,8 @@ Los valores se guardan cifrados en tu bóveda y en el runspec queda solo la LIST
 - \`DELETE /machines/:id/secrets?name=DATABASE_URL\` → deja de inyectarlo (el valor sigue en la bóveda).
 
 **Cada máquina tiene los suyos.** Un secreto que cargas en una máquina vale sólo para ella: dos apps de la misma cuenta pueden tener cada una su \`JWT_SECRET\` o su \`FACTURAPI_KEY\` (varios negocios, una cuenta). Si la máquina no tiene uno propio con ese nombre, recibe el de tu bóveda general. Un \`redeploy_machine\` se los lleva a la caja nueva.
+
+**La bóveda general** (la de tu cuenta, la misma de \`secret_set\` y de /dash/developer/secrets) también tiene REST: \`GET /secrets\` → \`{ items:[{id, name, createdAt, lastUsedAt}] }\` (sólo nombres), \`POST /secrets\` \`{ name, value }\` → 201 (mismo nombre = reemplaza; \`[A-Z_][A-Z0-9_]*\`), \`DELETE /secrets/:name\` → \`{ deleted }\`. SDK: \`eb.listSecrets()\`, \`eb.setSecret(name, value)\`, \`eb.deleteSecret(name)\`. CLI: \`easybits secrets ls|set|rm\`.
 
 Surten efecto en el **siguiente despliegue**, no al vuelo. Rotar un secreto es cambiarlo aquí y volver a desplegar. Si el runspec declara uno que no está en la bóveda, el deploy falla diciendo cuál — mejor que ver la app morir al conectar.
 

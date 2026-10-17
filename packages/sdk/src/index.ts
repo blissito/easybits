@@ -506,6 +506,14 @@ export interface ApiKey {
 
 // ─── Webhook Types ─────────────────────────────────────────────
 
+/** A secret in the account vault: name and dates only, never the value. */
+export interface SecretSummary {
+  id: string;
+  name: string;
+  createdAt: string;
+  lastUsedAt: string | null;
+}
+
 export interface Webhook {
   id: string;
   url: string;
@@ -1519,6 +1527,26 @@ export class EasybitsClient {
 
   async listKeys(): Promise<{ keys: ApiKey[] }> {
     return this.request<{ keys: ApiKey[] }>("/keys");
+  }
+
+  // ── Secrets (vault de la cuenta) ───────────────────────────
+
+  /** Names in your account vault. Values are never returned. */
+  async listSecrets(): Promise<{ items: SecretSummary[]; hasMore: boolean; nextCursor: string | null; total?: number }> {
+    return this.request("/secrets");
+  }
+
+  /**
+   * Store a secret (same name = replace). Encrypted at rest; it can never be read
+   * back, only injected by name (`$secret:NAME`, a machine's secretNames, agent env).
+   */
+  async setSecret(name: string, value: string): Promise<SecretSummary> {
+    return this.request<SecretSummary>("/secrets", { method: "POST", body: JSON.stringify({ name, value }) });
+  }
+
+  /** Delete a secret by name. Whatever references it stops resolving. */
+  async deleteSecret(name: string): Promise<{ deleted: boolean }> {
+    return this.request<{ deleted: boolean }>(`/secrets/${encodeURIComponent(name)}`, { method: "DELETE" });
   }
 
   // ── Webhooks ───────────────────────────────────────────────

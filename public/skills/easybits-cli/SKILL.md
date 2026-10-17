@@ -147,6 +147,19 @@ easybits init --port 3000                           # GitHub Actions: deploy on 
   new one runs, otherwise both are billed. `rm` and `redeploy --replace` are irreversible: confirm
   with the person first, then pass `--yes`.
 
+## Account secrets (vault)
+
+```bash
+easybits secrets ls --json                                   # {items:[{id, name, createdAt, lastUsedAt}]}; never values
+easybits secrets set --dotenv .env.production --json         # KEY=VALUE lines (- = stdin) → {saved:[names]}
+printf '%s' "$TOKEN" | easybits secrets set GITHUB_TOKEN --json   # one value from stdin
+easybits secrets rm GITHUB_TOKEN --yes --json
+```
+
+Use a stored secret by name: `$secret:NAME` (agent MCP headers, `--repo-token`), or
+`machines launch --secret NAME`. Never put a value in argv. Never print or log a value you were
+given; if the person pastes one in chat, store it and refer to it by name from then on.
+
 ## Domains
 
 ```bash

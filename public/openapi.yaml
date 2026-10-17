@@ -2556,6 +2556,78 @@ paths:
                         used: { type: string }
         "401": { $ref: "#/components/responses/Unauthorized" }
 
+  /api/v2/secrets:
+    get:
+      tags: [Account]
+      operationId: listSecrets
+      summary: Secretos del vault de la cuenta (sólo nombres)
+      description: Los valores nunca salen; se usan por nombre (`$secret:NOMBRE`, `secretNames` de una máquina).
+      responses:
+        "200":
+          description: Nombres y fechas.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: string }
+                        name: { type: string }
+                        createdAt: { type: string, format: date-time }
+                        lastUsedAt: { type: string, format: date-time, nullable: true }
+                  hasMore: { type: boolean }
+                  nextCursor: { type: string, nullable: true }
+                  total: { type: integer }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    post:
+      tags: [Account]
+      operationId: setSecret
+      summary: Guardar o reemplazar un secreto
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, value]
+              properties:
+                name: { type: string, pattern: "^[A-Z_][A-Z0-9_]*$" }
+                value: { type: string, minLength: 1 }
+      responses:
+        "201":
+          description: Guardado (sin el valor).
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id: { type: string }
+                  name: { type: string }
+                  createdAt: { type: string, format: date-time }
+                  lastUsedAt: { type: string, format: date-time, nullable: true }
+        "400": { description: "invalid_body o invalid_secret (nombre fuera de [A-Z_][A-Z0-9_]* o valor vacío)." }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /api/v2/secrets/{name}:
+    delete:
+      tags: [Account]
+      operationId: deleteSecret
+      summary: Borrar un secreto por nombre
+      parameters:
+        - { name: name, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Borrado.
+          content:
+            application/json:
+              schema: { type: object, properties: { deleted: { type: boolean } } }
+        "404": { description: "not_found: no hay secreto con ese nombre." }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
   # ───────────────────────── Docs ─────────────────────────
   /api/v2/docs:
     get:

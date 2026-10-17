@@ -540,6 +540,8 @@ The values are stored encrypted in your vault and the runspec keeps only the LIS
 
 **Each machine has its own.** A secret you set on a machine applies to that machine only: two apps in the same account can each have their own \`JWT_SECRET\` or \`FACTURAPI_KEY\` (several businesses, one account). If the machine has none of its own under that name, it gets the one from your general vault. A \`redeploy_machine\` carries them to the new box.
 
+**The general vault** (your account's, the same as \`secret_set\` and /dash/developer/secrets) has REST too: \`GET /secrets\` → \`{ items:[{id, name, createdAt, lastUsedAt}] }\` (names only), \`POST /secrets\` \`{ name, value }\` → 201 (same name = replace; \`[A-Z_][A-Z0-9_]*\`), \`DELETE /secrets/:name\` → \`{ deleted }\`. SDK: \`eb.listSecrets()\`, \`eb.setSecret(name, value)\`, \`eb.deleteSecret(name)\`. CLI: \`easybits secrets ls|set|rm\`.
+
 They take effect on the **next deploy**, not on the fly. Rotating a secret means changing it here and deploying again. If the runspec declares one that is not in the vault, the deploy fails naming which one — better than watching the app die on connect.
 
 ### Deploy from GitHub on every push

@@ -95,6 +95,17 @@ easybits init --port 3000                                # GitHub Actions workfl
 
 **Runspec** = how the app is built, started and backed up: \`appDir\`, \`buildCommand\`, \`startCommand\` or \`unit\`, \`port\`, \`prebuilt\`, \`dataPaths\`, \`excludes\`, \`env\` (non-secret). \`runspec set\` merges (env by key) and applies on the next deploy or restart; \`--file rs.json\` takes the output of \`runspec get --json\` as is, and flags win over it. **Without \`--data\` (dataPaths) nothing is backed up.** \`redeploy\` is recovery and resize at once (there is no in-place resize): it builds a NEW machine from \`--release\` (default: the newest) at \`--tier\`; \`--replace\` releases the old one once the new one runs (it asks you to type the id), otherwise you pay for both. The new machine starts with no data. \`rm\` asks you to type the id too: it stops billing, takes a last backup and destroys the box.
 
+### Account secrets (vault)
+
+\`\`\`bash
+easybits secrets ls                                         # names and dates; values never come back
+easybits secrets set --dotenv .env.production               # KEY=VALUE lines (- reads stdin)
+printf '%s' "$TOKEN" | easybits secrets set GITHUB_TOKEN    # one value from stdin
+easybits secrets rm GITHUB_TOKEN --yes
+\`\`\`
+
+The vault of your account (the same as /dash/developer/secrets and the \`secret_*\` MCP tools). A secret is used by name: \`$secret:NAME\` in an agent's MCP config or \`--repo-token\`, \`machines launch --secret NAME\`. Names are \`[A-Z_][A-Z0-9_]*\`; the same name replaces the value. Values never go in argv (\`ps\` and your shell history see it). \`machines secrets\` is different: values for ONE machine, which win over the vault.
+
 ### Domains
 
 \`\`\`bash

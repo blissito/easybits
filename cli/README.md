@@ -78,6 +78,12 @@ easybits domains add sb_abc123 shop.example.com --port 3000
 easybits domains verify sb_abc123 shop.example.com
 easybits domains rm sb_abc123 shop.example.com --yes
 
+# Account secrets vault (values never come back; used by name: $secret:NAME, --secret NAME)
+easybits secrets ls
+easybits secrets set --dotenv .env.production   # KEY=VALUE lines; - reads stdin
+printf '%s' "$TOKEN" | easybits secrets set GITHUB_TOKEN   # one value from stdin
+easybits secrets rm GITHUB_TOKEN --yes
+
 # Databases
 easybits db ls
 easybits db create leads
