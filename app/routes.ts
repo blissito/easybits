@@ -229,6 +229,7 @@ export default [
   route("api/cron/purge-machines", "routes/api/cron/purge-machines.ts"),
   route("api/cron/backup-agents", "routes/api/cron/backup-agents.ts"),
   route("api/cron/backup-machines", "routes/api/cron/backup-machines.ts"),
+  route("api/cron/expire-work-boxes", "routes/api/cron/expire-work-boxes.ts"),
   route("api/cron/prune-backups", "routes/api/cron/prune-backups.ts"),
   route("api/cron/purge-certs", "routes/api/cron/purge-certs.ts"),
   route("api/cron/purge-keys", "routes/api/cron/purge-keys.ts"),

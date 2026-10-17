@@ -16,6 +16,7 @@ import { createSecret, getMachineSecretValue, listSecrets } from "./secretOperat
 import { FLEET_ENGINES, DEFAULT_SITE_ENGINE, getEngine, engineCreatable, engineIsMetered, type FleetEngine } from "~/lib/fleetEngines";
 import { createWebsite, deployWebsiteFile } from "./operations";
 import { createWorkBox, promoteWorkBox, releasePermanent } from "./machineOperations";
+import { restoreFromBackup } from "./machineBackupOperations";
 import { launchApp, setMachineSecrets, setRunspec } from "./releaseOperations";
 import { createDatabase } from "./databaseOperations";
 import { SECRETS_FILE, writeSecretsFile } from "./secretsFile";
@@ -196,7 +197,7 @@ export async function grantStarterTokensIfNeeded(userId: string): Promise<boolea
 }
 
 // Prisma+Mongo: un campo AUSENTE (fila creada sin `deletedAt`) NO matchea `null`.
-const NOT_DELETED = { OR: [{ deletedAt: null }, { deletedAt: { isSet: false } }] };
+export const NOT_DELETED = { OR: [{ deletedAt: null }, { deletedAt: { isSet: false } }] };
 
 export async function listSites(ctx: AuthContext) {
   requireScope(ctx, "READ");
@@ -223,6 +224,8 @@ export type SiteSummary = {
   websiteId: string | null;
   sandboxId: string | null;
   createdAt: string;
+  /** Web app sin publicar archivada por inactividad: abrirla o mandarle un mensaje la revive. */
+  archivedAt: string | null;
 };
 
 /** Los sitios de /dash/sitios tal como los ve el panel, sin campos internos. */
@@ -237,6 +240,7 @@ export async function listSiteSummaries(ctx: AuthContext): Promise<SiteSummary[]
     websiteId: s.websiteId ?? null,
     sandboxId: s.sandboxId ?? null,
     createdAt: s.createdAt.toISOString(),
+    archivedAt: s.archivedAt?.toISOString() ?? null,
   }));
 }
 
@@ -364,7 +368,13 @@ export async function createSite(
  * pisa código —sin package.json siembra el starter; sin easybits.json repite runspec
  * y puerto—.
  */
-async function prepareSiteMachine(ctx: AuthContext, siteId: string, sandboxId: string, stack: SiteStack): Promise<{ auth?: boolean }> {
+async function prepareSiteMachine(
+  ctx: AuthContext,
+  siteId: string,
+  sandboxId: string,
+  stack: SiteStack,
+  opts: { skipTemplate?: boolean } = {}
+): Promise<{ auth?: boolean }> {
   const saved = (await db.sandbox.findUnique({ where: { sandboxId }, select: { runspec: true } }))?.runspec as
     | { appDir?: string; port?: number; secretNames?: string[] }
     | null
@@ -414,7 +424,7 @@ async function prepareSiteMachine(ctx: AuthContext, siteId: string, sandboxId: s
   }
   // Plantilla de partida: sólo al sembrar (nunca encima de lo que ya construyó el agente).
   // Viene horneada en la caja dorada; si la caja nació sin ella, se escribe archivo por archivo.
-  if (stack && !have.has("package.json")) {
+  if (stack && !have.has("package.json") && !opts.skipTemplate) {
     const template = (await db.site.findUnique({ where: { id: siteId }, select: { template: true } }))?.template;
     if (isSiteTemplate(template) && stackHasTemplates(stack)) {
       const src = `${TEMPLATES_DIR}/${stack}/${template}`;
@@ -523,9 +533,48 @@ async function appDirEntries(ctx: AuthContext, sandboxId: string, appDir: string
 }
 
 /** Antes de cada turno: re-siembra si la preparación al crear el sitio falló. */
-export async function ensureSiteMachine(ctx: AuthContext, site: { id: string; kind: string; sandboxId: string | null; stack?: string | null }) {
+export async function ensureSiteMachine(
+  ctx: AuthContext,
+  site: { id: string; kind: string; sandboxId: string | null; stack?: string | null; archivedAt?: Date | null }
+): Promise<{ auth?: boolean; revived?: boolean }> {
   if (site.kind !== "webapp" || !site.sandboxId) return {};
+  // Archivada por inactividad (workBoxExpiry.ts): nace otra caja con su código antes del turno.
+  if (site.archivedAt) {
+    await reviveSite(ctx, site.id);
+    return { revived: true };
+  }
   return prepareSiteMachine(ctx, site.id, site.sandboxId, siteStack(site));
+}
+
+/**
+ * Revive una web app archivada: caja de trabajo nueva desde la dorada de su stack, starter
+ * sembrado (sin plantilla) y encima su /app del archivo. Borrar la marca de dependencias hace
+ * que la vista previa instale lo que el agente haya agregado al package.json.
+ */
+export async function reviveSite(ctx: AuthContext, siteId: string): Promise<{ sandboxId: string }> {
+  requireScope(ctx, "WRITE");
+  const site = await db.site.findFirst({ where: { id: siteId, ownerId: ctx.user.id, ...NOT_DELETED } });
+  if (!site) throw new Response("Site not found", { status: 404 });
+  if (!site.archivedAt || !site.archiveBackupId) {
+    if (site.sandboxId) return { sandboxId: site.sandboxId };
+    throw new Response("El sitio no tiene máquina ni archivo", { status: 409 });
+  }
+  const stack = siteStack(site);
+  const { sandboxId } = await createWorkBox(ctx, {
+    template: stack ? starterTemplate(stack) : "node",
+    name: site.name,
+    ...(stack ? { derived: starterSnapshot(stack) } : {}),
+  });
+  await db.site.update({ where: { id: site.id }, data: { sandboxId } });
+  await prepareSiteMachine(ctx, site.id, sandboxId, stack, { skipTemplate: true });
+  await restoreFromBackup(ctx, { backupId: site.archiveBackupId, targetSandboxId: sandboxId, confirm: true });
+  if (stack) {
+    await execCommand(ctx, sandboxId, { command: `rm -f ${PREVIEW_DEPS_MARK} && systemctl restart ${PREVIEW_UNIT}`, timeoutSeconds: 30 }).catch((e) =>
+      console.error("[sites] revive: reinicio de la vista previa", sandboxId, e)
+    );
+  }
+  await db.site.update({ where: { id: site.id }, data: { archivedAt: null, expiryWarnedAt: null } });
+  return { sandboxId };
 }
 
 /** Tras el checkout, engancha al sitio la máquina más reciente que no tenga sitio. */

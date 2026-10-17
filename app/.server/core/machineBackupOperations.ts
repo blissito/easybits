@@ -171,12 +171,20 @@ function toRecord(r: any): BackupRecord {
  */
 export async function backupMachine(
   sandboxId: string,
-  opts: { force?: boolean } = {}
+  opts: {
+    force?: boolean;
+    // Archivo de una caja de trabajo de sitio: rutas propias (no declara dataPaths),
+    // sin lo que se reconstruye (node_modules, builds) y retención larga.
+    paths?: string[];
+    exclude?: string[];
+    scope?: string;
+    retentionDays?: number;
+  } = {}
 ): Promise<BackupRecord> {
   const row = await db.sandbox.findUnique({ where: { sandboxId } });
   if (!row) throw new Error(`Machine ${sandboxId} not found`);
   const spec = (row.runspec as Runspec) ?? null;
-  const paths = resolveDataPaths(spec);
+  const paths = opts.paths?.length ? opts.paths : resolveDataPaths(spec);
   if (!paths.length) {
     const e: any = new Error(
       `Machine ${sandboxId} declares no runspec.dataPaths — nothing to back up. Set them with set_machine_runspec.`
@@ -185,14 +193,16 @@ export async function backupMachine(
     throw e;
   }
 
-  const stamp = stampFor();
+  const scope = opts.scope ?? "data";
+  // La llave única es (sandboxId, stamp): un archivo no pisa el respaldo diario del mismo día.
+  const stamp = scope === "data" ? stampFor() : `${stampFor()}-${scope}`;
   const existing = await db.sandboxBackup.findUnique({
     where: { sandboxId_stamp: { sandboxId, stamp } },
   });
   if (existing && existing.status === "available" && !opts.force) return toRecord(existing);
 
   const key = `backups/machines/${sandboxId}/${stamp}.tar.gz`;
-  const expiresAt = new Date(Date.now() + RETENTION_DAYS * 86400_000);
+  const expiresAt = new Date(Date.now() + (opts.retentionDays ?? RETENTION_DAYS) * 86400_000);
   const record = existing
     ? await db.sandboxBackup.update({
         where: { id: existing.id },
@@ -204,7 +214,7 @@ export async function backupMachine(
           sandboxId,
           key,
           stamp,
-          scope: "data",
+          scope,
           consistency: "crash",
           status: "uploading",
           expiresAt,
@@ -237,7 +247,7 @@ export async function backupMachine(
       // have created its uploads dir yet.
       `PATHS=""; for p in ${existing_paths}; do [ -e "$p" ] && PATHS="$PATHS $p"; done`,
       `if [ -z "$PATHS" ]; then rm -f ${shQuote(urlFile)}; echo "NOPATHS"; exit 0; fi`,
-      `tar czf ${shQuote(tarball)} $PATHS 2>/dev/null`,
+      `tar czf ${shQuote(tarball)} ${(opts.exclude ?? []).map((x) => `--exclude=${shQuote(x)}`).join(" ")} $PATHS 2>/dev/null`,
       `SIZE=$(stat -c%s ${shQuote(tarball)})`,
       `if [ "$SIZE" -gt ${MAX_BYTES} ]; then rm -f ${shQuote(tarball)} ${shQuote(urlFile)}; echo "TOOBIG:$SIZE"; exit 0; fi`,
       `SHA=$(sha256sum ${shQuote(tarball)} | cut -d" " -f1)`,

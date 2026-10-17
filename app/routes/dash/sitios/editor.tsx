@@ -12,7 +12,7 @@ import { ThemePicker } from "~/components/sitios/ThemePicker";
 import { LuArrowDown, LuMousePointerClick, LuTrash2 } from "react-icons/lu";
 import { getUserOrRedirect } from "~/.server/getters";
 import type { AuthContext } from "~/.server/apiAuth";
-import { attachNewestMachine, deleteSite, getSite, publishSite, siteAdminLoginUrl, siteEngineFor } from "~/.server/core/siteOperations";
+import { attachNewestMachine, deleteSite, getSite, publishSite, reviveSite, siteAdminLoginUrl, siteEngineFor } from "~/.server/core/siteOperations";
 import { githubAppEnabled } from "~/.server/core/githubApp";
 import { siteRepo } from "~/.server/core/githubSiteOperations";
 import type { Route } from "./+types/editor";
@@ -64,6 +64,9 @@ export const action = async ({ request, params }: Route.ActionArgs) => {
     switch (intent) {
       case "attach":
         return data({ site: await attachNewestMachine(ctx, params.id!) });
+      case "revive":
+        // Archivada por inactividad (workBoxExpiry.ts): caja nueva desde la dorada con su código.
+        return data({ revived: await reviveSite(ctx, params.id!) });
       case "publish":
         return data({ launch: await publishSite(ctx, params.id!) });
       case "admin-login":
@@ -451,7 +454,7 @@ export default function SiteEditor() {
   // turno termine (al terminar sube previewKey y carga la app ya arrancada).
   // Con starter la vista previa es el servidor dev: se muestra en cuanto responde (no
   // al terminar el turno) y de ahí en adelante cada cambio aparece solo.
-  const live = site.kind === "webapp" && !!site.sandboxId && !!site.stack;
+  const live = site.kind === "webapp" && !!site.sandboxId && !!site.stack && !site.archivedAt;
   const status = useFetcher<{ ready: boolean }>();
   const [previewReady, setPreviewReady] = useState(false);
   useEffect(() => {
@@ -735,6 +738,17 @@ export default function SiteEditor() {
             <fetcher.Form method="post">
               <input type="hidden" name="intent" value="attach" />
               <button type="submit" className="text-sm underline text-gray-500">Ya pagué, vincular máquina</button>
+            </fetcher.Form>
+          </div>
+        ) : site.archivedAt ? (
+          <div className="flex-1 flex flex-col items-center justify-center gap-3 text-center px-6 pb-12 md:pb-0">
+            <p className="font-bold">Esta app se archivó por inactividad</p>
+            <p className="text-sm text-gray-500 max-w-sm">
+              Su código está guardado. Al reactivarla vuelve a su máquina en unos segundos, o mándale un mensaje al agente y se reactiva sola.
+            </p>
+            <fetcher.Form method="post">
+              <input type="hidden" name="intent" value="revive" />
+              <BrutalButton type="submit" isLoading={fetcher.state !== "idle"}>Reactivar</BrutalButton>
             </fetcher.Form>
           </div>
         ) : firstBuild ? (

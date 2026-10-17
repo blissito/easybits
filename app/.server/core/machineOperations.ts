@@ -934,7 +934,10 @@ export async function getPermanent(ctx: AuthContext, sandboxId: string): Promise
 // canceló, nadie pidió borrar nada). Ver ahí el porqué de la divergencia.
 export async function releasePermanent(
   ctx: AuthContext,
-  sandboxId: string
+  sandboxId: string,
+  // Quien ya respaldó la caja (el archivo de una web app inactiva) lo pasa aquí: el
+  // respaldo final por dataPaths fallaría (los sitios no declaran) y gritaría «sin copia».
+  opts: { backupId?: string } = {}
 ): Promise<{ ok: true; destroyed: true; backupId?: string }> {
   requireScope(ctx, "DELETE");
   const row = await db.sandbox.findUnique({ where: { sandboxId } });
@@ -961,7 +964,7 @@ export async function releasePermanent(
   // Último backup ANTES de destruir: ahora es la ÚNICA copia que queda, así que
   // vale más que cuando había 7 días de gracia detrás. Sigue siendo best-effort
   // (una máquina sin dataPaths no tiene nada que copiar) pero el fallo se grita.
-  const backupId = await backupMachine(sandboxId, { force: true })
+  const backupId = opts.backupId ?? await backupMachine(sandboxId, { force: true })
     .then((b) => b.id as string | undefined)
     .catch((e) => {
       console.error(

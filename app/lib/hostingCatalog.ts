@@ -150,6 +150,12 @@ export function tierPrice(tier: HostingTier, mode: CpuMode): number {
  */
 export const SLEEP_IDLE_SECONDS = 300;
 
+// Caja de trabajo (web app sin publicar, la paga EasyBits): tras estos días sin turnos se
+// archiva (/app a Tigris), se destruye y libera el cupo; abrir el sitio la revive. Aviso por
+// correo en WARN. Ver app/.server/core/workBoxExpiry.ts.
+export const WORK_BOX_IDLE_DAYS = 7;
+export const WORK_BOX_WARN_DAYS = 5;
+
 /** Precio MXN/mes del tier en modo "duerme" (= precio shared: micro $99). */
 export function sleepPrice(tier: HostingTier): number {
   return tier.priceShared;

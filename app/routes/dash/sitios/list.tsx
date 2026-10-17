@@ -62,7 +62,7 @@ export default function SitesList() {
                   {s.kind === "webapp" ? "Web app" : "Estático"}
                 </span>
               </div>
-              <p className="text-xs text-gray-500 mt-2 truncate">{s.url ?? "sin publicar"}</p>
+              <p className="text-xs text-gray-500 mt-2 truncate">{s.archivedAt ? "archivada por inactividad · ábrela para reactivarla" : s.url ?? "sin publicar"}</p>
               <p className="text-[10px] text-gray-400 mt-1">construido con {s.engine ?? "easybits"}</p>
             </Link>
           ))}

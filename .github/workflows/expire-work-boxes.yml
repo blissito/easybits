@@ -1,0 +1,15 @@
+name: Expire idle work boxes
+on:
+  schedule:
+    - cron: '0 4 * * *'   # daily at 04:00 UTC — after backup-machines (03:00)
+  workflow_dispatch: {}
+jobs:
+  expire:
+    runs-on: ubuntu-latest
+    steps:
+      # Archiving tars /app and destroys the box, one site at a time: give it room.
+      - name: Warn and archive unpublished web apps without activity
+        run: |
+          curl -fsS --max-time 1800 -X GET \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            https://easybits.cloud/api/cron/expire-work-boxes

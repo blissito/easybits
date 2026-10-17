@@ -10,7 +10,7 @@ import { db } from "~/.server/db";
 import type { AuthContext } from "~/.server/apiAuth";
 import { withAdmitRetry } from "./fleetAdmitHold";
 import { routeMessage, FleetAgentAtCapacity } from "./fleetAgentOperations";
-import { ensureSiteMachine, siteGroupId, siteTurnPrompt, type getSite } from "./siteOperations";
+import { ensureSiteMachine, getSite, siteGroupId, siteTurnPrompt } from "./siteOperations";
 import { recordFleetTurnUsage } from "./fleetUsage";
 import { getEngineForAgent } from "~/lib/fleetEngines";
 import { narracionAMarkdown, partirNarracion } from "~/lib/narracion";
@@ -155,6 +155,8 @@ async function runSiteTurn(
     // Si el sembrado al crear el sitio falló (caja aún arrancando), se repite aquí
     // antes de que el agente encuentre /app vacío. Nunca bloquea el turno.
     const machine = (await ensureSiteMachine(ctx, site).catch((e) => console.error("[sites] ensureSiteMachine", site.sandboxId, e))) ?? {};
+    // Revivida desde el archivo: el prompt del turno debe nombrar la caja nueva.
+    if (machine.revived) Object.assign(site, await getSite(ctx, site.id));
     if (input.isContinue) {
       await db.fleetAgentMessage
         .create({ data: { fleetAgentId: builder.id, groupId: l.groupId, role: "user", text: "Continuar" } })
