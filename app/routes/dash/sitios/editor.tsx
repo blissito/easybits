@@ -3,14 +3,13 @@ import { Link, data, redirect, useFetcher, useLoaderData, useRevalidator, useSea
 import toast from "react-hot-toast";
 import { resolveTier, sleepPrice } from "~/lib/hostingCatalog";
 import { db } from "~/.server/db";
-import { Streamdown } from "streamdown";
 import { ChatComposer } from "~/components/sitios/ChatComposer";
+import { BotMessage, UserMessage, applyTurnEvent, type Msg } from "~/components/sitios/ChatMessages";
 import { DeleteSiteArt, GithubRepoArt } from "~/components/sitios/DialogArt";
 import { Modal } from "~/components/common/Modal";
 import { BrutalButton } from "~/components/common/BrutalButton";
 import { ThemePicker } from "~/components/sitios/ThemePicker";
-import { LuArrowDown, LuCheck, LuMousePointerClick, LuTrash2 } from "react-icons/lu";
-import { partirNarracion } from "~/lib/narracion";
+import { LuArrowDown, LuMousePointerClick, LuTrash2 } from "react-icons/lu";
 import { getUserOrRedirect } from "~/.server/getters";
 import type { AuthContext } from "~/.server/apiAuth";
 import { attachNewestMachine, deleteSite, getSite, publishSite, siteAdminLoginUrl, siteEngineFor } from "~/.server/core/siteOperations";
@@ -97,21 +96,7 @@ export const action = async ({ request, params }: Route.ActionArgs) => {
   }
 };
 
-// `cortes`: largo del texto cuando arrancó cada herramienta — separa la narración
-// («Reviso…», «Instalo…») de la respuesta final (ver ~/lib/narracion).
-type Msg = { role: "user" | "bot"; text: string; tools?: string[]; cortes?: number[]; imageUrl?: string; quota?: boolean };
 type Attached = { base64: string; ext: string; url: string; name: string };
-
-// Tools del turno agrupadas y contraídas: "3 búsquedas · 2 acciones" en vez de una
-// lista cruda de nombres internos (tool_search_tool_bm25, mcp_easybits_run_tool…).
-function summarizeTools(tools: string[]) {
-  const counts = new Map<string, number>();
-  for (const t of tools) {
-    const label = /search|discover/.test(t) ? "búsqueda" : /read|list|get/.test(t) ? "lectura" : "acción";
-    counts.set(label, (counts.get(label) ?? 0) + 1);
-  }
-  return [...counts].map(([k, n]) => `${n} ${n === 1 ? k : k === "acción" ? "acciones" : `${k}s`}`).join(" · ");
-}
 
 function fmtTokens(n: number) {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
@@ -119,81 +104,6 @@ function fmtTokens(n: number) {
   return String(n);
 }
 type Selection = { id: string; tag: string } | null;
-
-/** La respuesta del agente sin burbuja (como ghosty.studio): pasos con palomita, la
- *  respuesta en markdown con aire y las herramientas contraídas en una línea. */
-// Qué está haciendo el agente, en palabras, según su última herramienta: hay modelos
-// (Gemini) que encadenan lecturas sin narrar y el chat se quedaba en «construyendo…».
-function liveStatus(tools: string[] | undefined, pasos: number) {
-  const t = tools?.[tools.length - 1] ?? "";
-  if (/write|edit|patch|deploy|theme/.test(t)) return "Haciendo cambios en tu app";
-  if (/exec|bg|logs|restart|launch/.test(t)) return /launch/.test(t) ? "Publicando" : "Probando que todo funcione";
-  if (/read|list|get|search|discover/.test(t)) return "Revisando tu app";
-  return pasos ? "Trabajando" : "Pensando";
-}
-
-/** Segundos desde que el mensaje empezó a vivir (sólo cuenta mientras está en vivo). */
-function useElapsed(live: boolean) {
-  const [start] = useState(() => Date.now());
-  const [, tick] = useState(0);
-  useEffect(() => {
-    if (!live) return;
-    const t = setInterval(() => tick((n) => n + 1), 1000);
-    return () => clearInterval(t);
-  }, [live]);
-  return Math.round((Date.now() - start) / 1000);
-}
-
-function BotMessage({ msg, live }: { msg: Msg; live: boolean }) {
-  const { pasos, resto } = partirNarracion(msg.text, msg.cortes);
-  const secs = useElapsed(live);
-  return (
-    <div className="min-w-0 text-[15px] leading-6 text-gray-900">
-      {msg.tools && msg.tools.length > 0 && (
-        <details className="group mb-3 text-xs text-gray-400">
-          <summary className="inline-flex cursor-pointer select-none items-center gap-1.5 rounded-full border border-gray-200 px-2.5 py-1 hover:text-gray-600">
-            ⚙ {summarizeTools(msg.tools)}
-          </summary>
-          <p className="mt-2 font-mono text-[11px] leading-5 break-all">{msg.tools.join(" · ")}</p>
-        </details>
-      )}
-      {pasos.length > 0 && (
-        <ul className="mb-4 flex flex-col gap-2">
-          {pasos.map((p, i) => (
-            <li key={i} className="eb-paso flex items-start gap-2.5 text-[14px] leading-[21px] text-gray-500">
-              <span className="mt-[2px] grid size-[18px] shrink-0 place-items-center rounded-full bg-brand-500/15 text-brand-500">
-                <LuCheck className="h-3 w-3" strokeWidth={3} />
-              </span>
-              <span className="min-w-0 break-words">{p.split(/`([^`]+)`/).map((t, j) => (j % 2 ? <code key={j}>{t}</code> : t))}</span>
-            </li>
-          ))}
-        </ul>
-      )}
-      {resto ? (
-        <div className="eb-md min-w-0 break-words">
-          <Streamdown linkSafety={{ enabled: false }}>{resto}</Streamdown>
-        </div>
-      ) : (
-        live && (
-          <span className="inline-flex items-center gap-2 text-sm text-gray-400">
-            <span className="flex gap-1">
-              {[0, 150, 300].map((d) => (
-                <span key={d} className="h-1.5 w-1.5 animate-bounce rounded-full bg-brand-500/60" style={{ animationDelay: `${d}ms` }} />
-              ))}
-            </span>
-            {liveStatus(msg.tools, pasos.length)}…{secs >= 5 ? ` ${secs} s` : ""}
-          </span>
-        )
-      )}
-      {msg.quota && (
-        <div className="mt-3 flex gap-2">
-          <Link to="/dash/packs" className="px-3 py-1 rounded-lg bg-black text-white text-xs font-bold">Recargar</Link>
-          <Link to="/planes" className="px-3 py-1 rounded-lg border-2 border-black text-xs font-bold">Subir de plan</Link>
-        </div>
-      )}
-    </div>
-  );
-}
 
 export default function SiteEditor() {
   const { site, engineLabel, github, publishPrice } = useLoaderData<typeof loader>();
@@ -411,23 +321,8 @@ export default function SiteEditor() {
       return [...m.slice(0, -1), fn(last)];
     }), []);
   const applyEvent = useCallback((e: { type: string; [k: string]: any }): boolean => {
-    if (e.type === "chunk") patchLast((p) => ({ ...p, text: p.text + e.value }));
-    else if (e.type === "snapshot") patchLast((p) => ({ ...p, text: e.text ?? "", tools: e.tools ?? [], cortes: e.cortes ?? [] }));
-    else if (e.type === "tool" && e.phase === "start")
-      patchLast((p) => ({
-        ...p,
-        tools: [...(p.tools ?? []), e.name],
-        cortes: p.text.trim() && p.cortes?.[p.cortes.length - 1] !== p.text.length ? [...(p.cortes ?? []), p.text.length] : p.cortes,
-      }));
-    // done vacío = el turno se cortó sin respuesta (límite del motor): decirlo, no dejar «construyendo…».
-    // Se queda lo que llegó por el stream: los `cortes` se midieron sobre ese texto.
-    else if (e.type === "done") patchLast((p) => ({ ...p, text: p.text || e.value || "⚠️ El agente no terminó a tiempo y no respondió. Vuelve a intentarlo." }));
-    else if (e.type === "error") patchLast((p) => ({ ...p, text: [p.text, `⚠️ ${e.message}`].filter(Boolean).join("\n\n") }));
-    else if (e.type === "capacity") patchLast((p) => ({ ...p, text: `⏳ ${e.message} — reintenta en unos segundos.` }));
-    else if (e.type === "interrupted") {
-      patchLast((p) => ({ ...p, text: [p.text, "_Se interrumpió por un reinicio de la plataforma._"].filter(Boolean).join("\n\n") }));
-      setCutTurn(e.turnId ?? null);
-    }
+    patchLast((p) => applyTurnEvent(p, e).msg);
+    if (e.type === "interrupted") setCutTurn(e.turnId ?? null);
     return ["done", "error", "capacity", "interrupted", "idle"].includes(e.type);
   }, [patchLast]);
 
@@ -702,12 +597,7 @@ export default function SiteEditor() {
               )}
               {msgs.map((m, i) =>
                 m.role === "user" ? (
-                  <div key={i} className="flex flex-col items-end">
-                    <div className="max-w-[85%] rounded-2xl bg-brand-500 px-4 py-3 text-[15px] leading-[22px] text-white whitespace-pre-wrap break-words">
-                      {m.imageUrl && <img src={m.imageUrl} alt="" className="max-h-40 rounded-lg mb-2 border border-white/30" />}
-                      {m.text}
-                    </div>
-                  </div>
+                  <UserMessage key={i} msg={m} />
                 ) : (
                   <BotMessage key={i} msg={m} live={busy && i === msgs.length - 1} />
                 )

@@ -2,6 +2,7 @@ import { AnimatePresence, LayoutGroup, motion, useReducedMotion } from "motion/r
 import { useCallback, useEffect, useRef, useState } from "react";
 import { LuArrowUp, LuBriefcase, LuCamera, LuRocket, LuX, LuExternalLink } from "react-icons/lu";
 import { templateFor, templateHtml } from "./heroTemplates";
+import { BotMessage, UserMessage, applyTurnEvent, type Msg } from "~/components/sitios/ChatMessages";
 
 /**
  * Prompt del hero. Al enviar, la caja se transforma (layoutId, sin cambiar de ruta)
@@ -31,6 +32,8 @@ const CHIPS = [
   },
 ];
 
+const EMPTY_BOT: Msg = { role: "bot", text: "", tools: [] };
+
 type Phase = "idle" | "creating" | "running" | "done" | "auth" | "error";
 type Site = { id: string; name: string; kind: "static" | "webapp"; previewUrl: string | null; editorUrl: string };
 
@@ -38,8 +41,10 @@ export function HeroPrompt({ loggedIn }: { loggedIn: boolean }) {
   const [text, setText] = useState("");
   const [sent, setSent] = useState("");
   const [phase, setPhase] = useState<Phase>("idle");
-  const [reply, setReply] = useState("");
-  const [tools, setTools] = useState(0);
+  // La respuesta del agente: mismo mensaje y mismo formato que el editor (ChatMessages).
+  const [bot, setBot] = useState<Msg>(EMPTY_BOT);
+  const say = (text: string, extra: Partial<Msg> = {}) => setBot((p) => ({ ...p, text, ...extra }));
+  const tools = bot.tools?.length ?? 0;
   const [site, setSite] = useState<Site | null>(null);
   const [previewKey, setPreviewKey] = useState(0);
   // La caja responde en su servidor de desarrollo: hasta entonces se ve la plantilla de muestra.
@@ -59,8 +64,7 @@ export function HeroPrompt({ loggedIn }: { loggedIn: boolean }) {
   const close = useCallback(() => {
     // Un turno en curso sigue en el servidor; el sitio queda en /dash/sitios.
     setPhase("idle");
-    setReply("");
-    setTools(0);
+    setBot(EMPTY_BOT);
     setSite(null);
     setPreviewReady(false);
   }, []);
@@ -93,20 +97,11 @@ export function HeroPrompt({ loggedIn }: { loggedIn: boolean }) {
     };
   }, [open, close]);
 
-  /** Aplica un evento SSE del turno; true = evento final. Mismo contrato que el editor. */
+  /** Aplica un evento SSE del turno; true = evento final. */
   const apply = useCallback((e: { type: string; [k: string]: any }) => {
-    if (e.type === "chunk") setReply((r) => r + e.value);
-    else if (e.type === "snapshot") {
-      setReply(e.text ?? "");
-      setTools((e.tools ?? []).length);
-    } else if (e.type === "tool" && e.phase === "start") {
-      setTools((n) => n + 1);
-      // La web app se ve en vivo (recarga en caliente de su servidor dev); el estático hay que recargarlo.
-      if (siteRef.current?.kind !== "webapp") reloadPreview();
-    } else if (e.type === "done") setReply((r) => r || e.value || "El agente no terminó a tiempo. Ábrelo en el editor y vuelve a intentarlo.");
-    else if (e.type === "error") setReply((r) => [r, `⚠️ ${e.message}`].filter(Boolean).join("\n\n"));
-    else if (e.type === "capacity") setReply(`⏳ ${e.message}. Reintenta en unos segundos.`);
-    else if (e.type === "interrupted") setReply((r) => [r, "Se interrumpió por un reinicio de la plataforma. Ábrelo en el editor para continuar."].filter(Boolean).join("\n\n"));
+    setBot((p) => applyTurnEvent(p, e).msg);
+    // La web app se ve en vivo (recarga en caliente de su servidor dev); el estático hay que recargarlo.
+    if (e.type === "tool" && e.phase === "start" && siteRef.current?.kind !== "webapp") reloadPreview();
     return ["done", "error", "capacity", "interrupted", "idle"].includes(e.type);
   }, [reloadPreview]);
 
@@ -152,7 +147,7 @@ export function HeroPrompt({ loggedIn }: { loggedIn: boolean }) {
       if (res.status === 401) return setPhase("auth");
       const created = await res.json().catch(() => null);
       if (!res.ok || !created?.id) {
-        setReply(`⚠️ ${created?.error || `Error ${res.status}`}`);
+        say(`⚠️ ${created?.error || `Error ${res.status}`}`);
         return setPhase("error");
       }
       setSite(created);
@@ -166,12 +161,12 @@ export function HeroPrompt({ loggedIn }: { loggedIn: boolean }) {
         chat = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body });
       }
       if (chat.status === 402) {
-        setReply("Se acabaron tus tokens LLM. Recarga en Planes para seguir construyendo.");
+        say("Se acabaron tus tokens LLM.", { quota: true });
         return setPhase("done");
       }
       if (!chat.ok) {
         const err = await chat.json().catch(() => null);
-        setReply(`⚠️ ${err?.message || `Error ${chat.status}`}`);
+        say(`⚠️ ${err?.message || `Error ${chat.status}`}`);
         return setPhase("done");
       }
       let finished = await consume(chat).catch(() => false);
@@ -184,7 +179,7 @@ export function HeroPrompt({ loggedIn }: { loggedIn: boolean }) {
       setPhase("done");
       if (created.kind !== "webapp") setPreviewKey((k) => k + 1);
     } catch (err) {
-      setReply(`⚠️ ${err instanceof Error ? err.message : "error de red"}`);
+      say(`⚠️ ${err instanceof Error ? err.message : "error de red"}`);
       setPhase("error");
     }
   }
@@ -301,12 +296,19 @@ export function HeroPrompt({ loggedIn }: { loggedIn: boolean }) {
             <motion.div
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0, transition: { delay: reduce ? 0 : 0.3 } }}
-              className="flex w-full md:w-[38%] md:max-w-md flex-col gap-3 overflow-y-auto p-4 md:border-r-2 md:border-black"
+              className="flex w-full md:w-[38%] md:max-w-md flex-col gap-6 overflow-y-auto px-4 py-6 md:border-r-2 md:border-black"
             >
-              <div className="self-end max-w-[90%] rounded-2xl rounded-br-sm border-2 border-black bg-brand-500/20 px-4 py-2 whitespace-pre-wrap">
-                {sent}
-              </div>
-              <BotBubble phase={phase} reply={reply} tools={tools} loginHref={loginHref} editorUrl={site?.editorUrl} />
+              <UserMessage msg={{ role: "user", text: sent }} />
+              {phase === "auth" ? (
+                <AuthPrompt href={loginHref} />
+              ) : (
+                <BotMessage msg={bot} live={phase === "creating" || phase === "running"} />
+              )}
+              {phase === "done" && site && (
+                <a href={site.editorUrl} className="self-start rounded-lg border-2 border-black bg-white px-3 py-1.5 text-sm font-bold shadow-[3px_3px_0_#000] transition hover:-translate-y-0.5">
+                  Seguir en el editor →
+                </a>
+              )}
             </motion.div>
 
             <motion.div
@@ -329,63 +331,15 @@ export function HeroPrompt({ loggedIn }: { loggedIn: boolean }) {
   );
 }
 
-function BotBubble({
-  phase,
-  reply,
-  tools,
-  loginHref,
-  editorUrl,
-}: {
-  phase: Phase;
-  reply: string;
-  tools: number;
-  loginHref: string;
-  editorUrl?: string;
-}) {
-  if (phase === "auth") {
-    return (
-      <div className="max-w-[90%] rounded-2xl rounded-bl-sm border-2 border-black bg-white px-4 py-3">
-        <p>Para construirlo necesito que entres a tu cuenta. Es gratis y tu mensaje te espera del otro lado.</p>
-        <a
-          href={loginHref}
-          className="mt-3 inline-flex items-center gap-1.5 rounded-xl border-2 border-black bg-brand-500 px-4 py-2 font-bold shadow-[3px_3px_0_0_#000]"
-        >
-          Entrar y construir →
-        </a>
-      </div>
-    );
-  }
-  const working = phase === "creating" || phase === "running";
+/** Sin sesión: el agente no corre; el mensaje pide entrar y el prompt viaja al login. */
+function AuthPrompt({ href }: { href: string }) {
   return (
-    <div className="max-w-[90%] rounded-2xl rounded-bl-sm border-2 border-black bg-white px-4 py-3">
-      {reply ? (
-        <p className="whitespace-pre-wrap">{reply}</p>
-      ) : (
-        <p className="flex items-center gap-2 text-gray-500">
-          <Dots /> {phase === "creating" ? "Preparando tu sitio…" : "Construyendo…"}
-        </p>
-      )}
-      {working && reply && (
-        <p className="mt-2 flex items-center gap-2 text-xs text-gray-500">
-          <Dots /> {tools} {tools === 1 ? "acción" : "acciones"}
-        </p>
-      )}
-      {phase === "done" && editorUrl && (
-        <a href={editorUrl} className="mt-3 inline-flex items-center gap-1.5 rounded-xl border-2 border-black px-3 py-1.5 text-sm font-bold hover:bg-brand-500/15">
-          Seguir en el editor →
-        </a>
-      )}
+    <div className="text-[15px] leading-6 text-gray-900">
+      <p>Para construirlo necesito que entres a tu cuenta. Es gratis y tu mensaje te espera del otro lado.</p>
+      <a href={href} className="mt-3 inline-flex items-center gap-1.5 rounded-xl border-2 border-black bg-brand-500 px-4 py-2 font-bold shadow-[3px_3px_0_0_#000]">
+        Entrar y construir →
+      </a>
     </div>
-  );
-}
-
-function Dots() {
-  return (
-    <span className="inline-flex gap-0.5" aria-hidden>
-      {[0, 1, 2].map((i) => (
-        <span key={i} className="size-1.5 rounded-full bg-brand-500 animate-bounce" style={{ animationDelay: `${i * 120}ms` }} />
-      ))}
-    </span>
   );
 }
 
