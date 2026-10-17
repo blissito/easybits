@@ -2,17 +2,18 @@
 // recurso y cómo se empata un nombre contra la lista. La parte con red vive en resolve.ts.
 // Sin imports a propósito: el test lo carga directo con --experimental-strip-types.
 
-export type RefKind = "agent" | "sandbox" | "db";
+export type RefKind = "agent" | "sandbox" | "db" | "site";
 
 /** Lo mínimo de cada recurso para empatar: id, nombre y (si hay) estado. */
 export type NamedRef = { id: string; name?: string | null; status?: string | null };
 
 // Formato de id de cada recurso. Lo que empata pasa directo, sin listar nada.
-// agent y db = ObjectId de Mongo; sandbox (y máquina) = `sb_<uuid>`.
+// agent, db y site = ObjectId de Mongo; sandbox (y máquina) = `sb_<uuid>`.
 const ID_FORMAT: Record<RefKind, RegExp> = {
   agent: /^[0-9a-f]{24}$/i,
   db: /^[0-9a-f]{24}$/i,
   sandbox: /^sb_[0-9a-z-]+$/i,
+  site: /^[0-9a-f]{24}$/i,
 };
 
 export const looksLikeId = (kind: RefKind, ref: string) => ID_FORMAT[kind].test(ref);
@@ -57,6 +58,7 @@ export const REF_ARGS: Record<string, { index: number; kind: RefKind }> = {
   "db tables": { index: 0, kind: "db" },
   "db query": { index: 0, kind: "db" },
   "db photos": { index: 1, kind: "db" },
+  "sites theme": { index: 1, kind: "site" },
 };
 
 export type MatchResult =

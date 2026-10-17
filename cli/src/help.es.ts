@@ -150,7 +150,6 @@ export const HELP_ES: Record<string, string> = {
   "Detach a domain": "Desliga un dominio",
   "Write the GitHub Actions deploy workflow for this repo": "Escribe el workflow de GitHub Actions que despliega este repo",
   "Write the GitHub Actions workflow that deploys this repo on every push to main": "Escribe el workflow de GitHub Actions que despliega este repo en cada push a main",
-  "Where the app lives in the machine (default /srv/app)": "Dónde vive la app en la máquina (default /srv/app)",
   "Port your app listens on (default 3000)": "Puerto en el que escucha tu app (default 3000)",
   "Data": "Datos",
   "SQL databases (libSQL)": "Bases de datos SQL (libSQL)",
@@ -207,4 +206,15 @@ export const HELP_ES: Record<string, string> = {
   "Also replace rows that already have a permanent link": "Reemplaza también las filas que ya tienen liga permanente",
   "Show the plan; upload nothing": "Enseña el plan; no sube nada",
   "how many links are permanent, external or empty": "cuántas ligas son permanentes, de fuera o vacías",
+  // sites create / theme
+  "Create a site from a prompt; its builder agent picks it up in the editor": "Crea un sitio a partir de un prompt; su agente lo sigue construyendo en el editor",
+  "What to build; also names the site if --name is missing": "Qué construir; también nombra el sitio si falta --name",
+  "Site name": "Nombre del sitio",
+  "webapp (default: its own machine, published later) or static (CDN website)": "webapp (default: su propia máquina, se publica después) o static (website en el CDN)",
+  "Web app stack: tanstack (default), next, react-router, remix, nuxt, sveltekit, astro, elysia": "Stack de la web app: tanstack (default), next, react-router, remix, nuxt, sveltekit, astro, elysia",
+  "Starting template (tanstack/react-router): consultorio, despacho, portafolio, lanzamiento": "Plantilla de partida (tanstack/react-router): consultorio, despacho, portafolio, lanzamiento",
+  "Read or change a site's color theme without a model turn (the «Tema» button)": "Lee o cambia el tema de colores de un sitio sin turno del modelo (el botón «Tema»)",
+  "Palette id: minimal, calido, oceano, noche, dracula, nord, tokyo-night, github-light…": "Id de la paleta: minimal, calido, oceano, noche, dracula, nord, tokyo-night, github-light…",
+  "JSON with every token as #rrggbb (- reads stdin)": "JSON con cada token en #rrggbb (- lee stdin)",
+  "edit, then:": "edítalo y luego:",
 };

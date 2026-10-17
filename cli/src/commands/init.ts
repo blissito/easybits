@@ -21,14 +21,14 @@ export const init: Command = {
   synopsis: "init",
   leaf: {
     summary: "Write the GitHub Actions workflow that deploys this repo on every push to main",
-    usage: "easybits init [--app-dir /srv/app] [--port 3000]",
+    usage: "easybits init [--app-dir /app] [--port 3000]",
     options: {
-      "app-dir": { type: "string", value: "dir", description: "Where the app lives in the machine (default /srv/app)" },
+      "app-dir": { type: "string", value: "dir", description: "Where the app lives in the machine (default /app)" },
       port: { type: "string", value: "port", description: "Port your app listens on (default 3000)" },
     },
-    examples: ["easybits init", "easybits init --app-dir /srv/app --port 8080"],
+    examples: ["easybits init", "easybits init --port 8080"],
     async run(ctx) {
-  const appDir = str(ctx, "app-dir") ?? "/srv/app";
+  const appDir = str(ctx, "app-dir") ?? "/app";
   const port = str(ctx, "port") ?? "3000";
 
   if (!existsSync("package.json")) {

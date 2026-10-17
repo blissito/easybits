@@ -93,6 +93,22 @@ easybits domains ls sb_abc123
 easybits domains rm sb_abc123 shop.example.com --yes
 \`\`\`
 
+### Sites (site builder)
+
+\`\`\`bash
+easybits sites ls                                              # your /dash/sitios sites: kind, engine, URL
+easybits sites create --prompt "Landing for my dental clinic"  # web app (TanStack) in its own machine
+easybits sites create --prompt "Task tracker with login" --stack next --json
+easybits sites create --name "Promo" --kind static             # CDN website instead of a machine
+easybits sites theme get my-clinic                             # current colors (by name or id)
+easybits sites theme set my-clinic --theme dracula             # a palette, no model turn
+jq .colors theme.json | easybits sites theme set my-clinic --colors -   # or every token as #rrggbb
+\`\`\`
+
+\`create\` returns \`{id, name, kind, stack, template, previewUrl, url, editorUrl}\`; \`url\` is \`null\` until you publish from the editor (building is free; a web app is charged when published). \`--kind webapp\` (default) gets its own machine with \`--stack\` \`tanstack\` (default), \`next\`, \`react-router\`, \`remix\`, \`nuxt\`, \`sveltekit\`, \`astro\` or \`elysia\`; \`--template\` (\`consultorio\`, \`despacho\`, \`portafolio\`, \`lanzamiento\`) only exists for TanStack and React Router, and without it the prompt picks one. \`--kind static\` is a website on the CDN. The CLI rejects an unknown stack or template before calling the API.
+
+\`theme\` is the editor's «Tema» button: it rewrites the site's theme file (web app: \`eb-theme.css\`; static: the \`eb-theme\` block of \`index.html\`) and the preview picks it up. \`--colors\` needs every token (\`primary\`, \`primary-light\`, \`primary-dark\`, \`secondary\`, \`accent\`, \`surface\`, \`surface-alt\`, \`surface-deep\`, \`on-surface\`, \`on-surface-muted\`, \`on-surface-deep\`, \`on-primary\`, \`on-secondary\`, \`on-accent\`); an unknown palette answers \`invalid_theme\` and a site older than themes answers \`no_tokens\` (409).
+
 ### Databases
 
 \`\`\`bash
@@ -136,6 +152,7 @@ easybits agents skills add helper --dir ./skills/quotes --restart  # ls|get|rm t
 easybits agents mcp set helper --file servers.json                 # replaces the list and restarts
 easybits agents try helper "who are you?"                          # one full turn as text, to verify
 easybits agents logs helper --since "10 min ago"
+easybits agents restart helper                                     # restart the runtime: new session, skills and MCP reload
 easybits agents doctor helper                                      # exits 1 on a problem
 easybits agents get helper --fields status,lastError --json        # status "error" carries why the runtime did not start
 easybits agents create --like helper --name helper-2 --copy-files --dry-run
@@ -177,7 +194,7 @@ One rule, like \`gh\`: \`easybits <noun> <verb>\`. Older spellings keep working 
 
 ### Names instead of ids
 
-Every command that takes an agent, a sandbox or machine, or a database accepts its **name** as well as its id: \`easybits sb exec scratch -- ls\`, \`easybits domains ls shop\`, \`easybits machines deploy shop -m "v2"\`. An id (\`sb_…\`, or the 24-character id of agents and databases) passes straight through; a name is matched exactly, case-insensitive, against your list (one request per run). If two share the name the CLI exits 2 and lists the ids; if none matches it exits 1 with the \`ls\` to run.
+Every command that takes an agent, a sandbox or machine, a database or a site accepts its **name** as well as its id: \`easybits sb exec scratch -- ls\`, \`easybits domains ls shop\`, \`easybits machines deploy shop -m "v2"\`. An id (\`sb_…\`, or the 24-character id of agents, databases and sites) passes straight through; a name is matched exactly, case-insensitive, against your list (one request per run). If two share the name the CLI exits 2 and lists the ids; if none matches it exits 1 with the \`ls\` to run.
 
 ### Files, websites and account
 
@@ -186,7 +203,6 @@ easybits files upload ./report.pdf
 easybits files upload ./logo.png --public   # open CDN URL; private by default
 easybits files ls
 easybits files rm FILE_ID --yes   # to the trash for 7 days
-easybits sites ls                      # your site-builder sites (/dash/sitios): kind, engine, URL
 easybits websites ls                   # every static website (also documents and agent-published pages)
 easybits websites create "My shop" --slug my-shop   # slug optional
 easybits websites slug my-shop my-store             # change it; the old URL 301s
@@ -233,7 +249,7 @@ Deliberate exception: \`sandboxes exec\` without \`--json\` exits with the remot
 
 \`sandboxes destroy\`, \`agents destroy\`, \`db rm\`, \`domains rm\` and \`files rm\` ask before acting in a terminal: \`[y/N]\`, or typing the name/id for irreversible ones (a database, an agent, a permanent sandbox). **Without a terminal or with \`--json\` they never prompt**: pass \`--yes\` (\`-y\`) or they exit \`2\` with a hint holding the exact command.
 
-Once a day, in a terminal, the CLI says on stderr when a newer version is out (never with \`--json\`; \`EASYBITS_NO_UPDATE_CHECK=1\` or \`CI\` turn it off).
+At most once an hour it checks npm and, in a terminal, the CLI says on stderr when a newer version is out (never with \`--json\`; \`EASYBITS_NO_UPDATE_CHECK=1\` or \`CI\` turn it off).
 
 \`easybits --help\`, \`easybits <command> <subcommand> --help\` and \`easybits help <command> <subcommand>\` show usage, flags and examples. A typo gets a "Did you mean".
 

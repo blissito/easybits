@@ -5,7 +5,7 @@ license: MIT
 compatibility: Needs Node 22+ (npx is enough), network access to https://www.easybits.cloud and an EasyBits API key
 metadata:
   author: easybits
-  version: "1.18"
+  version: "1.19"
 ---
 
 # Use the EasyBits CLI
@@ -79,7 +79,7 @@ at another server (default https://www.easybits.cloud).
 5. Deletes need `--yes`: `sb destroy`, `agents destroy`, `db rm`, `domains rm`, `files rm`,
    `agents files rm`, `agents skills rm`.
    With `--json` (or no terminal) they never prompt; without `--yes` they exit 2.
-6. Names work where ids do: any agent, sandbox/machine or database argument takes its name
+6. Names work where ids do: any agent, sandbox/machine, database or site argument takes its name
    (`easybits agents get helper`, `easybits sb exec scratch -- ls`, `easybits db query leads …`).
    Exact match, case-insensitive. Two with the same name → exit 2, `error` says so and `hint`
    lists the ids: retry with one. For destructive commands prefer the id you got back on create.
@@ -145,8 +145,20 @@ easybits domains rm "$ID" shop.example.com --json --yes
 ## Site-builder sites (/dash/sitios)
 
 ```bash
-easybits sites ls --json      # { id, name, kind: static|webapp, engine, stack, url, websiteId, sandboxId }
+easybits sites ls --json      # [{ id, name, kind: static|webapp, engine, stack, url, websiteId, sandboxId, archivedAt }]
+easybits sites create --prompt "Landing for my dental clinic" --json   # {id, name, kind, stack, template, previewUrl, url: null, editorUrl}
+easybits sites create --prompt "Task tracker with login" --stack next --json
+easybits sites create --name "Promo" --kind static --json
+easybits sites theme get "$SITE" --json                          # {supported, colors:{primary:"#…",…}}
+easybits sites theme set "$SITE" --theme dracula --json          # or --colors file.json|- (every token)
 ```
+
+`create` makes the site and hands it to its builder agent; give the person `editorUrl` to keep
+building it. `url` stays `null` until they publish from the editor (building is free; a web app is
+charged when published). `--stack`: tanstack (default), next, react-router, remix, nuxt, sveltekit,
+astro, elysia; `--template` (consultorio, despacho, portafolio, lanzamiento) only for tanstack and
+react-router — without it the prompt picks one. `theme` takes the site's name or id; `no_tokens`
+(409) = the site predates themes, `invalid_theme` (400) = unknown palette or a missing token.
 
 "My sites" means this list: what the user built in /dash/sitios, with the engine that builds
 each one. A static site's files are in its website (`websiteId`); a web app's code is in its
@@ -224,6 +236,8 @@ easybits agents skills ls helper --json
 easybits agents mcp set helper --file servers.json --json   # replaces ALL servers, restarts
 easybits agents try helper "which skills do you have?" --json   # {text, error, session, ms}
 easybits agents doctor helper --json                            # {ok, checks:[{check,ok,detail,hint}]}
+easybits agents logs helper --since "10 min ago" --json          # the runtime's journal
+easybits agents restart helper --json                           # new session; skills and MCP reload
 easybits agents get helper --fields status,lastError --json     # status "error" + lastError = the runtime did not start (fix, then agents restart)
 easybits agents create --like helper --name helper-2 --dry-run --json   # plan: template, prompt, MCP, skills
 easybits agents create --like helper --name helper-2 --copy-files --json

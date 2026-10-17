@@ -53,7 +53,8 @@ easybits sandboxes destroy sb_abc123 --yes
 easybits machines ls
 easybits machines launch --repo https://github.com/you/shop.git --tier micro --domain shop.example.com
 easybits machines launch --machine shop --archive ./build.tgz --prebuilt -m v2   # redeploy
-easybits deploy sb_abc123 -m "v1.2"   # = machines deploy
+easybits machines deploy sb_abc123 -m "v1.2"   # publish a release of the current code
+easybits deploy sb_abc123 -m "v1.2"            # same thing, shorter
 easybits machines releases sb_abc123 --limit 5
 easybits machines logs sb_abc123 --lines 100 --grep ERROR
 easybits machines rollback sb_abc123 rel_789
@@ -93,7 +94,7 @@ easybits agents set helper --prompt-file PROMPT.md [--prompt-mode append|replace
 easybits agents files ls|get|put|rm helper [path|local-files…] [--to DIR] [--out FILE]
 easybits agents skills ls|get|add|rm helper [slug…] [--dir FOLDER | --file SKILL.md] [--restart]
 easybits agents mcp get|set helper [--file servers.json|-]   # set replaces the list and restarts
-easybits agents restart helper
+easybits agents restart helper                  # restart its runtime (new session; skills and MCP load)
 easybits agents try helper "who are you?"      # one full turn as text: verify what you set up
 easybits agents logs helper --since "10 min ago"
 easybits agents doctor helper                   # exits 1 on a problem; status "error" shows why it did not start
@@ -109,6 +110,11 @@ easybits files upload ./report.pdf
 easybits files upload ./logo.png --public   # open CDN URL; private by default
 easybits files rm FILE_ID --yes
 easybits sites ls                    # your site-builder sites (/dash/sitios): kind, engine, URL
+easybits sites create --prompt "Landing for my dental clinic"   # web app (TanStack) in its own machine
+easybits sites create --prompt "Task tracker with login" --stack next --json
+easybits sites create --name "Promo" --kind static              # CDN website instead of a machine
+easybits sites theme get my-clinic                              # site by name or id
+easybits sites theme set my-clinic --theme dracula              # or --colors theme.json (every token)
 easybits websites ls                 # every static website (also documents and agent-published pages)
 easybits websites create "My shop" --slug my-shop   # slug optional
 easybits websites slug my-shop my-store             # change it; the old URL 301s
@@ -125,7 +131,7 @@ easybits docs cli      # a docs section as markdown (--en for English)
 easybits docs --open   # open the docs in your browser
 ```
 
-**Names or ids.** Wherever a command takes an agent, a sandbox/machine or a database, you can
+**Names or ids.** Wherever a command takes an agent, a sandbox/machine, a database or a site, you can
 pass its name instead of the id (`easybits sb exec scratch -- ls`, `easybits domains ls shop`).
 The match is exact and case-insensitive; if two share the name the CLI exits 2 and lists the ids.
 
@@ -144,7 +150,7 @@ never prompt — and neither do they with `--json`: pass `--yes` / `-y`, or they
 **Dry runs.** Writes that change an agent (`agents set`, `files put|rm`, `skills add|rm`,
 `mcp set`, `create`) take `--dry-run`: they print what would change and touch nothing.
 
-**Updates.** Once a day the CLI checks npm and, in a terminal, says on stderr when a newer
+**Updates.** Every hour at most the CLI checks npm and, in a terminal, says on stderr when a newer
 version is out (never with `--json`). `EASYBITS_NO_UPDATE_CHECK=1` or `CI` turns it off.
 
 **Secrets** go in a dotenv file or on stdin, never in argv (visible in `ps` and shell

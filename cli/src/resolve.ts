@@ -2,6 +2,7 @@
 // la hoja; la tabla y el empate viven en refs.ts (puro, con tests).
 import type { Ctx } from "./types.js";
 import { getClient } from "./client.js";
+import { api } from "./api.js";
 import { CliError, EXIT } from "./errors.js";
 import { REF_ARGS, matchRef, looksLikeId, type NamedRef, type RefKind } from "./refs.js";
 import { t } from "./i18n.js";
@@ -10,10 +11,11 @@ const LS_HINT: Record<RefKind, string> = {
   agent: "easybits agents ls",
   sandbox: "easybits sandboxes ls",
   db: "easybits db ls",
+  site: "easybits sites ls",
 };
 
-const NOUN = (): Record<RefKind, string> => ({ agent: t("agent", "agente"), sandbox: t("sandbox or machine", "sandbox o máquina"), db: t("database", "base de datos") });
-const NOUNS = (): Record<RefKind, string> => ({ agent: t("agents", "agentes"), sandbox: t("sandboxes", "sandboxes"), db: t("databases", "bases de datos") });
+const NOUN = (): Record<RefKind, string> => ({ agent: t("agent", "agente"), sandbox: t("sandbox or machine", "sandbox o máquina"), db: t("database", "base de datos"), site: t("site", "sitio") });
+const NOUNS = (): Record<RefKind, string> => ({ agent: t("agents", "agentes"), sandbox: t("sandboxes", "sandboxes"), db: t("databases", "bases de datos"), site: t("sites", "sitios") });
 
 // Una lista por tipo y por corrida: dos referencias del mismo tipo no piden dos veces.
 const cache = new Map<RefKind, Promise<NamedRef[]>>();
@@ -24,6 +26,7 @@ export function listRefs(ctx: Ctx, kind: RefKind): Promise<NamedRef[]> {
     p = (async () => {
       const eb = await getClient(ctx);
       if (kind === "agent") return (await eb.listAgents()).map((a) => ({ id: a.agentId, name: a.name, status: a.status }));
+      if (kind === "site") return (await api<{ items: NamedRef[] }>(ctx, "GET", "/sites")).items.map((s) => ({ id: s.id, name: s.name }));
       if (kind === "db") return (await eb.listDatabases()).items.map((d) => ({ id: d.id, name: d.name }));
       return (await eb.sandboxes.list()).map((s) => ({ id: s.sandboxId, name: s.name, status: s.status }));
     })();

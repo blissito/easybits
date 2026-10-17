@@ -12,6 +12,12 @@ const boxes = [
   { id: "sb_f4ca413b-bf7f-4ac9-a748-f6becf11b3fa", name: "bitacora-normi035" },
 ];
 
+test("sites theme acepta el nombre del sitio (segundo posicional)", () => {
+  assert.deepEqual(REF_ARGS["sites theme"], { index: 1, kind: "site" });
+  assert.equal(looksLikeId("site", "6650f0c2a1b2c3d4e5f60718"), true);
+  assert.deepEqual(matchRef("site", "mi tienda", [{ id: "6650f0c2a1b2c3d4e5f60718", name: "Mi Tienda" }]), { ok: true, id: "6650f0c2a1b2c3d4e5f60718" });
+});
+
 test("un id con formato pasa directo, sin lista", () => {
   assert.deepEqual(matchRef("agent", "6650f0c2a1b2c3d4e5f60718", null), { ok: true, id: "6650f0c2a1b2c3d4e5f60718" });
   assert.deepEqual(matchRef("sandbox", "sb_abc-123", null), { ok: true, id: "sb_abc-123" });
@@ -43,7 +49,7 @@ test("inexistente", () => {
 test("la tabla sólo apunta a tipos conocidos", () => {
   for (const [key, spec] of Object.entries(REF_ARGS)) {
     assert.match(key, /^[a-z]+ [a-z]+$/);
-    assert.ok(["agent", "sandbox", "db"].includes(spec.kind), key);
+    assert.ok(["agent", "sandbox", "db", "site"].includes(spec.kind), key);
     assert.ok(spec.index >= 0 && spec.index <= 1, key);
   }
 });

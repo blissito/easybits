@@ -24,7 +24,7 @@ const GLOBAL_FLAGS_EN = `Global flags:
 Naming (like gh): noun then verb — easybits <noun> <verb>. Old spellings still work
 and print the new one on stderr (never with --json).
 
-Names or ids: agents, sandboxes/machines and databases take either
+Names or ids: agents, sandboxes/machines, databases and sites take either
 (exact, case-insensitive; two with the same name → exit 2 with the ids).
 
 Deletes (sandboxes destroy, agents destroy, db rm, domains rm, files rm, agents files|skills rm)
@@ -32,7 +32,7 @@ ask first; without a terminal or with --json pass -y/--yes, or they exit 2.
 Agent writes (agents set|create|files|skills|mcp) take --dry-run: show the change, touch nothing.
 
 Env: EASYBITS_API_KEY (API key), EASYBITS_URL (API server, default https://www.easybits.cloud),
-     EASYBITS_NO_UPDATE_CHECK=1 (no daily "update available" notice on stderr)
+     EASYBITS_NO_UPDATE_CHECK=1 (no "update available" notice on stderr; npm is checked hourly)
 
 Exit codes: 0 ok, 1 API error, 2 usage error, 3 not logged in or bad key`;
 
@@ -46,7 +46,7 @@ const GLOBAL_FLAGS_ES = `Flags globales:
 Nombres (como gh): sustantivo y luego verbo — easybits <sustantivo> <verbo>. Las formas
 viejas siguen funcionando y avisan la nueva en stderr (nunca con --json).
 
-Nombres o ids: agentes, sandboxes/máquinas y bases aceptan cualquiera de los dos
+Nombres o ids: agentes, sandboxes/máquinas, bases y sitios aceptan cualquiera de los dos
 (exacto, sin distinguir mayúsculas; dos con el mismo nombre → sale con 2 y los ids).
 
 Los borrados (sandboxes destroy, agents destroy, db rm, domains rm, files rm, agents files|skills rm)
@@ -55,7 +55,7 @@ Lo que escribe en un agente (agents set|create|files|skills|mcp) acepta --dry-ru
 cambio y no toca nada.
 
 Env: EASYBITS_API_KEY (API key), EASYBITS_URL (servidor de la API, default https://www.easybits.cloud),
-     EASYBITS_NO_UPDATE_CHECK=1 (sin el aviso diario de versión nueva en stderr)
+     EASYBITS_NO_UPDATE_CHECK=1 (sin el aviso de versión nueva en stderr; npm se revisa cada hora)
 
 Códigos de salida: 0 ok, 1 error de la API, 2 error de uso, 3 sin sesión o key inválida`;
 

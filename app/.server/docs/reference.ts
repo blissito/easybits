@@ -239,6 +239,22 @@ easybits domains ls sb_abc123
 easybits domains rm sb_abc123 tienda.com --yes
 \`\`\`
 
+### Sitios (creador de sitios)
+
+\`\`\`bash
+easybits sites ls                                                 # tus sitios de /dash/sitios: tipo, motor y URL
+easybits sites create --prompt "Landing de mi consultorio dental" # web app (TanStack) en su propia máquina
+easybits sites create --prompt "Lista de tareas con login" --stack next --json
+easybits sites create --name "Promo" --kind static                # website en el CDN en vez de máquina
+easybits sites theme get mi-consultorio                           # colores actuales (por nombre o id)
+easybits sites theme set mi-consultorio --theme dracula           # una paleta, sin turno del modelo
+jq .colors tema.json | easybits sites theme set mi-consultorio --colors -   # o cada token en #rrggbb
+\`\`\`
+
+\`create\` devuelve \`{id, name, kind, stack, template, previewUrl, url, editorUrl}\`; \`url\` es \`null\` hasta que publiques desde el editor (construir es gratis; una web app se cobra al publicarla). \`--kind webapp\` (default) tiene su propia máquina con \`--stack\` \`tanstack\` (default), \`next\`, \`react-router\`, \`remix\`, \`nuxt\`, \`sveltekit\`, \`astro\` o \`elysia\`; \`--template\` (\`consultorio\`, \`despacho\`, \`portafolio\`, \`lanzamiento\`) sólo existe en TanStack y React Router, y sin ella el prompt elige una. \`--kind static\` es un website en el CDN. El CLI rechaza un stack o una plantilla desconocidos antes de llamar a la API.
+
+\`theme\` es el botón «Tema» del editor: reescribe el archivo de tema del sitio (web app: \`eb-theme.css\`; estático: el bloque \`eb-theme\` de \`index.html\`) y la vista previa lo toma. \`--colors\` necesita todos los tokens (\`primary\`, \`primary-light\`, \`primary-dark\`, \`secondary\`, \`accent\`, \`surface\`, \`surface-alt\`, \`surface-deep\`, \`on-surface\`, \`on-surface-muted\`, \`on-surface-deep\`, \`on-primary\`, \`on-secondary\`, \`on-accent\`); una paleta desconocida responde \`invalid_theme\` y un sitio anterior a los temas responde \`no_tokens\` (409).
+
 ### Bases de datos
 
 \`\`\`bash
@@ -282,6 +298,7 @@ easybits agents skills add ayudante --dir ./skills/cotizar --restart   # tambié
 easybits agents mcp set ayudante --file servers.json                 # reemplaza la lista y reinicia
 easybits agents try ayudante "¿quién eres?"                          # un turno completo a texto, para verificar
 easybits agents logs ayudante --since "10 min ago"
+easybits agents restart ayudante                                     # reinicia el runtime: sesión nueva, recarga skills y MCP
 easybits agents doctor ayudante                                      # sale con 1 si hay un problema
 easybits agents get ayudante --fields status,lastError --json        # con status "error", lastError dice por qué no arrancó
 easybits agents create --like ayudante --name ayudante-2 --copy-files --dry-run
@@ -323,7 +340,7 @@ Una sola regla, como \`gh\`: \`easybits <sustantivo> <verbo>\`. Las formas vieja
 
 ### Nombres en vez de ids
 
-Todo comando que recibe un agente, un sandbox o máquina, o una base de datos acepta su **nombre** además del id: \`easybits sb exec pruebas -- ls\`, \`easybits domains ls tienda\`, \`easybits machines deploy tienda -m "v2"\`. Un id (\`sb_…\`, o el id de 24 caracteres de agentes y bases) pasa directo; un nombre se busca exacto, sin distinguir mayúsculas, en tu lista (una petición por corrida). Si dos comparten el nombre, el CLI sale con 2 y enlista los ids; si ninguno coincide, sale con 1 y te dice qué \`ls\` correr.
+Todo comando que recibe un agente, un sandbox o máquina, una base de datos o un sitio acepta su **nombre** además del id: \`easybits sb exec pruebas -- ls\`, \`easybits domains ls tienda\`, \`easybits machines deploy tienda -m "v2"\`. Un id (\`sb_…\`, o el id de 24 caracteres de agentes, bases y sitios) pasa directo; un nombre se busca exacto, sin distinguir mayúsculas, en tu lista (una petición por corrida). Si dos comparten el nombre, el CLI sale con 2 y enlista los ids; si ninguno coincide, sale con 1 y te dice qué \`ls\` correr.
 
 ### Archivos, sitios y cuenta
 
@@ -332,7 +349,6 @@ easybits files upload ./reporte.pdf
 easybits files upload ./logo.png --public   # URL abierta en el CDN; privado por default
 easybits files ls
 easybits files rm FILE_ID --yes   # a la papelera 7 días
-easybits sites ls                      # tus sitios del creador (/dash/sitios): tipo, motor y URL
 easybits websites ls                   # todos los websites estáticos (también documentos y páginas de agentes)
 easybits websites create "Mi tienda" --slug mi-tienda   # slug opcional
 easybits websites slug mi-tienda mi-store               # cambiarlo; la URL vieja responde 301
@@ -379,7 +395,7 @@ Excepción deliberada: \`sandboxes exec\` sin \`--json\` sale con el código del
 
 \`sandboxes destroy\`, \`agents destroy\`, \`db rm\`, \`domains rm\` y \`files rm\` preguntan antes de actuar en una terminal: \`[y/N]\`, o teclear el nombre/id en lo irreversible (una base, un agente, una caja permanente). **Sin terminal o con \`--json\` nunca preguntan**: pasa \`--yes\` (\`-y\`) o salen con \`2\` y la pista con el comando exacto.
 
-Una vez al día, en una terminal, el CLI avisa en stderr cuando hay versión nueva (nunca con \`--json\`; \`EASYBITS_NO_UPDATE_CHECK=1\` o \`CI\` lo apagan).
+Como mucho una vez por hora revisa npm y, en una terminal, el CLI avisa en stderr cuando hay versión nueva (nunca con \`--json\`; \`EASYBITS_NO_UPDATE_CHECK=1\` o \`CI\` lo apagan).
 
 \`easybits --help\`, \`easybits <comando> <subcomando> --help\` y \`easybits help <comando> <subcomando>\` muestran uso, banderas y ejemplos. Un typo recibe un «Did you mean».
 
