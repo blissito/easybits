@@ -7,6 +7,7 @@ import { getClient } from "../client.js";
 import { CliError, usageError } from "../errors.js";
 import { YES_OPTION, confirm, requireYesIfHeadless } from "../prompt.js";
 import { t } from "../i18n.js";
+import { sandboxDomains } from "./domains.js";
 
 /** Registro plano de una caja: la clase Sandbox lleva handles internos que no son datos. */
 export function sandboxRecord(s: Sandbox) {
@@ -246,6 +247,7 @@ export const sandboxes: Command = {
         }
       },
     },
+    domains: sandboxDomains,
     suspend: {
       summary: "Suspend to disk (frees CPU; TTL paused)",
       usage: "easybits sandboxes suspend <sandbox>",

@@ -24,6 +24,19 @@ function positionals(argv: string[]): number[] {
 const MACHINE_SUBS = ["ls", "list", "deploy", "release", "releases", "logs", "rollback", "secrets"];
 const SANDBOX_NAMES = ["sandboxes", "sandbox", "sb"];
 const AGENT_NAMES = ["agents", "agent"];
+const DOMAIN_NAMES = ["domains", "domain"];
+
+/**
+ * ¿`domains <sub> …` en la forma VIEJA (dominios de una caja)? La nueva (de la cuenta) lleva
+ * el dominio como único posicional; la vieja, la caja primero: `ls <caja>`,
+ * `add <caja> <dominio> --port N`, `verify|rm <caja> <dominio>`.
+ */
+function oldSandboxDomains(sub: string | undefined, rest: number, hasPort: boolean): boolean {
+  if (sub === "ls" || sub === "list") return rest >= 1;
+  if (sub === "add") return hasPort || rest >= 2;
+  if (sub === "verify" || sub === "rm" || sub === "remove" || sub === "delete") return rest >= 2;
+  return false;
+}
 
 /** Devuelve el argv reescrito y los avisos (inglés, español) para quien usó una forma vieja. */
 export function normalizeArgs(input: string[]): { argv: string[]; notes: Array<[en: string, es: string]> } {
@@ -65,6 +78,21 @@ export function normalizeArgs(input: string[]): { argv: string[]; notes: Array<[
   if ((at(0) === "machines" || at(0) === "machine") && at(1) === "release") {
     argv[pos[1]] = "deploy";
     notes.push(["`machines release` is now `machines deploy`.", "`machines release` ahora es `machines deploy`."]);
+  }
+
+  // `domains` era de las cajas; ahora es de la cuenta (sitios). La forma vieja sigue andando
+  // como `sandboxes domains …` (los scripts no se rompen) y avisa la nueva.
+  if (DOMAIN_NAMES.includes(at(0) ?? "")) {
+    const hasPort = head.some((a) => a === "--port" || a.startsWith("--port="));
+    const sub = at(1);
+    if (oldSandboxDomains(sub, pos.length - 2, hasPort)) {
+      argv.splice(pos[0], 1, "sandboxes", "domains");
+      notes.push([
+        `\`easybits domains ${sub} <sandbox> …\` is now \`easybits sandboxes domains ${sub} <sandbox> …\` (\`domains\` is for your account's domains).`,
+        `\`easybits domains ${sub} <caja> …\` ahora es \`easybits sandboxes domains ${sub} <caja> …\` (\`domains\` es para los dominios de tu cuenta).`,
+      ]);
+      pos = positionals(argv);
+    }
   }
 
   // `--timeout` quería decir dos cosas: vida de la caja (create) y tope del comando (exec).

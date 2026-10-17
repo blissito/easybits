@@ -159,7 +159,7 @@ export function matchWebsite(ref: string, items: WebsiteRow[]): string | null {
   return items.find((w) => w.slug === r)?.id ?? null;
 }
 
-async function resolveWebsiteId(ctx: Ctx, ref: string): Promise<string> {
+export async function resolveWebsiteId(ctx: Ctx, ref: string): Promise<string> {
   if (/^[0-9a-f]{24}$/i.test(ref)) return ref;
   // La API pagina de 100 en 100; se recorre hasta encontrarlo.
   for (let offset = 0; ; offset += 100) {

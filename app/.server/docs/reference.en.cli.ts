@@ -108,12 +108,27 @@ The vault of your account (the same as /dash/developer/secrets and the \`secret_
 
 ### Domains
 
+Two kinds. Your **account's** domains serve your websites at \`<slug>.example.com\` and, if you assign one, at the root:
+
 \`\`\`bash
-easybits domains add sb_abc123 shop.example.com --port 3000   # prints the DNS record to create
-easybits domains verify sb_abc123 shop.example.com            # exits 1 until it is ready
-easybits domains ls sb_abc123
-easybits domains rm sb_abc123 shop.example.com --yes
+easybits domains ls
+easybits domains add example.com             # prints the DNS records to create
+easybits domains verify example.com          # TXT found → certificate issued
+easybits domains dns-auto example.com        # DNS in Mailmask? writes the records for you (--undo restores)
+easybits domains apex example.com my-shop    # serve a website at example.com and www (--clear removes it)
+easybits domains rm example.com --yes
 \`\`\`
+
+A **sandbox's** domains point a domain at a port of a sandbox or machine:
+
+\`\`\`bash
+easybits sandboxes domains add sb_abc123 shop.example.com --port 3000   # prints the DNS record to create
+easybits sandboxes domains verify sb_abc123 shop.example.com            # exits 1 until it is ready
+easybits sandboxes domains ls sb_abc123
+easybits sandboxes domains rm sb_abc123 shop.example.com --yes
+\`\`\`
+
+\`easybits domains <ls|add|verify|rm> <sandbox> …\` (the old form) still works: it runs \`sandboxes domains\` and says so on stderr. \`domains dns-auto\` without Mailmask connected exits 1 with the link to connect it once in a browser.
 
 ### Sites (site builder)
 
@@ -216,7 +231,7 @@ One rule, like \`gh\`: \`easybits <noun> <verb>\`. Older spellings keep working 
 
 ### Names instead of ids
 
-Every command that takes an agent, a sandbox or machine, a database or a site accepts its **name** as well as its id: \`easybits sb exec scratch -- ls\`, \`easybits domains ls shop\`, \`easybits machines deploy shop -m "v2"\`. An id (\`sb_…\`, or the 24-character id of agents, databases and sites) passes straight through; a name is matched exactly, case-insensitive, against your list (one request per run). If two share the name the CLI exits 2 and lists the ids; if none matches it exits 1 with the \`ls\` to run.
+Every command that takes an agent, a sandbox or machine, a database or a site accepts its **name** as well as its id: \`easybits sb exec scratch -- ls\`, \`easybits sb domains ls shop\`, \`easybits machines deploy shop -m "v2"\`. An id (\`sb_…\`, or the 24-character id of agents, databases and sites) passes straight through; a name is matched exactly, case-insensitive, against your list (one request per run). If two share the name the CLI exits 2 and lists the ids; if none matches it exits 1 with the \`ls\` to run.
 
 ### Files, websites and account
 

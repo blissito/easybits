@@ -72,11 +72,19 @@ easybits machines redeploy shop --tier focus --replace   # resize: new machine f
 easybits machines rm shop --yes      # release: stops billing, last backup, destroys the box
 easybits init --port 3000            # GitHub Actions workflow that deploys on every push
 
-# Domains
-easybits domains ls sb_abc123
-easybits domains add sb_abc123 shop.example.com --port 3000
-easybits domains verify sb_abc123 shop.example.com
-easybits domains rm sb_abc123 shop.example.com --yes
+# Domains of your account (serve your websites at <slug>.example.com and the root)
+easybits domains ls
+easybits domains add example.com             # prints the DNS records to create
+easybits domains verify example.com          # TXT found → certificate issued
+easybits domains dns-auto example.com        # DNS in Mailmask? writes the records for you (--undo restores)
+easybits domains apex example.com mi-tienda  # serve a website at example.com and www (--clear removes it)
+easybits domains rm example.com --yes
+
+# Domains on a sandbox or machine port (was `easybits domains … <sandbox>`; that still works)
+easybits sandboxes domains ls sb_abc123
+easybits sandboxes domains add sb_abc123 shop.example.com --port 3000
+easybits sandboxes domains verify sb_abc123 shop.example.com   # exit 1 until it is ready
+easybits sandboxes domains rm sb_abc123 shop.example.com --yes
 
 # Account secrets vault (values never come back; used by name: $secret:NAME, --secret NAME)
 easybits secrets ls
@@ -147,7 +155,7 @@ easybits docs --open   # open the docs in your browser
 ```
 
 **Names or ids.** Wherever a command takes an agent, a sandbox/machine, a database or a site, you can
-pass its name instead of the id (`easybits sb exec scratch -- ls`, `easybits domains ls shop`).
+pass its name instead of the id (`easybits sb exec scratch -- ls`, `easybits sb domains ls shop`).
 The match is exact and case-insensitive; if two share the name the CLI exits 2 and lists the ids.
 
 Shell completion: `source <(easybits completion zsh)` (or `bash`, `fish`).

@@ -254,12 +254,27 @@ La bóveda de tu cuenta (la misma de /dash/developer/secrets y de las tools MCP 
 
 ### Dominios
 
+Dos clases. Los de tu **cuenta** sirven tus sitios en \`<slug>.tienda.com\` y, si le asignas uno, en la raíz:
+
 \`\`\`bash
-easybits domains add sb_abc123 tienda.com --port 3000   # imprime el registro DNS a crear
-easybits domains verify sb_abc123 tienda.com            # sale con 1 mientras no esté listo
-easybits domains ls sb_abc123
-easybits domains rm sb_abc123 tienda.com --yes
+easybits domains ls
+easybits domains add tienda.com              # imprime los registros DNS a crear
+easybits domains verify tienda.com           # encuentra el TXT → emite el certificado
+easybits domains dns-auto tienda.com         # ¿DNS en Mailmask? escribe los registros por ti (--undo los restaura)
+easybits domains apex tienda.com mi-tienda   # sirve un sitio en tienda.com y www (--clear lo quita)
+easybits domains rm tienda.com --yes
 \`\`\`
+
+Los de una **caja** ligan un dominio a un puerto de un sandbox o máquina:
+
+\`\`\`bash
+easybits sandboxes domains add sb_abc123 tienda.com --port 3000   # imprime el registro DNS a crear
+easybits sandboxes domains verify sb_abc123 tienda.com            # sale con 1 mientras no esté listo
+easybits sandboxes domains ls sb_abc123
+easybits sandboxes domains rm sb_abc123 tienda.com --yes
+\`\`\`
+
+\`easybits domains <ls|add|verify|rm> <caja> …\` (la forma de antes) sigue funcionando: corre \`sandboxes domains\` y avisa en stderr. \`domains dns-auto\` sin Mailmask conectado sale con 1 y la liga para conectarlo una vez en el navegador.
 
 ### Sitios (creador de sitios)
 
@@ -362,7 +377,7 @@ Una sola regla, como \`gh\`: \`easybits <sustantivo> <verbo>\`. Las formas vieja
 
 ### Nombres en vez de ids
 
-Todo comando que recibe un agente, un sandbox o máquina, una base de datos o un sitio acepta su **nombre** además del id: \`easybits sb exec pruebas -- ls\`, \`easybits domains ls tienda\`, \`easybits machines deploy tienda -m "v2"\`. Un id (\`sb_…\`, o el id de 24 caracteres de agentes, bases y sitios) pasa directo; un nombre se busca exacto, sin distinguir mayúsculas, en tu lista (una petición por corrida). Si dos comparten el nombre, el CLI sale con 2 y enlista los ids; si ninguno coincide, sale con 1 y te dice qué \`ls\` correr.
+Todo comando que recibe un agente, un sandbox o máquina, una base de datos o un sitio acepta su **nombre** además del id: \`easybits sb exec pruebas -- ls\`, \`easybits sb domains ls tienda\`, \`easybits machines deploy tienda -m "v2"\`. Un id (\`sb_…\`, o el id de 24 caracteres de agentes, bases y sitios) pasa directo; un nombre se busca exacto, sin distinguir mayúsculas, en tu lista (una petición por corrida). Si dos comparten el nombre, el CLI sale con 2 y enlista los ids; si ninguno coincide, sale con 1 y te dice qué \`ls\` correr.
 
 ### Archivos, sitios y cuenta
 
@@ -890,7 +905,7 @@ Certificates are issued automatically on the first HTTPS request (wildcard regis
 
 **DNS hosted in Mailmask?** Skip the copy-paste. Connect Mailmask once (OAuth consent in the browser, \`/dash/integrations/mailmask/connect\`) and EasyBits writes these records into your Mailmask zone and verifies: \`POST /api/v2/domains/:domainId/dns-auto\` · MCP \`configure_domain_dns({ domainId })\`. It saves what was there before, so \`DELETE …/dns-auto\` / \`undo_domain_dns\` restores it (records you changed afterwards are left alone), and deleting the domain undoes them too. Without a connection the call returns \`MailmaskNotConnected\` with a \`connectUrl\`.
 
-REST: \`GET/POST/DELETE /domains\`, \`POST /domains/:domainId/verify\`, \`POST /domains/:domainId/apex\` \`{ websiteId | null }\`.
+REST: \`GET/POST/DELETE /domains\` (each domain carries \`dns\`: the records above, ready to create), \`POST /domains/:domainId/verify\`, \`POST /domains/:domainId/apex\` \`{ websiteId | null }\`.
 MCP: \`list_domains\`, \`add_domain\`, \`verify_domain\`, \`set_domain_website\`, \`delete_domain\`, \`configure_domain_dns\`, \`undo_domain_dns\`.
 
 ### List site-builder sites

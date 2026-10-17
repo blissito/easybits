@@ -55,3 +55,21 @@ test("agents create --timeout → --ttl", () => {
 test("--token no se confunde con un posicional", () => {
   assert.deepEqual(n("--token k deploy shop").argv, ["--token", "k", "machines", "deploy", "shop"]);
 });
+
+test("domains de caja (forma vieja) → sandboxes domains, con aviso", () => {
+  const add = n("domains add sb_1 shop.example.com --port 3000");
+  assert.deepEqual(add.argv, "sandboxes domains add sb_1 shop.example.com --port 3000".split(" "));
+  assert.equal(add.notes.length, 1);
+  assert.match(add.notes[0][0], /`easybits domains add <sandbox> …` is now `easybits sandboxes domains add/);
+  assert.deepEqual(n("domain ls shop").argv, ["sandboxes", "domains", "ls", "shop"]);
+  assert.deepEqual(n("domains verify sb_1 shop.example.com").argv, ["sandboxes", "domains", "verify", "sb_1", "shop.example.com"]);
+  assert.deepEqual(n("domains rm sb_1 shop.example.com --yes").argv, ["sandboxes", "domains", "rm", "sb_1", "shop.example.com", "--yes"]);
+});
+
+test("domains de la cuenta (forma nueva) pasa igual y sin aviso", () => {
+  for (const s of ["domains ls", "domains ls --json", "domains add example.com", "domains verify example.com", "domains rm example.com --yes", "domains apex example.com mi-tienda", "domains dns-auto example.com --undo"]) {
+    const r = n(s);
+    assert.deepEqual(r.argv, s.split(" "), s);
+    assert.equal(r.notes.length, 0, s);
+  }
+});

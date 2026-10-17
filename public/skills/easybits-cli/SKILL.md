@@ -162,11 +162,24 @@ given; if the person pastes one in chat, store it and refer to it by name from t
 
 ## Domains
 
+Account domains serve your websites at `<slug>.example.com` and, with `apex`, at the root:
+
 ```bash
-easybits domains add "$ID" shop.example.com --port 3000 --json   # returns the DNS record
-easybits domains verify "$ID" shop.example.com                   # exit 1 until ready
-easybits domains ls "$ID" --json
-easybits domains rm "$ID" shop.example.com --json --yes
+easybits domains add example.com --json        # {id, domain, txtToken, dns: [{name, type, values}]}
+easybits domains verify example.com            # exit 1 with the missing record until the TXT resolves
+easybits domains dns-auto example.com          # DNS in Mailmask: writes + verifies; exit 1 + connect link if not connected
+easybits domains apex example.com my-shop      # website (slug or id) at the root and www; --clear removes it
+easybits domains ls --json
+easybits domains rm example.com --json --yes
+```
+
+A domain on a sandbox or machine PORT is `sandboxes domains` (the old `domains add <sandbox> …` still works):
+
+```bash
+easybits sandboxes domains add "$ID" shop.example.com --port 3000 --json   # returns the DNS record
+easybits sandboxes domains verify "$ID" shop.example.com                   # exit 1 until ready
+easybits sandboxes domains ls "$ID" --json
+easybits sandboxes domains rm "$ID" shop.example.com --json --yes
 ```
 
 ## Site-builder sites (/dash/sitios)

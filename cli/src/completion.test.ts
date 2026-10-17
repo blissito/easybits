@@ -12,7 +12,7 @@ test("comandos, subcomandos y flags salen de la tabla", () => {
   assert.ok(top.kind === "words" && !top.words.some((w) => w.startsWith("__")));
   const subs = words("agents");
   assert.ok(subs.kind === "words" && subs.words.includes("export") && subs.words.includes("get"));
-  assert.deepEqual(words("sb"), { kind: "words", words: ["ls", "create", "get", "exec", "logs", "files", "suspend", "resume", "destroy", "snapshot"] });
+  assert.deepEqual(words("sb"), { kind: "words", words: ["ls", "create", "get", "exec", "logs", "files", "domains", "suspend", "resume", "destroy", "snapshot"] });
   const flags = words("apply ./x", "--");
   assert.ok(flags.kind === "words" && flags.words.includes("--prune") && flags.words.includes("--json"));
 });
@@ -24,7 +24,7 @@ test("nombres donde va un recurso", () => {
   assert.deepEqual(words("sb exec"), { kind: "names", ref: "sandbox" });
   assert.deepEqual(words("sandboxes files ls"), { kind: "names", ref: "sandbox" });
   assert.deepEqual(words("db query"), { kind: "names", ref: "db" });
-  assert.deepEqual(words("domains add"), { kind: "names", ref: "sandbox" });
+  assert.deepEqual(words("sb domains add"), { kind: "names", ref: "sandbox" });
   assert.deepEqual(words("apply ./x --agent"), { kind: "names", ref: "agent" });
   assert.deepEqual(words("agents create --like"), { kind: "names", ref: "agent" });
   // el valor de un flag con valor no cuenta como posicional
