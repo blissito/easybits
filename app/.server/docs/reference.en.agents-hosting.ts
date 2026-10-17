@@ -484,6 +484,8 @@ Defaults: \`tier: "micro"\` (nano is 256MB — it does NOT survive a Node build)
 - Express 5 rejects \`app.all("*", …)\` (path-to-regexp 8). Use \`app.use(handler)\`.
 - Public GitHub repos clone without a token. A private one: a **clean** URL + the token separately in \`repoToken\` (accepts \`$secret:NAME\`). **Do not put the token in the URL** (\`https://x-access-token:TOKEN@…\`): it is rejected with 422 \`RepoUrlHasCredentials\`, because git would store it in \`.git/config\` inside the box.
 
+⚠️ **PHP: no URL ending in \`.php\` is served.** The EasyBits edge answers 404 to every \`.php\`/\`.asp\`/\`.jsp\` path and to dotfiles (\`/.env\`, \`/.git\`, \`wp-admin\`…) before they reach the box: they are what scanners probe most, and every probe used to wake sleeping boxes. PHP does work behind a front controller with clean URLs (Laravel, Symfony, Slim: \`/login\`, not \`/login.php\`); classic WordPress or pages like \`/contact.php\` do not. \`launch_app\` flags it in \`warnings\` when it finds \`composer.json\` or \`.php\` files.
+
 **Redeploy the same machine from the repo** (the direct flow, no workflow): secrets first, then \`launch_app({ sandboxId, repo, … })\`. It publishes a new release (v2, v3…) and restarts the app in ~18 s. \`sandboxId\` is the TARGET; \`repo\` the source.
 
 **Measured times** with a real React Router v7 app (204 MB of \`node_modules\`, 49.5 MB release), on tier \`micro\`:

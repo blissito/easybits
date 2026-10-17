@@ -1178,6 +1178,25 @@ export interface LaunchResult {
   exitCode: number;
   buildOutput?: string;
   domain?: { domain: string; url: string; dns: unknown };
+  /** Avisos que no impiden el despliegue pero el agente debe pasarle al dueño (p. ej. PHP). */
+  warnings?: string[];
+}
+
+// El borde (Caddy, snippet bot_shield en sandbox-host) responde 404 a TODA ruta que termine
+// en .php/.asp/.jsp y a los dotfiles: es lo que más sondean los escáneres. Una app PHP sólo
+// sirve con front controller y URLs limpias (Laravel, Symfony, Slim); WordPress o PHP «de
+// archivos» (/contacto.php) no. Se avisa al desplegar para que no lo descubra el cliente.
+export const PHP_EDGE_WARNING =
+  "Esta app parece PHP. El borde de EasyBits responde 404 a cualquier URL que termine en .php (y a /.env, /.git, wp-admin…) para cortar escáneres. Funciona con front controller y URLs limpias (Laravel, Symfony, Slim: /login, no /login.php); WordPress clásico o páginas como /contacto.php no van a responder.";
+
+async function detectPhpApp(owner: string, sandboxId: string, appDir: string): Promise<boolean> {
+  const res = await execSandboxRaw(
+    owner,
+    sandboxId,
+    `cd ${shQuote(appDir)} 2>/dev/null && { [ -f composer.json ] || ls *.php public/*.php >/dev/null 2>&1; } && echo PHP || true`,
+    15
+  ).catch(() => null);
+  return !!res?.stdout?.includes("PHP");
 }
 
 /**
@@ -1545,6 +1564,7 @@ export async function launchApp(
       domain = { domain: d.domain, url: d.url, dns: (d as any).dns };
     }
 
+    const isPhp = await detectPhpApp(owner, sandboxId, merged.appDir);
     return {
       sandboxId,
       url: exposed.url,
@@ -1553,6 +1573,7 @@ export async function launchApp(
       exitCode: 0,
       buildOutput: started.buildOutput,
       domain,
+      ...(isPhp ? { warnings: [PHP_EDGE_WARNING] } : {}),
     };
   } catch (err: any) {
     if (!createdHere && codeReplaced && previousReleaseId) {

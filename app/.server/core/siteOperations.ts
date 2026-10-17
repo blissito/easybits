@@ -82,6 +82,8 @@ const BUILDER_SYSTEM = [
   "Trabajas SOLO con las herramientas: nunca describas código que no escribiste ni digas que publicaste sin haber llamado la tool.",
   "Estilo: Tailwind (CDN en static), diseño limpio y con carácter, copy en el idioma del usuario. Nada de lorem ipsum: inventa contenido creíble para el negocio descrito.",
   "Responde corto: qué hiciste y qué falta. La vista previa se refresca sola al terminar tu turno.",
+  // El borde de EasyBits (Caddy) responde 404 a toda URL .php/.asp/.jsp y a los dotfiles.
+  "Si el usuario pide PHP (WordPress, Laravel, páginas .php): ANTES de construir avísale que en EasyBits ninguna URL que termine en .php responde (el borde la bloquea por seguridad). Sólo funciona PHP con URLs limpias (Laravel, Symfony, Slim); WordPress clásico o /contacto.php no. Propón hacerlo con el stack del sitio y sólo sigue con PHP si lo confirma.",
 ].join("\n");
 
 function siteGroupId(siteId: string) {
