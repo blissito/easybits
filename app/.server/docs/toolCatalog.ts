@@ -59,6 +59,7 @@ const PREFIX_GROUPS: Array<[RegExp, string]> = [
   [/^(.*webhook.*)/, "core"],
   [/^(.*ai_key.*|list_providers)/, "core"],
   [/(website)/, "sites"],
+  [/^(list_crons|get_cron_runs|run_cron|pause_cron)$/, "admin-crons"],
   [/^(discover_tools|run_tool)/, "scripting"],
   [/^agent_/, "sandbox"],
   [/(scorecard|screening_report)/, "magnet"],
@@ -93,9 +94,18 @@ export function getToolCatalog(): CatalogTool[] {
   return cached;
 }
 
+// Buckets que no son grupos de conector (no viven en TOOL_GROUPS) pero sí agrupan tools.
+const EXTRA_GROUPS: Record<string, { label: string; description: string }> = {
+  "admin-crons": {
+    label: "Crons (admin)",
+    description:
+      "Sólo superusuarios de la plataforma: estado e historial de las tareas programadas, y PROPONER correr o pausar una (el humano aprueba con su sesión). Lo usa el asistente del panel /dash/admin/crons.",
+  },
+};
 const groupLabel = (key: string) =>
-  TOOL_GROUPS.find((g) => g.key === key)?.label ?? (key === "otras" ? "Otras" : key);
-const groupDescription = (key: string) => TOOL_GROUPS.find((g) => g.key === key)?.description ?? "";
+  TOOL_GROUPS.find((g) => g.key === key)?.label ?? EXTRA_GROUPS[key]?.label ?? (key === "otras" ? "Otras" : key);
+const groupDescription = (key: string) =>
+  TOOL_GROUPS.find((g) => g.key === key)?.description ?? EXTRA_GROUPS[key]?.description ?? "";
 
 /** Descripciones largas hacen ilegible una tabla; el detalle está en el schema de la tool. */
 const truncate = (s: string, max = 120) => (s.length <= max ? s : `${s.slice(0, max - 1)}…`);
@@ -110,7 +120,7 @@ export function renderToolCatalogMarkdown(): string {
     byGroup.set(t.group, list);
   }
   // El orden de TOOL_GROUPS es el orden de presentación; "otras" al final.
-  const order = [...TOOL_GROUPS.map((g) => g.key).filter((k) => byGroup.has(k)), "otras"].filter(
+  const order = [...TOOL_GROUPS.map((g) => g.key).filter((k) => byGroup.has(k)), ...Object.keys(EXTRA_GROUPS), "otras"].filter(
     (k, i, a) => byGroup.has(k) && a.indexOf(k) === i
   );
 

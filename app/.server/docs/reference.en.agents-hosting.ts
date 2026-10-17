@@ -626,6 +626,17 @@ Daily machine backups, their rotation, the hosting monitor (every 5 min) and the
 - \`GET /api/v2/admin/crons/:key/runs\` — last 50 runs with the full error.
 - \`POST /api/v2/admin/crons/:key/run\` — runs it in the background (\`trigger: "manual"\`) and answers 202 right away. 409 if it is already running or paused.
 - \`POST /api/v2/admin/crons/:key/pause\` — \`{ "paused": true | false }\`. While paused, the route answers \`{ "skipped": "paused" }\` without running.
+
+#### Panel assistant
+\`/dash/admin/crons\` has an assistant (a fleet agent, "Asistente de admin", one per superuser) that answers only with data from these MCP tools of the \`admin-crons\` group:
+
+- \`list_crons\` — the same status as \`GET /api/v2/admin/crons\`.
+- \`get_cron_runs({ job, limit? })\` — latest runs with the full error; this is how it explains why a job failed.
+- \`run_cron({ job })\` and \`pause_cron({ job, paused })\` — **do not execute**: they create a pending action and return \`{ needs_confirmation: true, actionId, summary }\` (a success, not an error, so the model does not retry). The summary is built from the real job name, never from model text.
+
+All four require a superuser; the two that propose need the \`WRITE\` scope, not \`ADMIN\`: the assistant's key lives in its microVM and with \`ADMIN\` it could skip the confirmation by calling the API directly.
+
+Confirmation: the chat (\`POST /api/v2/admin/copilot/chat\` with \`{ text, context?: { page, job? } }\`, SSE; \`GET ?attach=1\` to reattach) emits a \`permission\` event \`{ id, title, tool, options }\` for each proposal. It is resolved with \`POST /api/v2/admin/agent-actions/:id\` \`{ "decision": "approve" | "reject" }\` using **only the session** of the superuser who proposed it (any \`Authorization\` → 403). It runs exactly once (a second click → 409) and expires after 15 min.
 `;
 
 export const EN_EVE = `## eve (Vercel) on EasyBits

@@ -450,6 +450,12 @@ async function pickHost(vmMemMb: number): Promise<{ url: string; freeMb: number 
 type Persona = {
   name?: string;
   env?: Record<string, string>;
+  /**
+   * Secreto del vault del dueño que va como EASYBITS_API_KEY (en vez de la llave general
+   * `EASYBITS_API_KEY`). Para agentes que necesitan una llave con scopes propios, p. ej. el
+   * copiloto de crons (READ/WRITE, nunca ADMIN). Nunca se escribe en claro en persona.env.
+   */
+  easybitsKeySecret?: string;
   seedFiles?: Array<{ name: string; contentBase64: string }>;
 };
 
@@ -1783,6 +1789,10 @@ export async function buildSpawnEnv(ctx: AuthContext, fleetAgent: SpawnEnvAgent)
   // malicioso puede llegar a leer — no debe poder administrar ni borrar el agente.
   // El vault es el del DUEÑO del agente, no el del ctx: con "operar como" el ctx puede
   // ser un delegado, y el secreto acabaría en la cuenta equivocada.
+  if (persona.easybitsKeySecret && !env.EASYBITS_API_KEY) {
+    const value = await getSecretValue(ctx.user.id, persona.easybitsKeySecret).catch(() => null);
+    if (value) env.EASYBITS_API_KEY = value;
+  }
   env.FLEET_TOKEN = (await ensureWorkerTokens(fleetAgent)).message;
   env.FLEET_WA_ACTION_URL = `${appBaseUrl()}/api/v2/fleet-agents/wa-action`;
   // Modelo del worker — persona.env gana (override por-agente), si no el default

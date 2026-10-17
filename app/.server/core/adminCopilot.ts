@@ -1,0 +1,152 @@
+// Copiloto del panel de crons (/dash/admin/crons): un FleetAgent «Asistente de admin» por
+// superusuario, creado al primer mensaje (como el builder de Sitios). Corre con el motor
+// medido (ghosty-gc → proxy de tokens) y SÓLO el grupo `admin-crons`: lee estado e
+// historial y PROPONE correr/pausar; el humano aprueba en la tarjeta con su sesión.
+import type { AuthContext } from "~/.server/apiAuth";
+import { db } from "~/.server/db";
+import { getUserOrNull, isAdminUser } from "~/.server/getters";
+import { createApiKey } from "~/.server/iam";
+import { createFleetAgent, recycleFleetAgentBoxes } from "./fleetAgentOperations";
+import { createSecret, getSecretValue } from "./secretOperations";
+import { DEFAULT_SITE_ENGINE, getEngine } from "~/lib/fleetEngines";
+import { getCronJob } from "~/lib/cronJobs";
+import { pendingActionsSince, type PendingActionView } from "./agentActions";
+import type { TurnEvent } from "./siteTurns.server";
+
+export const ADMIN_COPILOT_NAME = "Asistente de admin";
+const TOOL_GROUP = "admin-crons";
+/** Llave propia del copiloto en el vault: READ/WRITE (WRITE la pide el proxy medido), nunca ADMIN. */
+export const ADMIN_COPILOT_KEY_SECRET = "EASYBITS_ADMIN_COPILOT_KEY";
+
+export const ADMIN_COPILOT_SYSTEM = [
+  "Eres el asistente del panel de tareas programadas (crons) de la plataforma EasyBits. Hablas con un superusuario, en español de México, sin voseo.",
+  "Respondes SÓLO con lo que devuelven tus herramientas (list_crons, get_cron_runs). Nunca calcules, estimes ni inventes números, fechas o duraciones: cítalos tal como vienen.",
+  "Si te preguntan por qué falló una tarea, llama get_cron_runs y explica el `error` de la corrida fallida en palabras simples; si no hay error registrado, dilo.",
+  "Para correr o pausar/reanudar una tarea SIEMPRE llama run_cron o pause_cron. Esas herramientas no ejecutan: crean una tarjeta de aprobación. Dile al usuario que la apruebe en la tarjeta; no digas que ya se ejecutó y no reintentes.",
+  "Sé breve: lo que encontraste y, si aplica, qué sigue. Sin relleno.",
+].join("\n");
+
+export const adminCopilotGroupId = (userId: string) => `admin-crons:${userId}`;
+
+/** Llave del copiloto: se mintea una vez (READ/WRITE) y vive en el vault del superusuario. */
+async function ensureCopilotKey(ctx: AuthContext) {
+  if (await getSecretValue(ctx.user.id, ADMIN_COPILOT_KEY_SECRET).catch(() => null)) return;
+  const minted = await createApiKey(ctx.user.id, { name: "admin-copilot", scopes: ["READ", "WRITE"] });
+  await createSecret(ctx.user.id, { name: ADMIN_COPILOT_KEY_SECRET, value: minted.raw });
+}
+
+/** El copiloto del superusuario; se crea al primer mensaje (lazy). */
+export async function ensureAdminCopilot(ctx: AuthContext): Promise<{ id: string }> {
+  await ensureCopilotKey(ctx);
+  const existing = await db.fleetAgent.findFirst({
+    where: { ownerId: ctx.user.id, name: ADMIN_COPILOT_NAME },
+    select: { id: true, persona: true },
+  });
+  const engine = getEngine(DEFAULT_SITE_ENGINE)!;
+  const env: Record<string, string> = {
+    ...(engine.env ?? {}),
+    EASYBITS_TOOL_GROUP: TOOL_GROUP,
+    // ghosty-gc arma su MCP con EASYBITS_TOOLS, no con EASYBITS_TOOL_GROUP.
+    EASYBITS_TOOLS: TOOL_GROUP,
+    SYSTEM_PROMPT: ADMIN_COPILOT_SYSTEM,
+    ASSISTANT_NAME: ADMIN_COPILOT_NAME,
+  };
+  if (existing) {
+    // Prompt/toolset cambiados en código: se reescriben y se recicla la caja (el mcp.json de
+    // ghosty-gc nace con la caja).
+    const persona = (existing.persona as { env?: Record<string, string>; easybitsKeySecret?: string } | null) ?? {};
+    const stale =
+      persona.easybitsKeySecret !== ADMIN_COPILOT_KEY_SECRET ||
+      Object.entries(env).some(([k, v]) => persona.env?.[k] !== v);
+    if (stale) {
+      await db.fleetAgent.update({
+        where: { id: existing.id },
+        data: { persona: { ...persona, easybitsKeySecret: ADMIN_COPILOT_KEY_SECRET, env: { ...(persona.env ?? {}), ...env } } },
+      });
+      await recycleFleetAgentBoxes({ id: existing.id, ownerId: ctx.user.id }).catch(() => {});
+    }
+    return { id: existing.id };
+  }
+  const created = await createFleetAgent(ctx, {
+    name: ADMIN_COPILOT_NAME,
+    workerTemplate: engine.template,
+    persona: { name: ADMIN_COPILOT_NAME, env, easybitsKeySecret: ADMIN_COPILOT_KEY_SECRET },
+    idleSuspendMin: 2,
+  });
+  return { id: created.id };
+}
+
+export type CopilotContext = { page?: string; job?: string };
+
+/** Lee `context` del body sin confiar en él: sólo campos conocidos y cortos. */
+export function parseCopilotContext(raw: unknown): CopilotContext | null {
+  if (!raw || typeof raw !== "object") return null;
+  const r = raw as Record<string, unknown>;
+  const page = typeof r.page === "string" ? r.page.slice(0, 40) : undefined;
+  const job = typeof r.job === "string" && getCronJob(r.job) ? r.job : undefined;
+  return page || job ? { page, job } : null;
+}
+
+/** Lo que el usuario ve, como prefijo del texto del turno (en sesión caliente el append de sistema no siempre llega). */
+export function copilotTurnText(text: string, context: CopilotContext | null): string {
+  if (!context) return text;
+  const parts: string[] = [];
+  if (context.page) parts.push(`pantalla: ${context.page}`);
+  if (context.job) {
+    const job = getCronJob(context.job)!;
+    parts.push(`tarea seleccionada: ${job.key} («${job.name}»)`);
+  }
+  return `[Contexto del panel — ${parts.join("; ")}]\n${text}`;
+}
+
+/** Evento `permission` (forma de ACP/Ghosty) para la tarjeta de aprobación. */
+export function permissionEvent(a: PendingActionView): TurnEvent {
+  return {
+    type: "permission",
+    id: a.id,
+    title: a.summary,
+    tool: a.tool,
+    expiresAt: a.expiresAt,
+    options: [
+      { optionId: "approve", name: "Aprobar", kind: "allow_once" },
+      { optionId: "reject", name: "Rechazar", kind: "reject_once" },
+    ],
+  };
+}
+
+/** `afterTool` del turno: las propuestas nacidas en él salen como `permission`. */
+export function copilotAfterTool(ownerId: string) {
+  return async (startedAt: Date) => (await pendingActionsSince(ownerId, startedAt)).map(permissionEvent);
+}
+
+/**
+ * SESIÓN de superusuario y nada más. Cualquier `Authorization` (llave de API, token de
+ * turno, token de flota) se rechaza aunque venga con cookie: si la llave del agente
+ * alcanzara la aprobación, el agente se aprobaría a sí mismo. En POST, además, el
+ * `Origin` (si viene) debe ser el propio: una cookie no basta contra un form de otro sitio.
+ */
+export async function requireAdminSession(request: Request) {
+  if (request.headers.get("Authorization")) {
+    throw Response.json({ error: "session_required", message: "Sólo con la sesión del panel, no con llaves." }, { status: 403 });
+  }
+  if (request.method !== "GET") {
+    const origin = request.headers.get("Origin");
+    if (origin && origin !== new URL(request.url).origin && !sameHost(origin, request)) {
+      throw Response.json({ error: "bad_origin" }, { status: 403 });
+    }
+  }
+  const user = await getUserOrNull(request).catch(() => null);
+  if (!user) throw Response.json({ error: "Unauthorized" }, { status: 401 });
+  if (!isAdminUser(user)) throw Response.json({ error: "Forbidden", reason: "platform_admin_only" }, { status: 403 });
+  return { user, scopes: ["READ", "WRITE"] } as AuthContext;
+}
+
+// Detrás de Caddy `request.url` puede traer http://localhost:3001; se compara contra Host.
+function sameHost(origin: string, request: Request) {
+  const host = request.headers.get("X-Forwarded-Host") ?? request.headers.get("Host");
+  try {
+    return !!host && new URL(origin).host === host;
+  } catch {
+    return false;
+  }
+}

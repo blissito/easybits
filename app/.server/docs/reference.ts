@@ -2090,6 +2090,17 @@ Los respaldos diarios de máquinas, su rotación, el monitor de hosting (cada 5 
 - \`GET /api/v2/admin/crons/:key/runs\` — últimas 50 corridas con el error completo.
 - \`POST /api/v2/admin/crons/:key/run\` — la corre en segundo plano (\`trigger: "manual"\`) y responde 202 al instante. 409 si ya está corriendo o en pausa.
 - \`POST /api/v2/admin/crons/:key/pause\` — \`{ "paused": true | false }\`. En pausa, la ruta responde \`{ "skipped": "paused" }\` sin correr.
+
+#### Asistente del panel
+En \`/dash/admin/crons\` hay un asistente (un agente de la flota, «Asistente de admin», uno por superusuario) que responde sólo con datos de estas tools MCP del grupo \`admin-crons\`:
+
+- \`list_crons\` — el mismo estado que \`GET /api/v2/admin/crons\`.
+- \`get_cron_runs({ job, limit? })\` — últimas corridas con el error completo; con esto explica por qué falló una tarea.
+- \`run_cron({ job })\` y \`pause_cron({ job, paused })\` — **no ejecutan**: crean una acción pendiente y devuelven \`{ needs_confirmation: true, actionId, summary }\` (éxito, no error, para que el modelo no reintente). El resumen se arma con el nombre real de la tarea, no con texto del modelo.
+
+Las cuatro exigen ser superusuario; las dos que proponen piden scope \`WRITE\`, no \`ADMIN\`: la llave del asistente vive en su microVM y con \`ADMIN\` podría saltarse la confirmación llamando la API directa.
+
+Confirmación: el chat (\`POST /api/v2/admin/copilot/chat\` con \`{ text, context?: { page, job? } }\`, SSE; \`GET ?attach=1\` para re-engancharse) emite un evento \`permission\` \`{ id, title, tool, options }\` por cada propuesta. Se resuelve con \`POST /api/v2/admin/agent-actions/:id\` \`{ "decision": "approve" | "reject" }\` usando **sólo la sesión** del superusuario que la propuso (cualquier \`Authorization\` → 403). Se ejecuta una sola vez (un segundo clic → 409) y vence a los 15 min.
 `,
 
   databases: `## Databases (SQLite-as-a-Service)

@@ -30,6 +30,7 @@ import { registerStructuredDocTool } from "./structured/tool";
 import { applyToolAnnotations } from "./toolAnnotations";
 import { CLAUDE_DIRECTORY_DESCRIPTION_EDITS, GROUP_ALLOWLISTS, GROUP_HIDDEN_SCOPE, DYNAMIC_ONLY_TOOLS, TOOL_GROUPS, isStrictGroup, type ToolGroupKey } from "./toolGroups";
 import { importHtml, type ImportHtmlInput } from "./tools/importHtml";
+import { registerAdminCronTools } from "./tools/adminCrons";
 import { safeImageBlock } from "./safeImageBlock";
 import { offloadOversizedRead } from "./offloadOversizedRead";
 import { installDynamicTools } from "./dynamicTools";
@@ -595,6 +596,8 @@ export function createMcpServer(groups?: string[], denyTools?: string[]) {
   registerSiteTools(server);
   registerBrandTools(server);
   registerVideoTools(server);
+  // Copiloto del panel de crons: sólo superusuarios (el handler lo exige, ver adminCrons.ts).
+  registerAdminCronTools(server, wrapHandler);
 
   // Apply the group's allowlist by disabling tools outside it.
   // Disabled tools stay in `_registeredTools`, so `run_tool` can still

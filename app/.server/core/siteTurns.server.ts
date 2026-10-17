@@ -51,7 +51,7 @@ export class AppDraining extends Error {
 
 export class TurnBusy extends Error {
   constructor(readonly activeTurnId: string) {
-    super("Ya hay un turno en curso en este sitio");
+    super("Ya hay un turno en curso en esta conversación");
   }
 }
 
@@ -73,20 +73,40 @@ export function continuePrompt(userText: string) {
   ].join("\n");
 }
 
+/** Lo que el turno le manda al agente, armado justo antes de rutearlo. */
+type TurnMessage = { text: string; image?: { base64: string; ext: string }; appendSystemPrompt?: string };
+
+/**
+ * Un turno durable de cualquier superficie del dashboard que hable con un FleetAgent por
+ * `groupId` (Sitios, copiloto del panel de crons). Lo propio de cada superficie va en
+ * `prepare` (qué se le dice al agente) y `afterTool` (eventos extra, p. ej. `permission`).
+ */
+export type AgentTurnSpec = {
+  surface: string;
+  groupId: string;
+  fleetAgentId: string;
+  siteId?: string | null;
+  sender: string;
+  /** Lo que escribió el usuario: es lo que recibe el agente (vía `prepare`). */
+  text: string;
+  /** Lo que se guarda como `userText` del turno (default: `text`). */
+  storedText?: string;
+  turnId?: string;
+  continueTurnId?: string;
+  prepare: (agentText: string) => Promise<TurnMessage>;
+  /** Tras cada herramienta que termina y al cerrar: eventos extra a emitir (sin repetir por `id`). */
+  afterTool?: (startedAt: Date) => Promise<TurnEvent[]>;
+};
+
 /**
  * Arranca un turno y regresa su id SIN esperar a que termine. Idempotente por `turnId`
- * (un reintento del navegador no duplica el turno); `TurnBusy` si ya corre otro en el sitio.
+ * (un reintento del navegador no duplica el turno); `TurnBusy` si ya corre otro en el grupo.
  */
-export async function startSiteTurn(
-  ctx: AuthContext,
-  site: Site,
-  builder: { id: string },
-  input: { text: string; selection: Selection; image?: { base64: string; ext: string }; turnId?: string; continueTurnId?: string }
-): Promise<{ turnId: string }> {
+export async function startAgentTurn(ctx: AuthContext, spec: AgentTurnSpec): Promise<{ turnId: string }> {
   if (isDraining()) throw new AppDraining();
-  const groupId = siteGroupId(site.id);
-  if (input.turnId) {
-    const same = await db.fleetTurn.findUnique({ where: { turnId: input.turnId }, select: { turnId: true, groupId: true } });
+  const { groupId } = spec;
+  if (spec.turnId) {
+    const same = await db.fleetTurn.findUnique({ where: { turnId: spec.turnId }, select: { turnId: true, groupId: true } });
     if (same?.groupId === groupId) return { turnId: same.turnId };
   }
   const running = live.get(groupId);
@@ -96,47 +116,87 @@ export async function startSiteTurn(
   const stillRunning = await db.fleetTurn.findFirst({ where: { groupId, state: "running" }, select: { turnId: true } });
   if (stillRunning) throw new TurnBusy(stillRunning.turnId);
 
-  let userText = input.text;
-  let agentText = input.text;
+  let userText = spec.storedText ?? spec.text;
+  let agentText = spec.text;
   let continuesTurnId: string | undefined;
-  if (input.continueTurnId) {
-    const prev = await db.fleetTurn.findUnique({ where: { turnId: input.continueTurnId } });
+  if (spec.continueTurnId) {
+    const prev = await db.fleetTurn.findUnique({ where: { turnId: spec.continueTurnId } });
     if (!prev || prev.groupId !== groupId) throw new Response("Turno no encontrado", { status: 404 });
     userText = prev.userText;
     agentText = continuePrompt(prev.userText);
     continuesTurnId = prev.turnId;
   }
-  const turnId = input.turnId && /^[a-zA-Z0-9-]{8,64}$/.test(input.turnId) ? input.turnId : crypto.randomUUID();
+  const turnId = spec.turnId && /^[a-zA-Z0-9-]{8,64}$/.test(spec.turnId) ? spec.turnId : crypto.randomUUID();
+  const startedAt = new Date();
   await db.fleetTurn.create({
     data: {
       turnId,
-      surface: "sites",
+      surface: spec.surface,
       ownerId: ctx.user.id,
-      fleetAgentId: builder.id,
+      fleetAgentId: spec.fleetAgentId,
       groupId,
-      siteId: site.id,
+      siteId: spec.siteId ?? null,
       state: "running",
-      userText: continuesTurnId ? userText : userLine(input.text, input.selection),
+      userText,
       instance: INSTANCE,
       continuesTurnId: continuesTurnId ?? null,
+      startedAt,
     },
   });
   const l: Live = { turnId, groupId, text: "", tools: [], cortes: [], finished: false, listeners: new Set() };
   live.set(groupId, l);
-  void runSiteTurn(ctx, site, builder, l, { ...input, agentText, isContinue: !!continuesTurnId }).catch((e) =>
-    console.error("[sites] turno", turnId, e)
+  void runAgentTurn(spec, l, { agentText, isContinue: !!continuesTurnId, startedAt }).catch((e) =>
+    console.error(`[${spec.surface}] turno`, turnId, e)
   );
   return { turnId };
 }
 
-async function runSiteTurn(
+/**
+ * Turno de Sitios: el agente recibe la selección y la imagen en el texto, y el prompt del
+ * sitio (con su caja) como append de sistema.
+ */
+export async function startSiteTurn(
   ctx: AuthContext,
   site: Site,
   builder: { id: string },
-  l: Live,
-  input: { selection: Selection; image?: { base64: string; ext: string }; agentText: string; isContinue: boolean }
-) {
+  input: { text: string; selection: Selection; image?: { base64: string; ext: string }; turnId?: string; continueTurnId?: string }
+): Promise<{ turnId: string }> {
   const { selection, image } = input;
+  return startAgentTurn(ctx, {
+    surface: "sites",
+    groupId: siteGroupId(site.id),
+    fleetAgentId: builder.id,
+    siteId: site.id,
+    sender: "sitios",
+    text: input.text,
+    storedText: userLine(input.text, selection),
+    turnId: input.turnId,
+    continueTurnId: input.continueTurnId,
+    prepare: async (agentText) => {
+      // Si el sembrado al crear el sitio falló (caja aún arrancando), se repite aquí
+      // antes de que el agente encuentre /app vacío. Nunca bloquea el turno.
+      const machine = (await ensureSiteMachine(ctx, site).catch((e) => console.error("[sites] ensureSiteMachine", site.sandboxId, e))) ?? {};
+      // Revivida desde el archivo: el prompt del turno debe nombrar la caja nueva.
+      if (machine.revived) Object.assign(site, await getSite(ctx, site.id));
+      return {
+        // La selección va EN el texto (no solo en el system append): en una
+        // sesión caliente el appendSystemPrompt por turno no siempre llega.
+        text: [
+          selection
+            ? `[Elemento seleccionado en la vista previa: <${selection.tag} data-eb-id="${selection.id}">. Modifica SOLO ese nodo.]`
+            : "",
+          image ? "[El usuario adjuntó una imagen (mockup/referencia): mírala antes de responder y úsala como guía visual.]" : "",
+          agentText,
+        ].filter(Boolean).join("\n"),
+        image,
+        appendSystemPrompt: siteTurnPrompt(site, selection, machine),
+      };
+    },
+  });
+}
+
+async function runAgentTurn(spec: AgentTurnSpec, l: Live, input: { agentText: string; isContinue: boolean; startedAt: Date }) {
+  const builderId = spec.fleetAgentId;
   let dirty = false;
   const flush = () =>
     db.fleetTurn
@@ -148,37 +208,41 @@ async function runSiteTurn(
     dirty = false;
     void flush();
   }, HEARTBEAT_MS);
+  // Eventos extra de la superficie (p. ej. `permission`), cada `id` una sola vez.
+  const extraSeen = new Set<string>();
+  const emitExtras = async () => {
+    if (!spec.afterTool) return;
+    const evs = await spec.afterTool(input.startedAt).catch((e) => {
+      console.error(`[${spec.surface}] afterTool`, l.turnId, e);
+      return [] as TurnEvent[];
+    });
+    for (const e of evs) {
+      const key = `${e.type}:${String(e.id ?? "")}`;
+      if (extraSeen.has(key)) continue;
+      extraSeen.add(key);
+      emit(l, e);
+    }
+  };
+  let extras = Promise.resolve();
   let state = "done";
   let error: string | null = null;
   let reply = "";
   try {
-    // Si el sembrado al crear el sitio falló (caja aún arrancando), se repite aquí
-    // antes de que el agente encuentre /app vacío. Nunca bloquea el turno.
-    const machine = (await ensureSiteMachine(ctx, site).catch((e) => console.error("[sites] ensureSiteMachine", site.sandboxId, e))) ?? {};
-    // Revivida desde el archivo: el prompt del turno debe nombrar la caja nueva.
-    if (machine.revived) Object.assign(site, await getSite(ctx, site.id));
+    const msg = await spec.prepare(input.agentText);
     if (input.isContinue) {
       await db.fleetAgentMessage
-        .create({ data: { fleetAgentId: builder.id, groupId: l.groupId, role: "user", text: "Continuar" } })
+        .create({ data: { fleetAgentId: builderId, groupId: l.groupId, role: "user", text: "Continuar" } })
         .catch(() => undefined);
     }
     reply = await withAdmitRetry(() =>
       routeMessage(
-        builder.id,
+        builderId,
         {
           groupId: l.groupId,
-          sender: "sitios",
-          // La selección va EN el texto (no solo en el system append): en una
-          // sesión caliente el appendSystemPrompt por turno no siempre llega.
-          text: [
-            selection
-              ? `[Elemento seleccionado en la vista previa: <${selection.tag} data-eb-id="${selection.id}">. Modifica SOLO ese nodo.]`
-              : "",
-            image ? "[El usuario adjuntó una imagen (mockup/referencia): mírala antes de responder y úsala como guía visual.]" : "",
-            input.agentText,
-          ].filter(Boolean).join("\n"),
-          image,
-          appendSystemPrompt: siteTurnPrompt(site, selection, machine),
+          sender: spec.sender,
+          text: msg.text,
+          image: msg.image,
+          appendSystemPrompt: msg.appendSystemPrompt,
         },
         {
           turnId: l.turnId,
@@ -197,11 +261,12 @@ async function runSiteTurn(
             }
             dirty = true;
             emit(l, { type: "tool", name, phase: ev?.phase, ok: ev?.ok });
+            if (ev?.phase === "end") extras = extras.then(emitExtras);
           },
         }
       )
     );
-    await saveNarrated(builder.id, l.groupId, reply, l.text, l.cortes).catch((e) => console.error("[sites] narración", e));
+    await saveNarrated(builderId, l.groupId, reply, l.text, l.cortes).catch((e) => console.error(`[${spec.surface}] narración`, e));
   } catch (e) {
     if (e instanceof FleetAgentAtCapacity) state = "capacity";
     else state = "error";
@@ -209,13 +274,16 @@ async function runSiteTurn(
   } finally {
     clearInterval(beat);
     void dirty;
+    // Antes del final: una propuesta hecha en la última herramienta también sale.
+    await extras;
+    await emitExtras();
     l.finished = true;
     await db.fleetTurn
       .update({
         where: { turnId: l.turnId },
         data: { state, error, text: l.text, tools: l.tools, cortes: l.cortes, heartbeatAt: new Date(), endedAt: new Date() },
       })
-      .catch((e) => console.error("[sites] cierre del turno", l.turnId, e));
+      .catch((e) => console.error(`[${spec.surface}] cierre del turno`, l.turnId, e));
     if (state === "done") emit(l, { type: "done", value: reply });
     else if (state === "capacity") emit(l, { type: "capacity", message: error, retryAfter: 10 });
     else emit(l, { type: "error", message: error });

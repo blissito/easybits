@@ -40,6 +40,8 @@ export type ToolGroupKey =
   | "db-write"
   | "db-del"
   | "sitios"
+  // Copiloto del panel de crons (sólo superusuarios). Strict, fuera del menú de conectores.
+  | "admin-crons"
   | "all";
 
 export interface ToolGroup {
@@ -800,6 +802,10 @@ export const SITIOS_ALLOWLIST = new Set<string>([
   "get_file", "list_files", "upload_file",
 ]);
 
+/** Copiloto del panel de crons: leer estado/historial y PROPONER correr o pausar (el humano
+ *  aprueba con su sesión). Las tools exigen superusuario; ver mcp/tools/adminCrons.ts. */
+export const ADMIN_CRONS_ALLOWLIST = new Set<string>(["list_crons", "get_cron_runs", "run_cron", "pause_cron"]);
+
 /**
  * Scripting (Code Mode) toolset — la superficie MÍNIMA. La idea: el agente
  * descubre y ejecuta cualquier tool vía `discover_tools` + `run_tool` (siempre
@@ -890,6 +896,7 @@ export const GROUP_ALLOWLISTS: Partial<Record<ToolGroupKey, Set<string>>> = {
   "db-write": DB_WRITE_ALLOWLIST,
   "db-del": DB_DEL_ALLOWLIST,
   sitios: SITIOS_ALLOWLIST,
+  "admin-crons": ADMIN_CRONS_ALLOWLIST,
 };
 
 // Keep `toolCount` honest: derive it from the real allowlist size for every
@@ -905,7 +912,11 @@ for (const g of TOOL_GROUPS) {
 // prometiera más tools de las que enseña.
 
 /** ¿Este grupo acota `run_tool` por sí solo? (no confundir con el bucket `scripting`). */
+/** Buckets strict que NO son grupos de conector (no salen en TOOL_GROUPS ni en el menú). */
+const STRICT_BUCKETS = new Set<string>(["admin-crons"]);
+
 export function isStrictGroup(key: string): boolean {
+  if (STRICT_BUCKETS.has(key)) return true;
   return TOOL_GROUPS.some((g) => g.key === key && g.strict === true);
 }
 

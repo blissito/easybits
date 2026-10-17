@@ -2061,3 +2061,23 @@ model CronJobState {
   pausedBy String?
   pausedAt DateTime?
 }
+
+// Acción que un agente PROPONE y un humano aprueba con su sesión (copiloto del panel de
+// crons). El agente nunca ejecuta: crea la fila; `POST /api/v2/admin/agent-actions/:id` la
+// reclama con un update condicionado a `pending` (una sola ejecución) y corre la petición
+// guardada. El `summary` se arma desde la base, nunca con texto del modelo.
+model AgentAction {
+  id         String    @id @default(auto()) @map("_id") @db.ObjectId
+  ownerId    String    @db.ObjectId
+  tool       String // run_cron | pause_cron
+  args       Json
+  summary    String
+  status     String    @default("pending") // pending | executing | executed | failed | rejected | expired
+  result     Json?
+  error      String?
+  createdAt  DateTime  @default(now())
+  resolvedAt DateTime?
+  resolvedBy String?
+
+  @@index([ownerId, status, createdAt])
+}
