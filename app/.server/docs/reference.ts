@@ -203,13 +203,27 @@ easybits sandboxes logs sb_abc123 --unit myapp --lines 100 --since "10 min ago" 
 easybits sandboxes files ls sb_abc123 /data/work
 easybits sandboxes files write sb_abc123 /data/work/app.js ./app.js
 easybits sandboxes files read sb_abc123 /data/out.png --out out.png   # tope 8 MB: si el archivo pesa más, sale con código 1 ("truncated")
+easybits sandboxes files mkdir sb_abc123 /data/work/out
+easybits sandboxes files mv sb_abc123 /data/work/a.txt /data/work/out/a.txt
+easybits sandboxes files rm sb_abc123 /data/work/tmp -r --yes          # -r para una carpeta
+easybits sandboxes bg start sb_abc123 --cwd /data/work -- npm run dev   # proceso en segundo plano; imprime un execId
+easybits sandboxes bg ls sb_abc123                                      # recupera un execId perdido
+easybits sandboxes bg status sb_abc123 exec_123                         # estado, código de salida, su stdout/stderr
+easybits sandboxes bg kill sb_abc123 exec_123                           # SIGTERM a todo el grupo, SIGKILL tras --grace
+easybits sandboxes git clone sb_abc123 --repo https://github.com/tu/app.git --dir /data/work/app --git-token '$secret:GITHUB_TOKEN'
+easybits sandboxes git status sb_abc123 --dir /data/work/app
+easybits sandboxes git commit sb_abc123 --dir /data/work/app --all -m "fix: checkout"
+easybits sandboxes git push sb_abc123 --dir /data/work/app --git-token '$secret:GITHUB_TOKEN'
+easybits sandboxes git pull sb_abc123 --dir /data/work/app --rebase       # sale con 1 si hay conflictos
+easybits sandboxes git checkout sb_abc123 --dir /data/work/app --branch feature/x --create
+easybits sandboxes git log sb_abc123 --dir /data/work/app --limit 5
 easybits sandboxes suspend sb_abc123      # duerme a disco; resume la despierta
 easybits sandboxes resume sb_abc123
 easybits sandboxes snapshot sb_abc123 --name antes-del-upgrade
 easybits sandboxes destroy sb_abc123 --yes
 \`\`\`
 
-Alias: \`easybits sb …\`. Todo lo que va después de \`--\` en \`exec\` es el comando, tal cual. En \`create\`: \`--template\` (default \`ubuntu\`), \`--size s|m|l|xl\` (según tu plan), \`--ttl <s>\` (vida antes de autodestruirse; en \`exec\`, \`--timeout\` es el tope del comando) y \`--no-wait\` (regresa sin esperar a \`running\`). \`logs\` trae 200 líneas por defecto; \`--since\` acepta la sintaxis de \`journalctl\`.
+Alias: \`easybits sb …\`. Todo lo que va después de \`--\` en \`exec\` es el comando, tal cual. En \`create\`: \`--template\` (default \`ubuntu\`), \`--size s|m|l|xl\` (según tu plan), \`--ttl <s>\` (vida antes de autodestruirse; en \`exec\`, \`--timeout\` es el tope del comando) y \`--no-wait\` (regresa sin esperar a \`running\`). \`bg\` es para lo que dura más que una llamada (un servidor de desarrollo, un build largo): \`exec\` espera, \`bg start\` regresa un \`execId\` de inmediato; un \`nohup\` dentro de \`exec\` no sobrevive. \`git\` corre dentro de la caja con salida estructurada: el token de un repo privado va en \`--git-token\`, mejor como \`$secret:NOMBRE\` de tu bóveda (uno literal se acepta con aviso: argv se ve en \`ps\`); un commit sin cambios responde \`nothingToCommit\`, no un error. \`logs\` trae 200 líneas por defecto; \`--since\` acepta la sintaxis de \`journalctl\`.
 
 ### Hosting: máquinas permanentes
 

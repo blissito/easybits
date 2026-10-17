@@ -44,6 +44,18 @@ easybits sandboxes files ls sb_abc123 /data/work
 easybits sandboxes files read sb_abc123 /etc/os-release
 easybits sandboxes files read sb_abc123 /data/app.db --out app.db   # tope 8 MB: más grande sale con código 1 ("truncated")
 easybits sandboxes files write sb_abc123 /data/work/app.js ./app.js
+easybits sandboxes files mkdir sb_abc123 /data/work/out
+easybits sandboxes files mv sb_abc123 /data/work/a.txt /data/work/out/a.txt
+easybits sandboxes files rm sb_abc123 /data/work/tmp -r --yes
+easybits sandboxes bg start sb_abc123 --cwd /data/work -- npm run dev   # prints an execId
+easybits sandboxes bg ls sb_abc123
+easybits sandboxes bg status sb_abc123 exec_123    # status, exit code, its stdout/stderr
+easybits sandboxes bg kill sb_abc123 exec_123      # the whole process group
+easybits sandboxes git clone sb_abc123 --repo https://github.com/you/app.git --dir /data/work/app --git-token '$secret:GITHUB_TOKEN'
+easybits sandboxes git status sb_abc123 --dir /data/work/app
+easybits sandboxes git commit sb_abc123 --dir /data/work/app --all -m "fix: checkout"
+easybits sandboxes git push sb_abc123 --dir /data/work/app --git-token '$secret:GITHUB_TOKEN'
+easybits sandboxes git pull|checkout|log sb_abc123 --dir /data/work/app …
 easybits sandboxes suspend sb_abc123
 easybits sandboxes resume sb_abc123
 easybits sandboxes snapshot sb_abc123 --name before-upgrade

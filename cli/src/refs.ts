@@ -41,6 +41,8 @@ export const REF_ARGS: Record<string, { index: number; kind: RefKind }> = {
   "sandboxes logs": { index: 0, kind: "sandbox" },
   "sandboxes files": { index: 1, kind: "sandbox" },
   "sandboxes domains": { index: 1, kind: "sandbox" },
+  "sandboxes bg": { index: 1, kind: "sandbox" },
+  "sandboxes git": { index: 1, kind: "sandbox" },
   "sandboxes suspend": { index: 0, kind: "sandbox" },
   "sandboxes resume": { index: 0, kind: "sandbox" },
   "sandboxes destroy": { index: 0, kind: "sandbox" },

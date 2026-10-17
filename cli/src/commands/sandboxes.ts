@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import type { Sandbox } from "@easybits.cloud/sdk";
 import type { Command, Ctx } from "../types.js";
-import { ENV_FILE_OPTION, bool, envFrom, int, need, readStdin, str } from "../args.js";
+import { ENV_FILE_OPTION, bool, envFrom, int, list, need, readStdin, str } from "../args.js";
 import { emit, fmtBytes, fmtDate, table } from "../output.js";
 import { getClient } from "../client.js";
 import { CliError, usageError } from "../errors.js";
@@ -59,7 +59,74 @@ function checkNotTruncated(size: number, path: string) {
   );
 }
 
-const FILES_USAGE = "easybits sandboxes files <ls|read|write> <sandbox> <path> [local-file]";
+const BG_USAGE = "easybits sandboxes bg <start|ls|status|kill> <sandbox> [exec-id] [--cwd <dir>] [--dotenv <path>] [--grace <s>] [-- <command...>]";
+
+export const GIT_OPS = ["clone", "status", "commit", "push", "pull", "checkout", "log"] as const;
+const GIT_USAGE = `easybits sandboxes git <${GIT_OPS.join("|")}> <sandbox> --dir <dir> [flags]`;
+
+type GitFlags = {
+  dir?: string; repo?: string; branch?: string; depth?: number; sha?: string; token?: string; username?: string;
+  message?: string; all?: boolean; paths?: string[]; authorName?: string; authorEmail?: string; remote?: string;
+  setUpstream?: boolean; force?: boolean; rebase?: boolean; create?: boolean; from?: string; limit?: number;
+};
+
+/** Banderas → parámetros del SDK (`sb.git.<op>`), validando lo que exige cada operación. Puro. */
+export function gitParams(op: string, f: GitFlags): Record<string, unknown> {
+  if (!(GIT_OPS as readonly string[]).includes(op)) throw usageError(t(`Unknown git operation "${op}".`, `Operación de git desconocida "${op}".`), GIT_USAGE);
+  if (!f.dir) throw usageError(t("Missing --dir (the repo folder inside the sandbox).", "Falta --dir (la carpeta del repo dentro del sandbox)."), GIT_USAGE);
+  if (f.token && !f.token.startsWith("$secret:")) {
+    // No se prohíbe (un token de corta vida en CI), pero se avisa: argv lo ven ps y el historial.
+    process.stderr.write(t("Warning: a literal token in argv shows up in ps and shell history; prefer --git-token '$secret:NAME'.\n", "Aviso: un token literal en argv se ve en ps y el historial; mejor --git-token '$secret:NOMBRE'.\n"));
+  }
+  const clean = (o: Record<string, unknown>) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined && v !== false && !(Array.isArray(v) && !v.length)));
+  const auth = { token: f.token, username: f.username };
+  switch (op) {
+    case "clone":
+      if (!f.repo) throw usageError(t("clone needs --repo <url>.", "clone necesita --repo <url>."), GIT_USAGE);
+      return clean({ repo: f.repo, dir: f.dir, branch: f.branch, depth: f.depth, commit: f.sha, ...auth });
+    case "status":
+      return { dir: f.dir };
+    case "commit":
+      if (!f.message) throw usageError(t("commit needs -m <message>.", "commit necesita -m <mensaje>."), GIT_USAGE);
+      return clean({ dir: f.dir, message: f.message, addAll: f.all, paths: f.paths, authorName: f.authorName, authorEmail: f.authorEmail });
+    case "push":
+      return clean({ dir: f.dir, remote: f.remote, branch: f.branch, setUpstream: f.setUpstream, force: f.force, ...auth });
+    case "pull":
+      return clean({ dir: f.dir, rebase: f.rebase, ...auth });
+    case "checkout":
+      if (!f.branch) throw usageError(t("checkout needs --branch <name>.", "checkout necesita --branch <nombre>."), GIT_USAGE);
+      return clean({ dir: f.dir, branch: f.branch, create: f.create, from: f.from });
+    default:
+      return clean({ dir: f.dir, limit: f.limit, path: f.paths?.[0] });
+  }
+}
+
+function printGit(op: string, r: any) {
+  if (op === "clone") console.log(t(`Cloned ${r.remote} → ${r.dir} (${r.detached ? "detached" : r.branch} @ ${String(r.head).slice(0, 7)})`, `Clonado ${r.remote} → ${r.dir} (${r.detached ? "desprendido" : r.branch} @ ${String(r.head).slice(0, 7)})`));
+  else if (op === "status") {
+    console.log(`${r.branch}${r.upstream ? ` → ${r.upstream}` : ""}${r.ahead || r.behind ? `  +${r.ahead} -${r.behind}` : ""}${r.clean ? t("  (clean)", "  (limpio)") : ""}`);
+    for (const [k, label] of [["staged", "staged"], ["modified", "modified"], ["untracked", "untracked"], ["conflicted", "conflicted"]] as const) {
+      if (r[k]?.length) console.log(`  ${label}: ${r[k].join(", ")}`);
+    }
+  } else if (op === "commit") console.log(r.nothingToCommit ? t("Nothing to commit.", "Nada que commitear.") : `${t("Committed", "Commit")} ${String(r.sha).slice(0, 7)}`);
+  else if (op === "push") console.log(r.pushed ? t(`Pushed ${r.branch} to ${r.remote}`, `Subido ${r.branch} a ${r.remote}`) : r.output);
+  else if (op === "pull") {
+    console.log(r.updated ? t(`Updated to ${String(r.head).slice(0, 7)}`, `Actualizado a ${String(r.head).slice(0, 7)}`) : t("Already up to date.", "Ya estaba al día."));
+    if (r.conflicts?.length) console.log(t(`Conflicts: ${r.conflicts.join(", ")}`, `Conflictos: ${r.conflicts.join(", ")}`));
+  } else if (op === "checkout") console.log(t(`On ${r.branch}${r.created ? " (new)" : ""}`, `En ${r.branch}${r.created ? " (nueva)" : ""}`));
+  else
+    table(
+      r.items.map((e: any) => ({ ...e, sha: String(e.sha).slice(0, 7), date: fmtDate(e.date) })),
+      [["sha", "SHA"], ["date", "DATE"], ["author", "AUTHOR"], ["message", "MESSAGE"]],
+    );
+}
+
+/** El sandbox del posicional `i` (bg y git llevan la acción primero). */
+async function sandboxAt(ctx: Ctx, i: number, usage: string) {
+  return (await getClient(ctx)).sandboxes.get(need(ctx, i, "sandbox", usage));
+}
+
+const FILES_USAGE = "easybits sandboxes files <ls|read|write|rm|mv|mkdir> <sandbox> <path> [local-file|new-path]";
 
 export const sandboxes: Command = {
   name: "sandboxes",
@@ -189,11 +256,13 @@ export const sandboxes: Command = {
       },
     },
     files: {
-      summary: "List, read or write files inside a sandbox",
+      summary: "List, read, write, delete, move files and make folders inside a sandbox",
       usage: FILES_USAGE,
       options: {
         content: { type: "string", value: "text", description: "write: inline content instead of a local file" },
         out: { type: "string", value: "file", description: "read: save to a local file (binary-safe)" },
+        recursive: { type: "boolean", short: "r", description: "rm: a folder and everything in it" },
+        ...YES_OPTION,
       },
       examples: [
         "easybits sandboxes files ls sb_abc123 /data/work",
@@ -201,9 +270,14 @@ export const sandboxes: Command = {
         "easybits sb files read sb_abc123 /data/out.png --out out.png",
         "easybits sb files write sb_abc123 /data/work/app.js ./app.js",
         "echo hello | easybits sb files write sb_abc123 /tmp/hello.txt",
+        "easybits sb files mkdir sb_abc123 /data/work/out",
+        "easybits sb files mv sb_abc123 /data/work/a.txt /data/work/out/a.txt",
+        "easybits sb files rm sb_abc123 /data/work/tmp -r --yes",
       ],
       async run(ctx) {
-        const action = need(ctx, 0, "ls|read|write", FILES_USAGE);
+        const action = need(ctx, 0, "ls|read|write|rm|mv|mkdir", FILES_USAGE);
+        // Falla antes de pedir credenciales o tocar la red (exit 2 siempre igual).
+        if (action === "rm" || action === "delete") requireYesIfHeadless(ctx);
         const id = need(ctx, 1, "sandbox", FILES_USAGE);
         const path = need(ctx, 2, "path", FILES_USAGE);
         const eb = await getClient(ctx);
@@ -242,6 +316,18 @@ export const sandboxes: Command = {
           else throw usageError(t("Give a local file, --content, or pipe data on stdin.", "Pasa un archivo local, --content, o datos por stdin."), FILES_USAGE);
           const r = await sb.files.write(path, buf.toString("base64"), { encoding: "base64" });
           emit(ctx, { path, ...r }, () => console.log(t(`Wrote ${fmtBytes(r.bytes)} to ${path}`, `Escribí ${fmtBytes(r.bytes)} en ${path}`)));
+        } else if (action === "rm" || action === "delete") {
+          const recursive = bool(ctx, "recursive");
+          await confirm(ctx, t(`Delete ${path}${recursive ? " and everything in it" : ""} in ${id}?`, `¿Borrar ${path}${recursive ? " y todo lo que tiene" : ""} en ${id}?`));
+          const r = await sb.files.delete(path, recursive ? { recursive } : undefined);
+          emit(ctx, { path, ...r }, () => console.log(t(`Deleted ${path}`, `Borrado ${path}`)));
+        } else if (action === "mv" || action === "move") {
+          const to = need(ctx, 3, "new-path", FILES_USAGE);
+          const r = await sb.files.move(path, to);
+          emit(ctx, { from: path, to, ...r }, () => console.log(`${path} → ${to}`));
+        } else if (action === "mkdir") {
+          const r = await sb.files.mkdir(path);
+          emit(ctx, { path, ...r }, () => console.log(t(`Created ${path}`, `Creada ${path}`)));
         } else {
           throw usageError(t(`Unknown files action "${action}".`, `Acción de files desconocida "${action}".`), FILES_USAGE);
         }
@@ -292,6 +378,126 @@ export const sandboxes: Command = {
         );
         const r = await sb.destroy();
         emit(ctx, { ...r, sandboxId: ctx.args[0] }, () => console.log(t(`Destroyed ${ctx.args[0]}`, `Destruido ${ctx.args[0]}`)));
+      },
+    },
+    bg: {
+      summary: "Long-running processes: start one in the background, list, poll its output, kill it",
+      usage: BG_USAGE,
+      options: {
+        cwd: { type: "string", value: "dir", description: "Working directory" },
+        env: { type: "string", multiple: true, value: "K=V", description: "Environment variable, non-secret (repeatable)" },
+        ...ENV_FILE_OPTION,
+        grace: { type: "string", value: "seconds", description: "kill: seconds between SIGTERM and SIGKILL (default 5)" },
+      },
+      examples: [
+        "easybits sb bg start sb_abc123 --cwd /data/work -- npm run dev",
+        "easybits sb bg ls sb_abc123",
+        "easybits sb bg status sb_abc123 exec_123      # status, exit code, stdout/stderr",
+        "easybits sb bg kill sb_abc123 exec_123",
+      ],
+      async run(ctx) {
+        const action = need(ctx, 0, "start|ls|status|kill", BG_USAGE);
+        need(ctx, 1, "sandbox", BG_USAGE);
+        if (action === "start") {
+          const command = ctx.args.slice(2).join(" ");
+          if (!command) throw usageError(t("Missing <command> after --.", "Falta <command> después de --."), BG_USAGE);
+          const env = await envFrom(ctx, BG_USAGE);
+          const sb = await sandboxAt(ctx, 1, BG_USAGE);
+          const r = await sb.execBackground(command, { cwd: str(ctx, "cwd"), env: Object.keys(env).length ? env : undefined });
+          emit(ctx, r, () => {
+            console.log(t(`Started ${r.execId} (${r.status})`, `Arrancó ${r.execId} (${r.status})`));
+            console.log(t(`Poll it: easybits sb bg status ${ctx.args[1]} ${r.execId}`, `Revísalo: easybits sb bg status ${ctx.args[1]} ${r.execId}`));
+          });
+        } else if (action === "ls" || action === "list") {
+          const r = await (await sandboxAt(ctx, 1, BG_USAGE)).bgList();
+          emit(ctx, r, () =>
+            table(
+              r.processes.map((p) => ({ ...p, startedAt: fmtDate(p.startedAt), exit: p.exitCode ?? "-", output: fmtBytes(p.stdoutBytes + p.stderrBytes) })),
+              [["execId", "ID"], ["status", "STATUS"], ["exit", "EXIT"], ["startedAt", "STARTED"], ["output", "OUTPUT"], ["command", "COMMAND"]],
+              t("No background processes.", "Sin procesos en segundo plano."),
+            ),
+          );
+        } else if (action === "status") {
+          const execId = need(ctx, 2, "exec-id", BG_USAGE);
+          const r = await (await sandboxAt(ctx, 1, BG_USAGE)).bgStatus(execId);
+          if (ctx.json) return emit(ctx, r, () => {});
+          console.error(`${execId}: ${r.status}${r.exitCode != null ? ` (exit ${r.exitCode})` : ""}${r.logsExpired ? t(" — logs expired", " — logs vencidos") : ""}`);
+          if (r.stdout) process.stdout.write(r.stdout);
+          if (r.stderr) process.stderr.write(r.stderr);
+        } else if (action === "kill") {
+          const execId = need(ctx, 2, "exec-id", BG_USAGE);
+          const grace = int(ctx, "grace", BG_USAGE);
+          const r = await (await sandboxAt(ctx, 1, BG_USAGE)).bgKill(execId, grace != null ? { graceSeconds: grace } : undefined);
+          emit(ctx, { execId, ...r }, () =>
+            console.log(r.alreadyExited ? t(`${execId} had already exited.`, `${execId} ya había terminado.`) : t(`Killed ${execId} (${r.signal ?? "SIGTERM"})`, `Detenido ${execId} (${r.signal ?? "SIGTERM"})`)),
+          );
+        } else {
+          throw usageError(t(`Unknown bg action "${action}".`, `Acción de bg desconocida "${action}".`), BG_USAGE);
+        }
+      },
+    },
+    git: {
+      summary: "Git inside a sandbox: clone, status, commit, push, pull, checkout, log",
+      usage: GIT_USAGE,
+      options: {
+        dir: { type: "string", value: "dir", description: "Repo folder inside the sandbox (required)" },
+        repo: { type: "string", value: "url", description: "clone: repo URL (clean; the token goes in --git-token)" },
+        branch: { type: "string", value: "name", description: "clone/push/checkout: branch" },
+        depth: { type: "string", value: "n", description: "clone: shallow depth (default 1)" },
+        sha: { type: "string", value: "sha", description: "clone: a specific commit (full clone, detached HEAD)" },
+        "git-token": { type: "string", value: "$secret:NAME", description: "Token for a private repo; best as $secret:NAME from your vault" },
+        "git-user": { type: "string", value: "name", description: "Username for the token (default: x-access-token)" },
+        message: { type: "string", short: "m", value: "text", description: "commit: message" },
+        all: { type: "boolean", description: "commit: stage everything first (git add -A)" },
+        path: { type: "string", multiple: true, value: "path", description: "commit: only these paths (repeatable); log: only this path" },
+        "author-name": { type: "string", value: "name", description: "commit: author name" },
+        "author-email": { type: "string", value: "email", description: "commit: author email" },
+        remote: { type: "string", value: "name", description: "push: remote (default origin)" },
+        "set-upstream": { type: "boolean", description: "push: set the upstream branch" },
+        force: { type: "boolean", description: "push: --force-with-lease (fails if the remote moved)" },
+        rebase: { type: "boolean", description: "pull: rebase instead of merge" },
+        create: { type: "boolean", description: "checkout: create the branch (-B, safe to repeat)" },
+        from: { type: "string", value: "ref", description: "checkout --create: start point" },
+        limit: { type: "string", value: "n", description: "log: how many" },
+      },
+      examples: [
+        "easybits sb git clone sb_abc123 --repo https://github.com/you/app.git --dir /data/work/app --git-token '$secret:GITHUB_TOKEN'",
+        "easybits sb git status sb_abc123 --dir /data/work/app",
+        'easybits sb git commit sb_abc123 --dir /data/work/app --all -m "fix: checkout"',
+        "easybits sb git push sb_abc123 --dir /data/work/app --git-token '$secret:GITHUB_TOKEN'",
+        "easybits sb git checkout sb_abc123 --dir /data/work/app --branch feature/x --create",
+        "easybits sb git log sb_abc123 --dir /data/work/app --limit 5",
+      ],
+      async run(ctx) {
+        const op = need(ctx, 0, GIT_OPS.join("|"), GIT_USAGE);
+        need(ctx, 1, "sandbox", GIT_USAGE);
+        const params = gitParams(op, {
+          dir: str(ctx, "dir"),
+          repo: str(ctx, "repo"),
+          branch: str(ctx, "branch"),
+          depth: int(ctx, "depth", GIT_USAGE),
+          sha: str(ctx, "sha"),
+          token: str(ctx, "git-token"),
+          username: str(ctx, "git-user"),
+          message: str(ctx, "message"),
+          all: bool(ctx, "all"),
+          paths: list(ctx, "path"),
+          authorName: str(ctx, "author-name"),
+          authorEmail: str(ctx, "author-email"),
+          remote: str(ctx, "remote"),
+          setUpstream: bool(ctx, "set-upstream"),
+          force: bool(ctx, "force"),
+          rebase: bool(ctx, "rebase"),
+          create: bool(ctx, "create"),
+          from: str(ctx, "from"),
+          limit: int(ctx, "limit", GIT_USAGE),
+        });
+        const { git } = await sandboxAt(ctx, 1, GIT_USAGE);
+        // status recibe la carpeta; las demás, el objeto de parámetros.
+        const r: any = op === "status" ? await git.status(params.dir as string) : await (git as any)[op](params);
+        emit(ctx, r, () => printGit(op, r));
+        // Un pull con conflictos no es error de la API, pero un script debe notarlo.
+        if (op === "pull" && r.conflicts?.length) process.exitCode = 1;
       },
     },
     snapshot: {

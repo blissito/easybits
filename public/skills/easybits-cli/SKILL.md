@@ -104,11 +104,25 @@ easybits sb exec "$ID" --json -- 'cd /data/work && npm ci && npm test'
 easybits sb files write "$ID" /data/work/app.js ./app.js     # or --content '...', or stdin
 easybits sb files read  "$ID" /data/work/out.json            # --out file for binaries; 8 MB cap (exit 1 "truncated": gzip/split it with exec first)
 easybits sb files ls    "$ID" /data/work --json
+easybits sb files mkdir "$ID" /data/work/out && easybits sb files mv "$ID" /data/work/a.txt /data/work/out/a.txt
+easybits sb files rm "$ID" /data/work/tmp -r --yes --json
+easybits sb bg start "$ID" --cwd /data/work --json -- npm run dev   # {execId}: anything that must outlive the call
+easybits sb bg status "$ID" "$EXEC" --json     # {status: running|exited, exitCode, stdout, stderr}
+easybits sb bg ls "$ID" --json                 # {processes:[{execId, command, status…}]}: recover a lost execId
+easybits sb bg kill "$ID" "$EXEC" --json       # whole process group
+easybits sb git clone "$ID" --repo "$REPO" --dir /data/work/app --git-token '$secret:GITHUB_TOKEN' --json
+easybits sb git status "$ID" --dir /data/work/app --json   # {branch, ahead, behind, clean, staged, modified, untracked, conflicted}
+easybits sb git commit "$ID" --dir /data/work/app --all -m "msg" --json   # {sha} or {nothingToCommit:true} (not an error)
+easybits sb git push "$ID" --dir /data/work/app --git-token '$secret:GITHUB_TOKEN' --json
+easybits sb git pull|checkout|log "$ID" --dir /data/work/app …   # pull exits 1 on conflicts
 easybits sb logs "$ID" --unit myapp --lines 100 --since "10 min ago" --grep ERROR
 easybits sb suspend "$ID" && easybits sb resume "$ID"
 easybits sb snapshot "$ID" --name checkpoint
 easybits sb destroy "$ID" --json --yes
 ```
+
+Never `nohup cmd &` inside `exec`: it dies with the call. Use `bg start`. For git tokens use
+`$secret:NAME` (store it first with `easybits secrets set`), never a literal token.
 
 `create` flags: `--size s|m|l|xl` (plan-gated), `--no-wait` (return before running),
 `--dotenv <path|->` for env (`--env K=V` only for non-secret values).
