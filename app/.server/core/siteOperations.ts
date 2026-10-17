@@ -24,6 +24,8 @@ import { execCommand, exposeSandboxPort, getSandbox, listFiles, readFile, waitUn
 import { DEFAULT_SITE_THEME, SITE_THEMES, parseThemeColors, replaceStaticTheme, themeBlockStatic, themeCssTw4, validThemeColors, type ThemeColors } from "~/lib/siteTheme";
 import { PREVIEW_DEPS_MARK, PREVIEW_PORT, PREVIEW_UNIT, STARTER_DIR, stackHasAuth, previewInstallScript, starterFiles, starterPrompt, starterRunspec, stackThemeFiles, themeRule, starterSnapshot, starterTemplate } from "~/.server/starters";
 import { isSiteStack, type SiteStackId } from "~/lib/siteStacks";
+import { isSiteTemplate, stackHasTemplates, SITE_TEMPLATES, type SiteTemplateKey } from "~/lib/siteTemplates";
+import { templateFiles, TEMPLATES_DIR } from "~/.server/starters/templates";
 import { pushSiteToGithub, siteRepo } from "./githubSiteOperations";
 import { markSelfPushed } from "./pushDeployOperations";
 
@@ -306,7 +308,7 @@ function sandboxUrl(sandboxId: string, port: number) {
  */
 export async function createSite(
   ctx: AuthContext,
-  opts: { kind: SiteKind; name: string; tier?: string; engine?: string; model?: string | null; secretValue?: string; sleep?: boolean; stack?: SiteStack }
+  opts: { kind: SiteKind; name: string; tier?: string; engine?: string; model?: string | null; secretValue?: string; sleep?: boolean; stack?: SiteStack; template?: SiteTemplateKey | null }
 ): Promise<{ site: { id: string }; checkoutUrl?: string }> {
   requireScope(ctx, "WRITE");
   const name = opts.name.trim() || "Mi sitio";
@@ -341,7 +343,11 @@ export async function createSite(
     ...(opts.stack ? { derived: starterSnapshot(opts.stack) } : {}),
   });
   const site = await db.site.create({
-    data: { ownerId: ctx.user.id, kind: "webapp", name, sandboxId, engine: engine.id, stack: opts.stack ?? null },
+    data: {
+      ownerId: ctx.user.id, kind: "webapp", name, sandboxId, engine: engine.id, stack: opts.stack ?? null,
+      // Sólo los stacks cuya caja dorada las trae.
+      template: stackHasTemplates(opts.stack) && opts.template ? opts.template : null,
+    },
   });
   // Si sembrar falla, el sitio igual nace: el agente puede escribir el código.
   await prepareSiteMachine(ctx, site.id, sandboxId, opts.stack ?? null).catch((e) =>
@@ -405,6 +411,20 @@ async function prepareSiteMachine(ctx: AuthContext, siteId: string, sandboxId: s
       );
     }
     if (pkg) await writeFile(ctx, sandboxId, { path: `${appDir}/package.json`, content: pkg });
+  }
+  // Plantilla de partida: sólo al sembrar (nunca encima de lo que ya construyó el agente).
+  // Viene horneada en la caja dorada; si la caja nació sin ella, se escribe archivo por archivo.
+  if (stack && !have.has("package.json")) {
+    const template = (await db.site.findUnique({ where: { id: siteId }, select: { template: true } }))?.template;
+    if (isSiteTemplate(template) && stackHasTemplates(stack)) {
+      const src = `${TEMPLATES_DIR}/${stack}/${template}`;
+      const r = await execCommand(ctx, sandboxId, { command: `[ -d ${src} ] && cp -a ${src}/. ${appDir}/`, timeoutSeconds: 30 }).catch(() => null);
+      if (r?.exitCode !== 0) {
+        await Promise.all(
+          Object.entries(templateFiles(stack, template)).map(([path, content]) => writeFile(ctx, sandboxId, { path: `${appDir}/${path}`, content }))
+        );
+      }
+    }
   }
   // Base y login del sitio: va ANTES de la unit de la vista previa para que arranque con
   // los secretos. Si falla, el sitio sigue (el agente puede trabajar sin base).
@@ -655,6 +675,12 @@ export function siteTurnPrompt(site: Awaited<ReturnType<typeof getSite>>, select
     );
   } else if (site.kind === "webapp" && site.sandboxId) {
     const stack = siteStack(site);
+    const template = SITE_TEMPLATES.find((t) => t.key === site.template);
+    if (template) {
+      lines.push(
+        `La app arrancó desde la plantilla «${template.label}» (página en components/Page.tsx, paleta en eb-theme.css). ADÁPTALA a lo que pidió el usuario: textos, secciones y datos de su negocio. No la rehagas desde cero ni dejes contenido de ejemplo (nombres, direcciones, precios inventados) que no sea suyo.`
+      );
+    }
     lines.push(
       `Es una WEB APP en su propia máquina: sandboxId="${site.sandboxId}". El código vive en /app.`,
       // Cada tool remota cuesta ~450 ms (medido) y reescribir un archivo entero cuesta tokens

@@ -126,7 +126,7 @@ export default function Home({ loaderData }: Route.ComponentProps) {
         Tu agente ya tiene internet y puede extraer todo tipo de información →
       </a>
 
-      <Hero />
+      <Hero loggedIn={!!user?.id} />
 
       {/* ── Productos: seis sustantivos, un componente ── */}
       <Bento

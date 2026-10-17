@@ -1,35 +1,33 @@
 import { motion, useSpring } from "motion/react";
 import type { ReactNode } from "react";
-import { Link } from "react-router";
 import { twMerge } from "tailwind-merge";
-import { BrutalButton } from "~/components/common/BrutalButton";
 import { BrutalElement } from "~/components/common/BrutalElement";
 import { TextBlurEffect } from "~/components/TextBlurEffect";
+import { HeroPrompt } from "./HeroPrompt";
 
-export const Hero = () => {
+export const Hero = ({ loggedIn = false }: { loggedIn?: boolean }) => {
   return (
     <section className=" h-fit pt-10 md:pt-6 pb-6 md:pb-0  md:min-h-[88vh] text-center md:text-left flex-wrap-reverse md:flex-nowrap flex justify-between items-center px-4 md:px-[5%] xl:px-0 w-full max-w-7xl mx-auto gap-0 lg:gap-10">
       <div className="w-full md:w-[50%] ">
         <TextBlurEffect>
           <h1 className="text-4xl  md:text-5xl lg:text-6xl xl:text-[72px] leading-tight font-bold">
-            Tu agente de IA{" "}
+            Tu app{" "}
             <span className="underline decoration-4 decoration-brand-500 underline-offset-4">
-              en producción.
+              en producción
             </span>
+            , desde una frase.
           </h1>
 
           <p className="text-iron text-xl lg:text-2xl xl:text-2xl font-extralight mb-6 md:mb-10 mt-2 md:mt-6">
-            Un MCP todo en uno: computadora, WhatsApp, datos y cobro. En pesos.
+            Un agente la construye en su propia máquina, con base de datos, login y tu dominio. A precios mexicanos.
           </p>
         </TextBlurEffect>
-        <div className="flex flex-wrap items-center gap-4 justify-center md:justify-start">
-          <Link to="/login">
-            <BrutalButton id="EmpezarGratisHome">Empezar gratis →</BrutalButton>
-          </Link>
+        <div className="flex justify-center md:justify-start">
+          <HeroPrompt loggedIn={loggedIn} />
         </div>
-        {/* Prueba social: números verificables (server.ts, catálogo web, resume de microVM). */}
+        {/* Puente al resto de la home: la app es la entrada; el agente, el siguiente paso. */}
         <p className="text-iron text-sm md:text-base mt-6 md:mt-8 font-mono">
-          Un endpoint MCP · flota de microVMs por agente · precios en MXN
+          Next, TanStack, Astro y 4 stacks más · el código es tuyo · después le conectas un agente por WhatsApp
         </p>
       </div>
       <div className="w-full md:w-[40%] relative min-h-[285px] ">

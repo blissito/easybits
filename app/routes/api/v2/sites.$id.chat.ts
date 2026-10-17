@@ -10,7 +10,7 @@ import { checkLLMTokenLimit } from "~/.server/llmTokenLimit";
 // Chat del creador de sitios. Auth = sesión del dueño (el token del builder NUNCA
 // baja al browser). El turno vive APARTE de la petición (siteTurns.server.ts): el POST lo
 // arranca y se suscribe; si el navegador se va, el turno sigue y `GET ?attach=1` se
-// re-engancha (snapshot + en vivo). Eventos SSE: `chunk`, `tool`, `snapshot`, `done`,
+// re-engancha (snapshot + en vivo); `GET ?preview=1` dice si la vista previa de la caja ya responde. Eventos SSE: `chunk`, `tool`, `snapshot`, `done`,
 // `error`, `capacity`, `interrupted`, `idle`. GET sin attach = historial + estado del turno.
 async function ctxFor(request: Request) {
   const user = await getUserOrNull(request).catch(() => null);
@@ -64,7 +64,14 @@ function turnStream(request: Request, groupId: string, snapshot: boolean) {
 export async function loader({ request, params }: Route.LoaderArgs) {
   const ctx = await ctxFor(request);
   const site = await getSite(ctx, params.id!);
-  if (new URL(request.url).searchParams.get("attach")) return turnStream(request, siteGroupId(site.id), true);
+  const q = new URL(request.url).searchParams;
+  if (q.get("attach")) return turnStream(request, siteGroupId(site.id), true);
+  if (q.get("preview")) {
+    // ¿Ya responde la vista previa de la caja? El navegador no puede leer el status de otro origen.
+    if (!site.previewUrl?.startsWith("https://")) return Response.json({ ready: false, previewUrl: site.previewUrl });
+    const res = await fetch(site.previewUrl, { signal: AbortSignal.timeout(5000), redirect: "manual" }).catch(() => null);
+    return Response.json({ ready: !!res && res.status < 400, previewUrl: site.previewUrl });
+  }
   const engine = siteEngineFor(site);
   const builder = await ensureBuilderAgent(ctx, engine.id);
   const rows = await db.fleetAgentMessage.findMany({

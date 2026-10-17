@@ -10,6 +10,7 @@ import "dotenv/config";
 import { callHost } from "~/.server/core/sandboxOperations";
 import { SITE_STACKS, type SiteStackId } from "~/lib/siteStacks";
 import { STARTER_DIR, starterFiles, starterInstallCommand, starterSnapshot, starterTemplate } from "~/.server/starters";
+import { allTemplateFiles, TEMPLATES_DIR } from "~/.server/starters/templates";
 
 type Box = { sandboxId: string; status: string };
 type Exec = { exitCode: number; stdout: string; stderr: string };
@@ -46,6 +47,15 @@ async function bake(stack: SiteStackId) {
       const b64 = Buffer.from(content).toString("base64");
       const r = await exec(id, `mkdir -p "$(dirname '${dir}/${path}')" && echo '${b64}' | base64 -d > '${dir}/${path}'`);
       if (r.exitCode !== 0) throw new Error(`${path}: ${r.stderr}`);
+    }
+    // Caja dorada: también trae todas las plantillas, listas para copiarse encima del starter.
+    for (const [key, files] of Object.entries(allTemplateFiles(stack) ?? {})) {
+      for (const [path, content] of Object.entries(files)) {
+        const dest = `${TEMPLATES_DIR}/${stack}/${key}/${path}`;
+        const b64 = Buffer.from(content).toString("base64");
+        const r = await exec(id, `mkdir -p "$(dirname '${dest}')" && echo '${b64}' | base64 -d > '${dest}'`);
+        if (r.exitCode !== 0) throw new Error(`${key}/${path}: ${r.stderr}`);
+      }
     }
     const t1 = Date.now();
     const inst = await exec(id, `cd ${dir} && ${starterInstallCommand(stack)} 2>&1 | tail -5 && du -sh node_modules`, 600);

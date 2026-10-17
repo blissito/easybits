@@ -858,6 +858,7 @@ model Site {
   sandboxId  String?  // webapp (host id, ver Sandbox.sandboxId)
   engine     String?  // id de FLEET_ENGINES que lo construye; null = "easybits" (medido)
   stack      String?  // webapp: id de SITE_STACKS (app/lib/siteStacks.ts) = starter; null = Node libre
+  template   String?  // webapp: plantilla de partida (app/lib/siteTemplates.ts), copiada de la caja dorada al sembrar
   deletedAt  DateTime?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt

@@ -8,6 +8,7 @@ import { AUTH_DEPS, AUTH_FILES } from "./auth";
 import { shQuote } from "~/.server/core/sandboxOperations";
 import { createHash } from "node:crypto";
 import { DEFAULT_SITE_THEME, THEME_TOKENS, themeCssTw4 } from "~/lib/siteTheme";
+import { allTemplateFiles, TEMPLATES_DIR } from "./templates";
 
 // Todos arrancan con el script start de su package.json y respetan PORT. Elysia va
 // en la plantilla `bun` (Bun nativo, sin npm ni node en la caja); el resto en `node`.
@@ -88,10 +89,17 @@ export function starterInstallCommand(stack: SiteStackId): string {
 export function starterSnapshot(stack: SiteStackId): { templateKey: string; templateHash: string } {
   const files = Object.entries(starterFiles(stack)).sort(([a], [b]) => a.localeCompare(b));
   const templateHash = createHash("sha256")
-    .update(JSON.stringify({ files, install: starterInstallCommand(stack), dir: STARTER_DIR, v: 1 }))
+    // Las plantillas viajan en la misma caja dorada: si cambian, se vuelve a hornear.
+    .update(JSON.stringify({ files, install: starterInstallCommand(stack), dir: STARTER_DIR, v: 1, ...templatesHashPart(stack) }))
     .digest("hex")
     .slice(0, 32);
   return { templateKey: `pub:site-starter:${stack}`, templateHash };
+}
+
+/** Parte del hash que aportan las plantillas; vacía en los stacks sin ellas (su hash no cambia). */
+function templatesHashPart(stack: SiteStackId) {
+  const t = allTemplateFiles(stack);
+  return t ? { templates: t, templatesDir: TEMPLATES_DIR } : {};
 }
 
 // Vista previa = servidor de desarrollo de cada stack en su propio puerto, aparte del

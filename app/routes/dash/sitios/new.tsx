@@ -9,6 +9,7 @@ import { createSite, engineChoicesFor, type SiteKind } from "~/.server/core/site
 import { DEFAULT_SITE_ENGINE } from "~/lib/fleetEngines";
 import { HOSTING_CATALOG, sleepPrice } from "~/lib/hostingCatalog";
 import { SITE_STACKS, isSiteStack, type SiteStackId } from "~/lib/siteStacks";
+import { SITE_TEMPLATES, isSiteTemplate, stackHasTemplates, templateFor, type SiteTemplateKey } from "~/lib/siteTemplates";
 import type { Route } from "./+types/new";
 
 export const meta = () => [{ title: "Nuevo sitio — EasyBits" }, { name: "robots", content: "noindex" }];
@@ -30,9 +31,11 @@ export const action = async ({ request }: Route.ActionArgs) => {
   const model = String(form.get("model") || "") || null;
   const stackRaw = form.get("stack");
   const stack = kind === "webapp" && isSiteStack(stackRaw) ? stackRaw : null;
+  const templateRaw = form.get("template");
+  const template = stackHasTemplates(stack) && isSiteTemplate(templateRaw) ? templateRaw : null;
   try {
     // Ya no hay "siempre prendida": toda web app nueva duerme sin visitas.
-    const { site, checkoutUrl } = await createSite(ctx, { kind, name, engine, model, secretValue, sleep: true, stack });
+    const { site, checkoutUrl } = await createSite(ctx, { kind, name, engine, model, secretValue, sleep: true, stack, template });
     // El primer mensaje viaja por la URL y el editor lo manda solo al abrir.
     const q = new URLSearchParams();
     if (prompt) q.set("prompt", prompt);
@@ -64,8 +67,13 @@ export default function NewSite() {
   const result = useActionData<typeof action>();
   // La web app se construye gratis en una caja de trabajo; al publicar se cobra esa máquina.
   const work = HOSTING_CATALOG.plus;
-  const [prompt, setPrompt] = useState("");
+  // ?prompt= llega del hero de la home (sin sesión → login → aquí, ya escrito).
+  const [prompt, setPrompt] = useState(() => searchParams.get("prompt") ?? "");
   const [stack, setStack] = useState<SiteStackId | "node">("tanstack");
+  // Plantilla de la caja dorada: la que toca al prompt hasta que se elige otra ("none" = desde cero).
+  const [templatePick, setTemplatePick] = useState<SiteTemplateKey | "none" | null>(null);
+  const template = templatePick ?? templateFor(prompt);
+  const withTemplates = kind === "webapp" && stack !== "node" && stackHasTemplates(stack);
   return (
     <article className="pt-20 px-4 sm:px-8 pb-24 md:pl-36 w-full max-w-2xl mx-auto">
       <h1 className="text-2xl sm:text-4xl font-black tracking-tight uppercase mb-6">Nuevo sitio</h1>
@@ -109,6 +117,24 @@ export default function NewSite() {
               ))}
             </div>
             <input type="hidden" name="stack" value={stack} />
+          </div>
+        )}
+        {withTemplates && (
+          <div>
+            <span className="text-sm font-bold">Empieza desde</span>
+            <div className="mt-1 flex flex-wrap gap-2">
+              {[...SITE_TEMPLATES.map((t) => [t.key, t.label] as const), ["none", "Desde cero"] as const].map(([k, label]) => (
+                <button
+                  key={k}
+                  type="button"
+                  onClick={() => setTemplatePick(k)}
+                  className={`px-3 py-1.5 rounded-full border-2 text-xs font-semibold transition-all ${template === k ? "border-black bg-brand-500/10" : "border-gray-200 hover:border-gray-400"}`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            {template !== "none" && <input type="hidden" name="template" value={template} />}
           </div>
         )}
 
