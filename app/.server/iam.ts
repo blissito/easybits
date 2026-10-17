@@ -114,6 +114,26 @@ export async function listApiKeys(userId: string) {
   });
 }
 
+const ALL_SCOPES: ApiKeyScope[] = ["READ", "WRITE", "DELETE", "ADMIN"];
+
+/**
+ * Qué scopes puede llevar una key nueva: válidos y, salvo que quien la crea sea ADMIN,
+ * nunca más que los suyos (una key READ no fabrica una WRITE; una OAuth no fabrica ADMIN).
+ * Sin `requested` = READ/WRITE/DELETE, lo de siempre. Devuelve el error como texto.
+ */
+export function mintableScopes(
+  callerScopes: ApiKeyScope[],
+  requested: unknown
+): { scopes: ApiKeyScope[] } | { error: string } {
+  const list = requested == null ? (["READ", "WRITE", "DELETE"] as ApiKeyScope[]) : requested;
+  if (!Array.isArray(list) || list.length === 0) return { error: "scopes must be a non-empty array" };
+  const bad = list.filter((s) => !ALL_SCOPES.includes(s as ApiKeyScope));
+  if (bad.length) return { error: `unknown scope(s): ${bad.join(", ")} (valid: ${ALL_SCOPES.join(", ")})` };
+  const over = (list as ApiKeyScope[]).filter((s) => !hasScope(callerScopes, s));
+  if (over.length) return { error: `your credential cannot grant: ${over.join(", ")}` };
+  return { scopes: [...new Set(list as ApiKeyScope[])] };
+}
+
 export function hasScope(
   scopes: ApiKeyScope[],
   required: ApiKeyScope

@@ -306,6 +306,21 @@ easybits web crawl https://docs.ejemplo.com --max-pages 5 --main             # 1
 
 \`extract\` cobra 1 consulta por registro devuelto (no por intento) y casi todas las fuentes tardan 30-120 s: sin \`--wait\` devuelve el \`jobId\` y lo revisas con \`extract-status\`. Fuentes: \`google_maps\`, \`mercadolibre\`, \`amazon_product\`, \`instagram_profiles\`, \`linkedin_company\`… (o \`--dataset <id>\` del catálogo).
 
+### Webhooks y API keys
+
+\`\`\`bash
+easybits webhooks ls
+easybits webhooks create https://ejemplo.com/hook --event file.created --event form.submitted   # imprime el secreto UNA vez
+easybits webhooks update 66f0c2a1b2c3d4e5f6a7b8c9 --event file.created,file.deleted   # o --url, --pause, --resume
+easybits webhooks rm 66f0c2a1b2c3d4e5f6a7b8c9 --yes
+
+easybits keys ls                                    # sólo el prefijo
+easybits keys create ci-deploy --scopes READ,WRITE --expires 2027-01-31   # imprime la key UNA vez
+easybits keys revoke ci-deploy --yes                # por id, nombre o prefijo
+\`\`\`
+
+El secreto del webhook (\`whsec_…\`) y la key nueva (\`eb_sk_live_…\`) sólo salen al crearlos: con \`--json\` vienen en \`secret\` y \`raw\`. Una key nunca puede crear otra con más permisos que los suyos (una READ no fabrica una WRITE, y sólo el panel o una key ADMIN da ADMIN). \`keys revoke\` avisa si es la key que usa el propio CLI.
+
 ### Sitios (creador de sitios)
 
 \`\`\`bash

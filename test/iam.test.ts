@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { generateApiKey, hasScope } from "~/.server/iam";
+import { generateApiKey, hasScope, mintableScopes } from "~/.server/iam";
 
 describe("iam", () => {
   describe("generateApiKey", () => {
@@ -30,6 +30,28 @@ describe("iam", () => {
       expect(hasScope(["READ"], "READ")).toBe(true);
       expect(hasScope(["READ"], "WRITE")).toBe(false);
       expect(hasScope(["READ", "WRITE"], "WRITE")).toBe(true);
+    });
+  });
+
+  describe("mintableScopes", () => {
+    it("sin scopes pedidos = READ/WRITE/DELETE (lo que usa el SSO con su token OAuth)", () => {
+      expect(mintableScopes(["READ", "WRITE", "DELETE"], undefined)).toEqual({ scopes: ["READ", "WRITE", "DELETE"] });
+    });
+
+    it("una key nunca fabrica otra con más permisos", () => {
+      expect(mintableScopes(["READ"], ["READ", "WRITE"])).toEqual({ error: expect.stringMatching(/cannot grant: WRITE/) });
+      expect(mintableScopes(["READ", "WRITE", "DELETE"], ["ADMIN"])).toEqual({ error: expect.stringMatching(/ADMIN/) });
+      expect(mintableScopes(["READ"], undefined)).toHaveProperty("error");
+    });
+
+    it("ADMIN (sesión del panel) puede todo; scopes repetidos se dedupean", () => {
+      expect(mintableScopes(["ADMIN"], ["ADMIN", "READ", "READ"])).toEqual({ scopes: ["ADMIN", "READ"] });
+    });
+
+    it("rechaza scopes desconocidos o lista vacía", () => {
+      expect(mintableScopes(["ADMIN"], ["OWNER"])).toEqual({ error: expect.stringMatching(/unknown scope/) });
+      expect(mintableScopes(["ADMIN"], [])).toHaveProperty("error");
+      expect(mintableScopes(["ADMIN"], "READ")).toHaveProperty("error");
     });
   });
 });

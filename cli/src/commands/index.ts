@@ -15,6 +15,7 @@ import { completion } from "./completion.js";
 import { docs } from "./docs.js";
 import { doctor } from "./doctor.js";
 import { webCmd } from "./web.js";
+import { keys, webhooks } from "./webhooks.js";
 import { secrets } from "./secrets.js";
 
 // El orden aquí es el orden de la ayuda.
@@ -38,6 +39,8 @@ export const COMMANDS: Command[] = [
   websites,
   providers,
   webCmd,
+  webhooks,
+  keys,
   mcp,
   sshKey,
   sshProxy,

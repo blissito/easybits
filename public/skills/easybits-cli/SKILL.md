@@ -209,6 +209,20 @@ easybits web extract-status "$JOB" --json                    # {status: running|
 easybits web crawl https://docs.example.com --max-pages 5 --main --json   # {pages: [{url, markdown}], pending}
 ```
 
+## Webhooks and API keys
+
+```bash
+easybits webhooks create https://example.com/hook --event file.created,form.submitted --json   # {id, url, events, secret} — secret ONLY here
+easybits webhooks ls --json
+easybits webhooks update "$WH" --pause            # --resume resets failCount; --url, --event to change
+easybits webhooks rm "$WH" --json --yes
+easybits keys create ci --scopes READ,WRITE --json   # {id, prefix, raw, scopes} — raw ONLY here; store it in a secret
+easybits keys ls --json                            # prefix, scopes, status; never the key
+easybits keys revoke ci --json --yes               # id, name or prefix
+```
+
+A key cannot mint a key with more scopes than its own (400 `your credential cannot grant: …`).
+
 ## Site-builder sites (/dash/sitios)
 
 ```bash

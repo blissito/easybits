@@ -160,6 +160,21 @@ easybits web crawl https://docs.example.com --max-pages 5 --main             # 1
 
 \`extract\` charges 1 query per record returned (not per attempt) and most sources take 30-120 s: without \`--wait\` it returns the \`jobId\` and you check it with \`extract-status\`. Sources: \`google_maps\`, \`mercadolibre\`, \`amazon_product\`, \`instagram_profiles\`, \`linkedin_company\`… (or \`--dataset <id>\` from the catalog).
 
+### Webhooks and API keys
+
+\`\`\`bash
+easybits webhooks ls
+easybits webhooks create https://example.com/hook --event file.created --event form.submitted   # prints the secret ONCE
+easybits webhooks update 66f0c2a1b2c3d4e5f6a7b8c9 --event file.created,file.deleted   # or --url, --pause, --resume
+easybits webhooks rm 66f0c2a1b2c3d4e5f6a7b8c9 --yes
+
+easybits keys ls                                    # prefix only
+easybits keys create ci-deploy --scopes READ,WRITE --expires 2027-01-31   # prints the key ONCE
+easybits keys revoke ci-deploy --yes                # by id, name or prefix
+\`\`\`
+
+The webhook secret (\`whsec_…\`) and the new key (\`eb_sk_live_…\`) only appear at creation: with \`--json\` they come in \`secret\` and \`raw\`. A key can never create one with more permissions than its own (a READ key cannot mint a WRITE one, and only the dashboard or an ADMIN key grants ADMIN). \`keys revoke\` warns if it is the key the CLI itself is using.
+
 ### Sites (site builder)
 
 \`\`\`bash

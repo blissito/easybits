@@ -106,6 +106,17 @@ easybits web extract instagram_profiles --url https://instagram.com/easybits   #
 easybits web extract-status j_abc123                          # records as JSON lines once done
 easybits web crawl https://docs.example.com --max-pages 5 --main
 
+# Webhooks (HMAC-signed POSTs when your files, websites or forms change)
+easybits webhooks ls
+easybits webhooks create https://example.com/hook --event file.created --event form.submitted   # secret shown ONCE
+easybits webhooks update 66f0c2a1b2c3d4e5f6a7b8c9 --event file.created,file.deleted   # --pause / --resume / --url
+easybits webhooks rm 66f0c2a1b2c3d4e5f6a7b8c9 --yes
+
+# API keys
+easybits keys ls                                    # prefix only
+easybits keys create ci-deploy --scopes READ,WRITE --expires 2027-01-31   # prints the key ONCE
+easybits keys revoke ci-deploy --yes                # by id, name or prefix
+
 # Account secrets vault (values never come back; used by name: $secret:NAME, --secret NAME)
 easybits secrets ls
 easybits secrets set --dotenv .env.production   # KEY=VALUE lines; - reads stdin
