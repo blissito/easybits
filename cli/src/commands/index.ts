@@ -13,6 +13,7 @@ import { apply } from "./spec.js";
 import { completion } from "./completion.js";
 import { docs } from "./docs.js";
 import { doctor } from "./doctor.js";
+import { webCmd } from "./web.js";
 import { secrets } from "./secrets.js";
 
 // El orden aquí es el orden de la ayuda.
@@ -34,6 +35,7 @@ export const COMMANDS: Command[] = [
   files,
   websites,
   providers,
+  webCmd,
   mcp,
   sshKey,
   sshProxy,

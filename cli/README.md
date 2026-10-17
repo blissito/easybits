@@ -98,6 +98,14 @@ easybits sandboxes domains add sb_abc123 shop.example.com --port 3000
 easybits sandboxes domains verify sb_abc123 shop.example.com   # exit 1 until it is ready
 easybits sandboxes domains rm sb_abc123 shop.example.com --yes
 
+# Web (metered in web queries; out of them → exit 1 with the link to buy a pack)
+easybits web search dentista polanco --country mx            # organic results: # / title / url
+easybits web fetch https://example.com --markdown --main      # body to stdout (--out page.md to save it)
+easybits web extract google_maps --input '[{"keyword":"dentista Polanco CDMX","country":"MX"}]' --limit 50 --wait
+easybits web extract instagram_profiles --url https://instagram.com/easybits   # async: prints the jobId
+easybits web extract-status j_abc123                          # records as JSON lines once done
+easybits web crawl https://docs.example.com --max-pages 5 --main
+
 # Account secrets vault (values never come back; used by name: $secret:NAME, --secret NAME)
 easybits secrets ls
 easybits secrets set --dotenv .env.production   # KEY=VALUE lines; - reads stdin

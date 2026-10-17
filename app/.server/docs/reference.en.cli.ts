@@ -144,6 +144,22 @@ easybits sandboxes domains rm sb_abc123 shop.example.com --yes
 
 \`easybits domains <ls|add|verify|rm> <sandbox> …\` (the old form) still works: it runs \`sandboxes domains\` and says so on stderr. \`domains dns-auto\` without Mailmask connected exits 1 with the link to connect it once in a browser.
 
+### Web
+
+Search, read, extract and crawl the web. Metered in **web queries** (packs at \`/dash/packs?tab=web\`); out of them it exits 1 with the link to buy.
+
+\`\`\`bash
+easybits web search dentist polanco --country mx              # organic results: # / title / url (1 query)
+easybits web fetch https://example.com --markdown --main      # body to stdout; --out page.md saves it (1 query)
+easybits web extract google_maps --input '[{"keyword":"dentist Polanco CDMX","country":"MX"}]' --limit 50 --wait
+easybits web extract mercadolibre --input '{"query":"iphone 15"}' --json   # answers right away
+easybits web extract instagram_profiles --url https://instagram.com/easybits   # async: prints the jobId
+easybits web extract-status j_abc123                          # once done: one JSON record per line
+easybits web crawl https://docs.example.com --max-pages 5 --main             # 1 query per page
+\`\`\`
+
+\`extract\` charges 1 query per record returned (not per attempt) and most sources take 30-120 s: without \`--wait\` it returns the \`jobId\` and you check it with \`extract-status\`. Sources: \`google_maps\`, \`mercadolibre\`, \`amazon_product\`, \`instagram_profiles\`, \`linkedin_company\`… (or \`--dataset <id>\` from the catalog).
+
 ### Sites (site builder)
 
 \`\`\`bash

@@ -196,6 +196,19 @@ easybits sandboxes domains ls "$ID" --json
 easybits sandboxes domains rm "$ID" shop.example.com --json --yes
 ```
 
+## Web (search, read, extract, crawl)
+
+Metered in web queries; out of them → exit 1, `code: 1`, hint with the buy link (not a plan limit).
+
+```bash
+easybits web search "dentista polanco" --country mx --json   # {query, engine, results: {organic: [{title, link, …}]}}
+easybits web fetch https://example.com --markdown --main     # clean markdown on stdout; --json → {url, statusCode, format, body}
+easybits web extract google_maps --input '[{"keyword":"dentista Polanco CDMX","country":"MX"}]' --limit 50 --wait --json
+easybits web extract instagram_profiles --url https://instagram.com/x --json   # {jobId, status: "running"} (30-120 s)
+easybits web extract-status "$JOB" --json                    # {status: running|done|error, records}; 1 query per record
+easybits web crawl https://docs.example.com --max-pages 5 --main --json   # {pages: [{url, markdown}], pending}
+```
+
 ## Site-builder sites (/dash/sitios)
 
 ```bash
