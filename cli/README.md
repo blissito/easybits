@@ -292,6 +292,14 @@ Full reference: https://www.easybits.cloud/docs#cli · https://www.easybits.clou
 - `easybits domains …` now manages your account's domains (`/api/v2/domains`); a sandbox's
   domains moved to `sandboxes domains` (the old form still works and says so on stderr).
 - `easybits web search|fetch|extract|extract-status|crawl`.
+- `easybits webhooks ls|create|update|rm` and `easybits keys ls|create|revoke` (`keys create` prints
+  the key once). Creating a key now needs WRITE and can't grant more than your own key has.
+- `easybits websites get|files ls|upload|deploy|rm` (`deploy` uploads a whole folder keeping paths).
+- `easybits documents …`: ls, get, create (`--html` per page or a blank `--format`), pages
+  ls|get|set, add-page, rm-page, reorder, deploy, export pdf|png, rm. You write the HTML and set it;
+  no AI generate/refine from the CLI.
+- `easybits video …`: projects ls|get|create|rm, scenes ls|add|set|rm|reorder, music set,
+  render (`--wait`, `--out`, `--timeout`) and ls.
 - `init` defaults to `--app-dir /app`, like `machines launch` (it was `/srv/app`).
 - The update notice checks npm at most once an hour (the docs said once a day).
 
