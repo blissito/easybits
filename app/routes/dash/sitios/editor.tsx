@@ -449,6 +449,9 @@ export default function SiteEditor() {
   // Static carga el picker desde /s/:slug; una webapp TanStack lo carga su __root
   // (starter). En Node libre el parámetro no hace nada.
   const previewUrl = site.previewUrl ? `${site.previewUrl}?eb_edit=1` : null;
+  // Una web app en su caja de trabajo aún no tiene producción: «Abrir» lleva a la vista previa.
+  const unpublished = site.kind === "webapp" && !!site.sandbox?.workBox;
+  const openUrl = site.archivedAt ? null : site.url ?? (unpublished ? site.previewUrl : null);
   // Web app recién creada: mientras corre su PRIMER turno nada escucha todavía en el
   // puerto y el host contesta su error en JSON. No se monta el iframe hasta que el
   // turno termine (al terminar sube previewKey y carga la app ya arrancada).
@@ -655,9 +658,17 @@ export default function SiteEditor() {
       {/* Preview */}
       <main className={`${mobileTab === "preview" ? "flex" : "hidden"} md:flex flex-1 flex-col min-w-0`}>
         <div className="px-4 py-2 border-b border-gray-200 bg-white flex items-center gap-3 text-sm overflow-x-auto whitespace-nowrap">
-          <span className="font-mono text-xs text-gray-500 truncate flex-1">{site.url ?? "sin publicar"}</span>
-          {site.url && (
-            <a href={site.url} target="_blank" rel="noreferrer" className="text-brand-500 font-bold">Abrir ↗</a>
+          {/* Sin publicar, el puerto de producción (3000) no sirve nada: se abre la vista previa. */}
+          {openUrl ? (
+            <>
+              <span className="font-mono text-xs text-gray-500 truncate flex-1">
+                {unpublished && <span className="mr-2 rounded-full border border-gray-300 px-2 py-0.5 font-sans text-[10px] font-bold">sin publicar · vista previa</span>}
+                {openUrl}
+              </span>
+              <a href={openUrl} target="_blank" rel="noreferrer" className="text-brand-500 font-bold">Abrir ↗</a>
+            </>
+          ) : (
+            <span className="font-mono text-xs text-gray-500 truncate flex-1">sin publicar</span>
           )}
           {site.kind === "webapp" && site.sandboxId && (
             <>

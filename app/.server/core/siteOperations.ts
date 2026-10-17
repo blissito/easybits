@@ -211,7 +211,16 @@ export async function listSites(ctx: AuthContext) {
     select: { id: true, slug: true, subdomainEnabled: true, apexOf: { select: { domain: true, verified: true } } },
   });
   const bySite = Object.fromEntries(websites.map((w) => [w.id, w]));
-  return rows.map((r) => ({ ...r, url: publicUrl(r, r.websiteId ? bySite[r.websiteId] : null) }));
+  // Sin publicar (caja de trabajo) no hay URL pública: el :3000 no sirve nada hasta «Publicar».
+  const work = await db.sandbox.findMany({
+    where: { sandboxId: { in: rows.map((r) => r.sandboxId).filter(Boolean) as string[] }, workBox: true },
+    select: { sandboxId: true },
+  });
+  const unpublished = new Set(work.map((w) => w.sandboxId));
+  return rows.map((r) => ({
+    ...r,
+    url: r.sandboxId && unpublished.has(r.sandboxId) ? null : publicUrl(r, r.websiteId ? bySite[r.websiteId] : null),
+  }));
 }
 
 /** Forma pública de un sitio (API v2, MCP `list_sites`, SDK, CLI `sites ls`). */
@@ -263,7 +272,8 @@ export async function getSite(ctx: AuthContext, id: string) {
     ...site,
     website,
     sandbox,
-    url: publicUrl(site, website),
+    // Sin publicar (caja de trabajo) no hay URL pública: el :3000 no sirve nada hasta «Publicar».
+    url: sandbox?.workBox ? null : publicUrl(site, website),
     previewUrl: previewUrl(site, website, sandbox),
     hasAdmin: site.kind === "webapp" && !!stack && stackHasAuth(stack),
   };
