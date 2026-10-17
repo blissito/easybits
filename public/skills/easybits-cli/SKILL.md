@@ -1,6 +1,6 @@
 ---
 name: easybits-cli
-description: "Drive EasyBits from the terminal with the easybits CLI (npm @easybits.cloud/cli) - sandboxes, exec, sandbox files, permanent machines and releases, secrets, custom domains, site-builder sites, documents (HTML pages → URL, PDF, PNG), SQL databases, agents (prompt, skills, MCP, files, clone) and files, all with --json and stable exit codes. Use when a coding agent has a shell and needs to create or operate EasyBits resources without writing HTTP calls, or when the user mentions the easybits CLI."
+description: "Drive EasyBits from the terminal with the easybits CLI (npm @easybits.cloud/cli) - sandboxes, exec, sandbox files, permanent machines and releases, secrets, custom domains, site-builder sites, documents (HTML pages → URL, PDF, PNG), video projects (HTML scenes → MP4), SQL databases, agents (prompt, skills, MCP, files, clone) and files, all with --json and stable exit codes. Use when a coding agent has a shell and needs to create or operate EasyBits resources without writing HTTP calls, or when the user mentions the easybits CLI."
 license: MIT
 compatibility: Needs Node 22+ (npx is enough), network access to https://www.easybits.cloud and an EasyBits API key
 metadata:
@@ -77,9 +77,9 @@ at another server (default https://www.easybits.cloud).
 4. Put flags after the subcommand: `easybits sb create --template node`, not
    `easybits --template node sb create`.
 5. Deletes need `--yes`: `sb destroy`, `machines rm`, `agents destroy`, `db rm`, `domains rm`, `files rm`,
-   `agents files rm`, `agents skills rm`, `documents rm|rm-page`.
+   `agents files rm`, `agents skills rm`, `documents rm|rm-page`, `video projects|scenes rm`.
    With `--json` (or no terminal) they never prompt; without `--yes` they exit 2.
-6. Names work where ids do: any agent, sandbox/machine, database, site or document argument takes its name
+6. Names work where ids do: any agent, sandbox/machine, database, site, document or video project argument takes its name
    (`easybits agents get helper`, `easybits sb exec scratch -- ls`, `easybits db query leads …`).
    Exact match, case-insensitive. Two with the same name → exit 2, `error` says so and `hint`
    lists the ids: retry with one. For destructive commands prefer the id you got back on create.
@@ -293,6 +293,29 @@ li-feed, ig-square, fb-square, ig-story, wsp-status, tiktok, slide-16-9, or `WxH
 page edge to edge at that size; a full HTML document is normalized into a page. Edit one page at a
 time with `pages get` → change the file → `pages set`, and verify with `export png` before
 `deploy`. `export` renders on the server, so sizes are exact.
+
+## Video projects (HTML + GSAP scenes → MP4)
+
+```bash
+easybits video projects create --name "Fall promo" --format square --json   # {id, width, height, fps, status:"draft", …}
+easybits video projects ls --json             # {total, items:[{id, name, sceneCount, durationSec, status, lastRenderUrl}]}
+easybits video projects get "$VID" --json     # + scenes[{id, order, label, durationSec, html, timeline, narration}], failReason
+easybits video scenes add "$VID" scene.html --timeline "tl.from('#t',{opacity:0,duration:.5})" --narration "…" --json
+easybits video scenes ls "$VID" --json        # [{n, id, label, durationSec, narration}]
+easybits video scenes set "$VID" 2 scene2.html --duration 4 --json   # {scene, changed}
+easybits video scenes reorder "$VID" 2 1 --json
+easybits video scenes rm "$VID" 2 --yes --json
+easybits video music set "$VID" https://…/bed.mp3 --json   # none removes it
+easybits video render "$VID" --wait --out promo.mp4 --json # status ready + lastRenderUrl; failed → exit 1
+easybits video projects rm "$VID" --yes --json
+easybits video ls --json                      # AI-generated clips (video_create), not projects
+```
+
+Scene HTML is absolutely positioned to fill the frame (no `<script>`, media as `assets/<name>`);
+`--timeline` is a file or the GSAP code against the paused `tl`. Narration is synthesized at render
+(voices em_santa, em_alex, ef_dora) and the scene stretches to fit it. `render` without `--wait`
+only starts it: poll `video projects get --json` until `status` is `ready` or `failed`. Music must be
+a public URL (`easybits files upload song.mp3 --public` first).
 
 ## Databases (libSQL)
 

@@ -18,6 +18,7 @@ import { webCmd } from "./web.js";
 import { keys, webhooks } from "./webhooks.js";
 import { secrets } from "./secrets.js";
 import { documents } from "./documents.js";
+import { video } from "./video.js";
 
 // El orden aquí es el orden de la ayuda.
 export const COMMANDS: Command[] = [
@@ -39,6 +40,7 @@ export const COMMANDS: Command[] = [
   files,
   websites,
   documents,
+  video,
   providers,
   webCmd,
   webhooks,

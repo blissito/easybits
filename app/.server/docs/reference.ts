@@ -360,6 +360,28 @@ easybits documents rm "Cotización ACME" --yes
 
 Una página se indica por su número (1 = la primera, como en el editor) o por su id. \`--format\` es \`letter\` (default), \`ig-feed\`, \`li-feed\`, \`ig-square\`, \`fb-square\`, \`ig-story\`, \`wsp-status\`, \`tiktok\`, \`slide-16-9\` o \`WxH\` en px (100-10000); sin \`--html\` el documento arranca con una página en blanco de ese tamaño. Las páginas pasan por el mismo camino que \`set_page_html\`: un HTML completo (doctype, \`<style>\`) se normaliza a página. \`export\` renderiza en el servidor (Chromium), así que los tamaños salen exactos sin importar tu máquina: \`pdf\` escribe un archivo (default \`<nombre>.pdf\`), \`png\` un archivo por página en una carpeta (default \`.\`) y además los guarda en tus Files. \`rm\` borra el documento para siempre.
 
+### Video
+
+Un proyecto de video es una lista ordenada de escenas: cada una es HTML (posicionado en absoluto para llenar el cuadro; los medios como \`assets/<nombre>\`), un fragmento GSAP opcional sobre un timeline pausado \`tl\` y una narración opcional que se sintetiza al renderizar (kokoro: \`em_santa\` por default). El servidor lo compila a una composición HyperFrames y renderiza el MP4 en tu caja on-demand.
+
+\`\`\`bash
+easybits video projects create --name "Promo otoño" --format square   # portrait (default 1080x1920), landscape, WxH…
+easybits video projects ls
+easybits video projects get "Promo otoño"                             # escenas, música, estado, último MP4
+easybits video scenes add "Promo otoño" intro.html --timeline intro.js --narration "Llegó el otoño"
+easybits video scenes add "Promo otoño" oferta.html --duration 4 --after 1 --voice ef_dora
+easybits video scenes ls "Promo otoño"
+easybits video scenes set "Promo otoño" 2 oferta-v2.html --duration 5  # HTML y/o banderas
+easybits video scenes reorder "Promo otoño" 2 1
+easybits video scenes rm "Promo otoño" 2 --yes
+easybits video music set "Promo otoño" https://cdn.example.com/cama.mp3   # none la quita
+easybits video render "Promo otoño" --wait --out promo.mp4
+easybits video projects rm "Promo otoño" --yes
+easybits video ls                                                     # clips generados con IA (video_create)
+\`\`\`
+
+Una escena se indica por su número (1 = la primera) o su id; el proyecto, por nombre o id. \`--timeline\` toma un archivo o el código GSAP tal cual; \`--narration ""\` quita la voz en off y \`--duration\` (0.3-120 s) por default es lo que dure la narración. \`render\` sin \`--wait\` arranca el render y regresa en cuanto el servidor lo marca \`rendering\`; con \`--wait\` muestra un spinner (renglones simples sin terminal, nada con \`--json\`) hasta que el proyecto queda \`ready\` (imprime la URL del MP4; \`--out\` lo baja) o \`failed\` (sale con 1 y el motivo). Si un proxy corta la petición larga, el CLI sigue el estado del proyecto (\`--timeout\`, 15 min por default). La música es una URL pública: sube antes un archivo local con \`easybits files upload cancion.mp3 --public\`.
+
 ### Bases de datos
 
 \`\`\`bash
@@ -461,7 +483,7 @@ Una sola regla, como \`gh\`: \`easybits <sustantivo> <verbo>\`. Las formas vieja
 
 ### Nombres en vez de ids
 
-Todo comando que recibe un agente, un sandbox o máquina, una base de datos, un sitio o un documento acepta su **nombre** además del id: \`easybits sb exec pruebas -- ls\`, \`easybits sb domains ls tienda\`, \`easybits machines deploy tienda -m "v2"\`. Un id (\`sb_…\`, o el id de 24 caracteres de agentes, bases, sitios y documentos) pasa directo; un nombre se busca exacto, sin distinguir mayúsculas, en tu lista (una petición por corrida). Si dos comparten el nombre, el CLI sale con 2 y enlista los ids; si ninguno coincide, sale con 1 y te dice qué \`ls\` correr.
+Todo comando que recibe un agente, un sandbox o máquina, una base de datos, un sitio, un documento o un proyecto de video acepta su **nombre** además del id: \`easybits sb exec pruebas -- ls\`, \`easybits sb domains ls tienda\`, \`easybits machines deploy tienda -m "v2"\`. Un id (\`sb_…\`, o el id de 24 caracteres de agentes, bases, sitios, documentos y proyectos de video) pasa directo; un nombre se busca exacto, sin distinguir mayúsculas, en tu lista (una petición por corrida). Si dos comparten el nombre, el CLI sale con 2 y enlista los ids; si ninguno coincide, sale con 1 y te dice qué \`ls\` correr.
 
 ### Archivos, sitios y cuenta
 

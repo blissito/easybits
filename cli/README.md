@@ -203,6 +203,20 @@ easybits documents export pdf "ACME quote" --out quote.pdf
 easybits documents export png Carousel --out ./slides   # one PNG per page, exact size
 easybits documents rm "ACME quote" --yes
 
+# Video: HTML + GSAP scenes with narration, rendered to MP4 (scene = number 1… or id)
+easybits video projects create --name "Fall promo" --format square   # portrait 1080x1920 by default
+easybits video projects ls
+easybits video projects get "Fall promo"           # scenes, music, status, last MP4
+easybits video scenes add "Fall promo" intro.html --timeline intro.js --narration "Fall is here"
+easybits video scenes ls "Fall promo"
+easybits video scenes set "Fall promo" 1 --duration 4 --voice ef_dora
+easybits video scenes reorder "Fall promo" 2 1
+easybits video scenes rm "Fall promo" 2 --yes
+easybits video music set "Fall promo" https://cdn.example.com/bed.mp3   # none removes it
+easybits video render "Fall promo" --wait --out promo.mp4   # without --wait: starts and returns
+easybits video projects rm "Fall promo" --yes
+easybits video ls                                  # AI-generated clips
+
 # MCP, SSH, docs
 easybits whoami        # account and where the credential comes from
 easybits doctor        # Node, CLI version, credential, API; exits 1 on a problem
@@ -213,7 +227,7 @@ easybits docs cli      # a docs section as markdown (--en for English)
 easybits docs --open   # open the docs in your browser
 ```
 
-**Names or ids.** Wherever a command takes an agent, a sandbox/machine, a database, a site or a document, you can
+**Names or ids.** Wherever a command takes an agent, a sandbox/machine, a database, a site, a document or a video project, you can
 pass its name instead of the id (`easybits sb exec scratch -- ls`, `easybits sb domains ls shop`).
 The match is exact and case-insensitive; if two share the name the CLI exits 2 and lists the ids.
 

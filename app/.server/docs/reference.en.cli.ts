@@ -214,6 +214,28 @@ easybits documents rm "ACME quote" --yes
 
 A page is given by its number (1 = the first, as in the editor) or its id. \`--format\` is \`letter\` (default), \`ig-feed\`, \`li-feed\`, \`ig-square\`, \`fb-square\`, \`ig-story\`, \`wsp-status\`, \`tiktok\`, \`slide-16-9\` or \`WxH\` in px (100-10000); without \`--html\` the document starts with one blank page of that size. Pages go through the same path as \`set_page_html\`: a full HTML document (doctype, \`<style>\`) is normalized into a page. \`export\` renders on the server (Chromium), so sizes are exact whatever your machine: \`pdf\` writes one file (default \`<name>.pdf\`), \`png\` one file per page into a folder (default \`.\`) and also keeps them in your Files. \`rm\` deletes the document for good.
 
+### Video
+
+A video project is an ordered list of scenes: each one is HTML (absolutely positioned to fill the frame; media as \`assets/<name>\`), an optional GSAP snippet against a paused timeline \`tl\`, and optional narration that is synthesized at render time (kokoro: \`em_santa\` by default). The server compiles it to a HyperFrames composition and renders the MP4 on your on-demand box.
+
+\`\`\`bash
+easybits video projects create --name "Fall promo" --format square   # portrait (default 1080x1920), landscape, WxH…
+easybits video projects ls
+easybits video projects get "Fall promo"                             # scenes, music, status, last MP4
+easybits video scenes add "Fall promo" intro.html --timeline intro.js --narration "Fall is here"
+easybits video scenes add "Fall promo" offer.html --duration 4 --after 1 --voice ef_dora
+easybits video scenes ls "Fall promo"
+easybits video scenes set "Fall promo" 2 offer-v2.html --duration 5  # HTML and/or flags
+easybits video scenes reorder "Fall promo" 2 1
+easybits video scenes rm "Fall promo" 2 --yes
+easybits video music set "Fall promo" https://cdn.example.com/bed.mp3   # none removes it
+easybits video render "Fall promo" --wait --out promo.mp4
+easybits video projects rm "Fall promo" --yes
+easybits video ls                                                    # AI-generated clips (video_create)
+\`\`\`
+
+A scene is given by its number (1 = the first) or its id; the project by its name or id. \`--timeline\` takes a file or the GSAP code itself; \`--narration ""\` removes the voiceover and \`--duration\` (0.3-120 s) defaults to what the narration needs. \`render\` without \`--wait\` starts the render and returns once the server marks it \`rendering\`; with \`--wait\` it shows a spinner (plain lines without a terminal, nothing with \`--json\`) until the project is \`ready\` (prints the MP4 URL, \`--out\` downloads it) or \`failed\` (exit 1 with the reason). If a proxy cuts the long request, the CLI keeps following the project's status (\`--timeout\`, 15 min by default). Music is a public URL: upload a local file first with \`easybits files upload song.mp3 --public\`.
+
 ### Databases
 
 \`\`\`bash
@@ -315,7 +337,7 @@ One rule, like \`gh\`: \`easybits <noun> <verb>\`. Older spellings keep working 
 
 ### Names instead of ids
 
-Every command that takes an agent, a sandbox or machine, a database, a site or a document accepts its **name** as well as its id: \`easybits sb exec scratch -- ls\`, \`easybits sb domains ls shop\`, \`easybits machines deploy shop -m "v2"\`. An id (\`sb_…\`, or the 24-character id of agents, databases, sites and documents) passes straight through; a name is matched exactly, case-insensitive, against your list (one request per run). If two share the name the CLI exits 2 and lists the ids; if none matches it exits 1 with the \`ls\` to run.
+Every command that takes an agent, a sandbox or machine, a database, a site, a document or a video project accepts its **name** as well as its id: \`easybits sb exec scratch -- ls\`, \`easybits sb domains ls shop\`, \`easybits machines deploy shop -m "v2"\`. An id (\`sb_…\`, or the 24-character id of agents, databases, sites, documents and video projects) passes straight through; a name is matched exactly, case-insensitive, against your list (one request per run). If two share the name the CLI exits 2 and lists the ids; if none matches it exits 1 with the \`ls\` to run.
 
 ### Files, websites and account
 

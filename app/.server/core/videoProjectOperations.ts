@@ -14,6 +14,7 @@ import { db } from "../db";
 import type { AuthContext } from "../apiAuth";
 import { requireScope } from "../apiAuth";
 import { renderViaHyperframesBox, type VideoInput } from "./fleetVideo";
+import { VIDEO_FORMAT_PRESETS } from "~/lib/videoFormats";
 
 // ---- Types ------------------------------------------------------------------
 
@@ -661,17 +662,7 @@ function resolveFormat(opts: {
   height?: number;
   format?: { preset?: string };
 }): { width: number; height: number } {
-  const presets: Record<string, [number, number]> = {
-    portrait: [1080, 1920],
-    story: [1080, 1920],
-    reel: [1080, 1920],
-    tiktok: [1080, 1920],
-    square: [1080, 1080],
-    landscape: [1920, 1080],
-    "16-9": [1920, 1080],
-    youtube: [1920, 1080],
-  };
-  const preset = opts.format?.preset ? presets[opts.format.preset] : undefined;
+  const preset = opts.format?.preset ? VIDEO_FORMAT_PRESETS[opts.format.preset] : undefined;
   if (preset) return { width: preset[0], height: preset[1] };
   return { width: clampDim(opts.width ?? 1080), height: clampDim(opts.height ?? 1920) };
 }
