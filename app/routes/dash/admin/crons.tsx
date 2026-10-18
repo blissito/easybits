@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { data, redirect, useFetcher, useLoaderData, useRevalidator } from "react-router";
 import { Group, Panel, Separator, usePanelRef, type LayoutChangedMeta } from "react-resizable-panels";
 import { Drawer } from "vaul";
@@ -293,7 +293,7 @@ function JobRow({
       </td>
       <td className="p-3">
         <p className="font-bold leading-tight whitespace-nowrap">{job.name}</p>
-        <p className="font-mono text-xs text-gray-400 whitespace-nowrap">{job.path}</p>
+        <p className="font-mono text-xs text-gray-500 whitespace-nowrap">{job.path}</p>
       </td>
       <td className="p-3 text-sm whitespace-nowrap">{job.schedule}</td>
       <td className="p-3">
@@ -327,8 +327,11 @@ function useCompactTable() {
   const table = useRef<HTMLTableElement>(null);
   // 0 = completa · 1 = compacta · 2 = compacta sin corridas (y las acciones pueden ir en dos renglones).
   const [level, setLevel] = useState(0);
+  // Hasta la primera medida la tabla no se pinta: el HTML del servidor no sabe el ancho y saldría cortada.
+  const [measured, setMeasured] = useState(false);
   const needed = useRef<number[]>([]);
-  useEffect(() => {
+  // Antes de pintar (y en cada cambio de tamaño, también de la tabla cuando llega la fuente).
+  useLayoutEffect(() => {
     const el = box.current;
     if (!el) return;
     const check = () => {
@@ -339,6 +342,8 @@ function useCompactTable() {
         setLevel(level + 1);
       } else if (level > 0 && needed.current[level - 1] && avail >= needed.current[level - 1]) {
         setLevel(level - 1);
+      } else {
+        setMeasured(true);
       }
     };
     check();
@@ -348,7 +353,7 @@ function useCompactTable() {
     if (table.current) ro.observe(table.current);
     return () => ro.disconnect();
   }, [level]);
-  return { box, table, compact: level > 0, tight: level > 1 };
+  return { box, table, compact: level > 0, tight: level > 1, measured };
 }
 
 export default function CronsAdmin() {
@@ -375,7 +380,7 @@ export default function CronsAdmin() {
   }, [anyRunning, revalidator]);
 
   const open = jobs.find((j) => j.key === openKey) ?? null;
-  const { box, table, compact, tight } = useCompactTable();
+  const { box, table, compact, tight, measured } = useCompactTable();
 
   // Copiloto: se monta al abrirlo por primera vez y queda vivo (el hilo no se pierde al cerrar).
   // Escritorio: panel redimensionable que EMPUJA la tabla. Móvil: hoja de vaul desde abajo.
@@ -484,7 +489,7 @@ export default function CronsAdmin() {
                 </div>
               </div>
               <div ref={box} className="border-2 border-black rounded-xl overflow-hidden shadow-[3px_3px_0_#000]">
-                <table ref={table} className="w-full text-sm">
+                <table ref={table} className={`w-full text-sm ${measured ? "" : "invisible"}`}>
                   <thead className="bg-gray-100">
                     <tr>
                       {(compact

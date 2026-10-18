@@ -17,16 +17,20 @@
 .crons-separator::after {
   content: "";
   position: absolute;
-  inset: 0 auto 0 50%;
+  top: 50%;
+  left: 50%;
   width: 4px;
-  transform: translateX(-50%);
+  height: 44px;
+  transform: translate(-50%, -50%);
   border-radius: 9999px;
-  background: transparent;
-  transition: background-color 120ms;
+  /* Una agarradera en reposo (se descubre que se arrastra); al tomarla, la línea completa en morado. */
+  background: #9ca3af;
+  transition: background-color 120ms, height 120ms;
 }
 .crons-separator:hover::after,
 .crons-separator[data-separator="active"]::after,
 .crons-separator:focus-visible::after {
+  height: 100%;
   background: #9870ed;
 }
 
