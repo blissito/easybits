@@ -29,6 +29,7 @@ import {
   getTemplateSnapshot,
   deleteTemplateSnapshot,
   refreshAgentEnv,
+  callHost,
 } from "~/.server/core/sandboxOperations";
 import { getSecretValue } from "~/.server/core/secretOperations";
 import { ensureWorkerTokens } from "~/.server/core/fleetTokens";
@@ -3318,6 +3319,20 @@ async function runTurn(
       // evento existiera seguiría dando duración y tools, que ya es más que nada.
       let workerUsage: FleetTurnUsage | undefined;
       let toolCalls = 0;
+      // Detener: cortar la lectura no basta en ghosty-gc (su cerebro seguía el turno y
+      // gastando tokens); se le pide que lo interrumpa. claude-worker ya corta al colgar.
+      const stopOnBox =
+        opts.signal && worker.template === "ghosty-gc"
+          ? () =>
+              void callHost(
+                "POST",
+                `/v1/sandbox/${worker.sandboxId}/agent/message`,
+                { port: worker.port ?? 3000, path: "/cancel", method: "POST", rawBody: { sessionId: placed.sessionUuid } },
+                worker.ownerId,
+                10_000
+              ).catch((e) => console.warn(`[fleet] cancel en ghosty-gc ${worker.sandboxId}:`, e instanceof Error ? e.message : e))
+          : null;
+      if (stopOnBox) opts.signal!.addEventListener("abort", stopOnBox, { once: true });
       reply = await collectStream(
         stream,
         opts.onChunk,
@@ -3333,6 +3348,7 @@ async function runTurn(
         (u) => { workerUsage = u; },
         opts.signal
       );
+      if (stopOnBox) opts.signal!.removeEventListener("abort", stopOnBox);
       const turnUsage: FleetTurnUsage = {
         ...workerUsage,
         durationMs: Date.now() - turnStart,
