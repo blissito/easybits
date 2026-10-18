@@ -327,6 +327,19 @@ describe("spawnVm — decisión de nacer desde el artifact", () => {
     await expect(pickOrSpawn(CTX, fleetAgents.fa1, "web-1")).rejects.toThrow("host down");
   });
 
+  it("artifactSkip (template con dorado): nace del dorado aunque haya derivado, sin captura", async () => {
+    fleetAgents.fa1.metadata = {
+      artifactSkip: { reason: "golden", at: "x" },
+      artifact: { derivedId: "dt_old", hash: fleetArtifactHash(base), at: "x" },
+    };
+    await pickOrSpawn(CTX, fleetAgents.fa1, "web-1");
+    const params = createAgent.mock.calls[0][1];
+    expect(params.derivedTemplate).toBeUndefined();
+    expect(params.coldBoot).toBeUndefined();
+    expect(params.seedFiles).toEqual(base.persona.seedFiles);
+    expect(createTemplateSnapshot).not.toHaveBeenCalled();
+  });
+
   it("si la captura falla, el turno sale igual", async () => {
     createTemplateSnapshot.mockRejectedValue(new Error("501 DerivedTemplateUnsupported"));
     const placed = await pickOrSpawn(CTX, fleetAgents.fa1, "web-1");

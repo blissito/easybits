@@ -1637,6 +1637,24 @@ export const fleetArtifactEnabled = (fleetAgent?: { persona?: unknown }) => {
 };
 export type FleetArtifact = { derivedId: string; hash: string; at: string; templateVersion?: string };
 
+// Templates cuya forma de flota tiene «dorado» en sandbox-host (SANDBOX_GOLDEN): un clon
+// nace en ~0.23 s contra ~1.8 s de un hijo derivado, y su disco es el mismo (los seeds se
+// siembran al crear; los skills viajan por URL en el turno, no en disco). Sus agentes
+// nacen con `metadata.artifactSkip` y no usan derivado. Decisión 2026-10-18.
+const GOLDEN_TEMPLATES = (process.env.FLEET_GOLDEN_TEMPLATES ?? "claude-worker")
+  .split(",")
+  .map((t) => t.trim())
+  .filter(Boolean);
+export type ArtifactSkip = { reason: "golden"; at: string };
+export function artifactSkipFor(workerTemplate: string): ArtifactSkip | null {
+  return GOLDEN_TEMPLATES.includes(workerTemplate) ? { reason: "golden", at: new Date().toISOString() } : null;
+}
+/** Con `metadata.artifactSkip` el agente nace siempre del dorado: ni derivado ni captura. */
+export function readArtifactSkip(row: { metadata?: unknown } | null | undefined): ArtifactSkip | null {
+  const s = (row?.metadata as { artifactSkip?: ArtifactSkip } | null)?.artifactSkip;
+  return s && typeof s === "object" ? s : null;
+}
+
 export function fleetArtifactKey(fleetAgentId: string): string {
   return `fleet:${fleetAgentId}`;
 }
@@ -1963,15 +1981,14 @@ async function spawnVm(ctx: AuthContext, fleetAgent: SpawnEnvAgent & { name: str
   // Con artifact NO se mandan seedFiles (ya viven en el derivado). Si el host dice que
   // el derivado no sirve (404/409/410) se descarta y se cae al spawn normal, que a su
   // vez lo re-captura (pendingArtifactCapture → captureFleetArtifact en pickOrSpawn).
-  const useArtifact = fleetArtifactEnabled(fleetAgent);
   const hash = fleetArtifactHash(fleetAgent);
   // Se lee FRESCO de la DB, no de la fila del turno: un drop en esta misma colocación
   // (hijo derivado que no arrancó) debe verse en el reintento inmediato.
-  const artifact = useArtifact
-    ? readFleetArtifact(
-        await db.fleetAgent.findUnique({ where: { id: fleetAgent.id }, select: { metadata: true } }).catch(() => fleetAgent)
-      )
+  const freshRow = fleetArtifactEnabled(fleetAgent)
+    ? await db.fleetAgent.findUnique({ where: { id: fleetAgent.id }, select: { metadata: true } }).catch(() => fleetAgent)
     : null;
+  const useArtifact = !!freshRow && !readArtifactSkip(freshRow);
+  const artifact = useArtifact ? readFleetArtifact(freshRow) : null;
   let created: Awaited<ReturnType<typeof createAgent>> | null = null;
   let derivedFrom: string | null = null;
   if (artifact && artifact.hash === hash) {
@@ -3852,6 +3869,7 @@ export async function createFleetAgent(
       // siendo seguro — solo lo posponemos para cobrar el resume caliente.
       idleSuspendMin: opts.idleSuspendMin ?? 2,
       destroyIdleMin: opts.destroyIdleMin ?? 45,
+      ...(artifactSkipFor(workerTemplate) ? { metadata: { artifactSkip: artifactSkipFor(workerTemplate) } } : {}),
     },
   });
 }
