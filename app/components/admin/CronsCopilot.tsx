@@ -5,12 +5,24 @@ import "ghosty-autopilot/styles.css";
 const CHAT_URL = "/api/v2/admin/copilot/chat";
 
 // Las tools de admin-crons en primera persona, como los verbos de casa de Piloto.
-const TOOL_VERBS: ToolVerbs = {
+const VERBS: ToolVerbs = {
   list_crons: { one: "Revisé los crons", many: "Revisé los crons %n veces", running: "Revisando los crons…" },
   get_cron_runs: { one: "Leí el historial de corridas", many: "Leí %n historiales de corridas", running: "Leyendo corridas…" },
   run_cron: { one: "Propuse ejecutar un cron", many: "Propuse %n ejecuciones", running: "Preparando la ejecución…" },
   pause_cron: { one: "Propuse pausar un cron", many: "Propuse %n pausas", running: "Preparando la pausa…" },
+  list_my_crons: { one: "Revisé tus crons", many: "Revisé tus crons %n veces", running: "Revisando tus crons…" },
+  create_cron: { one: "Propuse crear un cron", many: "Propuse %n crons nuevos", running: "Preparando el cron…" },
+  update_cron: { one: "Propuse cambiar un cron", many: "Propuse %n cambios", running: "Preparando el cambio…" },
+  delete_cron: { one: "Propuse borrar un cron", many: "Propuse borrar %n crons", running: "Preparando el borrado…" },
+  run_my_cron: { one: "Propuse correr tu cron", many: "Propuse %n corridas", running: "Preparando la corrida…" },
 };
+// El worker nombra las tools `mcp_easybits_<tool>` (un guion bajo): Piloto sólo reconoce `mcp__server__tool`.
+const TOOL_VERBS: ToolVerbs = Object.fromEntries(
+  Object.entries(VERBS).flatMap(([name, verb]) => [
+    [name, verb],
+    [`mcp_easybits_${name}`, verb],
+  ])
+);
 
 // El servidor antepone al texto del turno lo que se ve en pantalla; en el historial no se muestra.
 const stripContext = (text: string) => text.replace(/^\[Contexto del panel — [^\]]*\]\n/, "");
