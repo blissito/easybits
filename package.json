@@ -98,7 +98,7 @@
     "fixtergeek-mcp-server": "^0.0.8",
     "framer-motion": "^12.18.1",
     "get-port": "^5.1.1",
-    "ghostykit": "^0.4.1",
+    "ghostykit": "^0.7.1",
     "grapesjs": "^0.22.14",
     "graphql": "^16.11.0",
     "graphql-request": "^7.1.2",

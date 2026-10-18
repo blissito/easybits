@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { createAgUiTransport, Piloto, type ToolVerbs } from "ghostykit";
+import { createAgUiTransport, definePlugin, Piloto, type ToolVerbs } from "ghostykit";
 import "ghostykit/styles.css";
 
 const CHAT_URL = "/api/v2/admin/copilot/chat";
@@ -18,16 +18,12 @@ const VERBS: ToolVerbs = {
   // El paso que pone el servidor al contestar una tarjeta (resume de AG-UI).
   confirm_action: { one: "Apliqué tu decisión", many: "Apliqué %n decisiones", running: "Aplicando tu decisión…" },
 };
-// El worker nombra las tools `mcp_easybits_<tool>` (un guion bajo): Piloto sólo reconoce `mcp__server__tool`.
-const TOOL_VERBS: ToolVerbs = Object.fromEntries(
-  Object.entries(VERBS).flatMap(([name, verb]) => [
-    [name, verb],
-    [`mcp_easybits_${name}`, verb],
-  ])
-);
-
 // El servidor antepone al texto del turno lo que se ve en pantalla; en el historial no se muestra.
 const stripContext = (text: string) => text.replace(/^\[Contexto del panel — [^\]]*\]\n/, "");
+
+// Lo propio de este piloto, con nombre (ghostykit 0.7: los plugins son la forma de personalizar).
+// Los verbos sirven también para `mcp_easybits_<tool>`: ghostykit prueba cada sufijo del nombre.
+const PLUGINS = [definePlugin({ name: "crons", tools: { verbs: VERBS }, message: { formatUserText: stripContext } })];
 
 // Un solo hilo por superusuario (el servidor lo guarda): al abrir, Piloto lo pide con un run vacío.
 const THREAD_ID = "admin-crons";
@@ -132,8 +128,7 @@ export function CronsCopilot({ ask, job, onClearJob, onClose, escBlocked, onChan
           suggestions={["Revisa qué cron falló hoy y dime por qué", "Pausa los crons que estén fallando"]}
           placeholder="Dime qué hago con los crons…"
           context={() => ({ page: "crons", ...(jobRef.current ? { job: jobRef.current.key } : {}) })}
-          toolVerbs={TOOL_VERBS}
-          formatUserText={stripContext}
+          plugins={PLUGINS}
           onTurnDone={onChange}
           className="crons-copilot"
           features={{ attachments: false }}
