@@ -20,8 +20,11 @@ export const INBOX_BODY_MAX = 256 * 1024;
 export const INBOX_KEEP_MAX = 1000;
 const RETENTION_MAX_DAYS = 30;
 const READ_MAX = 200;
-/** Headers que nunca se guardan: credenciales del que llama. */
-const DROP_HEADERS = /^(authorization|cookie|set-cookie|proxy-authorization|x-api-key|x-auth-token|x-forwarded-.*|x-real-ip|cf-.*|x-easybits-.*)$/i;
+/**
+ * Headers que nunca se guardan: credenciales del que llama y lo que agregan nuestros proxies
+ * (Caddy, el router), que lleva la IP de quien manda.
+ */
+const DROP_HEADERS = /^(authorization|cookie|set-cookie|proxy-authorization|x-api-key|x-auth-token|x-forwarded-.*|forwarded|x-real-ip|x-real-client-ip|x-client-ip|true-client-ip|fly-.*|cf-.*|via|host|x-easybits-.*)$/i;
 
 const bad = (error: string, status = 400) => Response.json({ error }, { status });
 
