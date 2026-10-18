@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { pickModeMessage, pickThemeMessage, readPickMessage, readPickReady } from "@ghostystudio/pointer/picked";
 import { Link, data, redirect, useFetcher, useLoaderData, useRevalidator, useSearchParams } from "react-router";
 import toast from "react-hot-toast";
 import { resolveTier, sleepPrice } from "~/lib/hostingCatalog";
@@ -150,14 +151,14 @@ export default function SiteEditor() {
     const on = !pointing;
     setPointing(on);
     if (!on) setSelection(null);
-    iframeRef.current?.contentWindow?.postMessage({ type: "eb-pointing", on }, "*");
+    iframeRef.current?.contentWindow?.postMessage(pickModeMessage(on ? "on" : "off"), "*");
   };
   // Sitio anterior a los temas: un turno del agente lo pasa a tokens (el botón «Tema» lo ofrece).
   const ADAPT_PROMPT =
     "Adapta el sitio a temas: crea el archivo/bloque de tema con los tokens indicados en tus instrucciones (si es web app, que el CSS principal lo importe) y reemplaza TODOS los colores literales (clases de color de Tailwind, hex, rgb) por las clases de los tokens que más se parezcan. No cambies textos ni estructura.";
   const clearSelection = () => {
     setSelection(null);
-    iframeRef.current?.contentWindow?.postMessage({ type: "eb-deselect" }, "*");
+    iframeRef.current?.contentWindow?.postMessage(pickModeMessage("clear"), "*");
   };
   const checkout = params.get("checkout");
 
@@ -228,11 +229,17 @@ export default function SiteEditor() {
 
   // Selección desde la vista previa (picker inyectado en /s/:slug?eb_edit=1).
   useEffect(() => {
+    // Protocolo de @ghostystudio/pointer (el picker es el del paquete, `app/lib/eb-picker.ts`). Sólo se
+    // cree lo que venga de ESTE iframe.
     const onMsg = (e: MessageEvent) => {
-      const d = e.data;
-      if (d?.type === "eb-selected" && typeof d.id === "string") setSelection({ id: d.id, tag: String(d.tag || "div") });
-      if (d?.type === "eb-deselected") setSelection(null);
-      if (d?.type === "eb-picker-ready") (e.source as Window | null)?.postMessage({ type: "eb-pointing", on: pointingRef.current }, "*");
+      if (e.source !== iframeRef.current?.contentWindow) return;
+      if (readPickReady(e.data)) {
+        (e.source as Window).postMessage(pickModeMessage(pointingRef.current ? "on" : "off"), "*");
+        return;
+      }
+      const msg = readPickMessage(e.data);
+      if (!msg) return;
+      setSelection(msg.picked?.id ? { id: msg.picked.id, tag: msg.picked.tag } : null);
     };
     window.addEventListener("message", onMsg);
     return () => window.removeEventListener("message", onMsg);
@@ -701,7 +708,7 @@ export default function SiteEditor() {
           <ThemePicker
             siteId={site.id}
             disabled={busy}
-            onPreview={(colors) => iframeRef.current?.contentWindow?.postMessage({ type: "eb-theme", colors }, "*")}
+            onPreview={(colors) => iframeRef.current?.contentWindow?.postMessage(pickThemeMessage(colors), "*")}
             onAdapt={() => void send(ADAPT_PROMPT)}
           />
           <button
