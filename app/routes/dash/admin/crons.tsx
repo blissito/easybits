@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { data, redirect, useFetcher, useLoaderData, useRevalidator } from "react-router";
 import { getUserOrRedirect, isAdminUser } from "~/.server/getters";
 import { CronRunError, listCronOverview, setCronPaused, startManualRun } from "~/.server/cron";
@@ -6,6 +6,9 @@ import type { CronOverview, CronRunView } from "~/.server/cron";
 import { BrutalButton } from "~/components/common/BrutalButton";
 import { SKILLS_ADD_CMD } from "~/components/docs/SkillsInstall";
 import type { Route } from "./+types/crons";
+
+// El copiloto (y su CSS) sólo se baja cuando se abre.
+const CronsCopilot = lazy(() => import("~/components/admin/CronsCopilot").then((m) => ({ default: m.CronsCopilot })));
 
 export const meta = () => [
   { title: "Crons — Admin — EasyBits" },
@@ -184,7 +187,7 @@ function RunsDrawer({ job, running, onClose }: { job: CronOverview; running: boo
 }
 
 // ── Fila ─────────────────────────────────────────────────────────────────────────
-function JobRow({ job, now, onOpen }: { job: CronOverview; now: number; onOpen: () => void }) {
+function JobRow({ job, now, onOpen, onAsk }: { job: CronOverview; now: number; onOpen: () => void; onAsk: () => void }) {
   const fetcher = useFetcher<{ ok: boolean; error?: string }>();
   const busy = fetcher.state !== "idle";
   const pending = fetcher.formData?.get("intent");
@@ -229,6 +232,11 @@ function JobRow({ job, now, onOpen }: { job: CronOverview; now: number; onOpen: 
       <td className="p-3 text-right whitespace-nowrap" onClick={stop} onKeyDown={stop}>
         <fetcher.Form method="post" className="inline-flex gap-2">
           <input type="hidden" name="job" value={job.key} />
+          {job.status === "fallo" && (
+            <BrutalButton type="button" size="chip" mode="brand" onClick={onAsk}>
+              Pídeselo
+            </BrutalButton>
+          )}
           <BrutalButton
             type="submit"
             size="chip"
@@ -281,36 +289,80 @@ export default function CronsAdmin() {
 
   const open = jobs.find((j) => j.key === openKey) ?? null;
 
+  // Copiloto: se monta al abrirlo por primera vez y queda vivo (el hilo no se pierde al cerrar).
+  const [copilotOpen, setCopilotOpen] = useState(false);
+  const [copilotMounted, setCopilotMounted] = useState(false);
+  const [copilotJobKey, setCopilotJobKey] = useState<string | null>(null);
+  const [ask, setAsk] = useState<{ text: string; n: number } | null>(null);
+  const copilotJob = jobs.find((j) => j.key === copilotJobKey) ?? null;
+
+  const openCopilot = () => {
+    setCopilotMounted(true);
+    setCopilotOpen(true);
+  };
+  const closeCopilot = useCallback(() => setCopilotOpen(false), []);
+  const refresh = useCallback(() => {
+    if (revalidator.state === "idle") revalidator.revalidate();
+  }, [revalidator]);
+  const askAbout = (job: CronOverview) => {
+    setCopilotJobKey(job.key);
+    setAsk((a) => ({ text: `¿Por qué falló «${job.name}» en su última corrida y qué hago para arreglarlo?`, n: (a?.n ?? 0) + 1 }));
+    openCopilot();
+  };
+
   return (
-    <div className="max-w-6xl">
-      <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
-        <div>
-          <h2 className="text-2xl font-black mb-1">Crons</h2>
-          <p className="text-sm text-gray-500">
-            Tareas programadas de la plataforma. El horario vive en el código (app/lib/cronJobs.ts) y cambia con un deploy.
-          </p>
+    <div className={copilotOpen ? "lg:grid lg:grid-cols-[minmax(0,1fr)_400px] lg:gap-6 lg:items-start" : "max-w-6xl"}>
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
+          <div>
+            <h2 className="text-2xl font-black mb-1">Crons</h2>
+            <p className="text-sm text-gray-500">
+              Tareas programadas de la plataforma. El horario vive en el código (app/lib/cronJobs.ts) y cambia con un deploy.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <CopySkillsCommand />
+            {!copilotOpen && (
+              <BrutalButton type="button" mode="brand" onClick={openCopilot}>
+                Copiloto
+              </BrutalButton>
+            )}
+          </div>
         </div>
-        <CopySkillsCommand />
-      </div>
-      <div className="border-2 border-black rounded-xl overflow-x-auto shadow-[3px_3px_0_#000]">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-100">
-            <tr>
-              {["Estado", "Tarea", "Horario", "Últimas corridas", "Última", "Próxima", ""].map((h, i) => (
-                <th key={i} className="p-3 text-left font-bold text-xs uppercase">
-                  {h}
-                </th>
+        <div className="border-2 border-black rounded-xl overflow-x-auto shadow-[3px_3px_0_#000]">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-100">
+              <tr>
+                {["Estado", "Tarea", "Horario", "Últimas corridas", "Última", "Próxima", ""].map((h, i) => (
+                  <th key={i} className="p-3 text-left font-bold text-xs uppercase">
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {jobs.map((job) => (
+                <JobRow key={job.key} job={job} now={now} onOpen={() => setOpenKey(job.key)} onAsk={() => askAbout(job)} />
               ))}
-            </tr>
-          </thead>
-          <tbody>
-            {jobs.map((job) => (
-              <JobRow key={job.key} job={job} now={now} onOpen={() => setOpenKey(job.key)} />
-            ))}
-          </tbody>
-        </table>
+            </tbody>
+          </table>
+        </div>
+        {open && <RunsDrawer job={open} running={open.running} onClose={() => setOpenKey(null)} />}
       </div>
-      {open && <RunsDrawer job={open} running={open.running} onClose={() => setOpenKey(null)} />}
+      {copilotMounted && (
+        <div hidden={!copilotOpen} className="lg:sticky lg:top-6">
+          <Suspense fallback={null}>
+            <CronsCopilot
+              ask={ask}
+              job={copilotJob ? { key: copilotJob.key, name: copilotJob.name } : null}
+              onClearJob={() => setCopilotJobKey(null)}
+              onClose={closeCopilot}
+              escBlocked={!copilotOpen || open != null}
+              onChange={refresh}
+            />
+          </Suspense>
+        </div>
+      )}
     </div>
   );
 }
