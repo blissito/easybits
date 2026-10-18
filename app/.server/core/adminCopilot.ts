@@ -54,6 +54,8 @@ export async function ensureAdminCopilot(ctx: AuthContext): Promise<{ id: string
     EASYBITS_TOOLS: TOOL_GROUP,
     SYSTEM_PROMPT: ADMIN_COPILOT_SYSTEM,
     ASSISTANT_NAME: ADMIN_COPILOT_NAME,
+    // Su caja no se desaloja (como Bittor): despertar en caliente es ~1 s; en frío, ~15-40 s.
+    FLEET_PINNED: "1",
   };
   if (existing) {
     // Prompt/toolset cambiados en código: se reescriben y se recicla la caja (el mcp.json de
@@ -92,19 +94,39 @@ export function parseCopilotContext(raw: unknown): CopilotContext | null {
 }
 
 /** Lo que el usuario ve, como prefijo del texto del turno (en sesión caliente el append de sistema no siempre llega). */
-export function copilotTurnText(text: string, context: CopilotContext | null): string {
-  if (!context) return text;
+export function copilotTurnText(text: string, context: CopilotContext | null, crons?: string): string {
+  // El estado de los crons va en el turno: ahorra el `list_crons` del arranque (un viaje de
+  // ida y vuelta al modelo por pregunta).
+  const brief = crons ? `[Estado de los crons ahora — no llames list_crons para esto]\n${crons}\n` : "";
+  if (!context) return brief + text;
   const parts: string[] = [];
   if (context.page) parts.push(`pantalla: ${context.page}`);
   if (context.job) {
     const job = getCronJob(context.job)!;
     parts.push(`tarea seleccionada: ${job.key} («${job.name}»)`);
   }
-  return `[Contexto del panel — ${parts.join("; ")}]\n${text}`;
+  return `[Contexto del panel — ${parts.join("; ")}]\n${brief}${text}`;
+}
+
+const STATUS_WORDS: Record<string, string> = { "al-dia": "al día", tarde: "tarde", fallo: "falló", pausado: "pausado", nuevo: "sin corridas" };
+
+/** Una línea por cron, con lo que ve el panel (estado, horario, última corrida). */
+export async function cronsBrief(): Promise<string> {
+  const { listCronOverview } = await import("~/.server/cron");
+  const jobs = await listCronOverview();
+  return jobs
+    .map((j) => {
+      const last = j.lastRun ? `última ${j.lastRun.startedAt} (${j.lastRun.ok === false ? "falló" : j.lastRun.running ? "corriendo" : "ok"})` : "sin corridas";
+      return `- ${j.key} «${j.name}»: ${STATUS_WORDS[j.status] ?? j.status}; ${j.schedule}; ${last}`;
+    })
+    .join("\n");
 }
 
 /** El texto del usuario como lo escribió (sin el contexto que le antepone `copilotTurnText`). */
-export const stripCopilotContext = (text: string) => text.replace(/^\[Contexto del panel — [^\]]*\]\n/, "");
+export const stripCopilotContext = (text: string) =>
+  text
+    .replace(/^\[Contexto del panel — [^\]]*\]\n/, "")
+    .replace(/^\[Estado de los crons ahora[^\]]*\]\n(?:- .*\n)*/, "");
 
 /** Evento `permission` (forma de ACP/Ghosty) para la tarjeta de aprobación. */
 export function permissionEvent(a: PendingActionView): TurnEvent {

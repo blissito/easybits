@@ -5,12 +5,14 @@ import {
   adminCopilotGroupId,
   copilotAfterTool,
   copilotTurnText,
+  cronsBrief,
   ensureAdminCopilot,
   parseCopilotContext,
   requireAdminSession,
   stripCopilotContext,
 } from "~/.server/core/adminCopilot";
 import { listPendingActions, resolveAgentAction } from "~/.server/core/agentActions";
+import { tryDirectCommand } from "~/.server/core/copilotFastPath";
 import {
   AppDraining,
   cancelAgentTurn,
@@ -64,7 +66,7 @@ export async function action({ request }: Route.ActionArgs) {
     }
     return agUiStream(request, (emit) => {
       emit({ type: "RUN_STARTED", threadId: input.threadId, runId: input.runId });
-      emit({ type: "RUN_FINISHED", threadId: input.threadId, runId: input.runId, outcome: { type: "cancelled" } });
+      emit({ type: "RUN_FINISHED", threadId: input.threadId, runId: input.runId, timestamp: Date.now(), outcome: { type: "cancelled" } });
     });
   }
 
@@ -95,6 +97,31 @@ export async function action({ request }: Route.ActionArgs) {
   if (pending.length) {
     return json(409, { error: "interrupt_pending", message: "Hay acciones esperando tu aprobación.", interrupts: pending.map((a) => interruptFrom(a)) });
   }
+  // Orden directa («ejecuta purga de notificaciones»): tarjeta al instante, sin modelo.
+  const direct = await tryDirectCommand(owner.id, text);
+  if (direct) {
+    const existing = await db.fleetAgent.findFirst({ where: { ownerId: owner.id, name: ADMIN_COPILOT_NAME }, select: { id: true } });
+    if (existing) {
+      await db.fleetAgentMessage
+        .createMany({
+          data: [
+            // createdAt explícito: el snapshot ordena por fecha y deben salir en este orden.
+            { fleetAgentId: existing.id, groupId, role: "user", text, createdAt: new Date(Date.now() - 1) },
+            { fleetAgentId: existing.id, groupId, role: "agent", text: direct.question, createdAt: new Date() },
+          ],
+        })
+        .catch(() => undefined);
+    }
+    return agUiStream(request, (emit) => {
+      start(emit);
+      const messageId = `msg-${input.runId}-direct`;
+      emit({ type: "TEXT_MESSAGE_START", messageId, role: "assistant" });
+      emit({ type: "TEXT_MESSAGE_CONTENT", messageId, delta: direct.question });
+      emit({ type: "TEXT_MESSAGE_END", messageId });
+      emit(runFinished(input.threadId, input.runId, [interruptFrom(direct.action)]));
+    });
+  }
+
   const context = parseCopilotContext(screenContext(input));
   const agent = await ensureAdminCopilot(ctx);
   try {
@@ -105,7 +132,7 @@ export async function action({ request }: Route.ActionArgs) {
       sender: "admin-copilot",
       text,
       turnId: turnIdFromRunId(input.runId),
-      prepare: async (agentText) => ({ text: copilotTurnText(agentText, context) }),
+      prepare: async (agentText) => ({ text: copilotTurnText(agentText, context, await cronsBrief().catch(() => undefined)) }),
       afterTool: copilotAfterTool(owner.id),
     });
   } catch (e) {

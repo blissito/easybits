@@ -51,6 +51,7 @@ beforeEach(() => {
     updateMany: vi.fn(async () => ({ count: 0 })),
   };
   h.db.fleetAgent = { findFirst: vi.fn(async () => ({ id: "f".repeat(24) })) };
+  h.db.userCron = { findMany: vi.fn(async () => []) };
   h.db.fleetAgentMessage = {
     create: vi.fn(async ({ data }: any) => {
       const row = { id: `m${messages.length + 1}`, createdAt: new Date(), ...data };
@@ -58,6 +59,10 @@ beforeEach(() => {
       return row;
     }),
     findMany: vi.fn(async () => [...messages].reverse()),
+    createMany: vi.fn(async ({ data }: any) => {
+      for (const d of data) messages.push({ id: `m${messages.length + 1}`, createdAt: new Date(), ...d });
+      return { count: data.length };
+    }),
     findFirst: vi.fn(async () => null),
     update: vi.fn(),
   };
@@ -112,7 +117,8 @@ describe("piloto de crons por AG-UI", () => {
   it("un turno con propuesta termina en RUN_FINISHED con interrupt (y HttpAgent lo acepta)", async () => {
     agentProposes();
     const a = agent();
-    a.addMessage({ id: "u1", role: "user", content: "corre la purga de notificaciones" });
+    // No es orden directa (pide revisar antes): va al modelo.
+    a.addMessage({ id: "u1", role: "user", content: "revisa cómo va la purga de notificaciones y córrela si hace falta" });
     const events = await run(a, {
       runId: "run-0000001",
       context: [{ description: "screen", value: JSON.stringify({ page: "crons", job: "purge-notifications" }) }],
@@ -250,6 +256,25 @@ describe("piloto de crons por AG-UI", () => {
     // Repetirlo es inocuo.
     const again = await (await post({ threadId: "th-crons", runId: "run-0000012", messages: [], forwardedProps: { cancel: "run-0000010" } })).text();
     expect(again).toContain('"cancelled"');
+  });
+
+  it("orden directa: tarjeta sin modelo, y aprobarla ejecuta sin modelo", async () => {
+    const a = agent();
+    a.addMessage({ id: "u", role: "user", content: "ejecuta purga de notificaciones" });
+    const t0 = Date.now();
+    const events = await run(a, { runId: "run-0000020" });
+    expect(Date.now() - t0).toBeLessThan(1000);
+    expect(h.routeMessage).not.toHaveBeenCalled();
+    expect(events.find((e) => e.type === "TEXT_MESSAGE_CONTENT").delta).toBe("¿Corro «Purga de notificaciones» ahora?");
+    const last = events.at(-1);
+    expect(last).toMatchObject({ type: "RUN_FINISHED", outcome: { type: "interrupt" } });
+    expect(typeof last.timestamp).toBe("number");
+    const id = last.outcome.interrupts[0].id;
+    // HttpAgent reenvía todo su historial; Piloto sólo lo nuevo (protocol.md): resume con uno limpio.
+    const done = await run(agent(), { runId: "run-0000021", resume: [{ interruptId: id, status: "resolved", payload: { approved: true } }] });
+    expect(done.at(-1)).toMatchObject({ type: "RUN_FINISHED", outcome: { type: "success" } });
+    expect(h.startManualRun).toHaveBeenCalledWith("purge-notifications");
+    expect(h.routeMessage).not.toHaveBeenCalled();
   });
 
   it("RunAgentInput sin threadId/runId: 400", async () => {

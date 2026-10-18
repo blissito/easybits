@@ -96,10 +96,13 @@ export function interruptFrom(a: Pick<PendingActionView, "id" | "summary" | "too
   };
 }
 
+// `timestamp` (ms, reloj del servidor): con él la tarjeta cuenta su vencimiento con la hora del
+// servidor y no con la del navegador (docs/protocol.md).
 export const runFinished = (threadId: string, runId: string, interrupts: AgUiInterrupt[]): AgUiEvent => ({
   type: "RUN_FINISHED",
   threadId,
   runId,
+  timestamp: Date.now(),
   outcome: interrupts.length ? { type: "interrupt", interrupts } : { type: "success" },
 });
 
@@ -218,7 +221,7 @@ export function createTurnTranslator(opts: { threadId: string; runId: string; em
           finish({ type: "RUN_ERROR", code: "capacity", message: String(e.message ?? "Sin capacidad; reintenta en unos segundos.") });
           return;
         case "cancelled":
-          finish({ type: "RUN_FINISHED", threadId, runId, outcome: { type: "cancelled" } });
+          finish({ type: "RUN_FINISHED", threadId, runId, timestamp: Date.now(), outcome: { type: "cancelled" } });
           return;
         case "interrupted":
           finish({ type: "RUN_ERROR", code: "interrupted", message: "El turno se cortó por un reinicio de la plataforma." });
