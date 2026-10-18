@@ -5,7 +5,7 @@ license: MIT
 compatibility: Node 18+ for the stdio proxy (npx), network access to https://www.easybits.cloud and an EasyBits API key (Claude.ai uses OAuth instead)
 metadata:
   author: easybits
-  version: "1.1"
+  version: "1.2"
 ---
 
 # Connect the EasyBits MCP
@@ -28,7 +28,7 @@ groups so the agent loads only what it needs; the group goes in the path
 
 | Group | Holds |
 |---|---|
-| `core` (default) | files, databases, documents, forms, websites, brand kits |
+| `core` (default) | files, databases, documents, forms, websites, brand kits, crons (`create_cron`, `wait_cron_run`…), event inboxes (`inbox_*`) |
 | `design` | Canva-like: documents in any format (letter, social, 16:9 slides), brand kits, images. The group to pick for Claude.ai / Claude Design |
 | `sandbox` | microVMs: create/exec/bg/run-code/files/expose/snapshot/fork/template-snapshot (derived templates)/network-policy/bootstrap/`sandbox_set_idle` (sleep instead of destroy on idle) |
 | `web` | `web_search`, `web_fetch`, `web_extract`, `web_crawl` (billed in web queries) |

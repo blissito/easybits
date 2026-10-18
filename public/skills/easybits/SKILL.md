@@ -5,7 +5,7 @@ license: MIT
 compatibility: Needs curl or any HTTP client, network access to https://www.easybits.cloud and an EasyBits API key
 metadata:
   author: easybits
-  version: "1.5"
+  version: "1.6"
 ---
 
 # Use EasyBits from a coding agent
@@ -50,6 +50,7 @@ Do not load the MCP just to make one call: a `curl` is cheaper than a tool catal
 | "store / serve / share this file" | `POST /files` → `PUT putUrl` with the bytes; `access: "public"` for a CDN URL |
 | "my agent needs a database" | `POST /databases`, then `POST /databases/:id/query` with `{ sql, args }` |
 | "deploy this app / put it on a URL" | `POST /machines/launch` with exactly one of `repo`, `archiveUrl`, `sandboxId`. Nothing else: it builds, releases and exposes |
+| "run this every day / once at 23:00 / tell me when it ends" | `POST /crons` (`cron`, or one-off `at`/`in`; action `http`, `agent` or `exec` = a command in a throwaway box), then `GET /crons/:id/runs/next` waits for the run. `notify` push/email/inbox; event inboxes (`POST /inboxes` → a public URL any webhook can POST to) |
 | "make a PDF / invoice / quote" | `structured_doc` (MCP) or `POST /documents` with HTML sections; see the `documents` docs section |
 | "what tools does EasyBits have?" | `GET https://www.easybits.cloud/api/tools.json` (no auth) |
 | "how does X work in EasyBits?" | Read `https://www.easybits.cloud/docs/<section>.md` or `https://www.easybits.cloud/llms.txt` (index) |
