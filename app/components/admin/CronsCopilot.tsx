@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { createPostStreamTransport, Piloto, type PermissionHandler, type ToolVerbs } from "ghostykit";
 import "ghostykit/styles.css";
-import "./cronsCopilot.css";
 
 const CHAT_URL = "/api/v2/admin/copilot/chat";
 
@@ -126,7 +125,6 @@ export function CronsCopilot({ ask, job, onClearJob, onClose, escBlocked, onChan
           formatUserText={stripContext}
           onPermission={onPermission}
           onTurnDone={onChange}
-          className="crons-copilot"
           features={{ attachments: false, models: false }}
           style={{ height: "100%" }}
         />
