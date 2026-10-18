@@ -40,14 +40,6 @@ export const FileDetailModal = ({
       {file && file.url && (
         <video controls className="w-full aspect-video" src={file.url}></video>
       )}
-      <h3>HLS:</h3>
-      {file && file.masterPlaylistURL && (
-        <video
-          controls
-          className="w-full aspect-video"
-          src={file.masterPlaylistURL}
-        ></video>
-      )}
     </Modal>
   );
 };

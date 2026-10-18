@@ -514,10 +514,8 @@ export default [
     route("blog-read", "routes/api/v1/blog-read.ts"),
     // AI & LLMs
     ...prefix("llms", [route("devstral", "routes/api/llms/devstral.ts")]), // LLMs communication Jun25
-    route(":fileId/main.m3u8", "routes/api/v1/mainm3u8.tsx"), // experiment
     // route("tokens", "routes/api/v1/tokens.tsx"),
     route("tokens/:token?", "routes/api/v1/tokens.tsx"),
-    route("conversion_webhook", "routes/api/v1/conversion_webhook.tsx"),
     route("user", "routes/api/v1/user.tsx"),
     route("assets", "routes/api/v1/assets.tsx"),
     route("clients", "routes/api/v1/clients.tsx"),

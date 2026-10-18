@@ -11,6 +11,8 @@ const FORBIDDEN = [
   /api\.machines\.dev/,
   /api\.fly\.io/,
   /FLY_API_TOKEN/,
+  // Apps auxiliares que vivían en Fly (conversor HLS, SDXL, toolbox): murieron con la cuenta.
+  /\.fly\.dev/,
 ];
 
 function walk(dir: string, out: string[] = []): string[] {

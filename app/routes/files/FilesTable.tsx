@@ -16,9 +16,6 @@ import { IconRenderer } from "./IconRenderer";
 import { FaBook } from "react-icons/fa6";
 import { useState } from "react";
 import { ConfirmModal } from "./ConfirmModal";
-import { useStartVersioningFlyMachine } from "~/hooks/useStartVersioningFlyMachine";
-import toast, { Toaster } from "react-hot-toast";
-import Spinner from "~/components/common/Spinner";
 import { MdFolderZip } from "react-icons/md";
 import { GiMagicLamp } from "react-icons/gi";
 
@@ -55,8 +52,6 @@ export const FilesTable = ({
 
   const handleDelete = () => {
     if (!fileToDelete) return;
-    setForceWorkingSpinner(fileToDelete.id);
-
     fetcher.submit(
       {
         intent: "delete_file",
@@ -68,33 +63,8 @@ export const FilesTable = ({
     );
   };
 
-  const { requestHLS } = useStartVersioningFlyMachine();
-  const [forceWorkingSpinner, setForceWorkingSpinner] = useState("");
-  const handleHLS = async (file: File) => {
-    setForceWorkingSpinner(file.id);
-    toast.success("Procesando todas las versiones para: " + file.name, {
-      position: "bottom-center",
-      duration: 15000,
-    });
-
-    const machineInfo = await requestHLS(file.storageKey);
-    console.log("INFO::", machineInfo);
-
-    toast("Esto tomará algún tiempo, puedes olvidarte, yo me encargo. 🤖", {
-      style: {
-        border: "2px solid #000000",
-        padding: "16px",
-        color: "#000000",
-      },
-      position: "bottom-center",
-      icon: "⏲️",
-      duration: 20000,
-    });
-  };
-
   return (
     <>
-      <Toaster />
       <ConfirmModal
         fileName={fileToDelete?.name as string}
         isOpen={Boolean(fileToDelete)}
@@ -105,13 +75,12 @@ export const FilesTable = ({
       <article className="bg-brand-100 border-[2px] rounded-xl border-black text-xs">
         <section className="grid grid-cols-12 pl-4 py-2 border-b-[2px] border-black">
           <span className=""></span>
-          <span className="col-span-2">Nombre</span>
+          <span className="col-span-2 lg:col-span-4">Nombre</span>
           <span className="hidden md:block">Tamaño</span>
           <span className="col-span-2 md:col-span-1">Fecha</span>
           <span className="hidden md:block"></span>
           <span>Tipo</span>
           <span className="col-span-2  lg:col-span-1 ">Privacidad</span>
-          <span className="col-span-2 hidden lg:block">HLS</span>
           <span className="">Link</span>
           <span className=""></span>
         </section>
@@ -144,7 +113,7 @@ export const FilesTable = ({
                 onClick={() => {
                   onDetail?.(file);
                 }}
-                className="truncate font-semibold col-span-2 text-left flex flex-col"
+                className="truncate font-semibold col-span-2 lg:col-span-4 text-left flex flex-col"
                 title={file.name}
               >
                 {file.name}
@@ -189,14 +158,6 @@ export const FilesTable = ({
                   </span>
                 )}
               </span>
-              <span className="col-span-2  flex-wrap gap-px items-start hidden lg:flex">
-                {file.contentType.includes("video") &&
-                  file.versions?.length > 0 && (
-                    <HLSVersions versions={file.versions} />
-                  )}
-                {(file.status === "WORKING" ||
-                  forceWorkingSpinner === file.id) && <Spinner />}
-              </span>
               <span className="relative">
                 {file.access === "private" ? (
                   <button
@@ -224,28 +185,6 @@ export const FilesTable = ({
                     Descargar
                   </button>
                 )}
-                {file.contentType.includes("video") &&
-                  file.versions?.length < 4 &&
-                  file.status !== "WORKING" && (
-                    <button
-                      onClick={() => {
-                        handleHLS(file);
-                      }}
-                      className="p-3 rounded-lg hover:bg-gray-100 text-xs  transition-all w-full"
-                    >
-                      Generar HLS
-                    </button>
-                  )}
-                {file.status === "DONE" && file.masterPlaylistURL && (
-                  <button
-                    onClick={() => {
-                      navigator.clipboard.writeText(file.masterPlaylistURL!);
-                    }}
-                    className="p-3 rounded-lg hover:bg-gray-100 text-xs  transition-all w-full"
-                  >
-                    copiar HLS playlist
-                  </button>
-                )}
                 {file.status !== "WORKING" && (
                   <button
                     onClick={() => openConfirm(file)}
@@ -259,33 +198,6 @@ export const FilesTable = ({
           ))}
         </AnimatePresence>
       </article>
-    </>
-  );
-};
-
-export const HLSVersions = ({ versions }: { versions: string[] }) => {
-  return (
-    <>
-      {versions.includes("360p") && (
-        <span className="py-px px-2 bg-pink-300 rounded-full border border-black">
-          360p
-        </span>
-      )}
-      {versions.includes("480p") && (
-        <span className="py-px px-2 bg-zinc-300 rounded-full border border-black">
-          480p
-        </span>
-      )}
-      {versions.includes("720p") && (
-        <span className="py-px px-2 bg-orange-300 rounded-full border border-black">
-          720p
-        </span>
-      )}
-      {versions.includes("1080p") && (
-        <span className="py-px px-2 bg-blue-300 rounded-full border border-black">
-          1080p
-        </span>
-      )}
     </>
   );
 };
