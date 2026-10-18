@@ -10,6 +10,7 @@ import {
   deleteUserCron,
   listUserCronRuns,
   listUserCrons,
+  previewUserCron,
   runUserCronNow,
   updateUserCron,
 } from "../../core/userCronOperations";
@@ -51,6 +52,12 @@ const cronShape = z
   .string()
   .describe("cron de 5 campos (min hora díaMes mes díaSemana), p. ej. `30 8 * * *` = diario 8:30; mínimo cada 5 min");
 const tzShape = z.string().optional().describe("zona IANA; default America/Mexico_City");
+const whenShapes = {
+  at: z.string().optional().describe("UNA SOLA VEZ, en lugar de `cron`: ISO (`2026-10-18T23:00`, sin zona se lee en `timezone`) o `23:00` (hoy). Al correr se apaga y queda en el historial"),
+  in: z.string().optional().describe("una sola vez, relativo a ahora: `10m`, `2h`, `1h30m`, `1d`"),
+  until: z.string().nullable().optional().describe("recurrente que termina solo: última fecha (misma forma que `at`); null lo quita"),
+  times: z.number().int().nullable().optional().describe("recurrente que termina solo: cuántas corridas más; null lo quita"),
+};
 const idShape = z.string().describe("id del cron (de list_my_crons)");
 
 async function maybePropose(ctx: AuthContext, tool: UserCronTool, args: Record<string, unknown>, run: () => Promise<unknown>) {
@@ -61,7 +68,7 @@ async function maybePropose(ctx: AuthContext, tool: UserCronTool, args: Record<s
 export function registerUserCronTools(server: McpServer, wrapHandler: Wrap) {
   server.tool(
     "list_my_crons",
-    "Tus crons (tareas programadas de TU cuenta): { items:[{ id, name, cron, timezone, schedule, enabled, action, nextRunAt, lastRunAt, lastOk, lastStatus, lastError, failCount }] }. Con `id`, devuelve además sus últimas corridas en `runs` (con `error` completo).",
+    "Tus crons (tareas programadas de TU cuenta): { items:[{ id, name, kind (once|recurring), cron, at, until, timesLeft, timezone, schedule, enabled, done, action, nextRunAt, nextRunLocal, in, lastRunAt, lastOk, lastStatus, lastError, failCount }] }. Con `id`, devuelve además sus últimas corridas en `runs` (con `error` completo).",
     { id: z.string().optional().describe("si lo pasas, incluye las últimas 20 corridas de ese cron") },
     wrapHandler(async (p: { id?: string }, extra) => {
       const ctx = authOf(extra);
@@ -74,27 +81,31 @@ export function registerUserCronTools(server: McpServer, wrapHandler: Wrap) {
 
   server.tool(
     "create_cron",
-    "Crea un cron en TU cuenta: cada vez que toca, le pega a una URL https pública o le manda un turno a uno de tus agentes. Mínimo cada 5 min; límite por plan (Byte 3, Mega 20, Tera 100). Devuelve el cron con `nextRunAt`. Ejemplo: diario 8:30 en CDMX → cron `30 8 * * *`.",
+    "Crea un cron en TU cuenta: le pega a una URL https pública o le manda un turno a uno de tus agentes. Se repite (`cron`, mínimo cada 5 min, puede terminar con `until`/`times`) o corre UNA SOLA VEZ (`at` o `in`). Límite por plan (Byte 3, Mega 20, Tera 100; los de una sola vez que ya corrieron no cuentan). Devuelve el cron con `nextRunAt` (ISO), `nextRunLocal` (en su zona) e `in` (cuánto falta). Con `dryRun:true` sólo valida y regresa las próximas 3 corridas. Ejemplos: diario 8:30 en CDMX → cron `30 8 * * *`; hoy a las 11 pm → at `23:00`.",
     {
       name: z.string().describe("nombre corto"),
-      cron: cronShape,
+      cron: cronShape.optional(),
+      ...whenShapes,
       timezone: tzShape,
       enabled: z.boolean().optional().describe("default true"),
       action: actionShape,
+      dryRun: z.boolean().optional().describe("sólo valida y dice cuándo correría; no crea nada"),
     },
     wrapHandler(async (p: Record<string, unknown>, extra) => {
       const ctx = authOf(extra);
+      if (p.dryRun) return ok(await previewUserCron(ctx, p));
       return maybePropose(ctx, "create_cron", p, () => createUserCron(ctx, p));
     })
   );
 
   server.tool(
     "update_cron",
-    "Cambia un cron tuyo (sólo los campos que pases). `enabled:false` lo pausa, `enabled:true` lo reanuda.",
+    "Cambia un cron tuyo (sólo los campos que pases). `enabled:false` lo pausa, `enabled:true` lo reanuda. Pasar `at`/`in` lo vuelve de una sola vez; pasar `cron`, recurrente.",
     {
       id: idShape,
       name: z.string().optional(),
       cron: cronShape.optional(),
+      ...whenShapes,
       timezone: tzShape,
       enabled: z.boolean().optional(),
       action: actionShape.optional(),

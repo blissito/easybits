@@ -17,10 +17,15 @@ import { t } from "../i18n.js";
 type UserCron = {
   id: string;
   name: string;
+  kind?: "once" | "recurring";
   cron: string;
+  at?: string | null;
   timezone: string;
   schedule: string;
   enabled: boolean;
+  done?: boolean;
+  nextRunLocal?: string | null;
+  in?: string | null;
   action: { type: "http"; method: string; url: string; secretName?: string } | { type: "agent_turn"; fleetAgentId: string; prompt: string };
   nextRunAt: string | null;
   lastRunAt: string | null;
@@ -87,6 +92,45 @@ export function actionFromFlags(f: { url?: string; method?: string; body?: strin
   return {};
 }
 
+const WHEN_OPTIONS = {
+  at: { type: "string", value: "when", description: 'Run ONCE at this time: ISO ("2026-10-18T23:00", read in --tz) or "23:00" (today)' },
+  in: { type: "string", value: "duration", description: "Run ONCE after this long: 10m, 2h, 1h30m, 1d" },
+  until: { type: "string", value: "when", description: "A repeating cron stops after this date" },
+  times: { type: "string", value: "N", description: "A repeating cron stops after N more runs" },
+} as const;
+
+/** Flags de horario → campos de la API. Puro, con test. */
+export function scheduleFromFlags(f: { cron?: string; at?: string; in?: string; until?: string; times?: string; tz?: string }) {
+  if (f.cron && (f.at || f.in)) return { error: "--cron repeats; --at/--in run once. Pick one." } as const;
+  if (f.at && f.in) return { error: "--at and --in are exclusive" } as const;
+  if (f.times != null && !/^\d+$/.test(f.times)) return { error: "--times must be a whole number" } as const;
+  return {
+    fields: {
+      ...(f.cron ? { cron: f.cron } : {}),
+      ...(f.at ? { at: f.at } : {}),
+      ...(f.in ? { in: f.in } : {}),
+      ...(f.until ? { until: f.until } : {}),
+      ...(f.times != null ? { times: Number(f.times) } : {}),
+      ...(f.tz ? { timezone: f.tz } : {}),
+    },
+  };
+}
+
+const whenOf = (ctx: Ctx) => ({
+  cron: str(ctx, "cron"),
+  at: str(ctx, "at"),
+  in: str(ctx, "in"),
+  until: str(ctx, "until"),
+  times: str(ctx, "times"),
+  tz: str(ctx, "tz"),
+});
+
+type Preview = { schedule: string; timezone: string; nextRuns: { at: string; local: string }[]; in: string | null };
+
+/** Cuándo corre, para humanos: «próxima 2026-10-18 23:00 (en 12h 54m)». */
+const nextLine = (c: Pick<UserCron, "nextRunLocal" | "in" | "timezone">) =>
+  c.nextRunLocal ? t(`next ${c.nextRunLocal} ${c.timezone} (in ${c.in})`, `próxima ${c.nextRunLocal} ${c.timezone} (en ${c.in})`) : t("no next run", "sin próxima corrida");
+
 const flagsOf = (ctx: Ctx) => ({
   url: str(ctx, "url"),
   method: str(ctx, "method"),
@@ -136,7 +180,7 @@ export const crons: Command = {
   name: "crons",
   aliases: ["cron"],
   group: "Account",
-  summary: "Your scheduled jobs (call a URL or message an agent) and, for admins, the platform's",
+  summary: "Your scheduled jobs (call a URL or message an agent, repeating or once) and, for admins, the platform's",
   synopsis: "crons <ls|create|update|rm|run|runs|pause|resume>",
   subs: {
     ls: {
@@ -153,10 +197,10 @@ export const crons: Command = {
               items.map((c) => ({
                 id: c.id,
                 name: c.name,
-                schedule: c.enabled ? c.schedule : `${c.schedule} (${t("paused", "en pausa")})`,
+                schedule: c.enabled ? c.schedule : `${c.schedule} (${c.done ? t("done", "terminado") : t("paused", "en pausa")})`,
                 does: describeCronAction(c.action),
                 last: c.lastRunAt ? `${fmtDate(c.lastRunAt)} ${c.lastOk === false ? t("failed", "falló") : "ok"}` : "—",
-                next: c.enabled ? fmtDate(c.nextRunAt) : "—",
+                next: c.enabled && c.nextRunLocal ? `${c.nextRunLocal} (${c.in})` : "—",
               })),
               [["id", "ID"], ["name", "NAME"], ["schedule", "SCHEDULE"], ["does", "DOES"], ["last", "LAST RUN"], ["next", "NEXT RUN"]],
               t(
@@ -250,35 +294,50 @@ export const crons: Command = {
     },
     create: {
       aliases: ["add"],
-      summary: "Create a cron: call a public https URL or send a turn to one of your agents (at most every 5 min)",
-      usage: 'easybits crons create <name> --cron "<5 fields>" [--tz <IANA>] (--url <https-url> [--method] [--body] [--secret NAME] | --agent <id> --prompt <text>)',
+      summary: "Create a cron: call a public https URL or send a turn to one of your agents, repeating (at most every 5 min) or once",
+      usage: 'easybits crons create <name> (--cron "<5 fields>" [--until <when>] [--times N] | --at <when> | --in <duration>) [--tz <IANA>] (--url <https-url> [--method] [--body] [--secret NAME] | --agent <id> --prompt <text>) [--dry-run]',
       options: {
         cron: { type: "string", value: "expr", description: 'Cron of 5 fields, e.g. "30 8 * * *" = daily 8:30' },
+        ...WHEN_OPTIONS,
         tz: { type: "string", value: "zone", description: "IANA time zone (default America/Mexico_City)" },
         ...ACTION_OPTIONS,
+        "dry-run": { type: "boolean", description: "Validate and show the next 3 runs without creating anything" },
       },
       examples: [
         'easybits crons create "Study reminder" --cron "30 8 * * *" --url https://www.ghosty.studio/api/v2/me/push --method POST --body \'{"title":"Study time"}\' --secret GHOSTY_PUSH_TOKEN',
-        'easybits crons create "Weekly report" --cron "0 9 * * 1" --agent 6a3c046d2cf7d7f4163f739d --prompt "Send me the weekly sales summary"',
+        'easybits crons create "Ping once" --at 23:00 --url https://example.com/ping --dry-run',
+        'easybits crons create "Weekly report" --cron "0 9 * * 1" --times 4 --agent 6a3c046d2cf7d7f4163f739d --prompt "Send me the weekly sales summary"',
       ],
       async run(ctx) {
         const name = need(ctx, 0, "name", this.usage);
-        const cron = str(ctx, "cron");
-        if (!cron) throw usageError(t("Missing --cron.", "Falta --cron."), this.usage);
+        const w = scheduleFromFlags(whenOf(ctx));
+        if ("error" in w) throw usageError(w.error!, this.usage);
+        if (!w.fields.cron && !w.fields.at && !w.fields.in) throw usageError(t("Missing --cron, --at or --in.", "Falta --cron, --at o --in."), this.usage);
         const a = actionFromFlags(flagsOf(ctx));
         if ("error" in a) throw usageError(a.error!, this.usage);
         if (!a.action) throw usageError(t("Missing --url or --agent.", "Falta --url o --agent."), this.usage);
-        const c = await api<UserCron>(ctx, "POST", "/crons", { name, cron, ...(str(ctx, "tz") ? { timezone: str(ctx, "tz") } : {}), action: a.action });
-        emit(ctx, c, () => console.log(t(`Created ${c.id} «${c.name}» — ${c.schedule}; next ${fmtDate(c.nextRunAt)}`, `Creado ${c.id} «${c.name}» — ${c.schedule}; próxima ${fmtDate(c.nextRunAt)}`)));
+        const body = { name, ...w.fields, action: a.action };
+        if (bool(ctx, "dry-run")) {
+          const p = await api<Preview>(ctx, "POST", "/crons", { ...body, dryRun: true });
+          emit(ctx, p, () => {
+            console.log(t(`OK, nothing created. «${name}» — ${p.schedule}`, `Válido, no se creó nada. «${name}» — ${p.schedule}`));
+            for (const r of p.nextRuns) console.log(`  ${r.local} ${p.timezone}  (${r.at})`);
+            if (p.in) console.log(t(`First run in ${p.in}.`, `La primera corre en ${p.in}.`));
+          });
+          return;
+        }
+        const c = await api<UserCron>(ctx, "POST", "/crons", body);
+        emit(ctx, c, () => console.log(t(`Created ${c.id} «${c.name}» — ${c.schedule}; `, `Creado ${c.id} «${c.name}» — ${c.schedule}; `) + nextLine(c)));
       },
     },
     update: {
       aliases: ["edit", "set"],
       summary: "Change one of your crons (only what you pass)",
-      usage: 'easybits crons update <id|name> [--name <n>] [--cron "<expr>"] [--tz <IANA>] [--url … | --agent … --prompt …]',
+      usage: 'easybits crons update <id|name> [--name <n>] [--cron "<expr>" | --at <when> | --in <duration>] [--until <when>] [--times N] [--tz <IANA>] [--url … | --agent … --prompt …]',
       options: {
         name: { type: "string", value: "name", description: "New name" },
         cron: { type: "string", value: "expr", description: "New schedule" },
+        ...WHEN_OPTIONS,
         tz: { type: "string", value: "zone", description: "New IANA time zone" },
         ...ACTION_OPTIONS,
       },
@@ -289,15 +348,16 @@ export const crons: Command = {
         if (!mine) throw new CliError(t(`You have no cron "${ref}".`, `No tienes un cron "${ref}".`), EXIT.API, "easybits crons ls", "not_found", 404);
         const a = actionFromFlags(flagsOf(ctx));
         if ("error" in a) throw usageError(a.error!, this.usage);
+        const w = scheduleFromFlags(whenOf(ctx));
+        if ("error" in w) throw usageError(w.error!, this.usage);
         const patch = {
           ...(str(ctx, "name") ? { name: str(ctx, "name") } : {}),
-          ...(str(ctx, "cron") ? { cron: str(ctx, "cron") } : {}),
-          ...(str(ctx, "tz") ? { timezone: str(ctx, "tz") } : {}),
+          ...w.fields,
           ...(a.action ? { action: a.action } : {}),
         };
         if (!Object.keys(patch).length) throw usageError(t("Nothing to change.", "No hay nada que cambiar."), this.usage);
         const c = await api<UserCron>(ctx, "PATCH", `/crons/${mine.id}`, patch);
-        emit(ctx, c, () => console.log(t(`Updated «${c.name}» — ${c.schedule}`, `Actualizado «${c.name}» — ${c.schedule}`)));
+        emit(ctx, c, () => console.log(t(`Updated «${c.name}» — ${c.schedule}; `, `Actualizado «${c.name}» — ${c.schedule}; `) + nextLine(c)));
       },
     },
     rm: {

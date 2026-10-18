@@ -2048,6 +2048,9 @@ model CronRun {
   durationMs Int?
   summary    String?
   error      String?
+  // Corridas `exec` de crons de usuario: código de salida y la cola de stdout/stderr (con tope).
+  exitCode   Int?
+  logs       String?
 
   @@index([job, startedAt])
   @@index([startedAt])
@@ -2091,7 +2094,12 @@ model UserCron {
   id         String    @id @default(auto()) @map("_id") @db.ObjectId
   ownerId    String    @db.ObjectId
   name       String
-  cron       String
+  // Recurrente: cron de 5 campos. De una sola vez: `cron` vacío y `at`.
+  cron       String    @default("")
+  at         DateTime?
+  // Un recurrente que termina solo: hasta esta fecha y/o tras N corridas más.
+  until      DateTime?
+  timesLeft  Int?
   timezone   String    @default("America/Mexico_City")
   enabled    Boolean   @default(true)
   action     Json

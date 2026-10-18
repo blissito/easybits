@@ -25,3 +25,12 @@ test("describeCronAction: una línea", () => {
   assert.equal(describeCronAction({ type: "http", method: "GET", url: "https://a.com" }), "GET https://a.com");
   assert.match(describeCronAction({ type: "agent_turn", fleetAgentId: "x", prompt: "p".repeat(80) }), /…$/);
 });
+
+test("scheduleFromFlags: se repite o una sola vez, nunca los dos", async () => {
+  const { scheduleFromFlags } = await import("./commands/crons.ts");
+  assert.deepEqual(scheduleFromFlags({ at: "23:00", tz: "UTC" }).fields, { at: "23:00", timezone: "UTC" });
+  assert.deepEqual(scheduleFromFlags({ cron: "0 9 * * *", times: "3" }).fields, { cron: "0 9 * * *", times: 3 });
+  assert.ok("error" in scheduleFromFlags({ cron: "0 9 * * *", at: "23:00" }));
+  assert.ok("error" in scheduleFromFlags({ at: "23:00", in: "2h" }));
+  assert.ok("error" in scheduleFromFlags({ cron: "0 9 * * *", times: "x" }));
+});

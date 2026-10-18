@@ -125,7 +125,9 @@ The vault of your account (the same as /dash/developer/secrets and the \`secret_
 \`\`\`bash
 easybits crons create "Study reminder" --cron "30 8 * * *" --url https://www.ghosty.studio/api/v2/me/push \\
   --method POST --body '{"title":"Study time"}' --secret GHOSTY_PUSH_TOKEN
-easybits crons create "Report" --cron "0 9 * * 1" --agent <agentId> --prompt "Send me the sales summary"
+easybits crons create "Report" --cron "0 9 * * 1" --times 4 --agent <agentId> --prompt "Send me the sales summary"
+easybits crons create "Heads-up" --at 23:00 --url https://my-app.com/api/notice --method POST --dry-run   # once; validates and says when
+easybits crons create "Heads-up" --in 2h --url https://my-app.com/api/notice --method POST
 easybits crons ls                                           # yours: schedule, what it does, last and next run
 easybits crons update "Study reminder" --cron "0 7 * * 1-5" # only what you pass
 easybits crons run "Study reminder"                         # id or exact name; in the background
@@ -134,7 +136,7 @@ easybits crons pause "Study reminder"                       # and resume
 easybits crons rm "Study reminder" --yes
 \`\`\`
 
-They call a public https URL (with \`--secret\` a secret from your vault travels as a header, \`Authorization: Bearer\` by default) or send a turn to one of your agents. At most every 5 min, \`--tz\` time zone (default America/Mexico_City), limit per plan. Same API as \`/api/v2/crons\`.
+They call a public https URL (with \`--secret\` a secret from your vault travels as a header, \`Authorization: Bearer\` by default) or send a turn to one of your agents. They repeat (\`--cron\`, at most every 5 min; they stop on their own with \`--until <date>\` or \`--times N\`) or run **once** (\`--at "2026-10-18T23:00"\` or \`--at 23:00\` = today, \`--in 2h\`): after running they turn off and stay in \`ls\` as "done", with their history. A time that already passed is an error, not "tomorrow". \`--dry-run\` validates everything and shows the next 3 runs in local time without creating anything. \`--tz\` time zone (default America/Mexico_City), limit per plan. Same API as \`/api/v2/crons\`.
 
 ### Platform crons (admins only)
 

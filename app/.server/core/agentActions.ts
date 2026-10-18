@@ -15,6 +15,7 @@ import {
   createUserCron,
   deleteUserCron,
   describeAction,
+  describeSchedule,
   humanCtx,
   normalizeCreate,
   normalizeUpdate,
@@ -106,7 +107,7 @@ export async function proposeUserCronAction(
     if (tool === "create_cron") {
       const c = await normalizeCreate(ownerId, raw);
       clean = c;
-      summary = `Crear cron «${c.name}» (${c.cron}, ${c.timezone}) → ${describeAction(c.action, await agentName(c.action))}`;
+      summary = `Crear cron «${c.name}» (${describeSchedule(c)}) → ${describeAction(c.action, await agentName(c.action))}`;
     } else {
       const id = String(raw.id ?? "");
       const row = /^[a-f0-9]{24}$/.test(id) ? await db.userCron.findFirst({ where: { id, ownerId } }) : null;
@@ -118,7 +119,8 @@ export async function proposeUserCronAction(
         clean = { id, ...p };
         const parts = [
           p.name !== undefined && `nombre «${p.name}»`,
-          (p.cron !== undefined || p.timezone !== undefined) && `horario ${p.cron ?? row.cron} (${p.timezone ?? row.timezone})`,
+          (p.cron !== undefined || p.at !== undefined || p.timezone !== undefined || p.until !== undefined || p.timesLeft !== undefined) &&
+            `horario ${describeSchedule({ ...row, ...p })}`,
           p.enabled !== undefined && (p.enabled ? "reanudar" : "pausar"),
           p.action && `acción → ${describeAction(p.action, await agentName(p.action))}`,
         ].filter(Boolean);

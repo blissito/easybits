@@ -16,10 +16,10 @@ export async function loader({ request }: Route.LoaderArgs) {
   });
 }
 
-// POST /api/v2/crons — { name, cron, timezone?, enabled?, action }
+// POST /api/v2/crons — { name, cron | at | in, until?, times?, timezone?, enabled?, action, dryRun? }
 export async function action({ request }: Route.ActionArgs) {
   const ctx = requireAuth(await authenticateRequest(request));
   if (request.method !== "POST") return Response.json({ error: "Method not allowed" }, { status: 405 });
   const body = await request.json().catch(() => ({}));
-  return Response.json(await createUserCron(ctx, body), { status: 201 });
+  return Response.json(await createUserCron(ctx, body), { status: body?.dryRun ? 200 : 201 });
 }

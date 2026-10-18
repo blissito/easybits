@@ -123,10 +123,12 @@ easybits secrets set --dotenv .env.production   # KEY=VALUE lines; - reads stdin
 printf '%s' "$TOKEN" | easybits secrets set GITHUB_TOKEN   # one value from stdin
 easybits secrets rm GITHUB_TOKEN --yes
 
-# Your crons: call a public https URL or message one of your agents (at most every 5 min)
+# Your crons: call a public https URL or message one of your agents, repeating (at most every 5 min) or once
 easybits crons create "Study reminder" --cron "30 8 * * *" --url https://www.ghosty.studio/api/v2/me/push \
   --method POST --body '{"title":"Study time"}' --secret GHOSTY_PUSH_TOKEN
 easybits crons create "Weekly report" --cron "0 9 * * 1" --agent <agentId> --prompt "Send me the sales summary"
+easybits crons create "Heads-up" --at 23:00 --url https://my-app.com/api/notice --method POST --dry-run  # once, today 23:00 in --tz
+easybits crons create "Heads-up" --in 2h --url https://my-app.com/api/notice --method POST              # once; --until/--times end repeating ones
 easybits crons ls
 easybits crons update "Study reminder" --cron "0 7 * * 1-5"
 easybits crons run "Study reminder"       # id or exact name

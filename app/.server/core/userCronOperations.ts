@@ -1,5 +1,6 @@
 // Crons de usuario: cada cuenta programa sus propias tareas (pegarle a una URL o mandarle un
-// turno a un agente de su flota). Fuente ÚNICA para REST (/api/v2/crons), MCP (create_cron…),
+// turno a un agente de su flota). Recurrentes (`cron`, que pueden terminar solos con `until` o
+// `times`) o de una sola vez (`at`): al correr, éstos se apagan y se quedan en el historial. Fuente ÚNICA para REST (/api/v2/crons), MCP (create_cron…),
 // el panel y las propuestas del copiloto (agentActions).
 //
 // Cómo corren: la tarea de plataforma `dispatch-user-crons` (cada minuto, la dispara eb-cron)
@@ -49,6 +50,16 @@ export type UserCronAction = HttpAction | AgentTurnAction;
 export type UserCronInput = {
   name?: string;
   cron?: string;
+  /** Una sola vez: ISO (sin zona se lee en `timezone`) o «23:00» (hoy en `timezone`). */
+  at?: string | Date | null;
+  /** Una sola vez, relativo: «2h», «90m», «1h30m», «1d». */
+  in?: string;
+  /** Recurrente que termina solo: última fecha (misma forma que `at`). null lo quita. */
+  until?: string | Date | null;
+  /** Recurrente que termina solo: cuántas corridas más. null lo quita. */
+  times?: number | null;
+  /** Igual que `times` (es como se guarda; las propuestas del copiloto lo traen así). */
+  timesLeft?: number | null;
   timezone?: string;
   enabled?: boolean;
   action?: unknown;
@@ -89,6 +100,150 @@ export function validateSchedule(cron: string, timezone: string): void {
 
 export function nextRunFor(cron: string, timezone: string, from: Date = new Date()): Date {
   return CronExpressionParser.parse(cron.trim(), { currentDate: from, tz: timezone }).next().toDate();
+}
+
+/** Lo más lejos que se puede programar algo de una sola vez. */
+export const MAX_AT_AHEAD_MS = 366 * 24 * 3600_000;
+
+/** Desfase de `tz` respecto a UTC en el instante `t` (ms). */
+function tzOffsetMs(t: number, tz: string): number {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-US", {
+      timeZone: tz,
+      hourCycle: "h23",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    })
+      .formatToParts(new Date(t))
+      .map((p) => [p.type, p.value])
+  );
+  const asUtc = Date.UTC(+parts.year, +parts.month - 1, +parts.day, +parts.hour, +parts.minute, +parts.second);
+  return asUtc - Math.floor(t / 1000) * 1000;
+}
+
+/** Hora de pared en `tz` → instante. Dos pasadas por si el desfase cambia (horario de verano). */
+function zonedTime(y: number, mo: number, d: number, h: number, mi: number, s: number, tz: string): Date {
+  const wall = Date.UTC(y, mo - 1, d, h, mi, s);
+  let t = wall - tzOffsetMs(wall, tz);
+  t = wall - tzOffsetMs(t, tz);
+  return new Date(t);
+}
+
+/** «2026-10-18 23:00» en la zona dada. */
+export function formatLocal(d: Date, tz: string): string {
+  const p = Object.fromEntries(
+    new Intl.DateTimeFormat("en-CA", {
+      timeZone: tz,
+      hourCycle: "h23",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    })
+      .formatToParts(d)
+      .map((x) => [x.type, x.value])
+  );
+  return `${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute}`;
+}
+
+/** Cuánto falta, corto: «12h 54m», «3d 2h», «40s». */
+export function humanIn(ms: number): string {
+  if (ms < 60_000) return `${Math.max(0, Math.round(ms / 1000))}s`;
+  const m = Math.floor(ms / 60_000);
+  const d = Math.floor(m / 1440);
+  const h = Math.floor((m % 1440) / 60);
+  const mm = m % 60;
+  if (d) return h ? `${d}d ${h}h` : `${d}d`;
+  if (h) return mm ? `${h}h ${mm}m` : `${h}h`;
+  return `${mm}m`;
+}
+
+/** «2h», «90m», «1h30m», «1d», «45s» → ms. null si no se entiende. */
+export function parseDuration(raw: string): number | null {
+  const s = raw.trim().toLowerCase().replace(/\s+/g, "");
+  if (!/^(\d+(d|h|m|min|s))+$/.test(s)) return null;
+  let ms = 0;
+  for (const [, n, u] of s.matchAll(/(\d+)(d|h|min|m|s)/g)) {
+    ms += Number(n) * (u === "d" ? 86_400_000 : u === "h" ? 3_600_000 : u === "s" ? 1000 : 60_000);
+  }
+  return ms;
+}
+
+/**
+ * Una fecha de `at`/`until`: Date, ISO con zona (`Z`, `-06:00`), ISO sin zona (se lee en `tz`) o
+ * «HH:MM» (hoy en `tz`). No adivina «mañana»: una hora que ya pasó se rechaza al validar.
+ */
+export function parseWhen(raw: string | Date, tz: string, now: Date = new Date()): Date {
+  if (raw instanceof Date) {
+    if (Number.isNaN(raw.getTime())) throw bad("Fecha inválida");
+    return raw;
+  }
+  const s = String(raw).trim();
+  let m = s.match(/^(\d{1,2}):(\d{2})$/);
+  if (m) {
+    const [y, mo, d] = formatLocal(now, tz).slice(0, 10).split("-").map(Number);
+    if (+m[1] > 23 || +m[2] > 59) throw bad(`Hora inválida: ${s}`);
+    return zonedTime(y, mo, d, +m[1], +m[2], 0, tz);
+  }
+  m = s.match(/^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2})(?::(\d{2}))?)?$/);
+  if (m) return zonedTime(+m[1], +m[2], +m[3], +(m[4] ?? 0), +(m[5] ?? 0), +(m[6] ?? 0), tz);
+  if (/^\d{4}-\d{2}-\d{2}T.+(Z|[+-]\d{2}:?\d{2})$/i.test(s)) {
+    const d = new Date(s);
+    if (!Number.isNaN(d.getTime())) return d;
+  }
+  throw bad(`Fecha inválida: «${s}». Usa ISO (2026-10-18T23:00, se lee en la zona del cron) o «23:00» (hoy).`);
+}
+
+/** `at` válido: en el futuro y a no más de un año. */
+export function validateAt(at: Date, tz: string, now: Date = new Date()): void {
+  if (at.getTime() <= now.getTime()) {
+    throw bad(`at ya pasó: ${formatLocal(at, tz)} (${tz}). Ahora son las ${formatLocal(now, tz)}.`);
+  }
+  if (at.getTime() - now.getTime() > MAX_AT_AHEAD_MS) throw bad("at puede estar a lo más a un año");
+}
+
+export type Schedule = { cron: string; at: Date | null; until: Date | null; timesLeft: number | null; timezone: string };
+
+/** Las próximas `n` corridas (respeta `until` y `timesLeft`). */
+export function upcomingRuns(s: Schedule, n = 3, from: Date = new Date()): Date[] {
+  if (s.at) return s.at > from ? [s.at] : [];
+  const out: Date[] = [];
+  const max = s.timesLeft == null ? n : Math.min(n, s.timesLeft);
+  const it = CronExpressionParser.parse(s.cron.trim(), { currentDate: from, tz: s.timezone });
+  while (out.length < max) {
+    const t = it.next().toDate();
+    if (s.until && t > s.until) break;
+    out.push(t);
+  }
+  return out;
+}
+
+/**
+ * Qué escribe el reclamo de una corrida programada: la siguiente fecha, o apagarlo si era de una
+ * sola vez o se le acabaron `until`/`times`. `run:false` = no correr (cron inválido). Puro, con test.
+ */
+export function claimData(c: Pick<UserCron, "cron" | "at" | "until" | "timesLeft" | "timezone">, now: Date) {
+  if (c.at) return { run: true, data: { nextRunAt: null, enabled: false } };
+  let next: Date;
+  try {
+    next = nextRunFor(c.cron, c.timezone, now);
+  } catch {
+    return { run: false, data: { nextRunAt: null, enabled: false, lastError: "cron inválido: se apagó" } };
+  }
+  const timesLeft = c.timesLeft == null ? null : Math.max(c.timesLeft - 1, 0);
+  const over = timesLeft === 0 || (c.until != null && next > c.until);
+  return {
+    run: true,
+    data: {
+      ...(timesLeft != null ? { timesLeft } : {}),
+      ...(over ? { nextRunAt: null, enabled: false } : { nextRunAt: next }),
+    },
+  };
 }
 
 /** Normaliza y valida la acción. Comprueba dueño del agente, existencia del secreto y URL pública. */
@@ -140,30 +295,98 @@ export async function validateAction(ownerId: string, raw: unknown): Promise<Use
   throw bad('action.type debe ser "http" o "agent_turn"');
 }
 
-/** Valida una alta completa sin escribir. La usan create y las propuestas del copiloto. */
-export async function normalizeCreate(ownerId: string, input: UserCronInput) {
-  const name = String(input.name ?? "").trim().slice(0, 80);
-  if (!name) throw bad("name es obligatorio");
+/**
+ * Horario de un alta o de un cambio ya mezclado con lo actual: exactamente uno de `cron` o `at`
+ * (o `in`), y `until`/`times` sólo con `cron`.
+ */
+function resolveSchedule(
+  input: { cron?: string; at?: string | Date | null; in?: string; until?: string | Date | null; times?: number | null },
+  timezone: string,
+  now: Date
+): Omit<Schedule, "timezone"> {
+  if (!validTimezone(timezone)) throw bad(`Zona horaria inválida: ${timezone}`);
   const cron = String(input.cron ?? "").trim();
-  const timezone = String(input.timezone || DEFAULT_TIMEZONE);
+  let at: Date | null = null;
+  if (input.in != null && input.in !== "") {
+    if (input.at) throw bad("Usa at o in, no los dos");
+    const ms = parseDuration(String(input.in));
+    if (ms == null) throw bad(`in inválido: «${input.in}». Ejemplos: 10m, 2h, 1h30m, 1d`);
+    at = new Date(now.getTime() + ms);
+  } else if (input.at) {
+    at = parseWhen(input.at, timezone, now);
+  }
+  if (at && cron) throw bad("Un cron lleva `cron` (se repite) o `at` (una sola vez), no los dos");
+  if (!at && !cron) throw bad("Falta el horario: `cron` (se repite) o `at`/`in` (una sola vez)");
+  const until = input.until ? parseWhen(input.until, timezone, now) : null;
+  const timesLeft = input.times == null ? null : Number(input.times);
+  if (at) {
+    if (until || timesLeft != null) throw bad("until y times son para crons que se repiten; uno con at corre una sola vez");
+    validateAt(at, timezone, now);
+    return { cron: "", at, until: null, timesLeft: null };
+  }
   validateSchedule(cron, timezone);
-  const action = await validateAction(ownerId, input.action);
-  return { name, cron, timezone, enabled: input.enabled !== false, action };
+  if (timesLeft != null && (!Number.isInteger(timesLeft) || timesLeft < 1 || timesLeft > 10_000)) {
+    throw bad("times debe ser un entero entre 1 y 10000");
+  }
+  if (until && until <= nextRunFor(cron, timezone, now)) {
+    throw bad(`until (${formatLocal(until, timezone)}) llega antes de la primera corrida: nunca correría`);
+  }
+  return { cron, at: null, until, timesLeft };
 }
 
+/** Valida una alta completa sin escribir. La usan create, dryRun y las propuestas del copiloto. */
+export async function normalizeCreate(ownerId: string, input: UserCronInput, now: Date = new Date()) {
+  if (input.times === undefined && input.timesLeft !== undefined) input = { ...input, times: input.timesLeft };
+  const name = String(input.name ?? "").trim().slice(0, 80);
+  if (!name) throw bad("name es obligatorio");
+  const timezone = String(input.timezone || DEFAULT_TIMEZONE);
+  const sched = resolveSchedule(input, timezone, now);
+  const action = await validateAction(ownerId, input.action);
+  return { name, ...sched, timezone, enabled: input.enabled !== false, action };
+}
+
+type SchedulePatch = { cron?: string; at?: Date | null; until?: Date | null; timesLeft?: number | null; timezone?: string };
+
 /** Valida un cambio parcial sin escribir. */
-export async function normalizeUpdate(current: UserCron, input: UserCronInput) {
-  const out: { name?: string; cron?: string; timezone?: string; enabled?: boolean; action?: UserCronAction } = {};
+export async function normalizeUpdate(current: UserCron, input: UserCronInput, now: Date = new Date()) {
+  if (input.times === undefined && input.timesLeft !== undefined) input = { ...input, times: input.timesLeft };
+  const out: { name?: string; enabled?: boolean; action?: UserCronAction } & SchedulePatch = {};
   if (input.name !== undefined) {
     out.name = String(input.name).trim().slice(0, 80);
     if (!out.name) throw bad("name no puede ir vacío");
   }
-  if (input.cron !== undefined) out.cron = String(input.cron).trim();
-  if (input.timezone !== undefined) out.timezone = String(input.timezone);
-  if (out.cron !== undefined || out.timezone !== undefined) {
-    validateSchedule(out.cron ?? current.cron, out.timezone ?? current.timezone);
+  const touches = ["cron", "at", "in", "until", "times", "timezone"].some((k) => (input as Record<string, unknown>)[k] !== undefined);
+  if (touches) {
+    const timezone = String(input.timezone ?? current.timezone);
+    // Pasar a `at`/`in` deja el cron vacío y viceversa; lo que no venga se queda como estaba.
+    if ((input.at || input.in) && input.cron) throw bad("Un cron lleva `cron` (se repite) o `at` (una sola vez), no los dos");
+    const switching = input.at || input.in ? "at" : input.cron ? "cron" : null;
+    const pick = <T,>(given: T | undefined, kept: T, cleared: T) => (given !== undefined ? given : switching === "at" ? cleared : kept);
+    const merged = {
+      cron: switching === "at" ? "" : (input.cron ?? current.cron),
+      at: switching === "cron" ? null : input.at !== undefined || input.in !== undefined ? input.at : current.at,
+      in: input.in,
+      until: pick(input.until, current.until as Date | string | null, null),
+      times: pick(input.times, current.timesLeft, null),
+    };
+    // Un `at` que ya corrió y no se toca no se revalida contra «ahora» (sólo si se reanuda; abajo).
+    const keepPastAt = !switching && merged.at && !input.at && current.at && current.at <= now;
+    const sched = keepPastAt
+      ? { cron: "", at: current.at, until: null, timesLeft: null }
+      : resolveSchedule(merged, timezone, now);
+    Object.assign(out, sched, { timezone });
   }
   if (input.enabled !== undefined) out.enabled = !!input.enabled;
+  const at = out.at !== undefined ? out.at : current.at;
+  if (out.enabled === true && at && at <= now) {
+    throw bad("Ese cron de una sola vez ya pasó; dale otro `at` (o `in`) para volver a programarlo");
+  }
+  if (out.enabled === true && !at) {
+    const timesLeft = out.timesLeft !== undefined ? out.timesLeft : current.timesLeft;
+    const until = out.until !== undefined ? out.until : current.until;
+    if (timesLeft === 0) throw bad("A ese cron ya no le quedan corridas; dale `times` nuevo (o null para siempre)");
+    if (until && until <= now) throw bad("La fecha `until` de ese cron ya pasó; dale otra (o null para siempre)");
+  }
   if (input.action !== undefined) out.action = await validateAction(current.ownerId, input.action);
   return out;
 }
@@ -173,12 +396,23 @@ export async function normalizeUpdate(current: UserCron, input: UserCronInput) {
 export type UserCronView = {
   id: string;
   name: string;
+  /** "once" (`at`) o "recurring" (`cron`). */
+  kind: "once" | "recurring";
   cron: string;
+  at: string | null;
+  until: string | null;
+  timesLeft: number | null;
   timezone: string;
   schedule: string;
   enabled: boolean;
+  /** Ya hizo todo lo que tenía que hacer (de una sola vez que corrió, o se le acabaron until/times). */
+  done: boolean;
   action: UserCronAction;
   nextRunAt: string | null;
+  /** `nextRunAt` en la zona del cron: «2026-10-18 23:00». */
+  nextRunLocal: string | null;
+  /** Cuánto falta: «12h 54m». */
+  in: string | null;
   lastRunAt: string | null;
   lastOk: boolean | null;
   lastStatus: number | null;
@@ -187,22 +421,46 @@ export type UserCronView = {
   createdAt: string;
 };
 
-export const toUserCronView = (c: UserCron): UserCronView => ({
-  id: c.id,
-  name: c.name,
-  cron: c.cron,
-  timezone: c.timezone,
-  schedule: scheduleWords(c.cron, c.timezone),
-  enabled: c.enabled,
-  action: c.action as UserCronAction,
-  nextRunAt: c.enabled ? (c.nextRunAt?.toISOString() ?? null) : null,
-  lastRunAt: c.lastRunAt?.toISOString() ?? null,
-  lastOk: c.lastOk ?? null,
-  lastStatus: c.lastStatus ?? null,
-  lastError: c.lastError ?? null,
-  failCount: c.failCount,
-  createdAt: c.createdAt.toISOString(),
-});
+/** Horario en palabras, también para los de una sola vez y los que terminan solos. */
+export function describeSchedule(c: Pick<UserCron, "cron" | "at" | "until" | "timesLeft" | "timezone">): string {
+  if (c.at) return `una vez, ${formatLocal(c.at, c.timezone)} ${c.timezone}`;
+  const base = scheduleWords(c.cron, c.timezone);
+  const ends = [
+    c.until && `hasta ${formatLocal(c.until, c.timezone)}`,
+    c.timesLeft != null && `${c.timesLeft} ${c.timesLeft === 1 ? "vez" : "veces"} más`,
+  ].filter(Boolean);
+  return ends.length ? `${base} · ${ends.join(" · ")}` : base;
+}
+
+export const isDone = (c: Pick<UserCron, "enabled" | "at" | "until" | "timesLeft">, now = new Date()) =>
+  !c.enabled && ((c.at != null && c.at <= now) || c.timesLeft === 0 || (c.until != null && c.until <= now));
+
+export const toUserCronView = (c: UserCron, now = new Date()): UserCronView => {
+  const next = c.enabled ? c.nextRunAt : null;
+  return {
+    id: c.id,
+    name: c.name,
+    kind: c.at ? "once" : "recurring",
+    cron: c.cron,
+    at: c.at?.toISOString() ?? null,
+    until: c.until?.toISOString() ?? null,
+    timesLeft: c.timesLeft ?? null,
+    timezone: c.timezone,
+    schedule: describeSchedule(c),
+    enabled: c.enabled,
+    done: isDone(c, now),
+    action: c.action as UserCronAction,
+    nextRunAt: next?.toISOString() ?? null,
+    nextRunLocal: next ? formatLocal(next, c.timezone) : null,
+    in: next ? humanIn(next.getTime() - now.getTime()) : null,
+    lastRunAt: c.lastRunAt?.toISOString() ?? null,
+    lastOk: c.lastOk ?? null,
+    lastStatus: c.lastStatus ?? null,
+    lastError: c.lastError ?? null,
+    failCount: c.failCount,
+    createdAt: c.createdAt.toISOString(),
+  };
+};
 
 /** Una línea para tarjetas y listas: «POST https://…» o «turno a <agente>». */
 export function describeAction(a: UserCronAction, agentName?: string): string {
@@ -220,7 +478,7 @@ async function findOwned(ctx: AuthContext, id: string): Promise<UserCron> {
 export async function listUserCrons(ctx: AuthContext): Promise<UserCronView[]> {
   requireScope(ctx, "READ");
   const rows = await db.userCron.findMany({ where: { ownerId: ctx.user.id }, orderBy: { createdAt: "asc" } });
-  return rows.map(toUserCronView);
+  return rows.map((r) => toUserCronView(r));
 }
 
 /** Agentes del usuario para elegir destino de un `agent_turn` (sólo id y nombre). */
@@ -290,19 +548,57 @@ function requireHuman(ctx: AuthContext) {
   }
 }
 
-export async function createUserCron(ctx: AuthContext, input: UserCronInput): Promise<UserCronView> {
+/** Crons que ocupan lugar del plan: los de una sola vez que ya corrieron no cuentan (son historial). */
+async function countActive(ownerId: string, now = new Date()) {
+  const [all, done] = await Promise.all([
+    db.userCron.count({ where: { ownerId } }),
+    db.userCron.count({ where: { ownerId, enabled: false, at: { lte: now } } }),
+  ]);
+  return all - done;
+}
+
+export type UserCronPreview = {
+  dryRun: true;
+  name: string;
+  kind: "once" | "recurring";
+  schedule: string;
+  timezone: string;
+  /** Las próximas (hasta 3) en ISO y en la zona del cron. */
+  nextRuns: { at: string; local: string }[];
+  in: string | null;
+  action: UserCronAction;
+};
+
+/** `dryRun`: valida todo (horario, acción, cupo) sin escribir y dice cuándo correría. */
+export async function previewUserCron(ctx: AuthContext, input: UserCronInput, now = new Date()): Promise<UserCronPreview> {
+  requireScope(ctx, "READ");
+  const clean = await normalizeCreate(ctx.user.id, input, now);
+  const runs = upcomingRuns(clean, 3, now);
+  return {
+    dryRun: true,
+    name: clean.name,
+    kind: clean.at ? "once" : "recurring",
+    schedule: describeSchedule(clean),
+    timezone: clean.timezone,
+    nextRuns: runs.map((d) => ({ at: d.toISOString(), local: formatLocal(d, clean.timezone) })),
+    in: runs[0] ? humanIn(runs[0].getTime() - now.getTime()) : null,
+    action: clean.action,
+  };
+}
+
+export async function createUserCron(ctx: AuthContext, input: UserCronInput & { dryRun?: boolean }): Promise<UserCronView | UserCronPreview> {
+  if (input.dryRun) return previewUserCron(ctx, input);
   requireScope(ctx, "WRITE");
   requireHuman(ctx);
   const clean = await normalizeCreate(ctx.user.id, input);
   const plan = getUserPlan(ctx.user);
   const limit = USER_CRON_LIMITS[plan];
-  const count = await db.userCron.count({ where: { ownerId: ctx.user.id } });
-  if (count >= limit) throw bad(`Tu plan ${plan} permite ${limit} crons; borra uno o sube de plan.`, 403);
+  if ((await countActive(ctx.user.id)) >= limit) throw bad(`Tu plan ${plan} permite ${limit} crons; borra uno o sube de plan.`, 403);
   const row = await db.userCron.create({
     data: {
       ownerId: ctx.user.id,
       ...clean,
-      nextRunAt: clean.enabled ? nextRunFor(clean.cron, clean.timezone) : null,
+      nextRunAt: clean.enabled ? (clean.at ?? nextRunFor(clean.cron, clean.timezone)) : null,
     },
   });
   return toUserCronView(row);
@@ -314,14 +610,15 @@ export async function updateUserCron(ctx: AuthContext, id: string, input: UserCr
   const current = await findOwned(ctx, id);
   const patch = await normalizeUpdate(current, input);
   const cron = patch.cron ?? current.cron;
+  const at = patch.at !== undefined ? patch.at : current.at;
   const timezone = patch.timezone ?? current.timezone;
   const enabled = patch.enabled ?? current.enabled;
-  const reschedule = patch.cron !== undefined || patch.timezone !== undefined || patch.enabled !== undefined;
+  const reschedule = ["cron", "at", "timezone", "enabled"].some((k) => (patch as Record<string, unknown>)[k] !== undefined);
   const row = await db.userCron.update({
     where: { id: current.id },
     data: {
       ...patch,
-      ...(reschedule ? { nextRunAt: enabled ? nextRunFor(cron, timezone) : null } : {}),
+      ...(reschedule ? { nextRunAt: enabled ? (at ?? nextRunFor(cron, timezone)) : null } : {}),
       // Reanudar o cambiar la acción limpia el contador de fallas.
       ...(patch.enabled === true || patch.action ? { failCount: 0 } : {}),
     },
@@ -463,17 +760,9 @@ export async function dispatchDueUserCrons(now: Date = new Date()) {
   const started: Promise<Outcome>[] = [];
   let claimed = 0;
   for (const c of due) {
-    let next: Date | null;
-    try {
-      next = nextRunFor(c.cron, c.timezone, now);
-    } catch {
-      next = null;
-    }
-    const claim = await db.userCron.updateMany({
-      where: { id: c.id, enabled: true, nextRunAt: c.nextRunAt },
-      data: next ? { nextRunAt: next } : { nextRunAt: null, enabled: false, lastError: "cron inválido: se apagó" },
-    });
-    if (claim.count !== 1 || !next) continue;
+    const { run, data } = claimData(c, now);
+    const claim = await db.userCron.updateMany({ where: { id: c.id, enabled: true, nextRunAt: c.nextRunAt }, data });
+    if (claim.count !== 1 || !run) continue;
     claimed++;
     started.push(executeUserCron(c, "schedule"));
   }

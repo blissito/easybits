@@ -271,7 +271,9 @@ La bóveda de tu cuenta (la misma de /dash/developer/secrets y de las tools MCP 
 \`\`\`bash
 easybits crons create "Despertador" --cron "30 8 * * *" --url https://www.ghosty.studio/api/v2/me/push \\
   --method POST --body '{"title":"Hora de estudiar"}' --secret GHOSTY_PUSH_TOKEN
-easybits crons create "Reporte" --cron "0 9 * * 1" --agent <agentId> --prompt "Mándame el resumen de ventas"
+easybits crons create "Reporte" --cron "0 9 * * 1" --times 4 --agent <agentId> --prompt "Mándame el resumen de ventas"
+easybits crons create "Aviso" --at 23:00 --url https://mi-app.com/api/aviso --method POST --dry-run   # una sola vez; valida y dice cuándo
+easybits crons create "Aviso" --in 2h --url https://mi-app.com/api/aviso --method POST
 easybits crons ls                                           # los tuyos: horario, qué hace, última y próxima
 easybits crons update "Despertador" --cron "0 7 * * 1-5"    # sólo lo que pases
 easybits crons run "Despertador"                            # id o nombre exacto; en segundo plano
@@ -280,7 +282,7 @@ easybits crons pause "Despertador"                          # y resume
 easybits crons rm "Despertador" --yes
 \`\`\`
 
-Le pegan a una URL https pública (con \`--secret\` un secreto de tu bóveda viaja como header, \`Authorization: Bearer\` por default) o le mandan un turno a uno de tus agentes. Como mucho cada 5 min, zona \`--tz\` (default America/Mexico_City), límite por plan. Misma API que \`/api/v2/crons\`.
+Le pegan a una URL https pública (con \`--secret\` un secreto de tu bóveda viaja como header, \`Authorization: Bearer\` por default) o le mandan un turno a uno de tus agentes. Se repiten (\`--cron\`, como mucho cada 5 min; terminan solos con \`--until <fecha>\` o \`--times N\`) o corren **una sola vez** (\`--at "2026-10-18T23:00"\` o \`--at 23:00\` = hoy, \`--in 2h\`): al correr se apagan y se quedan en \`ls\` como «terminado», con su historial. Una hora que ya pasó es error, no «mañana». \`--dry-run\` valida todo y muestra las próximas 3 corridas en hora local sin crear nada. Zona \`--tz\` (default America/Mexico_City), límite por plan. Misma API que \`/api/v2/crons\`.
 
 ### Crons de la plataforma (sólo administradores)
 
@@ -2100,11 +2102,11 @@ Qué pasa en cada push:
 También se administran desde \`/dash/hosting\`: cada sitio con su estado y su dirección, y al abrirlo cuatro pestañas — **Dominios** (con el registro DNS que hay que crear y si ya resuelve), **Versiones** (con vuelta atrás en un clic), **Variables** y **Registro** (las últimas líneas del log). Desde ahí también se pausa y se da de baja.
 
 ### Tus crons (cualquier cuenta)
-Cada cuenta programa sus propias tareas: **pegarle a una URL** o **mandarle un mensaje a uno de tus agentes de la flota**. Las despacha EasyBits cada minuto; cada corrida queda registrada (hora, duración, status, resumen y error). Mínimo cada 5 min; límite por plan: Byte 3, Mega 20, Tera 100. Zona horaria IANA (default \`America/Mexico_City\`). Tras 20 fallas seguidas el cron se apaga solo.
+Cada cuenta programa sus propias tareas: **pegarle a una URL** o **mandarle un mensaje a uno de tus agentes de la flota**. Las despacha EasyBits cada minuto; cada corrida queda registrada (hora, duración, status, resumen y error). Se repiten (\`cron\`, mínimo cada 5 min) o corren **una sola vez** (\`at\`/\`in\`). Límite por plan: Byte 3, Mega 20, Tera 100 (los de una sola vez que ya corrieron no cuentan). Zona horaria IANA (default \`America/Mexico_City\`). Tras 20 fallas seguidas el cron se apaga solo.
 
 - \`GET /api/v2/crons\` — \`{ items, nextCursor, hasMore, total }\` (\`?include=agents\` añade \`agents:[{id,name}]\`).
-- \`POST /api/v2/crons\` — \`{ name, cron, timezone?, enabled?, action }\`. \`action\` es \`{ type: "http", url, method?, body?, secretName?, secretHeader? }\` (https pública; \`secretName\` es un secreto de tu bóveda que viaja como header, \`Authorization: Bearer …\` por default; no sigue redirecciones) o \`{ type: "agent_turn", fleetAgentId, prompt, groupId? }\` (conversación \`cron:<id>\` por default).
-- \`GET|PATCH|DELETE /api/v2/crons/:id\` — \`PATCH { enabled: false }\` lo pausa.
+- \`POST /api/v2/crons\` — \`{ name, cron | at | in, until?, times?, timezone?, enabled?, action, dryRun? }\`. Horario: \`cron\` (5 campos, se repite; \`until\` = última fecha, \`times\` = cuántas corridas más) **o** \`at\` (una sola vez: ISO con zona, ISO sin zona —se lee en \`timezone\`— o \`"23:00"\` = hoy) **o** \`in\` (\`"10m"\`, \`"2h"\`, \`"1h30m"\`, \`"1d"\`). Un \`at\` que ya pasó → 400 (no se adivina «mañana»). Al correr, uno de una sola vez queda \`enabled:false, done:true\` y se conserva con su historial. \`dryRun:true\` valida todo sin crear y responde \`{ dryRun, schedule, timezone, nextRuns:[{at, local}], in }\` (las próximas 3). La respuesta trae \`kind\` (\`once\`|\`recurring\`), \`nextRunAt\` (ISO), \`nextRunLocal\` (en la zona del cron) e \`in\` («12h 54m»). \`action\` es \`{ type: "http", url, method?, body?, secretName?, secretHeader? }\` (https pública; \`secretName\` es un secreto de tu bóveda que viaja como header, \`Authorization: Bearer …\` por default; no sigue redirecciones) o \`{ type: "agent_turn", fleetAgentId, prompt, groupId? }\` (conversación \`cron:<id>\` por default).
+- \`GET|PATCH|DELETE /api/v2/crons/:id\` — \`PATCH { enabled: false }\` lo pausa; \`PATCH { at }\` lo vuelve de una sola vez (y reprograma uno que ya corrió), \`PATCH { cron }\` recurrente; \`until\`/\`times\` en \`null\` los quitan.
 - \`POST /api/v2/crons/:id/run\` — ejecutar ahora (202, en segundo plano, \`trigger: "manual"\`). \`GET /api/v2/crons/:id/runs\` — historial.
 
 \`\`\`bash
@@ -2113,7 +2115,7 @@ curl -X POST https://www.easybits.cloud/api/v2/crons -H "Authorization: Bearer $
   -d '{"name":"Ping diario","cron":"30 8 * * *","action":{"type":"http","url":"https://mi-app.com/api/tarea","method":"POST"}}'
 \`\`\`
 
-MCP: \`list_my_crons\`, \`create_cron\`, \`update_cron\`, \`delete_cron\`, \`run_my_cron\` (grupo \`core\`). Panel: sección «Mis crons» en \`/dash/admin/crons\`.
+MCP: \`list_my_crons\`, \`create_cron\` (con \`at\`/\`in\`/\`until\`/\`times\`/\`dryRun\`), \`update_cron\`, \`delete_cron\`, \`run_my_cron\` (grupo \`core\`). Panel: sección «Mis crons» en \`/dash/admin/crons\`.
 
 ### Tareas programadas de la plataforma (sólo administradores)
 Los respaldos diarios de máquinas, su rotación, el monitor de hosting (cada 5 min) y las purgas semanales son tareas programadas de EasyBits. Su horario vive en el código y cada corrida queda registrada (hora, duración, quién la disparó, resumen y error). Se ven y operan en \`/dash/admin/crons\` o por API. Requieren scope \`ADMIN\` **y** ser administrador de la plataforma; cualquier otra cuenta recibe 403.

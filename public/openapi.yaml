@@ -2340,7 +2340,7 @@ paths:
       tags: [Crons]
       operationId: createCron
       summary: Crear cron
-      description: "Mínimo cada 5 min. Límite por plan: Byte 3, Mega 20, Tera 100. La URL de `http` debe ser https pública; `secretName` viaja como header (`Authorization: Bearer …` por default)."
+      description: "Se repite (`cron`, mínimo cada 5 min) o corre una sola vez (`at`/`in`). Con `dryRun:true` responde 200 con `{ dryRun, schedule, timezone, nextRuns:[{at, local}], in }` sin crear. Límite por plan: Byte 3, Mega 20, Tera 100. La URL de `http` debe ser https pública; `secretName` viaja como header (`Authorization: Bearer …` por default)."
       requestBody:
         required: true
         content:
@@ -3371,19 +3371,31 @@ components:
       type: object
       properties:
         name: { type: string }
-        cron: { type: string, example: "30 8 * * *", description: "5 campos; mínimo cada 5 min" }
+        cron: { type: string, example: "30 8 * * *", description: "5 campos, se repite; mínimo cada 5 min. Uno de cron | at | in" }
+        at: { type: string, example: "2026-10-18T23:00", description: "una sola vez: ISO (sin zona se lee en timezone) o HH:MM (hoy); en el pasado → 400" }
+        in: { type: string, example: "2h", description: "una sola vez, relativo: 10m, 2h, 1h30m, 1d" }
+        until: { type: string, nullable: true, description: "recurrente: última fecha (misma forma que at)" }
+        times: { type: integer, nullable: true, description: "recurrente: cuántas corridas más" }
         timezone: { type: string, default: America/Mexico_City }
         enabled: { type: boolean, default: true }
         action: { $ref: "#/components/schemas/UserCronAction" }
+        dryRun: { type: boolean, description: "sólo valida; responde las próximas 3 corridas sin crear" }
     UserCron:
       type: object
       properties:
         id: { type: string }
         name: { type: string }
-        cron: { type: string }
+        kind: { type: string, enum: [once, recurring] }
+        cron: { type: string, description: "vacío si es de una sola vez" }
+        at: { type: string, format: date-time, nullable: true }
+        until: { type: string, format: date-time, nullable: true }
+        timesLeft: { type: integer, nullable: true }
         timezone: { type: string }
         schedule: { type: string, description: "el horario en palabras" }
         enabled: { type: boolean }
+        done: { type: boolean, description: "ya hizo todo (de una sola vez que corrió, o se acabaron until/times)" }
+        nextRunLocal: { type: string, nullable: true, example: "2026-10-18 23:00", description: "nextRunAt en la zona del cron" }
+        in: { type: string, nullable: true, example: "12h 54m" }
         action: { $ref: "#/components/schemas/UserCronAction" }
         nextRunAt: { type: string, format: date-time, nullable: true }
         lastRunAt: { type: string, format: date-time, nullable: true }

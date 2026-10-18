@@ -17,6 +17,7 @@ type UserCron = {
   timezone: string;
   schedule: string;
   enabled: boolean;
+  done?: boolean;
   action: Action;
   nextRunAt: string | null;
   lastRunAt: string | null;
@@ -38,7 +39,7 @@ const DAYS = [
   ["0", "domingo"],
 ] as const;
 
-type When = { mode: "daily" | "weekdays" | "weekly" | "every" | "custom"; time: string; day: string; every: string; cron: string };
+type When = { mode: "once" | "daily" | "weekdays" | "weekly" | "every" | "custom"; time: string; day: string; every: string; cron: string; at: string };
 
 /** Lo que el usuario eligió en palabras → cron de 5 campos. */
 function toCron(w: When): string {
@@ -207,7 +208,7 @@ export function UserCronsSection() {
                     {c.lastStatus != null && <span className="block text-xs text-gray-500">HTTP {c.lastStatus}</span>}
                   </td>
                   <td className="p-3 whitespace-nowrap max-md:hidden" suppressHydrationWarning>
-                    {c.enabled ? relative(c.nextRunAt) : "en pausa"}
+                    {c.enabled ? relative(c.nextRunAt) : c.done ? "terminado" : "en pausa"}
                   </td>
                   <td className="p-3 text-right">
                     <div className="inline-flex flex-wrap justify-end gap-2">
@@ -240,7 +241,7 @@ export function UserCronsSection() {
 
 function CronForm({ agents, onCancel, onCreated }: { agents: Agent[]; onCancel: () => void; onCreated: () => void }) {
   const [name, setName] = useState("");
-  const [when, setWhen] = useState<When>({ mode: "daily", time: "08:30", day: "1", every: "15", cron: "" });
+  const [when, setWhen] = useState<When>({ mode: "daily", time: "08:30", day: "1", every: "15", cron: "", at: "" });
   const [timezone] = useState(() => {
     try {
       return Intl.DateTimeFormat().resolvedOptions().timeZone || DEFAULT_TZ;
@@ -258,7 +259,8 @@ function CronForm({ agents, onCancel, onCreated }: { agents: Agent[]; onCancel: 
   const [prompt, setPrompt] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const cron = toCron(when);
+  const once = when.mode === "once";
+  const cron = once ? "" : toCron(when);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -275,7 +277,7 @@ function CronForm({ agents, onCancel, onCreated }: { agents: Agent[]; onCancel: 
           }
         : { type: "agent_turn", fleetAgentId: agentId || agents[0]?.id, prompt };
     try {
-      await api("/api/v2/crons", { method: "POST", body: JSON.stringify({ name, cron, timezone, action }) });
+      await api("/api/v2/crons", { method: "POST", body: JSON.stringify({ name, ...(once ? { at: when.at } : { cron }), timezone, action }) });
       onCreated();
     } catch (err) {
       setError((err as Error).message);
@@ -296,6 +298,7 @@ function CronForm({ agents, onCancel, onCreated }: { agents: Agent[]; onCancel: 
       <div>
         <label className={label}>Cuándo</label>
         <select className={input} value={when.mode} onChange={(e) => set({ mode: e.target.value as When["mode"] })}>
+          <option value="once">Una sola vez</option>
           <option value="daily">Todos los días</option>
           <option value="weekdays">De lunes a viernes</option>
           <option value="weekly">Una vez por semana</option>
@@ -324,6 +327,12 @@ function CronForm({ agents, onCancel, onCreated }: { agents: Agent[]; onCancel: 
             </div>
           </>
         )}
+        {once && (
+          <div className="flex-1">
+            <label className={label}>El</label>
+            <input type="datetime-local" className={input} value={when.at} onChange={(e) => set({ at: e.target.value })} required />
+          </div>
+        )}
         {when.mode === "every" && (
           <div className="flex-1">
             <label className={label}>Cada</label>
@@ -344,7 +353,13 @@ function CronForm({ agents, onCancel, onCreated }: { agents: Agent[]; onCancel: 
         )}
       </div>
       <p className="md:col-span-2 -mt-2 text-xs text-gray-500">
-        <span className="font-mono">{cron || "—"}</span> · zona {timezone} · mínimo cada 5 minutos
+        {once ? (
+          <>Corre una vez y se apaga · zona {timezone}</>
+        ) : (
+          <>
+            <span className="font-mono">{cron || "—"}</span> · zona {timezone} · mínimo cada 5 minutos
+          </>
+        )}
       </p>
 
       <div className="md:col-span-2">

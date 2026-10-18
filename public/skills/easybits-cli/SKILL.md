@@ -5,7 +5,7 @@ license: MIT
 compatibility: Needs Node 22+ (npx is enough), network access to https://www.easybits.cloud and an EasyBits API key
 metadata:
   author: easybits
-  version: "1.22"
+  version: "1.23"
 ---
 
 # Use the EasyBits CLI
@@ -180,8 +180,10 @@ given; if the person pastes one in chat, store it and refer to it by name from t
 easybits crons create "Ping" --cron "*/15 * * * *" --url https://my-app.com/api/ping --json   # → {id, schedule, nextRunAt, …}
 easybits crons create "Nudge" --cron "30 8 * * *" --url https://www.ghosty.studio/api/v2/me/push \
   --method POST --body '{"title":"Study time"}' --secret GHOSTY_PUSH_TOKEN --json
-easybits crons create "Report" --cron "0 9 * * 1" --agent <fleetAgentId> --prompt "Send the weekly summary" --json
-easybits crons ls --json                                     # {items:[{id, name, cron, timezone, schedule, enabled, action, nextRunAt, lastOk, lastError}]}
+easybits crons create "Report" --cron "0 9 * * 1" --times 4 --agent <fleetAgentId> --prompt "Send the weekly summary" --json
+easybits crons create "Once" --at 23:00 --url https://my-app.com/api/x --method POST --dry-run --json  # {dryRun, schedule, nextRuns:[{at, local}], in}
+easybits crons create "Once" --in 2h --url https://my-app.com/api/x --method POST --json            # runs ONCE, then enabled:false, done:true
+easybits crons ls --json                                     # {items:[{id, name, kind, cron, at, until, timesLeft, timezone, schedule, enabled, done, action, nextRunAt, nextRunLocal, in, lastOk, lastError}]}
 easybits crons update <id|name> --cron "0 7 * * 1-5" --json
 easybits crons run <id|name> --json                          # in the background; then:
 easybits crons runs <id|name> --json                         # {items:[{startedAt, ok, status, trigger, summary, error}]}
@@ -189,7 +191,10 @@ easybits crons pause <id|name> --json                        # resume to turn it
 easybits crons rm <id|name> --yes --json
 ```
 
-Cron = 5 fields in `--tz` (default America/Mexico_City); at most every 5 min (more often → 400).
+Cron = 5 fields in `--tz` (default America/Mexico_City); at most every 5 min (more often → 400);
+`--until <date>` / `--times N` make it stop on its own. ONE-OFF: `--at` (ISO, read in `--tz`, or
+`23:00` = today; a time already past → 400, never "tomorrow") or `--in 10m|2h|1d`; it turns off
+after running and stays listed with its runs. Use `--dry-run` first to confirm the local time.
 The URL must be public https; secrets go by vault NAME (`--secret`), never the value. Limit per plan:
 Byte 3, Mega 20, Tera 100. After 20 failures in a row a cron turns itself off (`enabled:false`).
 
