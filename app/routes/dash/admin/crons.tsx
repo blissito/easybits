@@ -195,6 +195,7 @@ function JobRow({
   job,
   now,
   compact,
+  tight,
   onOpen,
   onAsk,
 }: {
@@ -202,6 +203,8 @@ function JobRow({
   now: number;
   /** Tabla angosta (el copiloto abierto o una pantalla chica): tres columnas, sin ruta ni Pausar. */
   compact: boolean;
+  /** Ni así cabe: sin corridas, y las acciones pueden ir en dos renglones. */
+  tight: boolean;
   onOpen: () => void;
   onAsk: () => void;
 }) {
@@ -215,8 +218,8 @@ function JobRow({
   const dot = <span className={`w-3 h-3 shrink-0 rounded-full border-2 border-black ${st.dot}`} />;
 
   const actions = (
-    <td className={`p-3 text-right ${compact ? "" : "whitespace-nowrap"}`} onClick={stop} onKeyDown={stop}>
-      <fetcher.Form method="post" className="inline-flex flex-wrap justify-end gap-2">
+    <td className={`p-3 text-right ${tight ? "" : "whitespace-nowrap"}`} onClick={stop} onKeyDown={stop}>
+      <fetcher.Form method="post" className={`inline-flex justify-end gap-2 ${tight ? "flex-wrap" : ""}`}>
         <input type="hidden" name="job" value={job.key} />
         {job.status === "fallo" && (
           <BrutalButton type="button" size="chip" mode="brand" onClick={onAsk}>
@@ -269,9 +272,11 @@ function JobRow({
             {job.paused ? "en pausa" : relative(job.nextRunAt, now)}
           </p>
         </td>
-        <td className="p-3 max-sm:hidden">
-          <RunSquares runs={job.recent} max={10} />
-        </td>
+        {!tight && (
+          <td className="p-3">
+            <RunSquares runs={job.recent} max={10} />
+          </td>
+        )}
         {actions}
       </tr>
     );
@@ -319,19 +324,20 @@ function JobRow({
 function useCompactTable() {
   const box = useRef<HTMLDivElement>(null);
   const table = useRef<HTMLTableElement>(null);
-  const [compact, setCompact] = useState(false);
-  const needed = useRef(0);
+  // 0 = completa · 1 = compacta · 2 = compacta sin corridas (y las acciones pueden ir en dos renglones).
+  const [level, setLevel] = useState(0);
+  const needed = useRef<number[]>([]);
   useEffect(() => {
     const el = box.current;
     if (!el) return;
     const check = () => {
       const avail = el.clientWidth;
       const t = table.current;
-      if (!compact && t && t.scrollWidth > avail + 1) {
-        needed.current = t.scrollWidth;
-        setCompact(true);
-      } else if (compact && needed.current && avail >= needed.current) {
-        setCompact(false);
+      if (level < 2 && t && t.scrollWidth > avail + 1) {
+        needed.current[level] = t.scrollWidth;
+        setLevel(level + 1);
+      } else if (level > 0 && needed.current[level - 1] && avail >= needed.current[level - 1]) {
+        setLevel(level - 1);
       }
     };
     check();
@@ -340,8 +346,8 @@ function useCompactTable() {
     ro.observe(el);
     if (table.current) ro.observe(table.current);
     return () => ro.disconnect();
-  }, [compact]);
-  return { box, table, compact };
+  }, [level]);
+  return { box, table, compact: level > 0, tight: level > 1 };
 }
 
 export default function CronsAdmin() {
@@ -368,7 +374,7 @@ export default function CronsAdmin() {
   }, [anyRunning, revalidator]);
 
   const open = jobs.find((j) => j.key === openKey) ?? null;
-  const { box, table, compact } = useCompactTable();
+  const { box, table, compact, tight } = useCompactTable();
 
   // Copiloto: se monta al abrirlo por primera vez y queda vivo (el hilo no se pierde al cerrar).
   // Escritorio: panel redimensionable que EMPUJA la tabla. Móvil: hoja de vaul desde abajo.
@@ -486,7 +492,7 @@ export default function CronsAdmin() {
                       ).map((h, i) => (
                         <th
                           key={i}
-                          className={`p-3 text-left font-bold text-xs uppercase ${compact && i === 1 ? "max-sm:hidden" : ""}`}
+                          className={`p-3 text-left font-bold text-xs uppercase ${tight && i === 1 ? "hidden" : ""}`}
                         >
                           {h}
                         </th>
@@ -500,6 +506,7 @@ export default function CronsAdmin() {
                         job={job}
                         now={now}
                         compact={compact}
+                        tight={tight}
                         onOpen={() => setOpenKey(job.key)}
                         onAsk={() => askAbout(job)}
                       />

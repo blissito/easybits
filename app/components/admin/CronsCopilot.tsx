@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { createPostStreamTransport, Piloto, type PermissionHandler, type ToolVerbs } from "ghostykit";
 import "ghostykit/styles.css";
 
@@ -56,18 +56,20 @@ export function CronsCopilot({ ask, job, onClearJob, onClose, escBlocked, onChan
   const [height, setHeight] = useState<number | null>(null);
 
   // Columna pegajosa: llena de donde empieza hasta abajo de la ventana (el composer siempre a la vista).
-  useEffect(() => {
+  // La primera medida va ANTES de pintar: Piloto enfoca la caja al montar y, con la altura provisional
+  // (100vh), la caja quedaría bajo el borde y el navegador desplazaría la página.
+  useLayoutEffect(() => {
     if (variant !== "panel") return;
+    const fit = () => {
+      const el = aside.current;
+      if (el) setHeight(Math.max(320, window.innerHeight - Math.max(el.getBoundingClientRect().top, 0)));
+    };
     let frame = 0;
     const measure = () => {
       cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(() => {
-        const el = aside.current;
-        if (!el) return;
-        setHeight(Math.max(320, window.innerHeight - Math.max(el.getBoundingClientRect().top, 0)));
-      });
+      frame = requestAnimationFrame(fit);
     };
-    measure();
+    fit();
     window.addEventListener("scroll", measure, { passive: true });
     window.addEventListener("resize", measure);
     return () => {
