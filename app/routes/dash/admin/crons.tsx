@@ -257,7 +257,7 @@ function JobRow({
   if (compact) {
     return (
       <tr {...rowProps}>
-        <td className="p-3">
+        <td className="w-full p-3">
           <p className="flex items-center gap-2 font-bold leading-tight" title={stateLabel}>
             {dot}
             <span>{job.name}</span>
@@ -285,8 +285,8 @@ function JobRow({
         </span>
       </td>
       <td className="p-3">
-        <p className="font-bold leading-tight">{job.name}</p>
-        <p className="font-mono text-xs text-gray-400">{job.path}</p>
+        <p className="font-bold leading-tight whitespace-nowrap">{job.name}</p>
+        <p className="font-mono text-xs text-gray-400 whitespace-nowrap">{job.path}</p>
       </td>
       <td className="p-3 text-sm whitespace-nowrap">{job.schedule}</td>
       <td className="p-3">
