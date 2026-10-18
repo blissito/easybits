@@ -393,6 +393,9 @@ model File {
   // ^ relations
   createdAt             DateTime   @default(now())
   source                String?
+  // Con qué llave se subió (nombre copiado: sobrevive a que la revoquen). Null = sesión web o sin llave.
+  apiKeyId              String?    @db.ObjectId
+  apiKeyName            String?
   deletedAt             DateTime?
   updatedAt             DateTime   @updatedAt
   // ^ auto-dates

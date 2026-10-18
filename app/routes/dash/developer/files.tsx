@@ -60,6 +60,7 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
       storageProviderId: true,
       storageKey: true,
       source: true,
+      apiKeyName: true,
       deletedAt: true,
       createdAt: true,
     },
@@ -379,6 +380,11 @@ export default function DevFilesPage() {
                     ) : (
                       <span className="text-xs text-gray-400">—</span>
                     )}
+                    {f.apiKeyName ? (
+                      <div className="text-[10px] font-mono text-gray-500 mt-1 truncate max-w-[140px]" title={`Llave: ${f.apiKeyName}`}>
+                        🔑 {f.apiKeyName}
+                      </div>
+                    ) : null}
                   </td>
                   <td className="px-4 py-3 hidden xl:table-cell">
                     <span className="bg-brand-aqua text-xs font-bold px-2 py-0.5 rounded-md border border-black">

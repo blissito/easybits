@@ -242,6 +242,11 @@ function storageKeyFromUrl(input: string): string | null {
 
 // --- Upload File ---
 
+/** Qué llave hizo la subida: sin esto no hay forma de saber de dónde vino un archivo ajeno. */
+function uploadedByKey(ctx: AuthContext) {
+  return ctx.apiKey ? { apiKeyId: ctx.apiKey.id, apiKeyName: ctx.apiKey.name } : {};
+}
+
 export async function uploadFile(
   ctx: AuthContext,
   opts: {
@@ -367,6 +372,7 @@ export async function uploadFile(
           storageProviderId: provider?.id ?? null,
           ...(workspaceId ? { workspaceId } : {}),
           ...(opts.source ? { source: opts.source } : {}),
+          ...uploadedByKey(ctx),
           ...(opts.assetId ? { assetIds: [opts.assetId] } : {}),
         },
       });
@@ -1860,7 +1866,7 @@ export async function uploadWebsiteFile(
   if (existing) {
     file = await db.file.update({
       where: { id: existing.id },
-      data: { storageKey, size: opts.size, contentType: opts.contentType, status: "DONE", url: publicUrl },
+      data: { storageKey, size: opts.size, contentType: opts.contentType, status: "DONE", url: publicUrl, ...uploadedByKey(ctx) },
     });
   } else {
     file = await db.file.create({
@@ -1874,6 +1880,7 @@ export async function uploadWebsiteFile(
         access: opts.access || "public",
         url: publicUrl,
         status: "DONE",
+        ...uploadedByKey(ctx),
       },
     });
   }
@@ -1944,7 +1951,7 @@ export async function deployWebsiteFile(
     try { await client.deleteObject(existing.storageKey); } catch {}
     file = await db.file.update({
       where: { id: existing.id },
-      data: { storageKey, size: body.length, contentType: opts.contentType, status: "DONE", url: publicUrl },
+      data: { storageKey, size: body.length, contentType: opts.contentType, status: "DONE", url: publicUrl, ...uploadedByKey(ctx) },
     });
   } else {
     file = await db.file.create({
@@ -1958,6 +1965,7 @@ export async function deployWebsiteFile(
         access: "public",
         url: publicUrl,
         status: "DONE",
+        ...uploadedByKey(ctx),
       },
     });
   }
