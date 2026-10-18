@@ -245,6 +245,8 @@ describe("spawnVm — decisión de nacer desde el artifact", () => {
     const params = createAgent.mock.calls[0][1];
     expect(params.derivedTemplate).toBeUndefined();
     expect(params.seedFiles).toEqual(base.persona.seedFiles);
+    // Nace en frío para que el host tenga un .cow que capturar (no un clon del dorado).
+    expect(params.coldBoot).toBe(true);
     expect(createTemplateSnapshot).toHaveBeenCalledWith(
       expect.anything(),
       "sb_agent-1",
@@ -261,6 +263,7 @@ describe("spawnVm — decisión de nacer desde el artifact", () => {
     const params = createAgent.mock.calls[0][1];
     expect(params.derivedTemplate).toBe("dt_ok");
     expect(params.seedFiles).toBeUndefined();
+    expect(params.coldBoot).toBeUndefined();
     expect(params.env.SYSTEM_PROMPT).toBe("Eres Nik"); // las open options siguen yendo por env
     expect(createTemplateSnapshot).not.toHaveBeenCalled();
   });
@@ -311,6 +314,8 @@ describe("spawnVm — decisión de nacer desde el artifact", () => {
       await pickOrSpawn(CTX, fleetAgents.fa1, "web-1");
       expect(createAgent.mock.calls[0][1].derivedTemplate).toBeUndefined();
       expect(createTemplateSnapshot).not.toHaveBeenCalled();
+      // Sin captura no hace falta frío: puede clonar el dorado.
+      expect(createAgent.mock.calls[0][1].coldBoot).toBeUndefined();
     } finally {
       process.env.FLEET_ARTIFACT = "on";
     }
@@ -320,21 +325,6 @@ describe("spawnVm — decisión de nacer desde el artifact", () => {
     fleetAgents.fa1.metadata = { artifact: { derivedId: "dt_ok", hash: fleetArtifactHash(base), at: "x" } };
     createAgent.mockRejectedValueOnce(new Error("host down"));
     await expect(pickOrSpawn(CTX, fleetAgents.fa1, "web-1")).rejects.toThrow("host down");
-  });
-
-  it("caja clonada del dorado (501 Unsupported): no es falla; se deja de capturar ese hash", async () => {
-    createTemplateSnapshot.mockRejectedValue(
-      new Response(JSON.stringify({ error: "DerivedTemplateUnsupported" }), { status: 501 })
-    );
-    const placed = await pickOrSpawn(CTX, fleetAgents.fa1, "web-1");
-    expect(placed.vm.status).toBe("running");
-    expect(fleetAgents.fa1.metadata.artifactSkip).toMatchObject({ hash: fleetArtifactHash(base), reason: "golden" });
-    // El siguiente arranque en frío (otra conversación, caja nueva) ya no intenta capturar.
-    agents.forEach((a) => (a.status = "destroyed" as any));
-    createTemplateSnapshot.mockClear();
-    await pickOrSpawn(CTX, fleetAgents.fa1, "web-2");
-    expect(createAgent).toHaveBeenCalledTimes(2);
-    expect(createTemplateSnapshot).not.toHaveBeenCalled();
   });
 
   it("si la captura falla, el turno sale igual", async () => {

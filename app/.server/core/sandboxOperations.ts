@@ -1015,6 +1015,9 @@ export async function createSandbox(
     derivedTemplate?: string;
     templateKey?: string;
     templateHash?: string;
+    // Nacer en frío aunque el host tenga dorado de la forma: la caja se va a capturar como
+    // plantilla derivada y un clon del dorado no tiene el .cow que se copia (501).
+    coldBoot?: boolean;
     // Clasificación para la telemetría de ciclo de vida (SandboxSession). NO se
     // reenvía al host: solo etiqueta el intervalo para poder desglosar el uso por
     // tipo de caja. Lo pone el caller porque el template no basta (claude-worker
@@ -1147,6 +1150,7 @@ export async function createSandbox(
       env,
       ...resources,
       ...(derived ?? {}),
+      ...(params.coldBoot ? { coldBoot: true } : {}),
     },
     ctx.user.id
   ).catch((e) => {
@@ -3958,6 +3962,8 @@ export async function createAgent(
     derivedTemplate?: string;
     templateKey?: string;
     templateHash?: string;
+    /** Nacer en frío (sin clon del dorado) para poder capturarla como derivada. */
+    coldBoot?: boolean;
   }
 ): Promise<CreatedAgent> {
   requireScope(ctx, "WRITE");
@@ -3991,6 +3997,7 @@ export async function createAgent(
     derivedTemplate: params.derivedTemplate,
     templateKey: params.templateKey,
     templateHash: params.templateHash,
+    coldBoot: params.coldBoot,
     timeoutSeconds: isAcp ? ACP_IDLE_SECONDS : params.timeoutSeconds,
     name: params.name,
     memoryMb: params.memoryMb,
