@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef } from "react";
-import { createPostStreamTransport, Piloto, type PermissionHandler, type PilotoHandle, type ToolVerbs } from "ghostykit";
+import { createPostStreamTransport, Piloto, type PermissionHandler, type ToolVerbs } from "ghostykit";
 import "ghostykit/styles.css";
 
 const CHAT_URL = "/api/v2/admin/copilot/chat";
@@ -31,8 +31,8 @@ const approve: PermissionHandler = async (id, optionId) => {
 };
 
 interface Props {
-  /** Pregunta para dejar en la caja (sin mandarla); `n` cambia en cada pedido. */
-  ask: { text: string; n: number } | null;
+  /** Pregunta para dejar en la caja (sin mandarla); `key` cambia en cada pedido. */
+  ask: { text: string; key: number } | null;
   /** La tarea de la que se está hablando (viaja como contexto en cada turno). */
   job: { key: string; name: string } | null;
   onClearJob: () => void;
@@ -44,16 +44,10 @@ interface Props {
 }
 
 export function CronsCopilot({ ask, job, onClearJob, onClose, escBlocked, onChange }: Props) {
-  const piloto = useRef<PilotoHandle>(null);
   const transport = useMemo(() => createPostStreamTransport({ url: CHAT_URL }), []);
   const jobRef = useRef(job);
   jobRef.current = job;
 
-  useEffect(() => {
-    if (!ask) return;
-    piloto.current?.setDraft(ask.text);
-    piloto.current?.focus();
-  }, [ask]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -95,7 +89,7 @@ export function CronsCopilot({ ask, job, onClearJob, onClose, escBlocked, onChan
       </header>
       <div className="min-h-0 flex-1">
         <Piloto
-          ref={piloto}
+          draft={ask}
           transport={transport}
           skin="easybits"
           agentName="Asistente de admin"

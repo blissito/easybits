@@ -293,7 +293,7 @@ export default function CronsAdmin() {
   const [copilotOpen, setCopilotOpen] = useState(false);
   const [copilotMounted, setCopilotMounted] = useState(false);
   const [copilotJobKey, setCopilotJobKey] = useState<string | null>(null);
-  const [ask, setAsk] = useState<{ text: string; n: number } | null>(null);
+  const [ask, setAsk] = useState<{ text: string; key: number } | null>(null);
   const copilotJob = jobs.find((j) => j.key === copilotJobKey) ?? null;
 
   const openCopilot = () => {
@@ -306,7 +306,7 @@ export default function CronsAdmin() {
   }, [revalidator]);
   const askAbout = (job: CronOverview) => {
     setCopilotJobKey(job.key);
-    setAsk((a) => ({ text: `¿Por qué falló «${job.name}» en su última corrida y qué hago para arreglarlo?`, n: (a?.n ?? 0) + 1 }));
+    setAsk((a) => ({ text: `¿Por qué falló «${job.name}» en su última corrida y qué hago para arreglarlo?`, key: (a?.key ?? 0) + 1 }));
     openCopilot();
   };
 
