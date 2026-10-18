@@ -1,6 +1,6 @@
 {
   "name": "@easybits.cloud/html-tailwind-generator",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "AI-powered landing page generator with Tailwind CSS — canvas editor, streaming generation, and one-click deploy",
   "license": "PolyForm-Noncommercial-1.0.0",
   "type": "module",
@@ -141,7 +141,8 @@
     "nanoid": "^5.1.5",
     "parse5": "^7.3.0",
     "postcss": "^8.4.49",
-    "tailwindcss": "^3.4.16"
+    "tailwindcss": "^3.4.16",
+    "@ghostystudio/pointer": "^0.6.0"
   },
   "devDependencies": {
     "tsup": "^8.5.1"

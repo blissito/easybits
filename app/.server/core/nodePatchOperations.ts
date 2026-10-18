@@ -1,8 +1,9 @@
 /**
  * Edición por NODO — capa fina sobre las funciones puras del paquete.
  *
- * El núcleo (`stampIds`/`applyPatches`/`indexNodes`) vive en
- * `@easybits.cloud/html-tailwind-generator/htmlPatch` y es HTML→HTML, sin saber
+ * El núcleo (`stampIds`/`applyPatches`/`indexNodes`) vive en `@ghostystudio/pointer/html` (una sola
+ * implementación para EasyBits, Deník y Ghosty Studio; antes era `html-tailwind-generator/htmlPatch`)
+ * y es HTML→HTML, sin saber
  * nada de documentos EasyBits: así lo consumen igual quien guarda sus páginas en
  * nuestra DB y quien las guarda en la suya (denik.me las tiene en `Org.landingSections`).
  * Atar la primitiva a un `documentId` habría dejado fuera al segundo caso.
@@ -15,7 +16,7 @@ import {
   indexNodes,
   type HtmlPatch,
   type PatchResult,
-} from "@easybits.cloud/html-tailwind-generator/htmlPatch";
+} from "@ghostystudio/pointer/html";
 import type { AuthContext } from "../apiAuth";
 import { getPageHtml, setPageHtml } from "./documentOperations";
 
@@ -38,15 +39,15 @@ export interface NodeOutlineEntry {
  */
 export function outlineHtml(html: string, maxNodes = 250): NodeOutlineEntry[] {
   return indexNodes(html)
-    .filter((n) => n.dataId)
+    .filter((n) => n.id)
     .slice(0, maxNodes)
     .map((n) => ({
-      dataId: n.dataId!,
+      dataId: n.id!,
       tag: n.tag,
       depth: n.depth,
       classes: n.classes.slice(0, 8),
       text: n.text.slice(0, 80),
-      parentDataId: n.parentDataId,
+      parentDataId: n.parentId,
     }));
 }
 
