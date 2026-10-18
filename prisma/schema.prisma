@@ -1340,6 +1340,9 @@ model FleetAgent {
   // VM template to spawn. Default is "claude-worker" (Claude Agent SDK + OAuth,
   // native .jsonl transcript resume); interchangeable with "ghosty-gc".
   workerTemplate String  @default("claude-worker")
+  // Agentes de la casa (builder de Sitios, piloto de crons): su claude-worker corre con el OAuth
+  // Max de la PLATAFORMA, no con el del dueño. Sólo lo escribe el servidor; ninguna ruta lo acepta.
+  platformClaude Boolean?
   // Per-spawn branding/personality. Shape:
   //   { name?: string, env?: Record<string,string>,
   //     seedFiles?: Array<{ name: string; contentBase64: string }> }

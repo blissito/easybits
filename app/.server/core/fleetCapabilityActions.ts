@@ -271,10 +271,10 @@ export async function applyCapabilityAction(fa: FleetAgentRow, b: Record<string,
     // Cambia el MOTOR (workerTemplate + GHOSTY_LLM + modelo default). El template está
     // horneado en la VM al spawn → hay que RECICLAR las boxes para que corra el worker
     // nuevo. Se limpian todos los model-env del motor anterior y se setea el del nuevo.
-    const { getEngine } = await import("~/lib/fleetEngines");
+    const { getEngine, engineCreatable } = await import("~/lib/fleetEngines");
     const eng = getEngine(String(b?.engine ?? "").trim());
     if (!eng) return r({ error: "engine desconocido" }, 400);
-    if (!eng.models.some((m) => m.ready !== false)) return r({ error: "motor no disponible aún" }, 400);
+    if (!engineCreatable(eng)) return r({ error: "motor no disponible" }, 400);
     const env = { ...(persona.env ?? {}) };
     delete env.GHOSTY_LLM; delete env.ANTHROPIC_MODEL; delete env.DEEPSEEK_MODEL; delete env.CODEX_MODEL;
     if (eng.env?.GHOSTY_LLM) env.GHOSTY_LLM = eng.env.GHOSTY_LLM;

@@ -32,17 +32,19 @@ import { pushSiteToGithub, siteRepo } from "./githubSiteOperations";
 import { markSelfPushed } from "./pushDeployOperations";
 
 export const BUILDER_NAME = "Sitios Builder";
-// Motor por default: `easybits` = ghosty-gc contra el proxy medido (/api/v2/llm/v1),
-// que YA descuenta del bucket de tokens LLM del dueño y responde 402 sin saldo. Los
-// demás motores (claude/deepseek/codex) son BYOK: la llave del dueño, del vault.
-const BUILDER_TEMPLATE = "ghosty-gc";
-// Toolset del MCP de easybits para un builder ghosty-gc (?tools= de su mcp.json).
-const BUILDER_TOOLS = "sitios,sandbox,hosting";
+// Motor por default: `easybits` = claude-worker con Haiku 5.5 y el OAuth Max de la plataforma
+// (FleetAgent.platformClaude). Los demás motores (claude/codex/gemini) son BYOK: la llave del
+// dueño, del vault. Hasta el 18-oct-2026 `easybits` era ghosty-gc, que no cargaba las tools MCP.
+const BUILDER_TOOL_GROUP = "scripting,sitios,sandbox,hosting";
 
-/** Motor de un sitio (null → default medido). */
+/** Motor de un sitio (null o deprecado → el de la casa). */
 export function siteEngineFor(site: { engine?: string | null }): FleetEngine {
-  return getEngine(site.engine ?? DEFAULT_SITE_ENGINE) ?? getEngine(DEFAULT_SITE_ENGINE)!;
+  const e = getEngine(site.engine ?? DEFAULT_SITE_ENGINE);
+  return e && !e.deprecated ? e : getEngine(DEFAULT_SITE_ENGINE)!;
 }
+
+/** ¿Se puede construir un sitio con este motor? Los de usuario, más el de la casa. */
+const siteEngineUsable = (e: FleetEngine) => engineCreatable(e) || (!!e.platformClaude && !e.deprecated);
 
 /** Un builder POR MOTOR por cuenta. El de easybits conserva el nombre original. */
 function builderNameFor(engineId: string) {
@@ -52,12 +54,14 @@ function builderNameFor(engineId: string) {
 /** Para el selector: motores + si su llave ya está en el vault (sin exponer nombres). */
 export async function engineChoicesFor(userId: string) {
   const owned = new Set((await listSecrets(userId)).map((s) => s.name));
-  return FLEET_ENGINES.map((e) => ({
+  return FLEET_ENGINES.filter((e) => !e.deprecated).map((e) => ({
     id: e.id,
     label: e.label.replace(/^Ghosty · /, ""),
     model: e.model,
     metered: engineIsMetered(e),
-    creatable: engineCreatable(e),
+    /** El de la casa: no pide llave ni descuenta tokens. */
+    included: !!e.platformClaude,
+    creatable: siteEngineUsable(e),
     needsSecret: !!e.secret && !owned.has(e.secret.name),
     secretPlaceholder: e.secret?.placeholder ?? "",
     secretKind: e.secret?.kind ?? null,
@@ -92,29 +96,33 @@ function siteGroupId(siteId: string) {
 
 /** El builder de la cuenta para un motor; se crea al primer sitio (lazy). */
 export async function ensureBuilderAgent(ctx: AuthContext, engineId: string = DEFAULT_SITE_ENGINE, model?: string | null) {
-  const engine = getEngine(engineId) ?? getEngine(DEFAULT_SITE_ENGINE)!;
+  const engine = siteEngineFor({ engine: engineId });
   const existing = await db.fleetAgent.findFirst({
     where: { ownerId: ctx.user.id, name: builderNameFor(engine.id) },
-    select: { id: true, token: true, workerTemplate: true, persona: true },
+    select: { id: true, token: true, workerTemplate: true, persona: true, platformClaude: true },
   });
   // `model` = el que eligió el dueño al crear el sitio (sólo si es de la lista del motor).
   const picked = model && engine.models?.some((m) => m.id === model) ? model : null;
   const siteModel = picked ?? engine.siteModel ?? engine.defaultModel;
   if (existing) {
-    // Modelo elegido a mano al crear: manda sobre lo que tenga el builder, y se recicla la caja
-    // para que el siguiente turno ya corra con él (el env va horneado al crear la caja).
-    if (picked && engine.modelEnv) {
+    // Builder en un template viejo (ghosty-gc) o sin la credencial de la casa: se migra en sitio y
+    // se recicla la caja (el template y el env van horneados al nacer).
+    if (existing.workerTemplate !== engine.template || !!existing.platformClaude !== !!engine.platformClaude) {
       const persona = (existing.persona as { env?: Record<string, string>; siteModelPicked?: boolean } | null) ?? {};
-      if (persona.env?.[engine.modelEnv] !== picked) {
-        await db.fleetAgent.update({
-          where: { id: existing.id },
-          data: { persona: { ...persona, siteModelPicked: true, env: { ...(persona.env ?? {}), [engine.modelEnv]: picked } } },
-        });
-        await recycleFleetAgentBoxes({ id: existing.id, ownerId: ctx.user.id }).catch(() => {});
-      }
+      const env = { ...(persona.env ?? {}) };
+      delete env.GHOSTY_LLM;
+      delete env.EASYBITS_TOOLS;
+      delete env.DEEPSEEK_MODEL;
+      env.EASYBITS_TOOL_GROUP = BUILDER_TOOL_GROUP;
+      if (engine.modelEnv && siteModel) env[engine.modelEnv] = siteModel;
+      await db.fleetAgent.update({
+        where: { id: existing.id },
+        data: { workerTemplate: engine.template, platformClaude: !!engine.platformClaude, persona: { ...persona, siteModelPicked: false, env } },
+      });
+      await recycleFleetAgentBoxes({ id: existing.id, ownerId: ctx.user.id }).catch(() => {});
       return { id: existing.id, token: existing.token };
     }
-    // Builder con el modelo viejo (el default del motor o ninguno): se sube al de sitios. El env
+    // Modelo elegido a mano al crear    // Builder con el modelo viejo (el default del motor o ninguno): se sube al de sitios. El env
     // se refresca solo al despertar la caja (spawnEnvHash), sin reciclarla. Uno que el dueño
     // cambió a mano a otro modelo se respeta.
     if (engine.modelEnv && siteModel) {
@@ -128,34 +136,6 @@ export async function ensureBuilderAgent(ctx: AuthContext, engineId: string = DE
         });
       }
     }
-    // Builder ghosty-gc sin toolset propio: su arranque arma el MCP con EASYBITS_TOOLS
-    // (default `ghosty` = docs/db/imágenes), NO con EASYBITS_TOOL_GROUP → no veía
-    // deploy_website_file ni sandbox_*, gastaba el turno buscándolas y se cortaba a los
-    // 120 s sin responder (14-oct). El mcp.json se escribe en /data al nacer: hay que
-    // reciclar la caja (el hash del artifact ya incluye EASYBITS_TOOLS).
-    if (existing.workerTemplate === BUILDER_TEMPLATE) {
-      const persona = (existing.persona as { env?: Record<string, string> } | null) ?? {};
-      if (persona.env?.EASYBITS_TOOLS !== BUILDER_TOOLS) {
-        await db.fleetAgent.update({
-          where: { id: existing.id },
-          data: { persona: { ...persona, env: { ...(persona.env ?? {}), EASYBITS_TOOLS: BUILDER_TOOLS } } },
-        });
-        await recycleFleetAgentBoxes({ id: existing.id, ownerId: ctx.user.id }).catch(() => {});
-      }
-    }
-    // Builder easybits nacido antes del motor medido (claude-worker): se migra en sitio
-    // y se recicla su caja (el env es spawn-baked; la VM viva seguiría con el motor viejo).
-    if (engine.id === DEFAULT_SITE_ENGINE && existing.workerTemplate !== BUILDER_TEMPLATE) {
-      const persona = (existing.persona as { env?: Record<string, string>; siteModelPicked?: boolean } | null) ?? {};
-      await db.fleetAgent.update({
-        where: { id: existing.id },
-        data: {
-          workerTemplate: BUILDER_TEMPLATE,
-          persona: { ...persona, env: { ...(persona.env ?? {}), GHOSTY_LLM: DEFAULT_SITE_ENGINE, EASYBITS_TOOLS: BUILDER_TOOLS } },
-        },
-      });
-      await recycleFleetAgentBoxes({ id: existing.id, ownerId: ctx.user.id }).catch(() => {});
-    }
     return { id: existing.id, token: existing.token };
   }
   // Mismo patrón que el form de /dash/flota: template + env del motor + modelo default;
@@ -164,9 +144,7 @@ export async function ensureBuilderAgent(ctx: AuthContext, engineId: string = DE
     ...(engine.env ?? {}),
     // Buckets: sitios (Website + Files), sandbox (archivos/exec en la caja) y
     // hosting (launch_app/restart_machine). Sin lo demás: es un constructor.
-    EASYBITS_TOOL_GROUP: "scripting,sitios,sandbox,hosting",
-    // ghosty-gc no lee EASYBITS_TOOL_GROUP: arma su MCP con EASYBITS_TOOLS.
-    EASYBITS_TOOLS: BUILDER_TOOLS,
+    EASYBITS_TOOL_GROUP: BUILDER_TOOL_GROUP,
   };
   if (engine.modelEnv && siteModel) env[engine.modelEnv] = siteModel;
   const created = await createFleetAgent(ctx, {
@@ -177,6 +155,7 @@ export async function ensureBuilderAgent(ctx: AuthContext, engineId: string = DE
     oauthSecretName: engine.secret?.kind === "oauth" ? engine.secret.name : undefined,
     idleSuspendMin: 2,
   });
+  if (engine.platformClaude) await db.fleetAgent.update({ where: { id: created.id }, data: { platformClaude: true } });
   if (picked) {
     const row = await db.fleetAgent.findUnique({ where: { id: created.id }, select: { persona: true } });
     await db.fleetAgent.update({ where: { id: created.id }, data: { persona: { ...((row?.persona as object | null) ?? {}), siteModelPicked: true } } });
@@ -331,7 +310,7 @@ export async function createSite(
   requireScope(ctx, "WRITE");
   const name = opts.name.trim() || "Mi sitio";
   const engine = getEngine(opts.engine ?? DEFAULT_SITE_ENGINE) ?? getEngine(DEFAULT_SITE_ENGINE)!;
-  if (!engineCreatable(engine)) throw new Response("Ese motor aún no está disponible", { status: 400 });
+  if (!siteEngineUsable(engine)) throw new Response("Ese motor aún no está disponible", { status: 400 });
   // "Si la llave no está, que te la pida": BYOK guarda la credencial en el vault del
   // dueño con su nombre canónico; el spawn del worker la lee de ahí.
   if (engine.secret) {

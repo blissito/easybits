@@ -1737,7 +1737,7 @@ alcance** — ver "Credenciales con alcance" más abajo.
 ### Crear
 \`POST /fleet-agents\`
 Body: \`{ name?, systemPrompt?, model?, engine?, workerTemplate?, maxWorkersPerVm?, vmMemMb?, maxVms?, idleSuspendMin? }\`
-\`engine\` (atajo de alto nivel): \`claude\` (default) · \`deepseek\` · \`codex\` · \`easybits\` · \`glm\` — deriva template + modelo por defecto. Motores no-Claude pueden requerir un secret de proveedor (ej. \`deepseek\` → \`DEEPSEEK_API_KEY\`, ponlo con \`set-secret\`).
+\`engine\` (atajo de alto nivel): \`claude\` (default, claude-worker) · \`codex\` (codex-worker) · \`gemini\` (gemini-worker) — deriva template + modelo por defecto. Los motores no-Claude piden el secret de su proveedor (ej. \`codex\` → \`OPENAI_API_KEY\`, ponlo con \`set-secret\`). \`deepseek\` y \`glm\` (sobre ghosty-gc) están deprecados desde el 18-oct-2026: ya no se crean, y DeepSeek pasa a ghosty-lite. \`easybits\` es el motor de la casa (Haiku 5.5 con la suscripción de la plataforma) y sólo lo usan el creador de Sitios y el piloto de crons.
 Returns: \`{ fleetAgent: { id, token, ... } }\` — guarda \`id\` **y** \`token\`.
 SDK: \`eb.fleet.create({ name, systemPrompt?, model?, engine? })\`
 

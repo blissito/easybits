@@ -1785,6 +1785,7 @@ type SpawnEnvAgent = {
   ownerId: string;
   workerTemplate: string;
   persona: unknown;
+  platformClaude?: boolean | null;
   oauthSecretName: string | null;
   engineSecretName?: string | null;
   token: string;
@@ -1811,6 +1812,16 @@ export async function buildSpawnEnv(ctx: AuthContext, fleetAgent: SpawnEnvAgent)
   // duplicar sus ramas. Y sigue estando gateado por motor — a un codex-worker nunca
   // se le manda el OAuth Max de Anthropic, porque el envKey lo dicta SU motor.
   // persona.env gana si ya trae la credencial.
+  // Agentes de la casa: el OAuth Max de la plataforma gana sobre lo que traiga el dueño.
+  // Un caller con un `select` angosto no trae la columna: se lee aquí para no sellar un env sin ella.
+  const platformClaude =
+    fleetAgent.platformClaude !== undefined
+      ? !!fleetAgent.platformClaude
+      : !!(await db.fleetAgent.findUnique({ where: { id: fleetAgent.id }, select: { platformClaude: true } }).catch(() => null))?.platformClaude;
+  if (platformClaude && fleetAgent.workerTemplate === "claude-worker") {
+    const token = await platformClaudeToken();
+    if (token) env.CLAUDE_CODE_OAUTH_TOKEN = token;
+  }
   {
     const engine = getEngineForAgent(fleetAgent.workerTemplate, env);
     const sec = resolveEngineSecret(fleetAgent, engine);
@@ -1866,6 +1877,15 @@ export async function buildSpawnEnv(ctx: AuthContext, fleetAgent: SpawnEnvAgent)
     }
   }
   return env;
+}
+
+/** Dueño del Claude Max de la plataforma (fixtergeek), como BITTOR_OWNER_ID. */
+const PLATFORM_CLAUDE_OWNER_ID = process.env.PLATFORM_CLAUDE_OWNER_ID || "699f35cbc8ad86037eda62b1";
+
+/** OAuth Max de la plataforma: env del servidor si existe, si no el vault de su dueño. */
+export async function platformClaudeToken(): Promise<string | null> {
+  if (process.env.PLATFORM_CLAUDE_OAUTH_TOKEN) return process.env.PLATFORM_CLAUDE_OAUTH_TOKEN;
+  return getSecretValue(PLATFORM_CLAUDE_OWNER_ID, "CLAUDE_CODE_OAUTH_TOKEN").catch(() => null);
 }
 
 export const spawnEnvHash = (env: Record<string, string>) =>

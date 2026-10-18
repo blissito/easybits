@@ -1,6 +1,6 @@
 // Copiloto del panel de crons (/dash/admin/crons): un FleetAgent «Asistente de admin» por
-// superusuario, creado al primer mensaje (como el builder de Sitios). Corre con el motor
-// medido (ghosty-gc → proxy de tokens) y SÓLO el grupo `admin-crons`: lee estado e
+// superusuario, creado al primer mensaje (como el builder de Sitios). Corre con el motor de la
+// casa (claude-worker + Haiku 5.5 con el Max de la plataforma) y SÓLO el grupo `admin-crons`: lee estado e
 // historial y PROPONE correr/pausar, y crear/cambiar/borrar los crons propios del usuario;
 // el humano aprueba en la tarjeta con su sesión.
 import type { AuthContext } from "~/.server/apiAuth";
@@ -44,30 +44,36 @@ export async function ensureAdminCopilot(ctx: AuthContext): Promise<{ id: string
   await ensureCopilotKey(ctx);
   const existing = await db.fleetAgent.findFirst({
     where: { ownerId: ctx.user.id, name: ADMIN_COPILOT_NAME },
-    select: { id: true, persona: true },
+    select: { id: true, persona: true, workerTemplate: true, platformClaude: true },
   });
   const engine = getEngine(DEFAULT_SITE_ENGINE)!;
   const env: Record<string, string> = {
     ...(engine.env ?? {}),
     EASYBITS_TOOL_GROUP: TOOL_GROUP,
-    // ghosty-gc arma su MCP con EASYBITS_TOOLS, no con EASYBITS_TOOL_GROUP.
-    EASYBITS_TOOLS: TOOL_GROUP,
+    ...(engine.modelEnv && engine.defaultModel ? { [engine.modelEnv]: engine.defaultModel } : {}),
     SYSTEM_PROMPT: ADMIN_COPILOT_SYSTEM,
     ASSISTANT_NAME: ADMIN_COPILOT_NAME,
     // Su caja no se desaloja (como Bittor): despertar en caliente es ~1 s; en frío, ~15-40 s.
     FLEET_PINNED: "1",
   };
   if (existing) {
-    // Prompt/toolset cambiados en código: se reescriben y se recicla la caja (el mcp.json de
-    // ghosty-gc nace con la caja).
+    // Motor, prompt o toolset cambiados en código: se reescriben y se recicla la caja.
     const persona = (existing.persona as { env?: Record<string, string>; easybitsKeySecret?: string } | null) ?? {};
     const stale =
+      existing.workerTemplate !== engine.template ||
+      !!existing.platformClaude !== !!engine.platformClaude ||
       persona.easybitsKeySecret !== ADMIN_COPILOT_KEY_SECRET ||
       Object.entries(env).some(([k, v]) => persona.env?.[k] !== v);
     if (stale) {
+      // Lo del motor anterior (ghosty-gc) fuera: su MCP se armaba con EASYBITS_TOOLS.
+      const { GHOSTY_LLM: _l, EASYBITS_TOOLS: _t, DEEPSEEK_MODEL: _d, ...rest } = persona.env ?? {};
       await db.fleetAgent.update({
         where: { id: existing.id },
-        data: { persona: { ...persona, easybitsKeySecret: ADMIN_COPILOT_KEY_SECRET, env: { ...(persona.env ?? {}), ...env } } },
+        data: {
+          workerTemplate: engine.template,
+          platformClaude: !!engine.platformClaude,
+          persona: { ...persona, easybitsKeySecret: ADMIN_COPILOT_KEY_SECRET, env: { ...rest, ...env } },
+        },
       });
       await recycleFleetAgentBoxes({ id: existing.id, ownerId: ctx.user.id }).catch(() => {});
     }
@@ -79,6 +85,7 @@ export async function ensureAdminCopilot(ctx: AuthContext): Promise<{ id: string
     persona: { name: ADMIN_COPILOT_NAME, env, easybitsKeySecret: ADMIN_COPILOT_KEY_SECRET },
     idleSuspendMin: 2,
   });
+  if (engine.platformClaude) await db.fleetAgent.update({ where: { id: created.id }, data: { platformClaude: true } });
   return { id: created.id };
 }
 

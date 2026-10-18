@@ -75,6 +75,13 @@ export type FleetEngine = {
    */
   billing?: "byok" | "metered";
   /**
+   * Corre con el OAuth Max de la PLATAFORMA (FleetAgent.platformClaude), no con una llave del
+   * dueño: el builder de Sitios y el piloto de crons.
+   */
+  platformClaude?: boolean;
+  /** Ya no se crea (ghosty-gc). Los agentes que lo usan siguen corriendo hasta migrarse. */
+  deprecated?: boolean;
+  /**
    * ¿El motor VE imágenes de forma nativa? true = multimodal (Claude) → el arnés
    * dropea la imagen a disco y le dice "ábrela con Read". Ausente/false = text-only
    * (DeepSeek/GLM/Codex-worker) → el arnés le apunta a la tool `see_image` (Gemini
@@ -92,7 +99,6 @@ export const FLEET_ENGINES: FleetEngine[] = [
     template: "claude-worker",
     // El spawn lee ANTHROPIC_MODEL de persona.env (gana sobre FLEET_DEFAULT_MODEL).
     modelEnv: "ANTHROPIC_MODEL",
-    // Haiku queda fuera: es el tier rápido, poco confiable en multi-tool + code-mode.
     models: [
       { id: "claude-opus-5-5", label: "Opus 5.5 (tope · #1 en HTML)" },
       { id: "claude-sonnet-5-5", label: "Sonnet 5.5" },
@@ -100,6 +106,7 @@ export const FLEET_ENGINES: FleetEngine[] = [
       { id: "claude-fable-5", label: "Fable 5" },
       { id: "claude-sonnet-5", label: "Sonnet 5 (balance)" },
       { id: "claude-sonnet-4-6", label: "Sonnet 4.6" },
+      { id: "claude-haiku-5-5", label: "Haiku 5.5 (más rápido)" },
     ],
     defaultModel: "claude-sonnet-5",
     // WebDev Arena (8-oct-2026): Opus 5.5 #1 (1813), Sonnet 5.5 #3 (1774).
@@ -110,7 +117,10 @@ export const FLEET_ENGINES: FleetEngine[] = [
   },
   {
     id: "deepseek",
-    label: "Ghosty · DeepSeek",
+    label: "Ghosty · DeepSeek (deprecado)",
+    // ghosty-gc: su cerebro (ghostycode serve --http) no carga las tools MCP (18-oct-2026).
+    // DeepSeek se mueve a ghosty-lite.
+    deprecated: true,
     model: "V4 Pro · V4 Flash",
     provider: "deepseek",
     template: "ghosty-gc",
@@ -127,19 +137,27 @@ export const FLEET_ENGINES: FleetEngine[] = [
     billing: "byok", // la llave es del dueño; para revender, usar el motor `easybits`
   },
   {
+    // El motor de la casa: claude-worker con Haiku 5.5 y el OAuth Max de la PLATAFORMA. Lo usan el
+    // builder de Sitios y el piloto de crons. Hasta el 18-oct-2026 era ghosty-gc contra el proxy
+    // medido; su cerebro no cargaba las tools MCP y el piloto respondía «no tengo run_cron».
     id: "easybits",
-    label: "Ghosty · EasyBits (medido)",
-    model: "proxy",
-    provider: "easybits",
-    template: "ghosty-gc",
-    env: { GHOSTY_LLM: "easybits" },
-    models: [{ id: "proxy", label: "proxy medido (fijo)" }],
+    label: "Ghosty · EasyBits",
+    model: "Haiku 5.5",
+    provider: "anthropic",
+    template: "claude-worker",
+    modelEnv: "ANTHROPIC_MODEL",
+    models: [{ id: "claude-haiku-5-5", label: "Haiku 5.5" }],
+    defaultModel: "claude-haiku-5-5",
+    siteModel: "claude-haiku-5-5",
     secret: null,
-    billing: "metered",
+    billing: "byok",
+    platformClaude: true,
+    vision: true,
   },
   {
     id: "glm",
-    label: "Ghosty · GLM",
+    label: "Ghosty · GLM (deprecado)",
+    deprecated: true,
     model: "GLM 5.2",
     provider: "zhipu",
     template: "ghosty-gc",
@@ -244,9 +262,13 @@ export const resolveEngineSecret = (
   };
 };
 
-/** ¿El proveedor tiene al menos un modelo listo? (si no, se puede elegir pero no crear). */
+/**
+ * ¿Un usuario puede crear (o pasar) un agente a este motor? No si está deprecado, si no tiene
+ * modelos listos o si es de la casa (`platformClaude`: corre con el Max de la plataforma y sólo
+ * lo usan el builder de Sitios y el piloto).
+ */
 export const engineCreatable = (e: FleetEngine): boolean =>
-  e.models.some((m) => m.ready !== false);
+  !e.deprecated && !e.platformClaude && e.models.some((m) => m.ready !== false);
 
 /**
  * Motor de un agente EXISTENTE (para editar su modelo). Matchea por template Y, cuando

@@ -14,10 +14,11 @@ describe("a quién se le descuenta cuota", () => {
     }
   });
 
-  it("el motor medido de EasyBits sí descuenta", () => {
+  it("el motor de la casa (Max de la plataforma, desde 18-oct-2026) no descuenta", () => {
     const engine = getEngine("easybits");
-    expect(engineIsMetered(engine)).toBe(true);
-    expect(shouldChargeQuota({ ownerId: "u", fleetAgentId: "f", groupId: "g", engine })).toBe(true);
+    expect(engine?.platformClaude).toBe(true);
+    expect(engineIsMetered(engine)).toBe(false);
+    expect(shouldChargeQuota({ ownerId: "u", fleetAgentId: "f", groupId: "g", engine })).toBe(false);
   });
 
   it("billingMode 'managed' cobra aunque el motor sea BYOK — es el gancho de reventa", () => {

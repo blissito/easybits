@@ -55,7 +55,7 @@ export default function NewSite() {
   // ?kind=webapp llega desde /dash/hosting ("Crear app nueva").
   const [kind, setKind] = useState<SiteKind>(searchParams.get("kind") === "webapp" ? "webapp" : "static");
   const { engines } = useLoaderData<typeof loader>();
-  // Claude (Opus 5.5, #1 de WebDev Arena) cuando ya tiene su llave; si no, el medido, que no pide nada.
+  // Claude (Opus 5.5, #1 de WebDev Arena) cuando ya tiene su llave; si no, el de la casa, que no pide nada.
   const [engineId, setEngineId] = useState(() =>
     engines.some((e) => e.id === "claude" && e.creatable && !e.needsSecret) ? "claude" : DEFAULT_SITE_ENGINE
   );
@@ -142,8 +142,8 @@ export default function NewSite() {
           <span className="text-sm font-bold">Nombre</span>
           <input name="name" required placeholder="Estudio Orbe" className="mt-1 w-full px-4 py-2.5 border-2 border-black rounded-xl focus:outline-none" />
         </label>
-        {/* ¿Quién lo construye? Motores del registro de la flota. Medido = tokens de tu
-            cuenta; BYOK = tu llave (se pide una vez y queda en tu vault). */}
+        {/* ¿Quién lo construye? Motores del registro de la flota. Incluido = el de la casa
+            (EasyBits); BYOK = tu llave (se pide una vez y queda en tu vault). */}
         <div>
           <span className="text-sm font-bold">¿Quién lo construye?</span>
           <div className="mt-1 grid grid-cols-2 sm:grid-cols-3 gap-2">
@@ -158,7 +158,7 @@ export default function NewSite() {
                 <p className="font-bold text-sm flex items-center gap-2"><BrandLogo id={e.id} />{e.label}</p>
                 <p className="text-[11px] text-gray-500 truncate">{e.model}</p>
                 <p className="text-[10px] mt-1 font-semibold">
-                  {!e.creatable ? "próximamente" : e.metered ? "tokens de tu cuenta" : e.needsSecret ? "pide tu llave" : "tu llave ✓"}
+                  {!e.creatable ? "próximamente" : e.included ? "incluido" : e.metered ? "tokens de tu cuenta" : e.needsSecret ? "pide tu llave" : "tu llave ✓"}
                 </p>
               </button>
             ))}
