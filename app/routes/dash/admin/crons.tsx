@@ -215,8 +215,8 @@ function JobRow({
   const dot = <span className={`w-3 h-3 shrink-0 rounded-full border-2 border-black ${st.dot}`} />;
 
   const actions = (
-    <td className="p-3 text-right whitespace-nowrap" onClick={stop} onKeyDown={stop}>
-      <fetcher.Form method="post" className="inline-flex gap-2">
+    <td className={`p-3 text-right ${compact ? "" : "whitespace-nowrap"}`} onClick={stop} onKeyDown={stop}>
+      <fetcher.Form method="post" className="inline-flex flex-wrap justify-end gap-2">
         <input type="hidden" name="job" value={job.key} />
         {job.status === "fallo" && (
           <BrutalButton type="button" size="chip" mode="brand" onClick={onAsk}>
@@ -233,18 +233,16 @@ function JobRow({
         >
           {pending === "run" ? "…" : compact ? "Ejecutar" : "Ejecutar ahora"}
         </BrutalButton>
-        {!compact && (
-          <BrutalButton
-            type="submit"
-            size="chip"
-            mode={job.paused ? "brand" : "ghost"}
-            name="intent"
-            value={job.paused ? "resume" : "pause"}
-            isDisabled={busy}
-          >
-            {job.paused ? "Reanudar" : "Pausar"}
-          </BrutalButton>
-        )}
+        <BrutalButton
+          type="submit"
+          size="chip"
+          mode={job.paused ? "brand" : "ghost"}
+          name="intent"
+          value={job.paused ? "resume" : "pause"}
+          isDisabled={busy}
+        >
+          {job.paused ? "Reanudar" : "Pausar"}
+        </BrutalButton>
       </fetcher.Form>
       {fetcher.data?.error && <p className="mt-1 text-xs font-bold text-red-600 whitespace-normal">{fetcher.data.error}</p>}
     </td>
@@ -459,19 +457,21 @@ export default function CronsAdmin() {
         <Group id="crons-layout" style={{ overflow: "clip" }} onLayoutChanged={onLayoutChanged}>
           <Panel id="crons-table" minSize={isDesktop ? 420 : 0} style={{ overflow: "clip", minWidth: 0 }}>
             <div className="min-w-0 max-w-7xl pb-10 pr-2">
-              <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
-                <div>
-                  <h2 className="text-2xl font-black mb-1">Crons</h2>
-                  <p className="text-sm text-gray-500">
-                    Tareas programadas de la plataforma. El horario vive en el código (app/lib/cronJobs.ts) y cambia con un
-                    deploy.
-                  </p>
-                </div>
-                <div className="flex flex-wrap items-center gap-3">
+              {/* Encabezado fijo: la caja del comando no cambia de lugar al abrir o cerrar el copiloto. */}
+              <div className="mb-6">
+                <h2 className="text-2xl font-black mb-1">Crons</h2>
+                <p className="text-sm text-gray-500">
+                  Tareas programadas de la plataforma. El horario vive en el código (app/lib/cronJobs.ts) y cambia con un
+                  deploy.
+                </p>
+                <div className="mt-4 flex flex-wrap items-stretch gap-3">
                   <CopySkillsCommand />
                   {!copilotOpen && (
                     <BrutalButton type="button" mode="brand" onClick={openCopilot}>
-                      Copiloto
+                      <span className="inline-flex items-center gap-2">
+                        <SparkIcon />
+                        Copiloto
+                      </span>
                     </BrutalButton>
                   )}
                 </div>
@@ -595,6 +595,14 @@ function useIsDesktop() {
     return () => mq.removeEventListener("change", sync);
   }, []);
   return desktop;
+}
+
+function SparkIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinejoin="round" aria-hidden="true">
+      <path d="M12 3l2.2 5.8L20 11l-5.8 2.2L12 19l-2.2-5.8L4 11l5.8-2.2z" />
+    </svg>
+  );
 }
 
 /** Tu agente opera estos crons por la API de admin: instala los skills de EasyBits con un comando. */
