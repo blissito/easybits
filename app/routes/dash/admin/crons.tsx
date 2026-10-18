@@ -390,7 +390,7 @@ export default function CronsAdmin() {
 
   return (
     <div className="flex items-start gap-6">
-      <div className="min-w-0 max-w-6xl flex-1 pb-10">
+      <div className="min-w-0 max-w-7xl flex-1 pb-10">
         <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
           <div>
             <h2 className="text-2xl font-black mb-1">Crons</h2>
