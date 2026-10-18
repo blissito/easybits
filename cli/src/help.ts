@@ -4,7 +4,7 @@ import { SSH_CONFIG_SNIPPET } from "./commands/ssh.js";
 import { lang, t } from "./i18n.js";
 import { HELP_ES } from "./help.es.js";
 
-/** Un texto de la ayuda en el idioma de la corrida (help.es.ts; sin traducción, tal cual). */
+/** Un texto de la ayuda en el idioma de la ejecución (help.es.ts; sin traducción, tal cual). */
 export const h = (en: string | undefined): string => (en && lang() === "es" ? HELP_ES[en] ?? en : en ?? "");
 
 /** Un ejemplo con su comentario `# …` traducido; el comando queda igual. */

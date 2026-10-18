@@ -263,7 +263,7 @@ async function runAgentTurn(spec: AgentTurnSpec, l: Live, input: { agentText: st
               l.tools.push(name);
             }
             dirty = true;
-            emit(l, { type: "tool", name, phase: ev?.phase, ok: ev?.ok });
+            emit(l, { type: "tool", name, id: ev?.id, phase: ev?.phase, ok: ev?.ok });
             if (ev?.phase === "end") extras = extras.then(emitExtras);
           },
         }

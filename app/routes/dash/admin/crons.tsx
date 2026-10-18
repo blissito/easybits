@@ -82,11 +82,11 @@ const STATUS: Record<CronOverview["status"], { label: string; dot: string }> = {
   tarde: { label: "tarde", dot: "bg-amber-400" },
   fallo: { label: "falló", dot: "bg-red-500" },
   pausado: { label: "pausado", dot: "bg-gray-400" },
-  nuevo: { label: "sin corridas", dot: "bg-white" },
+  nuevo: { label: "sin ejecuciones", dot: "bg-white" },
 };
 
 function runTitle(r: CronRunView) {
-  const state = r.running ? "corriendo" : r.ok ? "ok" : "falló";
+  const state = r.running ? "en ejecución" : r.ok ? "ok" : "falló";
   return `${stamp(r.startedAt)} · ${duration(r.durationMs)} · ${r.status ?? "—"} ${state} · ${TRIGGER_LABEL[r.trigger] ?? r.trigger}`;
 }
 
@@ -94,7 +94,7 @@ function RunSquares({ runs: all, max = 20 }: { runs: CronRunView[]; max?: number
   const runs = all.slice(-max);
   const empty = Math.max(0, max - runs.length);
   return (
-    <div className="flex gap-[3px]" aria-label={`Últimas ${runs.length} corridas`}>
+    <div className="flex gap-[3px]" aria-label={`Últimas ${runs.length} ejecuciones`}>
       {Array.from({ length: empty }).map((_, i) => (
         <span key={`e${i}`} className="w-2.5 h-4 rounded-[2px] border border-gray-200" />
       ))}
@@ -140,7 +140,7 @@ function RunsDrawer({ job, running, onClose }: { job: CronOverview; running: boo
 
   const items = runs.data?.items;
   return (
-    <div className="fixed inset-0 z-50 flex justify-end" role="dialog" aria-modal="true" aria-label={`Corridas de ${job.name}`}>
+    <div className="fixed inset-0 z-50 flex justify-end" role="dialog" aria-modal="true" aria-label={`Ejecuciones de ${job.name}`}>
       <button type="button" aria-label="Cerrar" className="absolute inset-0 bg-black/30 cursor-default" onClick={onClose} />
       <aside className="relative h-full w-full max-w-xl bg-white border-l-2 border-black overflow-y-auto p-6">
         <div className="flex items-start justify-between gap-4 mb-1">
@@ -158,9 +158,9 @@ function RunsDrawer({ job, running, onClose }: { job: CronOverview; running: boo
         <p className="text-sm text-gray-600 mb-6">
           {job.schedule} · <span className="font-mono">{job.cron}</span>
         </p>
-        <h4 className="text-xs font-bold uppercase text-gray-500 mb-2">Últimas 50 corridas</h4>
+        <h4 className="text-xs font-bold uppercase text-gray-500 mb-2">Últimas 50 ejecuciones</h4>
         {!items && <p className="text-sm text-gray-500">Cargando…</p>}
-        {items && items.length === 0 && <p className="text-sm text-gray-500">Todavía no hay corridas registradas.</p>}
+        {items && items.length === 0 && <p className="text-sm text-gray-500">Todavía no hay ejecuciones registradas.</p>}
         <ol className="space-y-2">
           {items?.map((r) => (
             <li key={r.id} className="border-2 border-black rounded-xl p-3">
@@ -171,7 +171,7 @@ function RunsDrawer({ job, running, onClose }: { job: CronOverview; running: boo
                   }`}
                 />
                 <span className="font-bold">{stamp(r.startedAt)}</span>
-                <span className="text-gray-500">{r.running ? "corriendo" : duration(r.durationMs)}</span>
+                <span className="text-gray-500">{r.running ? "en ejecución" : duration(r.durationMs)}</span>
                 {r.status != null && <span className="text-gray-500">· {r.status}</span>}
                 <span className="ml-auto text-xs font-bold px-2 py-0.5 rounded-full bg-gray-100">
                   {TRIGGER_LABEL[r.trigger] ?? r.trigger}
@@ -204,7 +204,7 @@ function JobRow({
   now: number;
   /** Tabla angosta (el copiloto abierto o una pantalla chica): tres columnas, sin ruta ni Pausar. */
   compact: boolean;
-  /** Ni así cabe: sin corridas, y las acciones pueden ir en dos renglones. */
+  /** Ni así cabe: sin ejecuciones, y las acciones pueden ir en dos renglones. */
   tight: boolean;
   onOpen: () => void;
   onAsk: () => void;
@@ -215,7 +215,7 @@ function JobRow({
   const st = STATUS[job.status];
   const last = job.lastRun;
   const stop = (e: React.SyntheticEvent) => e.stopPropagation();
-  const stateLabel = job.running ? "corriendo" : st.label;
+  const stateLabel = job.running ? "en ejecución" : st.label;
   const dot = <span className={`w-3 h-3 shrink-0 rounded-full border-2 border-black ${st.dot}`} />;
 
   const actions = (
@@ -308,7 +308,7 @@ function JobRow({
         {last ? (
           <>
             {relative(last.startedAt, now)}
-            <span className="block text-xs text-gray-500">{last.running ? "corriendo" : duration(last.durationMs)}</span>
+            <span className="block text-xs text-gray-500">{last.running ? "en ejecución" : duration(last.durationMs)}</span>
           </>
         ) : (
           "—"
@@ -330,7 +330,7 @@ function JobRow({
 function useCompactTable() {
   const box = useRef<HTMLDivElement>(null);
   const table = useRef<HTMLTableElement>(null);
-  // 0 = completa · 1 = compacta · 2 = compacta sin corridas (y las acciones pueden ir en dos renglones).
+  // 0 = completa · 1 = compacta · 2 = compacta sin ejecuciones (y las acciones pueden ir en dos renglones).
   const [level, setLevel] = useState(0);
   // Hasta la primera medida la tabla no se pinta: el HTML del servidor no sabe el ancho y saldría cortada.
   const [measured, setMeasured] = useState(false);
@@ -375,7 +375,7 @@ export default function CronsAdmin() {
     return () => clearInterval(id);
   }, [serverNow]);
 
-  // Sondeo: cada 5 s mientras haya una corrida en curso; si no, cada minuto (el estado «al día /
+  // Sondeo: cada 5 s mientras haya una ejecución en curso; si no, cada minuto (el estado «al día /
   // tarde» lo calcula el servidor y una pestaña abierta no debe quedarse con el de cuando cargó).
   useEffect(() => {
     const id = setInterval(
@@ -450,7 +450,7 @@ export default function CronsAdmin() {
   const askAbout = (job: CronOverview) => {
     setCopilotJobKey(job.key);
     setAsk((a) => ({
-      text: `¿Por qué falló «${job.name}» en su última corrida y qué hago para arreglarlo?`,
+      text: `¿Por qué falló «${job.name}» en su última ejecución y qué hago para arreglarlo?`,
       key: (a?.key ?? 0) + 1,
     }));
     openCopilot();
@@ -501,8 +501,8 @@ export default function CronsAdmin() {
                   <thead className="bg-gray-100">
                     <tr>
                       {(compact
-                        ? ["Tarea", "Corridas", ""]
-                        : ["Estado", "Tarea", "Horario", "Últimas corridas", "Última", "Próxima", ""]
+                        ? ["Tarea", "Ejecuciones", ""]
+                        : ["Estado", "Tarea", "Horario", "Últimas ejecuciones", "Última", "Próxima", ""]
                       ).map((h, i) => (
                         <th
                           key={i}

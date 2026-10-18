@@ -19,7 +19,7 @@ test("--lang del argv crudo, antes de --", () => {
   assert.equal(langFlag(["sb", "exec", "x", "--", "echo", "--lang", "es"]), undefined);
 });
 
-test("mensajes de la API al idioma de la corrida", () => {
+test("mensajes de la API al idioma de la ejecución", () => {
   assert.equal(serverText("ruta inválida", "en"), "invalid path");
   assert.equal(serverText("ruta inválida", "es"), "ruta inválida");
   assert.equal(serverText("agent not found", "es"), "agente no encontrado");

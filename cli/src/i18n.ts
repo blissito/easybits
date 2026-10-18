@@ -3,14 +3,14 @@
 // - `t(en, es)`: los textos propios del CLI (errores, pistas, líneas de éxito, ayuda). Las llaves
 //   de --json NUNCA se traducen; sólo el texto para personas (y `error`/`hint`, que son prosa).
 // - `serverText(msg)`: la API de EasyBits contesta casi todo en inglés y algunos mensajes de las
-//   rutas de agentes en español; el diccionario de abajo pasa cada uno al idioma de la corrida.
+//   rutas de agentes en español; el diccionario de abajo pasa cada uno al idioma de la ejecución.
 //   Un mensaje que no esté ahí sale tal cual.
 // Sin imports a propósito: el test lo carga directo.
 
 export type Lang = "es" | "en";
 let current: Lang | null = null;
 
-/** Idioma de esta corrida: `--lang`, luego EASYBITS_LANG, luego LC_ALL / LC_MESSAGES / LANG. */
+/** Idioma de esta ejecución: `--lang`, luego EASYBITS_LANG, luego LC_ALL / LC_MESSAGES / LANG. */
 export function detectLang(flag?: string, env: Record<string, string | undefined> = process.env): Lang {
   const pick = (v?: string): Lang | null =>
     v && /^es\b|^es[_-]/i.test(v) ? "es" : v && /^en\b|^en[_-]|^c$|^posix$/i.test(v) ? "en" : null;
@@ -22,7 +22,7 @@ export function setLang(l: Lang) {
 }
 export const lang = (): Lang => current ?? (current = detectLang());
 
-/** El texto en el idioma de la corrida. */
+/** El texto en el idioma de la ejecución. */
 export const t = (en: string, es: string): string => (lang() === "es" ? es : en);
 
 /** `--lang X` / `--lang=X` del argv crudo (antes de parsear: la ayuda y los errores de uso ya lo usan). */
@@ -79,7 +79,7 @@ const compiled: Partial<Record<Lang, Compiled[]>> = {};
 const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const compile = (s: string) => new RegExp(`^${s.split("{}").map(escape).join("(.+?)")}$`, "s");
 
-/** Un mensaje de la API en el idioma de la corrida (los que ya están en ese idioma, tal cual). */
+/** Un mensaje de la API en el idioma de la ejecución (los que ya están en ese idioma, tal cual). */
 export function serverText(msg: string, l: Lang = lang()): string {
   if (!msg) return msg;
   compiled[l] ??= (l === "en" ? FROM_ES : FROM_EN).map(([from, to]) => ({ re: compile(from), to }));

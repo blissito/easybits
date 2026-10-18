@@ -23,8 +23,8 @@ export const ADMIN_COPILOT_KEY_SECRET = "EASYBITS_ADMIN_COPILOT_KEY";
 export const ADMIN_COPILOT_SYSTEM = [
   "Eres el asistente del panel de tareas programadas (crons) de la plataforma EasyBits. Hablas con un superusuario, en español de México, sin voseo.",
   "Respondes SÓLO con lo que devuelven tus herramientas (list_crons, get_cron_runs). Nunca calcules, estimes ni inventes números, fechas o duraciones: cítalos tal como vienen.",
-  "Si te preguntan por qué falló una tarea, llama get_cron_runs y explica el `error` de la corrida fallida en palabras simples; si no hay error registrado, dilo.",
-  "Para correr o pausar/reanudar una tarea SIEMPRE llama run_cron o pause_cron. Esas herramientas no ejecutan: crean una tarjeta de aprobación. Dile al usuario que la apruebe en la tarjeta; no digas que ya se ejecutó y no reintentes.",
+  "Si te preguntan por qué falló una tarea, llama get_cron_runs y explica el `error` de la ejecución fallida en palabras simples; si no hay error registrado, dilo.",
+  "Para ejecutar o pausar/reanudar una tarea SIEMPRE llama run_cron o pause_cron. Esas herramientas no ejecutan: crean una tarjeta de aprobación. Dile al usuario que la apruebe en la tarjeta; no digas que ya se ejecutó y no reintentes.",
   "Además del calendario de la plataforma, el usuario tiene SUS PROPIOS crons («Mis crons»): list_my_crons, create_cron, update_cron, delete_cron y run_my_cron. Sí puedes crearlos: cuando te pidan algo programado («todos los días a las 8:30…», «cada lunes…»), arma el cron de 5 campos en la zona del usuario (default America/Mexico_City; p. ej. diario 8:30 = `30 8 * * *`) y llama create_cron. La acción es `http` (pegarle a una URL https pública, con un secreto del vault como header si hace falta) o `agent_turn` (mandarle un mensaje a uno de sus agentes de la flota). Igual que run_cron, crear/cambiar/borrar/ejecutar sólo PROPONE: sale una tarjeta para aprobar.",
   "Si para lo que piden no existe la vía (p. ej. una URL o un agente que no tienes), dilo claro y pregunta qué URL o agente usar; no inventes ids ni URLs.",
   "Sé breve: lo que encontraste y, si aplica, qué sigue. Sin relleno.",
@@ -115,15 +115,15 @@ export function copilotTurnText(text: string, context: CopilotContext | null, cr
   return `[Contexto del panel — ${parts.join("; ")}]\n${brief}${text}`;
 }
 
-const STATUS_WORDS: Record<string, string> = { "al-dia": "al día", tarde: "tarde", fallo: "falló", pausado: "pausado", nuevo: "sin corridas" };
+const STATUS_WORDS: Record<string, string> = { "al-dia": "al día", tarde: "tarde", fallo: "falló", pausado: "pausado", nuevo: "sin ejecuciones" };
 
-/** Una línea por cron, con lo que ve el panel (estado, horario, última corrida). */
+/** Una línea por cron, con lo que ve el panel (estado, horario, última ejecución). */
 export async function cronsBrief(): Promise<string> {
   const { listCronOverview } = await import("~/.server/cron");
   const jobs = await listCronOverview();
   return jobs
     .map((j) => {
-      const last = j.lastRun ? `última ${j.lastRun.startedAt} (${j.lastRun.ok === false ? "falló" : j.lastRun.running ? "corriendo" : "ok"})` : "sin corridas";
+      const last = j.lastRun ? `última ${j.lastRun.startedAt} (${j.lastRun.ok === false ? "falló" : j.lastRun.running ? "en ejecución" : "ok"})` : "sin ejecuciones";
       return `- ${j.key} «${j.name}»: ${STATUS_WORDS[j.status] ?? j.status}; ${j.schedule}; ${last}`;
     })
     .join("\n");

@@ -56,12 +56,12 @@ export function scheduleWords(cron: string, timezone = "UTC"): string {
   return `${cron} (${timezone})`;
 }
 
-/** Próxima corrida estrictamente después de `from`. */
+/** Próxima ejecución estrictamente después de `from`. */
 export function nextRun(cron: string, from: Date = new Date(), tz = "UTC"): Date {
   return CronExpressionParser.parse(cron, { currentDate: from, tz }).next().toDate();
 }
 
-/** Periodo entre dos corridas consecutivas (para calcular la gracia). */
+/** Periodo entre dos ejecuciones consecutivas (para calcular la gracia). */
 export function periodMs(cron: string, from: Date = new Date(), tz = "UTC"): number {
   const it = CronExpressionParser.parse(cron, { currentDate: from, tz });
   const a = it.next().getTime();
@@ -75,7 +75,7 @@ export function graceMs(cron: string, from: Date = new Date()): number {
 }
 
 /**
- * Holgura antes de decir «tarde»: el despachador arranca la corrida unos segundos (o un minuto)
+ * Holgura antes de decir «tarde»: el despachador arranca la ejecución unos segundos (o un minuto)
  * después de la hora exacta. Un cuarto del periodo, entre 1 y 5 min, y nunca más que la gracia.
  */
 export function lateSlackMs(cron: string, from: Date = new Date()): number {
@@ -83,7 +83,7 @@ export function lateSlackMs(cron: string, from: Date = new Date()): number {
   return Math.min(slack, graceMs(cron, from));
 }
 
-// Una corrida sin `finishedAt` más vieja que esto la dio por muerta un reinicio de la app.
+// Una ejecución sin `finishedAt` más vieja que esto la dio por muerta un reinicio de la app.
 export const RUNNING_STALE_MS = 60 * 60_000;
 
 export type CronStatus = "nuevo" | "al-dia" | "tarde" | "fallo" | "pausado";
@@ -92,9 +92,9 @@ export type RunLike = { startedAt: Date; finishedAt: Date | null; ok: boolean | 
 
 /**
  * Estado de una tarea con la semántica de Healthchecks.io para horarios cron:
- * la fecha límite es la siguiente hora programada DESPUÉS de la última corrida; entre la
+ * la fecha límite es la siguiente hora programada DESPUÉS de la última ejecución; entre la
  * fecha límite (más una holgura por el retraso del despachador) y la gracia está «tarde»;
- * pasada la gracia, «falló». Una corrida que
+ * pasada la gracia, «falló». Una ejecución que
  * terminó con error también es «falló». `lastRun` = la más reciente (terminada o no).
  */
 export function cronStatus(

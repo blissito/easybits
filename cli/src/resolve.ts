@@ -20,7 +20,7 @@ const LS_HINT: Record<RefKind, string> = {
 const NOUN = (): Record<RefKind, string> => ({ agent: t("agent", "agente"), sandbox: t("sandbox or machine", "sandbox o máquina"), db: t("database", "base de datos"), site: t("site", "sitio"), fleet: t("fleet agent", "agente de flota"), document: t("document", "documento"), video: t("video project", "proyecto de video") });
 const NOUNS = (): Record<RefKind, string> => ({ agent: t("agents", "agentes"), sandbox: t("sandboxes", "sandboxes"), db: t("databases", "bases de datos"), site: t("sites", "sitios"), fleet: t("fleet agents", "agentes de flota"), document: t("documents", "documentos"), video: t("video projects", "proyectos de video") });
 
-// Una lista por tipo y por corrida: dos referencias del mismo tipo no piden dos veces.
+// Una lista por tipo y por ejecución: dos referencias del mismo tipo no piden dos veces.
 const cache = new Map<string, Promise<NamedRef[]>>();
 
 export function listRefs(ctx: Ctx, kind: RefKind, ref?: string): Promise<NamedRef[]> {

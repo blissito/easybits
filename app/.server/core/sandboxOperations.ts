@@ -5277,7 +5277,7 @@ function passThroughSSEStream(
   });
 }
 
-function mapSSETokenToChunk(
+export function mapSSETokenToChunk(
   upstream: ReadableStream<Uint8Array>
 ): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
@@ -5307,10 +5307,13 @@ function mapSSETokenToChunk(
                   )
                 );
               } else if (evt.type === "tool" && typeof (evt as { name?: string }).name === "string") {
-                // Tool que el agente empezó a usar → checklist en vivo (passthrough).
+                // Tool del agente → checklist en vivo. Pasa TAL CUAL (id, phase, ok, detail…): el
+                // cierre llega con `name: ""` y `phase: "end"`; sin `phase` se leía como OTRA tool que
+                // empieza sin nombre («tool ×N» en el piloto) y ninguna se cerraba.
+                const t = evt as { name: string; id?: string; phase?: string; ok?: boolean; detail?: string; command?: string; todos?: unknown };
                 controller.enqueue(
                   encoder.encode(
-                    `data: ${JSON.stringify({ type: "tool", name: (evt as { name?: string }).name })}\n\n`
+                    `data: ${JSON.stringify({ type: "tool", name: t.name, id: t.id, phase: t.phase, ok: t.ok, detail: t.detail, command: t.command, todos: t.todos })}\n\n`
                   )
                 );
               } else if (evt.type === "done") {

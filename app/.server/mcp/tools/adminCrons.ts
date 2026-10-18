@@ -47,7 +47,7 @@ type Wrap = <T>(fn: (params: T, extra: any) => Promise<any>) => (params: T, extr
 export function registerAdminCronTools(server: McpServer, wrapHandler: Wrap) {
   server.tool(
     "list_crons",
-    "SÓLO superusuarios. Tareas programadas de la plataforma EasyBits con su estado: { items:[{ key, name, schedule, status (nuevo|al-dia|tarde|fallo|pausado), paused, running, nextRunAt, lastRun, recent[] }] }. `recent` son las últimas 20 corridas SIN el error; para leer por qué falló una usa get_cron_runs.",
+    "SÓLO superusuarios. Tareas programadas de la plataforma EasyBits con su estado: { items:[{ key, name, schedule, status (nuevo|al-dia|tarde|fallo|pausado), paused, running, nextRunAt, lastRun, recent[] }] }. `recent` son las últimas 20 ejecuciones SIN el error; para leer por qué falló una usa get_cron_runs.",
     {},
     wrapHandler(async (_p, extra) => {
       requireCronAdmin(extra?.authInfo as AuthContext, "READ");
@@ -58,7 +58,7 @@ export function registerAdminCronTools(server: McpServer, wrapHandler: Wrap) {
 
   server.tool(
     "get_cron_runs",
-    "SÓLO superusuarios. Últimas corridas de UNA tarea (más reciente primero), con el `error` completo de las fallidas: { items:[{ id, trigger, startedAt, finishedAt, ok, status, durationMs, summary, error, running }] }.",
+    "SÓLO superusuarios. Últimas ejecuciones de UNA tarea (más reciente primero), con el `error` completo de las fallidas: { items:[{ id, trigger, startedAt, finishedAt, ok, status, durationMs, summary, error, running }] }.",
     { job: jobShape, limit: z.number().int().min(1).max(50).optional().describe("cuántas (default 20, máx 50)") },
     wrapHandler(async (p: { job: string; limit?: number }, extra) => {
       requireCronAdmin(extra?.authInfo as AuthContext, "READ");

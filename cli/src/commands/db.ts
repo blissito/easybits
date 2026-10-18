@@ -16,7 +16,7 @@ import { findNameRefs, replaceName, type NameRef } from "../db-name-refs.js";
 
 /**
  * La base ya resuelta (index.ts cambió el nombre por el id con refs.ts). Sin crear: un
- * typo no debe inventar una base nueva (db(name) sí crea). Reusa la lista de la corrida.
+ * typo no debe inventar una base nueva (db(name) sí crea). Reusa la lista de la ejecución.
  */
 async function findDb(ctx: Ctx, id: string) {
   const hit = (await listRefs(ctx, "db")).find((d) => d.id === id);

@@ -64,7 +64,7 @@ export function describeCron(c: UserCron): string[] {
   const state = c.enabled ? t("active", "activo") : c.done ? t("done", "terminado") : t("paused", "en pausa");
   return [
     `${c.id} «${c.name}» (${state})`,
-    `${t("Schedule", "Horario")}: ${c.schedule} (${c.timezone})${c.until ? ` ${t("until", "hasta")} ${c.until}` : ""}${c.timesLeft != null ? ` · ${t("runs left", "corridas restantes")}: ${c.timesLeft}` : ""}`,
+    `${t("Schedule", "Horario")}: ${c.schedule} (${c.timezone})${c.until ? ` ${t("until", "hasta")} ${c.until}` : ""}${c.timesLeft != null ? ` · ${t("runs left", "ejecuciones restantes")}: ${c.timesLeft}` : ""}`,
     `${t("Next run", "Próxima")}: ${c.enabled && c.nextRunLocal ? `${c.nextRunLocal} (${c.in})` : "—"}`,
     `${t("Does", "Hace")}: ${describeCronAction(c.action)}`,
     `${t("Notifies", "Avisa")}: ${chans ? `${chans} (${n!.on === "always" ? t("always", "siempre") : t("on failure", "si falla")})` : "—"}`,
@@ -241,7 +241,7 @@ type Preview = { schedule: string; timezone: string; nextRuns: { at: string; loc
 
 /** Cuándo corre, para humanos: «próxima 2026-10-18 23:00 (en 12h 54m)». */
 const nextLine = (c: Pick<UserCron, "nextRunLocal" | "in" | "timezone">) =>
-  c.nextRunLocal ? t(`next ${c.nextRunLocal} ${c.timezone} (in ${c.in})`, `próxima ${c.nextRunLocal} ${c.timezone} (en ${c.in})`) : t("no next run", "sin próxima corrida");
+  c.nextRunLocal ? t(`next ${c.nextRunLocal} ${c.timezone} (in ${c.in})`, `próxima ${c.nextRunLocal} ${c.timezone} (en ${c.in})`) : t("no next run", "sin próxima ejecución");
 
 const flagsOf = (ctx: Ctx) => ({
   url: str(ctx, "url"),
@@ -295,12 +295,12 @@ const STATUS: Record<string, [string, string]> = {
   tarde: ["late", "tarde"],
   fallo: ["failed", "falló"],
   pausado: ["paused", "pausado"],
-  nuevo: ["no runs yet", "sin corridas"],
+  nuevo: ["no runs yet", "sin ejecuciones"],
 };
 
 /** Estado legible; «corriendo» gana sobre lo demás. Puro para probarlo. */
 export function cronStatus(c: Pick<CronOverview, "status" | "running">): string {
-  if (c.running) return t("running", "corriendo");
+  if (c.running) return t("running", "en ejecución");
   const s = STATUS[c.status];
   return s ? t(s[0], s[1]) : c.status;
 }
@@ -407,14 +407,14 @@ export const crons: Command = {
           table(
             items.map((r) => ({
               at: fmtDate(r.startedAt),
-              ok: r.ok == null ? t("running", "corriendo") : r.ok ? "ok" : t("failed", "falló"),
+              ok: r.ok == null ? t("running", "en ejecución") : r.ok ? "ok" : t("failed", "falló"),
               status: r.exitCode != null ? `exit ${r.exitCode}` : (r.status ?? "—"),
               took: duration(r.durationMs),
               trigger: r.trigger,
               summary: (r.error ?? r.summary ?? "").slice(0, 80),
             })),
             [["at", "STARTED"], ["ok", "RESULT"], ["status", "HTTP"], ["took", "TOOK"], ["trigger", "TRIGGER"], ["summary", "SUMMARY"]],
-            t("No runs yet.", "Todavía no hay corridas."),
+            t("No runs yet.", "Todavía no hay ejecuciones."),
           );
           if (withLogs) {
             const last = items.find((r) => r.logs);
@@ -457,7 +457,7 @@ export const crons: Command = {
           }
           if (Date.now() >= deadline) {
             throw new CliError(
-              t(`Gave up waiting for «${mine.name}»${r.nextRunLocal ? ` (next run ${r.nextRunLocal})` : ""}.`, `Me cansé de esperar «${mine.name}»${r.nextRunLocal ? ` (próxima corrida ${r.nextRunLocal})` : ""}.`),
+              t(`Gave up waiting for «${mine.name}»${r.nextRunLocal ? ` (next run ${r.nextRunLocal})` : ""}.`, `Me cansé de esperar «${mine.name}»${r.nextRunLocal ? ` (próxima ejecución ${r.nextRunLocal})` : ""}.`),
               EXIT.API,
               `easybits crons wait ${mine.id} --timeout 2h`,
               "timeout",
@@ -540,7 +540,7 @@ export const crons: Command = {
           emit(ctx, p, () => {
             console.log(t(`OK, nothing created. «${name}» — ${p.schedule}`, `Válido, no se creó nada. «${name}» — ${p.schedule}`));
             for (const r of p.nextRuns) console.log(`  ${r.local} ${p.timezone}  (${r.at})`);
-            if (p.in) console.log(t(`First run in ${p.in}.`, `La primera corre en ${p.in}.`));
+            if (p.in) console.log(t(`First run in ${p.in}.`, `La primera se ejecuta en ${p.in}.`));
           });
           return;
         }
@@ -595,7 +595,7 @@ export const crons: Command = {
         const mine = await resolveUserCron(ctx, ref);
         if (!mine) throw new CliError(t(`You have no cron "${ref}".`, `No tienes un cron "${ref}".`), EXIT.API, "easybits crons ls", "not_found", 404);
         requireYesIfHeadless(ctx);
-        await confirm(ctx, t(`Delete cron «${mine.name}»? It stops running right away.`, `¿Borrar el cron «${mine.name}»? Deja de correr de inmediato.`));
+        await confirm(ctx, t(`Delete cron «${mine.name}»? It stops running right away.`, `¿Borrar el cron «${mine.name}»? Deja de ejecutarse de inmediato.`));
         const r = await api<Record<string, unknown>>(ctx, "DELETE", `/crons/${mine.id}`);
         emit(ctx, r, () => console.log(t(`Deleted «${mine.name}»`, `Borrado «${mine.name}»`)));
       },

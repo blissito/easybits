@@ -186,7 +186,7 @@ export function UserCronsSection() {
         <div>
           <h3 className="text-xl font-black mb-1">Mis crons</h3>
           <p className="text-sm text-gray-500">
-            Tareas programadas de tu cuenta: le pegan a una URL, le mandan un mensaje a uno de tus agentes o corren un comando en
+            Tareas programadas de tu cuenta: le pegan a una URL, le mandan un mensaje a uno de tus agentes o ejecutan un comando en
             una caja. También por API (<code className="font-mono text-xs">/api/v2/crons</code>), MCP (
             <code className="font-mono text-xs">create_cron</code>) o la CLI (<code className="font-mono text-xs">easybits crons</code>).
           </p>
@@ -349,11 +349,11 @@ function RunsList({ cronId }: { cronId: string }) {
 
   if (error) return <p className="text-sm font-bold text-red-600">{error}</p>;
   if (runs === null) return <p className="text-sm text-gray-500">Cargando historial…</p>;
-  if (!runs.length) return <p className="text-sm text-gray-500">Todavía no ha corrido.</p>;
+  if (!runs.length) return <p className="text-sm text-gray-500">Todavía no se ha ejecutado.</p>;
   return (
     <div>
       <div className="mb-2 flex items-center justify-between">
-        <p className={label}>Últimas {runs.length} corridas</p>
+        <p className={label}>Últimas {runs.length} ejecuciones</p>
         <BrutalButton type="button" size="chip" mode="ghost" onClick={load}>
           Recargar
         </BrutalButton>
@@ -361,7 +361,7 @@ function RunsList({ cronId }: { cronId: string }) {
       <ul className="grid gap-2">
         {runs.map((r) => {
           const chip = r.running
-            ? ["corriendo", "bg-yellow-200"]
+            ? ["en ejecución", "bg-yellow-200"]
             : r.ok
               ? ["ok", "bg-green-200"]
               : r.ok === false
@@ -411,7 +411,7 @@ function CronForm({
   onSaved: () => void;
 }) {
   const editing = !!initial;
-  // Buzones de eventos de la cuenta, para mandar ahí el resultado de cada corrida.
+  // Buzones de eventos de la cuenta, para mandar ahí el resultado de cada ejecución.
   const [inboxes, setInboxes] = useState<{ id: string; name: string }[]>([]);
   // Nombres de la bóveda (los valores nunca salen). Los acotados a un cron o máquina (`__C_`/`__M_`) no se ofrecen.
   const [vault, setVault] = useState<string[]>([]);
@@ -639,7 +639,7 @@ function CronForm({
 
       <p className="md:col-span-2 -mt-2 text-xs text-gray-500">
         {once ? (
-          <>Corre una vez y se apaga · zona {timezone}</>
+          <>Se ejecuta una vez y se apaga · zona {timezone}</>
         ) : (
           <>
             <span className="font-mono">{cron || "—"}</span> · zona {timezone} · mínimo cada 5 minutos
@@ -666,7 +666,7 @@ function CronForm({
                 Mandarle un mensaje a un agente{!agents.length && " (no tienes agentes)"}
               </label>
               <label className="flex items-center gap-2">
-                <input type="radio" checked={kind === "exec"} onChange={() => setKind("exec")} /> Correr un comando
+                <input type="radio" checked={kind === "exec"} onChange={() => setKind("exec")} /> Ejecutar un comando
               </label>
             </div>
           </div>
@@ -766,7 +766,7 @@ function CronForm({
                 )}
               </div>
               <p className="md:col-span-2 -mt-2 text-xs text-gray-500">
-                Corre en una caja nueva que se destruye al terminar; éxito = exit 0. Para archivos y llaves sólo de este cron usa la
+                Se ejecuta en una caja nueva que se destruye al terminar; éxito = exit 0. Para archivos y llaves sólo de este cron usa la
                 CLI: <code className="font-mono">easybits crons create … --run … --file … --secret-file NOMBRE:ruta</code>.
               </p>
             </>

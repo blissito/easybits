@@ -6,7 +6,7 @@
 // Cómo corren: la tarea de plataforma `dispatch-user-crons` (cada minuto, la dispara eb-cron)
 // llama a `dispatchDueUserCrons`. Cada cron vencido se RECLAMA con un update condicionado a su
 // `nextRunAt` actual, así que dos réplicas (azul/verde) o un reintento de Restate no lo corren
-// dos veces. Cada corrida queda en `CronRun` con `job = "user:<id>"`.
+// dos veces. Cada ejecución queda en `CronRun` con `job = "user:<id>"`.
 import { CronExpressionParser } from "cron-parser";
 import { Prisma, type CronRun, type User, type UserCron } from "@prisma/client";
 import { db } from "../db";
@@ -75,7 +75,7 @@ const EXEC_COMMAND_MAX = 8_000;
 const EXEC_FILES_MAX = 20;
 const EXEC_FILES_BYTES_MAX = 512 * 1024;
 const EXEC_SECRETS_MAX = 20;
-/** Cola de stdout+stderr que se guarda por corrida. */
+/** Cola de stdout+stderr que se guarda por ejecución. */
 export const LOGS_MAX = 64 * 1024;
 /** Directorio de trabajo del comando dentro de la caja. */
 export const EXEC_WORKDIR = "/root/job";
@@ -89,14 +89,14 @@ export type UserCronInput = {
   in?: string;
   /** Recurrente que termina solo: última fecha (misma forma que `at`). null lo quita. */
   until?: string | Date | null;
-  /** Recurrente que termina solo: cuántas corridas más. null lo quita. */
+  /** Recurrente que termina solo: cuántas ejecuciones más. null lo quita. */
   times?: number | null;
   /**
    * Valores de secretos acotados a ESTE cron (`{ NOMBRE: valor }`): se guardan como
    * `NOMBRE__C_<id>`, ningún otro cron los lee y se borran con el cron. Nunca regresan.
    */
   secretValues?: Record<string, string>;
-  /** Avisos por corrida; null los quita. */
+  /** Avisos por ejecución; null los quita. */
   notify?: unknown;
   /** Igual que `times` (es como se guarda; las propuestas del copiloto lo traen así). */
   timesLeft?: number | null;
@@ -121,7 +121,7 @@ export function validTimezone(tz: string): boolean {
   }
 }
 
-/** Cron de 5 campos, zona IANA y no más seguido que cada 5 min (se miran las siguientes 12 corridas). */
+/** Cron de 5 campos, zona IANA y no más seguido que cada 5 min (se miran las siguientes 12 ejecuciones). */
 export function validateSchedule(cron: string, timezone: string): void {
   const expr = cron.trim();
   if (expr.split(/\s+/).length !== 5) throw bad("cron debe tener 5 campos (min hora día mes díaSemana)");
@@ -134,7 +134,7 @@ export function validateSchedule(cron: string, timezone: string): void {
     throw bad(`cron inválido: ${(e as Error).message}`);
   }
   for (let i = 1; i < times.length; i++) {
-    if (times[i] - times[i - 1] < MIN_INTERVAL_MS) throw bad("Un cron puede correr como mucho cada 5 minutos");
+    if (times[i] - times[i - 1] < MIN_INTERVAL_MS) throw bad("Un cron puede ejecutarse como mucho cada 5 minutos");
   }
 }
 
@@ -249,7 +249,7 @@ export function validateAt(at: Date, tz: string, now: Date = new Date()): void {
 
 export type Schedule = { cron: string; at: Date | null; until: Date | null; timesLeft: number | null; timezone: string };
 
-/** Las próximas `n` corridas (respeta `until` y `timesLeft`). */
+/** Las próximas `n` ejecuciones (respeta `until` y `timesLeft`). */
 export function upcomingRuns(s: Schedule, n = 3, from: Date = new Date()): Date[] {
   if (s.at) return s.at > from ? [s.at] : [];
   const out: Date[] = [];
@@ -264,7 +264,7 @@ export function upcomingRuns(s: Schedule, n = 3, from: Date = new Date()): Date[
 }
 
 /**
- * Qué escribe el reclamo de una corrida programada: la siguiente fecha, o apagarlo si era de una
+ * Qué escribe el reclamo de una ejecución programada: la siguiente fecha, o apagarlo si era de una
  * sola vez o se le acabaron `until`/`times`. `run:false` = no correr (cron inválido). Puro, con test.
  */
 export function claimData(c: Pick<UserCron, "cron" | "at" | "until" | "timesLeft" | "timezone">, now: Date) {
@@ -338,7 +338,7 @@ export async function validateAction(ownerId: string, raw: unknown, input?: { se
 }
 
 /**
- * Avisos por corrida. `push` va a la app de Ghosty (POST /api/v2/me/push de ghosty.studio) con el
+ * Avisos por ejecución. `push` va a la app de Ghosty (POST /api/v2/me/push de ghosty.studio) con el
  * token personal `gpu_…` del secreto `GHOSTY_PUSH_TOKEN` (o el que diga `secret`). `email` sólo
  * al correo de la cuenta dueña: con una dirección libre, un cron sería un relevo de spam.
  */
@@ -468,7 +468,7 @@ function resolveSchedule(
   const until = input.until ? parseWhen(input.until, timezone, now) : null;
   const timesLeft = input.times == null ? null : Number(input.times);
   if (at) {
-    if (until || timesLeft != null) throw bad("until y times son para crons que se repiten; uno con at corre una sola vez");
+    if (until || timesLeft != null) throw bad("until y times son para crons que se repiten; uno con at se ejecuta una sola vez");
     validateAt(at, timezone, now);
     return { cron: "", at, until: null, timesLeft: null };
   }
@@ -477,7 +477,7 @@ function resolveSchedule(
     throw bad("times debe ser un entero entre 1 y 10000");
   }
   if (until && until <= nextRunFor(cron, timezone, now)) {
-    throw bad(`until (${formatLocal(until, timezone)}) llega antes de la primera corrida: nunca correría`);
+    throw bad(`until (${formatLocal(until, timezone)}) llega antes de la primera ejecución: nunca se ejecutaría`);
   }
   return { cron, at: null, until, timesLeft };
 }
@@ -533,7 +533,7 @@ export async function normalizeUpdate(current: UserCron, input: UserCronInput, n
   if (out.enabled === true && !at) {
     const timesLeft = out.timesLeft !== undefined ? out.timesLeft : current.timesLeft;
     const until = out.until !== undefined ? out.until : current.until;
-    if (timesLeft === 0) throw bad("A ese cron ya no le quedan corridas; dale `times` nuevo (o null para siempre)");
+    if (timesLeft === 0) throw bad("A ese cron ya no le quedan ejecuciones; dale `times` nuevo (o null para siempre)");
     if (until && until <= now) throw bad("La fecha `until` de ese cron ya pasó; dale otra (o null para siempre)");
   }
   if (input.notify !== undefined) out.notify = await validateNotify(current.ownerId, input.notify);
@@ -672,9 +672,9 @@ export type UserCronRunView = {
   durationMs: number | null;
   summary: string | null;
   error: string | null;
-  /** Corridas `exec`: código de salida del comando. */
+  /** Ejecuciones `exec`: código de salida del comando. */
   exitCode: number | null;
-  /** Corridas `exec`, sólo si se piden (`logs:true`): cola de stdout+stderr (64 KB). */
+  /** Ejecuciones `exec`, sólo si se piden (`logs:true`): cola de stdout+stderr (64 KB). */
   logs?: string | null;
   running: boolean;
 };
@@ -708,13 +708,13 @@ export async function listUserCronRuns(ctx: AuthContext, id: string, take = 20, 
 /** Lo más que una llamada de `wait` mantiene la conexión abierta (long-poll detrás de Caddy). */
 export const WAIT_MAX_S = 50;
 const WAIT_POLL_MS = 2_000;
-/** Cuánto se espera a que aparezca la corrida de un cron recién reclamado antes de dar 409. */
+/** Cuánto se espera a que aparezca la ejecución de un cron recién reclamado antes de dar 409. */
 const CLAIM_GRACE_MS = 30_000;
 
 export type UserCronWait = {
-  /** La corrida que terminó (con `logs`), o null si se acabó el tiempo de esta llamada. */
+  /** La ejecución que terminó (con `logs`), o null si se acabó el tiempo de esta llamada. */
   run: UserCronRunView | null;
-  /** Desde cuándo se espera: pásalo en la siguiente llamada para no perder la corrida. */
+  /** Desde cuándo se espera: pásalo en la siguiente llamada para no perder la ejecución. */
   after: string;
   running: boolean;
   nextRunAt: string | null;
@@ -722,8 +722,8 @@ export type UserCronWait = {
 };
 
 /**
- * Espera la siguiente corrida que TERMINE a partir de `after` (default: la que va en curso o, si
- * no hay, ahora). 409 si no hay nada que esperar: apagado, sin corrida en curso ni próxima.
+ * Espera la siguiente ejecución que TERMINE a partir de `after` (default: la que va en curso o, si
+ * no hay, ahora). 409 si no hay nada que esperar: apagado, sin ejecución en curso ni próxima.
  */
 export async function waitUserCronRun(
   ctx: AuthContext,
@@ -763,9 +763,9 @@ export async function waitUserCronRun(
       select: { id: true },
     })) || !!(inFlight && inFlight.startedAt >= after);
     // El despachador reclama un cron de una sola vez (lo apaga, sin nextRunAt) un instante ANTES
-    // de crear su CronRun: si el cron se movió hace poco, la corrida viene en camino.
+    // de crear su CronRun: si el cron se movió hace poco, la ejecución viene en camino.
     const justClaimed = !!cur && Date.now() - cur.updatedAt.getTime() < CLAIM_GRACE_MS;
-    if (!running && !next && !justClaimed) throw bad("No hay corrida por esperar: el cron está apagado o ya terminó y no corre nada", 409);
+    if (!running && !next && !justClaimed) throw bad("No hay ejecución por esperar: el cron está apagado o ya terminó y no se ejecuta nada", 409);
     if (Date.now() >= deadline) return { run: null, running, ...base };
     await sleep(Math.min(WAIT_POLL_MS, Math.max(deadline - Date.now(), 0)));
   }
@@ -893,7 +893,7 @@ export async function runUserCronNow(ctx: AuthContext, id: string): Promise<{ st
     where: { job: userCronJob(c.id), finishedAt: { isSet: false }, startedAt: { gt: new Date(Date.now() - RUNNING_STALE_MS) } },
     select: { id: true },
   });
-  if (running) throw bad("Ese cron ya está corriendo", 409);
+  if (running) throw bad("Ese cron ya está en ejecución", 409);
   void executeUserCron(c, "manual");
   return { started: true, id: c.id };
 }
@@ -908,7 +908,7 @@ const clip = (s: string, max: number) => {
 type Outcome = { ok: boolean; status: number | null; summary: string | null; error: string | null; exitCode?: number | null; logs?: string | null };
 
 async function runHttp(ownerId: string, a: HttpAction, cronId: string): Promise<Outcome> {
-  // Se revalida en cada corrida: el DNS de la URL pudo cambiar desde el alta.
+  // Se revalida en cada ejecución: el DNS de la URL pudo cambiar desde el alta.
   await assertPublicUrl(a.url);
   const headers: Record<string, string> = {
     "User-Agent": "EasyBits-Cron/1.0 (+https://www.easybits.cloud)",
@@ -961,7 +961,7 @@ export function joinLogs(stdout: string, stderr: string, max = LOGS_MAX): string
   return `${tail(out, half)}\n[stderr]\n${tail(err, max - half - 10)}`;
 }
 
-/** El valor de un secreto para la corrida: el del cron primero, luego el de la bóveda. */
+/** El valor de un secreto para la ejecución: el del cron primero, luego el de la bóveda. */
 export async function cronSecretValue(ownerId: string, cronId: string, name: string): Promise<string | null> {
   return (await getSecretValue(ownerId, cronSecretName(cronId, name)).catch(() => null)) ?? getSecretValue(ownerId, name);
 }
@@ -1073,9 +1073,9 @@ export async function executeUserCron(c: UserCron, trigger: "schedule" | "manual
         ...(disable ? { enabled: false, nextRunAt: null } : {}),
       },
     })
-    // El cron pudo borrarse a media corrida.
+    // El cron pudo borrarse a media ejecución.
     .catch(() => undefined);
-  // Avisos y webhooks: disparar y olvidar. Un aviso caído nunca vuelve fallida una corrida buena.
+  // Avisos y webhooks: disparar y olvidar. Un aviso caído nunca vuelve fallida una ejecución buena.
   void notifyRun(c, { ...out, runId: run?.id ?? null, startedAt, durationMs: finishedAt.getTime() - startedAt.getTime() }).catch((e) =>
     console.error(`[user-cron] avisos de ${c.id}:`, e)
   );
@@ -1162,7 +1162,7 @@ async function notifyRun(c: UserCron, r: RunResult) {
 }
 
 const DISPATCH_BATCH = 200;
-/** Cuánto espera el despachador a que terminen las corridas antes de contestar (las demás siguen solas). */
+/** Cuánto espera el despachador a que terminen las ejecuciones antes de contestar (las demás siguen solas). */
 const DISPATCH_WAIT_MS = 45_000;
 
 /**

@@ -118,6 +118,8 @@ export function createTurnTranslator(opts: { threadId: string; runId: string; em
   const nextId = (p: string) => `${p}-${runId}-${++seq}`;
   let textId: string | null = null;
   const open: string[] = [];
+  /** El id del worker (`tool_use` del SDK) → el `toolCallId` que se emitió: cierra el que es, aunque sean paralelas. */
+  const byWorkerId = new Map<string, string>();
   let lastToolCallId: string | undefined;
   const interrupts: AgUiInterrupt[] = [];
   let closed = false;
@@ -135,16 +137,22 @@ export function createTurnTranslator(opts: { threadId: string; runId: string; em
     emit({ type: "TEXT_MESSAGE_END", messageId: textId });
     textId = null;
   };
-  const toolStart = (name: string) => {
+  const toolStart = (name: string, workerId?: string) => {
     endText();
     const id = nextId("tc");
+    if (workerId) byWorkerId.set(workerId, id);
     emit({ type: "TOOL_CALL_START", toolCallId: id, toolCallName: name || "tool" });
     emit({ type: "TOOL_CALL_END", toolCallId: id });
     open.push(id);
     lastToolCallId = id;
     return id;
   };
-  const toolEnd = (ok: boolean, id = open.shift()) => {
+  const toolEnd = (ok: boolean, workerId?: string) => {
+    const known = workerId ? byWorkerId.get(workerId) : undefined;
+    if (workerId) byWorkerId.delete(workerId);
+    const at = known ? open.indexOf(known) : 0;
+    if (at < 0) return;
+    const [id] = open.splice(at, 1);
     if (!id) return;
     emit({
       type: "TOOL_CALL_RESULT",
@@ -191,8 +199,9 @@ export function createTurnTranslator(opts: { threadId: string; runId: string; em
           return;
         case "tool": {
           const name = String(e.name ?? "");
-          if (e.phase === "end") toolEnd(e.ok !== false);
-          else if (e.phase === "start") toolStart(name);
+          const wid = typeof e.id === "string" && e.id ? e.id : undefined;
+          if (e.phase === "end") toolEnd(e.ok !== false, wid);
+          else if (e.phase === "start") toolStart(name, wid);
           else {
             toolStart(name);
             toolEnd(e.ok !== false);

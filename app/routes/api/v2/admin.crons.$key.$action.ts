@@ -2,7 +2,7 @@ import type { Route } from "./+types/admin.crons.$key.$action";
 import { CronRunError, listCronRuns, requirePlatformAdmin, setCronPaused, startManualRun } from "~/.server/cron";
 import { getCronJob } from "~/lib/cronJobs";
 
-// GET  /api/v2/admin/crons/:key/runs   — últimas 50 corridas (con el error completo)
+// GET  /api/v2/admin/crons/:key/runs   — últimas 50 ejecuciones (con el error completo)
 // POST /api/v2/admin/crons/:key/run    — corre la tarea en segundo plano (trigger "manual")
 // POST /api/v2/admin/crons/:key/pause  — { paused: boolean }
 // Auth: scope ADMIN + superusuario (requirePlatformAdmin).

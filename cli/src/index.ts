@@ -100,7 +100,7 @@ function aliasNote([en, es]: [string, string]) {
   process.stderr.write(dim ? `\x1b[2m${note}\x1b[0m\n` : `${note}\n`);
 }
 
-/** «Did you mean» de suggest.ts (puro, en inglés) en el idioma de la corrida. */
+/** «Did you mean» de suggest.ts (puro, en inglés) en el idioma de la ejecución. */
 const localHint = (hint: string) => hint.replace("Did you mean this?", t("Did you mean this?", "¿Quisiste decir esto?"));
 
 async function main(input: string[]): Promise<void> {

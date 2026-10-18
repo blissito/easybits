@@ -5,7 +5,7 @@ import type { Route } from "./+types/sweep-fleet-memory";
 
 // Barrido de blobs de memoria huérfanos de la flota. El barrido in-process corre dentro
 // de startReaper() (baileys.server.ts, cada ~30 min) en la instancia que gana el lease
-// de líder (lifecycle.server.ts), haya o no WhatsApp conectado. Esta ruta es la corrida
+// de líder (lifecycle.server.ts), haya o no WhatsApp conectado. Esta ruta es la ejecución
 // semanal programada y la red de seguridad si no hay líder (EB_BACKGROUND=off, dev).
 // Auth: Authorization: Bearer ${CRON_SECRET} (same as purge-files/reap-embed-agents).
 export const loader = async ({ request }: Route.LoaderArgs) => {

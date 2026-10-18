@@ -5,7 +5,7 @@ import { authenticateRequest, requireAuth, requireScope } from "./apiAuth";
 import { isAdminUser } from "./getters";
 import { CRON_JOBS, cronStatus, getCronJob, nextRun, RUNNING_STALE_MS, scheduleWords } from "~/lib/cronJobs";
 
-// Registro de corridas de las rutas /api/cron/*. EasyBits es la fuente de verdad del
+// Registro de ejecuciones de las rutas /api/cron/*. EasyBits es la fuente de verdad del
 // historial sin importar quién dispare (Restate, GitHub Actions o el panel), así que el
 // registro vive aquí y no en el disparador.
 
@@ -60,8 +60,8 @@ export async function isCronPaused(job: string): Promise<boolean> {
 
 /**
  * Envuelve el trabajo de una ruta /api/cron/*. Va DESPUÉS del chequeo de CRON_SECRET (una
- * petición sin credencial no deja corrida). En pausa responde `{ skipped: "paused" }` sin
- * correr. Si no, escribe la corrida al empezar y al terminar; si el trabajo lanza, registra
+ * petición sin credencial no deja ejecución). En pausa responde `{ skipped: "paused" }` sin
+ * correr. Si no, escribe la ejecución al empezar y al terminar; si el trabajo lanza, registra
  * el error y relanza: la respuesta de la ruta queda igual que antes.
  */
 export async function withCronRun<T>(job: string, request: Request, fn: () => Promise<T>) {
@@ -143,19 +143,19 @@ export async function startManualRun(key: string): Promise<{ started: true; job:
   const secret = process.env.CRON_SECRET;
   if (!secret) throw new CronRunError("CRON_SECRET no está configurado", 500);
   if (await isCronPaused(key)) throw new CronRunError("La tarea está en pausa", 409);
-  if (await runningSince(key)) throw new CronRunError("La tarea ya está corriendo", 409);
+  if (await runningSince(key)) throw new CronRunError("La tarea ya está en ejecución", 409);
 
   const { loader } = (await route()) as { loader: CronLoader };
   const request = new Request(`http://localhost/api/cron/${key}`, {
     headers: { Authorization: `Bearer ${secret}`, "X-Cron-Trigger": "manual" },
   });
   // Sin esperar el final: el resultado queda en CronRun (withCronRun) y el panel lo ve al
-  // sondear. Sí se espera a que la corrida quede REGISTRADA: si no, el panel revalida antes
+  // sondear. Sí se espera a que la ejecución quede REGISTRADA: si no, el panel revalida antes
   // de que exista la fila, no ve nada «corriendo» y no arranca el sondeo.
   const registered = new Promise<void>((resolve) => manualStarted.set(key, resolve));
   const done = Promise.resolve()
     .then(() => loader({ request, params: {}, context: {} }))
-    .catch((e) => console.error(`[cron] corrida manual de ${key} falló:`, e instanceof Error ? e.message : e));
+    .catch((e) => console.error(`[cron] ejecución manual de ${key} falló:`, e instanceof Error ? e.message : e));
   await Promise.race([registered, done, new Promise((r) => setTimeout(r, 5000))]);
   manualStarted.delete(key);
   return { started: true, job: key };
@@ -254,7 +254,7 @@ export async function listCronRuns(key: string, take = 50): Promise<CronRunView[
   return runs.map((r) => toView(r, now));
 }
 
-/** Retención del historial de corridas (va dentro de purge-notifications). */
+/** Retención del historial de ejecuciones (va dentro de purge-notifications). */
 export async function purgeOldCronRuns(retentionDays = 90): Promise<{ purged: number }> {
   const cutoff = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1000);
   const res = await db.cronRun.deleteMany({ where: { startedAt: { lt: cutoff } } });

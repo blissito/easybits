@@ -2,7 +2,7 @@ import type { Route } from "./+types/cron-runs";
 import { authenticateRequest, requireAuth } from "~/.server/apiAuth";
 import { listUserCronRuns } from "~/.server/core/userCronOperations";
 
-// GET /api/v2/crons/:id/runs?limit=20&logs=1 — últimas corridas, la más reciente primero (logs = stdout/stderr de `exec`)
+// GET /api/v2/crons/:id/runs?limit=20&logs=1 — últimas ejecuciones, la más reciente primero (logs = stdout/stderr de `exec`)
 export async function loader({ request, params }: Route.LoaderArgs) {
   const ctx = requireAuth(await authenticateRequest(request));
   const q = new URL(request.url).searchParams;

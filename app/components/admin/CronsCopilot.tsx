@@ -7,19 +7,20 @@ const CHAT_URL = "/api/v2/admin/copilot/chat";
 // Las tools de admin-crons en primera persona, como los verbos de casa de Piloto.
 const VERBS: ToolVerbs = {
   list_crons: { one: "Revisé los crons", many: "Revisé los crons %n veces", running: "Revisando los crons…" },
-  get_cron_runs: { one: "Leí el historial de corridas", many: "Leí %n historiales de corridas", running: "Leyendo corridas…" },
+  get_cron_runs: { one: "Leí el historial de ejecuciones", many: "Leí %n historiales de ejecuciones", running: "Leyendo ejecuciones…" },
   run_cron: { one: "Propuse ejecutar un cron", many: "Propuse %n ejecuciones", running: "Preparando la ejecución…" },
   pause_cron: { one: "Propuse pausar un cron", many: "Propuse %n pausas", running: "Preparando la pausa…" },
   list_my_crons: { one: "Revisé tus crons", many: "Revisé tus crons %n veces", running: "Revisando tus crons…" },
   create_cron: { one: "Propuse crear un cron", many: "Propuse %n crons nuevos", running: "Preparando el cron…" },
   update_cron: { one: "Propuse cambiar un cron", many: "Propuse %n cambios", running: "Preparando el cambio…" },
   delete_cron: { one: "Propuse borrar un cron", many: "Propuse borrar %n crons", running: "Preparando el borrado…" },
-  run_my_cron: { one: "Propuse correr tu cron", many: "Propuse %n corridas", running: "Preparando la corrida…" },
+  run_my_cron: { one: "Propuse ejecutar tu cron", many: "Propuse %n ejecuciones", running: "Preparando la ejecución…" },
   // El paso que pone el servidor al contestar una tarjeta (resume de AG-UI).
   confirm_action: { one: "Apliqué tu decisión", many: "Apliqué %n decisiones", running: "Aplicando tu decisión…" },
 };
 // El servidor antepone al texto del turno lo que se ve en pantalla; en el historial no se muestra.
-const stripContext = (text: string) => text.replace(/^\[Contexto del panel — [^\]]*\]\n/, "");
+const stripContext = (text: string) =>
+  text.replace(/^\[Contexto del panel — [^\]]*\]\n/, "").replace(/^\[Estado de los crons ahora[^\]]*\]\n(?:- .*\n)*/, "");
 
 // Lo propio de este piloto, con nombre (ghostykit 0.7: los plugins son la forma de personalizar).
 // Los verbos sirven también para `mcp_easybits_<tool>`: ghostykit prueba cada sufijo del nombre.
@@ -35,7 +36,7 @@ interface Props {
   job: { key: string; name: string } | null;
   onClearJob: () => void;
   onClose: () => void;
-  /** Otro diálogo encima (el de corridas) se queda con el ESC. */
+  /** Otro diálogo encima (el de ejecuciones) se queda con el ESC. */
   escBlocked: boolean;
   /** Fin de turno o decisión: la tabla puede haber cambiado. */
   onChange: () => void;
@@ -124,7 +125,7 @@ export function CronsCopilot({ ask, job, onClearJob, onClose, escBlocked, onChan
           threadId={THREAD_ID}
           skin="easybits"
           agentName="Piloto"
-          welcome="Dime qué necesitas de los crons y yo me encargo: revisar por qué falló uno, correrlo o pausarlo. Antes de ejecutar o pausar te pido permiso."
+          welcome="Dime qué necesitas de los crons y yo me encargo: revisar por qué falló uno, ejecutarlo o pausarlo. Antes de ejecutar o pausar te pido permiso."
           suggestions={["Revisa qué cron falló hoy y dime por qué", "Pausa los crons que estén fallando"]}
           placeholder="Dime qué hago con los crons…"
           context={() => ({ page: "crons", ...(jobRef.current ? { job: jobRef.current.key } : {}) })}
