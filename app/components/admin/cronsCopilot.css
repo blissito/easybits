@@ -11,3 +11,9 @@
   --tw-ring-shadow: 0 0 #0000;
   --tw-ring-offset-shadow: 0 0 #0000;
 }
+
+/* Estado vacío: el saludo y el composer abajo del panel (como /c), sin el hueco del centrado. */
+.piloto.crons-copilot .piloto-empty-inner {
+  margin: auto 0 0;
+  padding-bottom: 0;
+}

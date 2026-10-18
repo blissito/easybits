@@ -86,8 +86,9 @@ function runTitle(r: CronRunView) {
   return `${stamp(r.startedAt)} · ${duration(r.durationMs)} · ${r.status ?? "—"} ${state} · ${TRIGGER_LABEL[r.trigger] ?? r.trigger}`;
 }
 
-function RunSquares({ runs }: { runs: CronRunView[] }) {
-  const empty = Math.max(0, 20 - runs.length);
+function RunSquares({ runs: all, max = 20 }: { runs: CronRunView[]; max?: number }) {
+  const runs = all.slice(-max);
+  const empty = Math.max(0, max - runs.length);
   return (
     <div className="flex gap-[3px]" aria-label={`Últimas ${runs.length} corridas`}>
       {Array.from({ length: empty }).map((_, i) => (
@@ -187,25 +188,100 @@ function RunsDrawer({ job, running, onClose }: { job: CronOverview; running: boo
 }
 
 // ── Fila ─────────────────────────────────────────────────────────────────────────
-function JobRow({ job, now, onOpen, onAsk }: { job: CronOverview; now: number; onOpen: () => void; onAsk: () => void }) {
+function JobRow({
+  job,
+  now,
+  compact,
+  onOpen,
+  onAsk,
+}: {
+  job: CronOverview;
+  now: number;
+  /** Tabla angosta (el copiloto abierto o una pantalla chica): tres columnas, sin ruta ni Pausar. */
+  compact: boolean;
+  onOpen: () => void;
+  onAsk: () => void;
+}) {
   const fetcher = useFetcher<{ ok: boolean; error?: string }>();
   const busy = fetcher.state !== "idle";
   const pending = fetcher.formData?.get("intent");
   const st = STATUS[job.status];
   const last = job.lastRun;
   const stop = (e: React.SyntheticEvent) => e.stopPropagation();
+  const stateLabel = job.running ? "corriendo" : st.label;
+  const dot = <span className={`w-3 h-3 shrink-0 rounded-full border-2 border-black ${st.dot}`} />;
+
+  const actions = (
+    <td className="p-3 text-right whitespace-nowrap" onClick={stop} onKeyDown={stop}>
+      <fetcher.Form method="post" className="inline-flex gap-2">
+        <input type="hidden" name="job" value={job.key} />
+        {job.status === "fallo" && (
+          <BrutalButton type="button" size="chip" mode="brand" onClick={onAsk}>
+            Pídeselo
+          </BrutalButton>
+        )}
+        <BrutalButton
+          type="submit"
+          size="chip"
+          mode="ghost"
+          name="intent"
+          value="run"
+          isDisabled={busy || job.running || job.paused}
+        >
+          {pending === "run" ? "…" : compact ? "Ejecutar" : "Ejecutar ahora"}
+        </BrutalButton>
+        {!compact && (
+          <BrutalButton
+            type="submit"
+            size="chip"
+            mode={job.paused ? "brand" : "ghost"}
+            name="intent"
+            value={job.paused ? "resume" : "pause"}
+            isDisabled={busy}
+          >
+            {job.paused ? "Reanudar" : "Pausar"}
+          </BrutalButton>
+        )}
+      </fetcher.Form>
+      {fetcher.data?.error && <p className="mt-1 text-xs font-bold text-red-600 whitespace-normal">{fetcher.data.error}</p>}
+    </td>
+  );
+
+  const rowProps = {
+    className: `border-t border-gray-200 hover:bg-gray-50 cursor-pointer ${focusRing}`,
+    onClick: onOpen,
+    onKeyDown: (e: React.KeyboardEvent) => e.key === "Enter" && onOpen(),
+    tabIndex: 0,
+  };
+
+  if (compact) {
+    return (
+      <tr {...rowProps}>
+        <td className="p-3">
+          <p className="flex items-center gap-2 font-bold leading-tight" title={stateLabel}>
+            {dot}
+            <span>{job.name}</span>
+            <span className="sr-only">· {stateLabel}</span>
+          </p>
+          <p className="mt-1 pl-5 text-xs text-gray-500" suppressHydrationWarning>
+            {job.schedule} · última {last ? relative(last.startedAt, now) : "—"} · próxima{" "}
+            {job.paused ? "en pausa" : relative(job.nextRunAt, now)}
+          </p>
+        </td>
+        <td className="p-3">
+          <RunSquares runs={job.recent} max={10} />
+        </td>
+        {actions}
+      </tr>
+    );
+  }
 
   return (
-    <tr
-      className={`border-t border-gray-200 hover:bg-gray-50 cursor-pointer ${focusRing}`}
-      onClick={onOpen}
-      onKeyDown={(e) => e.key === "Enter" && onOpen()}
-      tabIndex={0}
-    >
+    <tr {...rowProps}>
       <td className="p-3 whitespace-nowrap">
         <span className="inline-flex items-center gap-2">
-          <span className={`w-3 h-3 rounded-full border-2 border-black ${st.dot}`} />
-          <span className="text-xs font-bold">{job.running ? "corriendo" : st.label}</span>
+          {dot}
+          <span className="text-xs font-bold">{stateLabel}</span>
         </span>
       </td>
       <td className="p-3">
@@ -229,39 +305,40 @@ function JobRow({ job, now, onOpen, onAsk }: { job: CronOverview; now: number; o
       <td className="p-3 text-sm whitespace-nowrap" suppressHydrationWarning>
         {job.paused ? "—" : relative(job.nextRunAt, now)}
       </td>
-      <td className="p-3 text-right whitespace-nowrap" onClick={stop} onKeyDown={stop}>
-        <fetcher.Form method="post" className="inline-flex gap-2">
-          <input type="hidden" name="job" value={job.key} />
-          {job.status === "fallo" && (
-            <BrutalButton type="button" size="chip" mode="brand" onClick={onAsk}>
-              Pídeselo
-            </BrutalButton>
-          )}
-          <BrutalButton
-            type="submit"
-            size="chip"
-            mode="ghost"
-            name="intent"
-            value="run"
-            isDisabled={busy || job.running || job.paused}
-          >
-            {pending === "run" ? "…" : "Ejecutar ahora"}
-          </BrutalButton>
-          <BrutalButton
-            type="submit"
-            size="chip"
-            mode={job.paused ? "brand" : "ghost"}
-            name="intent"
-            value={job.paused ? "resume" : "pause"}
-            isDisabled={busy}
-          >
-            {job.paused ? "Reanudar" : "Pausar"}
-          </BrutalButton>
-        </fetcher.Form>
-        {fetcher.data?.error && <p className="mt-1 text-xs font-bold text-red-600">{fetcher.data.error}</p>}
-      </td>
+      {actions}
     </tr>
   );
+}
+
+/**
+ * ¿Cabe la tabla completa? Se mide de verdad: si la tabla completa no cabe en su contenedor se
+ * pasa a la compacta, y vuelve a la completa cuando el contenedor alcanza el ancho que necesitaba.
+ * Nunca hay scroll horizontal.
+ */
+function useCompactTable() {
+  const box = useRef<HTMLDivElement>(null);
+  const table = useRef<HTMLTableElement>(null);
+  const [compact, setCompact] = useState(false);
+  const needed = useRef(0);
+  useEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    const check = () => {
+      const avail = el.clientWidth;
+      const t = table.current;
+      if (!compact && t && t.scrollWidth > avail + 1) {
+        needed.current = t.scrollWidth;
+        setCompact(true);
+      } else if (compact && needed.current && avail >= needed.current) {
+        setCompact(false);
+      }
+    };
+    check();
+    const ro = new ResizeObserver(check);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [compact]);
+  return { box, table, compact };
 }
 
 export default function CronsAdmin() {
@@ -288,6 +365,7 @@ export default function CronsAdmin() {
   }, [anyRunning, revalidator]);
 
   const open = jobs.find((j) => j.key === openKey) ?? null;
+  const { box, table, compact } = useCompactTable();
 
   // Copiloto: se monta al abrirlo por primera vez y queda vivo (el hilo no se pierde al cerrar).
   const [copilotOpen, setCopilotOpen] = useState(false);
@@ -311,8 +389,8 @@ export default function CronsAdmin() {
   };
 
   return (
-    <div className="max-w-6xl">
-      <div className="min-w-0">
+    <div className="flex items-start gap-6">
+      <div className="min-w-0 max-w-6xl flex-1 pb-10">
         <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
           <div>
             <h2 className="text-2xl font-black mb-1">Crons</h2>
@@ -329,11 +407,14 @@ export default function CronsAdmin() {
             )}
           </div>
         </div>
-        <div className="border-2 border-black rounded-xl overflow-x-auto shadow-[3px_3px_0_#000]">
-          <table className="w-full text-sm">
+        <div ref={box} className="border-2 border-black rounded-xl overflow-hidden shadow-[3px_3px_0_#000]">
+          <table ref={table} className="w-full text-sm">
             <thead className="bg-gray-100">
               <tr>
-                {["Estado", "Tarea", "Horario", "Últimas corridas", "Última", "Próxima", ""].map((h, i) => (
+                {(compact
+                  ? ["Tarea", "Últimas corridas", ""]
+                  : ["Estado", "Tarea", "Horario", "Últimas corridas", "Última", "Próxima", ""]
+                ).map((h, i) => (
                   <th key={i} className="p-3 text-left font-bold text-xs uppercase">
                     {h}
                   </th>
@@ -342,7 +423,7 @@ export default function CronsAdmin() {
             </thead>
             <tbody>
               {jobs.map((job) => (
-                <JobRow key={job.key} job={job} now={now} onOpen={() => setOpenKey(job.key)} onAsk={() => askAbout(job)} />
+                <JobRow key={job.key} job={job} now={now} compact={compact} onOpen={() => setOpenKey(job.key)} onAsk={() => askAbout(job)} />
               ))}
             </tbody>
           </table>
@@ -350,7 +431,7 @@ export default function CronsAdmin() {
         {open && <RunsDrawer job={open} running={open.running} onClose={() => setOpenKey(null)} />}
       </div>
       {copilotMounted && (
-        <div hidden={!copilotOpen}>
+        <div className={copilotOpen ? "contents" : "hidden"}>
           <Suspense fallback={null}>
             <CronsCopilot
               ask={ask}

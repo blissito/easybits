@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { createPostStreamTransport, Piloto, type PermissionHandler, type ToolVerbs } from "ghostykit";
 import "ghostykit/styles.css";
 import "./cronsCopilot.css";
@@ -48,7 +48,29 @@ export function CronsCopilot({ ask, job, onClearJob, onClose, escBlocked, onChan
   const transport = useMemo(() => createPostStreamTransport({ url: CHAT_URL }), []);
   const jobRef = useRef(job);
   jobRef.current = job;
+  const aside = useRef<HTMLElement>(null);
+  const [height, setHeight] = useState<number | null>(null);
 
+  // Columna pegajosa: llena de donde empieza hasta abajo de la ventana (el composer siempre a la vista).
+  useEffect(() => {
+    let frame = 0;
+    const measure = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(() => {
+        const el = aside.current;
+        if (!el) return;
+        setHeight(Math.max(320, window.innerHeight - Math.max(el.getBoundingClientRect().top, 0) - 16));
+      });
+    };
+    measure();
+    window.addEventListener("scroll", measure, { passive: true });
+    window.addEventListener("resize", measure);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.removeEventListener("scroll", measure);
+      window.removeEventListener("resize", measure);
+    };
+  }, []);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -67,8 +89,10 @@ export function CronsCopilot({ ask, job, onClearJob, onClose, escBlocked, onChan
 
   return (
     <aside
+      ref={aside}
       aria-label="Copiloto de crons"
-      className="fixed inset-y-0 right-0 z-40 flex w-full flex-col overflow-hidden border-l-2 border-black bg-white shadow-[-4px_0_0_#000] sm:w-[420px]"
+      style={height ? ({ "--copilot-h": `${height}px` } as CSSProperties) : undefined}
+      className="fixed inset-0 z-40 flex flex-col overflow-hidden bg-white lg:sticky lg:inset-auto lg:top-4 lg:z-auto lg:h-[var(--copilot-h,calc(100vh-2rem))] lg:w-[400px] lg:shrink-0 lg:rounded-xl lg:border-2 lg:border-black lg:shadow-[3px_3px_0_#000]"
     >
       <header className="flex items-center gap-2 border-b-2 border-black px-4 py-3">
         <h3 className="font-black">Copiloto</h3>
@@ -102,6 +126,7 @@ export function CronsCopilot({ ask, job, onClearJob, onClose, escBlocked, onChan
           formatUserText={stripContext}
           onPermission={onPermission}
           onTurnDone={onChange}
+          className="crons-copilot"
           features={{ attachments: false, models: false }}
           style={{ height: "100%" }}
         />
