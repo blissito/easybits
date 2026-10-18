@@ -313,11 +313,7 @@ export function BittorChat({
                 }`}
               >
                 {message.isStreaming && message.role === 'assistant' ? (
-                  <div className="flex items-center gap-1">
-                    <span className="typing-dot" style={{ '--delay': '0s' } as React.CSSProperties}></span>
-                    <span className="typing-dot" style={{ '--delay': '0.2s' } as React.CSSProperties}></span>
-                    <span className="typing-dot" style={{ '--delay': '0.4s' } as React.CSSProperties}></span>
-                  </div>
+                  <Waiting />
                 ) : (
                   splitCodeBlocks(message.content)
                 )}
@@ -415,3 +411,22 @@ if (typeof document !== 'undefined') {
 }
 
 export default BittorChat;
+
+// Puntitos mientras Bittor piensa. Si su caja estaba dormida o hay que arrancarla, la
+// respuesta tarda más: en vez de silencio, se dice qué está pasando.
+function Waiting() {
+  const [secs, setSecs] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setSecs((s) => s + 1), 1000);
+    return () => clearInterval(t);
+  }, []);
+  const note = secs >= 20 ? "Ya casi, estoy terminando de arrancar…" : secs >= 8 ? "Despertando…" : null;
+  return (
+    <div className="flex items-center gap-1">
+      <span className="typing-dot" style={{ '--delay': '0s' } as React.CSSProperties}></span>
+      <span className="typing-dot" style={{ '--delay': '0.2s' } as React.CSSProperties}></span>
+      <span className="typing-dot" style={{ '--delay': '0.4s' } as React.CSSProperties}></span>
+      {note && <span className="ml-2 text-xs text-gray-500">{note}</span>}
+    </div>
+  );
+}

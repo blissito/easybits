@@ -1517,6 +1517,16 @@ async function buildCapacitySnapshot(
  *
  * Devuelve true si liberó algo.
  */
+// Agentes de cara al público (Bittor) marcan `persona.env.FLEET_PINNED=1`: su caja dormida
+// no se presta ni se destruye para hacerle lugar a otro agente de la cuenta, o el siguiente
+// visitante paga un arranque en frío.
+async function pinnedFleetAgentIds(ownerId: string): Promise<string[]> {
+  const rows = await db.fleetAgent
+    .findMany({ where: { ownerId }, select: { id: true, persona: true } })
+    .catch(() => [] as { id: string; persona: unknown }[]);
+  return rows.filter((a) => (a.persona as Persona | null)?.env?.FLEET_PINNED === "1").map((a) => a.id);
+}
+
 async function reclaimAccountCapacity(
   ctx: AuthContext,
   requestingFleetAgentId: string
@@ -1528,10 +1538,14 @@ async function reclaimAccountCapacity(
 
   // Candidatos: cajas de servicio (las más baratas — no tienen conversación que
   // respaldar) y workers dormidos de CUALQUIER fleet del dueño.
-  const [serviceBoxes, sleepingWorkers] = await Promise.all([
+  const [serviceBoxes, allSleeping, pinned] = await Promise.all([
     db.serviceBox.findMany({ where: { ownerId } }).catch(() => []),
     db.agent.findMany({ where: { ownerId, status: "suspended", id: { notIn: busy } } }),
+    pinnedFleetAgentIds(ownerId),
   ]);
+  const sleepingWorkers = allSleeping.filter(
+    (w) => !w.fleetAgentId || w.fleetAgentId === requestingFleetAgentId || !pinned.includes(w.fleetAgentId)
+  );
 
   const candidates: ReclaimCandidate[] = [
     ...serviceBoxes.map((b) => ({
@@ -1844,12 +1858,13 @@ const pendingAdoptSeed = new Set<string>();
  */
 async function adoptSiblingVm(ctx: AuthContext, fleetAgent: PoolRow): Promise<AgentRow | null> {
   if ((process.env.FLEET_CROSS_RECLAIM || "").toLowerCase() === "off") return null;
+  const pinned = await pinnedFleetAgentIds(ctx.user.id);
   const victim = await db.agent.findFirst({
     where: {
       ownerId: ctx.user.id,
       status: "suspended",
       template: fleetAgent.workerTemplate,
-      fleetAgentId: { not: fleetAgent.id },
+      fleetAgentId: { notIn: [fleetAgent.id, ...pinned] },
       id: { notIn: [...busyVms] },
     },
     orderBy: { lastMessageAt: "asc" },

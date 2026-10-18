@@ -29,7 +29,11 @@ const matchesStatus = (a: Agent, w: any) =>
 const matchesAgent = (a: Agent, w: any) =>
   matchesStatus(a, w) &&
   (w.fleetAgentId === undefined ||
-    (typeof w.fleetAgentId === "string" ? a.fleetAgentId === w.fleetAgentId : a.fleetAgentId !== w.fleetAgentId.not)) &&
+    (typeof w.fleetAgentId === "string"
+      ? a.fleetAgentId === w.fleetAgentId
+      : w.fleetAgentId.notIn
+        ? !w.fleetAgentId.notIn.includes(a.fleetAgentId)
+        : a.fleetAgentId !== w.fleetAgentId.not)) &&
   (w.ownerId === undefined || a.ownerId === w.ownerId) &&
   (w.template === undefined || a.template === w.template) &&
   (!w.id?.notIn || !w.id.notIn.includes(a.id));
@@ -87,6 +91,7 @@ const db = {
   fleetAgentMessage: { findFirst: async () => null },
   fleetAgent: {
     findUnique: async ({ where }: any) => fleetAgents[where.id] ?? null,
+    findMany: async () => Object.values(fleetAgents),
     update: async ({ where, data }: any) => {
       Object.assign(fleetAgents[where.id], data);
       return fleetAgents[where.id];
@@ -418,6 +423,16 @@ describe("reserveVm — techo de cuenta: adoptar caja dormida hermana", () => {
     expect(refreshAgentEnv).toHaveBeenCalledTimes(1);
     expect(execCommand).toHaveBeenCalledWith(expect.anything(), "sb_nap", expect.objectContaining({ command: expect.stringContaining("rm -rf /data/workspaces") }));
     expect(writeFile).toHaveBeenCalledWith(expect.anything(), "sb_nap", expect.objectContaining({ path: "/data/workspace/faq.md" }));
+  });
+
+  it("agente fijado (FLEET_PINNED, Bittor): su caja dormida no se adopta ni se destruye", async () => {
+    fleetAgents.fa2 = { ...fleetAgents.fa2, persona: { env: { FLEET_PINNED: "1" } } };
+    agents.push({ id: "nap", sandboxId: "sb_nap", ownerId: "u1", template: "claude-worker", embedToken: "t", fleetAgentId: "fa2", status: "suspended", lastMessageAt: new Date(0) });
+    await expect(pickOrSpawn(CTX, fleetAgents.fa1, "web-1")).rejects.toThrow();
+    const nap = agents.find((a) => a.id === "nap")!;
+    expect(nap.fleetAgentId).toBe("fa2");
+    expect(nap.status).toBe("suspended");
+    expect(createAgent).not.toHaveBeenCalled();
   });
 
   it("distinto template: no adopta (cae al camino de destruir + spawn)", async () => {

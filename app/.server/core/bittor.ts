@@ -48,6 +48,8 @@ const PERSONA_ENV = {
   ASSISTANT_NAME: BITTOR_NAME,
   SYSTEM_PROMPT,
   GS_TOOLS_PROFILE: "mcp-only",
+  // Su caja dormida no se la presta el desalojo entre agentes a otro de la cuenta.
+  FLEET_PINNED: "1",
 };
 
 /** Tabla de precios fresca en cada turno: sale de PLANS, así nunca se queda vieja en el prompt. */
