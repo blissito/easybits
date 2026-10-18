@@ -24,7 +24,7 @@ const READ_MAX = 200;
  * Headers que nunca se guardan: credenciales del que llama y lo que agregan nuestros proxies
  * (Caddy, el router), que lleva la IP de quien manda.
  */
-const DROP_HEADERS = /^(authorization|cookie|set-cookie|proxy-authorization|x-api-key|x-auth-token|x-forwarded-.*|forwarded|x-real-ip|x-real-client-ip|x-client-ip|true-client-ip|fly-.*|cf-.*|via|host|x-easybits-.*)$/i;
+const DROP_HEADERS = /^(authorization|cookie|set-cookie|proxy-authorization|x-api-key|x-auth-token|x-forwarded-.*|forwarded|x-real-ip|x-real-client-ip|x-client-ip|true-client-ip|fly-.*|cf-.*|via|host)$/i;
 
 const bad = (error: string, status = 400) => Response.json({ error }, { status });
 

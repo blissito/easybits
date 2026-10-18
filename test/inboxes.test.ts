@@ -84,8 +84,9 @@ describe("buzón", () => {
     await expect(add("x".repeat(256 * 1024 + 1))).rejects.toMatchObject({ status: 413 });
   });
   it("no guarda credenciales del que llama", () => {
-    const h = keepHeaders(new Headers({ Authorization: "Bearer s", Cookie: "a=1", "X-Api-Key": "k", "Stripe-Signature": "t=1", "Content-Type": "application/json", "Fly-Client-IP": "1.2.3.4", "X-Real-Client-IP": "1.2.3.4", Via: "2.0 Caddy", Host: "www.easybits.cloud" }));
-    expect(h).toEqual({ "stripe-signature": "t=1", "content-type": "application/json" });
+    const h = keepHeaders(new Headers({ Authorization: "Bearer s", Cookie: "a=1", "X-Api-Key": "k", "Stripe-Signature": "t=1", "Content-Type": "application/json", "Fly-Client-IP": "1.2.3.4", "X-Real-Client-IP": "1.2.3.4", Via: "2.0 Caddy", Host: "www.easybits.cloud", "X-Easybits-Signature": "sha256=abc" }));
+    // La firma de un webhook de EasyBits sí se guarda: es lo que permite verificarlo.
+    expect(h).toEqual({ "stripe-signature": "t=1", "content-type": "application/json", "x-easybits-signature": "sha256=abc" });
   });
   it("un cuerpo que no es JSON viaja como texto", () => {
     const v = toEventView({ seq: 1, source: "http", method: "POST", contentType: "text/plain", headers: {}, body: "hola", receivedAt: new Date() } as any);
