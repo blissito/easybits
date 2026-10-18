@@ -13,12 +13,12 @@
 //
 // Uso:
 //   EASYBITS_API_KEY=ek_... node scripts/test-mcp-desktop-link.mjs
-//   Opcionales: MCP_BASE (default https://easybits.fly.dev), TEMPLATE
+//   Opcionales: MCP_BASE (default https://www.easybits.cloud), TEMPLATE
 //   (default computer-ghosty-gemini), GOOGLE_GENERATIVE_AI_API_KEY (la caja
 //   levanta el escritorio aun SIN key — el cerebro Gemini es irrelevante para
 //   este test; el escritorio es independiente del agente).
 
-const MCP_BASE = process.env.MCP_BASE || "https://easybits.fly.dev";
+const MCP_BASE = process.env.MCP_BASE || "https://www.easybits.cloud";
 // agent_create / agent_list / sandbox_destroy viven en el grupo "sandbox" (no en
 // el "core" por default) → hay que pedirlo con ?tools=sandbox, si no el MCP
 // responde "Tool agent_create disabled".

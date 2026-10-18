@@ -24,7 +24,7 @@ const MAILMASK_NOTICE: Record<string, string> = {
 };
 import { listWebsites } from "~/.server/core/operations";
 import type { AuthContext } from "~/.server/apiAuth";
-import { FLY_EDGE_IPS } from "~/lib/fly_certs/edge_ips";
+import { APP_HOST_DNS } from "~/lib/appHostDns";
 import type { Route } from "./+types/domains";
 
 export const meta = () => [
@@ -55,7 +55,23 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
     { limit: 200 }
   );
   const mailmask = await mailmaskConnection(user.id).catch(() => ({ connected: false as const }));
-  return { domains, inRoute53, mailmask, websites: websites.map((w) => ({ id: w.id, name: w.name, slug: w.slug })) };
+  // Estado real de un dominio verificado: ¿su DNS ya llega al fierro? (el comodín con una etiqueta
+  // cualquiera; la raíz sólo si sirve un sitio). Con DNS correcto el Caddy emite el cert al primer acceso.
+  const { pointsToAppHost } = await import("~/.server/appHostDomains");
+  const dnsOk = Object.fromEntries(
+    await Promise.all(
+      domains
+        .filter((d) => d.verified)
+        .map(async (d) => {
+          const [wild, apex] = await Promise.all([
+            pointsToAppHost(`easybits-probe.${d.domain}`),
+            d.apexWebsiteId ? pointsToAppHost(d.domain) : Promise.resolve(true),
+          ]);
+          return [d.id, { wild, apex }] as const;
+        })
+    )
+  );
+  return { domains, inRoute53, dnsOk, mailmask, websites: websites.map((w) => ({ id: w.id, name: w.name, slug: w.slug })) };
 };
 
 export const action = async ({ request }: Route.ActionArgs) => {
@@ -115,7 +131,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
 };
 
 export default function DomainsPage() {
-  const { domains, websites, inRoute53, mailmask } = useLoaderData<typeof loader>();
+  const { domains, websites, inRoute53, dnsOk, mailmask } = useLoaderData<typeof loader>();
   const [params] = useSearchParams();
   const urlNotice = MAILMASK_NOTICE[params.get("mailmask") ?? ""] ?? null;
   const fetcher = useFetcher();
@@ -196,6 +212,17 @@ export default function DomainsPage() {
                   >
                     {d.verified ? "Verificado" : "Pendiente"}
                   </span>
+                  {d.verified && dnsOk[d.id] && (
+                    <span
+                      className={`ml-2 text-xs font-bold px-2 py-0.5 rounded-full ${
+                        dnsOk[d.id].wild && dnsOk[d.id].apex
+                          ? "bg-green-100 text-green-700"
+                          : "bg-red-100 text-red-700"
+                      }`}
+                    >
+                      {dnsOk[d.id].wild && dnsOk[d.id].apex ? "DNS listo" : "DNS no apunta a EasyBits"}
+                    </span>
+                  )}
                 </div>
                 <div className="flex gap-2">
                   {!d.verified && (
@@ -285,28 +312,28 @@ export default function DomainsPage() {
                       <span className="font-mono text-xs bg-gray-200 px-2 py-0.5 rounded">CNAME</span>
                       <span className="font-mono text-xs">*.{d.domain}</span>
                       <span className="text-gray-400 mx-1">&rarr;</span>
-                      <span className="font-mono text-xs">{FLY_EDGE_IPS.cnameTarget}</span>
+                      <span className="font-mono text-xs">{APP_HOST_DNS.cnameTarget}</span>
                     </div>
                     <p className="text-xs text-gray-500 pt-1">Solo si vas a usar el dominio raíz:</p>
                     <div className="flex gap-2">
                       <span className="font-mono text-xs bg-gray-200 px-2 py-0.5 rounded">A</span>
                       <span className="font-mono text-xs">{d.domain}</span>
                       <span className="text-gray-400 mx-1">&rarr;</span>
-                      <span className="font-mono text-xs">{FLY_EDGE_IPS.v4}</span>
+                      <span className="font-mono text-xs">{APP_HOST_DNS.v4}</span>
                     </div>
-                    {FLY_EDGE_IPS.v6 && (
-                      <div className="flex gap-2">
-                        <span className="font-mono text-xs bg-gray-200 px-2 py-0.5 rounded">AAAA</span>
-                        <span className="font-mono text-xs">{d.domain}</span>
-                        <span className="text-gray-400 mx-1">&rarr;</span>
-                        <span className="font-mono text-xs">{FLY_EDGE_IPS.v6}</span>
-                      </div>
-                    )}
                   </div>
                   <p className="text-xs text-gray-500 mt-2">
                     Despues de agregar los registros, haz clic en "Verificar". La propagacion DNS puede tardar hasta 48h.
                   </p>
                 </div>
+              )}
+
+              {d.verified && dnsOk[d.id] && !(dnsOk[d.id].wild && dnsOk[d.id].apex) && (
+                <p className="mb-2 text-xs text-red-700">
+                  {!dnsOk[d.id].wild && <>Falta CNAME *.{d.domain} &rarr; {APP_HOST_DNS.cnameTarget}. </>}
+                  {!dnsOk[d.id].apex && <>Falta A {d.domain} &rarr; {APP_HOST_DNS.v4}. </>}
+                  Sin eso tus sitios no cargan en este dominio.
+                </p>
               )}
 
               {/* Sitio en el dominio raíz */}
@@ -348,7 +375,7 @@ export default function DomainsPage() {
               )}
               {d.verified && !d.apexWebsite && (
                 <p className="text-xs text-gray-500 mt-1">
-                  Para el dominio raíz necesitas el registro A hacia {FLY_EDGE_IPS.v4} y CNAME www &rarr; {FLY_EDGE_IPS.cnameTarget}.
+                  Para el dominio raíz necesitas el registro A hacia {APP_HOST_DNS.v4} y CNAME www &rarr; {APP_HOST_DNS.cnameTarget}.
                 </p>
               )}
 

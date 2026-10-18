@@ -36,7 +36,6 @@ vi.mock("~/.server/storage", () => ({
 vi.mock("~/.server/logger", () => ({ default: { warn: vi.fn(), error: vi.fn(), info: vi.fn() } }));
 vi.mock("~/.server/webhooks", () => ({ dispatchWebhooks: vi.fn() }));
 vi.mock("~/.server/core/notificationOperations", () => ({ notifyFilesPurged: vi.fn() }));
-vi.mock("~/lib/fly_certs/certs_getters", () => ({ createHost: vi.fn(), removeHost: vi.fn() }));
 
 import { listFiles, deleteFile, bulkDeleteFiles } from "~/.server/core/operations";
 

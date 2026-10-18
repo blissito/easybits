@@ -14,7 +14,7 @@
 import { db } from "../db";
 import { encryptSecret, decryptSecret } from "../crypto";
 import { base64UrlSha256, randomToken } from "../oauth";
-import { FLY_EDGE_IPS } from "~/lib/fly_certs/edge_ips";
+import { APP_HOST_DNS } from "~/lib/appHostDns";
 
 export const MAILMASK_ORIGIN = (process.env.MAILMASK_ORIGIN || "https://www.mailmask.studio").replace(/\/$/, "");
 const APP_URL = (process.env.APP_URL || "https://www.easybits.cloud").replace(/\/$/, "");
@@ -235,12 +235,12 @@ export function easybitsDnsRecords(domain: string, txtToken: string, apex: boole
   const d = domain.toLowerCase();
   const out: RRSet[] = [
     { name: `_easybits-verify.${d}`, type: "TXT", ttl: 300, values: [`"${txtToken}"`] },
-    { name: `*.${d}`, type: "CNAME", ttl: 300, values: [FLY_EDGE_IPS.cnameTarget] },
+    { name: `*.${d}`, type: "CNAME", ttl: 300, values: [APP_HOST_DNS.cnameTarget] },
   ];
   if (apex) {
     out.push(
-      { name: d, type: "A", ttl: 300, values: [FLY_EDGE_IPS.v4] },
-      { name: `www.${d}`, type: "CNAME", ttl: 300, values: [FLY_EDGE_IPS.cnameTarget] }
+      { name: d, type: "A", ttl: 300, values: [APP_HOST_DNS.v4] },
+      { name: `www.${d}`, type: "CNAME", ttl: 300, values: [APP_HOST_DNS.cnameTarget] }
     );
   }
   return out;

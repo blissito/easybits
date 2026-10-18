@@ -49,21 +49,8 @@ export const action = async ({ request }: Route.ActionArgs) => {
     if (!website || website.ownerId !== user.id) {
       return data({ error: "No encontrado" }, { status: 404 });
     }
+    // `<slug>.easybits.cloud` lo cubre el cert comodín del fierro: basta la bandera.
     const enable = intent === "enable-subdomain";
-    const hostname = `${website.slug}.easybits.cloud`;
-    try {
-      if (process.env.FLY_API_TOKEN) {
-        if (enable) {
-          const { createHost } = await import("~/lib/fly_certs/certs_getters");
-          await createHost(hostname);
-        } else {
-          const { removeHost } = await import("~/lib/fly_certs/certs_getters");
-          await removeHost(hostname);
-        }
-      }
-    } catch (err) {
-      console.error(`[websites] cert toggle failed for ${hostname}:`, err);
-    }
     await db.website.update({
       where: { id: websiteId },
       data: { subdomainEnabled: enable },

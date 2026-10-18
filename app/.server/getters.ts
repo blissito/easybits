@@ -4,9 +4,7 @@ import { commitSession, getSession } from "./sessions";
 import type { Asset, User } from "@prisma/client";
 import jwt from "jsonwebtoken";
 import { randomUUID } from "crypto";
-import { createHost } from "~/lib/fly_certs/certs_getters";
 import { sendWelcomeEmail } from "./emails/sendWelcome";
-import { getServerDomain } from "./urlUtils";
 import { canImpersonate } from "./delegation";
 
 const throwRedirect = (request: Request) => {
@@ -132,9 +130,6 @@ export const createUserSession = async (
   }
 
   session.set("email", userData.email);
-  // create certificate - use server domain
-  const domain = getServerDomain();
-  await createHost(`${host}.${domain}`); // @revisit
   // @todo revisit!
   await cb?.(user);
   throw redirect(userData.redirectURL || "/dash", {
@@ -167,7 +162,6 @@ export const validateUserToken = (token: string) => {
 export const createUserKeys = async (user: Partial<User>) => {
   const publicKey = randomUUID();
   const host = user.email?.split("@")[0] as string;
-  await createHost(host);
   return await db.user.update({
     where: { email: user.email },
     data: {

@@ -7,7 +7,6 @@ import { createWebsite } from "./operations";
 import { buildRevealHtml, type Slide, getPalette } from "~/lib/buildRevealHtml";
 import { buildPresentationHtml } from "~/lib/presentation/buildHtml";
 import type { Section3 } from "~/lib/landing3/types";
-import { createHost, removeHost } from "~/lib/fly_certs/certs_getters";
 import { dispatchWebhooks } from "../webhooks";
 
 function throwJson(error: string, status: number): never {
@@ -217,20 +216,9 @@ export async function deployPresentation(ctx: AuthContext, id: string) {
     data: { status: "PUBLISHED", websiteId },
   });
 
-  // SSL cert only if the underlying Website opted into subdomain masking.
-  // Otherwise, served via path-based route (no cert needed).
+  // `<slug>.easybits.cloud` lo cubre el cert comodín del fierro: no hay alta por sitio.
   const website = await db.website.findUnique({ where: { id: websiteId } });
   const proto = process.env.NODE_ENV === "production" ? "https" : "http";
-  if (website?.subdomainEnabled) {
-    const hostname = `${slug}.easybits.cloud`;
-    try {
-      if (process.env.FLY_API_TOKEN) {
-        await createHost(hostname);
-      }
-    } catch (err) {
-      console.error(`[deployPresentation] cert creation failed for ${hostname}:`, err);
-    }
-  }
   const url = website?.subdomainEnabled
     ? `${proto}://${slug}.easybits.cloud`
     : `${proto}://${process.env.NODE_ENV === "production" ? "www.easybits.cloud" : "localhost:3000"}/s/${slug}/`;
@@ -353,13 +341,6 @@ export async function unpublishPresentation(ctx: AuthContext, id: string) {
     where: { id: website.id },
     data: { status: "DELETED", deletedAt: new Date() },
   });
-
-  // Remove SSL cert
-  try {
-    await removeHost(`${website.slug}.easybits.cloud`);
-  } catch {
-    // cert may already be gone
-  }
 
   // Reset presentation to draft
   await db.presentation.update({

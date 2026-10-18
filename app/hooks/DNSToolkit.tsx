@@ -2,9 +2,6 @@ import type { User } from "@prisma/client";
 
 type DnsConfig = {
   clientStatus?: string;
-  dnsValidationTarget?: string;
-  dnsValidationHostname?: string;
-  dnsValidationInstructions?: string;
 };
 import {
   useEffect,
@@ -22,8 +19,7 @@ import { cn } from "~/utils/cn";
 import { IoWarningOutline } from "react-icons/io5";
 import { FaArrowLeft, FaCheck } from "react-icons/fa";
 import { DNSInput } from "./dns_toolkit/DNSInput";
-
-const statuses = ["Awaiting configuration", "Awaiting certificates"];
+import { APP_HOST_DNS } from "~/lib/appHostDns";
 
 type ChangeType = ChangeEvent<HTMLInputElement | HTMLTextAreaElement>;
 
@@ -281,66 +277,38 @@ const IPsInfo = ({ user }: { user: User }) => {
         </div>
 
         <div className="col-span-1 w-max items-center flex">
-          <p className="truncate"> 54.38.94.14</p>
-          <CopyButton className="ml-1" text={"54.38.94.14"} />
+          <p className="truncate"> {APP_HOST_DNS.v4}</p>
+          <CopyButton className="ml-1" text={APP_HOST_DNS.v4} />
         </div>
       </section>
     </article>
   );
 };
 
+// Estado del dominio (`User.dnsConfig`, lo escribe /api/v1/user): «Ready» cuando su DNS ya
+// llega a EasyBits. El cert lo emite el servidor solo en el primer acceso; no hay paso ACME.
 const DNSConfig = ({ user }: { user: User }) => {
-  const dnsConfig = user.dnsConfig as DnsConfig | null;
+  const ready = (user.dnsConfig as DnsConfig | null)?.clientStatus === "Ready";
   return (
-    <>
-      {/* Header */}
-      <article className="w-full ">
-        <h2 className="mb-2">
-          Agrega el siguiente registro CNAME a tu proveedor DNS para verificar
-          que eres el propietario de {" "}
-          <strong className="text-brand-500">{user.domain}</strong>
-        </h2>
-        <section className="border text-sm text-black border-black rounded-t-lg p-1 grid grid-cols-3 border-b-0 gap-2 relative ">
-          <span className="col-span-1 ">Tipo de registro</span>
-          <span className="col-span-1">Nombre del dominio</span>
-          <span className="col-span-1">Valor</span>{" "}
-          {[statuses[0]].includes(dnsConfig?.clientStatus as string) && (
-            <div className="absolute text-yellow-600 right-2 top-2">
-              <IoWarningOutline />
-            </div>
-          )}
-          {![statuses[0]].includes(dnsConfig?.clientStatus as string) && (
-            <div className="absolute text-green-600 right-2 top-2">
-              <FaCheck />
-            </div>
-          )}
-        </section>
-        {/* Content */}
-        <section className="border border-black rounded-b-lg p-1 grid grid-cols-3 place-content-center text-xs gap-2">
-          <span className="flex items-center">
-            {dnsConfig?.dnsValidationInstructions?.split(" ")[0]}{" "}
-          </span>
-          <div className="flex items-center">
-            <p className="truncate">
-              {" "}
-              {dnsConfig?.dnsValidationHostname?.split(".")[0]}
-            </p>
-            <CopyButton
-              className="ml-1"
-              text={dnsConfig?.dnsValidationHostname?.split(".")[0] ?? ""}
-            />
-          </div>
-
-          <div className="col-span-1 w-max items-center flex">
-            <p className="truncate"> {dnsConfig?.dnsValidationTarget}</p>
-            <CopyButton
-              className="ml-1"
-              text={dnsConfig?.dnsValidationTarget ?? ""}
-            />
-          </div>
-        </section>
-      </article>
-    </>
+    <article className="w-full flex items-center gap-2">
+      {ready ? (
+        <FaCheck className="text-green-600" />
+      ) : (
+        <IoWarningOutline className="text-yellow-600" />
+      )}
+      <p>
+        {ready ? (
+          <>
+            <strong className="text-brand-500">{user.domain}</strong> ya apunta a EasyBits.
+          </>
+        ) : (
+          <>
+            <strong className="text-brand-500">{user.domain}</strong> todavía no apunta a
+            EasyBits: agrega el registro de abajo y dale «Verificar».
+          </>
+        )}
+      </p>
+    </article>
   );
 };
 

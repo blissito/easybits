@@ -50,7 +50,6 @@ vi.mock("~/.server/db", () => ({
   },
 }));
 vi.mock("~/.server/webhooks", () => ({ dispatchWebhooks: vi.fn() }));
-vi.mock("~/lib/fly_certs/certs_getters", () => ({ createHost: vi.fn(), removeHost: vi.fn() }));
 
 const { checkWebsiteSlug } = await import("~/.server/core/websiteSlug");
 const { createWebsite, updateWebsite } = await import("~/.server/core/operations");

@@ -1,7 +1,7 @@
 import { db } from "~/.server/db";
 import { randomBytes } from "crypto";
 import { resolve } from "dns/promises";
-import { createHost, removeHost } from "~/lib/fly_certs/certs_getters";
+import { registerAppHostname, unregisterAppHostname } from "~/.server/appHostDomains";
 import {
   easybitsDnsRecords,
   mailmaskUndoRecords,
@@ -61,8 +61,8 @@ export async function verifyCustomDomain(domainId: string, userId: string) {
   }
 
   // Alta del comodín en la caja de EasyBits: sin esto el Caddy del fierro no emite el cert y
-  // <slug>.<dominio> no llega a la app (ver lib/fly_certs/certs_getters).
-  const ok = await createHost(`*.${domain.domain}`);
+  // <slug>.<dominio> no llega a la app (ver .server/appHostDomains).
+  const ok = await registerAppHostname(`*.${domain.domain}`);
   if (!ok) throw new Error("No se pudo dar de alta el dominio en el servidor. Intenta de nuevo en un momento.");
 
   return db.customDomain.update({
@@ -90,13 +90,9 @@ export async function removeCustomDomain(domainId: string, userId: string) {
     data: { customDomainId: null },
   });
 
-  // Remove Fly certs (wildcard + apex/www si los había)
-  try {
-    await removeHost(`*.${domain.domain}`);
-    if (domain.apexWebsiteId) await removeApexCerts(domain.domain);
-  } catch (e) {
-    console.error("Failed to remove cert:", e);
-  }
+  // Baja en la caja de EasyBits (comodín + apex/www si los había): el Caddy deja de emitir.
+  await unregisterAppHostname(`*.${domain.domain}`);
+  if (domain.apexWebsiteId) await removeApexCerts(domain.domain);
 
   return db.customDomain.delete({ where: { id: domainId } });
 }
@@ -106,11 +102,11 @@ export function apexHostnames(domain: string): [string, string] {
 }
 
 async function createApexCerts(domain: string) {
-  for (const h of apexHostnames(domain)) await createHost(h);
+  for (const h of apexHostnames(domain)) await registerAppHostname(h);
 }
 
 async function removeApexCerts(domain: string) {
-  for (const h of apexHostnames(domain)) await removeHost(h);
+  for (const h of apexHostnames(domain)) await unregisterAppHostname(h);
 }
 
 /**
@@ -195,7 +191,7 @@ export async function autoConfigureDomainDns(domainId: string, userId: string) {
       // DNS aún propagando.
     }
   }
-  if (verified && domain.verified) await createHost(`*.${domain.domain}`).catch(() => undefined);
+  if (verified && domain.verified) await registerAppHostname(`*.${domain.domain}`);
   return { verified, zone: managed.zone, records: want.map((r) => `${r.type} ${r.name}`) };
 }
 

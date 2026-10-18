@@ -8,10 +8,10 @@ import { db } from "~/.server/db";
 import { findNewsletter, scheduleNext } from "~/.server/emails/startNewsLetter";
 // import { sendPurchase } from "~/.server/emails/sendPurchase";
 import {
-  createHost,
-  removeHost,
-  showHost,
-} from "~/lib/fly_certs/certs_getters";
+  pointsToAppHost,
+  registerAppHostname,
+  unregisterAppHostname,
+} from "~/.server/appHostDomains";
 import { redirect } from "react-router";
 import { scheduleReview } from "~/.server/emails/scheduleReview";
 import { sendPurchase } from "~/.server/emails/sendPurchase";
@@ -23,24 +23,19 @@ import { getServerDomain } from "~/.server/urlUtils";
 
 // @todo separate this in an if block !! yes please!
 
-export type CertificateResponse = {
-  addCertificate: {
-    certificate: {
-      configured: true;
-      acmeDnsConfigured: false;
-      acmeAlpnConfigured: true;
-      certificateAuthority: "lets_encrypt";
-      certificateRequestedAt: "2025-05-01T21:54:07Z";
-      dnsProvider: "googledomains";
-      dnsValidationInstructions: "CNAME _acme-challenge.blissmos.easybits.cloud => blissmos.easybits.cloud.jnk0nd.flydns.net.";
-      dnsValidationHostname: "_acme-challenge.blissmos.easybits.cloud";
-      dnsValidationTarget: "blissmos.easybits.cloud.jnk0nd.flydns.net";
-      hostname: "blissmos.easybits.cloud";
-      id: "cert_6nkrnj";
-      source: "fly";
-    };
-  };
+// Estado del dominio propio de la tienda (`User.dnsConfig`). Antes era el cert de Fly; hoy el
+// Caddy del fierro emite el cert solo, así que lo único que falta saber es si el DNS ya llega.
+export type DomainStatus = {
+  hostname: string;
+  clientStatus: "Ready" | "Awaiting configuration";
 };
+
+async function domainStatus(hostname: string): Promise<DomainStatus> {
+  return {
+    hostname,
+    clientStatus: (await pointsToAppHost(hostname)) ? "Ready" : "Awaiting configuration",
+  };
+}
 
 export const action = async ({ request }: Route.ActionArgs) => {
   const formData = await request.formData();
@@ -241,17 +236,14 @@ export const action = async ({ request }: Route.ActionArgs) => {
     if (exists) {
       // return { error: "Este dominio ya está en uso, intenta con otro" };
     }
-    user?.domain && (await removeHost(user.domain));
-    const domainResult = (await createHost(domain)) as unknown as CertificateResponse;
-
-    if (domainResult) {
-      await db.user.update({
-        where: {
-          id: user.id,
-        },
-        data: { domain, dnsConfig: domainResult.addCertificate.certificate },
-      });
+    if (user.domain && user.domain !== domain) await unregisterAppHostname(user.domain);
+    if (!(await registerAppHostname(domain))) {
+      return { error: "No se pudo dar de alta el dominio. Intenta de nuevo en un momento." };
     }
+    await db.user.update({
+      where: { id: user.id },
+      data: { domain, dnsConfig: await domainStatus(domain) },
+    });
     return { success: true };
   }
 
@@ -260,60 +252,33 @@ export const action = async ({ request }: Route.ActionArgs) => {
     if (!user) return null;
 
     const domain = formData.get("domain") as string;
-    const domainResult = await showHost(domain);
-
-    // @todo document this "specialities"
-    if ((domainResult as any)?.app?.certificate) {
-      await db.user.update({
-        where: {
-          id: user.id,
-        },
-        data: { domain, dnsConfig: (domainResult as any).app.certificate },
-      });
-    }
+    const status = await domainStatus(domain);
+    await db.user.update({
+      where: { id: user.id },
+      data: { domain, dnsConfig: status },
+    });
+    return status;
   }
 
   if (intent === "update_host") {
     const currentUser = await getUserOrRedirect(request);
     const host = formData.get("host") as string;
-    const domain = getServerDomain();
 
-    // Update DNS validation instructions to use dynamic domain
-    const dnsValidationInstructions = `CNAME _acme-challenge.${host}.${domain} => ${host}.${domain}.jnk0nd.flydns.net.`;
-    const dnsValidationHostname = `_acme-challenge.${host}.${domain}`;
-    const dnsValidationTarget = `${host}.${domain}.jnk0nd.flydns.net`;
-    const hostname = `${host}.${domain}`;
-
-    // removing previous
     if (!currentUser) return { error: "User not found" };
 
-    // console.log("removing:", `${currentUser.host}.${domain}`);
-    await removeHost(`${currentUser.host}.${domain}`);
-    const hostResult = (await createHost(
-      `${host}.${domain}`
-    )) as unknown as CertificateResponse;
-
-    const {
-      addCertificate: { certificate },
-    } = hostResult || { addCertificate: {} };
-
+    // `<host>.easybits.cloud` lo cubre el cert comodín del fierro: no hay alta por tienda.
     await db.user.update({
-      where: {
-        id: currentUser.id,
-      },
-      data: { host, dnsConfig: certificate },
+      where: { id: currentUser.id },
+      data: { host },
     });
 
     return { success: true, nextStep: 1 };
   }
 
   if (intent === "remove_host") {
-    const user = await getUserOrRedirect(request);
+    await getUserOrRedirect(request);
     const host = formData.get("host") as string;
     const domain = getServerDomain();
-
-    // console.log("removing:", `${user.host}.${domain}`);
-    await removeHost(`${user.host}.${domain}`);
 
     return {
       message: "Host removed successfully",

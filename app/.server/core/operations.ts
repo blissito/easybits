@@ -18,7 +18,6 @@ import logger from "../logger";
 import type { AuthContext } from "../apiAuth";
 import { requireScope } from "../apiAuth";
 import type { StorageRegion } from "@prisma/client";
-import { createHost, removeHost } from "~/lib/fly_certs/certs_getters";
 import { checkWebsiteSlug, slugError, MAX_PREVIOUS_SLUGS } from "./websiteSlug";
 import { fileEvents } from "./fileEvents";
 import { PLANS, NEXT_PLAN, getUserPlan, formatPrice, type PlanKey } from "~/lib/plans";
@@ -1236,17 +1235,6 @@ export async function updateWebsite(
   } catch (err: unknown) {
     if (newSlug && isPrismaUniqueError(err)) throw slugError("slug_taken", `slug "${newSlug}" is already in use`);
     throw err;
-  }
-
-  // Subdominio enmascarado: el certificado es por host (`<slug>.easybits.cloud`),
-  // así que se emite el nuevo y se quita el viejo (mismo patrón que el dashboard).
-  if (newSlug && website.subdomainEnabled && process.env.FLY_API_TOKEN) {
-    try {
-      await createHost(`${newSlug}.easybits.cloud`);
-      await removeHost(`${website.slug}.easybits.cloud`);
-    } catch (err) {
-      console.error(`[websites] cert swap failed ${website.slug} → ${newSlug}:`, err);
-    }
   }
 
   const result = { ...updated, ...websiteUrls(updated) };

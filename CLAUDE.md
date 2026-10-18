@@ -323,8 +323,11 @@ GTeams provisiona cada team con la **key de PLATAFORMA** (cuenta fixtergeek, Api
 | Overflow de páginas | AI genera contenido que excede 11in | Prompts lo prohíben pero AI lo ignora a veces | Refine pidiendo "reduce contenido" o dividir |
 | `__grapes_css__` | Sección fantasma con CSS de GrapesJS | `grapesToSections` extrae `<style>` como sección especial | Filtrada en PageList, deploy, y listado |
 
-## Cert Management
-- **Retirado (2026-10-18)**: el panel `/dash/admin/certs` y el cron `purge-certs` comparaban contra la app de Fly (borrada el 2026-10-08); los certs hoy los emite el Caddy de sandbox-host (on-demand TLS).
+## Dominios propios y certificados
+- **Sin Fly (2026-10-17)**: ya no queda código que llame a la API de Fly; `test/noFlyApi.test.ts` falla si vuelve un import o una llamada.
+- Un dominio propio se da de alta como `domain:` de la caja app-host (`app/.server/appHostDomains.ts`: `registerAppHostname`/`unregisterAppHostname`). El router lo enruta y el Caddy del fierro A emite el cert on-demand (su `/_caddy/ask` aprueba sólo dominios registrados; `*.<dominio>` cubre cada `<slug>.<dominio>`). `*.easybits.cloud` ya tiene cert comodín: no se registra nada por sitio.
+- El estado que se muestra al usuario es el DNS (`pointsToAppHost`: resuelve contra la IP de app-host, `app/lib/appHostDns.ts`), no un cert: con DNS correcto el cert sale en el primer acceso.
+- Los certs ya no se purgan a mano: el panel `/dash/admin/certs` y el cron `purge-certs` se retiraron (2026-10-18).
 
 ## Brand: logo animado (wordmark "EasyBits" — efecto FlipLetters)
 
