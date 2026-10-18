@@ -2132,7 +2132,7 @@ En \`/dash/admin/crons\` hay un asistente (un agente de la flota, «Asistente de
 
 Las cuatro exigen ser superusuario; las dos que proponen piden scope \`WRITE\`, no \`ADMIN\`: la llave del asistente vive en su microVM y con \`ADMIN\` podría saltarse la confirmación llamando la API directa.
 
-Confirmación: el chat (\`POST /api/v2/admin/copilot/chat\` con \`{ text, context?: { page, job? } }\`, SSE; \`GET ?attach=1\` para re-engancharse) emite un evento \`permission\` \`{ id, title, tool, options }\` por cada propuesta. Se resuelve con \`POST /api/v2/admin/agent-actions/:id\` \`{ "decision": "approve" | "reject" }\` usando **sólo la sesión** del superusuario que la propuso (cualquier \`Authorization\` → 403). Se ejecuta una sola vez (un segundo clic → 409) y vence a los 15 min.
+Confirmación: el chat habla [AG-UI](https://docs.ag-ui.com) (\`POST /api/v2/admin/copilot/chat\` con un \`RunAgentInput\` → SSE de eventos AG-UI; contrato en \`docs/protocol.md\` de ghostykit). Cada propuesta termina el run con \`RUN_FINISHED\` \`outcome: { type: "interrupt", interrupts: [{ id, message, expiresAt, metadata: { tool } }] }\`. Se contesta con otro POST al mismo hilo: \`resume: [{ interruptId, status: "resolved", payload: { approved: true | false } }]\`, usando **sólo la sesión** del superusuario que la propuso (cualquier \`Authorization\` → 403). Se ejecuta una sola vez (repetir el resume no vuelve a ejecutar) y vence a los 15 min (\`RUN_ERROR\` \`interrupt_expired\`). Un POST sin mensaje ni \`resume\` reconecta: \`MESSAGES_SNAPSHOT\` y el turno vivo o las tarjetas abiertas.
 `,
 
   databases: `## Databases (SQLite-as-a-Service)

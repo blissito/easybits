@@ -652,7 +652,7 @@ Daily machine backups, their rotation, the hosting monitor (every 5 min) and the
 
 All four require a superuser; the two that propose need the \`WRITE\` scope, not \`ADMIN\`: the assistant's key lives in its microVM and with \`ADMIN\` it could skip the confirmation by calling the API directly.
 
-Confirmation: the chat (\`POST /api/v2/admin/copilot/chat\` with \`{ text, context?: { page, job? } }\`, SSE; \`GET ?attach=1\` to reattach) emits a \`permission\` event \`{ id, title, tool, options }\` for each proposal. It is resolved with \`POST /api/v2/admin/agent-actions/:id\` \`{ "decision": "approve" | "reject" }\` using **only the session** of the superuser who proposed it (any \`Authorization\` → 403). It runs exactly once (a second click → 409) and expires after 15 min.
+Confirmation: the chat speaks [AG-UI](https://docs.ag-ui.com) (\`POST /api/v2/admin/copilot/chat\` with a \`RunAgentInput\` → SSE of AG-UI events; contract in ghostykit's \`docs/protocol.md\`). Each proposal ends the run with \`RUN_FINISHED\` \`outcome: { type: "interrupt", interrupts: [{ id, message, expiresAt, metadata: { tool } }] }\`. It is answered with another POST on the same thread: \`resume: [{ interruptId, status: "resolved", payload: { approved: true | false } }]\`, using **only the session** of the superuser who proposed it (any \`Authorization\` → 403). It runs exactly once (repeating the resume does not run it again) and expires after 15 min (\`RUN_ERROR\` \`interrupt_expired\`). A POST with no message and no \`resume\` reconnects: \`MESSAGES_SNAPSHOT\` plus the live turn or the open cards.
 `;
 
 export const EN_EVE = `## eve (Vercel) on EasyBits

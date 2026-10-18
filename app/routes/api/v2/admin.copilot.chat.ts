@@ -7,162 +7,239 @@ import {
   copilotTurnText,
   ensureAdminCopilot,
   parseCopilotContext,
-  permissionEvent,
   requireAdminSession,
+  stripCopilotContext,
 } from "~/.server/core/adminCopilot";
-import { listPendingActions } from "~/.server/core/agentActions";
+import { listPendingActions, resolveAgentAction } from "~/.server/core/agentActions";
 import {
   AppDraining,
+  cancelAgentTurn,
   siteTurnStatus,
   startAgentTurn,
   subscribeSiteTurn,
-  TERMINAL_TURN_EVENTS,
   TurnBusy,
   type TurnEvent,
 } from "~/.server/core/siteTurns.server";
+import {
+  agUiStream,
+  createTurnTranslator,
+  interruptFrom,
+  parseRunAgentInput,
+  runFinished,
+  toAgUiMessages,
+  turnIdFromRunId,
+  userText,
+  type AgUiEvent,
+  type RunAgentInput,
+} from "~/.server/core/agui";
 
-// Chat del copiloto del panel de crons. Sesión de superusuario (nunca Bearer). El turno vive
-// aparte de la petición (siteTurns.server.ts): POST lo arranca y se suscribe; si el navegador
-// se va, sigue, y `GET ?attach=1` se re-engancha (snapshot + en vivo + permisos abiertos).
-// GET sin attach = historial + permisos pendientes + estado del turno.
-//
-// SSE con NOMBRE de evento, como el chat /c de Ghosty (`event: <nombre>\ndata: <json>`):
-//   started      { turnId? }
-//   snapshot     { turnId, text, tools }            (sólo attach)
-//   chunk        { text, turnId }
-//   tool         { title, status: "in_progress"|"completed"|"failed" }
-//   permission   { id, title, tool, expiresAt, options:[{optionId,name,kind}] }
-//   done         { turnId, text }
-//   error        { message } · capacity { message, retryAfter } · interrupted { turnId, canContinue } · idle {}
-// Aprobar/rechazar: POST /api/v2/admin/agent-actions/:id { decision } (con la sesión).
+// Piloto del panel de crons, en AG-UI (docs/protocol.md de ghostykit). UN endpoint:
+// `POST` con `RunAgentInput` → SSE de eventos AG-UI. Sesión de superusuario y nada más (una
+// llave del agente nunca aprueba). Tres formas del mismo POST:
+//   · con mensaje del usuario → corre un turno (durable: sigue aunque el navegador se vaya);
+//   · con `resume` → aprueba/rechaza las propuestas (AgentAction: una vez, vence a 15 min);
+//   · vacío → abre/reconecta: MESSAGES_SNAPSHOT + el turno vivo, las tarjetas abiertas o éxito.
+// Las propuestas (run_cron, pause_cron, crons del usuario) terminan el run con
+// `outcome: interrupt`. Cerrar la conexión NUNCA detiene el turno (sobrevive recargas y
+// deploys); detener es `forwardedProps.cancel = <runId>` → `RUN_FINISHED {outcome: cancelled}`.
 
-function toSse(e: TurnEvent, turnId: string | null): [string, unknown] {
-  switch (e.type) {
-    case "chunk":
-      return ["chunk", { text: e.value, turnId }];
-    case "tool":
-      return ["tool", { title: e.name, status: e.phase === "end" ? (e.ok === false ? "failed" : "completed") : "in_progress" }];
-    case "done":
-      return ["done", { turnId: e.turnId ?? turnId, text: e.value }];
-    case "snapshot":
-      return ["snapshot", { turnId: e.turnId, text: e.text, tools: e.tools }];
-    default: {
-      const { type, ...rest } = e;
-      return [type, rest];
-    }
-  }
-}
-
-function turnStream(request: Request, groupId: string, opts: { turnId: string | null; snapshot: boolean; ownerId: string }) {
-  const encoder = new TextEncoder();
-  let unsubscribe: (() => void) | null = null;
-  let heartbeat: ReturnType<typeof setInterval> | null = null;
-  let turnId = opts.turnId;
-  const stream = new ReadableStream<Uint8Array>({
-    async start(controller) {
-      let closed = false;
-      const close = () => {
-        if (closed) return;
-        closed = true;
-        unsubscribe?.();
-        if (heartbeat) clearInterval(heartbeat);
-        try { controller.close(); } catch { /* ya cerrado */ }
-      };
-      const write = (event: string, data: unknown) => {
-        if (closed) return;
-        try {
-          controller.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
-        } catch {
-          close();
-        }
-      };
-      const send = (e: TurnEvent) => {
-        if (typeof e.turnId === "string") turnId = e.turnId;
-        const [event, data] = toSse(e, turnId);
-        write(event, data);
-        if (TERMINAL_TURN_EVENTS.has(e.type) || e.type === "idle") close();
-      };
-      controller.enqueue(encoder.encode(`retry: 2000\n\n`));
-      write("started", turnId ? { turnId } : {});
-      // Quien se re-engancha necesita el ESTADO: las tarjetas que siguen esperando.
-      if (opts.snapshot) {
-        for (const a of await listPendingActions(opts.ownerId).catch(() => [])) {
-          const { type, ...rest } = permissionEvent(a);
-          write(type, rest);
-        }
-      }
-      heartbeat = setInterval(() => {
-        try { controller.enqueue(encoder.encode(`: ka\n\n`)); } catch { close(); }
-      }, 15_000);
-      unsubscribe = subscribeSiteTurn(groupId, send, { snapshot: opts.snapshot });
-      request.signal.addEventListener("abort", close);
-    },
-    cancel() {
-      unsubscribe?.();
-      if (heartbeat) clearInterval(heartbeat);
-    },
-  });
-  return new Response(stream, {
-    headers: {
-      "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache, no-transform",
-      Connection: "keep-alive",
-      "X-Accel-Buffering": "no",
-    },
-  });
-}
-
-export async function loader({ request }: Route.LoaderArgs) {
-  const ctx = await requireAdminSession(request);
-  const groupId = adminCopilotGroupId(ctx.user.id);
-  const q = new URL(request.url).searchParams;
-  if (q.get("attach")) return turnStream(request, groupId, { turnId: null, snapshot: true, ownerId: ctx.user.id });
-  const agent = await db.fleetAgent.findFirst({
-    where: { ownerId: ctx.user.id, name: ADMIN_COPILOT_NAME },
-    select: { id: true },
-  });
-  const messages = agent
-    ? await db.fleetAgentMessage.findMany({
-        where: { fleetAgentId: agent.id, groupId },
-        orderBy: { createdAt: "asc" },
-        take: 200,
-        select: { role: true, text: true, createdAt: true },
-      })
-    : [];
-  const pending = await listPendingActions(ctx.user.id);
-  return Response.json({ messages, pending: pending.map(permissionEvent), ...(await siteTurnStatus(groupId)) });
-}
+const json = (status: number, body: Record<string, unknown>, headers?: Record<string, string>) =>
+  Response.json(body, { status, headers });
 
 export async function action({ request }: Route.ActionArgs) {
-  if (request.method !== "POST") return Response.json({ error: "Method not allowed" }, { status: 405 });
+  if (request.method !== "POST") return json(405, { error: "method_not_allowed", message: "Usa POST." });
   const ctx = await requireAdminSession(request);
-  const body = await request.json().catch(() => ({}));
-  const text = typeof body?.text === "string" ? body.text.trim().slice(0, 4000) : "";
-  if (!text) return Response.json({ error: "text required" }, { status: 400 });
-  const context = parseCopilotContext(body?.context);
+  const input = parseRunAgentInput(await request.json().catch(() => null));
+  if (!input) return json(400, { error: "bad_request", message: "RunAgentInput inválido (threadId y runId son obligatorios)." });
+  const owner = { id: ctx.user.id, email: ctx.user.email };
+  const groupId = adminCopilotGroupId(owner.id);
+  const text = userText(input).slice(0, 4000);
+
+  // Detener: pedido explícito (desconectarse nunca detiene nada). Idempotente.
+  if (input.cancel) {
+    const turnId = turnIdFromRunId(input.cancel);
+    const out = turnId ? await cancelAgentTurn(groupId, turnId) : "not_found";
+    if (out === "elsewhere") {
+      return json(503, { error: "draining", message: "Ese turno corre en la instancia que se está apagando; reintenta en unos segundos." }, { "Retry-After": "3" });
+    }
+    return agUiStream(request, (emit) => {
+      emit({ type: "RUN_STARTED", threadId: input.threadId, runId: input.runId });
+      emit({ type: "RUN_FINISHED", threadId: input.threadId, runId: input.runId, outcome: { type: "cancelled" } });
+    });
+  }
+
+  // Primero las respuestas a las tarjetas (pueden venir solas o junto con un mensaje nuevo).
+  const resumed = input.resume?.length ? await resolveResumes(owner, groupId, input) : null;
+  const start = (emit: (e: AgUiEvent) => void) => {
+    emit({ type: "RUN_STARTED", threadId: input.threadId, runId: input.runId });
+    for (const e of resumed?.events ?? []) emit(e);
+  };
+  if (resumed?.error) {
+    return agUiStream(request, (emit) => {
+      start(emit);
+      emit(resumed.error!);
+    });
+  }
+  if (!text) {
+    if (!resumed) return reconnect(request, owner.id, groupId, input);
+    // Si quedaron tarjetas sin contestar, el run sigue en pausa por ellas.
+    const left = (await listPendingActions(owner.id)).map((a) => interruptFrom(a));
+    return agUiStream(request, (emit) => {
+      start(emit);
+      emit(runFinished(input.threadId, input.runId, left));
+    });
+  }
+
+  // Con tarjetas sin contestar no se abre otro turno: el cliente reconecta y las enseña.
+  const pending = await listPendingActions(owner.id);
+  if (pending.length) {
+    return json(409, { error: "interrupt_pending", message: "Hay acciones esperando tu aprobación.", interrupts: pending.map((a) => interruptFrom(a)) });
+  }
+  const context = parseCopilotContext(screenContext(input));
   const agent = await ensureAdminCopilot(ctx);
-  const groupId = adminCopilotGroupId(ctx.user.id);
-  let turnId: string;
   try {
-    ({ turnId } = await startAgentTurn(ctx, {
+    await startAgentTurn(ctx, {
       surface: "admin-copilot",
       groupId,
       fleetAgentId: agent.id,
       sender: "admin-copilot",
       text,
-      turnId: typeof body?.turnId === "string" ? body.turnId : undefined,
-      continueTurnId: typeof body?.continueTurnId === "string" ? body.continueTurnId : undefined,
+      turnId: turnIdFromRunId(input.runId),
       prepare: async (agentText) => ({ text: copilotTurnText(agentText, context) }),
-      afterTool: copilotAfterTool(ctx.user.id),
-    }));
+      afterTool: copilotAfterTool(owner.id),
+    });
   } catch (e) {
-    if (e instanceof AppDraining) {
-      return Response.json({ error: "draining", message: e.message }, { status: 503, headers: { "Retry-After": "3" } });
-    }
-    if (e instanceof TurnBusy) {
-      return Response.json({ error: "turn_busy", message: e.message, activeTurnId: e.activeTurnId }, { status: 409 });
-    }
+    if (e instanceof AppDraining) return json(503, { error: "draining", message: e.message }, { "Retry-After": "3" });
+    if (e instanceof TurnBusy) return json(409, { error: "run_active", message: e.message, runId: e.activeTurnId });
     throw e;
   }
-  return turnStream(request, groupId, { turnId, snapshot: false, ownerId: ctx.user.id });
+  return agUiStream(request, (emit, onClose) => {
+    start(emit);
+    const t = createTurnTranslator({ threadId: input.threadId, runId: input.runId, emit });
+    // Con snapshot: lo que el turno alcanzó a decir antes de que esta conexión se suscribiera.
+    onClose(subscribeSiteTurn(groupId, followTurn(t, owner.id), { snapshot: true }));
+  });
+}
+
+/**
+ * `context` de AG-UI → `{page, job}` del panel. Acepta una entrada `screen` con el JSON entero
+ * o una entrada por llave (`{description:"job", value:"\"purge-keys\""}`), que es lo que manda Piloto.
+ */
+function screenContext(input: RunAgentInput): Record<string, unknown> | null {
+  const out: Record<string, unknown> = {};
+  for (const c of input.context) {
+    let v: unknown = c.value;
+    try {
+      v = JSON.parse(c.value);
+    } catch {
+      /* texto plano */
+    }
+    if (c.description === "screen" && v && typeof v === "object") Object.assign(out, v);
+    else out[c.description] = v;
+  }
+  return Object.keys(out).length ? out : null;
+}
+
+/**
+ * Pasa los eventos del turno al traductor; al terminar bien, las tarjetas salen de la base
+ * (una `permission` emitida antes de suscribirse no se pierde).
+ */
+function followTurn(t: ReturnType<typeof createTurnTranslator>, ownerId: string) {
+  return (e: TurnEvent) => {
+    if (e.type !== "done" && e.type !== "idle") return t.onTurnEvent(e);
+    void listPendingActions(ownerId)
+      .then((p) => t.finishWith(p.map((a) => interruptFrom(a))))
+      .catch(() => t.finishWith([]));
+  };
+}
+
+/** Abrir o reconectar: el hilo guardado y luego el turno vivo, las tarjetas o éxito. */
+async function reconnect(request: Request, ownerId: string, groupId: string, input: RunAgentInput) {
+  const agent = await db.fleetAgent.findFirst({ where: { ownerId, name: ADMIN_COPILOT_NAME }, select: { id: true } });
+  const rows = agent
+    ? await db.fleetAgentMessage.findMany({
+        where: { fleetAgentId: agent.id, groupId },
+        orderBy: { createdAt: "desc" },
+        take: 200,
+        select: { id: true, role: true, text: true },
+      })
+    : [];
+  const status = await siteTurnStatus(groupId);
+  const pending = (await listPendingActions(ownerId)).map((a) => interruptFrom(a));
+  return agUiStream(request, (emit, onClose) => {
+    emit({ type: "RUN_STARTED", threadId: input.threadId, runId: input.runId });
+    emit({ type: "MESSAGES_SNAPSHOT", messages: toAgUiMessages(rows.reverse(), stripCopilotContext) });
+    const t = createTurnTranslator({ threadId: input.threadId, runId: input.runId, emit });
+    if (!status.activeTurn) return t.finishWith(pending);
+    onClose(subscribeSiteTurn(groupId, followTurn(t, ownerId), { snapshot: true }));
+  });
+}
+
+const STATUS_WORDS: Record<string, string> = {
+  executed: "Hecho",
+  rejected: "Rechazado",
+  failed: "Falló",
+  expired: "Venció sin respuesta",
+};
+
+/**
+ * Contestar las tarjetas. Cada propuesta se reclama con un update condicionado a `pending`
+ * (agentActions.ts): repetir el mismo resume no vuelve a ejecutar, sólo cuenta cómo quedó.
+ * `cancelled` (la tarjeta venció en pantalla o se descartó) rechaza sin ruido; aprobar una ya
+ * vencida es `interrupt_expired`.
+ */
+async function resolveResumes(owner: { id: string; email: string }, groupId: string, input: RunAgentInput) {
+  const events: AgUiEvent[] = [];
+  let seq = 0;
+  const id = (p: string) => `${p}-${input.runId}-r${++seq}`;
+  const lines: string[] = [];
+  let error: AgUiEvent | null = null;
+  for (const r of input.resume!) {
+    const row = /^[a-f0-9]{24}$/.test(r.interruptId)
+      ? await db.agentAction.findFirst({ where: { id: r.interruptId, ownerId: owner.id }, select: { tool: true, summary: true } })
+      : null;
+    if (!row) {
+      error = { type: "RUN_ERROR", code: "interrupt_not_found", message: "No encontré esa aprobación." };
+      break;
+    }
+    const approve = r.status === "resolved" && r.payload?.approved === true;
+    const out = await resolveAgentAction(owner, r.interruptId, approve ? "approve" : "reject");
+    const status = out.status === "not_pending" ? out.current : out.status;
+    if (status === "expired") {
+      if (r.status === "resolved") error = { type: "RUN_ERROR", code: "interrupt_expired", message: `Venció sin respuesta: ${row.summary}. Pídela de nuevo.` };
+      continue;
+    }
+    const toolCallId = id("tc");
+    events.push(
+      // Un paso aparte de la propuesta (que fue `run_cron`…): éste es la decisión aplicada.
+      { type: "TOOL_CALL_START", toolCallId, toolCallName: "confirm_action" },
+      { type: "TOOL_CALL_ARGS", toolCallId, delta: JSON.stringify({ interruptId: r.interruptId, tool: row.tool, approved: approve }) },
+      { type: "TOOL_CALL_END", toolCallId },
+      {
+        type: "TOOL_CALL_RESULT",
+        messageId: id("tool"),
+        toolCallId,
+        role: "tool",
+        content: JSON.stringify(
+          out.status === "executed" ? { status, result: out.result } : out.status === "failed" ? { status, error: out.error } : { status }
+        ),
+        ...(status === "failed" ? { metadata: { error: true } } : {}),
+      }
+    );
+    const again = out.status === "not_pending" ? " (ya estaba resuelta)" : "";
+    lines.push(`${STATUS_WORDS[status] ?? status}${again}: ${row.summary}${out.status === "failed" ? ` — ${out.error}` : ""}`);
+  }
+  if (lines.length) {
+    const text = lines.join("\n");
+    const messageId = id("msg");
+    events.push(
+      { type: "TEXT_MESSAGE_START", messageId, role: "assistant" },
+      { type: "TEXT_MESSAGE_CONTENT", messageId, delta: text },
+      { type: "TEXT_MESSAGE_END", messageId }
+    );
+    // Al hilo, para que el snapshot y el propio agente sepan cómo quedó.
+    const agent = await db.fleetAgent.findFirst({ where: { ownerId: owner.id, name: ADMIN_COPILOT_NAME }, select: { id: true } });
+    if (agent) await db.fleetAgentMessage.create({ data: { fleetAgentId: agent.id, groupId, role: "agent", text } }).catch(() => undefined);
+  }
+  return { events, error };
 }

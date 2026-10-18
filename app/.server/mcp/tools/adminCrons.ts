@@ -5,7 +5,7 @@
 // microVM, que es justo lo que un prompt malicioso puede leer. Con ADMIN, esa llave podría
 // pegarle directo a `POST /api/v2/admin/crons/:job/run` y saltarse la confirmación. Aquí no
 // hace falta: las dos tools que mutan sólo PROPONEN (crean una AgentAction pendiente) y la
-// ejecución exige la sesión del humano en `/api/v2/admin/agent-actions/:id`.
+// ejecución exige la sesión del humano: el `resume` de AG-UI en `/api/v2/admin/copilot/chat`.
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { ApiKeyScope } from "@prisma/client";

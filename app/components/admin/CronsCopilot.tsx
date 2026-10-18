@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { createPostStreamTransport, Piloto, type PermissionHandler, type ToolVerbs } from "ghosty-autopilot";
-import "ghosty-autopilot/styles.css";
+import { createAgUiTransport, Piloto, type ToolVerbs } from "ghostykit";
+import "ghostykit/styles.css";
 
 const CHAT_URL = "/api/v2/admin/copilot/chat";
 
@@ -15,6 +15,8 @@ const VERBS: ToolVerbs = {
   update_cron: { one: "Propuse cambiar un cron", many: "Propuse %n cambios", running: "Preparando el cambio…" },
   delete_cron: { one: "Propuse borrar un cron", many: "Propuse borrar %n crons", running: "Preparando el borrado…" },
   run_my_cron: { one: "Propuse correr tu cron", many: "Propuse %n corridas", running: "Preparando la corrida…" },
+  // El paso que pone el servidor al contestar una tarjeta (resume de AG-UI).
+  confirm_action: { one: "Apliqué tu decisión", many: "Apliqué %n decisiones", running: "Aplicando tu decisión…" },
 };
 // El worker nombra las tools `mcp_easybits_<tool>` (un guion bajo): Piloto sólo reconoce `mcp__server__tool`.
 const TOOL_VERBS: ToolVerbs = Object.fromEntries(
@@ -27,20 +29,8 @@ const TOOL_VERBS: ToolVerbs = Object.fromEntries(
 // El servidor antepone al texto del turno lo que se ve en pantalla; en el historial no se muestra.
 const stripContext = (text: string) => text.replace(/^\[Contexto del panel — [^\]]*\]\n/, "");
 
-// La aprobación va por la ruta con SESIÓN (nunca por el agente): aprobar ejecuta una sola vez.
-const approve: PermissionHandler = async (id, optionId) => {
-  const res = await fetch(`/api/v2/admin/agent-actions/${id}`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ decision: optionId === "approve" ? "approve" : "reject" }),
-  });
-  const json = (await res.json().catch(() => null)) as { status?: string; message?: string; error?: string } | null;
-  // Vencida o ya contestada (otra pestaña): la tarjeta sale sin repetir la acción.
-  if (res.status === 404 || res.status === 409) return { resolved: false, detail: json?.message };
-  if (res.status === 422) return { resolved: true, detail: `falló: ${json?.error ?? "error"}` };
-  if (!res.ok) throw new Error(json?.message ?? json?.error ?? `Error ${res.status}`);
-  return { resolved: true, detail: json?.status === "executed" ? "ejecutado" : json?.status === "rejected" ? "rechazado" : json?.status };
-};
+// Un solo hilo por superusuario (el servidor lo guarda): al abrir, Piloto lo pide con un run vacío.
+const THREAD_ID = "admin-crons";
 
 interface Props {
   /** Pregunta para dejar en la caja (sin mandarla); `key` cambia en cada pedido. */
@@ -61,7 +51,8 @@ interface Props {
 }
 
 export function CronsCopilot({ ask, job, onClearJob, onClose, escBlocked, onChange, variant }: Props) {
-  const transport = useMemo(() => createPostStreamTransport({ url: CHAT_URL }), []);
+  // AG-UI: aprobar o rechazar una tarjeta es el `resume` del siguiente run, con la cookie de sesión.
+  const transport = useMemo(() => createAgUiTransport({ url: CHAT_URL }), []);
   const jobRef = useRef(job);
   jobRef.current = job;
   const aside = useRef<HTMLElement>(null);
@@ -101,12 +92,6 @@ export function CronsCopilot({ ask, job, onClearJob, onClose, escBlocked, onChan
     return () => window.removeEventListener("keydown", onKey);
   }, [escBlocked, onClose, variant]);
 
-  const onPermission: PermissionHandler = async (id, optionId) => {
-    const out = await approve(id, optionId);
-    onChange();
-    return out;
-  };
-
   return (
     <aside
       ref={aside}
@@ -140,6 +125,7 @@ export function CronsCopilot({ ask, job, onClearJob, onClose, escBlocked, onChan
         <Piloto
           draft={ask}
           transport={transport}
+          threadId={THREAD_ID}
           skin="easybits"
           agentName="Piloto"
           welcome="Dime qué necesitas de los crons y yo me encargo: revisar por qué falló uno, correrlo o pausarlo. Antes de ejecutar o pausar te pido permiso."
@@ -148,10 +134,9 @@ export function CronsCopilot({ ask, job, onClearJob, onClose, escBlocked, onChan
           context={() => ({ page: "crons", ...(jobRef.current ? { job: jobRef.current.key } : {}) })}
           toolVerbs={TOOL_VERBS}
           formatUserText={stripContext}
-          onPermission={onPermission}
           onTurnDone={onChange}
           className="crons-copilot"
-          features={{ attachments: false, models: false }}
+          features={{ attachments: false }}
           style={{ height: "100%" }}
         />
       </div>

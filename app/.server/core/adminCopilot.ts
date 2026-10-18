@@ -103,6 +103,9 @@ export function copilotTurnText(text: string, context: CopilotContext | null): s
   return `[Contexto del panel — ${parts.join("; ")}]\n${text}`;
 }
 
+/** El texto del usuario como lo escribió (sin el contexto que le antepone `copilotTurnText`). */
+export const stripCopilotContext = (text: string) => text.replace(/^\[Contexto del panel — [^\]]*\]\n/, "");
+
 /** Evento `permission` (forma de ACP/Ghosty) para la tarjeta de aprobación. */
 export function permissionEvent(a: PendingActionView): TurnEvent {
   return {

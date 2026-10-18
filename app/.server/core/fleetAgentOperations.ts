@@ -1326,14 +1326,19 @@ const numOrUndef = (v: unknown): number | undefined =>
  * Si no se pasa `onBlock`, el comportamiento es el de antes (todo junto al final), así
  * que las superficies que no lo usan no cambian.
  */
-async function collectStream(
+export async function collectStream(
   stream: ReadableStream<Uint8Array>,
   onChunk?: (s: string) => void,
   onTool?: (name: string, ev?: FleetToolEvent) => void,
   onBlock?: (text: string) => Promise<void> | void,
-  onUsage?: (u: FleetTurnUsage) => void
+  onUsage?: (u: FleetTurnUsage) => void,
+  signal?: AbortSignal
 ): Promise<string> {
   const reader = stream.getReader();
+  // Detener: se deja de leer y se cierra la conexión con la caja; lo dicho hasta ahí queda.
+  const stop = () => void reader.cancel().catch(() => undefined);
+  if (signal?.aborted) stop();
+  else signal?.addEventListener("abort", stop, { once: true });
   const decoder = new TextDecoder();
   let buffer = "";
   let reply = "";
@@ -1419,6 +1424,7 @@ async function collectStream(
       buffer = buffer.slice(nl + 1);
     }
   }
+  signal?.removeEventListener("abort", stop);
   buffer += decoder.decode();
   if (buffer) consume(buffer);
   await flushChain; // los bloques tempranos salen ANTES que el resto
@@ -2882,6 +2888,12 @@ type RouteMessageOpts = {
    * tools — que es lo que EasyBits mide por su cuenta.
    */
   onUsage?: (u: FleetTurnUsage) => void;
+  /**
+   * «Detener» explícito (el piloto del panel): corta la lectura del turno y cierra la
+   * conexión con la caja; regresa lo que alcanzó a decir. Sólo lo pasa quien lo pide —
+   * WhatsApp/WABA/Teams no lo usan y no cambian.
+   */
+  signal?: AbortSignal;
 };
 
 async function runTurn(
@@ -3318,7 +3330,8 @@ async function runTurn(
         opts.onBlock && (async (t) => { earlyBlocks.push(t); await opts.onBlock!(t); }),
         // SIEMPRE se captura, aunque el caller no pase `onUsage`: si no, el canal de
         // más volumen (WhatsApp/WABA, que no pasa callback) no medía absolutamente nada.
-        (u) => { workerUsage = u; }
+        (u) => { workerUsage = u; },
+        opts.signal
       );
       const turnUsage: FleetTurnUsage = {
         ...workerUsage,

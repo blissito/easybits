@@ -27,7 +27,7 @@ const HEARTBEAT_MS = 5_000;
 const STALE_MS = 30_000;
 /** Un turno de sitio nunca dura tanto: ghosty-gc corta a los 15 min. */
 const MAX_TURN_MS = 30 * 60_000;
-const TERMINAL = new Set(["done", "error", "capacity", "interrupted"]);
+const TERMINAL = new Set(["done", "error", "capacity", "interrupted", "cancelled"]);
 
 type Live = {
   turnId: string;
@@ -37,6 +37,8 @@ type Live = {
   cortes: number[];
   finished: boolean;
   listeners: Set<(e: TurnEvent) => void>;
+  /** «Detener» explícito: corta la lectura del worker (routeMessage `signal`). */
+  abort: AbortController;
 };
 // globalThis: el dev server recarga módulos y perdería los turnos en curso.
 const g = globalThis as unknown as { __ebSiteTurns?: Map<string, Live> };
@@ -143,7 +145,7 @@ export async function startAgentTurn(ctx: AuthContext, spec: AgentTurnSpec): Pro
       startedAt,
     },
   });
-  const l: Live = { turnId, groupId, text: "", tools: [], cortes: [], finished: false, listeners: new Set() };
+  const l: Live = { turnId, groupId, text: "", tools: [], cortes: [], finished: false, listeners: new Set(), abort: new AbortController() };
   live.set(groupId, l);
   void runAgentTurn(spec, l, { agentText, isContinue: !!continuesTurnId, startedAt }).catch((e) =>
     console.error(`[${spec.surface}] turno`, turnId, e)
@@ -247,6 +249,7 @@ async function runAgentTurn(spec: AgentTurnSpec, l: Live, input: { agentText: st
         {
           turnId: l.turnId,
           skipUserLog: input.isContinue,
+          signal: l.abort.signal,
           onChunk: (value) => {
             l.text += value;
             dirty = true;
@@ -267,6 +270,7 @@ async function runAgentTurn(spec: AgentTurnSpec, l: Live, input: { agentText: st
       )
     );
     await saveNarrated(builderId, l.groupId, reply, l.text, l.cortes).catch((e) => console.error(`[${spec.surface}] narración`, e));
+    if (l.abort.signal.aborted) state = "cancelled";
   } catch (e) {
     if (e instanceof FleetAgentAtCapacity) state = "capacity";
     else state = "error";
@@ -285,6 +289,7 @@ async function runAgentTurn(spec: AgentTurnSpec, l: Live, input: { agentText: st
       })
       .catch((e) => console.error(`[${spec.surface}] cierre del turno`, l.turnId, e));
     if (state === "done") emit(l, { type: "done", value: reply });
+    else if (state === "cancelled") emit(l, { type: "cancelled", turnId: l.turnId });
     else if (state === "capacity") emit(l, { type: "capacity", message: error, retryAfter: 10 });
     else emit(l, { type: "error", message: error });
     l.listeners.clear();
@@ -355,7 +360,26 @@ function terminalEvent(row: { turnId: string; state: string; text: string; error
   if (row.state === "done") return { type: "done", turnId: row.turnId, value: row.text };
   if (row.state === "capacity") return { type: "capacity", turnId: row.turnId, message: row.error, retryAfter: 10 };
   if (row.state === "interrupted") return { type: "interrupted", turnId: row.turnId, canContinue: true };
+  if (row.state === "cancelled") return { type: "cancelled", turnId: row.turnId };
   return { type: "error", turnId: row.turnId, message: row.error ?? "error" };
+}
+
+/**
+ * «Detener» explícito de un turno. Desconectarse NUNCA lo detiene (el turno sobrevive a
+ * recargas y deploys); esto sí: corta la lectura del worker, guarda lo dicho y cierra el turno
+ * como `cancelled`. Idempotente: un turno que ya terminó contesta su estado.
+ *  - `stopped`: se detuvo aquí (o ya estaba detenido/terminado).
+ *  - `elsewhere`: corre en otra instancia (deploy con traslape) y no se puede cortar desde aquí.
+ */
+export async function cancelAgentTurn(groupId: string, turnId: string): Promise<"stopped" | "elsewhere" | "not_found"> {
+  const l = live.get(groupId);
+  if (l && l.turnId === turnId) {
+    if (!l.finished) l.abort.abort();
+    return "stopped";
+  }
+  const row = await db.fleetTurn.findUnique({ where: { turnId }, select: { groupId: true, state: true } }).catch(() => null);
+  if (!row || row.groupId !== groupId) return "not_found";
+  return row.state === "running" ? "elsewhere" : "stopped";
 }
 
 /** Estado para el editor al cargar: turno en curso o el último cortado (para «Continuar»). */

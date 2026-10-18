@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { fakeAgentActionTable } from "./fakeAgentActions";
 
 // Copiloto del panel de crons: tools MCP (forma + sólo superusuarios), propuestas que NO
-// ejecutan, aprobación con la sesión una sola vez, y que una llave no pueda aprobar.
+// ejecutan y aprobación una sola vez. La ruta (AG-UI, con sesión) se prueba en copilotAgUi.test.ts.
 
 const h = vi.hoisted(() => ({
   db: {} as any,
@@ -30,7 +30,6 @@ vi.mock("~/.server/getters", async (orig) => ({
 
 import { createMcpServer, getRegisteredTools } from "~/.server/mcp/server";
 import { PENDING_TTL_MS, resolveAgentAction, proposeAction } from "~/.server/core/agentActions";
-import { action as approveRoute } from "~/routes/api/v2/admin.agent-actions.$id";
 
 const admin = { id: "a".repeat(24), email: "root@easybits.cloud", roles: ["Admin"] } as any;
 const mortal = { id: "b".repeat(24), email: "x@y.z", roles: [] } as any;
@@ -157,52 +156,3 @@ describe("aprobación de acciones", () => {
   });
 });
 
-describe("POST /api/v2/admin/agent-actions/:id", () => {
-  const req = (headers: Record<string, string>, decision = "approve") =>
-    new Request("https://www.easybits.cloud/api/v2/admin/agent-actions/x", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", ...headers },
-      body: JSON.stringify({ decision }),
-    });
-  const run = async (headers: Record<string, string>, id: string, decision?: string) => {
-    try {
-      return await approveRoute({ request: req(headers, decision), params: { id } } as any);
-    } catch (e) {
-      if (e instanceof Response) return e;
-      throw e;
-    }
-  };
-
-  it("una llave (Bearer) NO aprueba, aunque traiga también la cookie del superusuario", async () => {
-    const a = await proposeAction(admin.id, "run_cron", { job: "purge-keys" });
-    const res = await run({ Authorization: "Bearer eb_sk_live_agente", Cookie: "__session=x" }, a.id);
-    expect(res.status).toBe(403);
-    expect((await res.json()).error).toBe("session_required");
-    expect(actions.rows[0].status).toBe("pending");
-    expect(h.startManualRun).not.toHaveBeenCalled();
-  });
-
-  it("sin sesión: 401; sesión de alguien que no es superusuario: 403", async () => {
-    const a = await proposeAction(admin.id, "run_cron", { job: "purge-keys" });
-    h.sessionUser = null;
-    expect((await run({}, a.id)).status).toBe(401);
-    h.sessionUser = mortal;
-    expect((await run({}, a.id)).status).toBe(403);
-    expect(h.startManualRun).not.toHaveBeenCalled();
-  });
-
-  it("otro origen: 403", async () => {
-    const a = await proposeAction(admin.id, "run_cron", { job: "purge-keys" });
-    expect((await run({ Origin: "https://evil.example" }, a.id)).status).toBe(403);
-    expect(h.startManualRun).not.toHaveBeenCalled();
-  });
-
-  it("con la sesión: ejecuta y un segundo POST da 409", async () => {
-    const a = await proposeAction(admin.id, "run_cron", { job: "purge-notifications" });
-    const ok = await run({ Origin: "https://www.easybits.cloud" }, a.id);
-    expect(ok.status).toBe(200);
-    expect(await ok.json()).toMatchObject({ ok: true, status: "executed" });
-    expect((await run({}, a.id)).status).toBe(409);
-    expect(h.startManualRun).toHaveBeenCalledTimes(1);
-  });
-});
