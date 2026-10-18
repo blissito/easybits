@@ -487,7 +487,7 @@ export default function CronsAdmin() {
                     <BrutalButton type="button" mode="brand" onClick={openCopilot}>
                       <span className="inline-flex items-center gap-2">
                         <SparkIcon />
-                        Copiloto
+                        Piloto
                       </span>
                     </BrutalButton>
                   )}
@@ -531,7 +531,7 @@ export default function CronsAdmin() {
           </Panel>
           <Separator
             className={`crons-separator max-lg:hidden ${panelOpen ? "" : "invisible"}`}
-            aria-label="Cambiar el ancho del copiloto"
+            aria-label="Cambiar el ancho del piloto"
           />
           <Panel
             id="crons-copilot"
@@ -568,7 +568,7 @@ export default function CronsAdmin() {
               className="fixed inset-x-0 bottom-0 z-50 flex h-[94dvh] flex-col rounded-t-2xl border-2 border-b-0 border-black bg-white outline-none"
             >
               <Drawer.Handle className="!my-2 !h-1.5 !w-12 shrink-0 !bg-gray-300" />
-              <Drawer.Title className="sr-only">Copiloto de crons</Drawer.Title>
+              <Drawer.Title className="sr-only">Piloto de crons</Drawer.Title>
               {/* vaul desplaza la hoja: el chat mide lo VISIBLE en cada punto, para que el composer no quede abajo de la pantalla. */}
               <div
                 ref={sheetChat}

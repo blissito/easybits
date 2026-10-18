@@ -132,7 +132,7 @@ export function UserCronsSection() {
           <p className="text-sm text-gray-500">
             Tareas programadas de tu cuenta: le pegan a una URL o le mandan un mensaje a uno de tus agentes. También por
             API (<code className="font-mono text-xs">/api/v2/crons</code>), MCP (<code className="font-mono text-xs">create_cron</code>) o el
-            copiloto.
+            piloto.
           </p>
         </div>
         {!showForm && (

@@ -98,7 +98,7 @@ export function CronsCopilot({ ask, job, onClearJob, onClose, escBlocked, onChan
   return (
     <aside
       ref={aside}
-      aria-label="Copiloto de crons"
+      aria-label="Piloto de crons"
       style={variant === "panel" && height ? ({ "--copilot-h": `${height}px` } as CSSProperties) : undefined}
       className={
         variant === "panel"
@@ -107,7 +107,7 @@ export function CronsCopilot({ ask, job, onClearJob, onClose, escBlocked, onChan
       }
     >
       <header className="flex items-center gap-2 border-b-2 border-black px-4 py-3">
-        <h3 className="font-black">Copiloto</h3>
+        <h3 className="font-black">Piloto</h3>
         {job && (
           <span className="inline-flex min-w-0 items-center gap-1 rounded-full border-2 border-black bg-[#fbbf24] px-2 py-0.5 text-xs font-bold">
             <span className="truncate">{job.name}</span>
@@ -129,10 +129,10 @@ export function CronsCopilot({ ask, job, onClearJob, onClose, escBlocked, onChan
           draft={ask}
           transport={transport}
           skin="easybits"
-          agentName="Asistente de admin"
-          welcome="Pregúntame por qué falló un cron, cuándo corre o qué pasó en sus últimas corridas. Para ejecutar o pausar te pido permiso antes."
-          suggestions={["¿Qué crons fallaron hoy?", "¿Cuál cron tarda más?"]}
-          placeholder="Pregunta sobre los crons…"
+          agentName="Piloto"
+          welcome="Dime qué necesitas de los crons y yo me encargo: revisar por qué falló uno, correrlo o pausarlo. Antes de ejecutar o pausar te pido permiso."
+          suggestions={["Revisa qué cron falló hoy y dime por qué", "Pausa los crons que estén fallando"]}
+          placeholder="Dime qué hago con los crons…"
           context={() => ({ page: "crons", ...(jobRef.current ? { job: jobRef.current.key } : {}) })}
           toolVerbs={TOOL_VERBS}
           formatUserText={stripContext}
