@@ -5,7 +5,7 @@
   "scripts": {
     "postinstall": "patch-package",
     "dev": "react-router dev",
-    "prebuild": "npx tsx scripts/docs-sync.mts --write && npx tsx scripts/skills-pack.mts --write && npx tsx scripts/eb-picker.mts",
+    "prebuild": "npx tsx scripts/docs-sync.mts --write && npx tsx scripts/skills-pack.mts --write",
     "build": "react-router build",
     "check:skills": "npx tsx scripts/skills-pack.mts",
     "check:docs": "npx tsx scripts/docs-sync.mts",
