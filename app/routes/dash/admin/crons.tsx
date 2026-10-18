@@ -1,11 +1,14 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { data, redirect, useFetcher, useLoaderData, useRevalidator } from "react-router";
+import { Group, Panel, Separator, usePanelRef, type LayoutChangedMeta } from "react-resizable-panels";
+import { Drawer } from "vaul";
 import { getUserOrRedirect, isAdminUser } from "~/.server/getters";
 import { CronRunError, listCronOverview, setCronPaused, startManualRun } from "~/.server/cron";
 import type { CronOverview, CronRunView } from "~/.server/cron";
 import { BrutalButton } from "~/components/common/BrutalButton";
 import { SKILLS_ADD_CMD } from "~/components/docs/SkillsInstall";
 import type { Route } from "./+types/crons";
+import "./crons.css";
 
 // El copiloto (y su CSS) sólo se baja cuando se abre.
 const CronsCopilot = lazy(() => import("~/components/admin/CronsCopilot").then((m) => ({ default: m.CronsCopilot })));
@@ -268,7 +271,7 @@ function JobRow({
             {job.paused ? "en pausa" : relative(job.nextRunAt, now)}
           </p>
         </td>
-        <td className="p-3">
+        <td className="p-3 max-sm:hidden">
           <RunSquares runs={job.recent} max={10} />
         </td>
         {actions}
@@ -334,8 +337,10 @@ function useCompactTable() {
       }
     };
     check();
+    // También la tabla: si cambia su contenido o llega la fuente, crece sin que cambie el contenedor.
     const ro = new ResizeObserver(check);
     ro.observe(el);
+    if (table.current) ro.observe(table.current);
     return () => ro.disconnect();
   }, [compact]);
   return { box, table, compact };
@@ -368,84 +373,228 @@ export default function CronsAdmin() {
   const { box, table, compact } = useCompactTable();
 
   // Copiloto: se monta al abrirlo por primera vez y queda vivo (el hilo no se pierde al cerrar).
-  const [copilotOpen, setCopilotOpen] = useState(false);
+  // Escritorio: panel redimensionable que EMPUJA la tabla. Móvil: hoja de vaul desde abajo.
+  const isDesktop = useIsDesktop();
+  const copilotPanel = usePanelRef();
+  const [panelOpen, setPanelOpen] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [sheetSnap, setSheetSnap] = useState<number>(SHEET_SNAPS[0]);
+  const sheetChat = useRef<HTMLDivElement>(null);
+  const [sheetChatH, setSheetChatH] = useState<number | null>(null);
+
+  // Lo visible de la hoja = de donde empieza el chat hasta el borde de abajo; se mide mientras vaul la acomoda.
+  useEffect(() => {
+    if (!sheetOpen) return;
+    let frame = 0;
+    const until = performance.now() + 700;
+    const measure = () => {
+      const el = sheetChat.current;
+      if (el) setSheetChatH(Math.max(240, Math.round(window.innerHeight - el.getBoundingClientRect().top)));
+      if (performance.now() < until) frame = requestAnimationFrame(measure);
+    };
+    frame = requestAnimationFrame(measure);
+    return () => cancelAnimationFrame(frame);
+  }, [sheetOpen, sheetSnap]);
   const [copilotMounted, setCopilotMounted] = useState(false);
   const [copilotJobKey, setCopilotJobKey] = useState<string | null>(null);
   const [ask, setAsk] = useState<{ text: string; key: number } | null>(null);
   const copilotJob = jobs.find((j) => j.key === copilotJobKey) ?? null;
+  const copilotOpen = isDesktop ? panelOpen : sheetOpen;
+
+  // Al pasar a móvil con el panel abierto, se cierra el panel y sigue en la hoja.
+  useEffect(() => {
+    const panel = copilotPanel.current;
+    if (isDesktop || !panel || panel.isCollapsed()) return;
+    panel.collapse();
+    setSheetOpen(true);
+  }, [isDesktop, copilotPanel]);
 
   const openCopilot = () => {
     setCopilotMounted(true);
-    setCopilotOpen(true);
+    if (!isDesktop) return setSheetOpen(true);
+    const panel = copilotPanel.current;
+    if (!panel || !panel.isCollapsed()) return;
+    panel.expand();
+    panel.resize(`${readCopilotWidth()}px`);
   };
-  const closeCopilot = useCallback(() => setCopilotOpen(false), []);
+  const closeCopilot = useCallback(() => {
+    copilotPanel.current?.collapse();
+    setSheetOpen(false);
+  }, [copilotPanel]);
+  // El ancho que el usuario eligió arrastrando se recuerda (sólo el ancho: siempre arranca cerrado).
+  const onLayoutChanged = (_: unknown, meta: LayoutChangedMeta) => {
+    const px = copilotPanel.current?.getSize().inPixels ?? 0;
+    if (meta.isUserInteraction && px > 0) writeCopilotWidth(px);
+  };
   const refresh = useCallback(() => {
     if (revalidator.state === "idle") revalidator.revalidate();
   }, [revalidator]);
   const askAbout = (job: CronOverview) => {
     setCopilotJobKey(job.key);
-    setAsk((a) => ({ text: `¿Por qué falló «${job.name}» en su última corrida y qué hago para arreglarlo?`, key: (a?.key ?? 0) + 1 }));
+    setAsk((a) => ({
+      text: `¿Por qué falló «${job.name}» en su última corrida y qué hago para arreglarlo?`,
+      key: (a?.key ?? 0) + 1,
+    }));
     openCopilot();
   };
 
-  return (
-    <div className="flex items-start gap-6">
-      <div className="min-w-0 max-w-7xl flex-1 pb-10">
-        <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
-          <div>
-            <h2 className="text-2xl font-black mb-1">Crons</h2>
-            <p className="text-sm text-gray-500">
-              Tareas programadas de la plataforma. El horario vive en el código (app/lib/cronJobs.ts) y cambia con un deploy.
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <CopySkillsCommand />
-            {!copilotOpen && (
-              <BrutalButton type="button" mode="brand" onClick={openCopilot}>
-                Copiloto
-              </BrutalButton>
-            )}
-          </div>
-        </div>
-        <div ref={box} className="border-2 border-black rounded-xl overflow-hidden shadow-[3px_3px_0_#000]">
-          <table ref={table} className="w-full text-sm">
-            <thead className="bg-gray-100">
-              <tr>
-                {(compact
-                  ? ["Tarea", "Últimas corridas", ""]
-                  : ["Estado", "Tarea", "Horario", "Últimas corridas", "Última", "Próxima", ""]
-                ).map((h, i) => (
-                  <th key={i} className="p-3 text-left font-bold text-xs uppercase">
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {jobs.map((job) => (
-                <JobRow key={job.key} job={job} now={now} compact={compact} onOpen={() => setOpenKey(job.key)} onAsk={() => askAbout(job)} />
-              ))}
-            </tbody>
-          </table>
-        </div>
-        {open && <RunsDrawer job={open} running={open.running} onClose={() => setOpenKey(null)} />}
-      </div>
-      {copilotMounted && (
-        <div className={copilotOpen ? "contents" : "hidden"}>
-          <Suspense fallback={null}>
-            <CronsCopilot
-              ask={ask}
-              job={copilotJob ? { key: copilotJob.key, name: copilotJob.name } : null}
-              onClearJob={() => setCopilotJobKey(null)}
-              onClose={closeCopilot}
-              escBlocked={!copilotOpen || open != null}
-              onChange={refresh}
-            />
-          </Suspense>
-        </div>
-      )}
-    </div>
+  const copilot = (variant: "panel" | "sheet") => (
+    <Suspense fallback={null}>
+      <CronsCopilot
+        variant={variant}
+        ask={ask}
+        job={copilotJob ? { key: copilotJob.key, name: copilotJob.name } : null}
+        onClearJob={() => setCopilotJobKey(null)}
+        onClose={closeCopilot}
+        escBlocked={!copilotOpen || open != null}
+        onChange={refresh}
+      />
+    </Suspense>
   );
+
+  return (
+    <>
+      {/* El copiloto llega hasta el borde de la ventana (el layout de admin tiene px-8). */}
+      <div className="md:-mr-8">
+        <Group id="crons-layout" style={{ overflow: "clip" }} onLayoutChanged={onLayoutChanged}>
+          <Panel id="crons-table" minSize={isDesktop ? 420 : 0} style={{ overflow: "clip", minWidth: 0 }}>
+            <div className="min-w-0 max-w-7xl pb-10 pr-2">
+              <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
+                <div>
+                  <h2 className="text-2xl font-black mb-1">Crons</h2>
+                  <p className="text-sm text-gray-500">
+                    Tareas programadas de la plataforma. El horario vive en el código (app/lib/cronJobs.ts) y cambia con un
+                    deploy.
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-3">
+                  <CopySkillsCommand />
+                  {!copilotOpen && (
+                    <BrutalButton type="button" mode="brand" onClick={openCopilot}>
+                      Copiloto
+                    </BrutalButton>
+                  )}
+                </div>
+              </div>
+              <div ref={box} className="border-2 border-black rounded-xl overflow-hidden shadow-[3px_3px_0_#000]">
+                <table ref={table} className="w-full text-sm">
+                  <thead className="bg-gray-100">
+                    <tr>
+                      {(compact
+                        ? ["Tarea", "Últimas corridas", ""]
+                        : ["Estado", "Tarea", "Horario", "Últimas corridas", "Última", "Próxima", ""]
+                      ).map((h, i) => (
+                        <th
+                          key={i}
+                          className={`p-3 text-left font-bold text-xs uppercase ${compact && i === 1 ? "max-sm:hidden" : ""}`}
+                        >
+                          {h}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {jobs.map((job) => (
+                      <JobRow
+                        key={job.key}
+                        job={job}
+                        now={now}
+                        compact={compact}
+                        onOpen={() => setOpenKey(job.key)}
+                        onAsk={() => askAbout(job)}
+                      />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {open && <RunsDrawer job={open} running={open.running} onClose={() => setOpenKey(null)} />}
+            </div>
+          </Panel>
+          <Separator
+            className={`crons-separator max-lg:hidden ${panelOpen ? "" : "invisible"}`}
+            aria-label="Cambiar el ancho del copiloto"
+          />
+          <Panel
+            id="crons-copilot"
+            panelRef={copilotPanel}
+            collapsible
+            collapsedSize={0}
+            defaultSize={0}
+            minSize={320}
+            maxSize="60%"
+            style={{ overflow: "clip", minWidth: 0 }}
+            onResize={(size) => setPanelOpen(size.inPixels > 0)}
+          >
+            {copilotMounted && isDesktop && copilot("panel")}
+          </Panel>
+        </Group>
+      </div>
+      {!isDesktop && (
+        <Drawer.Root
+          open={sheetOpen}
+          onOpenChange={setSheetOpen}
+          snapPoints={SHEET_SNAPS}
+          activeSnapPoint={sheetSnap}
+          setActiveSnapPoint={(p) => setSheetSnap(typeof p === "number" ? p : SHEET_SNAPS[0])}
+        >
+          <Drawer.Portal>
+            <Drawer.Overlay className="fixed inset-0 z-40 bg-black/30" />
+            <Drawer.Content
+              aria-describedby={undefined}
+              className="fixed inset-x-0 bottom-0 z-50 flex h-[94dvh] flex-col rounded-t-2xl border-2 border-b-0 border-black bg-white outline-none"
+            >
+              <Drawer.Handle className="!my-2 !h-1.5 !w-12 shrink-0 !bg-gray-300" />
+              <Drawer.Title className="sr-only">Copiloto de crons</Drawer.Title>
+              {/* vaul desplaza la hoja: el chat mide lo VISIBLE en cada punto, para que el composer no quede abajo de la pantalla. */}
+              <div
+                ref={sheetChat}
+                className="min-h-0"
+                style={{ height: sheetChatH ? `${sheetChatH}px` : `calc(${Math.round(sheetSnap * 100)}dvh - 3rem)` }}
+              >
+                {copilotMounted && copilot("sheet")}
+              </div>
+            </Drawer.Content>
+          </Drawer.Portal>
+        </Drawer.Root>
+      )}
+    </>
+  );
+}
+
+// ── Copiloto: tamaño y punto de quiebre ──────────────────────────────────────────
+const COPILOT_WIDTH_KEY = "eb:crons-copilot-width";
+/** Hoja móvil: a media pantalla (se ve la tabla) o casi completa. */
+const SHEET_SNAPS = [0.6, 0.94];
+
+function readCopilotWidth(): number {
+  try {
+    const n = Number(localStorage.getItem(COPILOT_WIDTH_KEY));
+    if (n >= 320) return n;
+  } catch {
+    /* sin almacenamiento: ancho por defecto */
+  }
+  return 420;
+}
+
+function writeCopilotWidth(px: number) {
+  try {
+    localStorage.setItem(COPILOT_WIDTH_KEY, String(Math.round(px)));
+  } catch {
+    /* sin almacenamiento */
+  }
+}
+
+/** `lg` de Tailwind: panel lateral desde 1024 px, hoja de vaul debajo. En el servidor, escritorio. */
+function useIsDesktop() {
+  const [desktop, setDesktop] = useState(true);
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 1024px)");
+    const sync = () => setDesktop(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
+  return desktop;
 }
 
 /** Tu agente opera estos crons por la API de admin: instala los skills de EasyBits con un comando. */

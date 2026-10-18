@@ -112,7 +112,6 @@ const ROUTES: Record<string, () => Promise<{ loader: unknown }>> = {
   "expire-work-boxes": () => import("~/routes/api/cron/expire-work-boxes"),
   "check-hosting": () => import("~/routes/api/cron/check-hosting"),
   "purge-files": () => import("~/routes/api/cron/purge-files"),
-  "purge-certs": () => import("~/routes/api/cron/purge-certs"),
   "purge-keys": () => import("~/routes/api/cron/purge-keys"),
   "purge-machines": () => import("~/routes/api/cron/purge-machines"),
   "purge-notifications": () => import("~/routes/api/cron/purge-notifications"),

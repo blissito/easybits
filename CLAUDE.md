@@ -324,11 +324,7 @@ GTeams provisiona cada team con la **key de PLATAFORMA** (cuenta fixtergeek, Api
 | `__grapes_css__` | Sección fantasma con CSS de GrapesJS | `grapesToSections` extrae `<style>` como sección especial | Filtrada en PageList, deploy, y listado |
 
 ## Cert Management
-- ⚠️ **Heredado de Fly**: compara contra los certs de la app de Fly, que ya no existe (2026-10-08). Hoy los certs los emite el Caddy de sandbox-host (on-demand TLS).
-- Audit + cleanup: `app/.server/core/certOperations.ts` — compares Fly certs vs DB (websites, customDomains, users)
-- Cron: `GET /api/cron/purge-certs` — runs in `.github/workflows/purge-cron.yml` alongside purge-files (every 7 days)
-- Admin UI: `/dash/admin/certs` — view valid/orphaned/protected, bulk delete orphans
-- Protected hostnames: easybits.cloud, www.easybits.cloud, easybits.fly.dev (never deleted)
+- **Retirado (2026-10-18)**: el panel `/dash/admin/certs` y el cron `purge-certs` comparaban contra la app de Fly (borrada el 2026-10-08); los certs hoy los emite el Caddy de sandbox-host (on-demand TLS).
 
 ## Brand: logo animado (wordmark "EasyBits" — efecto FlipLetters)
 

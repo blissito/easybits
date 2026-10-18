@@ -23,7 +23,6 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
 
 const tabs = [
   { to: "/dash/admin", label: "Usuarios", end: true },
-  { to: "/dash/admin/certs", label: "Certificados", end: false },
   { to: "/dash/admin/metrics", label: "Métricas", end: false },
   { to: "/dash/admin/crons", label: "Crons", end: false },
   { to: "/dash/admin/blog", label: "Blog", end: false },

@@ -41,9 +41,14 @@ interface Props {
   escBlocked: boolean;
   /** Fin de turno o decisión: la tabla puede haber cambiado. */
   onChange: () => void;
+  /**
+   * `panel`: columna del escritorio (pegajosa, de donde empieza hasta abajo de la ventana; ESC cierra).
+   * `sheet`: dentro de la hoja de vaul en móvil (llena la hoja; el ESC y el arrastre los lleva vaul).
+   */
+  variant: "panel" | "sheet";
 }
 
-export function CronsCopilot({ ask, job, onClearJob, onClose, escBlocked, onChange }: Props) {
+export function CronsCopilot({ ask, job, onClearJob, onClose, escBlocked, onChange, variant }: Props) {
   const transport = useMemo(() => createPostStreamTransport({ url: CHAT_URL }), []);
   const jobRef = useRef(job);
   jobRef.current = job;
@@ -52,13 +57,14 @@ export function CronsCopilot({ ask, job, onClearJob, onClose, escBlocked, onChan
 
   // Columna pegajosa: llena de donde empieza hasta abajo de la ventana (el composer siempre a la vista).
   useEffect(() => {
+    if (variant !== "panel") return;
     let frame = 0;
     const measure = () => {
       cancelAnimationFrame(frame);
       frame = requestAnimationFrame(() => {
         const el = aside.current;
         if (!el) return;
-        setHeight(Math.max(320, window.innerHeight - Math.max(el.getBoundingClientRect().top, 0) - 16));
+        setHeight(Math.max(320, window.innerHeight - Math.max(el.getBoundingClientRect().top, 0)));
       });
     };
     measure();
@@ -69,16 +75,17 @@ export function CronsCopilot({ ask, job, onClearJob, onClose, escBlocked, onChan
       window.removeEventListener("scroll", measure);
       window.removeEventListener("resize", measure);
     };
-  }, []);
+  }, [variant]);
 
   useEffect(() => {
+    if (variant !== "panel") return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape" || e.defaultPrevented || escBlocked) return;
       onClose();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [escBlocked, onClose]);
+  }, [escBlocked, onClose, variant]);
 
   const onPermission: PermissionHandler = async (id, optionId) => {
     const out = await approve(id, optionId);
@@ -90,8 +97,12 @@ export function CronsCopilot({ ask, job, onClearJob, onClose, escBlocked, onChan
     <aside
       ref={aside}
       aria-label="Copiloto de crons"
-      style={height ? ({ "--copilot-h": `${height}px` } as CSSProperties) : undefined}
-      className="fixed inset-0 z-40 flex flex-col overflow-hidden bg-white lg:sticky lg:inset-auto lg:top-4 lg:z-auto lg:h-[var(--copilot-h,calc(100vh-2rem))] lg:w-[400px] lg:shrink-0 lg:rounded-xl lg:border-2 lg:border-black lg:shadow-[3px_3px_0_#000]"
+      style={variant === "panel" && height ? ({ "--copilot-h": `${height}px` } as CSSProperties) : undefined}
+      className={
+        variant === "panel"
+          ? "sticky top-0 flex h-[var(--copilot-h,100vh)] w-full flex-col overflow-hidden border-l-2 border-black bg-white"
+          : "flex h-full w-full flex-col overflow-hidden bg-white"
+      }
     >
       <header className="flex items-center gap-2 border-b-2 border-black px-4 py-3">
         <h3 className="font-black">Copiloto</h3>
@@ -125,6 +136,7 @@ export function CronsCopilot({ ask, job, onClearJob, onClose, escBlocked, onChan
           formatUserText={stripContext}
           onPermission={onPermission}
           onTurnDone={onChange}
+          className="crons-copilot"
           features={{ attachments: false, models: false }}
           style={{ height: "100%" }}
         />

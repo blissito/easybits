@@ -206,7 +206,6 @@ export default [
       layout("routes/dash/admin/admin.tsx", [
         ...prefix("admin", [
           index("routes/dash/admin/users.tsx"),
-          route("certs", "routes/dash/admin/certs.tsx"),
           route("metrics", "routes/dash/admin/metrics.tsx"),
           route("crons", "routes/dash/admin/crons.tsx"),
       route("blog", "routes/dash/admin/blog.tsx"),
@@ -232,7 +231,6 @@ export default [
   route("api/cron/backup-machines", "routes/api/cron/backup-machines.ts"),
   route("api/cron/expire-work-boxes", "routes/api/cron/expire-work-boxes.ts"),
   route("api/cron/prune-backups", "routes/api/cron/prune-backups.ts"),
-  route("api/cron/purge-certs", "routes/api/cron/purge-certs.ts"),
   route("api/cron/purge-keys", "routes/api/cron/purge-keys.ts"),
   route("api/cron/reap-embed-agents", "routes/api/cron/reap-embed-agents.ts"),
   route("api/cron/sweep-fleet-memory", "routes/api/cron/sweep-fleet-memory.ts"),

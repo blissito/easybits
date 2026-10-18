@@ -27,7 +27,6 @@ export const CRON_JOBS: CronJob[] = [
   job("expire-work-boxes", "Caducidad de web apps sin publicar", "0 4 * * *"),
   job("check-hosting", "Monitor de hosting", "*/5 * * * *"),
   job("purge-files", "Purga de archivos borrados", "0 6 * * 0"),
-  job("purge-certs", "Purga de certificados", "0 6 * * 0"),
   job("purge-keys", "Purga de llaves revocadas", "0 6 * * 0"),
   job("purge-machines", "Purga de máquinas liberadas", "0 6 * * 0"),
   job("purge-notifications", "Purga de notificaciones", "0 6 * * 0"),
