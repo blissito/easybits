@@ -1703,6 +1703,22 @@ const pendingArtifactCapture = new Map<string, string>();
 // con spawn normal en vez de dejar al agente sin arrancar hasta que alguien lo note.
 const derivedBorn = new Map<string, string>();
 
+// El host sólo captura cajas con rootfs dm. Las que nacen clonando el «dorado» de su forma
+// (sandbox-host, SANDBOX_GOLDEN=1, desde el 8-oct; hoy claude-worker 2 vCPU/2 GB en B)
+// traen un rootfs plano y responden 501 DerivedTemplateUnsupported. No es una falla: el
+// clon tarda ~0.23 s contra ~1.8 s de un hijo derivado, así que para ese hash se deja de
+// capturar en vez de reintentarlo en cada arranque en frío.
+type ArtifactSkip = { hash: string; reason: "golden"; at: string };
+function readArtifactSkip(row: { metadata?: unknown } | null | undefined): ArtifactSkip | null {
+  const s = (row?.metadata as { artifactSkip?: ArtifactSkip } | null)?.artifactSkip;
+  return s && typeof s.hash === "string" ? s : null;
+}
+async function setArtifactSkip(fleetAgentId: string, skip: ArtifactSkip) {
+  const row = await db.fleetAgent.findUnique({ where: { id: fleetAgentId }, select: { metadata: true } });
+  const meta = { ...((row?.metadata as Record<string, unknown> | null) ?? {}), artifactSkip: skip };
+  await db.fleetAgent.update({ where: { id: fleetAgentId }, data: { metadata: meta as Prisma.InputJsonValue } });
+}
+
 async function setFleetArtifact(fleetAgentId: string, artifact: FleetArtifact | null) {
   const row = await db.fleetAgent.findUnique({ where: { id: fleetAgentId }, select: { metadata: true } });
   const meta = { ...((row?.metadata as Record<string, unknown> | null) ?? {}) };
@@ -1967,11 +1983,13 @@ async function spawnVm(ctx: AuthContext, fleetAgent: SpawnEnvAgent & { name: str
   const hash = fleetArtifactHash(fleetAgent);
   // Se lee FRESCO de la DB, no de la fila del turno: un drop en esta misma colocación
   // (hijo derivado que no arrancó) debe verse en el reintento inmediato.
-  const artifact = useArtifact
-    ? readFleetArtifact(
-        await db.fleetAgent.findUnique({ where: { id: fleetAgent.id }, select: { metadata: true } }).catch(() => fleetAgent)
-      )
+  const freshRow = useArtifact
+    ? await db.fleetAgent.findUnique({ where: { id: fleetAgent.id }, select: { metadata: true } }).catch(() => fleetAgent)
     : null;
+  const artifact = readFleetArtifact(freshRow);
+  // Este hash ya se intentó capturar sobre un clon del dorado (ver captureFleetArtifact):
+  // no hay delta que capturar y el dorado arranca más rápido que un derivado.
+  const skipCapture = readArtifactSkip(freshRow)?.hash === hash;
   let created: Awaited<ReturnType<typeof createAgent>> | null = null;
   let derivedFrom: string | null = null;
   if (artifact && artifact.hash === hash) {
@@ -1991,7 +2009,7 @@ async function spawnVm(ctx: AuthContext, fleetAgent: SpawnEnvAgent & { name: str
   }
   if (!created) {
     created = await createAgent(ctx, { ...common, seedFiles: persona.seedFiles });
-    if (useArtifact) pendingArtifactCapture.set(created.agentId, hash);
+    if (useArtifact && !skipCapture) pendingArtifactCapture.set(created.agentId, hash);
   }
   auditLog("spawn", { fleetAgent: fleetAgent.id, agentId: created.agentId, memMb: fleetAgent.vmMemMb, box: target.url, derivedFrom });
   // Telemetría: createSandbox ya abrió el intervalo, pero NO podía saber a qué
@@ -2662,9 +2680,20 @@ export async function pickOrSpawn(ctx: AuthContext, fleetAgent: PoolRow, groupId
     // escritura del transcript y el snapshot se lo llevaría— pero nunca falla el turno.
     if (pendingAdoptSeed.has(vm.id)) await reseedAdoptedVm(ctx, fleetAgent, vm);
     if (pendingArtifactCapture.has(vm.id)) {
-      await captureFleetArtifact(ctx, fleetAgent, vm).catch((e) =>
-        auditLog("artifact.capture.fail", { fleetAgent: fleetAgent.id, agentId: vm.id, error: String(e) })
-      );
+      const hash = pendingArtifactCapture.get(vm.id)!;
+      await captureFleetArtifact(ctx, fleetAgent, vm).catch(async (e) => {
+        const body = e instanceof Response ? await e.clone().json().catch(() => null) : null;
+        if (body?.error === "DerivedTemplateUnsupported") {
+          auditLog("artifact.skip", { fleetAgent: fleetAgent.id, agentId: vm.id, hash, reason: "golden" });
+          await setArtifactSkip(fleetAgent.id, { hash, reason: "golden", at: new Date().toISOString() }).catch(() => {});
+          return;
+        }
+        auditLog("artifact.capture.fail", {
+          fleetAgent: fleetAgent.id,
+          agentId: vm.id,
+          error: body ? JSON.stringify(body) : String(e),
+        });
+      });
     }
     let memoryFresh = false;
     if (res.needsRestore) {

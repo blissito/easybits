@@ -322,6 +322,21 @@ describe("spawnVm — decisión de nacer desde el artifact", () => {
     await expect(pickOrSpawn(CTX, fleetAgents.fa1, "web-1")).rejects.toThrow("host down");
   });
 
+  it("caja clonada del dorado (501 Unsupported): no es falla; se deja de capturar ese hash", async () => {
+    createTemplateSnapshot.mockRejectedValue(
+      new Response(JSON.stringify({ error: "DerivedTemplateUnsupported" }), { status: 501 })
+    );
+    const placed = await pickOrSpawn(CTX, fleetAgents.fa1, "web-1");
+    expect(placed.vm.status).toBe("running");
+    expect(fleetAgents.fa1.metadata.artifactSkip).toMatchObject({ hash: fleetArtifactHash(base), reason: "golden" });
+    // El siguiente arranque en frío (otra conversación, caja nueva) ya no intenta capturar.
+    agents.forEach((a) => (a.status = "destroyed" as any));
+    createTemplateSnapshot.mockClear();
+    await pickOrSpawn(CTX, fleetAgents.fa1, "web-2");
+    expect(createAgent).toHaveBeenCalledTimes(2);
+    expect(createTemplateSnapshot).not.toHaveBeenCalled();
+  });
+
   it("si la captura falla, el turno sale igual", async () => {
     createTemplateSnapshot.mockRejectedValue(new Error("501 DerivedTemplateUnsupported"));
     const placed = await pickOrSpawn(CTX, fleetAgents.fa1, "web-1");
