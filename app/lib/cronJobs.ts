@@ -74,6 +74,15 @@ export function graceMs(cron: string, from: Date = new Date()): number {
   return Math.max(periodMs(cron, from) * 0.1, 5 * 60_000);
 }
 
+/**
+ * Holgura antes de decir «tarde»: el despachador arranca la corrida unos segundos (o un minuto)
+ * después de la hora exacta. Un cuarto del periodo, entre 1 y 5 min, y nunca más que la gracia.
+ */
+export function lateSlackMs(cron: string, from: Date = new Date()): number {
+  const slack = Math.min(Math.max(periodMs(cron, from) * 0.25, 60_000), 5 * 60_000);
+  return Math.min(slack, graceMs(cron, from));
+}
+
 // Una corrida sin `finishedAt` más vieja que esto la dio por muerta un reinicio de la app.
 export const RUNNING_STALE_MS = 60 * 60_000;
 
@@ -84,7 +93,8 @@ export type RunLike = { startedAt: Date; finishedAt: Date | null; ok: boolean | 
 /**
  * Estado de una tarea con la semántica de Healthchecks.io para horarios cron:
  * la fecha límite es la siguiente hora programada DESPUÉS de la última corrida; entre la
- * fecha límite y la gracia está «tarde»; pasada la gracia, «falló». Una corrida que
+ * fecha límite (más una holgura por el retraso del despachador) y la gracia está «tarde»;
+ * pasada la gracia, «falló». Una corrida que
  * terminó con error también es «falló». `lastRun` = la más reciente (terminada o no).
  */
 export function cronStatus(
@@ -99,7 +109,7 @@ export function cronStatus(
   if (running && now.getTime() - lastRun.startedAt.getTime() > RUNNING_STALE_MS) return "fallo";
   if (!running && lastRun.ok === false) return "fallo";
   const deadline = nextRun(cron, lastRun.startedAt).getTime();
-  if (now.getTime() < deadline) return "al-dia";
+  if (now.getTime() < deadline + lateSlackMs(cron, lastRun.startedAt)) return "al-dia";
   if (now.getTime() < deadline + graceMs(cron, lastRun.startedAt)) return "tarde";
   return "fallo";
 }

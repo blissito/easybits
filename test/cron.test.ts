@@ -58,6 +58,17 @@ describe("cronStatus", () => {
   it("al día antes de la siguiente hora programada", () => {
     expect(cronStatus(daily, run("2026-10-16T03:00:01Z"), false, at("2026-10-17T02:59:00Z"))).toBe("al-dia");
   });
+  it("segundos de retraso del despachador no son «tarde» (cada minuto / cada 5 min)", () => {
+    const everyMin = "* * * * *";
+    const r1 = run("2026-10-16T03:00:00Z");
+    expect(cronStatus(everyMin, r1, false, at("2026-10-16T03:01:40Z"))).toBe("al-dia");
+    expect(cronStatus(everyMin, r1, false, at("2026-10-16T03:02:30Z"))).toBe("tarde");
+    const every5 = "*/5 * * * *";
+    const r5 = run("2026-10-16T03:20:00Z");
+    expect(cronStatus(every5, r5, false, at("2026-10-16T03:25:40Z"))).toBe("al-dia");
+    expect(cronStatus(every5, r5, false, at("2026-10-16T03:27:00Z"))).toBe("tarde");
+  });
+
   it("tarde dentro de la gracia, falló después", () => {
     const last = run("2026-10-16T03:00:01Z");
     expect(cronStatus(daily, last, false, at("2026-10-17T04:00:00Z"))).toBe("tarde");

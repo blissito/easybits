@@ -375,12 +375,15 @@ export default function CronsAdmin() {
     return () => clearInterval(id);
   }, [serverNow]);
 
-  // Sondeo cada 5 s sólo mientras haya una corrida en curso.
+  // Sondeo: cada 5 s mientras haya una corrida en curso; si no, cada minuto (el estado «al día /
+  // tarde» lo calcula el servidor y una pestaña abierta no debe quedarse con el de cuando cargó).
   useEffect(() => {
-    if (!anyRunning) return;
-    const id = setInterval(() => {
-      if (revalidator.state === "idle") revalidator.revalidate();
-    }, 5000);
+    const id = setInterval(
+      () => {
+        if (revalidator.state === "idle" && document.visibilityState === "visible") revalidator.revalidate();
+      },
+      anyRunning ? 5000 : 60_000
+    );
     return () => clearInterval(id);
   }, [anyRunning, revalidator]);
 
