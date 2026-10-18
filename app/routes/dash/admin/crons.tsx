@@ -539,7 +539,12 @@ export default function CronsAdmin() {
             style={{ overflow: "clip", minWidth: 0 }}
             onResize={(size) => setPanelOpen(size.inPixels > 0)}
           >
-            {copilotMounted && isDesktop && copilot("panel")}
+            {/* Cerrado sigue montado (el hilo no se pierde), pero fuera del foco y del lector de pantalla. */}
+            {copilotMounted && isDesktop && (
+              <div className="h-full" inert={!panelOpen}>
+                {copilot("panel")}
+              </div>
+            )}
           </Panel>
         </Group>
       </div>
