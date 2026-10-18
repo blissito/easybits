@@ -1,7 +1,8 @@
 name: Hosting monitor
+# El horario lo lleva eb-cron (Restate, sandbox-host) desde 2026-10-18: el `schedule:` de
+# GitHub se saltaba corridas (hasta 2 h sin correr) y con los dos activos los correos de
+# alerta salían dobles. Queda sólo el disparo a mano.
 on:
-  schedule:
-    - cron: '*/5 * * * *'
   workflow_dispatch: {}
 jobs:
   check:
