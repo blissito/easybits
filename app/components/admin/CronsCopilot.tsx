@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef } from "react";
 import { createPostStreamTransport, Piloto, type PermissionHandler, type ToolVerbs } from "ghostykit";
 import "ghostykit/styles.css";
+import "./cronsCopilot.css";
 
 const CHAT_URL = "/api/v2/admin/copilot/chat";
 
@@ -67,7 +68,7 @@ export function CronsCopilot({ ask, job, onClearJob, onClose, escBlocked, onChan
   return (
     <aside
       aria-label="Copiloto de crons"
-      className="fixed inset-0 z-40 flex flex-col bg-white lg:relative lg:inset-auto lg:z-auto lg:h-[calc(100vh-6rem)] lg:rounded-xl lg:border-2 lg:border-black lg:shadow-[3px_3px_0_#000] overflow-hidden"
+      className="fixed inset-y-0 right-0 z-40 flex w-full flex-col overflow-hidden border-l-2 border-black bg-white shadow-[-4px_0_0_#000] sm:w-[420px]"
     >
       <header className="flex items-center gap-2 border-b-2 border-black px-4 py-3">
         <h3 className="font-black">Copiloto</h3>

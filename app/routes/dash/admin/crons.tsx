@@ -311,7 +311,7 @@ export default function CronsAdmin() {
   };
 
   return (
-    <div className={copilotOpen ? "lg:grid lg:grid-cols-[minmax(0,1fr)_400px] lg:gap-6 lg:items-start" : "max-w-6xl"}>
+    <div className="max-w-6xl">
       <div className="min-w-0">
         <div className="flex flex-wrap items-start justify-between gap-4 mb-6">
           <div>
@@ -350,7 +350,7 @@ export default function CronsAdmin() {
         {open && <RunsDrawer job={open} running={open.running} onClose={() => setOpenKey(null)} />}
       </div>
       {copilotMounted && (
-        <div hidden={!copilotOpen} className="lg:sticky lg:top-6">
+        <div hidden={!copilotOpen}>
           <Suspense fallback={null}>
             <CronsCopilot
               ask={ask}

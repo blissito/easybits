@@ -1,0 +1,13 @@
+/* @tailwindcss/forms pinta borde, fondo y anillo de foco en todo <textarea>; la caja de Piloto
+   ya tiene su contorno y su sombra. Se neutraliza sólo aquí mientras ghostykit no lo haga. */
+.piloto textarea.piloto-textarea,
+.piloto textarea.piloto-textarea:focus {
+  appearance: none;
+  border: 0;
+  border-radius: 0;
+  background-color: transparent;
+  box-shadow: none;
+  outline: none;
+  --tw-ring-shadow: 0 0 #0000;
+  --tw-ring-offset-shadow: 0 0 #0000;
+}
