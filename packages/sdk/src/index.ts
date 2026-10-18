@@ -520,18 +520,59 @@ export type CronAction =
       /** Header for the secret. Default `Authorization` (with `Bearer ` if the value has no scheme). */
       secretHeader?: string;
     }
-  | { type: "agent_turn"; fleetAgentId: string; prompt: string; groupId?: string };
+  | { type: "agent_turn"; fleetAgentId: string; prompt: string; groupId?: string }
+  | {
+      /** Run a shell command in a throwaway box (destroyed after). Success = exit 0. */
+      type: "exec";
+      /** Runs in /root/job. */
+      command: string;
+      /** Mounted before running. Relative path = /root/job, `~/` = /root. Up to 20 and 512 KB in total. */
+      files?: { path: string; content: string; encoding?: "utf8" | "base64" }[];
+      /**
+       * Without `file`: env var `name`. With `file`: written there (chmod 600) and `<name>_FILE`
+       * points to it. Value from `secretValues` (scoped to this cron) or your vault.
+       */
+      secrets?: { name: string; file?: string }[];
+      /** Box image. Default python (3.12 with pip). */
+      template?: "python" | "node" | "bun" | "ubuntu";
+      /** Default 300, max 600. */
+      timeoutSeconds?: number;
+    };
+
+/** Notifications after each run. Every run also emits the `cron.run.succeeded` / `cron.run.failed` webhooks. */
+export interface CronNotify {
+  /** Default "failure": only when a run fails. */
+  on?: "failure" | "always";
+  /** Push to the Ghosty app with the personal token in your vault secret (default `GHOSTY_PUSH_TOKEN`). */
+  push?: true | { secret: string };
+  /** Email to the account that owns the cron (never another address). */
+  email?: true;
+}
 
 export interface Cron {
   id: string;
   name: string;
+  /** "once" (`at`) or "recurring" (`cron`). */
+  kind: "once" | "recurring";
+  /** Empty for a one-off cron. */
   cron: string;
+  at: string | null;
+  until: string | null;
+  timesLeft: number | null;
   timezone: string;
   /** The schedule in words (Spanish), e.g. "diario 08:30 America/Mexico_City". */
   schedule: string;
   enabled: boolean;
+  /** Did everything it had to (a one-off that ran, or `until`/`times` ran out). */
+  done: boolean;
+  /** For `exec`, files come back as `{ path, bytes }` (never their content). */
   action: CronAction;
+  notify: CronNotify | null;
   nextRunAt: string | null;
+  /** `nextRunAt` in the cron's zone: "2026-10-18 23:00". */
+  nextRunLocal: string | null;
+  /** Time left: "12h 54m". */
+  in: string | null;
   lastRunAt: string | null;
   lastOk: boolean | null;
   lastStatus: number | null;
@@ -543,15 +584,39 @@ export interface Cron {
 
 export interface CreateCronParams {
   name: string;
-  /** 5 fields (min hour day month weekday); at most every 5 minutes. */
-  cron: string;
+  /** Repeating: 5 fields (min hour day month weekday); at most every 5 minutes. One of `cron` | `at` | `in`. */
+  cron?: string;
+  /** Once: ISO (without offset it is read in `timezone`) or "23:00" (today). A time in the past → 400. */
+  at?: string;
+  /** Once, relative: "10m", "2h", "1h30m", "1d". */
+  in?: string;
+  /** Repeating cron that stops on its own: last date (same forms as `at`). */
+  until?: string | null;
+  /** Repeating cron that stops on its own: how many more runs. */
+  times?: number | null;
   /** IANA time zone. Default America/Mexico_City. */
   timezone?: string;
   enabled?: boolean;
   action: CronAction;
+  /** Secret values ONLY for this cron (`{ NAME: value }`); the names go in `action.secrets`. Never returned. */
+  secretValues?: Record<string, string>;
+  notify?: CronNotify | null;
 }
 
 export type UpdateCronParams = Partial<CreateCronParams>;
+
+/** `createCron({ ..., dryRun: true })`: validates without creating. */
+export interface CronPreview {
+  dryRun: true;
+  name: string;
+  kind: "once" | "recurring";
+  schedule: string;
+  timezone: string;
+  /** The next (up to 3) runs, ISO and local. */
+  nextRuns: { at: string; local: string }[];
+  in: string | null;
+  action: CronAction;
+}
 
 export interface CronRun {
   id: string;
@@ -560,10 +625,24 @@ export interface CronRun {
   finishedAt: string | null;
   ok: boolean | null;
   status: number | null;
+  /** `exec` runs: the command's exit code. */
+  exitCode: number | null;
+  /** `exec` runs, with `logs: true`: tail of stdout+stderr (64 KB). */
+  logs?: string | null;
   durationMs: number | null;
   summary: string | null;
   error: string | null;
   running: boolean;
+}
+
+export interface CronWait {
+  /** The run that finished (with `logs`), or null if this call timed out. */
+  run: CronRun | null;
+  /** Pass it to the next call so a run is never missed. */
+  after: string;
+  running: boolean;
+  nextRunAt: string | null;
+  nextRunLocal: string | null;
 }
 
 // ─── Webhook Types ─────────────────────────────────────────────
@@ -1618,9 +1697,14 @@ export class EasybitsClient {
     return this.request(`/crons${opts?.includeAgents ? "?include=agents" : ""}`);
   }
 
-  /** Schedule a job: call a URL or send a turn to one of your agents. At most every 5 min; limit per plan. */
-  async createCron(params: CreateCronParams): Promise<Cron> {
-    return this.request<Cron>("/crons", { method: "POST", body: JSON.stringify(params) });
+  /**
+   * Schedule a job: call a URL, send a turn to one of your agents or run a command in a throwaway
+   * box (`exec`); repeating (`cron`, at most every 5 min) or once (`at` / `in`). Limit per plan.
+   */
+  async createCron(params: CreateCronParams): Promise<Cron>;
+  async createCron(params: CreateCronParams & { dryRun: true }): Promise<CronPreview>;
+  async createCron(params: CreateCronParams & { dryRun?: boolean }): Promise<Cron | CronPreview> {
+    return this.request<Cron | CronPreview>("/crons", { method: "POST", body: JSON.stringify(params) });
   }
 
   async getCron(id: string): Promise<Cron> {
@@ -1641,9 +1725,29 @@ export class EasybitsClient {
     return this.request(`/crons/${encodeURIComponent(id)}/run`, { method: "POST" });
   }
 
-  /** Latest runs, newest first (max 50). */
-  async listCronRuns(id: string, opts?: { limit?: number }): Promise<{ items: CronRun[] }> {
-    return this.request(`/crons/${encodeURIComponent(id)}/runs${opts?.limit ? `?limit=${opts.limit}` : ""}`);
+  /** Latest runs, newest first (max 50). `logs: true` adds stdout/stderr of `exec` runs. */
+  async listCronRuns(id: string, opts?: { limit?: number; logs?: boolean }): Promise<{ items: CronRun[] }> {
+    const q = new URLSearchParams();
+    if (opts?.limit) q.set("limit", String(opts.limit));
+    if (opts?.logs) q.set("logs", "1");
+    return this.request(`/crons/${encodeURIComponent(id)}/runs${q.size ? `?${q}` : ""}`);
+  }
+
+  /**
+   * Waits for the next run to FINISH (the one in progress, or the next scheduled) and returns it
+   * with `logs`. Long-polls in 50 s calls until `timeoutMs` (default 30 min); then returns `run: null`.
+   * Throws 409 when there is nothing to wait for.
+   */
+  async waitCronRun(id: string, opts?: { timeoutMs?: number }): Promise<CronWait> {
+    const deadline = Date.now() + (opts?.timeoutMs ?? 30 * 60_000);
+    let after: string | undefined;
+    for (;;) {
+      const wait = Math.max(1, Math.min(50, Math.ceil((deadline - Date.now()) / 1000)));
+      const q = new URLSearchParams({ wait: String(wait), ...(after ? { after } : {}) });
+      const r = await this.request<CronWait>(`/crons/${encodeURIComponent(id)}/runs/next?${q}`);
+      if (r.run || Date.now() >= deadline) return r;
+      after = r.after;
+    }
   }
 
   // ── Webhooks ───────────────────────────────────────────────

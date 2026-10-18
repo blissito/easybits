@@ -13,12 +13,13 @@ import {
   previewUserCron,
   runUserCronNow,
   updateUserCron,
+  waitUserCronRun,
 } from "../../core/userCronOperations";
 import { proposeUserCronAction, type UserCronTool } from "../../core/agentActions";
 import { needsConfirmation } from "./adminCrons";
 import { ok, paginate } from "../responses";
 
-export const USER_CRON_TOOLS = ["list_my_crons", "create_cron", "update_cron", "delete_cron", "run_my_cron"] as const;
+export const USER_CRON_TOOLS = ["list_my_crons", "create_cron", "update_cron", "delete_cron", "run_my_cron", "wait_cron_run"] as const;
 
 type Wrap = <T>(fn: (params: T, extra: any) => Promise<any>) => (params: T, extra: any) => Promise<any>;
 
@@ -66,6 +67,16 @@ const secretValuesShape = z
   .optional()
   .describe("valores de secretos SÓLO para este cron (`{ NOMBRE: valor }`, p. ej. el contenido de un .p8): se guardan cifrados como acotados al cron, ningún otro cron los lee, se borran con el cron y nunca regresan. Los nombres deben estar en action.secrets");
 
+const notifyShape = z
+  .object({
+    on: z.enum(["failure", "always"]).optional().describe("default failure: sólo cuando falla"),
+    push: z.union([z.literal(true), z.object({ secret: z.string() })]).optional().describe("aviso a la app de Ghosty; usa el token personal del secreto GHOSTY_PUSH_TOKEN (o el que digas)"),
+    email: z.literal(true).optional().describe("correo a la cuenta dueña (nunca a otra dirección)"),
+  })
+  .nullable()
+  .optional()
+  .describe("avisos por corrida; null los quita. Además, cada corrida emite los webhooks cron.run.succeeded / cron.run.failed");
+
 const cronShape = z
   .string()
   .describe("cron de 5 campos (min hora díaMes mes díaSemana), p. ej. `30 8 * * *` = diario 8:30; mínimo cada 5 min");
@@ -111,6 +122,7 @@ export function registerUserCronTools(server: McpServer, wrapHandler: Wrap) {
       enabled: z.boolean().optional().describe("default true"),
       action: actionShape,
       secretValues: secretValuesShape,
+      notify: notifyShape,
       dryRun: z.boolean().optional().describe("sólo valida y dice cuándo correría; no crea nada"),
     },
     wrapHandler(async (p: Record<string, unknown>, extra) => {
@@ -132,6 +144,7 @@ export function registerUserCronTools(server: McpServer, wrapHandler: Wrap) {
       enabled: z.boolean().optional(),
       action: actionShape.optional(),
       secretValues: secretValuesShape,
+      notify: notifyShape,
     },
     wrapHandler(async (p: { id: string } & Record<string, unknown>, extra) => {
       const ctx = authOf(extra);
@@ -147,6 +160,20 @@ export function registerUserCronTools(server: McpServer, wrapHandler: Wrap) {
     wrapHandler(async (p: { id: string }, extra) => {
       const ctx = authOf(extra);
       return maybePropose(ctx, "delete_cron", p, () => deleteUserCron(ctx, p.id));
+    })
+  );
+
+  server.tool(
+    "wait_cron_run",
+    "Espera a que termine la SIGUIENTE corrida de un cron tuyo (la que va en curso, o la próxima programada) y la regresa con `ok`, `exitCode` y `logs`. Long-poll de hasta 50 s: si responde `run: null`, vuelve a llamar con el mismo `after` que te regresó. 409 si no hay nada que esperar (apagado o ya terminó).",
+    {
+      id: idShape,
+      timeoutSeconds: z.number().int().optional().describe("cuánto esperar en esta llamada; máximo 50"),
+      after: z.string().optional().describe("el `after` de la respuesta anterior (para no perder la corrida entre llamadas)"),
+    },
+    wrapHandler(async (p: { id: string; timeoutSeconds?: number; after?: string }, extra) => {
+      const ctx = authOf(extra);
+      return ok(await waitUserCronRun(ctx, p.id, { after: p.after, waitS: p.timeoutSeconds }));
     })
   );
 

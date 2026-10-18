@@ -132,6 +132,8 @@ easybits crons create "Heads-up" --in 2h --url https://my-app.com/api/notice --m
 easybits crons create "Review" --at 23:00 --run "python3 asc.py submit" --file scripts/asc.py \
   --secret-file ASC_P8:~/.appstoreconnect/private_keys/AuthKey_X.p8     # a command in a throwaway box; the .p8 only this cron reads
 easybits crons runs "Review" --logs                                      # exit code + stdout/stderr
+easybits crons wait "Review" --timeout 2h                                # blocks until it runs; exits with its exit code
+easybits crons update "Review" --notify push,email --notify-on always    # push to the Ghosty app / email to you
 easybits crons ls
 easybits crons update "Study reminder" --cron "0 7 * * 1-5"
 easybits crons run "Study reminder"       # id or exact name

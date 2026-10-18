@@ -52,3 +52,17 @@ test("execFromFlags: archivos junto al comando y .p8 como secreto acotado en la 
   assert.equal(remotePathFor("/tmp/x/key.pem", "/h/bliss"), "key.pem");
   assert.ok("error" in execFromFlags({ run: "x", files: [], secrets: [], secretFiles: ["sin-dos-puntos"] }, read, "/h/bliss"));
 });
+
+test("crons wait: código de salida y duraciones", async () => {
+  const { runExitCode, parseDurationMs, notifyFromFlags } = await import("./commands/crons.ts");
+  assert.equal(runExitCode({ ok: true, exitCode: 0 }), 0);
+  assert.equal(runExitCode({ ok: false, exitCode: 3 }), 3);
+  assert.equal(runExitCode({ ok: false }), 1);
+  assert.equal(runExitCode({ ok: true }), 0);
+  assert.equal(parseDurationMs("1h30m"), 90 * 60_000);
+  assert.equal(parseDurationMs("ya"), null);
+  assert.deepEqual(notifyFromFlags({ notify: "push", notifyOn: "always" }), { notify: { on: "always", push: true } });
+  assert.deepEqual(notifyFromFlags({ notify: "none" }), { notify: null });
+  assert.deepEqual(notifyFromFlags({}), {});
+  assert.ok("error" in notifyFromFlags({ notify: "sms" }));
+});

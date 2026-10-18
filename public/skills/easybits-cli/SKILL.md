@@ -5,7 +5,7 @@ license: MIT
 compatibility: Needs Node 22+ (npx is enough), network access to https://www.easybits.cloud and an EasyBits API key
 metadata:
   author: easybits
-  version: "1.24"
+  version: "1.25"
 ---
 
 # Use the EasyBits CLI
@@ -186,6 +186,8 @@ easybits crons create "Once" --in 2h --url https://my-app.com/api/x --method POS
 easybits crons create "Job" --at 23:00 --run "pip install -q requests && python3 job.py" --file ./job.py \
   --secret API_TOKEN --secret-file KEY_P8:~/.keys/AuthKey.p8 --json                             # command in a throwaway box
 easybits crons runs <id|name> --logs --json                  # {items:[{startedAt, ok, exitCode, summary, error, logs}]}
+easybits crons wait <id|name> --timeout 2h --json            # blocks until the next run ends; EXITS with its code (exec) or 0/1
+easybits crons update <id|name> --notify push,email --notify-on always --json   # push (GHOSTY_PUSH_TOKEN) / email to you; none removes
 easybits crons ls --json                                     # {items:[{id, name, kind, cron, at, until, timesLeft, timezone, schedule, enabled, done, action, nextRunAt, nextRunLocal, in, lastOk, lastError}]}
 easybits crons update <id|name> --cron "0 7 * * 1-5" --json
 easybits crons run <id|name> --json                          # in the background; then:
@@ -201,6 +203,7 @@ after running and stays listed with its runs. Use `--dry-run` first to confirm t
 `--run` = a throwaway box (python default; `--template node|bun|ubuntu`; `--timeout` ≤ 600 s; success =
 exit 0): `--file` mounts next to the command, `--secret NAME` = vault secret as env var, `--secret-file
 NAME:path` uploads that file as a secret ONLY that cron can read and writes it at the same `~/` path.
+To learn the result, prefer `crons wait` (run it in the background) over looping on `runs`.
 The URL must be public https; secrets go by vault NAME (`--secret`), never the value. Limit per plan:
 Byte 3, Mega 20, Tera 100. After 20 failures in a row a cron turns itself off (`enabled:false`).
 

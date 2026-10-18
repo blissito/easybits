@@ -292,7 +292,7 @@ export const CORE_ALLOWLIST = new Set<string>([
   "structured_doc",
   "get_usage_stats",
   "get_learning_progress",
-  "list_my_crons", "create_cron", "update_cron", "delete_cron", "run_my_cron",
+  "list_my_crons", "create_cron", "update_cron", "delete_cron", "run_my_cron", "wait_cron_run",
   "create_form",
   "list_forms",
   "list_form_submissions",
@@ -808,7 +808,7 @@ export const SITIOS_ALLOWLIST = new Set<string>([
 export const ADMIN_CRONS_ALLOWLIST = new Set<string>([
   "list_crons", "get_cron_runs", "run_cron", "pause_cron",
   // Crons del propio superusuario: con la llave del copiloto sólo PROPONEN (userCrons.ts).
-  "list_my_crons", "create_cron", "update_cron", "delete_cron", "run_my_cron",
+  "list_my_crons", "create_cron", "update_cron", "delete_cron", "run_my_cron", "wait_cron_run",
 ]);
 
 /**

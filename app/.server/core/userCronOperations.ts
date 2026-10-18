@@ -8,7 +8,7 @@
 // `nextRunAt` actual, así que dos réplicas (azul/verde) o un reintento de Restate no lo corren
 // dos veces. Cada corrida queda en `CronRun` con `job = "user:<id>"`.
 import { CronExpressionParser } from "cron-parser";
-import type { CronRun, User, UserCron } from "@prisma/client";
+import { Prisma, type CronRun, type User, type UserCron } from "@prisma/client";
 import { db } from "../db";
 import type { AuthContext } from "../apiAuth";
 import { requireScope } from "../apiAuth";
@@ -16,6 +16,8 @@ import { getUserPlan, type PlanKey } from "~/lib/plans";
 import { RUNNING_STALE_MS, scheduleWords } from "~/lib/cronJobs";
 import { assertPublicUrl, PublicUrlError } from "../publicUrl";
 import { createSecret, getSecretValue } from "./secretOperations";
+import { dispatchWebhooks } from "../webhooks";
+import { sendTransactional } from "../emails/sendTransactional";
 
 export const DEFAULT_TIMEZONE = "America/Mexico_City";
 /** Lo más seguido que puede correr un cron de usuario. */
@@ -93,6 +95,8 @@ export type UserCronInput = {
    * `NOMBRE__C_<id>`, ningún otro cron los lee y se borran con el cron. Nunca regresan.
    */
   secretValues?: Record<string, string>;
+  /** Avisos por corrida; null los quita. */
+  notify?: unknown;
   /** Igual que `times` (es como se guarda; las propuestas del copiloto lo traen así). */
   timesLeft?: number | null;
   timezone?: string;
@@ -332,6 +336,35 @@ export async function validateAction(ownerId: string, raw: unknown, input?: { se
   throw bad('action.type debe ser "http", "agent_turn" o "exec"');
 }
 
+/**
+ * Avisos por corrida. `push` va a la app de Ghosty (POST /api/v2/me/push de ghosty.studio) con el
+ * token personal `gpu_…` del secreto `GHOSTY_PUSH_TOKEN` (o el que diga `secret`). `email` sólo
+ * al correo de la cuenta dueña: con una dirección libre, un cron sería un relevo de spam.
+ */
+export type CronNotify = { on: "failure" | "always"; push?: { secret: string }; email?: true };
+export const DEFAULT_PUSH_SECRET = "GHOSTY_PUSH_TOKEN";
+export const GHOSTY_PUSH_URL = process.env.GHOSTY_PUSH_URL || "https://www.ghosty.studio/api/v2/me/push";
+
+export async function validateNotify(ownerId: string, raw: unknown): Promise<CronNotify | null> {
+  if (raw == null) return null;
+  const n = raw as Record<string, unknown>;
+  const on = n.on == null ? "failure" : String(n.on);
+  if (on !== "failure" && on !== "always") throw bad('notify.on debe ser "failure" o "always"');
+  const out: CronNotify = { on };
+  if (n.push) {
+    const secret = typeof n.push === "object" && (n.push as { secret?: unknown }).secret ? String((n.push as { secret: unknown }).secret) : DEFAULT_PUSH_SECRET;
+    if (!SECRET_NAME.test(secret) || isScopedName(secret)) throw bad(`notify.push.secret inválido: «${secret}»`);
+    const exists = await db.secret.findUnique({ where: { userId_name: { userId: ownerId, name: secret } }, select: { id: true } });
+    if (!exists) {
+      throw bad(`Para avisos push falta el secreto ${secret} en tu bóveda: saca un token personal en la app de Ghosty (Ajustes → Avisos) y guárdalo con ese nombre`);
+    }
+    out.push = { secret };
+  }
+  if (n.email) out.email = true;
+  if (!out.push && !out.email) throw bad("notify necesita push o email");
+  return out;
+}
+
 /** Sufijo de los secretos acotados a un cron. */
 export const cronSecretName = (cronId: string, name: string) => `${name}__C_${cronId.toUpperCase()}`;
 /** Un nombre «acotado» (de un cron o de una máquina) no se puede pedir por su nombre guardado. */
@@ -451,7 +484,8 @@ export async function normalizeCreate(ownerId: string, input: UserCronInput, now
   const timezone = String(input.timezone || DEFAULT_TIMEZONE);
   const sched = resolveSchedule(input, timezone, now);
   const action = await validateAction(ownerId, input.action, input);
-  return { name, ...sched, timezone, enabled: input.enabled !== false, action };
+  const notify = await validateNotify(ownerId, input.notify);
+  return { name, ...sched, timezone, enabled: input.enabled !== false, action, ...(notify ? { notify } : {}) };
 }
 
 type SchedulePatch = { cron?: string; at?: Date | null; until?: Date | null; timesLeft?: number | null; timezone?: string };
@@ -459,7 +493,7 @@ type SchedulePatch = { cron?: string; at?: Date | null; until?: Date | null; tim
 /** Valida un cambio parcial sin escribir. */
 export async function normalizeUpdate(current: UserCron, input: UserCronInput, now: Date = new Date()) {
   if (input.times === undefined && input.timesLeft !== undefined) input = { ...input, times: input.timesLeft };
-  const out: { name?: string; enabled?: boolean; action?: UserCronAction } & SchedulePatch = {};
+  const out: { name?: string; enabled?: boolean; action?: UserCronAction; notify?: CronNotify | null } & SchedulePatch = {};
   if (input.name !== undefined) {
     out.name = String(input.name).trim().slice(0, 80);
     if (!out.name) throw bad("name no puede ir vacío");
@@ -496,6 +530,7 @@ export async function normalizeUpdate(current: UserCron, input: UserCronInput, n
     if (timesLeft === 0) throw bad("A ese cron ya no le quedan corridas; dale `times` nuevo (o null para siempre)");
     if (until && until <= now) throw bad("La fecha `until` de ese cron ya pasó; dale otra (o null para siempre)");
   }
+  if (input.notify !== undefined) out.notify = await validateNotify(current.ownerId, input.notify);
   if (input.action !== undefined) out.action = await validateAction(current.ownerId, input.action, input);
   else if (input.secretValues) throw bad("secretValues va junto con action (la acción dice qué secretos usa)");
   return out;
@@ -518,6 +553,7 @@ export type UserCronView = {
   /** Ya hizo todo lo que tenía que hacer (de una sola vez que corrió, o se le acabaron until/times). */
   done: boolean;
   action: UserCronAction;
+  notify: CronNotify | null;
   nextRunAt: string | null;
   /** `nextRunAt` en la zona del cron: «2026-10-18 23:00». */
   nextRunLocal: string | null;
@@ -569,6 +605,7 @@ export const toUserCronView = (c: UserCron, now = new Date()): UserCronView => {
     enabled: c.enabled,
     done: isDone(c, now),
     action: publicAction(c.action as UserCronAction),
+    notify: (c.notify as CronNotify | null) ?? null,
     nextRunAt: next?.toISOString() ?? null,
     nextRunLocal: next ? formatLocal(next, c.timezone) : null,
     in: next ? humanIn(next.getTime() - now.getTime()) : null,
@@ -662,6 +699,67 @@ export async function listUserCronRuns(ctx: AuthContext, id: string, take = 20, 
   return rows.map((r) => runView(r, Date.now(), opts.logs));
 }
 
+/** Lo más que una llamada de `wait` mantiene la conexión abierta (long-poll detrás de Caddy). */
+export const WAIT_MAX_S = 50;
+const WAIT_POLL_MS = 2_000;
+
+export type UserCronWait = {
+  /** La corrida que terminó (con `logs`), o null si se acabó el tiempo de esta llamada. */
+  run: UserCronRunView | null;
+  /** Desde cuándo se espera: pásalo en la siguiente llamada para no perder la corrida. */
+  after: string;
+  running: boolean;
+  nextRunAt: string | null;
+  nextRunLocal: string | null;
+};
+
+/**
+ * Espera la siguiente corrida que TERMINE a partir de `after` (default: la que va en curso o, si
+ * no hay, ahora). 409 si no hay nada que esperar: apagado, sin corrida en curso ni próxima.
+ */
+export async function waitUserCronRun(
+  ctx: AuthContext,
+  id: string,
+  opts: { after?: string | Date; waitS?: number; sleep?: (ms: number) => Promise<void> } = {}
+): Promise<UserCronWait> {
+  requireScope(ctx, "READ");
+  const c = await findOwned(ctx, id);
+  const job = userCronJob(c.id);
+  const fresh = () => new Date(Date.now() - RUNNING_STALE_MS);
+  const inFlight = await db.cronRun.findFirst({
+    where: { job, finishedAt: { isSet: false }, startedAt: { gt: fresh() } },
+    orderBy: { startedAt: "asc" },
+  });
+  let after: Date;
+  if (opts.after) {
+    after = new Date(opts.after);
+    if (Number.isNaN(after.getTime())) throw bad("after inválido");
+  } else after = inFlight?.startedAt ?? new Date();
+  const sleep = opts.sleep ?? ((ms: number) => new Promise((r) => setTimeout(r, ms)));
+  const deadline = Date.now() + Math.min(Math.max(opts.waitS ?? WAIT_MAX_S, 0), WAIT_MAX_S) * 1000;
+  for (;;) {
+    const done = await db.cronRun.findFirst({
+      where: { job, startedAt: { gte: after }, finishedAt: { isSet: true } },
+      orderBy: { startedAt: "asc" },
+    });
+    const cur = await db.userCron.findUnique({ where: { id: c.id } });
+    const next = cur?.enabled ? cur.nextRunAt : null;
+    const base = {
+      after: after.toISOString(),
+      nextRunAt: next?.toISOString() ?? null,
+      nextRunLocal: next ? formatLocal(next, c.timezone) : null,
+    };
+    if (done) return { run: runView(done, Date.now(), true), running: false, ...base };
+    const running = !!(await db.cronRun.findFirst({
+      where: { job, startedAt: { gte: after }, finishedAt: { isSet: false } },
+      select: { id: true },
+    })) || !!(inFlight && inFlight.startedAt >= after);
+    if (!running && !next) throw bad("No hay corrida por esperar: el cron está apagado o ya terminó y no corre nada", 409);
+    if (Date.now() >= deadline) return { run: null, running, ...base };
+    await sleep(Math.min(WAIT_POLL_MS, Math.max(deadline - Date.now(), 0)));
+  }
+}
+
 // ── Escritura ────────────────────────────────────────────────────────────────────
 
 /**
@@ -751,10 +849,12 @@ export async function updateUserCron(ctx: AuthContext, id: string, input: UserCr
   const timezone = patch.timezone ?? current.timezone;
   const enabled = patch.enabled ?? current.enabled;
   const reschedule = ["cron", "at", "timezone", "enabled"].some((k) => (patch as Record<string, unknown>)[k] !== undefined);
+  const { notify, ...rest } = patch;
   const row = await db.userCron.update({
     where: { id: current.id },
     data: {
-      ...patch,
+      ...rest,
+      ...(notify !== undefined ? { notify: (notify ?? null) as Prisma.InputJsonValue | null } : {}),
       ...(reschedule ? { nextRunAt: enabled ? (at ?? nextRunFor(cron, timezone)) : null } : {}),
       // Reanudar o cambiar la acción limpia el contador de fallas.
       ...(patch.enabled === true || patch.action ? { failCount: 0 } : {}),
@@ -964,7 +1064,75 @@ export async function executeUserCron(c: UserCron, trigger: "schedule" | "manual
     })
     // El cron pudo borrarse a media corrida.
     .catch(() => undefined);
+  // Avisos y webhooks: disparar y olvidar. Un aviso caído nunca vuelve fallida una corrida buena.
+  void notifyRun(c, { ...out, runId: run?.id ?? null, startedAt, durationMs: finishedAt.getTime() - startedAt.getTime() }).catch((e) =>
+    console.error(`[user-cron] avisos de ${c.id}:`, e)
+  );
   return out;
+}
+
+type RunResult = Outcome & { runId: string | null; startedAt: Date; durationMs: number };
+
+/** ¿Toca avisar? Puro, con test. */
+export const shouldNotify = (n: CronNotify | null | undefined, ok: boolean) => !!n && (n.on === "always" || !ok);
+
+/** Una línea para el aviso: «✅ «Revisión 1.0.10» terminó · exit 0 · 1.0.9 READY_FOR_SALE». Pura, con test. */
+export function notifyText(name: string, r: Pick<Outcome, "ok" | "exitCode" | "summary" | "error">): { title: string; body: string } {
+  const title = `${r.ok ? "✅" : "❌"} «${name}» ${r.ok ? "terminó bien" : "falló"}`;
+  const detail = (r.ok ? r.summary : r.error ?? r.summary) ?? "";
+  return { title, body: clip(detail || (r.exitCode != null ? `exit ${r.exitCode}` : ""), 240) };
+}
+
+async function notifyRun(c: UserCron, r: RunResult) {
+  const payload = {
+    cronId: c.id,
+    name: c.name,
+    runId: r.runId,
+    ok: r.ok,
+    exitCode: r.exitCode ?? null,
+    status: r.status,
+    summary: r.summary,
+    error: r.error,
+    startedAt: r.startedAt.toISOString(),
+    durationMs: r.durationMs,
+  };
+  void dispatchWebhooks(c.ownerId, r.ok ? "cron.run.succeeded" : "cron.run.failed", payload);
+  const n = c.notify as CronNotify | null;
+  if (!shouldNotify(n, r.ok)) return;
+  const { title, body } = notifyText(c.name, r);
+  const url = `${(process.env.BASE_URL || "https://www.easybits.cloud").replace(/\/$/, "")}/dash/admin/crons`;
+  const jobs: Promise<unknown>[] = [];
+  if (n!.push) {
+    jobs.push(
+      (async () => {
+        const token = await getSecretValue(c.ownerId, n!.push!.secret);
+        if (!token) throw new Error(`falta el secreto ${n!.push!.secret}`);
+        const res = await fetch(GHOSTY_PUSH_URL, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ title, body, url, tag: `cron:${c.id}` }),
+          signal: AbortSignal.timeout(15_000),
+        });
+        if (!res.ok) throw new Error(`push HTTP ${res.status}`);
+      })()
+    );
+  }
+  if (n!.email) {
+    jobs.push(
+      (async () => {
+        const owner = await db.user.findUnique({ where: { id: c.ownerId }, select: { email: true } });
+        if (!owner?.email) return;
+        const esc = (x: string) => x.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        await sendTransactional({
+          to: owner.email,
+          subject: title,
+          html: `<p>${esc(body)}</p>${r.exitCode != null ? `<p>Código de salida: ${r.exitCode}</p>` : ""}<p><a href="${url}">Ver el cron</a> · <code>easybits crons runs ${c.id} --logs</code></p>`,
+        });
+      })()
+    );
+  }
+  const results = await Promise.allSettled(jobs);
+  for (const x of results) if (x.status === "rejected") console.warn(`[user-cron] aviso de ${c.id} no salió:`, x.reason);
 }
 
 const DISPATCH_BATCH = 200;

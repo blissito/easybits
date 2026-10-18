@@ -475,6 +475,7 @@ export default [
     route("crons/:id", "routes/api/v2/cron.ts"),
     route("crons/:id/run", "routes/api/v2/cron-run.ts"),
     route("crons/:id/runs", "routes/api/v2/cron-runs.ts"),
+    route("crons/:id/runs/next", "routes/api/v2/cron-runs-next.ts"),
     route("notifications", "routes/api/v2/notifications.ts"),
     route("databases", "routes/api/v2/databases.ts"),
     route("databases/:dbId", "routes/api/v2/database.ts"),

@@ -2103,6 +2103,8 @@ model UserCron {
   // Un recurrente que termina solo: hasta esta fecha y/o tras N corridas más.
   until      DateTime?
   timesLeft  Int?
+  // Avisos por corrida: { on: "failure"|"always", push?: true|{secret}, email?: true }.
+  notify     Json?
   timezone   String    @default("America/Mexico_City")
   enabled    Boolean   @default(true)
   action     Json

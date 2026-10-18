@@ -28,6 +28,8 @@ export const WEBHOOK_EVENTS = [
   "broadcast.sent",
   "turn.completed",
   "turn.failed",
+  "cron.run.succeeded",
+  "cron.run.failed",
 ] as const;
 
 export type WebhookEvent = (typeof WEBHOOK_EVENTS)[number];
@@ -57,6 +59,9 @@ export const WEBHOOK_EVENT_DOCS: Record<WebhookEvent, string> = {
   "turn.failed":
     "a turn ended with no reply (no capacity, rate limited, or worker error) — without " +
     'this a mobile client cannot tell "still thinking" from "died"',
+  "cron.run.succeeded":
+    "one of your crons finished a run OK — `{ cronId, name, runId, exitCode, summary, startedAt, durationMs }` (exitCode for `exec`)",
+  "cron.run.failed": "one of your crons failed a run — same payload, with `error`",
 };
 
 const MAX_FAIL_COUNT = 5;

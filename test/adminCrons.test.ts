@@ -56,7 +56,7 @@ describe("tools MCP admin-crons", () => {
       .sort();
     expect(visible).toEqual([
       "create_cron", "delete_cron", "discover_tools", "get_cron_runs", "list_crons", "list_my_crons",
-      "pause_cron", "run_cron", "run_my_cron", "run_tool", "update_cron",
+      "pause_cron", "run_cron", "run_my_cron", "run_tool", "update_cron", "wait_cron_run",
     ]);
   });
 

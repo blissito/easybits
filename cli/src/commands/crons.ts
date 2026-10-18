@@ -154,6 +154,28 @@ export function actionFromFlags(f: { url?: string; method?: string; body?: strin
   return {};
 }
 
+const NOTIFY_OPTIONS = {
+  notify: { type: "string", value: "push,email|none", description: "Tell you after each run: push to the Ghosty app (vault secret GHOSTY_PUSH_TOKEN) and/or email to your account; none removes it" },
+  "notify-on": { type: "string", value: "failure|always", description: "When to notify (default failure)" },
+} as const;
+
+/** Flags de aviso → `notify` de la API (undefined = no tocar, null = quitar). Puro, con test. */
+export function notifyFromFlags(f: { notify?: string; notifyOn?: string }) {
+  if (f.notify == null) return f.notifyOn ? ({ error: "--notify-on needs --notify" } as const) : {};
+  if (f.notify === "none") return { notify: null };
+  const chans = f.notify.split(",").map((x) => x.trim()).filter(Boolean);
+  const bad = chans.find((x) => x !== "push" && x !== "email");
+  if (bad || !chans.length) return { error: `--notify takes push, email or none (got "${f.notify}")` } as const;
+  if (f.notifyOn && f.notifyOn !== "failure" && f.notifyOn !== "always") return { error: "--notify-on is failure or always" } as const;
+  return {
+    notify: {
+      on: (f.notifyOn ?? "failure") as "failure" | "always",
+      ...(chans.includes("push") ? { push: true as const } : {}),
+      ...(chans.includes("email") ? { email: true as const } : {}),
+    },
+  };
+}
+
 const WHEN_OPTIONS = {
   at: { type: "string", value: "when", description: 'Run ONCE at this time: ISO ("2026-10-18T23:00", read in --tz) or "23:00" (today)' },
   in: { type: "string", value: "duration", description: "Run ONCE after this long: 10m, 2h, 1h30m, 1d" },
@@ -255,6 +277,19 @@ export function cronStatus(c: Pick<CronOverview, "status" | "running">): string 
   return s ? t(s[0], s[1]) : c.status;
 }
 
+/** Código de salida de `crons wait`: el del comando en exec; si no, 0 ok / 1 falla. Puro, con test. */
+export const runExitCode = (r: { ok: boolean | null; exitCode?: number | null }) =>
+  r.exitCode != null ? Math.min(Math.max(r.exitCode, 0), 255) : r.ok ? 0 : 1;
+
+/** «10m», «2h», «1h30m», «1d», «45s» → ms. Pura, con test. */
+export function parseDurationMs(raw: string): number | null {
+  const s = raw.trim().toLowerCase();
+  if (!/^(\d+(d|h|m|s))+$/.test(s)) return null;
+  let ms = 0;
+  for (const [, n, u] of s.matchAll(/(\d+)(d|h|m|s)/g)) ms += Number(n) * ({ d: 86_400_000, h: 3_600_000, m: 60_000, s: 1000 } as const)[u as "d"];
+  return ms;
+}
+
 function duration(ms: number | null | undefined) {
   if (ms == null) return "—";
   return ms < 1000 ? `${ms} ms` : `${(ms / 1000).toFixed(1)} s`;
@@ -265,7 +300,7 @@ export const crons: Command = {
   aliases: ["cron"],
   group: "Account",
   summary: "Your scheduled jobs (call a URL, message an agent or run a command; repeating or once) and, for admins, the platform's",
-  synopsis: "crons <ls|create|update|rm|run|runs|pause|resume>",
+  synopsis: "crons <ls|create|update|rm|run|runs|wait|pause|resume>",
   subs: {
     ls: {
       aliases: ["list"],
@@ -343,6 +378,47 @@ export const crons: Command = {
         });
       },
     },
+    wait: {
+      summary: "Wait for the next run of one of your crons to finish and exit with its result (exec: its exit code)",
+      usage: "easybits crons wait <id|name> [--timeout 30m] [--json]",
+      options: { timeout: { type: "string", value: "duration", description: "Give up after this long (default 30m; 10m, 2h…)" } },
+      examples: ['easybits crons wait "Review 1.0.10"', "easybits crons wait 66f0c2a1b2c3d4e5f6a7b8c9 --timeout 2h --json"],
+      async run(ctx) {
+        const ref = need(ctx, 0, "id|name", this.usage);
+        const mine = await resolveUserCron(ctx, ref);
+        if (!mine) throw new CliError(t(`You have no cron "${ref}".`, `No tienes un cron "${ref}".`), EXIT.API, "easybits crons ls", "not_found", 404);
+        const limitMs = parseDurationMs(str(ctx, "timeout") ?? "30m");
+        if (limitMs == null) throw usageError(t("--timeout like 10m, 2h or 1d.", "--timeout como 10m, 2h o 1d."), this.usage);
+        const deadline = Date.now() + limitMs;
+        let after: string | undefined;
+        for (;;) {
+          const left = Math.ceil((deadline - Date.now()) / 1000);
+          const q = new URLSearchParams({ wait: String(Math.max(1, Math.min(50, left))) });
+          if (after) q.set("after", after);
+          const r = await api<{ run: (RunView & { id: string }) | null; after: string; running: boolean; nextRunLocal: string | null }>(ctx, "GET", `/crons/${mine.id}/runs/next?${q}`);
+          after = r.after;
+          if (r.run) {
+            const code = runExitCode(r.run);
+            emit(ctx, r, () => {
+              console.log(`${r.run!.ok ? "✓" : "✗"} «${mine.name}» ${r.run!.exitCode != null ? `exit ${r.run!.exitCode}` : r.run!.ok ? "ok" : t("failed", "falló")} (${duration(r.run!.durationMs)})`);
+              if (r.run!.logs) console.log(r.run!.logs);
+              else if (r.run!.error) console.log(r.run!.error);
+              else if (r.run!.summary) console.log(r.run!.summary);
+            });
+            process.exitCode = code;
+            return;
+          }
+          if (Date.now() >= deadline) {
+            throw new CliError(
+              t(`Gave up waiting for «${mine.name}»${r.nextRunLocal ? ` (next run ${r.nextRunLocal})` : ""}.`, `Me cansé de esperar «${mine.name}»${r.nextRunLocal ? ` (próxima corrida ${r.nextRunLocal})` : ""}.`),
+              EXIT.API,
+              `easybits crons wait ${mine.id} --timeout 2h`,
+              "timeout",
+            );
+          }
+        }
+      },
+    },
     run: {
       summary: "Run one of your crons or a platform job now, in the background (trigger manual)",
       usage: "easybits crons run <id|name|job>",
@@ -391,12 +467,13 @@ export const crons: Command = {
         ...WHEN_OPTIONS,
         tz: { type: "string", value: "zone", description: "IANA time zone (default America/Mexico_City)" },
         ...ACTION_OPTIONS,
+        ...NOTIFY_OPTIONS,
         "dry-run": { type: "boolean", description: "Validate and show the next 3 runs without creating anything" },
       },
       examples: [
         'easybits crons create "Study reminder" --cron "30 8 * * *" --url https://www.ghosty.studio/api/v2/me/push --method POST --body \'{"title":"Study time"}\' --secret GHOSTY_PUSH_TOKEN',
         'easybits crons create "Ping once" --at 23:00 --url https://example.com/ping --dry-run',
-        'easybits crons create "Review 1.0.10" --at 23:00 --run "pip install -q cryptography && python3 asc.py enviar-tienda" --file scripts/asc.py --secret-file ASC_P8:~/.appstoreconnect/private_keys/AuthKey_X.p8',
+        'easybits crons create "Review 1.0.10" --at 23:00 --run "pip install -q cryptography && python3 asc.py enviar-tienda" --file scripts/asc.py --secret-file ASC_P8:~/.appstoreconnect/private_keys/AuthKey_X.p8 --notify push --notify-on always',
         'easybits crons create "Weekly report" --cron "0 9 * * 1" --times 4 --agent 6a3c046d2cf7d7f4163f739d --prompt "Send me the weekly sales summary"',
       ],
       async run(ctx) {
@@ -407,7 +484,9 @@ export const crons: Command = {
         const a = actionOf(ctx);
         if ("error" in a) throw usageError(a.error!, this.usage);
         if (!a.action) throw usageError(t("Missing --url, --agent or --run.", "Falta --url, --agent o --run."), this.usage);
-        const body = { name, ...w.fields, action: a.action, ...(a.secretValues ? { secretValues: a.secretValues } : {}) };
+        const nf = notifyFromFlags({ notify: str(ctx, "notify"), notifyOn: str(ctx, "notify-on") });
+        if ("error" in nf) throw usageError(nf.error!, this.usage);
+        const body = { name, ...w.fields, action: a.action, ...(a.secretValues ? { secretValues: a.secretValues } : {}), ...nf };
         if (bool(ctx, "dry-run")) {
           const p = await api<Preview>(ctx, "POST", "/crons", { ...body, dryRun: true });
           emit(ctx, p, () => {
@@ -429,6 +508,7 @@ export const crons: Command = {
         name: { type: "string", value: "name", description: "New name" },
         cron: { type: "string", value: "expr", description: "New schedule" },
         ...WHEN_OPTIONS,
+        ...NOTIFY_OPTIONS,
         tz: { type: "string", value: "zone", description: "New IANA time zone" },
         ...ACTION_OPTIONS,
       },
@@ -441,7 +521,10 @@ export const crons: Command = {
         if ("error" in a) throw usageError(a.error!, this.usage);
         const w = scheduleFromFlags(whenOf(ctx));
         if ("error" in w) throw usageError(w.error!, this.usage);
+        const nf = notifyFromFlags({ notify: str(ctx, "notify"), notifyOn: str(ctx, "notify-on") });
+        if ("error" in nf) throw usageError(nf.error!, this.usage);
         const patch = {
+          ...nf,
           ...(str(ctx, "name") ? { name: str(ctx, "name") } : {}),
           ...w.fields,
           ...(a.action ? { action: a.action } : {}),

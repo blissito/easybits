@@ -262,6 +262,9 @@ function CronForm({ agents, onCancel, onCreated }: { agents: Agent[]; onCancel: 
   const [prompt, setPrompt] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [notifyPush, setNotifyPush] = useState(false);
+  const [notifyEmail, setNotifyEmail] = useState(false);
+  const [notifyAlways, setNotifyAlways] = useState(false);
   const once = when.mode === "once";
   const cron = once ? "" : toCron(when);
 
@@ -280,7 +283,15 @@ function CronForm({ agents, onCancel, onCreated }: { agents: Agent[]; onCancel: 
           }
         : { type: "agent_turn", fleetAgentId: agentId || agents[0]?.id, prompt };
     try {
-      await api("/api/v2/crons", { method: "POST", body: JSON.stringify({ name, ...(once ? { at: when.at } : { cron }), timezone, action }) });
+      await api("/api/v2/crons", { method: "POST", body: JSON.stringify({
+          name,
+          ...(once ? { at: when.at } : { cron }),
+          timezone,
+          action,
+          ...(notifyPush || notifyEmail
+            ? { notify: { on: notifyAlways ? "always" : "failure", ...(notifyPush ? { push: true } : {}), ...(notifyEmail ? { email: true } : {}) } }
+            : {}),
+        }) });
       onCreated();
     } catch (err) {
       setError((err as Error).message);
@@ -421,6 +432,22 @@ function CronForm({ agents, onCancel, onCreated }: { agents: Agent[]; onCancel: 
           </div>
         </>
       )}
+
+      <div className="md:col-span-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+        <span className={label}>Avisarme</span>
+        <label className="flex items-center gap-1.5">
+          <input type="checkbox" checked={notifyPush} onChange={(e) => setNotifyPush(e.target.checked)} /> push a la app de Ghosty
+        </label>
+        <label className="flex items-center gap-1.5">
+          <input type="checkbox" checked={notifyEmail} onChange={(e) => setNotifyEmail(e.target.checked)} /> correo
+        </label>
+        {(notifyPush || notifyEmail) && (
+          <label className="flex items-center gap-1.5">
+            <input type="checkbox" checked={notifyAlways} onChange={(e) => setNotifyAlways(e.target.checked)} /> también cuando sale bien
+          </label>
+        )}
+        {notifyPush && <span className="text-xs text-gray-500">Usa el secreto GHOSTY_PUSH_TOKEN de tu bóveda (token personal de la app).</span>}
+      </div>
 
       {error && <p className="md:col-span-2 text-sm font-bold text-red-600">{error}</p>}
       <div className="md:col-span-2 flex justify-end gap-2">
