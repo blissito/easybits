@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { createPostStreamTransport, Piloto, type PermissionHandler, type ToolVerbs } from "ghostykit";
-import "ghostykit/styles.css";
+import { createPostStreamTransport, Piloto, type PermissionHandler, type ToolVerbs } from "ghosty-autopilot";
+import "ghosty-autopilot/styles.css";
 
 const CHAT_URL = "/api/v2/admin/copilot/chat";
 
