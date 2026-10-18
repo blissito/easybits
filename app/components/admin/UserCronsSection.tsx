@@ -55,7 +55,9 @@ function relative(iso: string | null): string {
   const diff = new Date(iso).getTime() - Date.now();
   const abs = Math.abs(diff);
   const min = Math.round(abs / 60_000);
-  const txt = min < 1 ? "segundos" : min < 60 ? `${min} min` : min < 48 * 60 ? `${Math.round(min / 60)} h` : `${Math.round(min / 1440)} d`;
+  // El reloj del navegador y el del servidor difieren unos segundos: menos de un minuto es «ahora».
+  if (min < 1) return "justo ahora";
+  const txt = min < 60 ? `${min} min` : min < 48 * 60 ? `${Math.round(min / 60)} h` : `${Math.round(min / 1440)} d`;
   return diff >= 0 ? `en ${txt}` : `hace ${txt}`;
 }
 
