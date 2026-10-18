@@ -702,6 +702,8 @@ export async function listUserCronRuns(ctx: AuthContext, id: string, take = 20, 
 /** Lo más que una llamada de `wait` mantiene la conexión abierta (long-poll detrás de Caddy). */
 export const WAIT_MAX_S = 50;
 const WAIT_POLL_MS = 2_000;
+/** Cuánto se espera a que aparezca la corrida de un cron recién reclamado antes de dar 409. */
+const CLAIM_GRACE_MS = 30_000;
 
 export type UserCronWait = {
   /** La corrida que terminó (con `logs`), o null si se acabó el tiempo de esta llamada. */
@@ -754,7 +756,10 @@ export async function waitUserCronRun(
       where: { job, startedAt: { gte: after }, finishedAt: { isSet: false } },
       select: { id: true },
     })) || !!(inFlight && inFlight.startedAt >= after);
-    if (!running && !next) throw bad("No hay corrida por esperar: el cron está apagado o ya terminó y no corre nada", 409);
+    // El despachador reclama un cron de una sola vez (lo apaga, sin nextRunAt) un instante ANTES
+    // de crear su CronRun: si el cron se movió hace poco, la corrida viene en camino.
+    const justClaimed = !!cur && Date.now() - cur.updatedAt.getTime() < CLAIM_GRACE_MS;
+    if (!running && !next && !justClaimed) throw bad("No hay corrida por esperar: el cron está apagado o ya terminó y no corre nada", 409);
     if (Date.now() >= deadline) return { run: null, running, ...base };
     await sleep(Math.min(WAIT_POLL_MS, Math.max(deadline - Date.now(), 0)));
   }

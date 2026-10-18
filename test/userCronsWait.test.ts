@@ -29,7 +29,7 @@ const run = (startedAt: Date, finishedAt: Date | null, extra = {}) => ({
 
 beforeEach(() => {
   runs = [];
-  cron = { id: ID, ownerId: "u1", timezone: "America/Mexico_City", enabled: true, nextRunAt: new Date(Date.now() + 60_000) };
+  cron = { id: ID, ownerId: "u1", timezone: "America/Mexico_City", enabled: true, nextRunAt: new Date(Date.now() + 60_000), updatedAt: new Date(Date.now() - 3_600_000) };
 });
 
 describe("wait", () => {
@@ -55,6 +55,17 @@ describe("wait", () => {
     const r = await waitUserCronRun(ctx, ID, { waitS: 0 });
     expect(r.run).toBeNull();
     expect(r.nextRunAt).not.toBeNull();
+  });
+  it("recién reclamado (apagado, sin corrida todavía) sigue esperando en lugar de dar 409", async () => {
+    cron = { ...cron, enabled: false, nextRunAt: null, updatedAt: new Date(Date.now() - 1000) };
+    let calls = 0;
+    const r = await waitUserCronRun(ctx, ID, {
+      waitS: 50,
+      sleep: async () => {
+        if (++calls === 1) runs.push(run(new Date(Date.now() + 500), new Date(Date.now() + 1500)));
+      },
+    });
+    expect(r.run?.id).toBe("r0");
   });
   it("sin nada que esperar → 409 al instante", async () => {
     cron = { ...cron, enabled: false, nextRunAt: null };
