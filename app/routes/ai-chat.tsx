@@ -6,7 +6,7 @@ export default function AIChatPage() {
       <div className="max-w-4xl mx-auto px-4">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            Chat con Google Gemini
+            Bittor, el asistente de EasyBits
           </h1>
           <p className="text-gray-600">
             Interactúa con nuestro asistente de IA para obtener ayuda y

@@ -1,4 +1,5 @@
 import { LRUCache } from "lru-cache";
+import { isIP } from "node:net";
 
 // Configuración del rate limiter
 const rateLimitConfig = {
@@ -140,6 +141,12 @@ export class RateLimiter {
   }
 
   public getClientIP(request: Request): string {
+    // El Caddy del borde (sandbox-host) PISA `X-Real-Client-IP` con el peer TCP: es la única
+    // que el cliente no controla. `X-Forwarded-For` se AÑADE, así que su primer valor lo
+    // puede inventar quien llama.
+    const edgeIP = request.headers.get("x-real-client-ip");
+    if (edgeIP && isIP(edgeIP)) return edgeIP;
+
     // Obtener IP real considerando proxies
     const forwarded = request.headers.get("x-forwarded-for");
     const realIP = request.headers.get("x-real-ip");
@@ -219,6 +226,23 @@ export async function checkSandboxRateLimit(
   } catch (error) {
     console.error("Sandbox rate limiting error:", error);
     return { allowed: true, remaining: max, max, retryAfterS: 60 };
+  }
+}
+
+// ─── Bittor (chat público de la landing) ──────────────────────────
+// Cada turno es un modelo corriendo en la cuenta de la plataforma: tope por visitante (IP)
+// y uno global para que un enjambre de IPs no lo convierta en gasto sin fondo.
+const bittorIpLimiter = new RateLimiter({ windowMs: 10 * 60_000, maxRequests: 15 });
+const bittorGlobalLimiter = new RateLimiter({ windowMs: 15 * 60_000, maxRequests: 400 });
+
+export async function checkBittorRate(request: Request): Promise<boolean> {
+  try {
+    const ip = bittorIpLimiter.getClientIP(request);
+    if (!(await bittorIpLimiter.checkRateLimit(`bittor:${ip}`)).allowed) return false;
+    return (await bittorGlobalLimiter.checkRateLimit("bittor:global")).allowed;
+  } catch (error) {
+    console.error("Bittor rate limiting error:", error);
+    return true;
   }
 }
 

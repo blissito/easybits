@@ -62,18 +62,15 @@ export const useBittor = (initialHistory: Message[] = []) => {
       const response = await fetch("/api/v1/ai/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: userMessage,
-          history: messages
-        }),
+        // La memoria vive en el servidor (una conversación por visitante): sólo va el mensaje.
+        body: JSON.stringify({ message: userMessage }),
       });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Error en la respuesta: ${response.status} - ${errorText}`);
+      // Bittor contesta con `{ content }` también en 429/502 (mensaje amable): se muestra tal cual.
+      const data = await response.json().catch(() => null);
+      if (!data?.content && !response.ok) {
+        throw new Error("No pude responder ahorita. Intenta de nuevo en un momento.");
       }
-      
-      const data = await response.json();
       
       // Actualizar el mensaje del asistente con la respuesta
       setMessages(prev => {
