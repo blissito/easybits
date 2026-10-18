@@ -72,7 +72,7 @@ const notifyShape = z
     on: z.enum(["failure", "always"]).optional().describe("default failure: sólo cuando falla"),
     push: z.union([z.literal(true), z.object({ secret: z.string() })]).optional().describe("aviso a la app de Ghosty; usa el token personal del secreto GHOSTY_PUSH_TOKEN (o el que digas)"),
     email: z.literal(true).optional().describe("correo a la cuenta dueña (nunca a otra dirección)"),
-    inbox: z.string().optional().describe("id de un buzón tuyo (inbox_create): el resultado de cada corrida llega ahí como evento"),
+    inbox: z.string().optional().describe("id o nombre de un buzón tuyo (inbox_create); se guarda su id. El resultado de cada corrida llega ahí como evento"),
   })
   .nullable()
   .optional()
@@ -88,7 +88,7 @@ const whenShapes = {
   until: z.string().nullable().optional().describe("recurrente que termina solo: última fecha (misma forma que `at`); null lo quita"),
   times: z.number().int().nullable().optional().describe("recurrente que termina solo: cuántas corridas más; null lo quita"),
 };
-const idShape = z.string().describe("id del cron (de list_my_crons)");
+const idShape = z.string().describe("id del cron (los crons se nombran por id; sácalo de list_my_crons)");
 
 async function maybePropose(ctx: AuthContext, tool: UserCronTool, args: Record<string, unknown>, run: () => Promise<unknown>) {
   if (isCopilot(ctx)) return needsConfirmation(await proposeUserCronAction(ctx.user.id, tool, args));
@@ -98,16 +98,17 @@ async function maybePropose(ctx: AuthContext, tool: UserCronTool, args: Record<s
 export function registerUserCronTools(server: McpServer, wrapHandler: Wrap) {
   server.tool(
     "list_my_crons",
-    "Tus crons (tareas programadas de TU cuenta): { items:[{ id, name, kind (once|recurring), cron, at, until, timesLeft, timezone, schedule, enabled, done, action, nextRunAt, nextRunLocal, in, lastRunAt, lastOk, lastStatus, lastError, failCount }] }. Con `id`, devuelve además sus últimas corridas en `runs` (con `error` completo).",
+    "Tus crons (tareas programadas de TU cuenta): { items:[{ id, name, kind (once|recurring), cron, at, until, timesLeft, timezone, schedule, enabled, done, action, nextRunAt, nextRunLocal, in, lastRunAt, lastOk, lastStatus, lastError, failCount }] }. Con `id` (los crons se nombran por id), devuelve además sus últimas corridas en `runs` (con `error` completo).",
     {
-      id: z.string().optional().describe("si lo pasas, incluye las últimas 20 corridas de ese cron"),
+      id: z.string().optional().describe("si lo pasas, incluye las últimas corridas de ese cron (20 por default)"),
+      limit: z.number().int().optional().describe("con `id`: cuántas corridas (1-50, default 20)"),
       logs: z.boolean().optional().describe("con `id`: incluye stdout/stderr (cola de 64 KB) de cada corrida `exec`"),
     },
-    wrapHandler(async (p: { id?: string; logs?: boolean }, extra) => {
+    wrapHandler(async (p: { id?: string; limit?: number; logs?: boolean }, extra) => {
       const ctx = authOf(extra);
       const items = await listUserCrons(ctx);
       if (!p.id) return ok(paginate(items, { total: items.length }));
-      const runs = await listUserCronRuns(ctx, p.id, 20, { logs: p.logs });
+      const runs = await listUserCronRuns(ctx, p.id, p.limit ?? 20, { logs: p.logs });
       return ok({ ...paginate(items.filter((c) => c.id === p.id), { total: 1 }), runs });
     })
   );
@@ -135,7 +136,7 @@ export function registerUserCronTools(server: McpServer, wrapHandler: Wrap) {
 
   server.tool(
     "update_cron",
-    "Cambia un cron tuyo (sólo los campos que pases). `enabled:false` lo pausa, `enabled:true` lo reanuda. Pasar `at`/`in` lo vuelve de una sola vez; pasar `cron`, recurrente.",
+    "Cambia un cron tuyo por su id (de list_my_crons; sólo los campos que pases). `enabled:false` lo pausa, `enabled:true` lo reanuda. Pasar `at`/`in` lo vuelve de una sola vez; pasar `cron`, recurrente.",
     {
       id: idShape,
       name: z.string().optional(),
@@ -156,7 +157,7 @@ export function registerUserCronTools(server: McpServer, wrapHandler: Wrap) {
 
   server.tool(
     "delete_cron",
-    "Borra un cron tuyo (el historial de corridas se queda hasta su purga de 90 días).",
+    "Borra un cron tuyo por su id (de list_my_crons; el historial de corridas se queda hasta su purga de 90 días).",
     { id: idShape },
     wrapHandler(async (p: { id: string }, extra) => {
       const ctx = authOf(extra);
@@ -166,7 +167,7 @@ export function registerUserCronTools(server: McpServer, wrapHandler: Wrap) {
 
   server.tool(
     "wait_cron_run",
-    "Espera a que termine la SIGUIENTE corrida de un cron tuyo (la que va en curso, o la próxima programada) y la regresa con `ok`, `exitCode` y `logs`. Long-poll de hasta 50 s: si responde `run: null`, vuelve a llamar con el mismo `after` que te regresó. 409 si no hay nada que esperar (apagado o ya terminó).",
+    "Espera a que termine la SIGUIENTE corrida de un cron tuyo, por su id (la que va en curso, o la próxima programada) y la regresa con `ok`, `exitCode` y `logs`. Long-poll de hasta 50 s: si responde `run: null`, vuelve a llamar con el mismo `after` que te regresó. 409 si no hay nada que esperar (apagado o ya terminó).",
     {
       id: idShape,
       timeoutSeconds: z.number().int().optional().describe("cuánto esperar en esta llamada; máximo 50"),
@@ -180,7 +181,7 @@ export function registerUserCronTools(server: McpServer, wrapHandler: Wrap) {
 
   server.tool(
     "run_my_cron",
-    "Ejecuta ahora un cron tuyo (en segundo plano, trigger «manual»; no mueve su próxima corrida). El resultado sale en list_my_crons con `id`.",
+    "Ejecuta ahora un cron tuyo por su id (en segundo plano, trigger «manual»; no mueve su próxima corrida). El resultado sale en list_my_crons con `id`.",
     { id: idShape },
     wrapHandler(async (p: { id: string }, extra) => {
       const ctx = authOf(extra);

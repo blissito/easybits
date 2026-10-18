@@ -5,7 +5,7 @@ license: MIT
 compatibility: Needs Node 22+ (npx is enough), network access to https://www.easybits.cloud and an EasyBits API key
 metadata:
   author: easybits
-  version: "1.26"
+  version: "1.27"
 ---
 
 # Use the EasyBits CLI
@@ -185,7 +185,8 @@ easybits crons create "Once" --at 23:00 --url https://my-app.com/api/x --method 
 easybits crons create "Once" --in 2h --url https://my-app.com/api/x --method POST --json            # runs ONCE, then enabled:false, done:true
 easybits crons create "Job" --at 23:00 --run "pip install -q requests && python3 job.py" --file ./job.py \
   --secret API_TOKEN --secret-file KEY_P8:~/.keys/AuthKey.p8 --json                             # command in a throwaway box
-easybits crons runs <id|name> --logs --json                  # {items:[{startedAt, ok, exitCode, summary, error, logs}]}
+easybits crons get <id|name> --json                          # the whole cron: {id, name, schedule, action, notify, nextRunAt, until, timesLeft, lastError…}
+easybits crons runs <id|name> --logs --limit 5 --json        # {items:[{startedAt, ok, exitCode, summary, error, logs}]}
 easybits crons wait <id|name> --timeout 2h --json            # blocks until the next run ends; EXITS with its code (exec) or 0/1
 easybits crons update <id|name> --notify push,email --notify-on always --json   # push (GHOSTY_PUSH_TOKEN) / email to you; none removes
 easybits crons ls --json                                     # {items:[{id, name, kind, cron, at, until, timesLeft, timezone, schedule, enabled, done, action, nextRunAt, nextRunLocal, in, lastOk, lastError}]}
@@ -214,7 +215,9 @@ Byte 3, Mega 20, Tera 100. After 20 failures in a row a cron turns itself off (`
 easybits inbox create builds --json            # {id, name, url, unread} — give `url` to whatever should notify you
 easybits inbox ls --json                       # {items:[{id, name, url, unread, lastSeq, lastEventAt}]}
 easybits inbox listen builds                   # stdout: ONE JSON line per event, live; reconnects on its own
-easybits inbox read builds --json              # {items:[{seq, source, body, json?, receivedAt}], cursor, unread}; marks read
+easybits inbox read builds --json              # {items:[{seq, source, body, json?, receivedAt}], cursor, unread}; marks read (--since <cursor>, --no-ack)
+easybits inbox update builds --retention 30 --json      # or --name <new>; the URL stays
+easybits inbox rotate builds --yes --json      # new `url`; the old one stops accepting writes
 easybits inbox rm builds --yes --json
 ```
 

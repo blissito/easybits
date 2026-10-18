@@ -2,10 +2,10 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { AuthContext } from "../../apiAuth";
-import { createInbox, deleteInbox, listInboxes, readInboxEvents } from "../../core/inboxOperations";
+import { createInbox, deleteInbox, listInboxes, readInboxEvents, rotateInboxToken, updateInbox } from "../../core/inboxOperations";
 import { ok, paginate } from "../responses";
 
-export const INBOX_TOOLS = ["inbox_create", "inbox_list", "inbox_read", "inbox_delete"] as const;
+export const INBOX_TOOLS = ["inbox_create", "inbox_list", "inbox_read", "inbox_update", "inbox_rotate", "inbox_delete"] as const;
 
 type Wrap = <T>(fn: (params: T, extra: any) => Promise<any>) => (params: T, extra: any) => Promise<any>;
 
@@ -29,7 +29,7 @@ export function registerInboxTools(server: McpServer, wrapHandler: Wrap) {
 
   server.tool(
     "inbox_list",
-    "Tus buzones de eventos: { items:[{ id, name, url, unread, lastSeq, lastEventAt, retentionDays }] }. `unread` = eventos que llegaron y nadie ha leído con inbox_read.",
+    "Tus buzones de eventos: { items:[{ id, name, url, unread, lastSeq, lastEventAt, retentionDays, createdAt }] }. `unread` = eventos que llegaron y nadie ha leído con inbox_read.",
     {},
     wrapHandler(async (_p, extra) => {
       const items = await listInboxes(authOf(extra));
@@ -49,6 +49,26 @@ export function registerInboxTools(server: McpServer, wrapHandler: Wrap) {
     wrapHandler(async (p: { id: string; since?: number; limit?: number; ack?: boolean }, extra) =>
       ok(await readInboxEvents(authOf(extra), p.id, { since: p.since, limit: p.limit, ack: p.ack }))
     )
+  );
+
+  server.tool(
+    "inbox_update",
+    "Cambia el nombre o la retención de un buzón (sólo lo que pases). Su URL no cambia.",
+    {
+      id: refShape,
+      name: z.string().optional().describe("nombre nuevo, único en tu cuenta"),
+      retentionDays: z.number().int().optional().describe("días que se guardan los eventos (1-30)"),
+    },
+    wrapHandler(async (p: { id: string; name?: string; retentionDays?: number }, extra) =>
+      ok(await updateInbox(authOf(extra), p.id, { name: p.name, retentionDays: p.retentionDays }))
+    )
+  );
+
+  server.tool(
+    "inbox_rotate",
+    "Le da al buzón una URL nueva (`url`); la vieja deja de aceptar eventos de inmediato. Úsalo si la URL se filtró. Los eventos guardados se quedan.",
+    { id: refShape },
+    wrapHandler(async (p: { id: string }, extra) => ok(await rotateInboxToken(authOf(extra), p.id)))
   );
 
   server.tool(

@@ -130,7 +130,8 @@ easybits crons create "Heads-up" --at 23:00 --url https://my-app.com/api/notice 
 easybits crons create "Heads-up" --in 2h --url https://my-app.com/api/notice --method POST
 easybits crons create "Review 1.0.10" --at 23:00 --run "pip install -q cryptography && python3 asc.py submit" \\
   --file scripts/asc.py --secret-file ASC_P8:~/.appstoreconnect/private_keys/AuthKey_X.p8   # command in a throwaway box
-easybits crons runs "Review 1.0.10" --logs                  # exit code and stdout/stderr of each run
+easybits crons get "Review 1.0.10"                          # what it does, how it notifies you and the next run (--json: the whole object)
+easybits crons runs "Review 1.0.10" --logs --limit 5        # exit code and stdout/stderr of each run
 easybits crons wait "Review 1.0.10" --timeout 2h            # waits for the next run and exits with its exit code
 easybits crons update "Review 1.0.10" --notify push,email --notify-on always    # notifications (none removes them)
 easybits crons ls                                           # yours: schedule, what it does, last and next run
@@ -149,7 +150,9 @@ They call a public https URL (with \`--secret\` a secret from your vault travels
 easybits inbox create builds                                # your own webhook URL: anyone POSTs to it
 easybits inbox ls                                           # your inboxes, URL and unread
 easybits inbox listen builds                                # live: one JSON line per event; reconnects on its own
-easybits inbox read builds                                  # the unread ones, marked read (--all everything, --no-ack just look)
+easybits inbox read builds                                  # the unread ones, marked read (--all everything, --since <seq> from a cursor, --no-ack just look)
+easybits inbox update builds --retention 30                 # rename (--name) or keep events longer; the URL stays
+easybits inbox rotate builds --yes                          # new URL; the old one stops accepting writes (if it leaked)
 easybits inbox rm builds --yes
 \`\`\`
 

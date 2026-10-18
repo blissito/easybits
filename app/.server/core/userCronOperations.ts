@@ -364,7 +364,7 @@ export async function validateNotify(ownerId: string, raw: unknown): Promise<Cro
   if (n.email) out.email = true;
   if (n.inbox) {
     const box = await ownedInbox(ownerId, String(n.inbox));
-    if (!box) throw bad("notify.inbox: ese buzón no existe en tu cuenta (usa su id)");
+    if (!box) throw bad(`notify.inbox: no tienes un buzón «${String(n.inbox)}» (usa su id o su nombre)`);
     out.inbox = box.id;
   }
   if (!out.push && !out.email && !out.inbox) throw bad("notify necesita push, email o inbox");

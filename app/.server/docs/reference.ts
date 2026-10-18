@@ -276,7 +276,8 @@ easybits crons create "Aviso" --at 23:00 --url https://mi-app.com/api/aviso --me
 easybits crons create "Aviso" --in 2h --url https://mi-app.com/api/aviso --method POST
 easybits crons create "Revisión 1.0.10" --at 23:00 --run "pip install -q cryptography && python3 asc.py enviar-tienda" \\
   --file scripts/asc.py --secret-file ASC_P8:~/.appstoreconnect/private_keys/AuthKey_X.p8   # comando en caja desechable
-easybits crons runs "Revisión 1.0.10" --logs                # exit code y stdout/stderr de cada corrida
+easybits crons get "Revisión 1.0.10"                        # qué hace, cómo te avisa y la próxima corrida (--json: el objeto completo)
+easybits crons runs "Revisión 1.0.10" --logs --limit 5      # exit code y stdout/stderr de cada corrida
 easybits crons wait "Revisión 1.0.10" --timeout 2h          # espera la siguiente corrida y sale con su exit code
 easybits crons update "Revisión 1.0.10" --notify push,email --notify-on always   # avisos (none los quita)
 easybits crons ls                                           # los tuyos: horario, qué hace, última y próxima
@@ -295,7 +296,9 @@ Le pegan a una URL https pública (con \`--secret\` un secreto de tu bóveda via
 easybits inbox create builds                                # URL de webhook propia: cualquiera le escribe con POST
 easybits inbox ls                                           # tus buzones, URL y no leídos
 easybits inbox listen builds                                # en vivo: una línea JSON por evento; se reconecta solo
-easybits inbox read builds                                  # lo no leído, y lo marca (--all todo, --no-ack sólo mirar)
+easybits inbox read builds                                  # lo no leído, y lo marca (--all todo, --since <seq> desde un cursor, --no-ack sólo mirar)
+easybits inbox update builds --retention 30                 # renombrar (--name) o guardar más días; la URL no cambia
+easybits inbox rotate builds --yes                          # URL nueva; la vieja deja de aceptar escrituras (si se filtró)
 easybits inbox rm builds --yes
 \`\`\`
 
@@ -2132,16 +2135,16 @@ curl -X POST https://www.easybits.cloud/api/v2/crons -H "Authorization: Bearer $
   -d '{"name":"Ping diario","cron":"30 8 * * *","action":{"type":"http","url":"https://mi-app.com/api/tarea","method":"POST"}}'
 \`\`\`
 
-MCP: \`list_my_crons\` (\`logs:true\` con \`id\`), \`create_cron\` (con \`at\`/\`in\`/\`until\`/\`times\`/\`dryRun\`, \`exec\` y \`secretValues\`), \`update_cron\` (también \`notify\`), \`delete_cron\`, \`run_my_cron\`, \`wait_cron_run\` (grupo \`core\`). Panel: sección «Mis crons» en \`/dash/developer/crons\`. Para el resultado: con servidor, los webhooks \`cron.run.*\`; desde una terminal, \`notify.inbox\` (abajo) o \`crons wait\`.
+MCP: \`list_my_crons\` (con \`id\`: \`limit\` hasta 50 corridas y \`logs:true\`; los crons se nombran por id), \`create_cron\` (con \`at\`/\`in\`/\`until\`/\`times\`/\`dryRun\`, \`exec\` y \`secretValues\`), \`update_cron\` (también \`notify\`), \`delete_cron\`, \`run_my_cron\`, \`wait_cron_run\` (grupo \`core\`). Panel: sección «Mis crons» en \`/dash/developer/crons\`. Para el resultado: con servidor, los webhooks \`cron.run.*\`; desde una terminal, \`notify.inbox\` (abajo) o \`crons wait\`.
 
 ### Buzones de eventos (webhook propio que llega a tu terminal)
 Un buzón es una URL de webhook de EasyBits: cualquiera le escribe con \`POST\` (tu cron, Stripe, GitHub, un formulario) y lo que llega **te alcanza en vivo** si estás escuchando o **te espera guardado** si no. Sirve para un agente en una terminal, que no tiene URL pública. Retención 7 días por default (1-30), hasta 1,000 eventos por buzón, cuerpo hasta 256 KB; límite por plan Byte 3, Mega 20, Tera 100.
 
 - \`POST /hooks/<token>\` (público; el token ES la autorización para escribir, quien tenga la URL puede escribir) — cualquier cuerpo; responde \`202 { ok, seq }\`. Se guardan los headers salvo credenciales (\`authorization\`, \`cookie\`, \`x-api-key\`…), así que una firma como \`stripe-signature\` llega.
-- \`GET|POST /api/v2/inboxes\` — lista (\`{ items:[{ id, name, url, unread, lastSeq, lastEventAt, retentionDays }] }\`) / crea \`{ name, retentionDays? }\`. \`GET|PATCH|DELETE /api/v2/inboxes/:id\` (id o nombre); \`POST /api/v2/inboxes/:id/rotate\` = URL nueva (la vieja deja de aceptar).
+- \`GET|POST /api/v2/inboxes\` — lista (\`{ items:[{ id, name, url, unread, lastSeq, lastEventAt, retentionDays, createdAt }] }\`) / crea \`{ name, retentionDays? }\`. \`GET|PATCH|DELETE /api/v2/inboxes/:id\` (id o nombre); \`POST /api/v2/inboxes/:id/rotate\` = URL nueva (la vieja deja de aceptar).
 - \`GET /api/v2/inboxes/:id/events?since=&limit=&ack=\` — sin \`since\`, lo **no leído**; \`ack\` (default 1) marca como leído hasta lo entregado. \`{ items:[{ seq, source (http|cron), method, contentType, headers, body, json?, receivedAt }], cursor, unread }\`.
 - \`GET /api/v2/inboxes/:id/events/stream?since=\` — SSE en vivo: \`event: inbox\` por evento (\`id\` = \`seq\`; reconecta con \`Last-Event-ID\`). Escuchar no marca como leído.
-- Crons: \`notify: { inbox: "<id>", on: "always" }\` deja cada resultado como evento \`{ event: "cron.run.succeeded"|"cron.run.failed", cronId, name, runId, ok, exitCode, summary, error, … }\`.
+- Crons: \`notify: { inbox: "<id o nombre>", on: "always" }\` (se guarda el id) deja cada resultado como evento \`{ event: "cron.run.succeeded"|"cron.run.failed", cronId, name, runId, ok, exitCode, summary, error, … }\`.
 
 \`\`\`bash
 easybits inbox create builds                         # imprime la URL
@@ -2150,7 +2153,7 @@ easybits inbox read builds                           # lo que llegó mientras no
 easybits crons update "Revisión 1.0.10" --notify inbox:builds --notify-on always
 \`\`\`
 
-MCP: \`inbox_create\`, \`inbox_list\`, \`inbox_read\`, \`inbox_delete\` (grupo \`core\`). Al empezar una sesión, un agente lee sus buzones con \`inbox_read\` para ver qué pasó mientras no estaba.
+MCP: \`inbox_create\`, \`inbox_list\`, \`inbox_read\`, \`inbox_update\`, \`inbox_rotate\`, \`inbox_delete\` (grupo \`core\`). SDK: \`listInboxes\`, \`getInbox\`, \`createInbox\`, \`updateInbox\`, \`rotateInbox\`, \`deleteInbox\`, \`readInbox\`, \`listenInbox\`; \`waitCronRun(id, { timeoutMs, after })\` regresa el último \`after\` para seguir sin perder la corrida. Al empezar una sesión, un agente lee sus buzones con \`inbox_read\` para ver qué pasó mientras no estaba.
 
 ### Tareas programadas de la plataforma (sólo administradores)
 Los respaldos diarios de máquinas, su rotación, el monitor de hosting (cada 5 min) y las purgas semanales son tareas programadas de EasyBits. Su horario vive en el código y cada corrida queda registrada (hora, duración, quién la disparó, resumen y error). Se ven y operan en \`/dash/admin/crons\` o por API. Requieren scope \`ADMIN\` **y** ser administrador de la plataforma; cualquier otra cuenta recibe 403.

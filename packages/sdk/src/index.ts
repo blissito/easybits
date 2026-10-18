@@ -547,7 +547,7 @@ export interface CronNotify {
   push?: true | { secret: string };
   /** Email to the account that owns the cron (never another address). */
   email?: true;
-  /** Id of one of your inboxes: each result lands there as an event. */
+  /** Id or name of one of your inboxes (stored as its id): each result lands there as an event. */
   inbox?: string;
 }
 
@@ -1763,12 +1763,13 @@ export class EasybitsClient {
 
   /**
    * Waits for the next run to FINISH (the one in progress, or the next scheduled) and returns it
-   * with `logs`. Long-polls in 50 s calls until `timeoutMs` (default 30 min); then returns `run: null`.
+   * with `logs`. Long-polls in 50 s calls until `timeoutMs` (default 30 min); then returns `run: null`
+   * with the latest `after`: pass it back as `opts.after` so the next call doesn't miss the run.
    * Throws 409 when there is nothing to wait for.
    */
-  async waitCronRun(id: string, opts?: { timeoutMs?: number }): Promise<CronWait> {
+  async waitCronRun(id: string, opts?: { timeoutMs?: number; after?: string }): Promise<CronWait> {
     const deadline = Date.now() + (opts?.timeoutMs ?? 30 * 60_000);
-    let after: string | undefined;
+    let after = opts?.after;
     for (;;) {
       const wait = Math.max(1, Math.min(50, Math.ceil((deadline - Date.now()) / 1000)));
       const q = new URLSearchParams({ wait: String(wait), ...(after ? { after } : {}) });
@@ -1782,6 +1783,15 @@ export class EasybitsClient {
 
   async listInboxes(): Promise<{ items: Inbox[] }> {
     return this.request("/inboxes");
+  }
+
+  async getInbox(idOrName: string): Promise<Inbox> {
+    return this.request<Inbox>(`/inboxes/${encodeURIComponent(idOrName)}`);
+  }
+
+  /** Rename it or change its retention (1-30 days). The URL stays the same. */
+  async updateInbox(idOrName: string, params: { name?: string; retentionDays?: number }): Promise<Inbox> {
+    return this.request<Inbox>(`/inboxes/${encodeURIComponent(idOrName)}`, { method: "PATCH", body: JSON.stringify(params) });
   }
 
   /** Your own webhook URL (`url`). Limit per plan; retention 1-30 days (default 7). */

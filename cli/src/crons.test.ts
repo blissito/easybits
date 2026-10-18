@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { actionFromFlags, describeCronAction, isUserCronId } from "./commands/crons.ts";
+import { actionFromFlags, describeCron, describeCronAction, isUserCronId } from "./commands/crons.ts";
 
 test("isUserCronId: un id de 24 hex es tuyo; una key de la plataforma no", () => {
   assert.equal(isUserCronId("66f0c2a1b2c3d4e5f6a7b8c9"), true);
@@ -77,4 +77,27 @@ test("inbox: SSE por bloques y línea legible", async () => {
   assert.equal(line, '#3 2026-10-18 17:04 http {"hola":1}');
   const { notifyFromFlags } = await import("./commands/crons.ts");
   assert.deepEqual(notifyFromFlags({ notify: "inbox:builds,push" }), { notify: { on: "failure", push: true, inbox: "builds" } });
+});
+
+test("crons get: qué hace, cómo avisa y cuándo corre", () => {
+  const lines = describeCron({
+    id: "66f0c2a1b2c3d4e5f6a7b8c9",
+    name: "Review",
+    cron: "",
+    timezone: "America/Mexico_City",
+    schedule: "una vez",
+    enabled: true,
+    nextRunLocal: "2026-10-18 23:00",
+    in: "2h",
+    action: { type: "exec", command: "python3 asc.py" },
+    notify: { on: "always", push: { secret: "GHOSTY_PUSH_TOKEN" }, inbox: "6a00000000000000000000b1" },
+    nextRunAt: null,
+    lastRunAt: null,
+    lastOk: null,
+    lastStatus: null,
+    lastError: null,
+  }).join("\n");
+  assert.match(lines, /run: python3 asc.py/);
+  assert.match(lines, /push, inbox:6a00000000000000000000b1/);
+  assert.match(lines, /2026-10-18 23:00 \(2h\)/);
 });

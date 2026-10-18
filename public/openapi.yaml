@@ -3593,7 +3593,7 @@ components:
             on: { type: string, enum: [failure, always], default: failure }
             push: { description: "true o { secret }: aviso a la app de Ghosty con el token personal del secreto (default GHOSTY_PUSH_TOKEN)" }
             email: { type: boolean, description: "correo a la cuenta dueña" }
-            inbox: { type: string, description: "id de un buzón tuyo: cada resultado llega como evento" }
+            inbox: { type: string, description: "id o nombre de un buzón tuyo (se guarda su id): cada resultado llega como evento" }
         secretValues:
           type: object
           additionalProperties: { type: string }

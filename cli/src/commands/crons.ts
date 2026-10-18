@@ -20,6 +20,9 @@ import { t } from "../i18n.js";
 type UserCron = {
   id: string;
   name: string;
+  notify?: { on: "failure" | "always"; push?: { secret: string }; email?: true; inbox?: string } | null;
+  until?: string | null;
+  timesLeft?: number | null;
   kind?: "once" | "recurring";
   cron: string;
   at?: string | null;
@@ -52,6 +55,21 @@ export function describeCronAction(a: UserCron["action"]): string {
     return `run: ${a.command.length > 40 ? a.command.slice(0, 39) + "…" : a.command}${extra ? ` (${extra})` : ""}`;
   }
   return `agent ${a.fleetAgentId}: ${a.prompt.length > 40 ? a.prompt.slice(0, 39) + "…" : a.prompt}`;
+}
+
+/** Un cron en renglones legibles para `crons get`. Pura, con test. */
+export function describeCron(c: UserCron): string[] {
+  const n = c.notify;
+  const chans = n ? [n.push ? "push" : "", n.email ? "email" : "", n.inbox ? `inbox:${n.inbox}` : ""].filter(Boolean).join(", ") : "";
+  const state = c.enabled ? t("active", "activo") : c.done ? t("done", "terminado") : t("paused", "en pausa");
+  return [
+    `${c.id} «${c.name}» (${state})`,
+    `${t("Schedule", "Horario")}: ${c.schedule} (${c.timezone})${c.until ? ` ${t("until", "hasta")} ${c.until}` : ""}${c.timesLeft != null ? ` · ${t("runs left", "corridas restantes")}: ${c.timesLeft}` : ""}`,
+    `${t("Next run", "Próxima")}: ${c.enabled && c.nextRunLocal ? `${c.nextRunLocal} (${c.in})` : "—"}`,
+    `${t("Does", "Hace")}: ${describeCronAction(c.action)}`,
+    `${t("Notifies", "Avisa")}: ${chans ? `${chans} (${n!.on === "always" ? t("always", "siempre") : t("on failure", "si falla")})` : "—"}`,
+    `${t("Last run", "Última")}: ${c.lastRunAt ? `${fmtDate(c.lastRunAt)} ${c.lastOk === false ? t("failed", "falló") : "ok"}${c.lastError ? ` — ${c.lastError}` : ""}` : "—"}`,
+  ];
 }
 
 /** id, o nombre exacto (sin mayúsculas) de uno de TUS crons. null si no es tuyo. */
@@ -310,7 +328,7 @@ export const crons: Command = {
   aliases: ["cron"],
   group: "Account",
   summary: "Your scheduled jobs (call a URL, message an agent or run a command; repeating or once) and, for admins, the platform's",
-  synopsis: "crons <ls|create|update|rm|run|runs|wait|pause|resume>",
+  synopsis: "crons <ls|get|create|update|rm|run|runs|wait|pause|resume>",
   subs: {
     ls: {
       aliases: ["list"],
@@ -355,16 +373,35 @@ export const crons: Command = {
         );
       },
     },
+    get: {
+      aliases: ["show"],
+      summary: "Show one of your crons: what it does, how it notifies you and when it runs (--json: the whole object)",
+      usage: "easybits crons get <id|name> [--json]",
+      examples: ['easybits crons get "Review 1.0.10"', "easybits crons get 66f0c2a1b2c3d4e5f6a7b8c9 --json"],
+      async run(ctx) {
+        const ref = need(ctx, 0, "id|name", this.usage);
+        const c = await resolveUserCron(ctx, ref);
+        if (!c) throw new CliError(t(`You have no cron "${ref}".`, `No tienes un cron "${ref}".`), EXIT.API, "easybits crons ls", "not_found", 404);
+        emit(ctx, c, () => {
+          for (const line of describeCron(c)) console.log(line);
+        });
+      },
+    },
     runs: {
       summary: "Show the last runs of one of your crons (id or name) or of a platform job, with the full error",
-      usage: "easybits crons runs <id|name|job> [--logs]",
-      options: { logs: { type: "boolean", description: "Also print stdout/stderr of --run crons (last 64 KB per run)" } },
+      usage: "easybits crons runs <id|name|job> [--limit N] [--logs]",
+      options: {
+        limit: { type: "string", value: "N", description: "At most N runs of one of your crons (1-50, default 50)" },
+        logs: { type: "boolean", description: "Also print stdout/stderr of --run crons (last 64 KB per run)" },
+      },
       examples: ["easybits crons runs 66f0c2a1b2c3d4e5f6a7b8c9", "easybits crons runs \"Review 1.0.10\" --logs", "easybits crons runs backup-machines --json"],
       async run(ctx) {
         const key = need(ctx, 0, "id|name|job", this.usage);
         const mine = await userCronOrNull(ctx, key);
         const withLogs = bool(ctx, "logs");
-        const path = mine ? `/crons/${mine.id}/runs?limit=50${withLogs ? "&logs=1" : ""}` : `/admin/crons/${encodeURIComponent(key)}/runs`;
+        const limit = str(ctx, "limit") ?? "50";
+        if (!/^\d+$/.test(limit) || Number(limit) < 1 || Number(limit) > 50) throw usageError(t("--limit is 1 to 50.", "--limit va de 1 a 50."), this.usage);
+        const path = mine ? `/crons/${mine.id}/runs?limit=${limit}${withLogs ? "&logs=1" : ""}` : `/admin/crons/${encodeURIComponent(key)}/runs`;
         const { items } = await api<{ items: RunView[] }>(ctx, "GET", path);
         emit(ctx, { items }, () => {
           table(
@@ -514,7 +551,7 @@ export const crons: Command = {
     update: {
       aliases: ["edit", "set"],
       summary: "Change one of your crons (only what you pass)",
-      usage: 'easybits crons update <id|name> [--name <n>] [--cron "<expr>" | --at <when> | --in <duration>] [--until <when>] [--times N] [--tz <IANA>] [--url … | --agent … --prompt …]',
+      usage: 'easybits crons update <id|name> [--name <n>] [--cron "<expr>" | --at <when> | --in <duration>] [--until <when>] [--times N] [--tz <IANA>] [--url … | --agent … --prompt … | --run <cmd> [--file f]… [--secret NAME]…] [--notify push,email,inbox:<name>|none] [--notify-on failure|always]',
       options: {
         name: { type: "string", value: "name", description: "New name" },
         cron: { type: "string", value: "expr", description: "New schedule" },

@@ -633,16 +633,16 @@ curl -X POST https://www.easybits.cloud/api/v2/crons -H "Authorization: Bearer $
   -d '{"name":"Daily ping","cron":"30 8 * * *","action":{"type":"http","url":"https://my-app.com/api/task","method":"POST"}}'
 \`\`\`
 
-MCP: \`list_my_crons\` (\`logs:true\` with \`id\`), \`create_cron\` (with \`at\`/\`in\`/\`until\`/\`times\`/\`dryRun\`, \`exec\` and \`secretValues\`), \`update_cron\` (also \`notify\`), \`delete_cron\`, \`run_my_cron\`, \`wait_cron_run\` (\`core\` group). Dashboard: "Mis crons" section at \`/dash/developer/crons\`. For the result: with a server, the \`cron.run.*\` webhooks; from a terminal, \`notify.inbox\` (below) or \`crons wait\`.
+MCP: \`list_my_crons\` (with \`id\`: \`limit\` up to 50 runs and \`logs:true\`; crons are named by id), \`create_cron\` (with \`at\`/\`in\`/\`until\`/\`times\`/\`dryRun\`, \`exec\` and \`secretValues\`), \`update_cron\` (also \`notify\`), \`delete_cron\`, \`run_my_cron\`, \`wait_cron_run\` (\`core\` group). Dashboard: "Mis crons" section at \`/dash/developer/crons\`. For the result: with a server, the \`cron.run.*\` webhooks; from a terminal, \`notify.inbox\` (below) or \`crons wait\`.
 
 ### Event inboxes (your own webhook that reaches your terminal)
 An inbox is an EasyBits webhook URL: anyone writes to it with \`POST\` (your cron, Stripe, GitHub, a form) and what arrives **reaches you live** if you are listening or **waits for you** if not. Made for an agent in a terminal, which has no public URL. 7-day retention by default (1-30), up to 1,000 events per inbox, body up to 256 KB; limit per plan Byte 3, Mega 20, Tera 100.
 
 - \`POST /hooks/<token>\` (public; the token IS the write authorization, anyone with the URL can write) — any body; answers \`202 { ok, seq }\`. Headers are kept except credentials (\`authorization\`, \`cookie\`, \`x-api-key\`…), so a signature like \`stripe-signature\` comes through.
-- \`GET|POST /api/v2/inboxes\` — list (\`{ items:[{ id, name, url, unread, lastSeq, lastEventAt, retentionDays }] }\`) / create \`{ name, retentionDays? }\`. \`GET|PATCH|DELETE /api/v2/inboxes/:id\` (id or name); \`POST /api/v2/inboxes/:id/rotate\` = new URL (the old one stops accepting).
+- \`GET|POST /api/v2/inboxes\` — list (\`{ items:[{ id, name, url, unread, lastSeq, lastEventAt, retentionDays, createdAt }] }\`) / create \`{ name, retentionDays? }\`. \`GET|PATCH|DELETE /api/v2/inboxes/:id\` (id or name); \`POST /api/v2/inboxes/:id/rotate\` = new URL (the old one stops accepting).
 - \`GET /api/v2/inboxes/:id/events?since=&limit=&ack=\` — without \`since\`, the **unread** ones; \`ack\` (default 1) marks them read up to what was delivered. \`{ items:[{ seq, source (http|cron), method, contentType, headers, body, json?, receivedAt }], cursor, unread }\`.
 - \`GET /api/v2/inboxes/:id/events/stream?since=\` — live SSE: \`event: inbox\` per event (\`id\` = \`seq\`; reconnect with \`Last-Event-ID\`). Listening does not mark as read.
-- Crons: \`notify: { inbox: "<id>", on: "always" }\` drops each result as an event \`{ event: "cron.run.succeeded"|"cron.run.failed", cronId, name, runId, ok, exitCode, summary, error, … }\`.
+- Crons: \`notify: { inbox: "<id or name>", on: "always" }\` (the id is stored) drops each result as an event \`{ event: "cron.run.succeeded"|"cron.run.failed", cronId, name, runId, ok, exitCode, summary, error, … }\`.
 
 \`\`\`bash
 easybits inbox create builds                         # prints the URL
@@ -651,7 +651,7 @@ easybits inbox read builds                           # what arrived while you we
 easybits crons update "Review 1.0.10" --notify inbox:builds --notify-on always
 \`\`\`
 
-MCP: \`inbox_create\`, \`inbox_list\`, \`inbox_read\`, \`inbox_delete\` (\`core\` group). At the start of a session, an agent reads its inboxes with \`inbox_read\` to see what happened while it was away.
+MCP: \`inbox_create\`, \`inbox_list\`, \`inbox_read\`, \`inbox_update\`, \`inbox_rotate\`, \`inbox_delete\` (\`core\` group). SDK: \`listInboxes\`, \`getInbox\`, \`createInbox\`, \`updateInbox\`, \`rotateInbox\`, \`deleteInbox\`, \`readInbox\`, \`listenInbox\`; \`waitCronRun(id, { timeoutMs, after })\` returns the latest \`after\` so the next call never misses the run. At the start of a session, an agent reads its inboxes with \`inbox_read\` to see what happened while it was away.
 
 ### Platform scheduled jobs (platform admins only)
 Daily machine backups, their rotation, the hosting monitor (every 5 min) and the weekly purges are EasyBits scheduled jobs. Their schedule lives in code and every run is recorded (time, duration, who triggered it, summary and error). They are viewed and operated at \`/dash/admin/crons\` or through the API. They require the \`ADMIN\` scope **and** being a platform admin; any other account gets 403.

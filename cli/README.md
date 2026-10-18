@@ -131,7 +131,8 @@ easybits crons create "Heads-up" --at 23:00 --url https://my-app.com/api/notice 
 easybits crons create "Heads-up" --in 2h --url https://my-app.com/api/notice --method POST              # once; --until/--times end repeating ones
 easybits crons create "Review" --at 23:00 --run "python3 asc.py submit" --file scripts/asc.py \
   --secret-file ASC_P8:~/.appstoreconnect/private_keys/AuthKey_X.p8     # a command in a throwaway box; the .p8 only this cron reads
-easybits crons runs "Review" --logs                                      # exit code + stdout/stderr
+easybits crons get "Review"                                              # what it does, how it notifies you, next run (--json: all of it)
+easybits crons runs "Review" --logs --limit 5                            # exit code + stdout/stderr
 easybits crons wait "Review" --timeout 2h                                # blocks until it runs; exits with its exit code
 easybits crons update "Review" --notify push,email --notify-on always    # push to the Ghosty app / email to you
 easybits crons ls
@@ -145,7 +146,9 @@ easybits crons rm "Study reminder" --yes
 easybits inbox create builds              # prints the URL (anyone with it can write)
 easybits inbox ls
 easybits inbox listen builds              # one JSON line per event, live (Claude Code: run it with Monitor)
-easybits inbox read builds                # the unread ones, marked read
+easybits inbox read builds                # the unread ones, marked read (--since <seq>: from a cursor)
+easybits inbox update builds --retention 30   # rename (--name) or keep events longer; the URL stays
+easybits inbox rotate builds --yes        # new URL; the old one stops working (if it leaked)
 easybits inbox rm builds --yes
 
 # Platform crons (platform admins only; key with the ADMIN scope)

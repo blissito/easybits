@@ -310,6 +310,6 @@ export async function openInboxStream(ctx: AuthContext, ref: string, opts: { sin
   });
 }
 
-/** Para `notify.inbox` de los crons: el buzón del dueño por id. */
-export const ownedInbox = (ownerId: string, id: string) =>
-  /^[a-f0-9]{24}$/.test(id) ? db.eventInbox.findFirst({ where: { id, ownerId } }) : Promise.resolve(null);
+/** Para `notify.inbox` de los crons: el buzón del dueño por id o por nombre. */
+export const ownedInbox = (ownerId: string, ref: string) =>
+  db.eventInbox.findFirst({ where: /^[a-f0-9]{24}$/.test(ref) ? { id: ref, ownerId } : { name: ref, ownerId } });

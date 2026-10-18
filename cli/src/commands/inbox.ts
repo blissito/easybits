@@ -106,7 +106,7 @@ export const inbox: Command = {
   aliases: ["inboxes"],
   group: "Account",
   summary: "Event inboxes: your own webhook URL whose events reach your terminal live or wait for you to read them",
-  synopsis: "inbox <ls|create|listen|read|rm>",
+  synopsis: "inbox <ls|create|listen|read|update|rotate|rm>",
   subs: {
     ls: {
       aliases: ["list"],
@@ -157,17 +157,22 @@ export const inbox: Command = {
     },
     read: {
       summary: "Show the events you haven't read yet and mark them read (the next read brings only new ones)",
-      usage: "easybits inbox read <id|name> [--all] [--no-ack] [--limit N]",
+      usage: "easybits inbox read <id|name> [--all | --since <seq>] [--no-ack] [--limit N]",
       options: {
         all: { type: "boolean", description: "Everything still kept, read or not" },
+        since: { type: "string", value: "seq", description: "Events after this one, read or not (the cursor of a previous read)" },
         "no-ack": { type: "boolean", description: "Just look; don't mark them read" },
         limit: { type: "string", value: "N", description: "At most N events (default 50, max 200)" },
       },
-      examples: ["easybits inbox read builds", "easybits inbox read builds --all --no-ack --json"],
+      examples: ["easybits inbox read builds", "easybits inbox read builds --all --no-ack --json", "easybits inbox read builds --since 12 --no-ack"],
       async run(ctx) {
         const name = need(ctx, 0, "id|name", this.usage);
+        const since = str(ctx, "since");
+        if (since != null && !/^\d+$/.test(since)) throw usageError(t("--since is an event number.", "--since es un número de evento."), this.usage);
+        if (since != null && bool(ctx, "all")) throw usageError(t("--all and --since are exclusive.", "--all y --since no van juntos."), this.usage);
         const q = new URLSearchParams();
         if (bool(ctx, "all")) q.set("since", "0");
+        if (since != null) q.set("since", since);
         if (bool(ctx, "no-ack")) q.set("ack", "0");
         if (str(ctx, "limit")) q.set("limit", str(ctx, "limit")!);
         const r = await api<{ items: InboxEvent[]; cursor: number; unread: number }>(ctx, "GET", `/inboxes/${ref(name)}/events${q.size ? `?${q}` : ""}`);
@@ -175,6 +180,41 @@ export const inbox: Command = {
           if (!r.items.length) return console.log(t("Nothing new.", "Nada nuevo."));
           for (const e of r.items) console.log(eventLine(e, process.stdout.columns || 100));
           if (r.unread) console.log(t(`\n${r.unread} more unread: easybits inbox read ${name}`, `\nQuedan ${r.unread} sin leer: easybits inbox read ${name}`));
+        });
+      },
+    },
+    update: {
+      aliases: ["edit", "set"],
+      summary: "Rename an inbox or change how long it keeps events (its URL stays the same)",
+      usage: "easybits inbox update <id|name> [--name <new>] [--retention <days>]",
+      options: {
+        name: { type: "string", value: "new", description: "New name, unique in your account" },
+        retention: { type: "string", value: "days", description: "Days events are kept (1-30)" },
+      },
+      examples: ["easybits inbox update builds --retention 30", "easybits inbox update builds --name ci --json"],
+      async run(ctx) {
+        const name = need(ctx, 0, "id|name", this.usage);
+        const days = str(ctx, "retention");
+        if (days != null && !/^\d+$/.test(days)) throw usageError(t("--retention is whole days.", "--retention son días enteros."), this.usage);
+        const patch = { ...(str(ctx, "name") ? { name: str(ctx, "name") } : {}), ...(days ? { retentionDays: Number(days) } : {}) };
+        if (!Object.keys(patch).length) throw usageError(t("Nothing to change: pass --name or --retention.", "No hay nada que cambiar: pasa --name o --retention."), this.usage);
+        const b = await api<Inbox>(ctx, "PATCH", `/inboxes/${ref(name)}`, patch);
+        emit(ctx, b, () => console.log(t(`Updated «${b.name}»: keeps events ${b.retentionDays} days.`, `Actualizado «${b.name}»: guarda los eventos ${b.retentionDays} días.`)));
+      },
+    },
+    rotate: {
+      summary: "Give an inbox a new URL and print it; the old one stops accepting writes right away (stored events stay)",
+      usage: "easybits inbox rotate <id|name> [--yes]",
+      options: { ...YES_OPTION },
+      examples: ["easybits inbox rotate builds --yes", "easybits inbox rotate builds --yes --json"],
+      async run(ctx) {
+        const name = need(ctx, 0, "id|name", this.usage);
+        requireYesIfHeadless(ctx);
+        await confirm(ctx, t(`New URL for «${name}»? Whoever uses the old one stops getting through.`, `¿URL nueva para «${name}»? Quien use la vieja deja de poder escribir.`));
+        const b = await api<Inbox>(ctx, "POST", `/inboxes/${ref(name)}/rotate`);
+        emit(ctx, b, () => {
+          console.log(t(`New URL for «${b.name}» (the old one no longer works):`, `URL nueva de «${b.name}» (la vieja ya no sirve):`));
+          console.log(`  ${b.url}`);
         });
       },
     },

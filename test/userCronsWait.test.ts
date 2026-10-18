@@ -16,10 +16,14 @@ const mockDb = {
   cronRun: {
     findFirst: vi.fn(async ({ where }: any) => runs.filter((r) => match(r, where)).sort((a, b) => a.startedAt - b.startedAt)[0] ?? null),
   },
+  eventInbox: {
+    findFirst: vi.fn(async ({ where }: any) => BOXES.find((b) => b.ownerId === where.ownerId && (where.id ? b.id === where.id : b.name === where.name)) ?? null),
+  },
 };
+const BOXES = [{ id: "6a00000000000000000000b1", ownerId: "u1", name: "builds" }];
 vi.mock("~/.server/db", () => ({ db: mockDb }));
 
-const { waitUserCronRun, shouldNotify, notifyText } = await import("~/.server/core/userCronOperations");
+const { waitUserCronRun, shouldNotify, notifyText, validateNotify } = await import("~/.server/core/userCronOperations");
 
 const ID = "6a00000000000000000000aa";
 const ctx = { user: { id: "u1" }, scopes: ["READ"] } as any;
@@ -86,5 +90,16 @@ describe("notify", () => {
       body: "exit 0 · enviada",
     });
     expect(notifyText("X", { ok: false, exitCode: 1, summary: null, error: "exit 1: boom" }).title).toContain("❌");
+  });
+});
+
+describe("notify.inbox", () => {
+  it("acepta el id o el NOMBRE del buzón y guarda el id", async () => {
+    expect(await validateNotify("u1", { inbox: "6a00000000000000000000b1" })).toEqual({ on: "failure", inbox: "6a00000000000000000000b1" });
+    expect(await validateNotify("u1", { inbox: "builds", on: "always" })).toEqual({ on: "always", inbox: "6a00000000000000000000b1" });
+  });
+  it("un buzón de otra cuenta o inexistente → 400", async () => {
+    await expect(validateNotify("u2", { inbox: "builds" })).rejects.toMatchObject({ status: 400 });
+    await expect(validateNotify("u1", { inbox: "nope" })).rejects.toMatchObject({ status: 400 });
   });
 });
