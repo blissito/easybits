@@ -213,7 +213,6 @@ async function resolveResumes(owner: { id: string; email: string }, groupId: str
     events.push(
       // Un paso aparte de la propuesta (que fue `run_cron`…): éste es la decisión aplicada.
       { type: "TOOL_CALL_START", toolCallId, toolCallName: "confirm_action" },
-      { type: "TOOL_CALL_ARGS", toolCallId, delta: JSON.stringify({ interruptId: r.interruptId, tool: row.tool, approved: approve }) },
       { type: "TOOL_CALL_END", toolCallId },
       {
         type: "TOOL_CALL_RESULT",
