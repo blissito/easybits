@@ -5,7 +5,7 @@ license: MIT
 compatibility: Needs Node 22+ (npx is enough), network access to https://www.easybits.cloud and an EasyBits API key
 metadata:
   author: easybits
-  version: "1.23"
+  version: "1.24"
 ---
 
 # Use the EasyBits CLI
@@ -183,6 +183,9 @@ easybits crons create "Nudge" --cron "30 8 * * *" --url https://www.ghosty.studi
 easybits crons create "Report" --cron "0 9 * * 1" --times 4 --agent <fleetAgentId> --prompt "Send the weekly summary" --json
 easybits crons create "Once" --at 23:00 --url https://my-app.com/api/x --method POST --dry-run --json  # {dryRun, schedule, nextRuns:[{at, local}], in}
 easybits crons create "Once" --in 2h --url https://my-app.com/api/x --method POST --json            # runs ONCE, then enabled:false, done:true
+easybits crons create "Job" --at 23:00 --run "pip install -q requests && python3 job.py" --file ./job.py \
+  --secret API_TOKEN --secret-file KEY_P8:~/.keys/AuthKey.p8 --json                             # command in a throwaway box
+easybits crons runs <id|name> --logs --json                  # {items:[{startedAt, ok, exitCode, summary, error, logs}]}
 easybits crons ls --json                                     # {items:[{id, name, kind, cron, at, until, timesLeft, timezone, schedule, enabled, done, action, nextRunAt, nextRunLocal, in, lastOk, lastError}]}
 easybits crons update <id|name> --cron "0 7 * * 1-5" --json
 easybits crons run <id|name> --json                          # in the background; then:
@@ -195,6 +198,9 @@ Cron = 5 fields in `--tz` (default America/Mexico_City); at most every 5 min (mo
 `--until <date>` / `--times N` make it stop on its own. ONE-OFF: `--at` (ISO, read in `--tz`, or
 `23:00` = today; a time already past → 400, never "tomorrow") or `--in 10m|2h|1d`; it turns off
 after running and stays listed with its runs. Use `--dry-run` first to confirm the local time.
+`--run` = a throwaway box (python default; `--template node|bun|ubuntu`; `--timeout` ≤ 600 s; success =
+exit 0): `--file` mounts next to the command, `--secret NAME` = vault secret as env var, `--secret-file
+NAME:path` uploads that file as a secret ONLY that cron can read and writes it at the same `~/` path.
 The URL must be public https; secrets go by vault NAME (`--secret`), never the value. Limit per plan:
 Byte 3, Mega 20, Tera 100. After 20 failures in a row a cron turns itself off (`enabled:false`).
 

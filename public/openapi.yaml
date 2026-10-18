@@ -2449,6 +2449,10 @@ paths:
         - name: limit
           in: query
           schema: { type: integer, minimum: 1, maximum: 50, default: 20 }
+        - name: logs
+          in: query
+          description: "1 = incluye `logs` (stdout+stderr de corridas exec, últimos 64 KB)"
+          schema: { type: string, enum: ["1", "true"] }
       responses:
         "200":
           description: Corridas, la más reciente primero.
@@ -2471,6 +2475,8 @@ paths:
                         durationMs: { type: integer, nullable: true }
                         summary: { type: string, nullable: true }
                         error: { type: string, nullable: true }
+                        exitCode: { type: integer, nullable: true, description: "corridas exec" }
+                        logs: { type: string, nullable: true, description: "con ?logs=1" }
                         running: { type: boolean }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { $ref: "#/components/responses/NotFound" }
@@ -3367,6 +3373,33 @@ components:
             fleetAgentId: { type: string }
             prompt: { type: string, maxLength: 4000 }
             groupId: { type: string, description: "default cron:<id>" }
+        - type: object
+          required: [type, command]
+          properties:
+            type: { type: string, enum: [exec] }
+            command: { type: string, maxLength: 8000, description: "corre en /root/job de una caja efímera; éxito = exit 0" }
+            files:
+              type: array
+              maxItems: 20
+              description: "hasta 512 KB en total; ruta relativa = /root/job, ~/ = /root"
+              items:
+                type: object
+                required: [path, content]
+                properties:
+                  path: { type: string }
+                  content: { type: string }
+                  encoding: { type: string, enum: [utf8, base64], default: utf8 }
+            secrets:
+              type: array
+              maxItems: 20
+              items:
+                type: object
+                required: [name]
+                properties:
+                  name: { type: string, description: "sin file: variable de entorno; valor de secretValues o de tu bóveda" }
+                  file: { type: string, description: "se escribe en esta ruta (chmod 600) y <name>_FILE apunta a ella" }
+            template: { type: string, enum: [python, node, bun, ubuntu], default: python }
+            timeoutSeconds: { type: integer, minimum: 10, maximum: 600, default: 300 }
     UserCronInput:
       type: object
       properties:
@@ -3380,6 +3413,10 @@ components:
         enabled: { type: boolean, default: true }
         action: { $ref: "#/components/schemas/UserCronAction" }
         dryRun: { type: boolean, description: "sólo valida; responde las próximas 3 corridas sin crear" }
+        secretValues:
+          type: object
+          additionalProperties: { type: string }
+          description: "valores de secretos acotados a ESTE cron (los nombres deben estar en action.secrets); cifrados, nunca regresan, se borran con el cron"
     UserCron:
       type: object
       properties:

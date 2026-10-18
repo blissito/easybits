@@ -103,6 +103,10 @@ export async function proposeUserCronAction(
     a?.type === "agent_turn"
       ? (await db.fleetAgent.findUnique({ where: { id: a.fleetAgentId }, select: { name: true } }))?.name ?? undefined
       : undefined;
+  // La propuesta se guarda tal cual en AgentAction: un valor de secreto ahí quedaría en claro.
+  if (raw.secretValues) {
+    throw new AgentActionError("Los valores de secretos no pasan por el copiloto: súbelos con la CLI o la API (secretValues), o guárdalos en tu bóveda", 400);
+  }
   try {
     if (tool === "create_cron") {
       const c = await normalizeCreate(ownerId, raw);

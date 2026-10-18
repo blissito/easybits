@@ -15,7 +15,7 @@ import { requireScope } from "../apiAuth";
 import { getUserPlan, type PlanKey } from "~/lib/plans";
 import { RUNNING_STALE_MS, scheduleWords } from "~/lib/cronJobs";
 import { assertPublicUrl, PublicUrlError } from "../publicUrl";
-import { getSecretValue } from "./secretOperations";
+import { createSecret, getSecretValue } from "./secretOperations";
 
 export const DEFAULT_TIMEZONE = "America/Mexico_City";
 /** Lo más seguido que puede correr un cron de usuario. */
@@ -45,7 +45,37 @@ export type HttpAction = {
   secretHeader?: string;
 };
 export type AgentTurnAction = { type: "agent_turn"; fleetAgentId: string; prompt: string; groupId?: string };
-export type UserCronAction = HttpAction | AgentTurnAction;
+/** Un archivo que se monta en la caja antes de correr. `path` relativo = dentro del directorio de trabajo. */
+export type ExecFile = { path: string; content: string; encoding?: "utf8" | "base64" };
+/**
+ * Un secreto para el comando: como variable de entorno (`NAME`) o, con `file`, como archivo en esa
+ * ruta (para un .p8). Se busca primero el del cron (`NAME__C_<id>`, subido con `secretValues`) y
+ * luego el de la bóveda de la cuenta.
+ */
+export type ExecSecret = { name: string; file?: string };
+export type ExecAction = {
+  type: "exec";
+  command: string;
+  files?: ExecFile[];
+  secrets?: ExecSecret[];
+  template?: ExecTemplate;
+  timeoutSeconds?: number;
+};
+export type UserCronAction = HttpAction | AgentTurnAction | ExecAction;
+
+export const EXEC_TEMPLATES = ["python", "node", "bun", "ubuntu"] as const;
+export type ExecTemplate = (typeof EXEC_TEMPLATES)[number];
+export const EXEC_DEFAULT_TIMEOUT_S = 300;
+/** Lo que acepta `exec` del host por llamada. */
+export const EXEC_MAX_TIMEOUT_S = 600;
+const EXEC_COMMAND_MAX = 8_000;
+const EXEC_FILES_MAX = 20;
+const EXEC_FILES_BYTES_MAX = 512 * 1024;
+const EXEC_SECRETS_MAX = 20;
+/** Cola de stdout+stderr que se guarda por corrida. */
+export const LOGS_MAX = 64 * 1024;
+/** Directorio de trabajo del comando dentro de la caja. */
+export const EXEC_WORKDIR = "/root/job";
 
 export type UserCronInput = {
   name?: string;
@@ -58,6 +88,11 @@ export type UserCronInput = {
   until?: string | Date | null;
   /** Recurrente que termina solo: cuántas corridas más. null lo quita. */
   times?: number | null;
+  /**
+   * Valores de secretos acotados a ESTE cron (`{ NOMBRE: valor }`): se guardan como
+   * `NOMBRE__C_<id>`, ningún otro cron los lee y se borran con el cron. Nunca regresan.
+   */
+  secretValues?: Record<string, string>;
   /** Igual que `times` (es como se guarda; las propuestas del copiloto lo traen así). */
   timesLeft?: number | null;
   timezone?: string;
@@ -247,7 +282,7 @@ export function claimData(c: Pick<UserCron, "cron" | "at" | "until" | "timesLeft
 }
 
 /** Normaliza y valida la acción. Comprueba dueño del agente, existencia del secreto y URL pública. */
-export async function validateAction(ownerId: string, raw: unknown): Promise<UserCronAction> {
+export async function validateAction(ownerId: string, raw: unknown, input?: { secretValues?: Record<string, string> }): Promise<UserCronAction> {
   const a = (raw ?? {}) as Record<string, unknown>;
   if (a.type === "http") {
     const url = String(a.url ?? "").trim();
@@ -267,6 +302,7 @@ export async function validateAction(ownerId: string, raw: unknown): Promise<Use
     }
     if (a.secretName) {
       const name = String(a.secretName);
+      if (isScopedName(name)) throw bad(`No existe el secreto ${name} en tu vault`);
       const exists = await db.secret.findUnique({ where: { userId_name: { userId: ownerId, name } }, select: { id: true } });
       if (!exists) throw bad(`No existe el secreto ${name} en tu vault`);
       out.secretName = name;
@@ -292,7 +328,80 @@ export async function validateAction(ownerId: string, raw: unknown): Promise<Use
     if (a.groupId) out.groupId = String(a.groupId).slice(0, 200);
     return out;
   }
-  throw bad('action.type debe ser "http" o "agent_turn"');
+  if (a.type === "exec") return validateExec(ownerId, a, input?.secretValues);
+  throw bad('action.type debe ser "http", "agent_turn" o "exec"');
+}
+
+/** Sufijo de los secretos acotados a un cron. */
+export const cronSecretName = (cronId: string, name: string) => `${name}__C_${cronId.toUpperCase()}`;
+/** Un nombre «acotado» (de un cron o de una máquina) no se puede pedir por su nombre guardado. */
+const isScopedName = (name: string) => /__[CM]_[A-Z0-9]+$/.test(name);
+const SECRET_NAME = /^[A-Z_][A-Z0-9_]*$/;
+
+/** Ruta en la caja: `~/x` bajo /root, relativa bajo el directorio de trabajo; sin `..`. */
+export function boxPath(p: string): string {
+  const raw = String(p ?? "").trim();
+  if (!raw || raw.length > 300 || raw.split("/").includes("..") || /[\0\n]/.test(raw)) throw bad(`Ruta inválida: «${raw}»`);
+  if (raw.startsWith("~/")) return `/root/${raw.slice(2)}`;
+  if (raw.startsWith("/")) return raw;
+  return `${EXEC_WORKDIR}/${raw.replace(/^\.\//, "")}`;
+}
+
+async function validateExec(ownerId: string, a: Record<string, unknown>, secretValues?: Record<string, string>): Promise<ExecAction> {
+  const command = String(a.command ?? "").trim();
+  if (!command) throw bad("command es obligatorio");
+  if (command.length > EXEC_COMMAND_MAX) throw bad("command pasa de 8000 caracteres");
+  const out: ExecAction = { type: "exec", command };
+  const template = String(a.template ?? "python") as ExecTemplate;
+  if (!EXEC_TEMPLATES.includes(template)) throw bad(`template debe ser ${EXEC_TEMPLATES.join(", ")}`);
+  out.template = template;
+  const timeout = a.timeoutSeconds == null ? EXEC_DEFAULT_TIMEOUT_S : Number(a.timeoutSeconds);
+  if (!Number.isInteger(timeout) || timeout < 10 || timeout > EXEC_MAX_TIMEOUT_S) throw bad(`timeoutSeconds entre 10 y ${EXEC_MAX_TIMEOUT_S}`);
+  out.timeoutSeconds = timeout;
+  if (a.files != null) {
+    if (!Array.isArray(a.files) || a.files.length > EXEC_FILES_MAX) throw bad(`files: hasta ${EXEC_FILES_MAX} archivos`);
+    let bytes = 0;
+    out.files = a.files.map((f: any) => {
+      const encoding = f?.encoding === "base64" ? "base64" : "utf8";
+      const content = String(f?.content ?? "");
+      bytes += encoding === "base64" ? Math.floor((content.length * 3) / 4) : Buffer.byteLength(content);
+      boxPath(f?.path);
+      return { path: String(f.path).trim(), content, ...(encoding === "base64" ? { encoding } : {}) };
+    });
+    if (bytes > EXEC_FILES_BYTES_MAX) throw bad("files pasa de 512 KB en total");
+  }
+  if (a.secrets != null) {
+    if (!Array.isArray(a.secrets) || a.secrets.length > EXEC_SECRETS_MAX) throw bad(`secrets: hasta ${EXEC_SECRETS_MAX}`);
+    out.secrets = [];
+    for (const raw of a.secrets as any[]) {
+      const sec = typeof raw === "string" ? { name: raw } : raw;
+      const name = String(sec?.name ?? "");
+      if (!SECRET_NAME.test(name) || isScopedName(name)) throw bad(`Nombre de secreto inválido: «${name}»`);
+      const given = secretValues && Object.prototype.hasOwnProperty.call(secretValues, name);
+      if (!given) {
+        // Sin valor nuevo vale el de la bóveda o uno ya acotado a este cron (se resuelve al correr).
+        const vault = await db.secret.findFirst({
+          where: { userId: ownerId, OR: [{ name }, { name: { startsWith: `${name}__C_` } }] },
+          select: { id: true },
+        });
+        if (!vault) throw bad(`No existe el secreto ${name}: súbelo con secretValues (o --secret-file) o guárdalo en tu bóveda`);
+      }
+      out.secrets.push(sec.file ? { name, file: (boxPath(sec.file), String(sec.file).trim()) } : { name });
+    }
+  }
+  return out;
+}
+
+/** Guarda los `secretValues` como secretos de ESTE cron (sólo los que su acción usa). */
+async function storeCronSecrets(ownerId: string, cronId: string, action: UserCronAction, values?: Record<string, string>) {
+  if (!values || action.type !== "exec") return;
+  const used = new Set((action.secrets ?? []).map((s) => s.name));
+  for (const [name, value] of Object.entries(values)) {
+    if (!used.has(name)) throw bad(`secretValues.${name} no lo usa la acción (agrégalo a action.secrets)`);
+    if (typeof value !== "string" || !value) throw bad(`secretValues.${name} vacío`);
+    if (value.length > 64 * 1024) throw bad(`secretValues.${name} pasa de 64 KB`);
+    await createSecret(ownerId, { name: cronSecretName(cronId, name), value });
+  }
 }
 
 /**
@@ -341,7 +450,7 @@ export async function normalizeCreate(ownerId: string, input: UserCronInput, now
   if (!name) throw bad("name es obligatorio");
   const timezone = String(input.timezone || DEFAULT_TIMEZONE);
   const sched = resolveSchedule(input, timezone, now);
-  const action = await validateAction(ownerId, input.action);
+  const action = await validateAction(ownerId, input.action, input);
   return { name, ...sched, timezone, enabled: input.enabled !== false, action };
 }
 
@@ -387,7 +496,8 @@ export async function normalizeUpdate(current: UserCron, input: UserCronInput, n
     if (timesLeft === 0) throw bad("A ese cron ya no le quedan corridas; dale `times` nuevo (o null para siempre)");
     if (until && until <= now) throw bad("La fecha `until` de ese cron ya pasó; dale otra (o null para siempre)");
   }
-  if (input.action !== undefined) out.action = await validateAction(current.ownerId, input.action);
+  if (input.action !== undefined) out.action = await validateAction(current.ownerId, input.action, input);
+  else if (input.secretValues) throw bad("secretValues va junto con action (la acción dice qué secretos usa)");
   return out;
 }
 
@@ -435,6 +545,15 @@ export function describeSchedule(c: Pick<UserCron, "cron" | "at" | "until" | "ti
 export const isDone = (c: Pick<UserCron, "enabled" | "at" | "until" | "timesLeft">, now = new Date()) =>
   !c.enabled && ((c.at != null && c.at <= now) || c.timesLeft === 0 || (c.until != null && c.until <= now));
 
+/** La acción como se muestra: los archivos sin su contenido (sólo ruta y tamaño). */
+export function publicAction(a: UserCronAction): UserCronAction {
+  if (a.type !== "exec" || !a.files) return a;
+  return {
+    ...a,
+    files: a.files.map((f) => ({ path: f.path, bytes: f.encoding === "base64" ? Math.floor((f.content.length * 3) / 4) : Buffer.byteLength(f.content) })) as unknown as ExecFile[],
+  };
+}
+
 export const toUserCronView = (c: UserCron, now = new Date()): UserCronView => {
   const next = c.enabled ? c.nextRunAt : null;
   return {
@@ -449,7 +568,7 @@ export const toUserCronView = (c: UserCron, now = new Date()): UserCronView => {
     schedule: describeSchedule(c),
     enabled: c.enabled,
     done: isDone(c, now),
-    action: c.action as UserCronAction,
+    action: publicAction(c.action as UserCronAction),
     nextRunAt: next?.toISOString() ?? null,
     nextRunLocal: next ? formatLocal(next, c.timezone) : null,
     in: next ? humanIn(next.getTime() - now.getTime()) : null,
@@ -465,6 +584,10 @@ export const toUserCronView = (c: UserCron, now = new Date()): UserCronView => {
 /** Una línea para tarjetas y listas: «POST https://…» o «turno a <agente>». */
 export function describeAction(a: UserCronAction, agentName?: string): string {
   if (a.type === "http") return `${a.method} ${a.url}${a.secretName ? ` (con ${a.secretName})` : ""}`;
+  if (a.type === "exec") {
+    const extra = [a.files?.length && `${a.files.length} archivo(s)`, a.secrets?.length && `secretos ${a.secrets.map((x) => x.name).join(", ")}`].filter(Boolean);
+    return `ejecutar «${a.command.slice(0, 80)}${a.command.length > 80 ? "…" : ""}» en ${a.template ?? "python"}${extra.length ? ` (${extra.join("; ")})` : ""}`;
+  }
   return `turno a ${agentName ? `«${agentName}»` : a.fleetAgentId}: «${a.prompt.slice(0, 80)}${a.prompt.length > 80 ? "…" : ""}»`;
 }
 
@@ -506,10 +629,14 @@ export type UserCronRunView = {
   durationMs: number | null;
   summary: string | null;
   error: string | null;
+  /** Corridas `exec`: código de salida del comando. */
+  exitCode: number | null;
+  /** Corridas `exec`, sólo si se piden (`logs:true`): cola de stdout+stderr (64 KB). */
+  logs?: string | null;
   running: boolean;
 };
 
-const runView = (r: CronRun, now = Date.now()): UserCronRunView => ({
+const runView = (r: CronRun, now = Date.now(), withLogs = false): UserCronRunView => ({
   id: r.id,
   trigger: r.trigger,
   startedAt: r.startedAt.toISOString(),
@@ -519,10 +646,12 @@ const runView = (r: CronRun, now = Date.now()): UserCronRunView => ({
   durationMs: r.durationMs ?? null,
   summary: r.summary ?? null,
   error: r.error ?? null,
+  exitCode: r.exitCode ?? null,
+  ...(withLogs ? { logs: r.logs ?? null } : {}),
   running: !r.finishedAt && now - r.startedAt.getTime() <= RUNNING_STALE_MS,
 });
 
-export async function listUserCronRuns(ctx: AuthContext, id: string, take = 20): Promise<UserCronRunView[]> {
+export async function listUserCronRuns(ctx: AuthContext, id: string, take = 20, opts: { logs?: boolean } = {}): Promise<UserCronRunView[]> {
   requireScope(ctx, "READ");
   const c = await findOwned(ctx, id);
   const rows = await db.cronRun.findMany({
@@ -530,7 +659,7 @@ export async function listUserCronRuns(ctx: AuthContext, id: string, take = 20):
     orderBy: { startedAt: "desc" },
     take: Math.min(Math.max(take, 1), 50),
   });
-  return rows.map((r) => runView(r));
+  return rows.map((r) => runView(r, Date.now(), opts.logs));
 }
 
 // ── Escritura ────────────────────────────────────────────────────────────────────
@@ -582,7 +711,7 @@ export async function previewUserCron(ctx: AuthContext, input: UserCronInput, no
     timezone: clean.timezone,
     nextRuns: runs.map((d) => ({ at: d.toISOString(), local: formatLocal(d, clean.timezone) })),
     in: runs[0] ? humanIn(runs[0].getTime() - now.getTime()) : null,
-    action: clean.action,
+    action: publicAction(clean.action),
   };
 }
 
@@ -601,6 +730,13 @@ export async function createUserCron(ctx: AuthContext, input: UserCronInput & { 
       nextRunAt: clean.enabled ? (clean.at ?? nextRunFor(clean.cron, clean.timezone)) : null,
     },
   });
+  try {
+    await storeCronSecrets(ctx.user.id, row.id, clean.action, input.secretValues);
+  } catch (e) {
+    // Sin sus secretos el cron no sirve: se deshace el alta.
+    await db.userCron.delete({ where: { id: row.id } }).catch(() => undefined);
+    throw e;
+  }
   return toUserCronView(row);
 }
 
@@ -609,6 +745,7 @@ export async function updateUserCron(ctx: AuthContext, id: string, input: UserCr
   requireHuman(ctx);
   const current = await findOwned(ctx, id);
   const patch = await normalizeUpdate(current, input);
+  if (patch.action) await storeCronSecrets(current.ownerId, current.id, patch.action, input.secretValues);
   const cron = patch.cron ?? current.cron;
   const at = patch.at !== undefined ? patch.at : current.at;
   const timezone = patch.timezone ?? current.timezone;
@@ -631,6 +768,8 @@ export async function deleteUserCron(ctx: AuthContext, id: string): Promise<{ de
   requireHuman(ctx);
   const current = await findOwned(ctx, id);
   await db.userCron.delete({ where: { id: current.id } });
+  // Sus secretos acotados se van con él.
+  await db.secret.deleteMany({ where: { userId: current.ownerId, name: { endsWith: cronSecretName(current.id, "") } } }).catch(() => undefined);
   return { deleted: true, id: current.id };
 }
 
@@ -655,7 +794,7 @@ const clip = (s: string, max: number) => {
   return line.length > max ? line.slice(0, max - 1) + "…" : line;
 };
 
-type Outcome = { ok: boolean; status: number | null; summary: string | null; error: string | null };
+type Outcome = { ok: boolean; status: number | null; summary: string | null; error: string | null; exitCode?: number | null; logs?: string | null };
 
 async function runHttp(ownerId: string, a: HttpAction, cronId: string): Promise<Outcome> {
   // Se revalida en cada corrida: el DNS de la URL pudo cambiar desde el alta.
@@ -698,6 +837,76 @@ async function runAgentTurn(ownerId: string, a: AgentTurnAction, cronId: string)
   return { ok: true, status: 200, summary: clip(reply || "(sin respuesta)", SUMMARY_MAX), error: null };
 }
 
+/** Cola de un texto (lo último es lo que explica una falla). */
+const tail = (s: string, max: number) => (s.length > max ? "…" + s.slice(s.length - max + 1) : s);
+
+/** stdout y stderr en un solo texto, con tope. Puro, con test. */
+export function joinLogs(stdout: string, stderr: string, max = LOGS_MAX): string {
+  const out = stdout.trimEnd();
+  const err = stderr.trimEnd();
+  if (!err) return tail(out, max);
+  if (!out) return tail(`[stderr]\n${err}`, max);
+  const half = Math.floor(max / 2);
+  return `${tail(out, half)}\n[stderr]\n${tail(err, max - half - 10)}`;
+}
+
+/** El valor de un secreto para la corrida: el del cron primero, luego el de la bóveda. */
+export async function cronSecretValue(ownerId: string, cronId: string, name: string): Promise<string | null> {
+  return (await getSecretValue(ownerId, cronSecretName(cronId, name)).catch(() => null)) ?? getSecretValue(ownerId, name);
+}
+
+const shq = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
+
+/**
+ * Caja efímera: monta archivos y secretos-archivo, corre el comando con los secretos-variable en su
+ * entorno y la destruye pase lo que pase. La caja vive a lo más timeout + 2 min aunque esto muera.
+ */
+async function runExec(ownerId: string, a: ExecAction, cronId: string): Promise<Outcome> {
+  const env: Record<string, string> = { EASYBITS_CRON_ID: cronId };
+  const secretFiles: { path: string; value: string }[] = [];
+  for (const sec of a.secrets ?? []) {
+    const value = await cronSecretValue(ownerId, cronId, sec.name);
+    if (value == null) throw new Error(`El secreto ${sec.name} ya no existe (ni del cron ni en la bóveda)`);
+    if (sec.file) {
+      const path = boxPath(sec.file);
+      secretFiles.push({ path, value });
+      env[`${sec.name}_FILE`] = path;
+    } else env[sec.name] = value;
+  }
+  const timeout = a.timeoutSeconds ?? EXEC_DEFAULT_TIMEOUT_S;
+  const ops = await import("./sandboxOperations");
+  const ctx = await humanCtx(ownerId);
+  const box = await ops.createSandbox(ctx, {
+    template: a.template ?? "python",
+    timeoutSeconds: timeout + 120,
+    name: `cron-${cronId}`,
+    metadata: { eb_cron: cronId },
+  });
+  try {
+    await ops.waitUntilRunning(ctx, box.sandboxId, { timeoutMs: 90_000 });
+    const files = [...(a.files ?? []).map((f) => ({ path: boxPath(f.path), content: f.content, encoding: f.encoding ?? "utf8" })), ...secretFiles.map((f) => ({ path: f.path, content: f.value, encoding: "utf8" as const }))];
+    const dirs = [...new Set([EXEC_WORKDIR, ...files.map((f) => f.path.replace(/\/[^/]*$/, "") || "/")])];
+    await ops.execCommand(ctx, box.sandboxId, { command: `mkdir -p ${dirs.map(shq).join(" ")}`, timeoutSeconds: 30 });
+    for (const f of files) await ops.writeFile(ctx, box.sandboxId, f);
+    if (secretFiles.length) {
+      await ops.execCommand(ctx, box.sandboxId, { command: `chmod 600 ${secretFiles.map((f) => shq(f.path)).join(" ")}`, timeoutSeconds: 30 });
+    }
+    const r = await ops.execCommand(ctx, box.sandboxId, { command: a.command, cwd: EXEC_WORKDIR, timeoutSeconds: timeout, env });
+    const ok = r.exitCode === 0;
+    const lastLine = (r.stdout.trim().split("\n").pop() || r.stderr.trim().split("\n").pop() || "").trim();
+    return {
+      ok,
+      status: null,
+      exitCode: r.exitCode,
+      logs: joinLogs(r.stdout ?? "", r.stderr ?? ""),
+      summary: clip(`exit ${r.exitCode}${lastLine ? ` · ${lastLine}` : ""}`, SUMMARY_MAX),
+      error: ok ? null : clip(`exit ${r.exitCode}: ${tail((r.stderr || r.stdout || "").trim(), ERROR_MAX - 20)}`, ERROR_MAX),
+    };
+  } finally {
+    await ops.destroySandbox(ctx, box.sandboxId).catch((e) => console.error(`[user-cron] no se pudo destruir la caja de ${cronId}:`, e));
+  }
+}
+
 /** Corre una vez y lo registra en CronRun y en el cron. Nunca lanza. */
 export async function executeUserCron(c: UserCron, trigger: "schedule" | "manual"): Promise<Outcome> {
   const startedAt = new Date();
@@ -710,7 +919,12 @@ export async function executeUserCron(c: UserCron, trigger: "schedule" | "manual
   const action = c.action as UserCronAction;
   let out: Outcome;
   try {
-    out = action.type === "http" ? await runHttp(c.ownerId, action, c.id) : await runAgentTurn(c.ownerId, action, c.id);
+    out =
+      action.type === "http"
+        ? await runHttp(c.ownerId, action, c.id)
+        : action.type === "exec"
+          ? await runExec(c.ownerId, action, c.id)
+          : await runAgentTurn(c.ownerId, action, c.id);
   } catch (e) {
     const msg = e instanceof Error ? `${e.name === "TimeoutError" ? "Timeout: " : ""}${e.message}` : String(e);
     out = { ok: false, status: null, summary: null, error: clip(msg, ERROR_MAX) };
@@ -720,7 +934,16 @@ export async function executeUserCron(c: UserCron, trigger: "schedule" | "manual
     await db.cronRun
       .update({
         where: { id: run.id },
-        data: { finishedAt, durationMs: finishedAt.getTime() - startedAt.getTime(), ok: out.ok, status: out.status, summary: out.summary, error: out.error },
+        data: {
+          finishedAt,
+          durationMs: finishedAt.getTime() - startedAt.getTime(),
+          ok: out.ok,
+          status: out.status,
+          summary: out.summary,
+          error: out.error,
+          ...(out.exitCode != null ? { exitCode: out.exitCode } : {}),
+          ...(out.logs ? { logs: out.logs } : {}),
+        },
       })
       .catch((e) => console.error(`[user-cron] no se pudo registrar el final de ${c.id}:`, e));
   }

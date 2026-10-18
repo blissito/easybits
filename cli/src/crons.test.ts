@@ -34,3 +34,21 @@ test("scheduleFromFlags: se repite o una sola vez, nunca los dos", async () => {
   assert.ok("error" in scheduleFromFlags({ at: "23:00", in: "2h" }));
   assert.ok("error" in scheduleFromFlags({ cron: "0 9 * * *", times: "x" }));
 });
+
+test("execFromFlags: archivos junto al comando y .p8 como secreto acotado en la misma ruta ~", async () => {
+  const { execFromFlags, remotePathFor } = await import("./commands/crons.ts");
+  const files: Record<string, string> = { "/h/bliss/proj/scripts/asc.py": "print(1)", "/h/bliss/.appstoreconnect/private_keys/K.p8": "KEY" };
+  const read = (p: string) => files[p] ?? (() => { throw new Error(p); })();
+  const r = execFromFlags(
+    { run: "python3 asc.py", files: ["/h/bliss/proj/scripts/asc.py"], secrets: ["ASC_KEY_ID"], secretFiles: ["ASC_P8:~/.appstoreconnect/private_keys/K.p8"], timeout: "120" },
+    read,
+    "/h/bliss",
+  );
+  assert.ok("action" in r && r.action);
+  assert.deepEqual(r.action.files, [{ path: "asc.py", content: Buffer.from("print(1)").toString("base64"), encoding: "base64" }]);
+  assert.deepEqual(r.action.secrets, [{ name: "ASC_KEY_ID" }, { name: "ASC_P8", file: "~/.appstoreconnect/private_keys/K.p8" }]);
+  assert.equal(r.action.timeoutSeconds, 120);
+  assert.deepEqual(r.secretValues, { ASC_P8: "KEY" });
+  assert.equal(remotePathFor("/tmp/x/key.pem", "/h/bliss"), "key.pem");
+  assert.ok("error" in execFromFlags({ run: "x", files: [], secrets: [], secretFiles: ["sin-dos-puntos"] }, read, "/h/bliss"));
+});

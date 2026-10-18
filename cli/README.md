@@ -129,6 +129,9 @@ easybits crons create "Study reminder" --cron "30 8 * * *" --url https://www.gho
 easybits crons create "Weekly report" --cron "0 9 * * 1" --agent <agentId> --prompt "Send me the sales summary"
 easybits crons create "Heads-up" --at 23:00 --url https://my-app.com/api/notice --method POST --dry-run  # once, today 23:00 in --tz
 easybits crons create "Heads-up" --in 2h --url https://my-app.com/api/notice --method POST              # once; --until/--times end repeating ones
+easybits crons create "Review" --at 23:00 --run "python3 asc.py submit" --file scripts/asc.py \
+  --secret-file ASC_P8:~/.appstoreconnect/private_keys/AuthKey_X.p8     # a command in a throwaway box; the .p8 only this cron reads
+easybits crons runs "Review" --logs                                      # exit code + stdout/stderr
 easybits crons ls
 easybits crons update "Study reminder" --cron "0 7 * * 1-5"
 easybits crons run "Study reminder"       # id or exact name

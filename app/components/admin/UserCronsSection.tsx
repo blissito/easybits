@@ -8,7 +8,8 @@ import { BrutalButton } from "~/components/common/BrutalButton";
 
 type Action =
   | { type: "http"; url: string; method: string; body?: string; secretName?: string; secretHeader?: string }
-  | { type: "agent_turn"; fleetAgentId: string; prompt: string; groupId?: string };
+  | { type: "agent_turn"; fleetAgentId: string; prompt: string; groupId?: string }
+  | { type: "exec"; command: string; template?: string; files?: { path: string }[]; secrets?: { name: string }[] };
 
 type UserCron = {
   id: string;
@@ -186,7 +187,9 @@ export function UserCronsSection() {
               const target =
                 c.action.type === "http"
                   ? `${c.action.method} ${c.action.url}`
-                  : `turno a «${agents.find((a) => a.id === (c.action as { fleetAgentId: string }).fleetAgentId)?.name ?? "agente"}»`;
+                  : c.action.type === "exec"
+                    ? `$ ${c.action.command}${c.action.secrets?.length ? ` (con ${c.action.secrets.map((x) => x.name).join(", ")})` : ""}`
+                    : `turno a «${agents.find((a) => a.id === (c.action as { fleetAgentId: string }).fleetAgentId)?.name ?? "agente"}»`;
               return (
                 <tr key={c.id} className="border-t border-gray-200 align-top">
                   <td className="p-3 w-full">

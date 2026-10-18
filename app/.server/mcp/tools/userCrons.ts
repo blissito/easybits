@@ -45,8 +45,26 @@ const actionShape = z
       prompt: z.string().describe("lo que se le dice al agente en cada corrida"),
       groupId: z.string().optional().describe("conversación; default `cron:<id>` (una propia por cron)"),
     }),
+    z.object({
+      type: z.literal("exec"),
+      command: z.string().describe("comando de shell; corre en /root/job dentro de una caja efímera que se destruye al terminar. Éxito = exit 0"),
+      files: z
+        .array(z.object({ path: z.string(), content: z.string(), encoding: z.enum(["utf8", "base64"]).optional() }))
+        .optional()
+        .describe("archivos a montar antes de correr (ruta relativa = dentro de /root/job, `~/` = /root); hasta 20 y 512 KB en total"),
+      secrets: z
+        .array(z.object({ name: z.string(), file: z.string().optional() }))
+        .optional()
+        .describe("secretos: sin `file` llegan como variable de entorno NAME; con `file` se escriben en esa ruta (p. ej. un .p8) y NAME_FILE apunta a ella. Valor: el de `secretValues` (acotado a este cron) o el de tu bóveda"),
+      template: z.enum(["python", "node", "bun", "ubuntu"]).optional().describe("imagen de la caja; default python"),
+      timeoutSeconds: z.number().int().optional().describe("default 300, máximo 600"),
+    }),
   ])
-  .describe("qué hace: pegarle a una URL (`http`) o mandarle un turno a un agente (`agent_turn`)");
+  .describe("qué hace: pegarle a una URL (`http`), mandarle un turno a un agente (`agent_turn`) o correr un comando en una caja efímera (`exec`)");
+const secretValuesShape = z
+  .record(z.string())
+  .optional()
+  .describe("valores de secretos SÓLO para este cron (`{ NOMBRE: valor }`, p. ej. el contenido de un .p8): se guardan cifrados como acotados al cron, ningún otro cron los lee, se borran con el cron y nunca regresan. Los nombres deben estar en action.secrets");
 
 const cronShape = z
   .string()
@@ -69,19 +87,22 @@ export function registerUserCronTools(server: McpServer, wrapHandler: Wrap) {
   server.tool(
     "list_my_crons",
     "Tus crons (tareas programadas de TU cuenta): { items:[{ id, name, kind (once|recurring), cron, at, until, timesLeft, timezone, schedule, enabled, done, action, nextRunAt, nextRunLocal, in, lastRunAt, lastOk, lastStatus, lastError, failCount }] }. Con `id`, devuelve además sus últimas corridas en `runs` (con `error` completo).",
-    { id: z.string().optional().describe("si lo pasas, incluye las últimas 20 corridas de ese cron") },
-    wrapHandler(async (p: { id?: string }, extra) => {
+    {
+      id: z.string().optional().describe("si lo pasas, incluye las últimas 20 corridas de ese cron"),
+      logs: z.boolean().optional().describe("con `id`: incluye stdout/stderr (cola de 64 KB) de cada corrida `exec`"),
+    },
+    wrapHandler(async (p: { id?: string; logs?: boolean }, extra) => {
       const ctx = authOf(extra);
       const items = await listUserCrons(ctx);
       if (!p.id) return ok(paginate(items, { total: items.length }));
-      const runs = await listUserCronRuns(ctx, p.id, 20);
+      const runs = await listUserCronRuns(ctx, p.id, 20, { logs: p.logs });
       return ok({ ...paginate(items.filter((c) => c.id === p.id), { total: 1 }), runs });
     })
   );
 
   server.tool(
     "create_cron",
-    "Crea un cron en TU cuenta: le pega a una URL https pública o le manda un turno a uno de tus agentes. Se repite (`cron`, mínimo cada 5 min, puede terminar con `until`/`times`) o corre UNA SOLA VEZ (`at` o `in`). Límite por plan (Byte 3, Mega 20, Tera 100; los de una sola vez que ya corrieron no cuentan). Devuelve el cron con `nextRunAt` (ISO), `nextRunLocal` (en su zona) e `in` (cuánto falta). Con `dryRun:true` sólo valida y regresa las próximas 3 corridas. Ejemplos: diario 8:30 en CDMX → cron `30 8 * * *`; hoy a las 11 pm → at `23:00`.",
+    "Crea un cron en TU cuenta: le pega a una URL https pública, le manda un turno a uno de tus agentes o corre un comando (`exec`) en una caja efímera con tus archivos y secretos (p. ej. `python3 asc.py` con un .p8 en `secretValues`). Se repite (`cron`, mínimo cada 5 min, puede terminar con `until`/`times`) o corre UNA SOLA VEZ (`at` o `in`). Límite por plan (Byte 3, Mega 20, Tera 100; los de una sola vez que ya corrieron no cuentan). Devuelve el cron con `nextRunAt` (ISO), `nextRunLocal` (en su zona) e `in` (cuánto falta). Con `dryRun:true` sólo valida y regresa las próximas 3 corridas. Ejemplos: diario 8:30 en CDMX → cron `30 8 * * *`; hoy a las 11 pm → at `23:00`.",
     {
       name: z.string().describe("nombre corto"),
       cron: cronShape.optional(),
@@ -89,6 +110,7 @@ export function registerUserCronTools(server: McpServer, wrapHandler: Wrap) {
       timezone: tzShape,
       enabled: z.boolean().optional().describe("default true"),
       action: actionShape,
+      secretValues: secretValuesShape,
       dryRun: z.boolean().optional().describe("sólo valida y dice cuándo correría; no crea nada"),
     },
     wrapHandler(async (p: Record<string, unknown>, extra) => {
@@ -109,6 +131,7 @@ export function registerUserCronTools(server: McpServer, wrapHandler: Wrap) {
       timezone: tzShape,
       enabled: z.boolean().optional(),
       action: actionShape.optional(),
+      secretValues: secretValuesShape,
     },
     wrapHandler(async (p: { id: string } & Record<string, unknown>, extra) => {
       const ctx = authOf(extra);

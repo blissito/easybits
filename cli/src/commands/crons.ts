@@ -1,5 +1,8 @@
 import type { Command, Ctx } from "../types.js";
-import { bool, need, str } from "../args.js";
+import { readFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { basename, resolve } from "node:path";
+import { bool, list, need, str } from "../args.js";
 import { emit, fmtDate, table } from "../output.js";
 import { api } from "../api.js";
 import { CliError, EXIT, usageError } from "../errors.js";
@@ -26,7 +29,10 @@ type UserCron = {
   done?: boolean;
   nextRunLocal?: string | null;
   in?: string | null;
-  action: { type: "http"; method: string; url: string; secretName?: string } | { type: "agent_turn"; fleetAgentId: string; prompt: string };
+  action:
+    | { type: "http"; method: string; url: string; secretName?: string }
+    | { type: "agent_turn"; fleetAgentId: string; prompt: string }
+    | { type: "exec"; command: string; template?: string; files?: { path: string }[]; secrets?: { name: string; file?: string }[] };
   nextRunAt: string | null;
   lastRunAt: string | null;
   lastOk: boolean | null;
@@ -41,6 +47,10 @@ export const isUserCronId = (ref: string) => HEX24.test(ref);
 /** Lo que hace un cron, en una línea. Puro, con test. */
 export function describeCronAction(a: UserCron["action"]): string {
   if (a.type === "http") return `${a.method} ${a.url}${a.secretName ? ` (+${a.secretName})` : ""}`;
+  if (a.type === "exec") {
+    const extra = [a.files?.length ? `${a.files.length} file(s)` : "", a.secrets?.length ? `+${a.secrets.map((x) => x.name).join(",")}` : ""].filter(Boolean).join(" ");
+    return `run: ${a.command.length > 40 ? a.command.slice(0, 39) + "…" : a.command}${extra ? ` (${extra})` : ""}`;
+  }
   return `agent ${a.fleetAgentId}: ${a.prompt.length > 40 ? a.prompt.slice(0, 39) + "…" : a.prompt}`;
 }
 
@@ -65,11 +75,63 @@ const ACTION_OPTIONS = {
   url: { type: "string", value: "https-url", description: "Call this public https URL on each run" },
   method: { type: "string", value: "GET|POST|PUT|PATCH|DELETE", description: "HTTP method (default GET)" },
   body: { type: "string", value: "json|text", description: "Request body (not with GET)" },
-  secret: { type: "string", value: "NAME", description: "Vault secret sent as a header (default Authorization: Bearer)" },
+  secret: { type: "string", multiple: true, value: "NAME", description: "Vault secret: a header with --url (default Authorization: Bearer); an env var with --run (repeatable)" },
   "secret-header": { type: "string", value: "header", description: "Header for --secret" },
   agent: { type: "string", value: "id", description: "Send a turn to this fleet agent instead of calling a URL" },
   prompt: { type: "string", value: "text", description: "What the agent is told on each run (with --agent)" },
+  run: { type: "string", value: "command", description: "Run this shell command in a throwaway box instead (python, files and secrets included; success = exit 0)" },
+  file: { type: "string", multiple: true, value: "local[=remote]", description: "File mounted for --run, next to the command by default (repeatable)" },
+  "secret-file": { type: "string", multiple: true, value: "NAME:local[=remote]", description: "Upload a local file as a secret only this cron can read, written at the same ~ path in the box (repeatable; e.g. a .p8)" },
+  template: { type: "string", value: "python|node|bun|ubuntu", description: "Box image for --run (default python)" },
+  timeout: { type: "string", value: "seconds", description: "Time limit for --run (default 300, max 600)" },
 } as const;
+
+/** Ruta en la caja para un archivo local: bajo tu HOME → la misma con `~/`; si no, su nombre. Pura, con test. */
+export function remotePathFor(local: string, home = homedir()): string {
+  const abs = resolve(local.replace(/^~(?=\/)/, home));
+  return abs.startsWith(home + "/") ? `~/${abs.slice(home.length + 1)}` : basename(abs);
+}
+
+type ExecFlags = { run?: string; files: string[]; secrets: string[]; secretFiles: string[]; template?: string; timeout?: string };
+
+/**
+ * Flags de `--run` → `action` exec + `secretValues`. `read` lee un archivo local (inyectable para
+ * el test). Los secretos-archivo se suben como valores acotados a este cron.
+ */
+export function execFromFlags(f: ExecFlags, read: (p: string) => string, home = homedir()) {
+  if (!f.run) return {};
+  const expand = (p: string) => resolve(p.replace(/^~(?=\/)/, home));
+  const split = (spec: string) => {
+    const eq = spec.indexOf("=");
+    return eq < 0 ? [spec, undefined] as const : [spec.slice(0, eq), spec.slice(eq + 1)] as const;
+  };
+  const files = f.files.map((spec) => {
+    const [local, remote] = split(spec);
+    return { path: remote || basename(expand(local)), content: Buffer.from(read(expand(local)), "utf8").toString("base64"), encoding: "base64" as const };
+  });
+  const secretValues: Record<string, string> = {};
+  const secrets: { name: string; file?: string }[] = f.secrets.map((name) => ({ name }));
+  for (const spec of f.secretFiles) {
+    const colon = spec.indexOf(":");
+    if (colon < 1) return { error: `--secret-file needs NAME:path, got "${spec}"` } as const;
+    const name = spec.slice(0, colon);
+    const [local, remote] = split(spec.slice(colon + 1));
+    secretValues[name] = read(expand(local));
+    secrets.push({ name, file: remote || remotePathFor(local, home) });
+  }
+  if (f.timeout != null && !/^\d+$/.test(f.timeout)) return { error: "--timeout must be whole seconds" } as const;
+  return {
+    action: {
+      type: "exec" as const,
+      command: f.run,
+      ...(files.length ? { files } : {}),
+      ...(secrets.length ? { secrets } : {}),
+      ...(f.template ? { template: f.template } : {}),
+      ...(f.timeout ? { timeoutSeconds: Number(f.timeout) } : {}),
+    },
+    ...(Object.keys(secretValues).length ? { secretValues } : {}),
+  };
+}
 
 /** Flags → `action` de la API (o undefined si no vino ninguna). Puro, con test. */
 export function actionFromFlags(f: { url?: string; method?: string; body?: string; secret?: string; secretHeader?: string; agent?: string; prompt?: string }) {
@@ -135,13 +197,35 @@ const flagsOf = (ctx: Ctx) => ({
   url: str(ctx, "url"),
   method: str(ctx, "method"),
   body: str(ctx, "body"),
-  secret: str(ctx, "secret"),
+  secret: list(ctx, "secret")[0],
   secretHeader: str(ctx, "secret-header"),
   agent: str(ctx, "agent"),
   prompt: str(ctx, "prompt"),
 });
 
-type RunView = { startedAt: string; finishedAt: string | null; ok: boolean | null; status: number | null; durationMs: number | null; trigger: string; summary: string | null; error?: string | null };
+type ActionResult = { error: string } | { error?: undefined; action?: Record<string, unknown>; secretValues?: Record<string, string> };
+
+/** Acción + secretos de los flags: --url, --agent o --run (exclusivos). */
+function actionOf(ctx: Ctx): ActionResult {
+  const run = str(ctx, "run");
+  if (run && (str(ctx, "url") || str(ctx, "agent"))) return { error: "--run, --url and --agent are exclusive" } as const;
+  if (run) {
+    return execFromFlags(
+      { run, files: list(ctx, "file"), secrets: list(ctx, "secret"), secretFiles: list(ctx, "secret-file"), template: str(ctx, "template"), timeout: str(ctx, "timeout") },
+      (p) => {
+        try {
+          return readFileSync(p, "utf8");
+        } catch {
+          throw new CliError(t(`Can't read ${p}.`, `No se pudo leer ${p}.`), EXIT.USAGE);
+        }
+      },
+    );
+  }
+  if (list(ctx, "secret").length > 1) return { error: "--url takes one --secret" } as const;
+  return actionFromFlags(flagsOf(ctx)) as ActionResult;
+}
+
+type RunView = { startedAt: string; finishedAt: string | null; ok: boolean | null; status: number | null; durationMs: number | null; trigger: string; summary: string | null; error?: string | null; exitCode?: number | null; logs?: string | null };
 
 type CronOverview = {
   key: string;
@@ -180,7 +264,7 @@ export const crons: Command = {
   name: "crons",
   aliases: ["cron"],
   group: "Account",
-  summary: "Your scheduled jobs (call a URL or message an agent, repeating or once) and, for admins, the platform's",
+  summary: "Your scheduled jobs (call a URL, message an agent or run a command; repeating or once) and, for admins, the platform's",
   synopsis: "crons <ls|create|update|rm|run|runs|pause|resume>",
   subs: {
     ls: {
@@ -228,19 +312,21 @@ export const crons: Command = {
     },
     runs: {
       summary: "Show the last runs of one of your crons (id or name) or of a platform job, with the full error",
-      usage: "easybits crons runs <id|name|job>",
-      examples: ["easybits crons runs 66f0c2a1b2c3d4e5f6a7b8c9", "easybits crons runs backup-machines --json"],
+      usage: "easybits crons runs <id|name|job> [--logs]",
+      options: { logs: { type: "boolean", description: "Also print stdout/stderr of --run crons (last 64 KB per run)" } },
+      examples: ["easybits crons runs 66f0c2a1b2c3d4e5f6a7b8c9", "easybits crons runs \"Review 1.0.10\" --logs", "easybits crons runs backup-machines --json"],
       async run(ctx) {
         const key = need(ctx, 0, "id|name|job", this.usage);
         const mine = await userCronOrNull(ctx, key);
-        const path = mine ? `/crons/${mine.id}/runs?limit=50` : `/admin/crons/${encodeURIComponent(key)}/runs`;
+        const withLogs = bool(ctx, "logs");
+        const path = mine ? `/crons/${mine.id}/runs?limit=50${withLogs ? "&logs=1" : ""}` : `/admin/crons/${encodeURIComponent(key)}/runs`;
         const { items } = await api<{ items: RunView[] }>(ctx, "GET", path);
         emit(ctx, { items }, () => {
           table(
             items.map((r) => ({
               at: fmtDate(r.startedAt),
               ok: r.ok == null ? t("running", "corriendo") : r.ok ? "ok" : t("failed", "falló"),
-              status: r.status ?? "—",
+              status: r.exitCode != null ? `exit ${r.exitCode}` : (r.status ?? "—"),
               took: duration(r.durationMs),
               trigger: r.trigger,
               summary: (r.error ?? r.summary ?? "").slice(0, 80),
@@ -248,8 +334,12 @@ export const crons: Command = {
             [["at", "STARTED"], ["ok", "RESULT"], ["status", "HTTP"], ["took", "TOOK"], ["trigger", "TRIGGER"], ["summary", "SUMMARY"]],
             t("No runs yet.", "Todavía no hay corridas."),
           );
+          if (withLogs) {
+            const last = items.find((r) => r.logs);
+            if (last) console.log(`\n${t("Output", "Salida")} (${fmtDate(last.startedAt)}):\n${last.logs}`);
+          }
           const failed = items.find((r) => r.ok === false && r.error);
-          if (failed) console.log(`\n${t("Last error", "Último error")} (${fmtDate(failed.startedAt)}):\n${failed.error}`);
+          if (failed && !withLogs) console.log(`\n${t("Last error", "Último error")} (${fmtDate(failed.startedAt)}):\n${failed.error}`);
         });
       },
     },
@@ -294,8 +384,8 @@ export const crons: Command = {
     },
     create: {
       aliases: ["add"],
-      summary: "Create a cron: call a public https URL or send a turn to one of your agents, repeating (at most every 5 min) or once",
-      usage: 'easybits crons create <name> (--cron "<5 fields>" [--until <when>] [--times N] | --at <when> | --in <duration>) [--tz <IANA>] (--url <https-url> [--method] [--body] [--secret NAME] | --agent <id> --prompt <text>) [--dry-run]',
+      summary: "Create a cron: call a public https URL, send a turn to one of your agents or run a command in a throwaway box, repeating (at most every 5 min) or once",
+      usage: 'easybits crons create <name> (--cron "<5 fields>" [--until <when>] [--times N] | --at <when> | --in <duration>) [--tz <IANA>] (--url <https-url> [--method] [--body] [--secret NAME] | --agent <id> --prompt <text> | --run <cmd> [--file f]… [--secret NAME]… [--secret-file NAME:path]… [--template] [--timeout]) [--dry-run]',
       options: {
         cron: { type: "string", value: "expr", description: 'Cron of 5 fields, e.g. "30 8 * * *" = daily 8:30' },
         ...WHEN_OPTIONS,
@@ -306,6 +396,7 @@ export const crons: Command = {
       examples: [
         'easybits crons create "Study reminder" --cron "30 8 * * *" --url https://www.ghosty.studio/api/v2/me/push --method POST --body \'{"title":"Study time"}\' --secret GHOSTY_PUSH_TOKEN',
         'easybits crons create "Ping once" --at 23:00 --url https://example.com/ping --dry-run',
+        'easybits crons create "Review 1.0.10" --at 23:00 --run "pip install -q cryptography && python3 asc.py enviar-tienda" --file scripts/asc.py --secret-file ASC_P8:~/.appstoreconnect/private_keys/AuthKey_X.p8',
         'easybits crons create "Weekly report" --cron "0 9 * * 1" --times 4 --agent 6a3c046d2cf7d7f4163f739d --prompt "Send me the weekly sales summary"',
       ],
       async run(ctx) {
@@ -313,10 +404,10 @@ export const crons: Command = {
         const w = scheduleFromFlags(whenOf(ctx));
         if ("error" in w) throw usageError(w.error!, this.usage);
         if (!w.fields.cron && !w.fields.at && !w.fields.in) throw usageError(t("Missing --cron, --at or --in.", "Falta --cron, --at o --in."), this.usage);
-        const a = actionFromFlags(flagsOf(ctx));
+        const a = actionOf(ctx);
         if ("error" in a) throw usageError(a.error!, this.usage);
-        if (!a.action) throw usageError(t("Missing --url or --agent.", "Falta --url o --agent."), this.usage);
-        const body = { name, ...w.fields, action: a.action };
+        if (!a.action) throw usageError(t("Missing --url, --agent or --run.", "Falta --url, --agent o --run."), this.usage);
+        const body = { name, ...w.fields, action: a.action, ...(a.secretValues ? { secretValues: a.secretValues } : {}) };
         if (bool(ctx, "dry-run")) {
           const p = await api<Preview>(ctx, "POST", "/crons", { ...body, dryRun: true });
           emit(ctx, p, () => {
@@ -346,7 +437,7 @@ export const crons: Command = {
         const ref = need(ctx, 0, "id|name", this.usage);
         const mine = await resolveUserCron(ctx, ref);
         if (!mine) throw new CliError(t(`You have no cron "${ref}".`, `No tienes un cron "${ref}".`), EXIT.API, "easybits crons ls", "not_found", 404);
-        const a = actionFromFlags(flagsOf(ctx));
+        const a = actionOf(ctx);
         if ("error" in a) throw usageError(a.error!, this.usage);
         const w = scheduleFromFlags(whenOf(ctx));
         if ("error" in w) throw usageError(w.error!, this.usage);
@@ -354,6 +445,7 @@ export const crons: Command = {
           ...(str(ctx, "name") ? { name: str(ctx, "name") } : {}),
           ...w.fields,
           ...(a.action ? { action: a.action } : {}),
+          ...(a.secretValues ? { secretValues: a.secretValues } : {}),
         };
         if (!Object.keys(patch).length) throw usageError(t("Nothing to change.", "No hay nada que cambiar."), this.usage);
         const c = await api<UserCron>(ctx, "PATCH", `/crons/${mine.id}`, patch);

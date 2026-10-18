@@ -176,7 +176,8 @@ export async function resolveSecretRef(
   const m = value.match(SECRET_REF_RE);
   if (!m) return value;
   const name = m[1];
-  const resolved = await getSecretValue(userId, name).catch(() => null);
+  // Los secretos acotados a un cron (`__C_<id>`) sólo los lee ese cron.
+  const resolved = /__C_[A-Z0-9]+$/.test(name) ? null : await getSecretValue(userId, name).catch(() => null);
   if (resolved == null) {
     const e: any = new Error(
       `$secret:${name} no existe en el vault. ${opts.hint ?? "Cárgalo con `secret_set` o en /dash/developer/secrets."}`

@@ -128,6 +128,9 @@ easybits crons create "Study reminder" --cron "30 8 * * *" --url https://www.gho
 easybits crons create "Report" --cron "0 9 * * 1" --times 4 --agent <agentId> --prompt "Send me the sales summary"
 easybits crons create "Heads-up" --at 23:00 --url https://my-app.com/api/notice --method POST --dry-run   # once; validates and says when
 easybits crons create "Heads-up" --in 2h --url https://my-app.com/api/notice --method POST
+easybits crons create "Review 1.0.10" --at 23:00 --run "pip install -q cryptography && python3 asc.py submit" \\
+  --file scripts/asc.py --secret-file ASC_P8:~/.appstoreconnect/private_keys/AuthKey_X.p8   # command in a throwaway box
+easybits crons runs "Review 1.0.10" --logs                  # exit code and stdout/stderr of each run
 easybits crons ls                                           # yours: schedule, what it does, last and next run
 easybits crons update "Study reminder" --cron "0 7 * * 1-5" # only what you pass
 easybits crons run "Study reminder"                         # id or exact name; in the background
@@ -136,7 +139,7 @@ easybits crons pause "Study reminder"                       # and resume
 easybits crons rm "Study reminder" --yes
 \`\`\`
 
-They call a public https URL (with \`--secret\` a secret from your vault travels as a header, \`Authorization: Bearer\` by default) or send a turn to one of your agents. They repeat (\`--cron\`, at most every 5 min; they stop on their own with \`--until <date>\` or \`--times N\`) or run **once** (\`--at "2026-10-18T23:00"\` or \`--at 23:00\` = today, \`--in 2h\`): after running they turn off and stay in \`ls\` as "done", with their history. A time that already passed is an error, not "tomorrow". \`--dry-run\` validates everything and shows the next 3 runs in local time without creating anything. \`--tz\` time zone (default America/Mexico_City), limit per plan. Same API as \`/api/v2/crons\`.
+They call a public https URL (with \`--secret\` a secret from your vault travels as a header, \`Authorization: Bearer\` by default) or send a turn to one of your agents. They repeat (\`--cron\`, at most every 5 min; they stop on their own with \`--until <date>\` or \`--times N\`) or run **once** (\`--at "2026-10-18T23:00"\` or \`--at 23:00\` = today, \`--in 2h\`): after running they turn off and stay in \`ls\` as "done", with their history. A time that already passed is an error, not "tomorrow". With \`--run\` the work is done by a **throwaway box** (python by default, \`--template node|bun|ubuntu\`): it mounts your \`--file\`s next to the command, each \`--secret NAME\` from your vault arrives as an env var, and each \`--secret-file NAME:path\` uploads that file as a secret **scoped to that cron** (no other cron, agent or machine can read it; it is deleted with the cron) and writes it at the same \`~/\` path in the box; success = exit 0, \`--timeout\` up to 600 s, the box is destroyed when done. \`--dry-run\` validates everything and shows the next 3 runs in local time without creating anything. \`--tz\` time zone (default America/Mexico_City), limit per plan. Same API as \`/api/v2/crons\`.
 
 ### Platform crons (admins only)
 
