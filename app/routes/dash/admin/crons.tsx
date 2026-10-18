@@ -274,7 +274,7 @@ function JobRow({
           </p>
         </td>
         {!tight && (
-          <td className="p-3">
+          <td className="w-px p-3">
             <RunSquares runs={job.recent} max={10} />
           </td>
         )}
@@ -292,8 +292,13 @@ function JobRow({
         </span>
       </td>
       <td className="p-3">
-        <p className="font-bold leading-tight whitespace-nowrap">{job.name}</p>
-        <p className="font-mono text-xs text-gray-500 whitespace-nowrap">{job.path}</p>
+        {/* Un nombre o ruta larga no ensancha la tabla: se corta y queda completo en el title. */}
+        <p className="max-w-[15rem] truncate font-bold leading-tight" title={job.name}>
+          {job.name}
+        </p>
+        <p className="max-w-[15rem] truncate font-mono text-xs text-gray-500" title={job.path}>
+          {job.path}
+        </p>
       </td>
       <td className="p-3 text-sm whitespace-nowrap">{job.schedule}</td>
       <td className="p-3">
@@ -468,7 +473,7 @@ export default function CronsAdmin() {
       <div className="md:-mr-8">
         <Group id="crons-layout" style={{ overflow: "clip" }} onLayoutChanged={onLayoutChanged}>
           <Panel id="crons-table" minSize={isDesktop ? 420 : 0} style={{ overflow: "clip", minWidth: 0 }}>
-            <div className="min-w-0 max-w-7xl pb-10 pr-2">
+            <div className="min-w-0 max-w-[90rem] pb-10 pr-2">
               {/* Encabezado fijo: la caja del comando no cambia de lugar al abrir o cerrar el copiloto. */}
               <div className="mb-6">
                 <h2 className="text-2xl font-black mb-1">Crons</h2>
@@ -493,7 +498,7 @@ export default function CronsAdmin() {
                   <thead className="bg-gray-100">
                     <tr>
                       {(compact
-                        ? ["Tarea", "Últimas corridas", ""]
+                        ? ["Tarea", "Corridas", ""]
                         : ["Estado", "Tarea", "Horario", "Últimas corridas", "Última", "Próxima", ""]
                       ).map((h, i) => (
                         <th
