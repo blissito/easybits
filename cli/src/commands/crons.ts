@@ -1,12 +1,101 @@
-import type { Command } from "../types.js";
-import { need } from "../args.js";
+import type { Command, Ctx } from "../types.js";
+import { bool, need, str } from "../args.js";
 import { emit, fmtDate, table } from "../output.js";
 import { api } from "../api.js";
+import { CliError, EXIT, usageError } from "../errors.js";
+import { YES_OPTION, confirm, requireYesIfHeadless } from "../prompt.js";
 import { t } from "../i18n.js";
 
-// Las tareas programadas de la plataforma (respaldos, purgas, caducidad): lo mismo que el panel
-// /dash/admin/crons, por la API de admin. Sólo para superusuarios de EasyBits; cualquier otra
-// cuenta recibe 403.
+// Dos clases de cron en un solo comando:
+// - TUS crons (`/api/v2/crons`, cualquier cuenta): pegarle a una URL o mandarle un turno a un
+//   agente. Se nombran por id (24 hex) o por nombre exacto.
+// - Los de la PLATAFORMA (respaldos, purgas…; `/api/v2/admin/crons`, sólo superusuarios): se
+//   nombran por su key (`backup-machines`). `ls --platform` los lista.
+// `run`, `runs`, `pause` y `resume` deciden por la forma del argumento: un id de 24 hex o un
+// nombre de tus crons es tuyo; una key de la tabla de la plataforma, de la plataforma.
+
+type UserCron = {
+  id: string;
+  name: string;
+  cron: string;
+  timezone: string;
+  schedule: string;
+  enabled: boolean;
+  action: { type: "http"; method: string; url: string; secretName?: string } | { type: "agent_turn"; fleetAgentId: string; prompt: string };
+  nextRunAt: string | null;
+  lastRunAt: string | null;
+  lastOk: boolean | null;
+  lastStatus: number | null;
+  lastError: string | null;
+};
+
+const HEX24 = /^[a-f0-9]{24}$/;
+/** Las keys de la plataforma son kebab-case sin dígitos hex de 24: nunca chocan con un id. Puro, con test. */
+export const isUserCronId = (ref: string) => HEX24.test(ref);
+
+/** Lo que hace un cron, en una línea. Puro, con test. */
+export function describeCronAction(a: UserCron["action"]): string {
+  if (a.type === "http") return `${a.method} ${a.url}${a.secretName ? ` (+${a.secretName})` : ""}`;
+  return `agent ${a.fleetAgentId}: ${a.prompt.length > 40 ? a.prompt.slice(0, 39) + "…" : a.prompt}`;
+}
+
+/** id, o nombre exacto (sin mayúsculas) de uno de TUS crons. null si no es tuyo. */
+async function resolveUserCron(ctx: Ctx, ref: string): Promise<UserCron | null> {
+  const { items } = await api<{ items: UserCron[] }>(ctx, "GET", "/crons");
+  const byId = items.find((c) => c.id === ref);
+  if (byId) return byId;
+  const byName = items.filter((c) => c.name.toLowerCase() === ref.trim().toLowerCase());
+  if (byName.length > 1) {
+    throw new CliError(t(`"${ref}" matches ${byName.length} crons. Use the id.`, `"${ref}" coincide con ${byName.length} crons. Usa el id.`), EXIT.USAGE);
+  }
+  return byName[0] ?? null;
+}
+
+async function userCronOrNull(ctx: Ctx, ref: string): Promise<UserCron | null> {
+  if (isUserCronId(ref)) return (await resolveUserCron(ctx, ref)) ?? { id: ref } as UserCron;
+  return resolveUserCron(ctx, ref);
+}
+
+const ACTION_OPTIONS = {
+  url: { type: "string", value: "https-url", description: "Call this public https URL on each run" },
+  method: { type: "string", value: "GET|POST|PUT|PATCH|DELETE", description: "HTTP method (default GET)" },
+  body: { type: "string", value: "json|text", description: "Request body (not with GET)" },
+  secret: { type: "string", value: "NAME", description: "Vault secret sent as a header (default Authorization: Bearer)" },
+  "secret-header": { type: "string", value: "header", description: "Header for --secret" },
+  agent: { type: "string", value: "id", description: "Send a turn to this fleet agent instead of calling a URL" },
+  prompt: { type: "string", value: "text", description: "What the agent is told on each run (with --agent)" },
+} as const;
+
+/** Flags → `action` de la API (o undefined si no vino ninguna). Puro, con test. */
+export function actionFromFlags(f: { url?: string; method?: string; body?: string; secret?: string; secretHeader?: string; agent?: string; prompt?: string }) {
+  if (f.url && f.agent) return { error: "--url and --agent are exclusive" } as const;
+  if (f.url) {
+    return {
+      action: {
+        type: "http" as const,
+        url: f.url,
+        method: (f.method ?? "GET").toUpperCase(),
+        ...(f.body ? { body: f.body } : {}),
+        ...(f.secret ? { secretName: f.secret, ...(f.secretHeader ? { secretHeader: f.secretHeader } : {}) } : {}),
+      },
+    };
+  }
+  if (f.agent) {
+    if (!f.prompt) return { error: "--agent needs --prompt" } as const;
+    return { action: { type: "agent_turn" as const, fleetAgentId: f.agent, prompt: f.prompt } };
+  }
+  return {};
+}
+
+const flagsOf = (ctx: Ctx) => ({
+  url: str(ctx, "url"),
+  method: str(ctx, "method"),
+  body: str(ctx, "body"),
+  secret: str(ctx, "secret"),
+  secretHeader: str(ctx, "secret-header"),
+  agent: str(ctx, "agent"),
+  prompt: str(ctx, "prompt"),
+});
 
 type RunView = { startedAt: string; finishedAt: string | null; ok: boolean | null; status: number | null; durationMs: number | null; trigger: string; summary: string | null; error?: string | null };
 
@@ -47,15 +136,37 @@ export const crons: Command = {
   name: "crons",
   aliases: ["cron"],
   group: "Account",
-  summary: "Platform scheduled jobs (admins only): status, history, run now, pause",
-  synopsis: "crons <ls|runs|run|pause|resume>",
+  summary: "Your scheduled jobs (call a URL or message an agent) and, for admins, the platform's",
+  synopsis: "crons <ls|create|update|rm|run|runs|pause|resume>",
   subs: {
     ls: {
       aliases: ["list"],
-      summary: "List the scheduled jobs with status, schedule, last and next run",
-      usage: "easybits crons ls",
-      examples: ["easybits crons ls", "easybits crons ls --json"],
+      summary: "List your crons (or, with --platform, the platform's scheduled jobs)",
+      usage: "easybits crons ls [--platform]",
+      options: { platform: { type: "boolean", description: "Platform jobs (backups, purges…; platform admins only)" } },
+      examples: ["easybits crons ls", "easybits crons ls --json", "easybits crons ls --platform"],
       async run(ctx) {
+        if (!bool(ctx, "platform")) {
+          const { items } = await api<{ items: UserCron[] }>(ctx, "GET", "/crons");
+          emit(ctx, { items }, () =>
+            table(
+              items.map((c) => ({
+                id: c.id,
+                name: c.name,
+                schedule: c.enabled ? c.schedule : `${c.schedule} (${t("paused", "en pausa")})`,
+                does: describeCronAction(c.action),
+                last: c.lastRunAt ? `${fmtDate(c.lastRunAt)} ${c.lastOk === false ? t("failed", "falló") : "ok"}` : "—",
+                next: c.enabled ? fmtDate(c.nextRunAt) : "—",
+              })),
+              [["id", "ID"], ["name", "NAME"], ["schedule", "SCHEDULE"], ["does", "DOES"], ["last", "LAST RUN"], ["next", "NEXT RUN"]],
+              t(
+                'No crons. Create one: easybits crons create "Ping" --cron "*/15 * * * *" --url https://example.com/ping',
+                'Sin crons. Crea uno: easybits crons create "Ping" --cron "*/15 * * * *" --url https://ejemplo.com/ping',
+              ),
+            ),
+          );
+          return;
+        }
         const { items } = await api<{ items: CronOverview[] }>(ctx, "GET", "/admin/crons");
         emit(ctx, { items }, () =>
           table(
@@ -72,12 +183,14 @@ export const crons: Command = {
       },
     },
     runs: {
-      summary: "Show a job's last 50 runs, with the full error when one failed",
-      usage: "easybits crons runs <job>",
-      examples: ["easybits crons runs backup-machines", "easybits crons runs check-hosting --json"],
+      summary: "Show the last runs of one of your crons (id or name) or of a platform job, with the full error",
+      usage: "easybits crons runs <id|name|job>",
+      examples: ["easybits crons runs 66f0c2a1b2c3d4e5f6a7b8c9", "easybits crons runs backup-machines --json"],
       async run(ctx) {
-        const key = need(ctx, 0, "job", this.usage);
-        const { items } = await api<{ items: RunView[] }>(ctx, "GET", `/admin/crons/${encodeURIComponent(key)}/runs`);
+        const key = need(ctx, 0, "id|name|job", this.usage);
+        const mine = await userCronOrNull(ctx, key);
+        const path = mine ? `/crons/${mine.id}/runs?limit=50` : `/admin/crons/${encodeURIComponent(key)}/runs`;
+        const { items } = await api<{ items: RunView[] }>(ctx, "GET", path);
         emit(ctx, { items }, () => {
           table(
             items.map((r) => ({
@@ -97,35 +210,110 @@ export const crons: Command = {
       },
     },
     run: {
-      summary: "Run a job now in the background (recorded with trigger manual)",
-      usage: "easybits crons run <job>",
-      examples: ["easybits crons run purge-notifications", "easybits crons run backup-machines --json"],
+      summary: "Run one of your crons or a platform job now, in the background (trigger manual)",
+      usage: "easybits crons run <id|name|job>",
+      examples: ["easybits crons run 66f0c2a1b2c3d4e5f6a7b8c9", "easybits crons run purge-notifications --json"],
       async run(ctx) {
-        const key = need(ctx, 0, "job", this.usage);
-        const r = await api<Record<string, unknown>>(ctx, "POST", `/admin/crons/${encodeURIComponent(key)}/run`);
+        const key = need(ctx, 0, "id|name|job", this.usage);
+        const mine = await userCronOrNull(ctx, key);
+        const r = await api<Record<string, unknown>>(ctx, "POST", mine ? `/crons/${mine.id}/run` : `/admin/crons/${encodeURIComponent(key)}/run`);
         emit(ctx, r, () =>
           console.log(t(`Started ${key}. Follow it with: easybits crons runs ${key}`, `Arrancó ${key}. Síguela con: easybits crons runs ${key}`)),
         );
       },
     },
     pause: {
-      summary: "Pause a job: scheduled runs answer skipped until you resume it",
-      usage: "easybits crons pause <job>",
-      examples: ["easybits crons pause check-hosting"],
+      summary: "Pause one of your crons or a platform job until you resume it",
+      usage: "easybits crons pause <id|name|job>",
+      examples: ["easybits crons pause 66f0c2a1b2c3d4e5f6a7b8c9", "easybits crons pause check-hosting"],
       async run(ctx) {
-        const key = need(ctx, 0, "job", this.usage);
-        const r = await api<Record<string, unknown>>(ctx, "POST", `/admin/crons/${encodeURIComponent(key)}/pause`, { paused: true });
+        const key = need(ctx, 0, "id|name|job", this.usage);
+        const mine = await userCronOrNull(ctx, key);
+        const r = mine
+          ? await api<Record<string, unknown>>(ctx, "PATCH", `/crons/${mine.id}`, { enabled: false })
+          : await api<Record<string, unknown>>(ctx, "POST", `/admin/crons/${encodeURIComponent(key)}/pause`, { paused: true });
         emit(ctx, r, () => console.log(t(`Paused ${key}.`, `${key} en pausa.`)));
       },
     },
     resume: {
-      summary: "Resume a paused job",
-      usage: "easybits crons resume <job>",
-      examples: ["easybits crons resume check-hosting"],
+      summary: "Resume one of your crons or a platform job",
+      usage: "easybits crons resume <id|name|job>",
+      examples: ["easybits crons resume 66f0c2a1b2c3d4e5f6a7b8c9", "easybits crons resume check-hosting"],
       async run(ctx) {
-        const key = need(ctx, 0, "job", this.usage);
-        const r = await api<Record<string, unknown>>(ctx, "POST", `/admin/crons/${encodeURIComponent(key)}/pause`, { paused: false });
+        const key = need(ctx, 0, "id|name|job", this.usage);
+        const mine = await userCronOrNull(ctx, key);
+        const r = mine
+          ? await api<Record<string, unknown>>(ctx, "PATCH", `/crons/${mine.id}`, { enabled: true })
+          : await api<Record<string, unknown>>(ctx, "POST", `/admin/crons/${encodeURIComponent(key)}/pause`, { paused: false });
         emit(ctx, r, () => console.log(t(`Resumed ${key}.`, `${key} reanudada.`)));
+      },
+    },
+    create: {
+      aliases: ["add"],
+      summary: "Create a cron: call a public https URL or send a turn to one of your agents (at most every 5 min)",
+      usage: 'easybits crons create <name> --cron "<5 fields>" [--tz <IANA>] (--url <https-url> [--method] [--body] [--secret NAME] | --agent <id> --prompt <text>)',
+      options: {
+        cron: { type: "string", value: "expr", description: 'Cron of 5 fields, e.g. "30 8 * * *" = daily 8:30' },
+        tz: { type: "string", value: "zone", description: "IANA time zone (default America/Mexico_City)" },
+        ...ACTION_OPTIONS,
+      },
+      examples: [
+        'easybits crons create "Study reminder" --cron "30 8 * * *" --url https://www.ghosty.studio/api/v2/me/push --method POST --body \'{"title":"Study time"}\' --secret GHOSTY_PUSH_TOKEN',
+        'easybits crons create "Weekly report" --cron "0 9 * * 1" --agent 6a3c046d2cf7d7f4163f739d --prompt "Send me the weekly sales summary"',
+      ],
+      async run(ctx) {
+        const name = need(ctx, 0, "name", this.usage);
+        const cron = str(ctx, "cron");
+        if (!cron) throw usageError(t("Missing --cron.", "Falta --cron."), this.usage);
+        const a = actionFromFlags(flagsOf(ctx));
+        if ("error" in a) throw usageError(a.error!, this.usage);
+        if (!a.action) throw usageError(t("Missing --url or --agent.", "Falta --url o --agent."), this.usage);
+        const c = await api<UserCron>(ctx, "POST", "/crons", { name, cron, ...(str(ctx, "tz") ? { timezone: str(ctx, "tz") } : {}), action: a.action });
+        emit(ctx, c, () => console.log(t(`Created ${c.id} «${c.name}» — ${c.schedule}; next ${fmtDate(c.nextRunAt)}`, `Creado ${c.id} «${c.name}» — ${c.schedule}; próxima ${fmtDate(c.nextRunAt)}`)));
+      },
+    },
+    update: {
+      aliases: ["edit", "set"],
+      summary: "Change one of your crons (only what you pass)",
+      usage: 'easybits crons update <id|name> [--name <n>] [--cron "<expr>"] [--tz <IANA>] [--url … | --agent … --prompt …]',
+      options: {
+        name: { type: "string", value: "name", description: "New name" },
+        cron: { type: "string", value: "expr", description: "New schedule" },
+        tz: { type: "string", value: "zone", description: "New IANA time zone" },
+        ...ACTION_OPTIONS,
+      },
+      examples: ['easybits crons update 66f0c2a1b2c3d4e5f6a7b8c9 --cron "0 7 * * 1-5"'],
+      async run(ctx) {
+        const ref = need(ctx, 0, "id|name", this.usage);
+        const mine = await resolveUserCron(ctx, ref);
+        if (!mine) throw new CliError(t(`You have no cron "${ref}".`, `No tienes un cron "${ref}".`), EXIT.API, "easybits crons ls", "not_found", 404);
+        const a = actionFromFlags(flagsOf(ctx));
+        if ("error" in a) throw usageError(a.error!, this.usage);
+        const patch = {
+          ...(str(ctx, "name") ? { name: str(ctx, "name") } : {}),
+          ...(str(ctx, "cron") ? { cron: str(ctx, "cron") } : {}),
+          ...(str(ctx, "tz") ? { timezone: str(ctx, "tz") } : {}),
+          ...(a.action ? { action: a.action } : {}),
+        };
+        if (!Object.keys(patch).length) throw usageError(t("Nothing to change.", "No hay nada que cambiar."), this.usage);
+        const c = await api<UserCron>(ctx, "PATCH", `/crons/${mine.id}`, patch);
+        emit(ctx, c, () => console.log(t(`Updated «${c.name}» — ${c.schedule}`, `Actualizado «${c.name}» — ${c.schedule}`)));
+      },
+    },
+    rm: {
+      aliases: ["remove", "delete"],
+      summary: "Delete one of your crons",
+      usage: "easybits crons rm <id|name> [--yes]",
+      options: { ...YES_OPTION },
+      examples: ["easybits crons rm 66f0c2a1b2c3d4e5f6a7b8c9 --yes"],
+      async run(ctx) {
+        const ref = need(ctx, 0, "id|name", this.usage);
+        const mine = await resolveUserCron(ctx, ref);
+        if (!mine) throw new CliError(t(`You have no cron "${ref}".`, `No tienes un cron "${ref}".`), EXIT.API, "easybits crons ls", "not_found", 404);
+        requireYesIfHeadless(ctx);
+        await confirm(ctx, t(`Delete cron «${mine.name}»? It stops running right away.`, `¿Borrar el cron «${mine.name}»? Deja de correr de inmediato.`));
+        const r = await api<Record<string, unknown>>(ctx, "DELETE", `/crons/${mine.id}`);
+        emit(ctx, r, () => console.log(t(`Deleted «${mine.name}»`, `Borrado «${mine.name}»`)));
       },
     },
   },

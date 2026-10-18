@@ -90,6 +90,26 @@ const eb = await createClientFromEnv();
 | `updateWebhook(webhookId, params)` | Update URL, events, or status |
 | `deleteWebhook(webhookId)` | Permanently delete a webhook |
 
+### Crons
+
+Scheduled jobs of your account: call a public https URL (optionally with a vault secret as a header) or send a turn to one of your fleet agents. At most every 5 minutes; IANA time zone (default `America/Mexico_City`); limit per plan (Byte 3, Mega 20, Tera 100).
+
+| Method | Description |
+|--------|-------------|
+| `listCrons({ includeAgents? })` | Your crons (`includeAgents` adds your agents as turn targets) |
+| `createCron(params)` | `{ name, cron, timezone?, enabled?, action }` |
+| `getCron(id)` / `updateCron(id, params)` / `deleteCron(id)` | `updateCron(id, { enabled: false })` pauses it |
+| `runCron(id)` | Run now in the background |
+| `listCronRuns(id, { limit? })` | Latest runs, newest first |
+
+```ts
+await eb.createCron({
+  name: "Study reminder",
+  cron: "30 8 * * *",
+  action: { type: "http", url: "https://www.ghosty.studio/api/v2/me/push", method: "POST", body: { title: "Study time" }, secretName: "GHOSTY_PUSH_TOKEN" },
+});
+```
+
 ### Secrets (account vault)
 
 | Method | Description |

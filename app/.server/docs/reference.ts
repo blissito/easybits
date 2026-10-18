@@ -266,10 +266,26 @@ easybits secrets rm GITHUB_TOKEN --yes
 
 La bóveda de tu cuenta (la misma de /dash/developer/secrets y de las tools MCP \`secret_*\`). Un secreto se usa por nombre: \`$secret:NOMBRE\` en el MCP de un agente o en \`--repo-token\`, \`machines launch --secret NOMBRE\`. Los nombres son \`[A-Z_][A-Z0-9_]*\`; el mismo nombre reemplaza el valor. Los valores nunca van en argv (\`ps\` y el historial de tu shell los ven). \`machines secrets\` es otra cosa: valores para UNA máquina, que ganan sobre la bóveda.
 
+### Tus crons
+
+\`\`\`bash
+easybits crons create "Despertador" --cron "30 8 * * *" --url https://www.ghosty.studio/api/v2/me/push \\
+  --method POST --body '{"title":"Hora de estudiar"}' --secret GHOSTY_PUSH_TOKEN
+easybits crons create "Reporte" --cron "0 9 * * 1" --agent <agentId> --prompt "Mándame el resumen de ventas"
+easybits crons ls                                           # los tuyos: horario, qué hace, última y próxima
+easybits crons update "Despertador" --cron "0 7 * * 1-5"    # sólo lo que pases
+easybits crons run "Despertador"                            # id o nombre exacto; en segundo plano
+easybits crons runs "Despertador"                           # historial con el error completo
+easybits crons pause "Despertador"                          # y resume
+easybits crons rm "Despertador" --yes
+\`\`\`
+
+Le pegan a una URL https pública (con \`--secret\` un secreto de tu bóveda viaja como header, \`Authorization: Bearer\` por default) o le mandan un turno a uno de tus agentes. Como mucho cada 5 min, zona \`--tz\` (default America/Mexico_City), límite por plan. Misma API que \`/api/v2/crons\`.
+
 ### Crons de la plataforma (sólo administradores)
 
 \`\`\`bash
-easybits crons ls                                           # estado, horario, última y próxima corrida
+easybits crons ls --platform                                # estado, horario, última y próxima corrida
 easybits crons runs backup-machines                         # últimas 50 corridas, con el error completo
 easybits crons run purge-notifications                      # ejecutar ahora, en segundo plano
 easybits crons pause check-hosting                          # sus corridas responden skipped

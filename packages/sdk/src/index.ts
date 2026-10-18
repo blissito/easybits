@@ -504,6 +504,68 @@ export interface ApiKey {
   expiresAt?: string | null;
 }
 
+// ─── Cron Types ────────────────────────────────────────────────
+
+/** What a cron does on each run: call a URL, or send a turn to one of your fleet agents. */
+export type CronAction =
+  | {
+      type: "http";
+      /** Public https URL (private/internal addresses are rejected). */
+      url: string;
+      method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+      /** Request body (an object is sent as JSON). Not with GET. Max 16 KB. */
+      body?: string | Record<string, unknown>;
+      /** A secret from your vault, sent as a header (never shown). */
+      secretName?: string;
+      /** Header for the secret. Default `Authorization` (with `Bearer ` if the value has no scheme). */
+      secretHeader?: string;
+    }
+  | { type: "agent_turn"; fleetAgentId: string; prompt: string; groupId?: string };
+
+export interface Cron {
+  id: string;
+  name: string;
+  cron: string;
+  timezone: string;
+  /** The schedule in words (Spanish), e.g. "diario 08:30 America/Mexico_City". */
+  schedule: string;
+  enabled: boolean;
+  action: CronAction;
+  nextRunAt: string | null;
+  lastRunAt: string | null;
+  lastOk: boolean | null;
+  lastStatus: number | null;
+  lastError: string | null;
+  /** Failures in a row; at 20 the cron turns itself off. */
+  failCount: number;
+  createdAt: string;
+}
+
+export interface CreateCronParams {
+  name: string;
+  /** 5 fields (min hour day month weekday); at most every 5 minutes. */
+  cron: string;
+  /** IANA time zone. Default America/Mexico_City. */
+  timezone?: string;
+  enabled?: boolean;
+  action: CronAction;
+}
+
+export type UpdateCronParams = Partial<CreateCronParams>;
+
+export interface CronRun {
+  id: string;
+  trigger: "schedule" | "manual" | string;
+  startedAt: string;
+  finishedAt: string | null;
+  ok: boolean | null;
+  status: number | null;
+  durationMs: number | null;
+  summary: string | null;
+  error: string | null;
+  running: boolean;
+}
+
 // ─── Webhook Types ─────────────────────────────────────────────
 
 /** A secret in the account vault: name and dates only, never the value. */
@@ -1547,6 +1609,41 @@ export class EasybitsClient {
   /** Delete a secret by name. Whatever references it stops resolving. */
   async deleteSecret(name: string): Promise<{ deleted: boolean }> {
     return this.request<{ deleted: boolean }>(`/secrets/${encodeURIComponent(name)}`, { method: "DELETE" });
+  }
+
+  // ── Crons ──────────────────────────────────────────────────
+
+  /** Your crons. `includeAgents` adds your fleet agents `{id,name}` (targets for `agent_turn`). */
+  async listCrons(opts?: { includeAgents?: boolean }): Promise<{ items: Cron[]; nextCursor: string | null; hasMore: boolean; total: number; agents?: { id: string; name: string }[] }> {
+    return this.request(`/crons${opts?.includeAgents ? "?include=agents" : ""}`);
+  }
+
+  /** Schedule a job: call a URL or send a turn to one of your agents. At most every 5 min; limit per plan. */
+  async createCron(params: CreateCronParams): Promise<Cron> {
+    return this.request<Cron>("/crons", { method: "POST", body: JSON.stringify(params) });
+  }
+
+  async getCron(id: string): Promise<Cron> {
+    return this.request<Cron>(`/crons/${encodeURIComponent(id)}`);
+  }
+
+  /** Change only what you pass. `enabled: false` pauses it; `true` resumes it. */
+  async updateCron(id: string, params: UpdateCronParams): Promise<Cron> {
+    return this.request<Cron>(`/crons/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(params) });
+  }
+
+  async deleteCron(id: string): Promise<{ deleted: true; id: string }> {
+    return this.request(`/crons/${encodeURIComponent(id)}`, { method: "DELETE" });
+  }
+
+  /** Run it now in the background (trigger `manual`); the result shows up in `listCronRuns`. */
+  async runCron(id: string): Promise<{ started: true; id: string }> {
+    return this.request(`/crons/${encodeURIComponent(id)}/run`, { method: "POST" });
+  }
+
+  /** Latest runs, newest first (max 50). */
+  async listCronRuns(id: string, opts?: { limit?: number }): Promise<{ items: CronRun[] }> {
+    return this.request(`/crons/${encodeURIComponent(id)}/runs${opts?.limit ? `?limit=${opts.limit}` : ""}`);
   }
 
   // ── Webhooks ───────────────────────────────────────────────

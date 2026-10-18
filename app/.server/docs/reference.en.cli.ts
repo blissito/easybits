@@ -120,10 +120,26 @@ easybits secrets rm GITHUB_TOKEN --yes
 
 The vault of your account (the same as /dash/developer/secrets and the \`secret_*\` MCP tools). A secret is used by name: \`$secret:NAME\` in an agent's MCP config or \`--repo-token\`, \`machines launch --secret NAME\`. Names are \`[A-Z_][A-Z0-9_]*\`; the same name replaces the value. Values never go in argv (\`ps\` and your shell history see it). \`machines secrets\` is different: values for ONE machine, which win over the vault.
 
+### Your crons
+
+\`\`\`bash
+easybits crons create "Study reminder" --cron "30 8 * * *" --url https://www.ghosty.studio/api/v2/me/push \\
+  --method POST --body '{"title":"Study time"}' --secret GHOSTY_PUSH_TOKEN
+easybits crons create "Report" --cron "0 9 * * 1" --agent <agentId> --prompt "Send me the sales summary"
+easybits crons ls                                           # yours: schedule, what it does, last and next run
+easybits crons update "Study reminder" --cron "0 7 * * 1-5" # only what you pass
+easybits crons run "Study reminder"                         # id or exact name; in the background
+easybits crons runs "Study reminder"                        # history with the full error
+easybits crons pause "Study reminder"                       # and resume
+easybits crons rm "Study reminder" --yes
+\`\`\`
+
+They call a public https URL (with \`--secret\` a secret from your vault travels as a header, \`Authorization: Bearer\` by default) or send a turn to one of your agents. At most every 5 min, \`--tz\` time zone (default America/Mexico_City), limit per plan. Same API as \`/api/v2/crons\`.
+
 ### Platform crons (admins only)
 
 \`\`\`bash
-easybits crons ls                                           # status, schedule, last and next run
+easybits crons ls --platform                                # status, schedule, last and next run
 easybits crons runs backup-machines                         # last 50 runs, with the full error
 easybits crons run purge-notifications                      # run now, in the background
 easybits crons pause check-hosting                          # its runs answer skipped
