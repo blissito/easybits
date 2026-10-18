@@ -73,6 +73,8 @@ export default [
   route("/sitemap.xml", "routes/sitemap.xml.ts"),
   route("/robots.txt", "routes/robots.txt.ts"),
   route("/llms.txt", "routes/llms.txt.ts"),
+  // Buzones de eventos: receptor público (el token de la URL es la autorización).
+  route("/hooks/:token", "routes/hooks/receive.ts"),
   // Índice → secciones sueltas (1-12 KB) y volcado completo. Ver llms.txt.ts.
   route("/llms-full.txt", "routes/llms-full.txt.ts"),
   route("/llms/:section", "routes/llms.$section.txt.ts"),
@@ -196,6 +198,7 @@ export default [
           route("websites", "routes/dash/developer/websites.tsx"),
           route("workspaces", "routes/dash/developer/workspaces.tsx"),
           route("webhooks", "routes/dash/developer/webhooks.tsx"),
+          route("inboxes", "routes/dash/developer/inboxes.tsx"),
           route("databases", "routes/dash/developer/databases.tsx"),
           route("domains", "routes/dash/developer/domains.tsx"),
           route("secrets", "routes/dash/developer/secrets.tsx"),
@@ -476,6 +479,11 @@ export default [
     route("crons/:id/run", "routes/api/v2/cron-run.ts"),
     route("crons/:id/runs", "routes/api/v2/cron-runs.ts"),
     route("crons/:id/runs/next", "routes/api/v2/cron-runs-next.ts"),
+    route("inboxes", "routes/api/v2/inboxes.ts"),
+    route("inboxes/:id", "routes/api/v2/inbox.ts", { id: "inbox" }),
+    route("inboxes/:id/:op", "routes/api/v2/inbox.ts", { id: "inbox-op" }),
+    route("inboxes/:id/events", "routes/api/v2/inbox-events.ts"),
+    route("inboxes/:id/events/stream", "routes/api/v2/inbox-stream.ts"),
     route("notifications", "routes/api/v2/notifications.ts"),
     route("databases", "routes/api/v2/databases.ts"),
     route("databases/:dbId", "routes/api/v2/database.ts"),

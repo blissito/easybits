@@ -2121,3 +2121,37 @@ model UserCron {
   @@index([ownerId])
   @@index([enabled, nextRunAt])
 }
+
+// Buzón de eventos: una URL de webhook propia (/hooks/<token>) cuyos eventos llegan en vivo a quien
+// escucha (`easybits inbox listen`) y, si nadie escucha, se guardan para leerlos después. El token
+// es lo único que autoriza a escribir; leer pide una llave de la cuenta.
+model EventInbox {
+  id            String    @id @default(auto()) @map("_id") @db.ObjectId
+  ownerId       String    @db.ObjectId
+  name          String
+  token         String    @unique
+  // Último seq asignado (update atómico con increment) y último leído (cursor de `read`).
+  nextSeq       Int       @default(0)
+  readSeq       Int       @default(0)
+  retentionDays Int       @default(7)
+  lastEventAt   DateTime?
+  createdAt     DateTime  @default(now())
+
+  @@index([ownerId])
+}
+
+model InboxEvent {
+  id          String   @id @default(auto()) @map("_id") @db.ObjectId
+  inboxId     String   @db.ObjectId
+  ownerId     String   @db.ObjectId
+  seq         Int
+  source      String // http | cron
+  method      String?
+  contentType String?
+  headers     Json?
+  body        String
+  receivedAt  DateTime @default(now())
+
+  @@unique([inboxId, seq])
+  @@index([inboxId, receivedAt])
+}

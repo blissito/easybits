@@ -72,6 +72,7 @@ const notifyShape = z
     on: z.enum(["failure", "always"]).optional().describe("default failure: sólo cuando falla"),
     push: z.union([z.literal(true), z.object({ secret: z.string() })]).optional().describe("aviso a la app de Ghosty; usa el token personal del secreto GHOSTY_PUSH_TOKEN (o el que digas)"),
     email: z.literal(true).optional().describe("correo a la cuenta dueña (nunca a otra dirección)"),
+    inbox: z.string().optional().describe("id de un buzón tuyo (inbox_create): el resultado de cada corrida llega ahí como evento"),
   })
   .nullable()
   .optional()

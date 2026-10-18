@@ -289,6 +289,18 @@ easybits crons rm "Despertador" --yes
 
 Le pegan a una URL https pública (con \`--secret\` un secreto de tu bóveda viaja como header, \`Authorization: Bearer\` por default) o le mandan un turno a uno de tus agentes. Se repiten (\`--cron\`, como mucho cada 5 min; terminan solos con \`--until <fecha>\` o \`--times N\`) o corren **una sola vez** (\`--at "2026-10-18T23:00"\` o \`--at 23:00\` = hoy, \`--in 2h\`): al correr se apagan y se quedan en \`ls\` como «terminado», con su historial. Una hora que ya pasó es error, no «mañana». Con \`--run\` el trabajo lo hace una **caja desechable** (python por default, \`--template node|bun|ubuntu\`): monta tus \`--file\` junto al comando, cada \`--secret NOMBRE\` de tu bóveda llega como variable de entorno y cada \`--secret-file NOMBRE:ruta\` sube ese archivo como secreto **acotado a ese cron** (ningún otro cron, agente ni máquina lo lee; se borra con el cron) y lo escribe en la misma ruta \`~/\` dentro de la caja; éxito = exit 0, tope \`--timeout\` 600 s, la caja se destruye al terminar. \`crons wait\` se queda hasta que termina la siguiente corrida (o la que va en curso), imprime su salida y **sale con su código** (\`exec\`: el del comando; los demás: 0 si salió bien, 1 si no), así que encaja con un \`&&\` o con un proceso en segundo plano. \`--notify push\` manda un aviso a la app de Ghosty con el token personal de tu secreto \`GHOSTY_PUSH_TOKEN\`; \`--notify email\` escribe al correo de tu cuenta (nunca a otro); por default sólo si falla, \`--notify-on always\` siempre. \`--dry-run\` valida todo y muestra las próximas 3 corridas en hora local sin crear nada. Zona \`--tz\` (default America/Mexico_City), límite por plan. Misma API que \`/api/v2/crons\`.
 
+### Buzones de eventos
+
+\`\`\`bash
+easybits inbox create builds                                # URL de webhook propia: cualquiera le escribe con POST
+easybits inbox ls                                           # tus buzones, URL y no leídos
+easybits inbox listen builds                                # en vivo: una línea JSON por evento; se reconecta solo
+easybits inbox read builds                                  # lo no leído, y lo marca (--all todo, --no-ack sólo mirar)
+easybits inbox rm builds --yes
+\`\`\`
+
+Un webhook de EasyBits que llega a tu terminal: lo que entra a la URL te alcanza en vivo con \`listen\` (en Claude Code, córrelo con Monitor: cada línea despierta al agente) o te espera para \`read\`. Un cron le escribe con \`--notify inbox:builds\`. Quien tenga la URL puede escribir: no la publiques.
+
 ### Crons de la plataforma (sólo administradores)
 
 \`\`\`bash
@@ -2120,7 +2132,25 @@ curl -X POST https://www.easybits.cloud/api/v2/crons -H "Authorization: Bearer $
   -d '{"name":"Ping diario","cron":"30 8 * * *","action":{"type":"http","url":"https://mi-app.com/api/tarea","method":"POST"}}'
 \`\`\`
 
-MCP: \`list_my_crons\` (\`logs:true\` con \`id\`), \`create_cron\` (con \`at\`/\`in\`/\`until\`/\`times\`/\`dryRun\`, \`exec\` y \`secretValues\`), \`update_cron\` (también \`notify\`), \`delete_cron\`, \`run_my_cron\`, \`wait_cron_run\` (grupo \`core\`). Panel: sección «Mis crons» en \`/dash/admin/crons\`.
+MCP: \`list_my_crons\` (\`logs:true\` con \`id\`), \`create_cron\` (con \`at\`/\`in\`/\`until\`/\`times\`/\`dryRun\`, \`exec\` y \`secretValues\`), \`update_cron\` (también \`notify\`), \`delete_cron\`, \`run_my_cron\`, \`wait_cron_run\` (grupo \`core\`). Panel: sección «Mis crons» en \`/dash/admin/crons\`. Para el resultado: con servidor, los webhooks \`cron.run.*\`; desde una terminal, \`notify.inbox\` (abajo) o \`crons wait\`.
+
+### Buzones de eventos (webhook propio que llega a tu terminal)
+Un buzón es una URL de webhook de EasyBits: cualquiera le escribe con \`POST\` (tu cron, Stripe, GitHub, un formulario) y lo que llega **te alcanza en vivo** si estás escuchando o **te espera guardado** si no. Sirve para un agente en una terminal, que no tiene URL pública. Retención 7 días por default (1-30), hasta 1,000 eventos por buzón, cuerpo hasta 256 KB; límite por plan Byte 3, Mega 20, Tera 100.
+
+- \`POST /hooks/<token>\` (público; el token ES la autorización para escribir, quien tenga la URL puede escribir) — cualquier cuerpo; responde \`202 { ok, seq }\`. Se guardan los headers salvo credenciales (\`authorization\`, \`cookie\`, \`x-api-key\`…), así que una firma como \`stripe-signature\` llega.
+- \`GET|POST /api/v2/inboxes\` — lista (\`{ items:[{ id, name, url, unread, lastSeq, lastEventAt, retentionDays }] }\`) / crea \`{ name, retentionDays? }\`. \`GET|PATCH|DELETE /api/v2/inboxes/:id\` (id o nombre); \`POST /api/v2/inboxes/:id/rotate\` = URL nueva (la vieja deja de aceptar).
+- \`GET /api/v2/inboxes/:id/events?since=&limit=&ack=\` — sin \`since\`, lo **no leído**; \`ack\` (default 1) marca como leído hasta lo entregado. \`{ items:[{ seq, source (http|cron), method, contentType, headers, body, json?, receivedAt }], cursor, unread }\`.
+- \`GET /api/v2/inboxes/:id/events/stream?since=\` — SSE en vivo: \`event: inbox\` por evento (\`id\` = \`seq\`; reconecta con \`Last-Event-ID\`). Escuchar no marca como leído.
+- Crons: \`notify: { inbox: "<id>", on: "always" }\` deja cada resultado como evento \`{ event: "cron.run.succeeded"|"cron.run.failed", cronId, name, runId, ok, exitCode, summary, error, … }\`.
+
+\`\`\`bash
+easybits inbox create builds                         # imprime la URL
+easybits inbox listen builds                         # en vivo: una línea JSON por evento (Monitor, jq)
+easybits inbox read builds                           # lo que llegó mientras no estabas; marca como leído
+easybits crons update "Revisión 1.0.10" --notify inbox:builds --notify-on always
+\`\`\`
+
+MCP: \`inbox_create\`, \`inbox_list\`, \`inbox_read\`, \`inbox_delete\` (grupo \`core\`). Al empezar una sesión, un agente lee sus buzones con \`inbox_read\` para ver qué pasó mientras no estaba.
 
 ### Tareas programadas de la plataforma (sólo administradores)
 Los respaldos diarios de máquinas, su rotación, el monitor de hosting (cada 5 min) y las purgas semanales son tareas programadas de EasyBits. Su horario vive en el código y cada corrida queda registrada (hora, duración, quién la disparó, resumen y error). Se ven y operan en \`/dash/admin/crons\` o por API. Requieren scope \`ADMIN\` **y** ser administrador de la plataforma; cualquier otra cuenta recibe 403.

@@ -547,6 +547,34 @@ export interface CronNotify {
   push?: true | { secret: string };
   /** Email to the account that owns the cron (never another address). */
   email?: true;
+  /** Id of one of your inboxes: each result lands there as an event. */
+  inbox?: string;
+}
+
+/** An event inbox: your own webhook URL. Events reach `listenInbox` live or wait for `readInbox`. */
+export interface Inbox {
+  id: string;
+  name: string;
+  /** POST anything here. The token in it IS the write authorization: keep it private. */
+  url: string;
+  unread: number;
+  lastSeq: number;
+  lastEventAt: string | null;
+  retentionDays: number;
+  createdAt: string;
+}
+
+export interface InboxEvent {
+  seq: number;
+  source: "http" | "cron" | string;
+  method: string | null;
+  contentType: string | null;
+  /** Without credentials (authorization, cookie, x-api-key…). */
+  headers: Record<string, string>;
+  body: string;
+  /** The body parsed, when it was JSON. */
+  json?: unknown;
+  receivedAt: string;
 }
 
 export interface Cron {
@@ -1747,6 +1775,83 @@ export class EasybitsClient {
       const r = await this.request<CronWait>(`/crons/${encodeURIComponent(id)}/runs/next?${q}`);
       if (r.run || Date.now() >= deadline) return r;
       after = r.after;
+    }
+  }
+
+  // ── Inboxes ────────────────────────────────────────────────
+
+  async listInboxes(): Promise<{ items: Inbox[] }> {
+    return this.request("/inboxes");
+  }
+
+  /** Your own webhook URL (`url`). Limit per plan; retention 1-30 days (default 7). */
+  async createInbox(params: { name: string; retentionDays?: number }): Promise<Inbox> {
+    return this.request<Inbox>("/inboxes", { method: "POST", body: JSON.stringify(params) });
+  }
+
+  async deleteInbox(idOrName: string): Promise<{ deleted: true; id: string }> {
+    return this.request(`/inboxes/${encodeURIComponent(idOrName)}`, { method: "DELETE" });
+  }
+
+  /** New URL; the old one stops accepting writes. */
+  async rotateInbox(idOrName: string): Promise<Inbox> {
+    return this.request<Inbox>(`/inboxes/${encodeURIComponent(idOrName)}/rotate`, { method: "POST" });
+  }
+
+  /**
+   * Events. Without `since`: the unread ones, marked read (`ack: false` to just look), so the next
+   * call brings only new ones. `since: 0` = everything still kept.
+   */
+  async readInbox(idOrName: string, opts?: { since?: number; limit?: number; ack?: boolean }): Promise<{ items: InboxEvent[]; cursor: number; unread: number }> {
+    const q = new URLSearchParams();
+    if (opts?.since != null) q.set("since", String(opts.since));
+    if (opts?.limit) q.set("limit", String(opts.limit));
+    if (opts?.ack === false) q.set("ack", "0");
+    return this.request(`/inboxes/${encodeURIComponent(idOrName)}/events${q.size ? `?${q}` : ""}`);
+  }
+
+  /**
+   * Live events as they arrive (SSE), starting with the unread ones (or after `since`). Reconnects
+   * on its own from the last event. Stop it with `signal` or by breaking the loop.
+   */
+  async *listenInbox(idOrName: string, opts?: { since?: number; signal?: AbortSignal }): AsyncGenerator<InboxEvent> {
+    let last = opts?.since;
+    while (!opts?.signal?.aborted) {
+      const q = last != null ? `?since=${last}` : "";
+      let res: Response;
+      try {
+        res = await fetch(`${this.baseUrl}/api/v2/inboxes/${encodeURIComponent(idOrName)}/events/stream${q}`, {
+          headers: { Authorization: `Bearer ${this.apiKey}`, Accept: "text/event-stream" },
+          signal: opts?.signal,
+        });
+      } catch {
+        if (opts?.signal?.aborted) return;
+        await new Promise((r) => setTimeout(r, 2000));
+        continue;
+      }
+      if (!res.ok || !res.body) throw new EasybitsError(res.status, await res.text().catch(() => ""));
+      const reader = res.body.getReader();
+      const dec = new TextDecoder();
+      let buf = "";
+      try {
+        for (;;) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buf += dec.decode(value, { stream: true });
+          const blocks = buf.split(/\r?\n\r?\n/);
+          buf = blocks.pop() ?? "";
+          for (const block of blocks) {
+            const lines = block.split(/\r?\n/);
+            if (!lines.includes("event: inbox")) continue;
+            const data = lines.filter((l) => l.startsWith("data:")).map((l) => l.slice(5).replace(/^ /, "")).join("\n");
+            const ev = JSON.parse(data) as InboxEvent;
+            last = ev.seq;
+            yield ev;
+          }
+        }
+      } catch {
+        if (opts?.signal?.aborted) return;
+      }
     }
   }
 

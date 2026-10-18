@@ -243,6 +243,14 @@ export function UserCronsSection() {
 }
 
 function CronForm({ agents, onCancel, onCreated }: { agents: Agent[]; onCancel: () => void; onCreated: () => void }) {
+  // Buzones de eventos de la cuenta, para mandar ahí el resultado de cada corrida.
+  const [inboxes, setInboxes] = useState<{ id: string; name: string }[]>([]);
+  const [notifyInbox, setNotifyInbox] = useState("");
+  useEffect(() => {
+    api("/api/v2/inboxes")
+      .then((r: { items?: { id: string; name: string }[] }) => setInboxes(r.items ?? []))
+      .catch(() => undefined);
+  }, []);
   const [name, setName] = useState("");
   const [when, setWhen] = useState<When>({ mode: "daily", time: "08:30", day: "1", every: "15", cron: "", at: "" });
   const [timezone] = useState(() => {
@@ -288,8 +296,15 @@ function CronForm({ agents, onCancel, onCreated }: { agents: Agent[]; onCancel: 
           ...(once ? { at: when.at } : { cron }),
           timezone,
           action,
-          ...(notifyPush || notifyEmail
-            ? { notify: { on: notifyAlways ? "always" : "failure", ...(notifyPush ? { push: true } : {}), ...(notifyEmail ? { email: true } : {}) } }
+          ...(notifyPush || notifyEmail || notifyInbox
+            ? {
+                notify: {
+                  on: notifyAlways ? "always" : "failure",
+                  ...(notifyPush ? { push: true } : {}),
+                  ...(notifyEmail ? { email: true } : {}),
+                  ...(notifyInbox ? { inbox: notifyInbox } : {}),
+                },
+              }
             : {}),
         }) });
       onCreated();
@@ -441,7 +456,20 @@ function CronForm({ agents, onCancel, onCreated }: { agents: Agent[]; onCancel: 
         <label className="flex items-center gap-1.5">
           <input type="checkbox" checked={notifyEmail} onChange={(e) => setNotifyEmail(e.target.checked)} /> correo
         </label>
-        {(notifyPush || notifyEmail) && (
+        {inboxes.length > 0 && (
+          <label className="flex items-center gap-1.5">
+            buzón
+            <select className="border-2 border-gray-200 rounded px-1 py-0.5" value={notifyInbox} onChange={(e) => setNotifyInbox(e.target.value)}>
+              <option value="">—</option>
+              {inboxes.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+        {(notifyPush || notifyEmail || notifyInbox) && (
           <label className="flex items-center gap-1.5">
             <input type="checkbox" checked={notifyAlways} onChange={(e) => setNotifyAlways(e.target.checked)} /> también cuando sale bien
           </label>

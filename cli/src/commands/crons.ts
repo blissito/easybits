@@ -155,7 +155,7 @@ export function actionFromFlags(f: { url?: string; method?: string; body?: strin
 }
 
 const NOTIFY_OPTIONS = {
-  notify: { type: "string", value: "push,email|none", description: "Tell you after each run: push to the Ghosty app (vault secret GHOSTY_PUSH_TOKEN) and/or email to your account; none removes it" },
+  notify: { type: "string", value: "push,email,inbox:<name>|none", description: "Tell you after each run: push to the Ghosty app (vault secret GHOSTY_PUSH_TOKEN), email to your account and/or an event in one of your inboxes; none removes it" },
   "notify-on": { type: "string", value: "failure|always", description: "When to notify (default failure)" },
 } as const;
 
@@ -164,16 +164,26 @@ export function notifyFromFlags(f: { notify?: string; notifyOn?: string }) {
   if (f.notify == null) return f.notifyOn ? ({ error: "--notify-on needs --notify" } as const) : {};
   if (f.notify === "none") return { notify: null };
   const chans = f.notify.split(",").map((x) => x.trim()).filter(Boolean);
-  const bad = chans.find((x) => x !== "push" && x !== "email");
-  if (bad || !chans.length) return { error: `--notify takes push, email or none (got "${f.notify}")` } as const;
+  const inboxChan = chans.find((x) => x.startsWith("inbox:"));
+  const bad = chans.find((x) => x !== "push" && x !== "email" && !x.startsWith("inbox:"));
+  if (bad || !chans.length || inboxChan === "inbox:") return { error: `--notify takes push, email, inbox:<name> or none (got "${f.notify}")` } as const;
   if (f.notifyOn && f.notifyOn !== "failure" && f.notifyOn !== "always") return { error: "--notify-on is failure or always" } as const;
   return {
     notify: {
       on: (f.notifyOn ?? "failure") as "failure" | "always",
       ...(chans.includes("push") ? { push: true as const } : {}),
       ...(chans.includes("email") ? { email: true as const } : {}),
+      ...(inboxChan ? { inbox: inboxChan.slice("inbox:".length) } : {}),
     },
   };
+}
+
+/** `notify.inbox` puede venir por nombre: la API pide el id. */
+async function resolveNotifyInbox<T extends { notify?: { inbox?: string } | null }>(ctx: Ctx, nf: T): Promise<T> {
+  const name = nf.notify?.inbox;
+  if (!name || /^[a-f0-9]{24}$/.test(name)) return nf;
+  const b = await api<{ id: string }>(ctx, "GET", `/inboxes/${encodeURIComponent(name)}`);
+  return { ...nf, notify: { ...nf.notify, inbox: b.id } };
 }
 
 const WHEN_OPTIONS = {
@@ -484,8 +494,9 @@ export const crons: Command = {
         const a = actionOf(ctx);
         if ("error" in a) throw usageError(a.error!, this.usage);
         if (!a.action) throw usageError(t("Missing --url, --agent or --run.", "Falta --url, --agent o --run."), this.usage);
-        const nf = notifyFromFlags({ notify: str(ctx, "notify"), notifyOn: str(ctx, "notify-on") });
-        if ("error" in nf) throw usageError(nf.error!, this.usage);
+        const nf0 = notifyFromFlags({ notify: str(ctx, "notify"), notifyOn: str(ctx, "notify-on") });
+        if ("error" in nf0) throw usageError(nf0.error!, this.usage);
+        const nf = await resolveNotifyInbox(ctx, nf0);
         const body = { name, ...w.fields, action: a.action, ...(a.secretValues ? { secretValues: a.secretValues } : {}), ...nf };
         if (bool(ctx, "dry-run")) {
           const p = await api<Preview>(ctx, "POST", "/crons", { ...body, dryRun: true });
@@ -521,8 +532,9 @@ export const crons: Command = {
         if ("error" in a) throw usageError(a.error!, this.usage);
         const w = scheduleFromFlags(whenOf(ctx));
         if ("error" in w) throw usageError(w.error!, this.usage);
-        const nf = notifyFromFlags({ notify: str(ctx, "notify"), notifyOn: str(ctx, "notify-on") });
-        if ("error" in nf) throw usageError(nf.error!, this.usage);
+        const nf0 = notifyFromFlags({ notify: str(ctx, "notify"), notifyOn: str(ctx, "notify-on") });
+        if ("error" in nf0) throw usageError(nf0.error!, this.usage);
+        const nf = await resolveNotifyInbox(ctx, nf0);
         const patch = {
           ...nf,
           ...(str(ctx, "name") ? { name: str(ctx, "name") } : {}),

@@ -143,6 +143,18 @@ easybits crons rm "Study reminder" --yes
 
 They call a public https URL (with \`--secret\` a secret from your vault travels as a header, \`Authorization: Bearer\` by default) or send a turn to one of your agents. They repeat (\`--cron\`, at most every 5 min; they stop on their own with \`--until <date>\` or \`--times N\`) or run **once** (\`--at "2026-10-18T23:00"\` or \`--at 23:00\` = today, \`--in 2h\`): after running they turn off and stay in \`ls\` as "done", with their history. A time that already passed is an error, not "tomorrow". With \`--run\` the work is done by a **throwaway box** (python by default, \`--template node|bun|ubuntu\`): it mounts your \`--file\`s next to the command, each \`--secret NAME\` from your vault arrives as an env var, and each \`--secret-file NAME:path\` uploads that file as a secret **scoped to that cron** (no other cron, agent or machine can read it; it is deleted with the cron) and writes it at the same \`~/\` path in the box; success = exit 0, \`--timeout\` up to 600 s, the box is destroyed when done. \`crons wait\` stays until the next run (or the one in progress) finishes, prints its output and **exits with its code** (\`exec\`: the command's; the others: 0 if OK, 1 if not), so it fits an \`&&\` or a background process. \`--notify push\` sends a notification to the Ghosty app with the personal token in your \`GHOSTY_PUSH_TOKEN\` secret; \`--notify email\` writes to your account's email (never another address); by default only on failure, \`--notify-on always\` every time. \`--dry-run\` validates everything and shows the next 3 runs in local time without creating anything. \`--tz\` time zone (default America/Mexico_City), limit per plan. Same API as \`/api/v2/crons\`.
 
+### Event inboxes
+
+\`\`\`bash
+easybits inbox create builds                                # your own webhook URL: anyone POSTs to it
+easybits inbox ls                                           # your inboxes, URL and unread
+easybits inbox listen builds                                # live: one JSON line per event; reconnects on its own
+easybits inbox read builds                                  # the unread ones, marked read (--all everything, --no-ack just look)
+easybits inbox rm builds --yes
+\`\`\`
+
+An EasyBits webhook that reaches your terminal: whatever hits the URL reaches you live with \`listen\` (in Claude Code, run it with Monitor: each line wakes the agent) or waits for \`read\`. A cron writes to it with \`--notify inbox:builds\`. Anyone with the URL can write: keep it private.
+
 ### Platform crons (admins only)
 
 \`\`\`bash

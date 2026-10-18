@@ -5,7 +5,7 @@ license: MIT
 compatibility: Needs Node 22+ (npx is enough), network access to https://www.easybits.cloud and an EasyBits API key
 metadata:
   author: easybits
-  version: "1.25"
+  version: "1.26"
 ---
 
 # Use the EasyBits CLI
@@ -203,9 +203,25 @@ after running and stays listed with its runs. Use `--dry-run` first to confirm t
 `--run` = a throwaway box (python default; `--template node|bun|ubuntu`; `--timeout` ≤ 600 s; success =
 exit 0): `--file` mounts next to the command, `--secret NAME` = vault secret as env var, `--secret-file
 NAME:path` uploads that file as a secret ONLY that cron can read and writes it at the same `~/` path.
-To learn the result, prefer `crons wait` (run it in the background) over looping on `runs`.
+To learn the result: `--notify inbox:<name>` + `inbox listen`/`inbox read` (see below), or
+`crons wait` (run it in the background) — never a loop on `runs`.
 The URL must be public https; secrets go by vault NAME (`--secret`), never the value. Limit per plan:
 Byte 3, Mega 20, Tera 100. After 20 failures in a row a cron turns itself off (`enabled:false`).
+
+## Event inboxes (a webhook that reaches your terminal)
+
+```bash
+easybits inbox create builds --json            # {id, name, url, unread} — give `url` to whatever should notify you
+easybits inbox ls --json                       # {items:[{id, name, url, unread, lastSeq, lastEventAt}]}
+easybits inbox listen builds                   # stdout: ONE JSON line per event, live; reconnects on its own
+easybits inbox read builds --json              # {items:[{seq, source, body, json?, receivedAt}], cursor, unread}; marks read
+easybits inbox rm builds --yes --json
+```
+
+At the start of a session, `easybits inbox read <inbox>` shows what arrived while you were away.
+To react live, run `easybits inbox listen <inbox>` in the background (Claude Code: Monitor) — each
+line is an event. A cron reports into it with `--notify inbox:<inbox> --notify-on always`. Anyone
+with the URL can write; never paste it in public places.
 
 ## Platform crons (platform admins only)
 

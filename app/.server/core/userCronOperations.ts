@@ -18,6 +18,7 @@ import { assertPublicUrl, PublicUrlError } from "../publicUrl";
 import { createSecret, getSecretValue } from "./secretOperations";
 import { dispatchWebhooks } from "../webhooks";
 import { sendTransactional } from "../emails/sendTransactional";
+import { appendInboxEvent, ownedInbox } from "./inboxOperations";
 
 export const DEFAULT_TIMEZONE = "America/Mexico_City";
 /** Lo más seguido que puede correr un cron de usuario. */
@@ -341,7 +342,7 @@ export async function validateAction(ownerId: string, raw: unknown, input?: { se
  * token personal `gpu_…` del secreto `GHOSTY_PUSH_TOKEN` (o el que diga `secret`). `email` sólo
  * al correo de la cuenta dueña: con una dirección libre, un cron sería un relevo de spam.
  */
-export type CronNotify = { on: "failure" | "always"; push?: { secret: string }; email?: true };
+export type CronNotify = { on: "failure" | "always"; push?: { secret: string }; email?: true; inbox?: string };
 export const DEFAULT_PUSH_SECRET = "GHOSTY_PUSH_TOKEN";
 export const GHOSTY_PUSH_URL = process.env.GHOSTY_PUSH_URL || "https://www.ghosty.studio/api/v2/me/push";
 
@@ -361,7 +362,12 @@ export async function validateNotify(ownerId: string, raw: unknown): Promise<Cro
     out.push = { secret };
   }
   if (n.email) out.email = true;
-  if (!out.push && !out.email) throw bad("notify necesita push o email");
+  if (n.inbox) {
+    const box = await ownedInbox(ownerId, String(n.inbox));
+    if (!box) throw bad("notify.inbox: ese buzón no existe en tu cuenta (usa su id)");
+    out.inbox = box.id;
+  }
+  if (!out.push && !out.email && !out.inbox) throw bad("notify necesita push, email o inbox");
   return out;
 }
 
@@ -1119,6 +1125,21 @@ async function notifyRun(c: UserCron, r: RunResult) {
           signal: AbortSignal.timeout(15_000),
         });
         if (!res.ok) throw new Error(`push HTTP ${res.status}`);
+      })()
+    );
+  }
+  if (n!.inbox) {
+    jobs.push(
+      (async () => {
+        const box = await ownedInbox(c.ownerId, n!.inbox!);
+        if (!box) throw new Error("el buzón ya no existe");
+        await appendInboxEvent(box, {
+          source: "cron",
+          method: null,
+          contentType: "application/json",
+          headers: { "x-easybits-event": r.ok ? "cron.run.succeeded" : "cron.run.failed" },
+          body: JSON.stringify({ event: r.ok ? "cron.run.succeeded" : "cron.run.failed", title, ...payload }),
+        });
       })()
     );
   }

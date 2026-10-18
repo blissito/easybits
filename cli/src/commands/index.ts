@@ -18,6 +18,7 @@ import { webCmd } from "./web.js";
 import { keys, webhooks } from "./webhooks.js";
 import { secrets } from "./secrets.js";
 import { crons } from "./crons.js";
+import { inbox } from "./inbox.js";
 import { documents } from "./documents.js";
 import { video } from "./video.js";
 
@@ -30,6 +31,7 @@ export const COMMANDS: Command[] = [
   usage,
   secrets,
   crons,
+  inbox,
   sandboxes,
   agents,
   fleet,

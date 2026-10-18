@@ -45,7 +45,9 @@ tags:
   - name: Webhooks
     description: Avisos HTTP firmados con HMAC.
   - name: Crons
-    description: Tareas programadas de tu cuenta (pegarle a una URL o mandarle un turno a un agente).
+    description: Tareas programadas de tu cuenta (pegarle a una URL, mandarle un turno a un agente o correr un comando en una caja desechable).
+  - name: Inboxes
+    description: "Buzones de eventos: una URL de webhook propia (POST /hooks/<token>) cuyos eventos se escuchan en vivo (SSE) o se leen después."
   - name: Domains
     description: Dominios propios para sitios (subdominios y dominio raíz).
   - name: Sites
@@ -2213,6 +2215,142 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
 
   # ───────────────────────── Webhooks ─────────────────────────
+  /api/v2/inboxes:
+    get:
+      tags: [Inboxes]
+      operationId: listInboxes
+      summary: Listar tus buzones
+      responses:
+        "200":
+          description: Buzones con su URL y los no leídos.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/Inbox" } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    post:
+      tags: [Inboxes]
+      operationId: createInbox
+      summary: Crear buzón
+      description: "Regresa la `url` pública (POST /hooks/<token>). Quien tenga la URL puede escribir. Límite por plan: Byte 3, Mega 20, Tera 100."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string }
+                retentionDays: { type: integer, minimum: 1, maximum: 30, default: 7 }
+      responses:
+        "201":
+          description: El buzón.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Inbox" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "409": { description: "Ya existe un buzón con ese nombre." }
+  /api/v2/inboxes/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        description: id o nombre
+        schema: { type: string }
+    get:
+      tags: [Inboxes]
+      operationId: getInbox
+      summary: Obtener buzón
+      responses:
+        "200": { description: El buzón., content: { application/json: { schema: { $ref: "#/components/schemas/Inbox" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Inboxes]
+      operationId: updateInbox
+      summary: Cambiar buzón
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name: { type: string }
+                retentionDays: { type: integer, minimum: 1, maximum: 30 }
+      responses:
+        "200": { description: El buzón., content: { application/json: { schema: { $ref: "#/components/schemas/Inbox" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [Inboxes]
+      operationId: deleteInbox
+      summary: Borrar buzón y sus eventos
+      responses:
+        "200": { description: Borrado. }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v2/inboxes/{id}/{op}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+      - name: op
+        in: path
+        required: true
+        schema: { type: string, enum: [rotate] }
+    post:
+      tags: [Inboxes]
+      operationId: rotateInbox
+      summary: URL nueva (la vieja deja de aceptar)
+      responses:
+        "200": { description: El buzón con su URL nueva., content: { application/json: { schema: { $ref: "#/components/schemas/Inbox" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v2/inboxes/{id}/events:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      tags: [Inboxes]
+      operationId: readInbox
+      summary: Leer eventos
+      description: "Sin `since`, lo no leído; `ack` (default 1) lo marca como leído."
+      parameters:
+        - { name: since, in: query, schema: { type: integer } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 200, default: 50 } }
+        - { name: ack, in: query, schema: { type: string, enum: ["0", "1"], default: "1" } }
+      responses:
+        "200":
+          description: Eventos, el más viejo primero.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items: { type: array, items: { $ref: "#/components/schemas/InboxEvent" } }
+                  cursor: { type: integer }
+                  unread: { type: integer }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v2/inboxes/{id}/events/stream:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      tags: [Inboxes]
+      operationId: streamInbox
+      summary: Escuchar en vivo (SSE)
+      description: "`event: inbox` por evento (`id` = seq). Sin `since`, empieza por lo no leído. Escuchar no marca como leído."
+      parameters:
+        - { name: since, in: query, schema: { type: integer } }
+      responses:
+        "200": { description: Stream SSE., content: { text/event-stream: { schema: { type: string } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
   /api/v2/webhooks:
     get:
       tags: [Webhooks]
@@ -3455,6 +3593,7 @@ components:
             on: { type: string, enum: [failure, always], default: failure }
             push: { description: "true o { secret }: aviso a la app de Ghosty con el token personal del secreto (default GHOSTY_PUSH_TOKEN)" }
             email: { type: boolean, description: "correo a la cuenta dueña" }
+            inbox: { type: string, description: "id de un buzón tuyo: cada resultado llega como evento" }
         secretValues:
           type: object
           additionalProperties: { type: string }
@@ -3483,6 +3622,28 @@ components:
         lastError: { type: string, nullable: true }
         failCount: { type: integer, description: "fallas seguidas; a las 20 se apaga solo" }
         createdAt: { type: string, format: date-time }
+    Inbox:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        url: { type: string, format: uri, description: "POST aquí; el token de la URL es la autorización para escribir" }
+        unread: { type: integer }
+        lastSeq: { type: integer }
+        lastEventAt: { type: string, format: date-time, nullable: true }
+        retentionDays: { type: integer }
+        createdAt: { type: string, format: date-time }
+    InboxEvent:
+      type: object
+      properties:
+        seq: { type: integer }
+        source: { type: string, enum: [http, cron] }
+        method: { type: string, nullable: true }
+        contentType: { type: string, nullable: true }
+        headers: { type: object, additionalProperties: { type: string }, description: "sin credenciales (authorization, cookie, x-api-key…)" }
+        body: { type: string }
+        json: { description: "el cuerpo parseado si era JSON" }
+        receivedAt: { type: string, format: date-time }
     Webhook:
       type: object
       properties:

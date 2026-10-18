@@ -293,6 +293,7 @@ export const CORE_ALLOWLIST = new Set<string>([
   "get_usage_stats",
   "get_learning_progress",
   "list_my_crons", "create_cron", "update_cron", "delete_cron", "run_my_cron", "wait_cron_run",
+  "inbox_create", "inbox_list", "inbox_read", "inbox_delete",
   "create_form",
   "list_forms",
   "list_form_submissions",

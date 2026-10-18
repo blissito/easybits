@@ -32,6 +32,7 @@ import { CLAUDE_DIRECTORY_DESCRIPTION_EDITS, GROUP_ALLOWLISTS, GROUP_HIDDEN_SCOP
 import { importHtml, type ImportHtmlInput } from "./tools/importHtml";
 import { registerAdminCronTools } from "./tools/adminCrons";
 import { registerUserCronTools } from "./tools/userCrons";
+import { registerInboxTools } from "./tools/inboxes";
 import { safeImageBlock } from "./safeImageBlock";
 import { offloadOversizedRead } from "./offloadOversizedRead";
 import { installDynamicTools } from "./dynamicTools";
@@ -601,6 +602,8 @@ export function createMcpServer(groups?: string[], denyTools?: string[]) {
   registerAdminCronTools(server, wrapHandler);
   // Crons del usuario (core + copiloto; con la llave del copiloto sólo proponen).
   registerUserCronTools(server, wrapHandler);
+  // Buzones de eventos (webhook propio que llega a la terminal o se guarda para después).
+  registerInboxTools(server, wrapHandler);
 
   // Apply the group's allowlist by disabling tools outside it.
   // Disabled tools stay in `_registeredTools`, so `run_tool` can still

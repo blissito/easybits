@@ -4,6 +4,7 @@ import { db } from "~/.server/db";
 import { randomBytes } from "crypto";
 import { useState, useEffect } from "react";
 import { BrutalButton } from "~/components/common/BrutalButton";
+import { WEBHOOK_EVENTS } from "~/.server/webhooks";
 import type { Route } from "./+types/webhooks";
 
 export const meta = () => [
@@ -11,7 +12,9 @@ export const meta = () => [
   { name: "robots", content: "noindex" },
 ];
 
-const VALID_EVENTS = [
+// Los que vienen marcados al crear (los de siempre). La lista completa sale de WEBHOOK_EVENTS
+// (servidor): antes había una copia aquí que no tenía cron.run.* ni turn.* y no se podían elegir.
+const DEFAULT_ON = new Set([
   "file.created",
   "file.updated",
   "file.deleted",
@@ -22,7 +25,7 @@ const VALID_EVENTS = [
   "database.created",
   "database.deleted",
   "form.submitted",
-] as const;
+]);
 
 export const loader = async ({ request }: Route.LoaderArgs) => {
   const user = await getUserOrRedirect(request);
@@ -39,7 +42,7 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
       createdAt: true,
     },
   });
-  return { webhooks };
+  return { webhooks, events: [...WEBHOOK_EVENTS] as string[] };
 };
 
 export const action = async ({ request }: Route.ActionArgs) => {
@@ -54,7 +57,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
     }
     const events = formData.getAll("events") as string[];
     const validEvents = events.filter((e) =>
-      (VALID_EVENTS as readonly string[]).includes(e)
+      (WEBHOOK_EVENTS as readonly string[]).includes(e)
     );
     if (validEvents.length === 0) {
       return data({ error: "Selecciona al menos un evento" }, { status: 400 });
@@ -97,7 +100,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
 };
 
 export default function WebhooksPage() {
-  const { webhooks } = useLoaderData<typeof loader>();
+  const { webhooks, events } = useLoaderData<typeof loader>();
   const fetcher = useFetcher<typeof action>();
   const [showCreate, setShowCreate] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
@@ -169,13 +172,13 @@ export default function WebhooksPage() {
               <fieldset className="mb-4">
                 <legend className="text-sm font-bold mb-2">Events</legend>
                 <div className="grid grid-cols-2 gap-2">
-                  {VALID_EVENTS.map((event) => (
+                  {events.map((event) => (
                     <label key={event} className="flex items-center gap-2 text-sm">
                       <input
                         type="checkbox"
                         name="events"
                         value={event}
-                        defaultChecked
+                        defaultChecked={DEFAULT_ON.has(event)}
                         className="rounded border-black"
                       />
                       {event}

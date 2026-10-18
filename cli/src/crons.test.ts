@@ -66,3 +66,15 @@ test("crons wait: código de salida y duraciones", async () => {
   assert.deepEqual(notifyFromFlags({}), {});
   assert.ok("error" in notifyFromFlags({ notify: "sms" }));
 });
+
+test("inbox: SSE por bloques y línea legible", async () => {
+  const { parseSse, eventLine } = await import("./commands/inbox.ts");
+  const r = parseSse('event: ready\ndata: {"since":0}\n\n: latido\n\nid: 1\nevent: inbox\ndata: {"seq":1}\n\nid: 2\nevent: in');
+  assert.deepEqual(r.events.map((e) => e.event), ["ready", "inbox"]);
+  assert.equal(r.events[1].id, "1");
+  assert.equal(r.rest, "id: 2\nevent: in");
+  const line = eventLine({ seq: 3, source: "http", method: "POST", contentType: "application/json", body: '{"hola":1}', json: { hola: 1 }, receivedAt: "2026-10-18T17:04:00Z" });
+  assert.equal(line, '#3 2026-10-18 17:04 http {"hola":1}');
+  const { notifyFromFlags } = await import("./commands/crons.ts");
+  assert.deepEqual(notifyFromFlags({ notify: "inbox:builds,push" }), { notify: { on: "failure", push: true, inbox: "builds" } });
+});

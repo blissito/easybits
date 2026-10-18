@@ -11,6 +11,7 @@ const tabs = [
   { to: "/dash/developer/websites", label: "Websites" },
   { to: "/dash/developer/workspaces", label: "Workspaces" },
   { to: "/dash/developer/webhooks", label: "Webhooks" },
+  { to: "/dash/developer/inboxes", label: "Buzones" },
   { to: "/dash/developer/databases", label: "Databases" },
   { to: "/dash/developer/domains", label: "Dominios" },
   { to: "/dash/developer/secrets", label: "Secretos" },

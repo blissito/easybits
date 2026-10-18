@@ -141,6 +141,13 @@ easybits crons runs "Study reminder"
 easybits crons pause "Study reminder"
 easybits crons rm "Study reminder" --yes
 
+# Event inboxes: your own webhook URL; events reach your terminal live or wait for you
+easybits inbox create builds              # prints the URL (anyone with it can write)
+easybits inbox ls
+easybits inbox listen builds              # one JSON line per event, live (Claude Code: run it with Monitor)
+easybits inbox read builds                # the unread ones, marked read
+easybits inbox rm builds --yes
+
 # Platform crons (platform admins only; key with the ADMIN scope)
 easybits crons ls --platform
 easybits crons runs backup-machines
