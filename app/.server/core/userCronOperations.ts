@@ -65,6 +65,17 @@ export type UserCronAction = HttpAction | AgentTurnAction | ExecAction;
 
 export const EXEC_TEMPLATES = ["python", "node", "bun", "ubuntu"] as const;
 export type ExecTemplate = (typeof EXEC_TEMPLATES)[number];
+/**
+ * Plantilla real del host para cada imagen de `exec`. `python` del catálogo no está horneada en
+ * ningún fierro (18-oct-2026: «template python not found»); `code-interpreter` es python:3.12-slim
+ * con pip y sí existe en los dos.
+ */
+const EXEC_HOST_TEMPLATE: Record<ExecTemplate, "code-interpreter" | "node" | "bun" | "ubuntu"> = {
+  python: "code-interpreter",
+  node: "node",
+  bun: "bun",
+  ubuntu: "ubuntu",
+};
 export const EXEC_DEFAULT_TIMEOUT_S = 300;
 /** Lo que acepta `exec` del host por llamada. */
 export const EXEC_MAX_TIMEOUT_S = 600;
@@ -877,7 +888,7 @@ async function runExec(ownerId: string, a: ExecAction, cronId: string): Promise<
   const ops = await import("./sandboxOperations");
   const ctx = await humanCtx(ownerId);
   const box = await ops.createSandbox(ctx, {
-    template: a.template ?? "python",
+    template: EXEC_HOST_TEMPLATE[a.template ?? "python"],
     timeoutSeconds: timeout + 120,
     name: `cron-${cronId}`,
     metadata: { eb_cron: cronId },
