@@ -198,6 +198,7 @@ export default [
           route("websites", "routes/dash/developer/websites.tsx"),
           route("workspaces", "routes/dash/developer/workspaces.tsx"),
           route("webhooks", "routes/dash/developer/webhooks.tsx"),
+          route("crons", "routes/dash/developer/crons.tsx"),
           route("inboxes", "routes/dash/developer/inboxes.tsx"),
           route("databases", "routes/dash/developer/databases.tsx"),
           route("domains", "routes/dash/developer/domains.tsx"),

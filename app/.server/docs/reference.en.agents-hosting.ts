@@ -633,7 +633,7 @@ curl -X POST https://www.easybits.cloud/api/v2/crons -H "Authorization: Bearer $
   -d '{"name":"Daily ping","cron":"30 8 * * *","action":{"type":"http","url":"https://my-app.com/api/task","method":"POST"}}'
 \`\`\`
 
-MCP: \`list_my_crons\` (\`logs:true\` with \`id\`), \`create_cron\` (with \`at\`/\`in\`/\`until\`/\`times\`/\`dryRun\`, \`exec\` and \`secretValues\`), \`update_cron\` (also \`notify\`), \`delete_cron\`, \`run_my_cron\`, \`wait_cron_run\` (\`core\` group). Dashboard: "Mis crons" section at \`/dash/admin/crons\`. For the result: with a server, the \`cron.run.*\` webhooks; from a terminal, \`notify.inbox\` (below) or \`crons wait\`.
+MCP: \`list_my_crons\` (\`logs:true\` with \`id\`), \`create_cron\` (with \`at\`/\`in\`/\`until\`/\`times\`/\`dryRun\`, \`exec\` and \`secretValues\`), \`update_cron\` (also \`notify\`), \`delete_cron\`, \`run_my_cron\`, \`wait_cron_run\` (\`core\` group). Dashboard: "Mis crons" section at \`/dash/developer/crons\`. For the result: with a server, the \`cron.run.*\` webhooks; from a terminal, \`notify.inbox\` (below) or \`crons wait\`.
 
 ### Event inboxes (your own webhook that reaches your terminal)
 An inbox is an EasyBits webhook URL: anyone writes to it with \`POST\` (your cron, Stripe, GitHub, a form) and what arrives **reaches you live** if you are listening or **waits for you** if not. Made for an agent in a terminal, which has no public URL. 7-day retention by default (1-30), up to 1,000 events per inbox, body up to 256 KB; limit per plan Byte 3, Mega 20, Tera 100.

@@ -2132,7 +2132,7 @@ curl -X POST https://www.easybits.cloud/api/v2/crons -H "Authorization: Bearer $
   -d '{"name":"Ping diario","cron":"30 8 * * *","action":{"type":"http","url":"https://mi-app.com/api/tarea","method":"POST"}}'
 \`\`\`
 
-MCP: \`list_my_crons\` (\`logs:true\` con \`id\`), \`create_cron\` (con \`at\`/\`in\`/\`until\`/\`times\`/\`dryRun\`, \`exec\` y \`secretValues\`), \`update_cron\` (también \`notify\`), \`delete_cron\`, \`run_my_cron\`, \`wait_cron_run\` (grupo \`core\`). Panel: sección «Mis crons» en \`/dash/admin/crons\`. Para el resultado: con servidor, los webhooks \`cron.run.*\`; desde una terminal, \`notify.inbox\` (abajo) o \`crons wait\`.
+MCP: \`list_my_crons\` (\`logs:true\` con \`id\`), \`create_cron\` (con \`at\`/\`in\`/\`until\`/\`times\`/\`dryRun\`, \`exec\` y \`secretValues\`), \`update_cron\` (también \`notify\`), \`delete_cron\`, \`run_my_cron\`, \`wait_cron_run\` (grupo \`core\`). Panel: sección «Mis crons» en \`/dash/developer/crons\`. Para el resultado: con servidor, los webhooks \`cron.run.*\`; desde una terminal, \`notify.inbox\` (abajo) o \`crons wait\`.
 
 ### Buzones de eventos (webhook propio que llega a tu terminal)
 Un buzón es una URL de webhook de EasyBits: cualquiera le escribe con \`POST\` (tu cron, Stripe, GitHub, un formulario) y lo que llega **te alcanza en vivo** si estás escuchando o **te espera guardado** si no. Sirve para un agente en una terminal, que no tiene URL pública. Retención 7 días por default (1-30), hasta 1,000 eventos por buzón, cuerpo hasta 256 KB; límite por plan Byte 3, Mega 20, Tera 100.
