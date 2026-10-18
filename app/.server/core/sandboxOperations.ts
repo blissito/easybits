@@ -1029,6 +1029,9 @@ export async function createSandbox(
 ): Promise<SandboxRecord> {
   requireScope(ctx, "WRITE");
   const plan = PLANS[getUserPlan(ctx.user)];
+  // `python` (python:3.12-slim) no está horneada en ningún fierro (18-oct-2026: «template python
+  // not found»); `code-interpreter` es la misma imagen con pip y sí existe en los dos.
+  if (params.template === "python") params = { ...params, template: "code-interpreter" };
 
   // Derivado: resuelve el template base desde el catálogo (para gates/telemetría);
   // si el par no está en DB el host decide (404 DerivedTemplateNotProvisioned).
