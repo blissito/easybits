@@ -292,6 +292,7 @@ export const CORE_ALLOWLIST = new Set<string>([
   "structured_doc",
   "get_usage_stats",
   "get_learning_progress",
+  "list_my_crons", "create_cron", "update_cron", "delete_cron", "run_my_cron",
   "create_form",
   "list_forms",
   "list_form_submissions",
@@ -804,7 +805,11 @@ export const SITIOS_ALLOWLIST = new Set<string>([
 
 /** Copiloto del panel de crons: leer estado/historial y PROPONER correr o pausar (el humano
  *  aprueba con su sesión). Las tools exigen superusuario; ver mcp/tools/adminCrons.ts. */
-export const ADMIN_CRONS_ALLOWLIST = new Set<string>(["list_crons", "get_cron_runs", "run_cron", "pause_cron"]);
+export const ADMIN_CRONS_ALLOWLIST = new Set<string>([
+  "list_crons", "get_cron_runs", "run_cron", "pause_cron",
+  // Crons del propio superusuario: con la llave del copiloto sólo PROPONEN (userCrons.ts).
+  "list_my_crons", "create_cron", "update_cron", "delete_cron", "run_my_cron",
+]);
 
 /**
  * Scripting (Code Mode) toolset — la superficie MÍNIMA. La idea: el agente

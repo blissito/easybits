@@ -2083,6 +2083,22 @@ Qué pasa en cada push:
 ### Dashboard (UI)
 También se administran desde \`/dash/hosting\`: cada sitio con su estado y su dirección, y al abrirlo cuatro pestañas — **Dominios** (con el registro DNS que hay que crear y si ya resuelve), **Versiones** (con vuelta atrás en un clic), **Variables** y **Registro** (las últimas líneas del log). Desde ahí también se pausa y se da de baja.
 
+### Tus crons (cualquier cuenta)
+Cada cuenta programa sus propias tareas: **pegarle a una URL** o **mandarle un mensaje a uno de tus agentes de la flota**. Las despacha EasyBits cada minuto; cada corrida queda registrada (hora, duración, status, resumen y error). Mínimo cada 5 min; límite por plan: Byte 3, Mega 20, Tera 100. Zona horaria IANA (default \`America/Mexico_City\`). Tras 20 fallas seguidas el cron se apaga solo.
+
+- \`GET /api/v2/crons\` — \`{ items, nextCursor, hasMore, total }\` (\`?include=agents\` añade \`agents:[{id,name}]\`).
+- \`POST /api/v2/crons\` — \`{ name, cron, timezone?, enabled?, action }\`. \`action\` es \`{ type: "http", url, method?, body?, secretName?, secretHeader? }\` (https pública; \`secretName\` es un secreto de tu bóveda que viaja como header, \`Authorization: Bearer …\` por default; no sigue redirecciones) o \`{ type: "agent_turn", fleetAgentId, prompt, groupId? }\` (conversación \`cron:<id>\` por default).
+- \`GET|PATCH|DELETE /api/v2/crons/:id\` — \`PATCH { enabled: false }\` lo pausa.
+- \`POST /api/v2/crons/:id/run\` — ejecutar ahora (202, en segundo plano, \`trigger: "manual"\`). \`GET /api/v2/crons/:id/runs\` — historial.
+
+\`\`\`bash
+curl -X POST https://www.easybits.cloud/api/v2/crons -H "Authorization: Bearer $EASYBITS_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{"name":"Ping diario","cron":"30 8 * * *","action":{"type":"http","url":"https://mi-app.com/api/tarea","method":"POST"}}'
+\`\`\`
+
+MCP: \`list_my_crons\`, \`create_cron\`, \`update_cron\`, \`delete_cron\`, \`run_my_cron\` (grupo \`core\`). Panel: sección «Mis crons» en \`/dash/admin/crons\`.
+
 ### Tareas programadas de la plataforma (sólo administradores)
 Los respaldos diarios de máquinas, su rotación, el monitor de hosting (cada 5 min) y las purgas semanales son tareas programadas de EasyBits. Su horario vive en el código y cada corrida queda registrada (hora, duración, quién la disparó, resumen y error). Se ven y operan en \`/dash/admin/crons\` o por API. Requieren scope \`ADMIN\` **y** ser administrador de la plataforma; cualquier otra cuenta recibe 403.
 

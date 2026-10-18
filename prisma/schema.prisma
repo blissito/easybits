@@ -2069,7 +2069,7 @@ model CronJobState {
 model AgentAction {
   id         String    @id @default(auto()) @map("_id") @db.ObjectId
   ownerId    String    @db.ObjectId
-  tool       String // run_cron | pause_cron
+  tool       String // run_cron | pause_cron | create_cron | update_cron | delete_cron | run_my_cron
   args       Json
   summary    String
   status     String    @default("pending") // pending | executing | executed | failed | rejected | expired
@@ -2080,4 +2080,31 @@ model AgentAction {
   resolvedBy String?
 
   @@index([ownerId, status, createdAt])
+}
+
+// Cron de un usuario (`/api/v2/crons`, MCP create_cron…). Lo despacha la tarea de plataforma
+// `dispatch-user-crons` (cada minuto, eb-cron): toma los vencidos con un update condicionado a
+// su `nextRunAt` (azul/verde o un reintento de Restate no lo corren dos veces). Cada corrida
+// queda en `CronRun` con `job = "user:<id>"`. `action` es discriminada por `type`:
+// `http` {url, method, body?, secretName?, secretHeader?} | `agent_turn` {fleetAgentId, prompt, groupId?}.
+model UserCron {
+  id         String    @id @default(auto()) @map("_id") @db.ObjectId
+  ownerId    String    @db.ObjectId
+  name       String
+  cron       String
+  timezone   String    @default("America/Mexico_City")
+  enabled    Boolean   @default(true)
+  action     Json
+  nextRunAt  DateTime?
+  lastRunAt  DateTime?
+  lastOk     Boolean?
+  lastStatus Int?
+  lastError  String?
+  // Fallas seguidas; a las 20 el cron se apaga solo (no se martilla una URL muerta).
+  failCount  Int       @default(0)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@index([ownerId])
+  @@index([enabled, nextRunAt])
 }

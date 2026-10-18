@@ -111,6 +111,7 @@ const ROUTES: Record<string, () => Promise<{ loader: unknown }>> = {
   "prune-backups": () => import("~/routes/api/cron/prune-backups"),
   "expire-work-boxes": () => import("~/routes/api/cron/expire-work-boxes"),
   "check-hosting": () => import("~/routes/api/cron/check-hosting"),
+  "dispatch-user-crons": () => import("~/routes/api/cron/dispatch-user-crons"),
   "purge-files": () => import("~/routes/api/cron/purge-files"),
   "purge-keys": () => import("~/routes/api/cron/purge-keys"),
   "purge-machines": () => import("~/routes/api/cron/purge-machines"),

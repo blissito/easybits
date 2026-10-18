@@ -55,7 +55,25 @@ describe("tools MCP admin-crons", () => {
       .filter(([, t]) => t.enabled !== false)
       .map(([n]) => n)
       .sort();
-    expect(visible).toEqual(["discover_tools", "get_cron_runs", "list_crons", "pause_cron", "run_cron", "run_tool"]);
+    expect(visible).toEqual([
+      "create_cron", "delete_cron", "discover_tools", "get_cron_runs", "list_crons", "list_my_crons",
+      "pause_cron", "run_cron", "run_my_cron", "run_tool", "update_cron",
+    ]);
+  });
+
+  it("con la llave del copiloto, borrar un cron propio sólo PROPONE", async () => {
+    const cronId = "c".repeat(24);
+    h.db.userCron = {
+      findFirst: vi.fn(async ({ where }: any) => (where.id === cronId && where.ownerId === admin.id ? { id: cronId, ownerId: admin.id, name: "Despertador" } : null)),
+      delete: vi.fn(),
+    };
+    const extra = { authInfo: { user: admin, scopes: ["READ", "WRITE"], apiKey: { name: "admin-copilot" } } };
+    const res = await call("delete_cron", { id: cronId }, extra);
+    const body = parse(res);
+    expect(res.isError).toBeFalsy();
+    expect(body.needs_confirmation).toBe(true);
+    expect(body.summary).toBe("Borrar cron «Despertador»");
+    expect(h.db.userCron.delete).not.toHaveBeenCalled();
   });
 
   it("un usuario normal no las usa, aunque tenga ADMIN sobre sus recursos", async () => {

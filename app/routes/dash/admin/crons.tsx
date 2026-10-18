@@ -7,6 +7,7 @@ import { CronRunError, listCronOverview, setCronPaused, startManualRun } from "~
 import type { CronOverview, CronRunView } from "~/.server/cron";
 import { BrutalButton } from "~/components/common/BrutalButton";
 import { SKILLS_ADD_CMD } from "~/components/docs/SkillsInstall";
+import { UserCronsSection } from "~/components/admin/UserCronsSection";
 import type { Route } from "./+types/crons";
 import "./crons.css";
 
@@ -515,6 +516,7 @@ export default function CronsAdmin() {
                 </table>
               </div>
               {open && <RunsDrawer job={open} running={open.running} onClose={() => setOpenKey(null)} />}
+              <UserCronsSection />
             </div>
           </Panel>
           <Separator

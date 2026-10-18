@@ -238,6 +238,7 @@ export default [
   route("api/cron/purge-notifications", "routes/api/cron/purge-notifications.ts"),
   route("api/cron/check-hosting", "routes/api/cron/check-hosting.ts"),
   route("api/cron/schedule", "routes/api/cron/schedule.ts"),
+  route("api/cron/dispatch-user-crons", "routes/api/cron/dispatch-user-crons.ts"),
   // Webhooks (inbound from external providers)
   route("api/webhooks/mercadopago", "routes/api/webhooks/mercadopago.ts"),
   // Unsubscribe (public)
@@ -470,6 +471,11 @@ export default [
     route("secrets/:name?", "routes/api/v2/secrets.ts"),
     route("webhooks", "routes/api/v2/webhooks.ts"),
     route("webhooks/:webhookId", "routes/api/v2/webhook.ts"),
+    // Crons del usuario (userCronOperations.ts): CRUD + ejecutar ahora + historial.
+    route("crons", "routes/api/v2/crons.ts"),
+    route("crons/:id", "routes/api/v2/cron.ts"),
+    route("crons/:id/run", "routes/api/v2/cron-run.ts"),
+    route("crons/:id/runs", "routes/api/v2/cron-runs.ts"),
     route("notifications", "routes/api/v2/notifications.ts"),
     route("databases", "routes/api/v2/databases.ts"),
     route("databases/:dbId", "routes/api/v2/database.ts"),

@@ -619,6 +619,22 @@ What happens on every push:
 ### Dashboard (UI)
 They are also managed from \`/dash/hosting\`: each site with its status and its address, and when you open one, four tabs — **Domains** (with the DNS record to create and whether it resolves yet), **Versions** (with one-click rollback), **Variables** and **Log** (the last lines of the log). From there you can also pause and cancel.
 
+### Your crons (any account)
+Every account schedules its own jobs: **call a URL** or **send a message to one of your fleet agents**. EasyBits dispatches them every minute; every run is recorded (time, duration, status, summary and error). At most every 5 min; limit per plan: Byte 3, Mega 20, Tera 100. IANA time zone (default \`America/Mexico_City\`). After 20 failures in a row the cron turns itself off.
+
+- \`GET /api/v2/crons\` — \`{ items, nextCursor, hasMore, total }\` (\`?include=agents\` adds \`agents:[{id,name}]\`).
+- \`POST /api/v2/crons\` — \`{ name, cron, timezone?, enabled?, action }\`. \`action\` is \`{ type: "http", url, method?, body?, secretName?, secretHeader? }\` (public https; \`secretName\` is a secret from your vault sent as a header, \`Authorization: Bearer …\` by default; redirects are not followed) or \`{ type: "agent_turn", fleetAgentId, prompt, groupId? }\` (conversation \`cron:<id>\` by default).
+- \`GET|PATCH|DELETE /api/v2/crons/:id\` — \`PATCH { enabled: false }\` pauses it.
+- \`POST /api/v2/crons/:id/run\` — run now (202, in the background, \`trigger: "manual"\`). \`GET /api/v2/crons/:id/runs\` — history.
+
+\`\`\`bash
+curl -X POST https://www.easybits.cloud/api/v2/crons -H "Authorization: Bearer $EASYBITS_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{"name":"Daily ping","cron":"30 8 * * *","action":{"type":"http","url":"https://my-app.com/api/task","method":"POST"}}'
+\`\`\`
+
+MCP: \`list_my_crons\`, \`create_cron\`, \`update_cron\`, \`delete_cron\`, \`run_my_cron\` (\`core\` group). Dashboard: "Mis crons" section at \`/dash/admin/crons\`.
+
 ### Platform scheduled jobs (platform admins only)
 Daily machine backups, their rotation, the hosting monitor (every 5 min) and the weekly purges are EasyBits scheduled jobs. Their schedule lives in code and every run is recorded (time, duration, who triggered it, summary and error). They are viewed and operated at \`/dash/admin/crons\` or through the API. They require the \`ADMIN\` scope **and** being a platform admin; any other account gets 403.
 

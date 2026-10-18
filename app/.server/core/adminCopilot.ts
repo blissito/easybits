@@ -1,7 +1,8 @@
 // Copiloto del panel de crons (/dash/admin/crons): un FleetAgent «Asistente de admin» por
 // superusuario, creado al primer mensaje (como el builder de Sitios). Corre con el motor
 // medido (ghosty-gc → proxy de tokens) y SÓLO el grupo `admin-crons`: lee estado e
-// historial y PROPONE correr/pausar; el humano aprueba en la tarjeta con su sesión.
+// historial y PROPONE correr/pausar, y crear/cambiar/borrar los crons propios del usuario;
+// el humano aprueba en la tarjeta con su sesión.
 import type { AuthContext } from "~/.server/apiAuth";
 import { db } from "~/.server/db";
 import { getUserOrNull, isAdminUser } from "~/.server/getters";
@@ -11,6 +12,7 @@ import { createSecret, getSecretValue } from "./secretOperations";
 import { DEFAULT_SITE_ENGINE, getEngine } from "~/lib/fleetEngines";
 import { getCronJob } from "~/lib/cronJobs";
 import { pendingActionsSince, type PendingActionView } from "./agentActions";
+import { COPILOT_KEY_NAME } from "./userCronOperations";
 import type { TurnEvent } from "./siteTurns.server";
 
 export const ADMIN_COPILOT_NAME = "Asistente de admin";
@@ -23,6 +25,8 @@ export const ADMIN_COPILOT_SYSTEM = [
   "Respondes SÓLO con lo que devuelven tus herramientas (list_crons, get_cron_runs). Nunca calcules, estimes ni inventes números, fechas o duraciones: cítalos tal como vienen.",
   "Si te preguntan por qué falló una tarea, llama get_cron_runs y explica el `error` de la corrida fallida en palabras simples; si no hay error registrado, dilo.",
   "Para correr o pausar/reanudar una tarea SIEMPRE llama run_cron o pause_cron. Esas herramientas no ejecutan: crean una tarjeta de aprobación. Dile al usuario que la apruebe en la tarjeta; no digas que ya se ejecutó y no reintentes.",
+  "Además del calendario de la plataforma, el usuario tiene SUS PROPIOS crons («Mis crons»): list_my_crons, create_cron, update_cron, delete_cron y run_my_cron. Sí puedes crearlos: cuando te pidan algo programado («todos los días a las 8:30…», «cada lunes…»), arma el cron de 5 campos en la zona del usuario (default America/Mexico_City; p. ej. diario 8:30 = `30 8 * * *`) y llama create_cron. La acción es `http` (pegarle a una URL https pública, con un secreto del vault como header si hace falta) o `agent_turn` (mandarle un mensaje a uno de sus agentes de la flota). Igual que run_cron, crear/cambiar/borrar/ejecutar sólo PROPONE: sale una tarjeta para aprobar.",
+  "Si para lo que piden no existe la vía (p. ej. una URL o un agente que no tienes), dilo claro y pregunta qué URL o agente usar; no inventes ids ni URLs.",
   "Sé breve: lo que encontraste y, si aplica, qué sigue. Sin relleno.",
 ].join("\n");
 
@@ -31,7 +35,7 @@ export const adminCopilotGroupId = (userId: string) => `admin-crons:${userId}`;
 /** Llave del copiloto: se mintea una vez (READ/WRITE) y vive en el vault del superusuario. */
 async function ensureCopilotKey(ctx: AuthContext) {
   if (await getSecretValue(ctx.user.id, ADMIN_COPILOT_KEY_SECRET).catch(() => null)) return;
-  const minted = await createApiKey(ctx.user.id, { name: "admin-copilot", scopes: ["READ", "WRITE"] });
+  const minted = await createApiKey(ctx.user.id, { name: COPILOT_KEY_NAME, scopes: ["READ", "WRITE"] });
   await createSecret(ctx.user.id, { name: ADMIN_COPILOT_KEY_SECRET, value: minted.raw });
 }
 

@@ -44,6 +44,8 @@ tags:
     description: Flota elástica de agentes multicanal (WhatsApp, WABA, web).
   - name: Webhooks
     description: Avisos HTTP firmados con HMAC.
+  - name: Crons
+    description: Tareas programadas de tu cuenta (pegarle a una URL o mandarle un turno a un agente).
   - name: Domains
     description: Dominios propios para sitios (subdominios y dominio raíz).
   - name: Sites
@@ -2309,6 +2311,170 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
 
   # ───────────────────────── Domains ─────────────────────────
+  /api/v2/crons:
+    get:
+      tags: [Crons]
+      operationId: listCrons
+      summary: Listar tus crons
+      description: "`?include=agents` añade `agents:[{id,name}]` (tus agentes, para `agent_turn`)."
+      parameters:
+        - name: include
+          in: query
+          schema: { type: string, enum: [agents] }
+      responses:
+        "200":
+          description: Crons.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: "#/components/schemas/UserCron" }
+                  nextCursor: { type: string, nullable: true }
+                  hasMore: { type: boolean }
+                  total: { type: integer }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    post:
+      tags: [Crons]
+      operationId: createCron
+      summary: Crear cron
+      description: "Mínimo cada 5 min. Límite por plan: Byte 3, Mega 20, Tera 100. La URL de `http` debe ser https pública; `secretName` viaja como header (`Authorization: Bearer …` por default)."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UserCronInput" }
+      responses:
+        "201":
+          description: Cron con `nextRunAt`.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserCron" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /api/v2/crons/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      tags: [Crons]
+      operationId: getCron
+      summary: Obtener cron
+      responses:
+        "200":
+          description: Cron.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserCron" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Crons]
+      operationId: updateCron
+      summary: Cambiar cron
+      description: "Sólo los campos que mandes. `enabled:false` lo pausa; `enabled:true` lo reanuda y limpia el contador de fallas."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UserCronInput" }
+      responses:
+        "200":
+          description: Actualizado.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserCron" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [Crons]
+      operationId: deleteCron
+      summary: Borrar cron
+      responses:
+        "200":
+          description: Borrado.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  deleted: { type: boolean }
+                  id: { type: string }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /api/v2/crons/{id}/run:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    post:
+      tags: [Crons]
+      operationId: runCron
+      summary: Ejecutar ahora
+      description: "Corre en segundo plano (trigger `manual`) sin mover `nextRunAt`; el resultado sale en `/runs`."
+      responses:
+        "202":
+          description: Arrancó.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  started: { type: boolean }
+                  id: { type: string }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /api/v2/crons/{id}/runs:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string }
+    get:
+      tags: [Crons]
+      operationId: listCronRuns
+      summary: Historial de corridas
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 50, default: 20 }
+      responses:
+        "200":
+          description: Corridas, la más reciente primero.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: string }
+                        trigger: { type: string, enum: [schedule, manual] }
+                        startedAt: { type: string, format: date-time }
+                        finishedAt: { type: string, format: date-time, nullable: true }
+                        ok: { type: boolean, nullable: true }
+                        status: { type: integer, nullable: true }
+                        durationMs: { type: integer, nullable: true }
+                        summary: { type: string, nullable: true }
+                        error: { type: string, nullable: true }
+                        running: { type: boolean }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
   /api/v2/sites:
     get:
       tags: [Sites]
@@ -3182,6 +3348,49 @@ components:
               id: { type: string }
               name: { type: string }
               slug: { type: string }
+        createdAt: { type: string, format: date-time }
+    UserCronAction:
+      oneOf:
+        - type: object
+          required: [type, url]
+          properties:
+            type: { type: string, enum: [http] }
+            url: { type: string, format: uri, description: "https pública" }
+            method: { type: string, enum: [GET, POST, PUT, PATCH, DELETE], default: GET }
+            body: { type: string, description: "JSON o texto, máx 16 KB; no con GET" }
+            secretName: { type: string, description: "secreto de tu vault que viaja como header" }
+            secretHeader: { type: string, description: "default Authorization (con Bearer)" }
+        - type: object
+          required: [type, fleetAgentId, prompt]
+          properties:
+            type: { type: string, enum: [agent_turn] }
+            fleetAgentId: { type: string }
+            prompt: { type: string, maxLength: 4000 }
+            groupId: { type: string, description: "default cron:<id>" }
+    UserCronInput:
+      type: object
+      properties:
+        name: { type: string }
+        cron: { type: string, example: "30 8 * * *", description: "5 campos; mínimo cada 5 min" }
+        timezone: { type: string, default: America/Mexico_City }
+        enabled: { type: boolean, default: true }
+        action: { $ref: "#/components/schemas/UserCronAction" }
+    UserCron:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string }
+        cron: { type: string }
+        timezone: { type: string }
+        schedule: { type: string, description: "el horario en palabras" }
+        enabled: { type: boolean }
+        action: { $ref: "#/components/schemas/UserCronAction" }
+        nextRunAt: { type: string, format: date-time, nullable: true }
+        lastRunAt: { type: string, format: date-time, nullable: true }
+        lastOk: { type: boolean, nullable: true }
+        lastStatus: { type: integer, nullable: true }
+        lastError: { type: string, nullable: true }
+        failCount: { type: integer, description: "fallas seguidas; a las 20 se apaga solo" }
         createdAt: { type: string, format: date-time }
     Webhook:
       type: object

@@ -11,10 +11,24 @@ import type { AgentAction } from "@prisma/client";
 import { db } from "~/.server/db";
 import { setCronPaused, startManualRun } from "~/.server/cron";
 import { getCronJob } from "~/lib/cronJobs";
+import {
+  createUserCron,
+  deleteUserCron,
+  describeAction,
+  humanCtx,
+  normalizeCreate,
+  normalizeUpdate,
+  runUserCronNow,
+  updateUserCron,
+  type UserCronAction,
+} from "./userCronOperations";
 
 export const PENDING_TTL_MS = 15 * 60_000;
 
 export type AgentActionTool = "run_cron" | "pause_cron";
+/** Cambios a los crons DEL USUARIO que el copiloto propone (userCronOperations.ts). */
+export type UserCronTool = "create_cron" | "update_cron" | "delete_cron" | "run_my_cron";
+const USER_CRON_TOOLS: string[] = ["create_cron", "update_cron", "delete_cron", "run_my_cron"];
 type Args = { job: string; paused?: boolean };
 
 export class AgentActionError extends Error {
@@ -44,7 +58,7 @@ export async function expireStaleActions(ownerId: string, now = Date.now()) {
 export type PendingActionView = {
   id: string;
   tool: string;
-  args: Args;
+  args: Args | Record<string, unknown>;
   summary: string;
   createdAt: string;
   expiresAt: string;
@@ -73,6 +87,63 @@ export async function proposeAction(ownerId: string, tool: AgentActionTool, args
   return view(await db.agentAction.create({ data: { ownerId, tool, args: clean, summary } }));
 }
 
+/**
+ * Propuesta sobre un cron del usuario. Se valida y normaliza AHORA (lo que se aprueba es lo
+ * que se ejecuta) y el resumen sale de esos datos normalizados y de la base, no del modelo.
+ */
+export async function proposeUserCronAction(
+  ownerId: string,
+  tool: UserCronTool,
+  raw: Record<string, unknown>
+): Promise<PendingActionView> {
+  let clean: Record<string, unknown>;
+  let summary: string;
+  const agentName = async (a: UserCronAction | undefined) =>
+    a?.type === "agent_turn"
+      ? (await db.fleetAgent.findUnique({ where: { id: a.fleetAgentId }, select: { name: true } }))?.name ?? undefined
+      : undefined;
+  try {
+    if (tool === "create_cron") {
+      const c = await normalizeCreate(ownerId, raw);
+      clean = c;
+      summary = `Crear cron «${c.name}» (${c.cron}, ${c.timezone}) → ${describeAction(c.action, await agentName(c.action))}`;
+    } else {
+      const id = String(raw.id ?? "");
+      const row = /^[a-f0-9]{24}$/.test(id) ? await db.userCron.findFirst({ where: { id, ownerId } }) : null;
+      if (!row) throw new AgentActionError("Cron no encontrado", 404);
+      if (tool === "update_cron") {
+        const { id: _id, ...patch } = raw;
+        const p = await normalizeUpdate(row, patch);
+        if (!Object.keys(p).length) throw new AgentActionError("No hay nada que cambiar", 400);
+        clean = { id, ...p };
+        const parts = [
+          p.name !== undefined && `nombre «${p.name}»`,
+          (p.cron !== undefined || p.timezone !== undefined) && `horario ${p.cron ?? row.cron} (${p.timezone ?? row.timezone})`,
+          p.enabled !== undefined && (p.enabled ? "reanudar" : "pausar"),
+          p.action && `acción → ${describeAction(p.action, await agentName(p.action))}`,
+        ].filter(Boolean);
+        summary = `Cambiar cron «${row.name}»: ${parts.join("; ")}`;
+      } else {
+        clean = { id };
+        summary = tool === "delete_cron" ? `Borrar cron «${row.name}»` : `Ejecutar ahora cron «${row.name}»`;
+      }
+    }
+  } catch (e) {
+    // Validación (Response 4xx) → error legible para el modelo.
+    if (e instanceof Response) {
+      const body = (await e.json().catch(() => ({}))) as { error?: string };
+      throw new AgentActionError(body.error ?? "Datos inválidos", e.status);
+    }
+    throw e;
+  }
+  await expireStaleActions(ownerId);
+  const open = await db.agentAction.findMany({ where: { ownerId, tool, status: "pending" } });
+  const json = JSON.parse(JSON.stringify(clean));
+  const same = open.find((a) => JSON.stringify(a.args) === JSON.stringify(json));
+  if (same) return view(same);
+  return view(await db.agentAction.create({ data: { ownerId, tool, args: json, summary: summary.slice(0, 500) } }));
+}
+
 export async function listPendingActions(ownerId: string): Promise<PendingActionView[]> {
   await expireStaleActions(ownerId);
   const rows = await db.agentAction.findMany({ where: { ownerId, status: "pending" }, orderBy: { createdAt: "asc" } });
@@ -90,6 +161,14 @@ export async function pendingActionsSince(ownerId: string, since: Date): Promise
 
 /** Lo que de verdad corre al aprobar. Única puerta a la ejecución. */
 async function execute(a: AgentAction, by: string): Promise<unknown> {
+  if (USER_CRON_TOOLS.includes(a.tool)) {
+    const { id, ...rest } = a.args as { id?: string } & Record<string, unknown>;
+    const ctx = await humanCtx(a.ownerId);
+    if (a.tool === "create_cron") return createUserCron(ctx, rest);
+    if (a.tool === "update_cron") return updateUserCron(ctx, id!, rest);
+    if (a.tool === "delete_cron") return deleteUserCron(ctx, id!);
+    return runUserCronNow(ctx, id!);
+  }
   const args = a.args as Args;
   if (a.tool === "run_cron") return startManualRun(args.job);
   if (a.tool === "pause_cron") {
@@ -137,7 +216,12 @@ export async function resolveAgentAction(
     await db.agentAction.update({ where: { id }, data: { status: "executed", result: JSON.parse(JSON.stringify(result ?? {})) } });
     return { ok: true, status: "executed", result };
   } catch (e) {
-    const error = e instanceof Error ? e.message : String(e);
+    const error =
+      e instanceof Response
+        ? (((await e.json().catch(() => ({}))) as { error?: string }).error ?? `HTTP ${e.status}`)
+        : e instanceof Error
+          ? e.message
+          : String(e);
     await db.agentAction.update({ where: { id }, data: { status: "failed", error } }).catch(() => undefined);
     return { ok: false, status: "failed", error };
   }
