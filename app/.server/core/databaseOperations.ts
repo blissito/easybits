@@ -5,6 +5,7 @@ import { requireScope } from "../apiAuth";
 import { sqldQuery, sqldExec, sqldCreateNamespace, sqldDeleteNamespace, SqldError } from "../sqld";
 import { dispatchWebhooks } from "../webhooks";
 import { getUserPlan, PLANS, type PlanKey } from "~/lib/plans";
+import { COPILOT_KEY_NAME } from "./userCronOperations";
 
 /**
  * Traduce un error de sqld a una Response con status y mensaje accionables. Antes todo
@@ -263,6 +264,22 @@ export async function deleteDatabase(ctx: AuthContext, dbId: string) {
   return { success: true };
 }
 
+const WRITE_WORDS = /\b(insert|update|delete|replace|upsert|create|drop|alter|attach|detach|vacuum|reindex|analyze|savepoint|release|rollback|commit|begin)\b/i;
+
+/** Sólo lectura: una sentencia SELECT/WITH sin palabras de escritura, o un PRAGMA de esquema. */
+export function assertReadOnlySql(sql: string) {
+  const q = sql.trim().replace(/;\s*$/, "");
+  const ok =
+    !q.includes(";") &&
+    ((/^(select|with)\b/i.test(q) && !WRITE_WORDS.test(q)) || /^pragma\s+(table_info|table_xinfo|index_list|index_info|foreign_key_list)\s*\(/i.test(q));
+  if (!ok) {
+    throw new Response(JSON.stringify({ error: "Desde el copiloto las bases sólo se leen: una sentencia SELECT (o PRAGMA table_info)." }), {
+      status: 403,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+}
+
 export async function queryDatabase(
   ctx: AuthContext,
   dbId: string,
@@ -271,6 +288,8 @@ export async function queryDatabase(
   source: QuerySource = "api"
 ) {
   requireScope(ctx, "WRITE");
+  // La llave de un copiloto vive en su microVM: con ella las bases sólo se LEEN.
+  if (ctx.apiKey?.name === COPILOT_KEY_NAME) assertReadOnlySql(sql);
   const database = await db.database.findUnique({ where: { id: dbId } });
   if (!database || database.userId !== ctx.user.id) {
     throw new Response(JSON.stringify({ error: "Database not found" }), {

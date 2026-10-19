@@ -20,6 +20,8 @@ const VERBS: ToolVerbs = {
   // El paso que pone el servidor al contestar una tarjeta (resume de AG-UI).
   confirm_action: { one: "Apliqué tu decisión", many: "Apliqué %n decisiones", running: "Aplicando tu decisión…" },
   wait_cron_run: { one: "Esperé a que terminara", many: "Esperé %n ejecuciones", running: "Esperando a que termine…" },
+  db_list: { one: "Revisé tus bases de datos", many: "Revisé tus bases %n veces", running: "Revisando tus bases…" },
+  db_query: { one: "Consulté una base", many: "Hice %n consultas", running: "Consultando…" },
   secret_list: { one: "Revisé los nombres de tu bóveda", many: "Revisé tu bóveda %n veces", running: "Revisando tu bóveda…" },
 };
 // El servidor antepone al texto del turno lo que se ve en pantalla; en el historial no se muestra.

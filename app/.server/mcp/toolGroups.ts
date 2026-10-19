@@ -814,11 +814,13 @@ export const ADMIN_CRONS_ALLOWLIST = new Set<string>([
   "list_my_crons", "create_cron", "update_cron", "delete_cron", "run_my_cron", "wait_cron_run",
 ]);
 
-/** Bittor de «Mis crons»: los crons propios (con su llave sólo PROPONEN) y los NOMBRES de la
- *  bóveda para armar un `exec`/`http` con secretos. Nada de la plataforma. */
+/** Bittor de «Mis crons»: los crons propios (con su llave sólo PROPONEN), los NOMBRES de la
+ *  bóveda para armar un `exec`/`http` con secretos y leer sus bases. Nada de la plataforma. */
 export const MY_CRONS_ALLOWLIST = new Set<string>([
   "list_my_crons", "create_cron", "update_cron", "delete_cron", "run_my_cron", "wait_cron_run",
   "secret_list",
+  // Sus bases de EasyBits, SÓLO lectura (databaseOperations rechaza escribir con la llave del copiloto).
+  "db_list", "db_query",
 ]);
 
 /**
