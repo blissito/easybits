@@ -500,7 +500,8 @@ export function UserCronsSection({ copilot = true }: { copilot?: boolean } = {})
   };
 
   const content = (
-    <section className="mt-10 pb-10 pr-2">
+    // En admin va debajo de la tabla; en su pestaña arranca pegada a la navegación (el panel de Bittor empieza aquí).
+    <section className={`pb-10 pr-2 ${copilot ? "" : "mt-10"}`}>
       <header className="mb-8 flex flex-wrap items-end justify-between gap-4">
         <div className="max-w-2xl">
           <h3 className="text-3xl font-black tracking-tight">Mis crons</h3>

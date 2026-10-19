@@ -10,7 +10,7 @@ export const meta = () => [
 
 export default function DeveloperCrons() {
   return (
-    <div className="-mt-10">
+    <div>
       <UserCronsSection />
     </div>
   );
