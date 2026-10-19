@@ -28,6 +28,8 @@ import { MAX_SANDBOX_TTL_SECONDS } from "../../lib/plans";
 import { filePreviewHtml, fileUploadHtml, fileListHtml } from "./apps/html";
 import { registerStructuredDocTool } from "./structured/tool";
 import { applyToolAnnotations } from "./toolAnnotations";
+import { COPILOT_KEY_NAME } from "~/.server/core/userCronOperations";
+import { isInternalSecretName } from "~/lib/secrets";
 import { CLAUDE_DIRECTORY_DESCRIPTION_EDITS, GROUP_ALLOWLISTS, GROUP_HIDDEN_SCOPE, DYNAMIC_ONLY_TOOLS, TOOL_GROUPS, isStrictGroup, type ToolGroupKey } from "./toolGroups";
 import { importHtml, type ImportHtmlInput } from "./tools/importHtml";
 import { registerAdminCronTools } from "./tools/adminCrons";
@@ -3575,7 +3577,10 @@ How to embed safely (the only reliable rule):
     {},
     wrapHandler(async (_params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
-      const result = await listSecrets(ctx.user.id);
+      const all = await listSecrets(ctx.user.id);
+      // Los copilotos (Bittor de «Mis crons») sólo ven lo que un cron puede usar: los secretos
+      // de una máquina o cron (`__M_`/`__C_`) y los de la plataforma los tomaba por usables.
+      const result = ctx.apiKey?.name === COPILOT_KEY_NAME ? all.filter((s) => !isInternalSecretName(s.name)) : all;
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     })
   );
