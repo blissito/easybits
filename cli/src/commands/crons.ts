@@ -102,6 +102,7 @@ const ACTION_OPTIONS = {
   "secret-file": { type: "string", multiple: true, value: "NAME:local[=remote]", description: "Upload a local file as a secret only this cron can read, written at the same ~ path in the box (repeatable; e.g. a .p8)" },
   template: { type: "string", value: "python|node|bun|ubuntu", description: "Box image for --run (default python)" },
   timeout: { type: "string", value: "seconds", description: "Time limit for --run (default 300, max 600)" },
+  machine: { type: "string", value: "id|name", description: "Run --run with that machine's config (its env and secrets, e.g. DATABASE_URL), resolved on every run" },
 } as const;
 
 /** Ruta en la caja para un archivo local: bajo tu HOME → la misma con `~/`; si no, su nombre. Pura, con test. */
@@ -110,7 +111,7 @@ export function remotePathFor(local: string, home = homedir()): string {
   return abs.startsWith(home + "/") ? `~/${abs.slice(home.length + 1)}` : basename(abs);
 }
 
-type ExecFlags = { run?: string; files: string[]; secrets: string[]; secretFiles: string[]; template?: string; timeout?: string };
+type ExecFlags = { run?: string; files: string[]; secrets: string[]; secretFiles: string[]; template?: string; timeout?: string; machine?: string };
 
 /**
  * Flags de `--run` → `action` exec + `secretValues`. `read` lee un archivo local (inyectable para
@@ -146,6 +147,7 @@ export function execFromFlags(f: ExecFlags, read: (p: string) => string, home = 
       ...(secrets.length ? { secrets } : {}),
       ...(f.template ? { template: f.template } : {}),
       ...(f.timeout ? { timeoutSeconds: Number(f.timeout) } : {}),
+      ...(f.machine ? { machine: f.machine } : {}),
     },
     ...(Object.keys(secretValues).length ? { secretValues } : {}),
   };
@@ -261,7 +263,7 @@ function actionOf(ctx: Ctx): ActionResult {
   if (run && (str(ctx, "url") || str(ctx, "agent"))) return { error: "--run, --url and --agent are exclusive" } as const;
   if (run) {
     return execFromFlags(
-      { run, files: list(ctx, "file"), secrets: list(ctx, "secret"), secretFiles: list(ctx, "secret-file"), template: str(ctx, "template"), timeout: str(ctx, "timeout") },
+      { run, files: list(ctx, "file"), secrets: list(ctx, "secret"), secretFiles: list(ctx, "secret-file"), template: str(ctx, "template"), timeout: str(ctx, "timeout"), machine: str(ctx, "machine") },
       (p) => {
         try {
           return readFileSync(p, "utf8");
@@ -508,7 +510,7 @@ export const crons: Command = {
     create: {
       aliases: ["add"],
       summary: "Create a cron: call a public https URL, send a turn to one of your agents or run a command in a throwaway box, repeating (at most every 5 min) or once",
-      usage: 'easybits crons create <name> (--cron "<5 fields>" [--until <when>] [--times N] | --at <when> | --in <duration>) [--tz <IANA>] (--url <https-url> [--method] [--body] [--secret NAME] | --agent <id> --prompt <text> | --run <cmd> [--file f]… [--secret NAME]… [--secret-file NAME:path]… [--template] [--timeout]) [--dry-run]',
+      usage: 'easybits crons create <name> (--cron "<5 fields>" [--until <when>] [--times N] | --at <when> | --in <duration>) [--tz <IANA>] (--url <https-url> [--method] [--body] [--secret NAME] | --agent <id> --prompt <text> | --run <cmd> [--file f]… [--secret NAME]… [--secret-file NAME:path]… [--template] [--timeout] [--machine id|name]) [--dry-run]',
       options: {
         cron: { type: "string", value: "expr", description: 'Cron of 5 fields, e.g. "30 8 * * *" = daily 8:30' },
         ...WHEN_OPTIONS,

@@ -20,6 +20,7 @@ import {
   PiHandTapBold,
   PiPauseBold,
   PiPencilSimpleBold,
+  PiHardDrivesDuotone,
   PiKeyDuotone,
   PiMagnifyingGlassBold,
   PiChatCircleDotsDuotone,
@@ -53,6 +54,7 @@ type Action =
       command: string;
       template?: string;
       timeoutSeconds?: number;
+      machine?: string;
       files?: { path: string }[];
       secrets?: { name: string; file?: string }[];
     };
@@ -421,6 +423,7 @@ function prettyLocal(s: string | null): string {
 export function UserCronsSection({ copilot = true }: { copilot?: boolean } = {}) {
   const [items, setItems] = useState<UserCron[] | null>(null);
   const [agents, setAgents] = useState<Agent[]>([]);
+  const [machines, setMachines] = useState<Agent[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
@@ -436,9 +439,10 @@ export function UserCronsSection({ copilot = true }: { copilot?: boolean } = {})
 
   const load = useCallback(async () => {
     try {
-      const r = await api("/api/v2/crons?include=agents");
+      const r = await api("/api/v2/crons?include=agents,machines");
       setItems(r.items);
       setAgents(r.agents ?? []);
+      setMachines(r.machines ?? []);
     } catch (e) {
       setError((e as Error).message);
     }
@@ -547,6 +551,7 @@ export function UserCronsSection({ copilot = true }: { copilot?: boolean } = {})
       {showForm && (
         <CronForm
           agents={agents}
+          machines={machines}
           onCancel={() => setShowForm(false)}
           onSaved={async () => {
             setShowForm(false);
@@ -590,6 +595,7 @@ export function UserCronsSection({ copilot = true }: { copilot?: boolean } = {})
           const kind = KIND[c.action.type];
           const state = stateOf(c);
           const secrets = c.action.type === "exec" ? (c.action.secrets ?? []).map((x) => x.name) : c.action.type === "http" && c.action.secretName ? [c.action.secretName] : [];
+          const machineName = c.action.type === "exec" && c.action.machine ? machines.find((m) => m.id === (c.action as { machine?: string }).machine)?.name ?? c.action.machine : null;
           const agentName = c.action.type === "agent_turn" ? agents.find((a) => a.id === (c.action as { fleetAgentId: string }).fleetAgentId)?.name ?? "agente" : "";
           const schedule = c.schedule.replace(` ${c.timezone}`, "");
           const isOpen = open?.id === c.id ? open.what : null;
@@ -655,6 +661,12 @@ export function UserCronsSection({ copilot = true }: { copilot?: boolean } = {})
                       </>
                     )}
                   </div>
+                  {machineName && (
+                    <div className="flex items-center gap-2 border-t border-white/10 px-4 py-2.5 text-[11px] text-gray-300">
+                      <PiHardDrivesDuotone className="text-base text-sky" />
+                      con la configuración de <span className="font-mono text-white">{machineName}</span>
+                    </div>
+                  )}
                   {secrets.length > 0 && (
                     <div className="flex flex-wrap items-center gap-1.5 border-t border-white/10 px-4 py-2.5">
                       <PiKeyDuotone className="text-base text-brand-yellow" title="Secretos que recibe" />
@@ -728,6 +740,7 @@ export function UserCronsSection({ copilot = true }: { copilot?: boolean } = {})
                   ) : (
                     <CronForm
                       agents={agents}
+                      machines={machines}
                       initial={c}
                       onCancel={() => setOpen(null)}
                       onSaved={async () => {
@@ -924,11 +937,14 @@ function RunItem({ run: r, fresh }: { run: Run; fresh: boolean }) {
 /** Alta (POST) o edición (PATCH, con `initial`). En edición la acción no se toca: eso va por CLI/API. */
 function CronForm({
   agents,
+  machines,
   initial,
   onCancel,
   onSaved,
 }: {
   agents: Agent[];
+  /** Máquinas del usuario: un comando puede correr con la configuración de una (su env y secretos). */
+  machines: Agent[];
   initial?: UserCron;
   onCancel: () => void;
   onSaved: () => void;
@@ -983,6 +999,7 @@ function CronForm({
   const [template, setTemplate] = useState<string>("python");
   const [timeout, setTimeoutS] = useState("300");
   const [execSecrets, setExecSecrets] = useState<string[]>([]);
+  const [machine, setMachine] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [notifyPush, setNotifyPush] = useState(!!initial?.notify?.push);
@@ -1041,6 +1058,7 @@ function CronForm({
                   command,
                   template,
                   timeoutSeconds: Number(timeout) || 300,
+                  ...(machine ? { machine } : {}),
                   ...(execSecrets.length ? { secrets: execSecrets.map((n) => ({ name: n })) } : {}),
                 }
               : { type: "agent_turn", fleetAgentId: agentId || agents[0]?.id, prompt };
@@ -1280,6 +1298,22 @@ function CronForm({
                   <input type="number" min={1} max={600} className={input} value={timeout} onChange={(e) => setTimeoutS(e.target.value)} />
                 </div>
               </div>
+              {machines.length > 0 && (
+                <div className="md:col-span-2">
+                  <label className={label}>Con la configuración de</label>
+                  <select className={input} value={machine} onChange={(e) => setMachine(e.target.value)}>
+                    <option value="">Ninguna máquina (sólo los secretos que elijas)</option>
+                    {machines.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="mt-1 text-xs text-gray-500">
+                    El comando recibe el entorno y los secretos de esa app (su base de datos incluida) en cada ejecución, sin copiarlos.
+                  </p>
+                </div>
+              )}
               <div className="md:col-span-2">
                 <label className={label}>Secretos como variables</label>
                 {vault.length ? (

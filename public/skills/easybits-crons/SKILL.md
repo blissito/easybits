@@ -5,7 +5,7 @@ license: MIT
 compatibility: Needs Node 22+ (npx is enough), network access to https://www.easybits.cloud and an EasyBits session (easybits login) or API key
 metadata:
   author: easybits
-  version: "1.0"
+  version: "1.1"
 ---
 
 # Schedule work with EasyBits crons
@@ -39,6 +39,9 @@ except what the script writes elsewhere (a URL, an EasyBits database, a file upl
   List names with `easybits secrets ls --json`; if one is missing, ask the person to run `easybits secrets set NAME` (it prompts) — never ask them to paste a value to you.
 - A key file only this cron can read: `--secret-file KEY_P8:~/.keys/AuthKey.p8` (uploaded once, written at the same path in the box).
 - Never put a value in `--run`, `--body`, `--prompt` or a `--file`.
+- The data of one of their apps: `--machine <id|name>` runs the command with that machine's config
+  (its env and secrets, e.g. `DATABASE_URL` / `EASYBITS_DB_URL`), resolved on every run. Don't copy a
+  machine's secret into the vault: rotating it on the machine already applies to the cron.
 
 ## 4. Prove it works (required)
 

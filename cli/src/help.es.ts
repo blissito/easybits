@@ -303,6 +303,7 @@ export const HELP_ES: Record<string, string> = {
   "Upload a local file as a secret only this cron can read, written at the same ~ path in the box (repeatable; e.g. a .p8)": "Sube un archivo local como secreto que sólo este cron puede leer; se escribe en la misma ruta ~ dentro de la caja (repetible; p. ej. un .p8)",
   "Box image for --run (default python)": "Imagen de la caja para --run (default python)",
   "Time limit for --run (default 300, max 600)": "Tiempo límite de --run (default 300, máximo 600)",
+  "Run --run with that machine's config (its env and secrets, e.g. DATABASE_URL), resolved on every run": "Corre --run con la configuración de esa máquina (su env y sus secretos, p. ej. DATABASE_URL), resuelta en cada ejecución",
   "Also print stdout/stderr of --run crons (last 64 KB per run)": "Muestra también stdout/stderr de los crons --run (últimos 64 KB por ejecución)",
   "Wait for the next run of one of your crons to finish and exit with its result (exec: its exit code)": "Espera a que termine la siguiente ejecución de un cron tuyo y sale con su resultado (exec: su código de salida)",
   "Give up after this long (default 30m; 10m, 2h…)": "Se rinde después de este tiempo (default 30m; 10m, 2h…)",

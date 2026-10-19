@@ -5,7 +5,7 @@ license: MIT
 compatibility: Needs Node 22+ (npx is enough), network access to https://www.easybits.cloud and an EasyBits API key
 metadata:
   author: easybits
-  version: "1.28"
+  version: "1.29"
 ---
 
 # Use the EasyBits CLI
@@ -188,6 +188,7 @@ easybits crons create "Once" --at 23:00 --url https://my-app.com/api/x --method 
 easybits crons create "Once" --in 2h --url https://my-app.com/api/x --method POST --json            # runs ONCE, then enabled:false, done:true
 easybits crons create "Job" --at 23:00 --run "pip install -q requests && python3 job.py" --file ./job.py \
   --secret API_TOKEN --secret-file KEY_P8:~/.keys/AuthKey.p8 --json                             # command in a throwaway box
+easybits crons create "Signups" --cron "0 9 * * *" --run "python3 count.py" --file ./count.py --machine my-app --json  # with my-app's env + secrets
 easybits crons get <id|name> --json                          # the whole cron: {id, name, schedule, action, notify, nextRunAt, until, timesLeft, lastError…}
 easybits crons runs <id|name> --logs --limit 5 --json        # {items:[{startedAt, ok, exitCode, summary, error, logs}]}
 easybits crons wait <id|name> --timeout 2h --json            # blocks until the next run ends; EXITS with its code (exec) or 0/1

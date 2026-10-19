@@ -101,3 +101,10 @@ test("crons get: qué hace, cómo avisa y cuándo corre", () => {
   assert.match(lines, /push, inbox:6a00000000000000000000b1/);
   assert.match(lines, /2026-10-18 23:00 \(2h\)/);
 });
+
+test("execFromFlags: --machine viaja tal cual en la acción", async () => {
+  const { execFromFlags } = await import("./commands/crons.ts");
+  const r = execFromFlags({ run: "python3 count.py", files: [], secrets: [], secretFiles: [], machine: "my-app" }, () => "");
+  assert.ok("action" in r && r.action);
+  assert.equal(r.action.machine, "my-app");
+});

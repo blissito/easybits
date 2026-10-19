@@ -1,18 +1,20 @@
 import type { Route } from "./+types/crons";
 import { authenticateRequest, requireAuth } from "~/.server/apiAuth";
-import { createUserCron, listCronAgentOptions, listUserCrons } from "~/.server/core/userCronOperations";
+import { createUserCron, listCronAgentOptions, listCronMachineOptions, listUserCrons } from "~/.server/core/userCronOperations";
 
-// GET /api/v2/crons — tus crons (`?include=agents` añade tus agentes {id,name} para `agent_turn`)
+// GET /api/v2/crons — tus crons. `?include=agents` añade tus agentes {id,name} para `agent_turn`;
+// `?include=agents,machines` además tus máquinas {id,name} para `exec.machine`.
 export async function loader({ request }: Route.LoaderArgs) {
   const ctx = requireAuth(await authenticateRequest(request));
   const items = await listUserCrons(ctx);
-  const withAgents = new URL(request.url).searchParams.get("include") === "agents";
+  const include = (new URL(request.url).searchParams.get("include") ?? "").split(",");
   return Response.json({
     items,
     nextCursor: null,
     hasMore: false,
     total: items.length,
-    ...(withAgents ? { agents: await listCronAgentOptions(ctx) } : {}),
+    ...(include.includes("agents") ? { agents: await listCronAgentOptions(ctx) } : {}),
+    ...(include.includes("machines") ? { machines: await listCronMachineOptions(ctx) } : {}),
   });
 }
 

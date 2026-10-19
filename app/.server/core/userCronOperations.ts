@@ -15,7 +15,7 @@ import { requireScope } from "../apiAuth";
 import { getUserPlan, type PlanKey } from "~/lib/plans";
 import { RUNNING_STALE_MS, scheduleWords } from "~/lib/cronJobs";
 import { assertPublicUrl, PublicUrlError } from "../publicUrl";
-import { createSecret, getSecretValue } from "./secretOperations";
+import { createSecret, getMachineSecretValue, getSecretValue } from "./secretOperations";
 import { dispatchWebhooks } from "../webhooks";
 import { sendTransactional } from "../emails/sendTransactional";
 import { appendInboxEvent, ownedInbox } from "./inboxOperations";
@@ -63,6 +63,12 @@ export type ExecAction = {
   secrets?: ExecSecret[];
   template?: ExecTemplate;
   timeoutSeconds?: number;
+  /**
+   * Correr con la configuración de una de sus máquinas (como Heroku Scheduler o un env group de
+   * Render): el comando recibe el `runspec.env` y los secretos de esa máquina (`DATABASE_URL`,
+   * `EASYBITS_DB_URL`…) resueltos al correr. Nada se copia: rotar un secreto de la máquina ya aplica.
+   */
+  machine?: string;
 };
 export type UserCronAction = HttpAction | AgentTurnAction | ExecAction;
 
@@ -428,7 +434,38 @@ async function validateExec(ownerId: string, a: Record<string, unknown>, secretV
       out.secrets.push(sec.file ? { name, file: (boxPath(sec.file), String(sec.file).trim()) } : { name });
     }
   }
+  if (a.machine != null && a.machine !== "") {
+    const m = await ownedMachine(ownerId, String(a.machine));
+    if (!m) throw bad(`No existe la máquina «${a.machine}» en tu cuenta`);
+    out.machine = m.sandboxId;
+  }
   return out;
+}
+
+/** Una máquina del dueño por id o por nombre (la caja de una web app o una máquina vendida). */
+async function ownedMachine(ownerId: string, ref: string) {
+  const live = { notIn: ["destroyed", "pending_deletion", "transferred"] };
+  return (
+    (await db.sandbox.findFirst({ where: { ownerId, sandboxId: ref, status: live }, select: { sandboxId: true, name: true, runspec: true } })) ??
+    (await db.sandbox.findFirst({ where: { ownerId, name: ref, status: live }, select: { sandboxId: true, name: true, runspec: true } }))
+  );
+}
+
+/**
+ * El entorno de la app de una máquina, como lo arma su arranque (releaseOperations `withSecrets`):
+ * `runspec.env` primero y luego sus secretos, el de la máquina antes que el global.
+ */
+async function machineEnv(ownerId: string, sandboxId: string): Promise<Record<string, string>> {
+  const m = await ownedMachine(ownerId, sandboxId);
+  if (!m) throw new Error(`La máquina ${sandboxId} ya no existe: edita el cron o bórralo`);
+  const spec = (m.runspec ?? {}) as { env?: Record<string, unknown>; secretNames?: string[] };
+  const env: Record<string, string> = {};
+  for (const [k, v] of Object.entries(spec.env ?? {})) env[k] = String(v);
+  for (const name of spec.secretNames ?? []) {
+    const value = await getMachineSecretValue(ownerId, sandboxId, name);
+    if (value != null) env[name] = value;
+  }
+  return env;
 }
 
 /** Guarda los `secretValues` como secretos de ESTE cron (sólo los que su acción usa). */
@@ -629,6 +666,7 @@ export function describeAction(a: UserCronAction, agentName?: string): string {
   if (a.type === "http") return `${a.method} ${a.url}${a.secretName ? ` (con ${a.secretName})` : ""}`;
   if (a.type === "exec") {
     const extra = [a.files?.length && `${a.files.length} archivo(s)`, a.secrets?.length && `secretos ${a.secrets.map((x) => x.name).join(", ")}`].filter(Boolean);
+    if (a.machine) extra.unshift(`con la configuración de la máquina ${a.machine}`);
     return `ejecutar «${a.command.slice(0, 80)}${a.command.length > 80 ? "…" : ""}» en ${a.template ?? "python"}${extra.length ? ` (${extra.join("; ")})` : ""}`;
   }
   return `turno a ${agentName ? `«${agentName}»` : a.fleetAgentId}: «${a.prompt.slice(0, 80)}${a.prompt.length > 80 ? "…" : ""}»`;
@@ -645,6 +683,21 @@ export async function listUserCrons(ctx: AuthContext): Promise<UserCronView[]> {
   requireScope(ctx, "READ");
   const rows = await db.userCron.findMany({ where: { ownerId: ctx.user.id }, orderBy: { createdAt: "asc" } });
   return rows.map((r) => toUserCronView(r));
+}
+
+/** Máquinas del usuario para `exec.machine` (sólo id y nombre; las de trabajo sin publicar no). */
+export async function listCronMachineOptions(ctx: AuthContext) {
+  requireScope(ctx, "READ");
+  const rows = await db.sandbox.findMany({
+    where: {
+      ownerId: ctx.user.id,
+      status: { notIn: ["destroyed", "pending_deletion", "transferred"] },
+      OR: [{ workBox: false }, { workBox: { isSet: false } }],
+    },
+    select: { sandboxId: true, name: true },
+    orderBy: { createdAt: "desc" },
+  });
+  return rows.map((r) => ({ id: r.sandboxId, name: r.name ?? r.sandboxId }));
 }
 
 /** Agentes del usuario para elegir destino de un `agent_turn` (sólo id y nombre). */
@@ -973,7 +1026,8 @@ const shq = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
  * entorno y la destruye pase lo que pase. La caja vive a lo más timeout + 2 min aunque esto muera.
  */
 async function runExec(ownerId: string, a: ExecAction, cronId: string): Promise<Outcome> {
-  const env: Record<string, string> = { EASYBITS_CRON_ID: cronId };
+  // La configuración de la máquina va primero: los secretos propios del cron ganan por nombre.
+  const env: Record<string, string> = { ...(a.machine ? await machineEnv(ownerId, a.machine) : {}), EASYBITS_CRON_ID: cronId };
   const secretFiles: { path: string; value: string }[] = [];
   for (const sec of a.secrets ?? []) {
     const value = await cronSecretValue(ownerId, cronId, sec.name);

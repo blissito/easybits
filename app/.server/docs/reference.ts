@@ -276,6 +276,7 @@ easybits crons create "Aviso" --at 23:00 --url https://mi-app.com/api/aviso --me
 easybits crons create "Aviso" --in 2h --url https://mi-app.com/api/aviso --method POST
 easybits crons create "Revisión 1.0.10" --at 23:00 --run "pip install -q cryptography && python3 asc.py enviar-tienda" \\
   --file scripts/asc.py --secret-file ASC_P8:~/.appstoreconnect/private_keys/AuthKey_X.p8   # comando en caja desechable
+easybits crons create "Altas del día" --cron "0 9 * * *" --run "python3 cuenta.py" --file cuenta.py --machine mi-app   # con el env y los secretos de mi-app (su DATABASE_URL)
 easybits crons get "Revisión 1.0.10"                        # qué hace, cómo te avisa y la próxima ejecución (--json: el objeto completo)
 easybits crons runs "Revisión 1.0.10" --logs --limit 5      # exit code y stdout/stderr de cada ejecución
 easybits crons wait "Revisión 1.0.10" --timeout 2h          # espera la siguiente ejecución y sale con su exit code
@@ -2134,6 +2135,8 @@ curl -X POST https://www.easybits.cloud/api/v2/crons -H "Authorization: Bearer $
   -H "Content-Type: application/json" \\
   -d '{"name":"Ping diario","cron":"30 8 * * *","action":{"type":"http","url":"https://mi-app.com/api/tarea","method":"POST"}}'
 \`\`\`
+
+Un \`exec\` puede correr con la configuración de una de tus máquinas: \`action.machine\` (id o nombre; CLI \`--machine\`) le pasa su \`runspec.env\` y sus secretos (\`DATABASE_URL\`, \`EASYBITS_DB_URL\`…) en cada ejecución, sin copiarlos. \`GET /api/v2/crons?include=agents,machines\` lista tus máquinas.
 
 MCP: \`list_my_crons\` (con \`id\`: \`limit\` hasta 50 ejecuciones y \`logs:true\`; los crons se nombran por id), \`create_cron\` (con \`at\`/\`in\`/\`until\`/\`times\`/\`dryRun\`, \`exec\` y \`secretValues\`), \`update_cron\` (también \`notify\`), \`delete_cron\`, \`run_my_cron\`, \`wait_cron_run\` (grupo \`core\`). Panel: sección «Mis crons» en \`/dash/developer/crons\`. Para el resultado: con servidor, los webhooks \`cron.run.*\`; desde una terminal, \`notify.inbox\` (abajo) o \`crons wait\`.
 

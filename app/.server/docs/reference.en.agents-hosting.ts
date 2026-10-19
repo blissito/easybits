@@ -633,6 +633,8 @@ curl -X POST https://www.easybits.cloud/api/v2/crons -H "Authorization: Bearer $
   -d '{"name":"Daily ping","cron":"30 8 * * *","action":{"type":"http","url":"https://my-app.com/api/task","method":"POST"}}'
 \`\`\`
 
+An \`exec\` can run with the config of one of your machines: \`action.machine\` (id or name; CLI \`--machine\`) passes its \`runspec.env\` and secrets (\`DATABASE_URL\`, \`EASYBITS_DB_URL\`…) on every run, without copying them. \`GET /api/v2/crons?include=agents,machines\` lists your machines.
+
 MCP: \`list_my_crons\` (with \`id\`: \`limit\` up to 50 runs and \`logs:true\`; crons are named by id), \`create_cron\` (with \`at\`/\`in\`/\`until\`/\`times\`/\`dryRun\`, \`exec\` and \`secretValues\`), \`update_cron\` (also \`notify\`), \`delete_cron\`, \`run_my_cron\`, \`wait_cron_run\` (\`core\` group). Dashboard: "Mis crons" section at \`/dash/developer/crons\`. For the result: with a server, the \`cron.run.*\` webhooks; from a terminal, \`notify.inbox\` (below) or \`crons wait\`.
 
 In the panel (\`/dash/developer/crons\`) there is **Bittor**, a fleet agent per account that uses these same tools: it builds the cron from what you ask in plain words, explains why one failed and reads your databases (SELECT only) to answer about your data. It never changes anything on its own: every create, change, delete or run comes up as a card that you approve with your session. To create them from a coding agent, use the \`easybits-crons\` skill.

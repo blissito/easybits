@@ -59,6 +59,10 @@ const actionShape = z
         .describe("secretos: sin `file` llegan como variable de entorno NAME; con `file` se escriben en esa ruta (p. ej. un .p8) y NAME_FILE apunta a ella. Valor: el de `secretValues` (acotado a este cron) o el de tu bóveda"),
       template: z.enum(["python", "node", "bun", "ubuntu"]).optional().describe("imagen de la caja; default python"),
       timeoutSeconds: z.number().int().optional().describe("default 300, máximo 600"),
+      machine: z
+        .string()
+        .optional()
+        .describe("id o nombre de una de TUS máquinas: el comando corre con su configuración (runspec.env + sus secretos, p. ej. DATABASE_URL / EASYBITS_DB_URL), resuelta en cada ejecución. Así un cron lee los datos de una app sin copiar credenciales"),
     }),
   ])
   .describe("qué hace: pegarle a una URL (`http`), mandarle un turno a un agente (`agent_turn`) o ejecutar un comando en una caja efímera (`exec`)");

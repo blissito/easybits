@@ -130,6 +130,7 @@ easybits crons create "Heads-up" --at 23:00 --url https://my-app.com/api/notice 
 easybits crons create "Heads-up" --in 2h --url https://my-app.com/api/notice --method POST
 easybits crons create "Review 1.0.10" --at 23:00 --run "pip install -q cryptography && python3 asc.py submit" \\
   --file scripts/asc.py --secret-file ASC_P8:~/.appstoreconnect/private_keys/AuthKey_X.p8   # command in a throwaway box
+easybits crons create "Daily signups" --cron "0 9 * * *" --run "python3 count.py" --file count.py --machine my-app   # with my-app's env and secrets (its DATABASE_URL)
 easybits crons get "Review 1.0.10"                          # what it does, how it notifies you and the next run (--json: the whole object)
 easybits crons runs "Review 1.0.10" --logs --limit 5        # exit code and stdout/stderr of each run
 easybits crons wait "Review 1.0.10" --timeout 2h            # waits for the next run and exits with its exit code
