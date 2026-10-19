@@ -42,6 +42,8 @@ export type ToolGroupKey =
   | "sitios"
   // Copiloto del panel de crons (sólo superusuarios). Strict, fuera del menú de conectores.
   | "admin-crons"
+  // Bittor de «Mis crons» (cualquier cuenta). Strict, fuera del menú de conectores.
+  | "my-crons"
   | "all";
 
 export interface ToolGroup {
@@ -812,6 +814,13 @@ export const ADMIN_CRONS_ALLOWLIST = new Set<string>([
   "list_my_crons", "create_cron", "update_cron", "delete_cron", "run_my_cron", "wait_cron_run",
 ]);
 
+/** Bittor de «Mis crons»: los crons propios (con su llave sólo PROPONEN) y los NOMBRES de la
+ *  bóveda para armar un `exec`/`http` con secretos. Nada de la plataforma. */
+export const MY_CRONS_ALLOWLIST = new Set<string>([
+  "list_my_crons", "create_cron", "update_cron", "delete_cron", "run_my_cron", "wait_cron_run",
+  "secret_list",
+]);
+
 /**
  * Scripting (Code Mode) toolset — la superficie MÍNIMA. La idea: el agente
  * descubre y ejecuta cualquier tool vía `discover_tools` + `run_tool` (siempre
@@ -903,6 +912,7 @@ export const GROUP_ALLOWLISTS: Partial<Record<ToolGroupKey, Set<string>>> = {
   "db-del": DB_DEL_ALLOWLIST,
   sitios: SITIOS_ALLOWLIST,
   "admin-crons": ADMIN_CRONS_ALLOWLIST,
+  "my-crons": MY_CRONS_ALLOWLIST,
 };
 
 // Keep `toolCount` honest: derive it from the real allowlist size for every
@@ -919,7 +929,7 @@ for (const g of TOOL_GROUPS) {
 
 /** ¿Este grupo acota `run_tool` por sí solo? (no confundir con el bucket `scripting`). */
 /** Buckets strict que NO son grupos de conector (no salen en TOOL_GROUPS ni en el menú). */
-const STRICT_BUCKETS = new Set<string>(["admin-crons"]);
+const STRICT_BUCKETS = new Set<string>(["admin-crons", "my-crons"]);
 
 export function isStrictGroup(key: string): boolean {
   if (STRICT_BUCKETS.has(key)) return true;

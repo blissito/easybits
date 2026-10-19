@@ -3,6 +3,7 @@ import { createAgUiTransport, definePlugin, Piloto, type ToolVerbs } from "ghost
 import "ghostykit/styles.css";
 
 const CHAT_URL = "/api/v2/admin/copilot/chat";
+const MY_CRONS_CHAT_URL = "/api/v2/copilot/crons/chat";
 
 // Las tools de admin-crons en primera persona, como los verbos de casa de Piloto.
 const VERBS: ToolVerbs = {
@@ -17,6 +18,8 @@ const VERBS: ToolVerbs = {
   run_my_cron: { one: "Propuse ejecutar tu cron", many: "Propuse %n ejecuciones", running: "Preparando la ejecución…" },
   // El paso que pone el servidor al contestar una tarjeta (resume de AG-UI).
   confirm_action: { one: "Apliqué tu decisión", many: "Apliqué %n decisiones", running: "Aplicando tu decisión…" },
+  wait_cron_run: { one: "Esperé a que terminara", many: "Esperé %n ejecuciones", running: "Esperando a que termine…" },
+  secret_list: { one: "Revisé los nombres de tu bóveda", many: "Revisé tu bóveda %n veces", running: "Revisando tu bóveda…" },
 };
 // El servidor antepone al texto del turno lo que se ve en pantalla; en el historial no se muestra.
 const stripContext = (text: string) =>
@@ -26,8 +29,33 @@ const stripContext = (text: string) =>
 // Los verbos sirven también para `mcp_easybits_<tool>`: ghostykit prueba cada sufijo del nombre.
 const PLUGINS = [definePlugin({ name: "crons", tools: { verbs: VERBS }, message: { formatUserText: stripContext } })];
 
-// Un solo hilo por superusuario (el servidor lo guarda): al abrir, Piloto lo pide con un run vacío.
-const THREAD_ID = "admin-crons";
+// Un solo hilo por cuenta y superficie (el servidor lo guarda): al abrir, Piloto lo pide con un run vacío.
+const SURFACES = {
+  admin: {
+    url: CHAT_URL,
+    threadId: "admin-crons",
+    agentName: "Piloto",
+    page: "crons",
+    welcome:
+      "Dime qué necesitas de los crons y yo me encargo: revisar por qué falló uno, ejecutarlo o pausarlo. Antes de ejecutar o pausar te pido permiso.",
+    suggestions: ["Revisa qué cron falló hoy y dime por qué", "Pausa los crons que estén fallando"],
+    placeholder: "Dime qué hago con los crons…",
+  },
+  mine: {
+    url: MY_CRONS_CHAT_URL,
+    threadId: "my-crons",
+    agentName: "Bittor",
+    page: "my-crons",
+    welcome:
+      "Soy Bittor. Te ayudo con tus crons: crearlos en palabras («cada lunes a las 9…»), ver por qué falló uno o ejecutarlo. Antes de cambiar algo te pido permiso en una tarjeta.",
+    suggestions: [
+      "Créame un cron que revise mi sitio cada hora",
+      "¿Por qué falló mi último cron?",
+      "Ejecuta mi cron más reciente",
+    ],
+    placeholder: "Pídele algo a Bittor…",
+  },
+} as const;
 
 interface Props {
   /** Pregunta para dejar en la caja (sin mandarla); `key` cambia en cada pedido. */
@@ -45,13 +73,20 @@ interface Props {
    * `sheet`: dentro de la hoja de vaul en móvil (llena la hoja; el ESC y el arrastre los lleva vaul).
    */
   variant: "panel" | "sheet";
+  /** `admin`: el piloto de la plataforma; `mine`: Bittor de «Mis crons» (cualquier cuenta). */
+  surface?: keyof typeof SURFACES;
+  /** Cron propio abierto en «Mis crons» (viaja como contexto). */
+  cronId?: string | null;
 }
 
-export function CronsCopilot({ ask, job, onClearJob, onClose, escBlocked, onChange, variant }: Props) {
+export function CronsCopilot({ ask, job, onClearJob, onClose, escBlocked, onChange, variant, surface = "admin", cronId }: Props) {
+  const cfg = SURFACES[surface];
   // AG-UI: aprobar o rechazar una tarjeta es el `resume` del siguiente run, con la cookie de sesión.
-  const transport = useMemo(() => createAgUiTransport({ url: CHAT_URL }), []);
+  const transport = useMemo(() => createAgUiTransport({ url: cfg.url }), [cfg.url]);
   const jobRef = useRef(job);
   jobRef.current = job;
+  const cronRef = useRef(cronId);
+  cronRef.current = cronId;
   const aside = useRef<HTMLElement>(null);
   const [height, setHeight] = useState<number | null>(null);
 
@@ -92,7 +127,7 @@ export function CronsCopilot({ ask, job, onClearJob, onClose, escBlocked, onChan
   return (
     <aside
       ref={aside}
-      aria-label="Piloto de crons"
+      aria-label={surface === "mine" ? "Bittor" : "Piloto de crons"}
       style={variant === "panel" && height ? ({ "--copilot-h": `${height}px` } as CSSProperties) : undefined}
       className={
         variant === "panel"
@@ -101,7 +136,7 @@ export function CronsCopilot({ ask, job, onClearJob, onClose, escBlocked, onChan
       }
     >
       <header className="flex items-center gap-2 border-b-2 border-black px-4 py-3">
-        <h3 className="font-black">Piloto</h3>
+        <h3 className="font-black">{cfg.agentName}</h3>
         {job && (
           <span className="inline-flex min-w-0 items-center gap-1 rounded-full border-2 border-black bg-[#fbbf24] px-2 py-0.5 text-xs font-bold">
             <span className="truncate">{job.name}</span>
@@ -122,13 +157,17 @@ export function CronsCopilot({ ask, job, onClearJob, onClose, escBlocked, onChan
         <Piloto
           draft={ask}
           transport={transport}
-          threadId={THREAD_ID}
+          threadId={cfg.threadId}
           skin="easybits"
-          agentName="Piloto"
-          welcome="Dime qué necesitas de los crons y yo me encargo: revisar por qué falló uno, ejecutarlo o pausarlo. Antes de ejecutar o pausar te pido permiso."
-          suggestions={["Revisa qué cron falló hoy y dime por qué", "Pausa los crons que estén fallando"]}
-          placeholder="Dime qué hago con los crons…"
-          context={() => ({ page: "crons", ...(jobRef.current ? { job: jobRef.current.key } : {}) })}
+          agentName={cfg.agentName}
+          welcome={cfg.welcome}
+          suggestions={[...cfg.suggestions]}
+          placeholder={cfg.placeholder}
+          context={() => ({
+            page: cfg.page,
+            ...(jobRef.current ? { job: jobRef.current.key } : {}),
+            ...(cronRef.current ? { cron: cronRef.current } : {}),
+          })}
           plugins={PLUGINS}
           onTurnDone={onChange}
           className="crons-copilot"

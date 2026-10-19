@@ -73,7 +73,8 @@ export function matchTarget(target: string, candidates: Candidate[]): Candidate 
  */
 export async function tryDirectCommand(
   ownerId: string,
-  text: string
+  text: string,
+  opts: { platform?: boolean } = {}
 ): Promise<{ action: PendingActionView; question: string } | null> {
   const cmd = parseDirectCommand(text);
   if (!cmd) return null;
@@ -81,7 +82,8 @@ export async function tryDirectCommand(
     .findMany({ where: { ownerId }, select: { id: true, name: true } })
     .catch(() => [] as { id: string; name: string }[]);
   const candidates: Candidate[] = [
-    ...CRON_JOBS.map((j) => ({ kind: "platform" as const, key: j.key, name: j.name })),
+    // Las tareas de la plataforma sólo en el piloto de admin; Bittor de «Mis crons» ve las suyas.
+    ...(opts.platform === false ? [] : CRON_JOBS.map((j) => ({ kind: "platform" as const, key: j.key, name: j.name }))),
     ...userCrons.map((u) => ({ kind: "user" as const, id: u.id, name: u.name })),
   ];
   const hit = matchTarget(cmd.target, candidates);

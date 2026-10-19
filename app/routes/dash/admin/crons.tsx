@@ -1,15 +1,13 @@
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { data, redirect, useFetcher, useLoaderData, useRevalidator } from "react-router";
-import { Group, Panel, Separator, usePanelRef, type LayoutChangedMeta } from "react-resizable-panels";
-import { Drawer } from "vaul";
 import { getUserOrRedirect, isAdminUser } from "~/.server/getters";
 import { CronRunError, listCronOverview, setCronPaused, startManualRun } from "~/.server/cron";
 import type { CronOverview, CronRunView } from "~/.server/cron";
 import { BrutalButton } from "~/components/common/BrutalButton";
 import { SKILLS_ADD_CMD } from "~/components/docs/SkillsInstall";
 import { UserCronsSection } from "~/components/admin/UserCronsSection";
+import { CopilotSplit, useCopilotSplit } from "~/components/admin/CopilotSplit";
 import type { Route } from "./+types/crons";
-import "./crons.css";
 
 // El copiloto (y su CSS) sólo se baja cuando se abre.
 const CronsCopilot = lazy(() => import("~/components/admin/CronsCopilot").then((m) => ({ default: m.CronsCopilot })));
@@ -390,60 +388,13 @@ export default function CronsAdmin() {
   const open = jobs.find((j) => j.key === openKey) ?? null;
   const { box, table, compact, tight, measured } = useCompactTable();
 
-  // Copiloto: se monta al abrirlo por primera vez y queda vivo (el hilo no se pierde al cerrar).
-  // Escritorio: panel redimensionable que EMPUJA la tabla. Móvil: hoja de vaul desde abajo.
-  const isDesktop = useIsDesktop();
-  const copilotPanel = usePanelRef();
-  const [panelOpen, setPanelOpen] = useState(false);
-  const [sheetOpen, setSheetOpen] = useState(false);
-  const [sheetSnap, setSheetSnap] = useState<number>(SHEET_SNAPS[0]);
-  const sheetChat = useRef<HTMLDivElement>(null);
-  const [sheetChatH, setSheetChatH] = useState<number | null>(null);
-
-  // Lo visible de la hoja = de donde empieza el chat hasta el borde de abajo; se mide mientras vaul la acomoda.
-  useEffect(() => {
-    if (!sheetOpen) return;
-    let frame = 0;
-    const until = performance.now() + 700;
-    const measure = () => {
-      const el = sheetChat.current;
-      if (el) setSheetChatH(Math.max(240, Math.round(window.innerHeight - el.getBoundingClientRect().top)));
-      if (performance.now() < until) frame = requestAnimationFrame(measure);
-    };
-    frame = requestAnimationFrame(measure);
-    return () => cancelAnimationFrame(frame);
-  }, [sheetOpen, sheetSnap]);
-  const [copilotMounted, setCopilotMounted] = useState(false);
+  // Copiloto: panel que empuja la tabla en escritorio, hoja de vaul en móvil (CopilotSplit).
+  const split = useCopilotSplit("eb:crons-copilot-width");
+  const { open: openCopilot, close: closeCopilot } = split;
+  const copilotOpen = split.isOpen;
   const [copilotJobKey, setCopilotJobKey] = useState<string | null>(null);
   const [ask, setAsk] = useState<{ text: string; key: number } | null>(null);
   const copilotJob = jobs.find((j) => j.key === copilotJobKey) ?? null;
-  const copilotOpen = isDesktop ? panelOpen : sheetOpen;
-
-  // Al pasar a móvil con el panel abierto, se cierra el panel y sigue en la hoja.
-  useEffect(() => {
-    const panel = copilotPanel.current;
-    if (isDesktop || !panel || panel.isCollapsed()) return;
-    panel.collapse();
-    setSheetOpen(true);
-  }, [isDesktop, copilotPanel]);
-
-  const openCopilot = () => {
-    setCopilotMounted(true);
-    if (!isDesktop) return setSheetOpen(true);
-    const panel = copilotPanel.current;
-    if (!panel || !panel.isCollapsed()) return;
-    panel.expand();
-    panel.resize(`${readCopilotWidth()}px`);
-  };
-  const closeCopilot = useCallback(() => {
-    copilotPanel.current?.collapse();
-    setSheetOpen(false);
-  }, [copilotPanel]);
-  // El ancho que el usuario eligió arrastrando se recuerda (sólo el ancho: siempre arranca cerrado).
-  const onLayoutChanged = (_: unknown, meta: LayoutChangedMeta) => {
-    const px = copilotPanel.current?.getSize().inPixels ?? 0;
-    if (meta.isUserInteraction && px > 0) writeCopilotWidth(px);
-  };
   const refresh = useCallback(() => {
     if (revalidator.state === "idle") revalidator.revalidate();
   }, [revalidator]);
@@ -473,9 +424,7 @@ export default function CronsAdmin() {
   return (
     <>
       {/* El copiloto llega hasta el borde de la ventana (el layout de admin tiene px-8). */}
-      <div className="md:-mr-8">
-        <Group id="crons-layout" style={{ overflow: "clip" }} onLayoutChanged={onLayoutChanged}>
-          <Panel id="crons-table" minSize={isDesktop ? 420 : 0} style={{ overflow: "clip", minWidth: 0 }}>
+      <CopilotSplit id="crons-layout" split={split} title="Piloto de crons" copilot={copilot} className="md:-mr-8">
             <div className="min-w-0 max-w-[90rem] pb-10 pr-2">
               {/* Encabezado fijo: la caja del comando no cambia de lugar al abrir o cerrar el copiloto. */}
               <div className="mb-6">
@@ -529,99 +478,11 @@ export default function CronsAdmin() {
                 </table>
               </div>
               {open && <RunsDrawer job={open} running={open.running} onClose={() => setOpenKey(null)} />}
-              <UserCronsSection />
+              <UserCronsSection copilot={false} />
             </div>
-          </Panel>
-          <Separator
-            className={`crons-separator max-lg:hidden ${panelOpen ? "" : "invisible"}`}
-            aria-label="Cambiar el ancho del piloto"
-          />
-          <Panel
-            id="crons-copilot"
-            panelRef={copilotPanel}
-            collapsible
-            collapsedSize={0}
-            defaultSize={0}
-            minSize={320}
-            maxSize="60%"
-            style={{ overflow: "clip", minWidth: 0 }}
-            onResize={(size) => setPanelOpen(size.inPixels > 0)}
-          >
-            {/* Cerrado sigue montado (el hilo no se pierde), pero fuera del foco y del lector de pantalla. */}
-            {copilotMounted && isDesktop && (
-              <div className="h-full" inert={!panelOpen}>
-                {copilot("panel")}
-              </div>
-            )}
-          </Panel>
-        </Group>
-      </div>
-      {!isDesktop && (
-        <Drawer.Root
-          open={sheetOpen}
-          onOpenChange={setSheetOpen}
-          snapPoints={SHEET_SNAPS}
-          activeSnapPoint={sheetSnap}
-          setActiveSnapPoint={(p) => setSheetSnap(typeof p === "number" ? p : SHEET_SNAPS[0])}
-        >
-          <Drawer.Portal>
-            <Drawer.Overlay className="fixed inset-0 z-40 bg-black/30" />
-            <Drawer.Content
-              aria-describedby={undefined}
-              className="fixed inset-x-0 bottom-0 z-50 flex h-[94dvh] flex-col rounded-t-2xl border-2 border-b-0 border-black bg-white outline-none"
-            >
-              <Drawer.Handle className="!my-2 !h-1.5 !w-12 shrink-0 !bg-gray-300" />
-              <Drawer.Title className="sr-only">Piloto de crons</Drawer.Title>
-              {/* vaul desplaza la hoja: el chat mide lo VISIBLE en cada punto, para que el composer no quede abajo de la pantalla. */}
-              <div
-                ref={sheetChat}
-                className="min-h-0"
-                style={{ height: sheetChatH ? `${sheetChatH}px` : `calc(${Math.round(sheetSnap * 100)}dvh - 3rem)` }}
-              >
-                {copilotMounted && copilot("sheet")}
-              </div>
-            </Drawer.Content>
-          </Drawer.Portal>
-        </Drawer.Root>
-      )}
+      </CopilotSplit>
     </>
   );
-}
-
-// ── Copiloto: tamaño y punto de quiebre ──────────────────────────────────────────
-const COPILOT_WIDTH_KEY = "eb:crons-copilot-width";
-/** Hoja móvil: a media pantalla (se ve la tabla) o casi completa. */
-const SHEET_SNAPS = [0.6, 0.94];
-
-function readCopilotWidth(): number {
-  try {
-    const n = Number(localStorage.getItem(COPILOT_WIDTH_KEY));
-    if (n >= 320) return n;
-  } catch {
-    /* sin almacenamiento: ancho por defecto */
-  }
-  return 420;
-}
-
-function writeCopilotWidth(px: number) {
-  try {
-    localStorage.setItem(COPILOT_WIDTH_KEY, String(Math.round(px)));
-  } catch {
-    /* sin almacenamiento */
-  }
-}
-
-/** `lg` de Tailwind: panel lateral desde 1024 px, hoja de vaul debajo. En el servidor, escritorio. */
-function useIsDesktop() {
-  const [desktop, setDesktop] = useState(true);
-  useEffect(() => {
-    const mq = window.matchMedia("(min-width: 1024px)");
-    const sync = () => setDesktop(mq.matches);
-    sync();
-    mq.addEventListener("change", sync);
-    return () => mq.removeEventListener("change", sync);
-  }, []);
-  return desktop;
 }
 
 function SparkIcon() {

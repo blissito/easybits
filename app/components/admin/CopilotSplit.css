@@ -1,20 +1,20 @@
 /* Panel del copiloto (react-resizable-panels): abrir y cerrar se animan; arrastrar, no. */
-#crons-layout:not(:has([data-separator="active"])) > [data-panel] {
+.copilot-layout:not(:has([data-separator="active"])) > [data-panel] {
   transition: flex-grow 280ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 @media (prefers-reduced-motion: reduce) {
-  #crons-layout > [data-panel] {
+  .copilot-layout > [data-panel] {
     transition: none;
   }
 }
 
 /* El borde que se arrastra: una franja ancha para atinarle, con una línea que se enciende. */
-.crons-separator {
+.copilot-separator {
   position: relative;
   width: 12px;
   cursor: col-resize;
 }
-.crons-separator::after {
+.copilot-separator::after {
   content: "";
   position: absolute;
   top: 50%;
@@ -27,9 +27,9 @@
   background: #9ca3af;
   transition: background-color 120ms, height 120ms;
 }
-.crons-separator:hover::after,
-.crons-separator[data-separator="active"]::after,
-.crons-separator:focus-visible::after {
+.copilot-separator:hover::after,
+.copilot-separator[data-separator="active"]::after,
+.copilot-separator:focus-visible::after {
   height: 100%;
   background: #9870ed;
 }

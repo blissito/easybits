@@ -1,6 +1,44 @@
-import { Fragment, useCallback, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
 import { useRevalidator } from "react-router";
-import { BrutalButton } from "~/components/common/BrutalButton";
+import { isInternalSecretName } from "~/lib/secrets";
+import { CopilotSplit, useCopilotSplit } from "./CopilotSplit";
+
+// Bittor (piloto de ghostykit): sólo se descarga al abrirlo.
+const CronsCopilot = lazy(() => import("./CronsCopilot").then((m) => ({ default: m.CronsCopilot })));
+import type { IconType } from "react-icons";
+import {
+  PiAlarmDuotone,
+  PiArrowsClockwiseBold,
+  PiBellRingingBold,
+  PiCheckCircleBold,
+  PiCircleNotchBold,
+  PiClockCounterClockwiseBold,
+  PiCodeBold,
+  PiFlagCheckeredBold,
+  PiGlobeHemisphereWestDuotone,
+  PiHandTapBold,
+  PiPauseBold,
+  PiPencilSimpleBold,
+  PiKeyDuotone,
+  PiMagnifyingGlassBold,
+  PiChatCircleDotsDuotone,
+  PiPlayFill,
+  PiPlayPauseBold,
+  PiPlusBold,
+  PiPulseBold,
+  PiRobotDuotone,
+  PiTerminalWindowDuotone,
+  PiTrashBold,
+  PiWarningCircleBold,
+  PiCheckBold,
+  PiCheckCircleDuotone,
+  PiDeviceMobileDuotone,
+  PiEnvelopeSimpleDuotone,
+  PiTrayDuotone,
+  PiXBold,
+  PiXCircleBold,
+} from "react-icons/pi";
 
 // «Mis crons»: los crons de la cuenta de quien mira (userCronOperations.ts). Habla directo con
 // la REST /api/v2/crons (la sesión del panel vale como auth), así que lo que se hace aquí es
@@ -124,17 +162,277 @@ async function api(path: string, init?: RequestInit) {
   return json;
 }
 
-const input = "w-full rounded-lg border-2 border-black px-3 py-2 text-sm";
-const label = "block text-xs font-bold uppercase mb-1";
+const input =
+  "w-full rounded-xl border border-gray-300 bg-white px-3 py-2 text-sm outline-none transition focus:border-brand-500 focus:ring-4 focus:ring-brand-500/15";
+const label = "block text-xs font-bold text-gray-700 mb-1";
 
-export function UserCronsSection() {
+const KIND = {
+  http: { icon: PiGlobeHemisphereWestDuotone, name: "URL", tint: "bg-sky/50 text-cyan-900" },
+  agent_turn: { icon: PiRobotDuotone, name: "Agente", tint: "bg-brand-100 text-brand-500" },
+  exec: { icon: PiTerminalWindowDuotone, name: "Comando", tint: "bg-lime/60 text-green-900" },
+} as const;
+
+/** Estado de un cron en palabras, con su icono y color. */
+function stateOf(c: UserCron) {
+  if (c.done) return { text: "terminado", icon: PiFlagCheckeredBold, cls: "bg-gray-100 text-gray-600" };
+  if (!c.enabled) return { text: "en pausa", icon: PiPauseBold, cls: "bg-gray-100 text-gray-600" };
+  if (c.lastOk === false) return { text: "falló", icon: PiWarningCircleBold, cls: "bg-red-50 text-red-700" };
+  return { text: "activo", icon: PiPulseBold, cls: "bg-green-50 text-green-700" };
+}
+
+/** Un campo de cron (`*`, `*\/n`, `a-b`, `a-b/n`, listas) → valores; null si no se entiende. */
+function expandField(f: string, min: number, max: number): number[] | null {
+  const out = new Set<number>();
+  for (const part of f.split(",")) {
+    const m = part.match(/^(\*|\d+(?:-\d+)?)(?:\/(\d+))?$/);
+    if (!m) return null;
+    const step = m[2] ? Number(m[2]) : 1;
+    const [a, b] = m[1] === "*" ? [min, max] : m[1].includes("-") ? m[1].split("-").map(Number) : [Number(m[1]), m[2] ? max : Number(m[1])];
+    if (!step || a < min || b > max) return null;
+    for (let v = a; v <= b; v += step) out.add(v);
+  }
+  return [...out];
+}
+
+const WEEKDAY: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+
+/** «Ahora» en la zona del cron: minuto del día y día de la semana. */
+function nowIn(tz: string) {
+  const p = Object.fromEntries(
+    new Intl.DateTimeFormat("en-US", { timeZone: tz, hourCycle: "h23", hour: "2-digit", minute: "2-digit", weekday: "short" })
+      .formatToParts(new Date())
+      .map((x) => [x.type, x.value])
+  );
+  return { min: Number(p.hour) * 60 + Number(p.minute), dow: WEEKDAY[p.weekday] ?? 0 };
+}
+
+/** Minutos desde ahora de cada disparo en las próximas 24 h; null si el cron depende del día del mes. */
+function firesIn24h(c: UserCron): number[] | null {
+  if (c.kind === "once" || !c.cron) return null;
+  const [mi, ho, dom, mon, dw] = c.cron.trim().split(/\s+/);
+  if (dom !== "*" || mon !== "*") return null;
+  const mins = expandField(mi, 0, 59);
+  const hours = expandField(ho, 0, 23);
+  const dows = expandField(dw, 0, 7);
+  if (!mins || !hours || !dows) return null;
+  const days = new Set(dows.map((d) => d % 7));
+  const now = nowIn(c.timezone);
+  const out: number[] = [];
+  for (const d of [0, 1])
+    for (const h of hours)
+      for (const m of mins) {
+        const t = d * 1440 + h * 60 + m - now.min;
+        if (t > 0 && t <= 1440 && days.has((now.dow + d) % 7)) out.push(t);
+      }
+  return out.sort((a, b) => a - b);
+}
+
+/** La línea de las próximas 24 h: cada punto es un disparo; el morado grande, el próximo. */
+function DayRibbon({ c }: { c: UserCron }) {
+  const now = nowIn(c.timezone);
+  let marks = c.enabled ? firesIn24h(c) : [];
+  if (marks === null) {
+    const next = c.nextRunAt ? (new Date(c.nextRunAt).getTime() - Date.now()) / 60_000 : -1;
+    marks = next > 0 && next <= 1440 ? [next] : [];
+  }
+  const ticks = Array.from({ length: 24 }, (_, k) => {
+    const hour = Math.floor(now.min / 60) + k + 1;
+    return { at: hour * 60 - now.min, h: hour % 24 };
+  }).filter((t) => t.h % 6 === 0);
+  const pct = (m: number) => `${(m / 1440) * 100}%`;
+  const dense = marks.length > 48;
+  const [next, ...rest] = marks;
+  return (
+    <div className="relative h-11 select-none" suppressHydrationWarning aria-hidden>
+      <div className="absolute inset-x-0 top-5 h-1.5 rounded-full bg-gray-100" />
+      {next != null && <div className="absolute left-0 top-5 h-1.5 rounded-full bg-brand-500/25" style={{ width: pct(next) }} />}
+      <span className="absolute left-0 top-[17px] size-3 rounded-full bg-black ring-4 ring-white" />
+      {ticks.map((t) => (
+        <span key={t.at} className="absolute top-8 -translate-x-1/2 text-[10px] tabular-nums text-gray-400" style={{ left: pct(t.at) }}>
+          {String(t.h).padStart(2, "0")}:00
+        </span>
+      ))}
+      {rest.map((m) =>
+        dense ? (
+          <span key={m} className="absolute top-5 h-1.5 w-px bg-brand-500/50" style={{ left: pct(m) }} />
+        ) : (
+          <span key={m} className="absolute top-[19px] size-2 -translate-x-1/2 rounded-full bg-brand-500/60" style={{ left: pct(m) }} />
+        )
+      )}
+      {next != null && (
+        <span className="absolute top-0 flex -translate-x-1/2 flex-col items-center" style={{ left: pct(next) }}>
+          <span className="rounded-md bg-black px-1.5 text-[10px] font-semibold leading-4 text-white tabular-nums">
+            {c.nextRunLocal?.slice(11) ?? ""}
+          </span>
+          <span className="mt-0.5 size-3.5 rounded-full bg-brand-500 ring-4 ring-brand-500/20" />
+        </span>
+      )}
+      {!c.enabled && (
+        <span className="absolute inset-x-0 top-0 text-center text-[11px] text-gray-400">
+          {c.done ? "Ya no se va a ejecutar" : "En pausa: no se ejecuta hasta que lo reanudes"}
+        </span>
+      )}
+    </div>
+  );
+}
+
+/** Secretos de la bóveda para un `exec`: buscador, elegidos como chips y la lista con interruptores. */
+function SecretPicker({ names, value, onChange }: { names: string[]; value: string[]; onChange: (v: string[]) => void }) {
+  const [q, setQ] = useState("");
+  const shown = names.filter((n) => n.toLowerCase().includes(q.trim().toLowerCase()));
+  const set = (n: string, on: boolean) => onChange(on ? [...value, n] : value.filter((x) => x !== n));
+  return (
+    <div className="overflow-hidden rounded-2xl bg-white ring-1 ring-black/10">
+      {value.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 border-b border-gray-100 px-3 py-2.5">
+          {value.map((n) => (
+            <button
+              key={n}
+              type="button"
+              onClick={() => set(n, false)}
+              aria-label={`Quitar ${n}`}
+              className="inline-flex items-center gap-1 rounded-full bg-brand-100 py-0.5 pl-2 pr-1 font-mono text-[11px] text-brand-500 hover:bg-brand-500 hover:text-white"
+            >
+              {n} <PiXBold />
+            </button>
+          ))}
+        </div>
+      )}
+      <label className="flex items-center gap-2 border-b border-gray-100 px-3">
+        <PiMagnifyingGlassBold className="text-gray-400" />
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder={`Buscar entre ${names.length} secretos…`}
+          className="w-full bg-transparent py-2.5 text-sm outline-none"
+        />
+      </label>
+      <ul className="max-h-60 divide-y divide-gray-100 overflow-y-auto">
+        {shown.map((n) => (
+          <SwitchRow key={n} icon={PiKeyDuotone} title={n} mono checked={value.includes(n)} onChange={(on) => set(n, on)} />
+        ))}
+        {!shown.length && <li className="px-4 py-3 text-xs text-gray-500">Ningún secreto se llama así.</li>}
+      </ul>
+    </div>
+  );
+}
+
+/** Fila de ajustes: icono, título y explicación a la izquierda; interruptor a la derecha. Toda la fila se pulsa. */
+function SwitchRow({
+  icon: Icon,
+  title,
+  hint,
+  checked,
+  onChange,
+  disabled,
+  mono,
+}: {
+  icon: IconType;
+  title: string;
+  hint?: string;
+  mono?: boolean;
+  checked: boolean;
+  onChange: (on: boolean) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <li>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        disabled={disabled}
+        onClick={() => onChange(!checked)}
+        className={`flex w-full items-center gap-3 px-4 text-left ${mono ? "py-2" : "py-3"} transition-colors hover:bg-gray-50 focus-visible:bg-gray-50 focus-visible:outline-none disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-transparent`}
+      >
+        <Icon className="shrink-0 text-xl text-brand-500" />
+        <span className="min-w-0 flex-1">
+          <span className={`block ${mono ? "break-all font-mono text-xs" : "text-sm font-semibold"}`}>{title}</span>
+          {hint && <span className="block text-xs text-gray-500">{hint}</span>}
+        </span>
+        <span className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${checked ? "bg-brand-500" : "bg-gray-300"}`}>
+          <span
+            className={`absolute size-5 rounded-full bg-white shadow transition-transform motion-reduce:transition-none ${checked ? "translate-x-[22px]" : "translate-x-0.5"}`}
+          />
+        </span>
+      </button>
+    </li>
+  );
+}
+
+/** Botón redondo de icono: el nombre va en aria-label y tooltip. */
+function IconButton({
+  title,
+  icon: Icon,
+  onClick,
+  active,
+  disabled,
+  danger,
+}: {
+  title: string;
+  icon: IconType;
+  onClick: () => void;
+  active?: boolean;
+  disabled?: boolean;
+  danger?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      title={title}
+      aria-label={title}
+      aria-pressed={active}
+      disabled={disabled}
+      onClick={onClick}
+      className={`grid size-9 place-items-center rounded-full text-lg transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500 disabled:cursor-not-allowed disabled:opacity-40 ${
+        active ? "bg-black text-white" : danger ? "text-gray-500 hover:bg-red-50 hover:text-red-600" : "text-gray-600 hover:bg-gray-100 hover:text-black"
+      }`}
+    >
+      <Icon />
+    </button>
+  );
+}
+
+/** «16h 14m» → cifras grandes, unidades chicas. */
+function Countdown({ text }: { text: string }) {
+  const parts = [...text.matchAll(/(\d+)\s*([a-zA-Z]+)/g)];
+  if (!parts.length) return <span>{text}</span>;
+  return (
+    <span className="inline-flex items-baseline gap-1.5">
+      {parts.map(([, n, u]) => (
+        <span key={u}>
+          <span className="text-4xl font-semibold tracking-tight tabular-nums">{n}</span>
+          <span className="ml-0.5 text-base font-medium text-gray-400">{u}</span>
+        </span>
+      ))}
+    </span>
+  );
+}
+
+/** «2026-10-19 12:00» → «dom 19 oct, 12:00» (ya viene en la zona del cron). */
+function prettyLocal(s: string | null): string {
+  if (!s) return "";
+  const d = new Date(s.replace(" ", "T"));
+  if (Number.isNaN(d.getTime())) return s;
+  return d.toLocaleString("es-MX", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+}
+
+/** `copilot`: Bittor en un panel (en admin va el piloto de la plataforma y aquí se apaga). */
+export function UserCronsSection({ copilot = true }: { copilot?: boolean } = {}) {
   const [items, setItems] = useState<UserCron[] | null>(null);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
-  // Fila abierta: su historial o su formulario de edición.
+  // Tarjeta abierta: su historial o su formulario de edición.
   const [open, setOpen] = useState<{ id: string; what: "runs" | "edit" } | null>(null);
+  // Bittor: el mismo panel que el piloto de admin (empuja en escritorio, hoja en móvil).
+  const split = useCopilotSplit("eb:my-crons-copilot-width");
+  const [ask, setAsk] = useState<{ text: string; key: number } | null>(null);
+  const openBittor = (text?: string) => {
+    split.open();
+    if (text) setAsk((a) => ({ text, key: (a?.key ?? 0) + 1 }));
+  };
 
   const load = useCallback(async () => {
     try {
@@ -158,20 +456,41 @@ export function UserCronsSection() {
     prev.current = revalidator.state;
   }, [revalidator.state, load]);
 
+  // Ejecuciones lanzadas desde aquí: se quedan a la vista (en curso → resultado) hasta que se cierran.
+  const [live, setLive] = useState<Record<string, LiveRun>>({});
+
+  /** «Ejecutar»: lanza y espera (long-poll /runs/next) a que esa ejecución termine. */
+  const runNow = async (id: string) => {
+    // Un margen por si el reloj del navegador va adelantado respecto al servidor.
+    const after = new Date(Date.now() - 5000).toISOString();
+    setLive((l) => ({ ...l, [id]: { startedAt: Date.now() } }));
+    setOpen({ id, what: "runs" });
+    try {
+      await api(`/api/v2/crons/${id}/run`, { method: "POST" });
+      for (let i = 0; i < 20; i++) {
+        const r = await api(`/api/v2/crons/${id}/runs/next?wait=50&after=${encodeURIComponent(after)}`);
+        if (r.run) {
+          setLive((l) => ({ ...l, [id]: { ...l[id], run: r.run } }));
+          break;
+        }
+      }
+    } catch (e) {
+      setLive((l) => ({ ...l, [id]: { ...l[id], error: (e as Error).message } }));
+    }
+    await load();
+  };
+
   const toggle = (id: string, what: "runs" | "edit") => setOpen((o) => (o?.id === id && o.what === what ? null : { id, what }));
 
-  const act = async (id: string, what: "run" | "pause" | "resume" | "delete") => {
+  const act = async (id: string, what: "pause" | "resume" | "delete") => {
     if (what === "delete" && !confirm("¿Borrar este cron?")) return;
     setBusy(`${id}:${what}`);
     setError(null);
     try {
-      if (what === "run") await api(`/api/v2/crons/${id}/run`, { method: "POST" });
       if (what === "delete") await api(`/api/v2/crons/${id}`, { method: "DELETE" });
       if (what === "pause" || what === "resume") {
         await api(`/api/v2/crons/${id}`, { method: "PATCH", body: JSON.stringify({ enabled: what === "resume" }) });
       }
-      // «Ejecutar» corre en segundo plano: un segundo después ya hay resultado casi siempre.
-      if (what === "run") await new Promise((r) => setTimeout(r, 1500));
       await load();
     } catch (e) {
       setError((e as Error).message);
@@ -180,23 +499,49 @@ export function UserCronsSection() {
     }
   };
 
-  return (
-    <section className="mt-10">
-      <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h3 className="text-xl font-black mb-1">Mis crons</h3>
-          <p className="text-sm text-gray-500">
-            Tareas programadas de tu cuenta: le pegan a una URL, le mandan un mensaje a uno de tus agentes o ejecutan un comando en
-            una caja. También por API (<code className="font-mono text-xs">/api/v2/crons</code>), MCP (
-            <code className="font-mono text-xs">create_cron</code>) o la CLI (<code className="font-mono text-xs">easybits crons</code>).
+  const content = (
+    <section className="mt-10 pb-10 pr-2">
+      <header className="mb-8 flex flex-wrap items-end justify-between gap-4">
+        <div className="max-w-2xl">
+          <h3 className="text-3xl font-black tracking-tight">Mis crons</h3>
+          <p className="mt-1.5 text-[15px] leading-relaxed text-gray-600">
+            Tareas que corren solas a la hora que digas: le pegan a una URL, le escriben a uno de tus agentes o ejecutan un comando en
+            una caja.
           </p>
+          <div className="mt-3 flex flex-wrap gap-1.5 text-xs">
+            {[
+              ["API", "/api/v2/crons"],
+              ["MCP", "create_cron"],
+              ["CLI", "easybits crons"],
+            ].map(([k, v]) => (
+              <span key={k} className="inline-flex items-center gap-1.5 rounded-full bg-gray-100 py-1 pl-1 pr-2.5">
+                <span className="rounded-full bg-white px-1.5 text-[10px] font-bold text-gray-700 shadow-sm">{k}</span>
+                <code className="font-mono text-gray-700">{v}</code>
+              </span>
+            ))}
+          </div>
         </div>
-        {!showForm && (
-          <BrutalButton type="button" mode="brand" onClick={() => setShowForm(true)}>
-            Nuevo cron
-          </BrutalButton>
-        )}
-      </div>
+        <div className="flex items-center gap-2">
+          {copilot && !split.isOpen && (
+            <button
+              type="button"
+              onClick={() => openBittor()}
+              className="inline-flex h-11 items-center gap-2 rounded-full bg-white px-5 text-sm font-semibold ring-1 ring-black/15 transition hover:ring-brand-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500"
+            >
+              <PiChatCircleDotsDuotone className="text-lg text-brand-500" /> Pídeselo a Bittor
+            </button>
+          )}
+          {!showForm && (
+            <button
+              type="button"
+              onClick={() => setShowForm(true)}
+              className="inline-flex h-11 items-center gap-2 rounded-full bg-black px-5 text-sm font-semibold text-white transition-transform hover:scale-[1.03] active:scale-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500"
+            >
+              <PiPlusBold /> Nuevo cron
+            </button>
+          )}
+        </div>
+      </header>
 
       {showForm && (
         <CronForm
@@ -209,132 +554,239 @@ export function UserCronsSection() {
         />
       )}
 
-      {error && <p className="mb-3 text-sm font-bold text-red-600">{error}</p>}
+      {error && (
+        <p role="alert" className="mb-4 flex items-center gap-2 rounded-2xl bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+          <PiWarningCircleBold className="shrink-0 text-lg" /> {error}
+        </p>
+      )}
 
-      <div className="border-2 border-black rounded-xl overflow-hidden shadow-[3px_3px_0_#000]">
-        <table className="w-full text-sm">
-          <thead className="bg-gray-100">
-            <tr>
-              <th className="p-3 text-left font-bold text-xs uppercase">Cron</th>
-              <th className="p-3 text-left font-bold text-xs uppercase max-md:hidden">Última</th>
-              <th className="p-3 text-left font-bold text-xs uppercase max-md:hidden">Próxima</th>
-              <th className="p-3" />
-            </tr>
-          </thead>
-          <tbody>
-            {items === null && (
-              <tr>
-                <td colSpan={4} className="p-3 text-gray-500">
-                  Cargando…
-                </td>
-              </tr>
-            )}
-            {items?.length === 0 && (
-              <tr>
-                <td colSpan={4} className="p-3 text-gray-500">
-                  Todavía no tienes crons.
-                </td>
-              </tr>
-            )}
-            {items?.map((c) => {
-              const dot = !c.enabled ? "bg-gray-400" : c.lastOk === false ? "bg-red-500" : c.lastOk ? "bg-green-500" : "bg-white";
-              const target =
-                c.action.type === "http"
-                  ? `${c.action.method} ${c.action.url}`
-                  : c.action.type === "exec"
-                    ? `$ ${c.action.command}${c.action.secrets?.length ? ` (con ${c.action.secrets.map((x) => x.name).join(", ")})` : ""}`
-                    : `turno a «${agents.find((a) => a.id === (c.action as { fleetAgentId: string }).fleetAgentId)?.name ?? "agente"}»`;
-              const isOpen = open?.id === c.id ? open.what : null;
-              return (
-                <Fragment key={c.id}>
-                  <tr className="border-t border-gray-200 align-top">
-                    <td className="p-3 w-full">
-                      <p className="flex items-center gap-2 font-bold leading-tight">
-                        <span className={`w-3 h-3 shrink-0 rounded-full border-2 border-black ${dot}`} />
-                        {c.name}
-                      </p>
-                      <p className="mt-1 pl-5 text-xs text-gray-500">
-                        {c.schedule} · <span className="font-mono break-all">{target}</span>
-                      </p>
-                      {c.lastError && (
-                        <p className="mt-1 pl-5 text-xs text-red-600 break-all line-clamp-2" title={c.lastError}>
-                          {c.lastError}
-                        </p>
-                      )}
-                    </td>
-                    <td className="p-3 whitespace-nowrap max-md:hidden" suppressHydrationWarning>
-                      {relative(c.lastRunAt)}
-                      {c.lastStatus != null && <span className="block text-xs text-gray-500">HTTP {c.lastStatus}</span>}
-                    </td>
-                    <td className="p-3 whitespace-nowrap max-md:hidden">
-                      {c.enabled && c.nextRunLocal ? (
-                        <>
-                          {c.nextRunLocal}
-                          {c.in && <span className="block text-xs text-gray-500">en {c.in}</span>}
-                        </>
-                      ) : c.done ? (
-                        "terminado"
-                      ) : (
-                        "en pausa"
-                      )}
-                    </td>
-                    <td className="p-3 text-right">
-                      <div className="inline-flex flex-wrap justify-end gap-2">
-                        <BrutalButton type="button" size="chip" mode="ghost" isDisabled={!!busy} onClick={() => act(c.id, "run")}>
-                          {busy === `${c.id}:run` ? "…" : "Ejecutar"}
-                        </BrutalButton>
-                        <BrutalButton type="button" size="chip" mode={isOpen === "runs" ? "brand" : "ghost"} onClick={() => toggle(c.id, "runs")}>
-                          Historial
-                        </BrutalButton>
-                        <BrutalButton type="button" size="chip" mode={isOpen === "edit" ? "brand" : "ghost"} onClick={() => toggle(c.id, "edit")}>
-                          Editar
-                        </BrutalButton>
-                        <BrutalButton
-                          type="button"
-                          size="chip"
-                          mode={c.enabled ? "ghost" : "brand"}
-                          isDisabled={!!busy}
-                          onClick={() => act(c.id, c.enabled ? "pause" : "resume")}
-                        >
-                          {c.enabled ? "Pausar" : "Reanudar"}
-                        </BrutalButton>
-                        <BrutalButton type="button" size="chip" mode="danger" isDisabled={!!busy} onClick={() => act(c.id, "delete")}>
-                          Borrar
-                        </BrutalButton>
-                      </div>
-                    </td>
-                  </tr>
-                  {isOpen && (
-                    <tr className="bg-gray-50">
-                      <td colSpan={4} className="p-3">
-                        {isOpen === "runs" ? (
-                          <RunsList cronId={c.id} />
-                        ) : (
-                          <CronForm
-                            agents={agents}
-                            initial={c}
-                            onCancel={() => setOpen(null)}
-                            onSaved={async () => {
-                              setOpen(null);
-                              await load();
-                            }}
-                          />
-                        )}
-                      </td>
-                    </tr>
+      {items === null && (
+        <div className="grid gap-4" aria-busy>
+          {[0, 1].map((i) => (
+            <div key={i} className="h-52 animate-pulse rounded-3xl bg-gray-100" />
+          ))}
+        </div>
+      )}
+
+      {items?.length === 0 && !showForm && (
+        <div className="grid place-items-center gap-3 rounded-3xl bg-gray-50 px-6 py-14 text-center ring-1 ring-black/5">
+          <PiAlarmDuotone className="text-6xl text-brand-500" />
+          <p className="max-w-sm text-sm text-gray-600">
+            Programa tu primera tarea: un aviso cada mañana, un respaldo cada noche o un mensaje semanal a tu agente.
+          </p>
+          <button
+            type="button"
+            onClick={() => setShowForm(true)}
+            className="inline-flex h-11 items-center gap-2 rounded-full bg-black px-5 text-sm font-semibold text-white"
+          >
+            <PiPlusBold /> Crear mi primer cron
+          </button>
+        </div>
+      )}
+
+      <ul className="grid gap-4">
+        {items?.map((c) => {
+          const kind = KIND[c.action.type];
+          const state = stateOf(c);
+          const secrets = c.action.type === "exec" ? (c.action.secrets ?? []).map((x) => x.name) : c.action.type === "http" && c.action.secretName ? [c.action.secretName] : [];
+          const agentName = c.action.type === "agent_turn" ? agents.find((a) => a.id === (c.action as { fleetAgentId: string }).fleetAgentId)?.name ?? "agente" : "";
+          const schedule = c.schedule.replace(` ${c.timezone}`, "");
+          const isOpen = open?.id === c.id ? open.what : null;
+          return (
+            <li
+              key={c.id}
+              className={`overflow-hidden rounded-3xl bg-white ring-1 ring-black/10 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_12px_32px_-16px_rgba(0,0,0,0.18)] ${c.enabled ? "" : "opacity-80"}`}
+            >
+              {/* Móvil: apilado. Tablet: 2 columnas. Escritorio: quién · qué ejecuta + cuándo · cuenta y acciones. */}
+              <div className="grid items-start gap-x-6 gap-y-4 p-5 md:grid-cols-[minmax(0,1fr)_auto] md:p-6 lg:grid-cols-[minmax(0,15rem)_minmax(0,1fr)_auto] lg:gap-y-3">
+                <div className="flex min-w-0 gap-4 lg:col-start-1 lg:row-start-1">
+                  <span className={`grid size-12 shrink-0 place-items-center rounded-2xl text-2xl ${kind.tint}`} title={kind.name}>
+                    <kind.icon />
+                  </span>
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2.5">
+                      <h4 className="text-lg font-bold leading-tight tracking-tight">{c.name}</h4>
+                      <span className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-semibold ${state.cls}`}>
+                        <span className="relative flex size-1.5">
+                          {state.text === "activo" && <span className="absolute inset-0 rounded-full bg-green-600 motion-safe:animate-ping" />}
+                          <span className={`relative size-1.5 rounded-full ${state.text === "activo" ? "bg-green-600" : state.text === "falló" ? "bg-red-600" : "bg-gray-400"}`} />
+                        </span>
+                        {state.text}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-sm text-gray-500" title={c.timezone}>
+                      {schedule}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="md:text-right lg:col-start-3 lg:row-start-1" suppressHydrationWarning>
+                  {c.enabled && c.in ? (
+                    <div>
+                      <Countdown text={c.in} />
+                      <p className="text-xs text-gray-500">{prettyLocal(c.nextRunLocal)}</p>
+                    </div>
+                  ) : (
+                    <p className="text-2xl font-semibold tracking-tight text-gray-400">{c.done ? "Terminado" : "En pausa"}</p>
                   )}
-                </Fragment>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+                </div>
+
+                {/* Qué se ejecuta, tal cual */}
+                <div className="overflow-hidden rounded-2xl bg-onix text-[13px] md:col-span-2 lg:col-span-1 lg:col-start-2 lg:row-start-1">
+                  <div className="flex items-start gap-3 overflow-x-auto px-4 py-3 font-mono">
+                    {c.action.type === "exec" && (
+                      <>
+                        <span className="select-none text-gray-500">$</span>
+                        <code className="whitespace-pre text-lime">{c.action.command}</code>
+                        {c.action.template && <span className="ml-auto shrink-0 font-sans text-[11px] text-gray-500">{c.action.template}</span>}
+                      </>
+                    )}
+                    {c.action.type === "http" && (
+                      <>
+                        <span className="shrink-0 rounded bg-white/10 px-1.5 text-[11px] font-bold text-sky">{c.action.method}</span>
+                        <code className="whitespace-pre text-gray-100">{c.action.url}</code>
+                      </>
+                    )}
+                    {c.action.type === "agent_turn" && (
+                      <>
+                        <span className="shrink-0 font-sans text-[11px] font-semibold text-rose">→ {agentName}</span>
+                        <code className="line-clamp-2 whitespace-pre-wrap text-gray-100">{c.action.prompt}</code>
+                      </>
+                    )}
+                  </div>
+                  {secrets.length > 0 && (
+                    <div className="flex flex-wrap items-center gap-1.5 border-t border-white/10 px-4 py-2.5">
+                      <PiKeyDuotone className="text-base text-brand-yellow" title="Secretos que recibe" />
+                      {secrets.map((n) => (
+                        <span key={n} className="rounded-md bg-white/10 px-1.5 py-0.5 font-mono text-[11px] text-gray-200">
+                          {n}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="md:col-span-2 lg:col-span-1 lg:col-start-2 lg:row-start-2">
+                  <DayRibbon c={c} />
+                </div>
+
+                {c.lastError && (
+                  <div className="flex items-start gap-3 rounded-xl bg-red-50 px-3 py-2 md:col-span-2 lg:col-span-3 lg:row-start-3">
+                    <p className="line-clamp-2 flex-1 break-all font-mono text-xs text-red-700" title={c.lastError}>
+                      {c.lastError}
+                    </p>
+                    {copilot && (
+                      <button
+                        type="button"
+                        onClick={() => openBittor(`¿Por qué falló «${c.name}» en su última ejecución y cómo lo arreglo?`)}
+                        className="shrink-0 rounded-full bg-white px-3 py-1 text-xs font-semibold text-red-700 ring-1 ring-red-200 hover:ring-red-400"
+                      >
+                        Pregúntale a Bittor
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                <p className="flex items-center gap-1.5 self-center text-xs text-gray-500 lg:col-start-1 lg:row-start-2 lg:pl-16" suppressHydrationWarning>
+                    {c.lastOk === false ? (
+                      <PiXCircleBold className="text-base text-red-600" />
+                    ) : c.lastOk ? (
+                      <PiCheckCircleBold className="text-base text-green-600" />
+                    ) : null}
+                    {c.lastRunAt ? `Última ${relative(c.lastRunAt)}` : "Nunca se ha ejecutado"}
+                    {c.lastStatus != null && <span className="rounded bg-gray-100 px-1 font-mono text-[11px]">HTTP {c.lastStatus}</span>}
+                </p>
+                <div className="flex items-center justify-end gap-1 self-center lg:col-start-3 lg:row-start-2">
+                    <IconButton title="Historial" icon={PiClockCounterClockwiseBold} active={isOpen === "runs"} onClick={() => toggle(c.id, "runs")} />
+                    <IconButton title="Editar" icon={PiPencilSimpleBold} active={isOpen === "edit"} onClick={() => toggle(c.id, "edit")} />
+                    {!c.done && (
+                      <IconButton
+                        title={c.enabled ? "Pausar" : "Reanudar"}
+                        icon={c.enabled ? PiPauseBold : PiPlayPauseBold}
+                        disabled={!!busy}
+                        onClick={() => act(c.id, c.enabled ? "pause" : "resume")}
+                      />
+                    )}
+                    <IconButton title="Borrar" icon={PiTrashBold} danger disabled={!!busy} onClick={() => act(c.id, "delete")} />
+                    <button
+                      type="button"
+                      disabled={!!busy || (!!live[c.id] && !live[c.id].run && !live[c.id].error)}
+                      onClick={() => runNow(c.id)}
+                      className="ml-2 inline-flex h-9 items-center gap-1.5 rounded-full bg-brand-500 px-4 text-sm font-semibold text-white transition-transform hover:scale-[1.03] active:scale-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-black disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {live[c.id] && !live[c.id].run && !live[c.id].error ? <PiCircleNotchBold className="animate-spin" /> : <PiPlayFill />}
+                      {live[c.id] && !live[c.id].run && !live[c.id].error ? "Ejecutando" : live[c.id] ? "Otra vez" : "Ejecutar"}
+                    </button>
+                </div>
+              </div>
+
+              {isOpen && (
+                <div className="border-t border-black/5 bg-gray-50/70 p-5 md:p-6">
+                  {isOpen === "runs" ? (
+                    <RunsList cronId={c.id} live={live[c.id]} />
+                  ) : (
+                    <CronForm
+                      agents={agents}
+                      initial={c}
+                      onCancel={() => setOpen(null)}
+                      onSaved={async () => {
+                        setOpen(null);
+                        await load();
+                      }}
+                    />
+                  )}
+                </div>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+
     </section>
+  );
+  if (!copilot) return content;
+  return (
+    <CopilotSplit
+      id="my-crons-layout"
+      split={split}
+      title="Bittor"
+      className="md:-mr-8"
+      copilot={(variant) => (
+        <Suspense fallback={null}>
+          <CronsCopilot
+            surface="mine"
+            variant={variant}
+            ask={ask}
+            job={null}
+            cronId={open?.id ?? null}
+            onClearJob={() => undefined}
+            onClose={split.close}
+            escBlocked={!split.isOpen}
+            onChange={load}
+          />
+        </Suspense>
+      )}
+    >
+      {content}
+    </CopilotSplit>
   );
 }
 
+type LiveRun = { startedAt: number; run?: Run; error?: string };
+
+/** Segundos desde `from`, refrescado mientras `on`. */
+function useElapsed(from: number, on: boolean) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    if (!on) return;
+    const t = setInterval(() => setNow(Date.now()), 100);
+    return () => clearInterval(t);
+  }, [on]);
+  return (now - from) / 1000;
+}
+
 /** Historial de un cron: GET /api/v2/crons/:id/runs?logs=1 (lo mismo que `list_my_crons` con `logs:true`). */
-function RunsList({ cronId }: { cronId: string }) {
+function RunsList({ cronId, live }: { cronId: string; live?: LiveRun }) {
   const [runs, setRuns] = useState<Run[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const load = useCallback(() => {
@@ -346,55 +798,125 @@ function RunsList({ cronId }: { cronId: string }) {
   useEffect(() => {
     load();
   }, [load]);
+  // En cuanto termina la ejecución lanzada desde aquí, se recarga y entra arriba.
+  const doneId = live?.run?.id;
+  useEffect(() => {
+    if (doneId) load();
+  }, [doneId, load]);
 
-  if (error) return <p className="text-sm font-bold text-red-600">{error}</p>;
-  if (runs === null) return <p className="text-sm text-gray-500">Cargando historial…</p>;
-  if (!runs.length) return <p className="text-sm text-gray-500">Todavía no se ha ejecutado.</p>;
+  const pending = !!live && !live.run && !live.error;
+  const secs = useElapsed(live?.startedAt ?? 0, pending);
+
+  if (error) return <p className="text-sm font-bold text-red-700">{error}</p>;
+  if (runs === null && !pending) return <p className="text-sm text-gray-500">Cargando historial…</p>;
+  const list = (runs ?? []).filter((r) => !(pending && r.running));
   return (
     <div>
-      <div className="mb-2 flex items-center justify-between">
-        <p className={label}>Últimas {runs.length} ejecuciones</p>
-        <BrutalButton type="button" size="chip" mode="ghost" onClick={load}>
-          Recargar
-        </BrutalButton>
+      <div className="mb-3 flex items-center justify-between">
+        <p className="text-sm font-bold">{list.length ? `Últimas ${list.length} ejecuciones` : "Ejecuciones"}</p>
+        <IconButton title="Recargar" icon={PiArrowsClockwiseBold} onClick={load} />
       </div>
-      <ul className="grid gap-2">
-        {runs.map((r) => {
-          const chip = r.running
-            ? ["en ejecución", "bg-yellow-200"]
-            : r.ok
-              ? ["ok", "bg-green-200"]
-              : r.ok === false
-                ? ["falló", "bg-red-200"]
-                : ["sin terminar", "bg-gray-200"];
-          return (
-            <li key={r.id} className="rounded-lg border-2 border-black bg-white p-2 text-xs">
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                <span className={`rounded border-2 border-black px-1.5 font-bold ${chip[1]}`}>{chip[0]}</span>
-                <span className="font-mono" suppressHydrationWarning>
-                  {new Date(r.startedAt).toLocaleString("es-MX", { dateStyle: "short", timeStyle: "short" })}
-                </span>
-                <span className="text-gray-500">{duration(r.durationMs)}</span>
-                {r.exitCode != null && <span className="font-mono">exit {r.exitCode}</span>}
-                {r.status != null && <span className="font-mono">HTTP {r.status}</span>}
-                {r.trigger === "manual" && <span className="text-gray-500">(a mano)</span>}
+      {!list.length && !pending && !live?.error && (
+        <p className="text-sm text-gray-500">Todavía no se ha ejecutado. Usa «Ejecutar» para probarlo ahora.</p>
+      )}
+      <ol className="relative grid gap-3 pl-6 before:absolute before:bottom-2 before:left-[9px] before:top-2 before:w-px before:bg-gray-300">
+        <AnimatePresence initial={false}>
+          {pending && (
+            <motion.li
+              key="pending"
+              layout
+              initial={{ opacity: 0, y: -12, scale: 0.97 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.97 }}
+              className="relative"
+              role="status"
+              aria-live="polite"
+            >
+              <span className="absolute -left-6 top-2.5 grid size-5 place-items-center rounded-full bg-brand-500 text-[12px] text-white ring-4 ring-gray-50">
+                <PiCircleNotchBold className="animate-spin" />
+              </span>
+              <div className="overflow-hidden rounded-2xl bg-white p-3 text-xs ring-2 ring-brand-500">
+                <p className="flex items-baseline gap-3">
+                  <span className="font-bold">Ejecutando…</span>
+                  <span className="tabular-nums text-gray-500">{secs.toFixed(1)} s</span>
+                </p>
+                <div className="mt-2 h-1 overflow-hidden rounded-full bg-brand-500/15">
+                  <div className="h-full w-1/3 rounded-full bg-brand-500 motion-safe:animate-[cronbar_1.2s_ease-in-out_infinite]" />
+                  <style>{"@keyframes cronbar{0%{transform:translateX(-100%)}100%{transform:translateX(300%)}}"}</style>
+                </div>
               </div>
-              {(r.summary || r.error) && (
-                <p className={`mt-1 break-all ${r.error ? "text-red-600" : "text-gray-700"}`}>{r.error || r.summary}</p>
-              )}
-              {r.logs && (
-                <details className="mt-1">
-                  <summary className="cursor-pointer font-bold">Logs</summary>
-                  <pre className="mt-1 max-h-64 overflow-auto whitespace-pre-wrap break-all rounded border-2 border-black bg-gray-900 p-2 text-[11px] text-gray-100">
-                    {r.logs}
-                  </pre>
-                </details>
-              )}
-            </li>
-          );
-        })}
-      </ul>
+            </motion.li>
+          )}
+          {live?.error && (
+            <motion.li key="live-error" layout initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }} className="relative" role="alert">
+              <span className="absolute -left-6 top-2.5 grid size-5 place-items-center rounded-full bg-red-600 text-[12px] text-white ring-4 ring-gray-50">
+                <PiXBold />
+              </span>
+              <div className="rounded-2xl bg-red-50 p-3 text-xs text-red-700 ring-1 ring-red-200">
+                <span className="font-bold">No se pudo ejecutar:</span> {live.error}
+              </div>
+            </motion.li>
+          )}
+          {list.map((r) => (
+            <motion.li
+              key={r.id}
+              layout
+              initial={{ opacity: 0, y: -12, scale: 0.97 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              transition={{ type: "spring", stiffness: 420, damping: 32 }}
+              className="relative"
+            >
+              <RunItem run={r} fresh={r.id === doneId} />
+            </motion.li>
+          ))}
+        </AnimatePresence>
+      </ol>
     </div>
+  );
+}
+
+/** Una ejecución del historial; la recién terminada llega resaltada y con sus logs abiertos. */
+function RunItem({ run: r, fresh }: { run: Run; fresh: boolean }) {
+  const st = r.running
+    ? { icon: PiCircleNotchBold, cls: "bg-brand-yellow", text: "en ejecución", spin: true }
+    : r.ok
+      ? { icon: PiCheckBold, cls: "bg-green-600 text-white", text: "Salió bien" }
+      : r.ok === false
+        ? { icon: PiXBold, cls: "bg-red-600 text-white", text: "Falló" }
+        : { icon: PiCircleNotchBold, cls: "bg-gray-200", text: "sin terminar" };
+  const ring = fresh ? (r.ok ? "ring-2 ring-green-500 bg-green-50" : "ring-2 ring-red-500 bg-red-50") : "ring-1 ring-black/5 bg-white";
+  return (
+    <>
+      <span className={`absolute -left-6 top-2.5 grid size-5 place-items-center rounded-full text-[11px] ring-4 ring-gray-50 ${st.cls}`}>
+        <st.icon className={"spin" in st && st.spin ? "animate-spin" : ""} />
+      </span>
+      <div className={`rounded-2xl p-3 text-xs transition-colors duration-1000 ${ring}`}>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <span className="font-bold">{st.text}</span>
+          {fresh && <span className="rounded-full bg-black px-1.5 text-[10px] font-semibold text-white">recién</span>}
+          <span className="tabular-nums" suppressHydrationWarning>
+            {new Date(r.startedAt).toLocaleString("es-MX", { dateStyle: "medium", timeStyle: "short" })}
+          </span>
+          <span className="text-gray-500">{duration(r.durationMs)}</span>
+          {r.exitCode != null && <span className="font-mono">exit {r.exitCode}</span>}
+          {r.status != null && <span className="font-mono">HTTP {r.status}</span>}
+          {r.trigger === "manual" && (
+            <span className="inline-flex items-center gap-1 text-gray-500">
+              <PiHandTapBold /> a mano
+            </span>
+          )}
+        </div>
+        {(r.summary || r.error) && <p className={`mt-1 break-all ${r.error ? "text-red-700" : "text-gray-700"}`}>{r.error || r.summary}</p>}
+        {r.logs && (
+          <details className="mt-2" open={fresh}>
+            <summary className="inline-flex cursor-pointer items-center gap-1 font-bold">
+              <PiCodeBold /> Logs
+            </summary>
+            <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-all rounded-xl bg-onix p-3 text-[11px] text-lime">{r.logs}</pre>
+          </details>
+        )}
+      </div>
+    </>
   );
 }
 
@@ -421,7 +943,7 @@ function CronForm({
       .catch(() => undefined);
     if (!editing) {
       api("/api/v2/secrets")
-        .then((r: { items?: { name: string }[] }) => setVault((r.items ?? []).map((s) => s.name).filter((n) => !n.includes("__"))))
+        .then((r: { items?: { name: string }[] }) => setVault((r.items ?? []).map((s) => s.name).filter((n) => !isInternalSecretName(n))))
         .catch(() => undefined);
     }
   }, [editing]);
@@ -547,7 +1069,7 @@ function CronForm({
   return (
     <form
       onSubmit={submit}
-      className={`grid gap-4 rounded-xl border-2 border-black bg-white p-4 shadow-[3px_3px_0_#000] md:grid-cols-2 ${editing ? "text-left" : "mb-6"}`}
+      className={`grid gap-4 md:grid-cols-2 ${editing ? "text-left" : "mb-6 rounded-3xl bg-white p-5 ring-1 ring-black/10 shadow-[0_12px_32px_-16px_rgba(0,0,0,0.18)] md:p-6"}`}
     >
       <div className="md:col-span-2">
         <label className={label}>Nombre</label>
@@ -648,7 +1170,7 @@ function CronForm({
       </p>
 
       {editing ? (
-        <p className="md:col-span-2 rounded-lg border-2 border-dashed border-black p-3 text-xs text-gray-600">
+        <p className="md:col-span-2 rounded-xl bg-gray-100 p-3 text-xs text-gray-600">
           La acción no se edita desde el panel. Para cambiarla usa la API (<code className="font-mono">PATCH /api/v2/crons/{initial!.id}</code>{" "}
           con <code className="font-mono">action</code>) o la CLI: borra este cron y créalo de nuevo con{" "}
           <code className="font-mono">easybits crons create … --run …</code>.
@@ -657,17 +1179,30 @@ function CronForm({
         <>
           <div className="md:col-span-2">
             <label className={label}>Qué hace</label>
-            <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
-              <label className="flex items-center gap-2">
-                <input type="radio" checked={kind === "http"} onChange={() => setKind("http")} /> Pegarle a una URL
-              </label>
-              <label className="flex items-center gap-2">
-                <input type="radio" checked={kind === "agent_turn"} onChange={() => setKind("agent_turn")} disabled={!agents.length} />
-                Mandarle un mensaje a un agente{!agents.length && " (no tienes agentes)"}
-              </label>
-              <label className="flex items-center gap-2">
-                <input type="radio" checked={kind === "exec"} onChange={() => setKind("exec")} /> Ejecutar un comando
-              </label>
+            <div className="grid gap-2 sm:grid-cols-3">
+              {(
+                [
+                  ["http", "Pegarle a una URL", true],
+                  ["agent_turn", agents.length ? "Escribirle a un agente" : "Escribirle a un agente (no tienes)", agents.length > 0],
+                  ["exec", "Ejecutar un comando", true],
+                ] as const
+              ).map(([k, text, enabled]) => {
+                const Icon = KIND[k].icon;
+                return (
+                  <button
+                    key={k}
+                    type="button"
+                    disabled={!enabled}
+                    aria-pressed={kind === k}
+                    onClick={() => setKind(k)}
+                    className={`flex items-center gap-3 rounded-2xl p-3 text-left text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-40 ${
+                      kind === k ? "bg-brand-100 ring-2 ring-brand-500" : "bg-white ring-1 ring-gray-200 hover:ring-gray-300"
+                    }`}
+                  >
+                    <Icon className="shrink-0 text-2xl" /> {text}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
@@ -744,21 +1279,10 @@ function CronForm({
                   <input type="number" min={1} max={600} className={input} value={timeout} onChange={(e) => setTimeoutS(e.target.value)} />
                 </div>
               </div>
-              <div>
+              <div className="md:col-span-2">
                 <label className={label}>Secretos como variables</label>
                 {vault.length ? (
-                  <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs">
-                    {vault.map((n) => (
-                      <label key={n} className="flex items-center gap-1 font-mono">
-                        <input
-                          type="checkbox"
-                          checked={execSecrets.includes(n)}
-                          onChange={(e) => setExecSecrets((xs) => (e.target.checked ? [...xs, n] : xs.filter((x) => x !== n)))}
-                        />
-                        {n}
-                      </label>
-                    ))}
-                  </div>
+                  <SecretPicker names={vault} value={execSecrets} onChange={setExecSecrets} />
                 ) : (
                   <p className="text-xs text-gray-500">
                     Tu bóveda está vacía (<a className="underline" href="/dash/developer/secrets">Secretos</a>).
@@ -774,43 +1298,64 @@ function CronForm({
         </>
       )}
 
-      <div className="md:col-span-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
-        <span className={label}>Avisarme</span>
-        <label className="flex items-center gap-1.5">
-          <input type="checkbox" checked={notifyPush} onChange={(e) => setNotifyPush(e.target.checked)} /> push a la app de Ghosty
-        </label>
-        <label className="flex items-center gap-1.5">
-          <input type="checkbox" checked={notifyEmail} onChange={(e) => setNotifyEmail(e.target.checked)} /> correo
-        </label>
-        {inboxes.length > 0 && (
-          <label className="flex items-center gap-1.5">
-            buzón
-            <select className="border-2 border-gray-200 rounded px-1 py-0.5" value={notifyInbox} onChange={(e) => setNotifyInbox(e.target.value)}>
-              <option value="">—</option>
-              {inboxes.map((b) => (
-                <option key={b.id} value={b.id}>
-                  {b.name}
-                </option>
-              ))}
-            </select>
-          </label>
-        )}
-        {(notifyPush || notifyEmail || notifyInbox) && (
-          <label className="flex items-center gap-1.5">
-            <input type="checkbox" checked={notifyAlways} onChange={(e) => setNotifyAlways(e.target.checked)} /> también cuando sale bien
-          </label>
-        )}
-        {notifyPush && <span className="text-xs text-gray-500">Usa el secreto GHOSTY_PUSH_TOKEN de tu bóveda (token personal de la app).</span>}
-      </div>
+      <fieldset className="md:col-span-2">
+        <legend className="mb-2 flex items-center gap-1.5 text-xs font-bold text-gray-700">
+          <PiBellRingingBold className="text-base" /> Avisarme
+        </legend>
+        <ul className="divide-y divide-gray-100 overflow-hidden rounded-2xl bg-white ring-1 ring-black/10">
+          <SwitchRow
+            icon={PiDeviceMobileDuotone}
+            title="Push a la app de Ghosty"
+            hint="Usa el secreto GHOSTY_PUSH_TOKEN de tu bóveda (token personal de la app)."
+            checked={notifyPush}
+            onChange={setNotifyPush}
+          />
+          <SwitchRow icon={PiEnvelopeSimpleDuotone} title="Correo" hint="Al correo de tu cuenta." checked={notifyEmail} onChange={setNotifyEmail} />
+          {inboxes.length > 0 && (
+            <li className="flex items-center gap-3 px-4 py-3">
+              <PiTrayDuotone className="shrink-0 text-xl text-brand-500" />
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold">Buzón</p>
+                <p className="text-xs text-gray-500">Deja cada resultado en uno de tus buzones de eventos.</p>
+              </div>
+              <select
+                aria-label="Buzón"
+                className="rounded-xl border border-gray-300 px-2 py-1 text-sm"
+                value={notifyInbox}
+                onChange={(e) => setNotifyInbox(e.target.value)}
+              >
+                <option value="">Ninguno</option>
+                {inboxes.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name}
+                  </option>
+                ))}
+              </select>
+            </li>
+          )}
+          <SwitchRow
+            icon={PiCheckCircleDuotone}
+            title="También cuando sale bien"
+            hint={notifyPush || notifyEmail || notifyInbox ? "Apagado, sólo te avisa cuando falla." : "Elige primero dónde avisarte."}
+            checked={notifyAlways}
+            onChange={setNotifyAlways}
+            disabled={!(notifyPush || notifyEmail || notifyInbox)}
+          />
+        </ul>
+      </fieldset>
 
-      {error && <p className="md:col-span-2 text-sm font-bold text-red-600">{error}</p>}
+      {error && <p className="md:col-span-2 text-sm font-bold text-brand-red">{error}</p>}
       <div className="md:col-span-2 flex justify-end gap-2">
-        <BrutalButton type="button" mode="ghost" onClick={onCancel}>
+        <button type="button" onClick={onCancel} className="h-10 rounded-full px-4 text-sm font-semibold text-gray-600 hover:bg-gray-100">
           Cancelar
-        </BrutalButton>
-        <BrutalButton type="submit" mode="brand" isDisabled={saving}>
+        </button>
+        <button
+          type="submit"
+          disabled={saving}
+          className="h-10 rounded-full bg-black px-5 text-sm font-semibold text-white transition-transform hover:scale-[1.03] disabled:opacity-50"
+        >
           {saving ? "Guardando…" : editing ? "Guardar cambios" : "Crear cron"}
-        </BrutalButton>
+        </button>
       </div>
     </form>
   );

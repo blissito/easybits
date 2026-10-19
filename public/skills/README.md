@@ -14,6 +14,7 @@ npx skills add blissito/easybits-skills        # same skills, from this repo
 |---|---|
 | `easybits` | do work on EasyBits from a coding agent (REST, SDK or MCP) |
 | `easybits-cli` | drive EasyBits from a shell with the `easybits` CLI (`--json`, exit codes) |
+| `easybits-crons` | schedule URL calls, agent messages or commands with secrets, and prove each with a green run |
 | `easybits-sandbox` | create and drive a Firecracker microVM |
 | `easybits-agent` | create a persistent agent and talk to it (HTTP/ACP) |
 | `easybits-mcp` | connect the MCP server to an editor or Claude.ai |

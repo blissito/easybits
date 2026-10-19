@@ -43,8 +43,9 @@ describe("OpenAPI ↔ servidor", () => {
   });
 
   it("toda ruta /api/v2 con loader/action está en el spec (o excluida a propósito)", () => {
-    // Superficie interna o no pública: admin, callbacks de proveedores, plumbing de la flota.
-    const EXCLUDE = [/^\/api\/v2\/admin\//, /webhook/, /callback/, /^\/api\/v2\/fleet-/, /internal/, /\/stream$/, /^\/api\/v2\/oauth/];
+    // Superficie interna o no pública: admin, callbacks de proveedores, plumbing de la flota,
+    // y los copilotos del panel (sólo sesión, nunca llaves: no es API).
+    const EXCLUDE = [/^\/api\/v2\/admin\//, /^\/api\/v2\/copilot\//, /webhook/, /callback/, /^\/api\/v2\/fleet-/, /internal/, /\/stream$/, /^\/api\/v2\/oauth/];
     const v2Start = routesSrc.indexOf('prefix("api/v2"');
     const v1Start = routesSrc.indexOf('prefix("api/v1"');
     const re = /route\(\s*"([^"]+)",\s*"([^"]+)"/g;

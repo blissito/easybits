@@ -635,6 +635,8 @@ curl -X POST https://www.easybits.cloud/api/v2/crons -H "Authorization: Bearer $
 
 MCP: \`list_my_crons\` (with \`id\`: \`limit\` up to 50 runs and \`logs:true\`; crons are named by id), \`create_cron\` (with \`at\`/\`in\`/\`until\`/\`times\`/\`dryRun\`, \`exec\` and \`secretValues\`), \`update_cron\` (also \`notify\`), \`delete_cron\`, \`run_my_cron\`, \`wait_cron_run\` (\`core\` group). Dashboard: "Mis crons" section at \`/dash/developer/crons\`. For the result: with a server, the \`cron.run.*\` webhooks; from a terminal, \`notify.inbox\` (below) or \`crons wait\`.
 
+In the panel (\`/dash/developer/crons\`) there is **Bittor**, a fleet agent per account that uses these same tools: it builds the cron from what you ask in plain words and explains why one failed. It never changes anything on its own: every create, change, delete or run comes up as a card that you approve with your session. To create them from a coding agent, use the \`easybits-crons\` skill.
+
 ### Event inboxes (your own webhook that reaches your terminal)
 An inbox is an EasyBits webhook URL: anyone writes to it with \`POST\` (your cron, Stripe, GitHub, a form) and what arrives **reaches you live** if you are listening or **waits for you** if not. Made for an agent in a terminal, which has no public URL. 7-day retention by default (1-30), up to 1,000 events per inbox, body up to 256 KB; limit per plan Byte 3, Mega 20, Tera 100.
 

@@ -334,6 +334,7 @@ export default [
     route("admin/crons/:key/:action", "routes/api/v2/admin.crons.$key.$action.ts"),
     // Copiloto del panel de crons (sesión de superusuario) + aprobación humana de sus propuestas.
     route("admin/copilot/chat", "routes/api/v2/admin.copilot.chat.ts"),
+    route("copilot/crons/chat", "routes/api/v2/copilot.crons.chat.ts"),
     // Raw sandboxes (microVMs) — backs @easybits.cloud/sdk eb.sandboxes.*
     route("sandboxes", "routes/api/v2/sandboxes-collection.ts"),
     route("sandboxes/:id", "routes/api/v2/sandbox.ts"),
