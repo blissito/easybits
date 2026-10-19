@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { createAgUiTransport, definePlugin, Piloto, type ToolVerbs } from "ghostykit";
 import "ghostykit/styles.css";
+import { PiXBold } from "react-icons/pi";
 
 const CHAT_URL = "/api/v2/admin/copilot/chat";
 const MY_CRONS_CHAT_URL = "/api/v2/copilot/crons/chat";
@@ -148,9 +149,11 @@ export function CronsCopilot({ ask, job, onClearJob, onClose, escBlocked, onChan
         <button
           type="button"
           onClick={onClose}
-          className="ml-auto rounded-lg border-2 border-black px-2 py-0.5 text-sm font-bold hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#9870ED]"
+          aria-label="Cerrar"
+          title="Cerrar"
+          className="ml-auto grid size-8 place-items-center rounded-full text-lg text-gray-600 hover:bg-gray-100 hover:text-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#9870ED]"
         >
-          Cerrar
+          <PiXBold />
         </button>
       </header>
       <div className="min-h-0 flex-1">
