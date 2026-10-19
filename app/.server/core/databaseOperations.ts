@@ -81,9 +81,25 @@ export async function listDatabases(ctx: AuthContext) {
       description: true,
       createdAt: true,
       updatedAt: true,
+      siteId: true,
     },
   });
-  return { items: databases };
+  // La base de una web app se llama `site-<id>`: sin el nombre del sitio nadie (ni un agente)
+  // sabe de qué app es. Se adjunta {id, name, domain, machine}.
+  const siteIds = [...new Set(databases.map((d) => d.siteId).filter((x): x is string => !!x))];
+  const sites = siteIds.length
+    ? await db.site.findMany({
+        where: { id: { in: siteIds }, ownerId: ctx.user.id },
+        select: { id: true, name: true, domain: true, sandboxId: true },
+      })
+    : [];
+  const byId = new Map(sites.map((x) => [x.id, x]));
+  return {
+    items: databases.map(({ siteId, ...d }) => {
+      const site = siteId ? byId.get(siteId) : undefined;
+      return site ? { ...d, site: { id: site.id, name: site.name, domain: site.domain, machine: site.sandboxId } } : d;
+    }),
+  };
 }
 
 /**

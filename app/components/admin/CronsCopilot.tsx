@@ -26,7 +26,7 @@ const VERBS: ToolVerbs = {
 };
 // El servidor antepone al texto del turno lo que se ve en pantalla; en el historial no se muestra.
 const stripContext = (text: string) =>
-  text.replace(/^\[Contexto del panel — [^\]]*\]\n/, "").replace(/^\[Estado de los crons ahora[^\]]*\]\n(?:- .*\n)*/, "");
+  text.replace(/^\[Contexto del panel — [^\]]*\]\n/, "").replace(/^\[Estado de los crons ahora[^\]]*\]\n(?:- .*\n)*(?:\[Sus apps[^\]]*\]\n(?:- .*\n)*)?/, "");
 
 // Lo propio de este piloto, con nombre (ghostykit 0.7: los plugins son la forma de personalizar).
 // Los verbos sirven también para `mcp_easybits_<tool>`: ghostykit prueba cada sufijo del nombre.

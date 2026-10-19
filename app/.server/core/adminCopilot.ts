@@ -201,21 +201,33 @@ export async function myCronsBrief(ownerId: string): Promise<string> {
     select: { id: true, name: true, enabled: true, cron: true, at: true, timezone: true, lastRunAt: true, lastOk: true, nextRunAt: true },
     take: 50,
   });
-  if (!rows.length) return "- (no tiene crons todavía)";
+  // Sus apps con su base y su máquina: sin esto «la base de mi app X» no se puede resolver.
+  const sites = await db.site.findMany({
+    // Mongo: un campo ausente no matchea `null` (ni al revés): las dos formas.
+    where: { ownerId, kind: "webapp", OR: [{ deletedAt: null }, { deletedAt: { isSet: false } }] },
+    select: { id: true, name: true, domain: true, sandboxId: true },
+    take: 50,
+  });
+  const apps = sites.length
+    ? `\n[Sus apps — base de datos y máquina de cada una]\n${sites
+        .map((x) => `- «${x.name}»${x.domain ? ` (${x.domain})` : ""}: base site-${x.id}; máquina ${x.sandboxId ?? "—"}`)
+        .join("\n")}`
+    : "";
+  if (!rows.length) return `- (no tiene crons todavía)${apps}`;
   return rows
     .map((c) => {
       const when = c.at ? `una vez ${c.at.toISOString()}` : `${c.cron} (${c.timezone})`;
       const last = c.lastRunAt ? `última ${c.lastRunAt.toISOString()} (${c.lastOk === false ? "falló" : "ok"})` : "sin ejecuciones";
       return `- ${c.id} «${c.name}»: ${c.enabled ? "activo" : "pausado/terminado"}; ${when}; ${last}`;
     })
-    .join("\n");
+    .join("\n") + apps;
 }
 
 /** El texto del usuario como lo escribió (sin el contexto que le antepone `copilotTurnText`). */
 export const stripCopilotContext = (text: string) =>
   text
     .replace(/^\[Contexto del panel — [^\]]*\]\n/, "")
-    .replace(/^\[Estado de los crons ahora[^\]]*\]\n(?:- .*\n)*/, "");
+    .replace(/^\[Estado de los crons ahora[^\]]*\]\n(?:- .*\n)*(?:\[Sus apps[^\]]*\]\n(?:- .*\n)*)?/, "");
 
 /** Evento `permission` (forma de ACP/Ghosty) para la tarjeta de aprobación. */
 export function permissionEvent(a: PendingActionView): TurnEvent {
