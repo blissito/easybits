@@ -4,15 +4,23 @@ import { join } from "node:path";
 import { sentryOptions } from "~/.server/sentry";
 
 describe("sentryOptions", () => {
-  // v11 cambió sendDefaultPii por dataCollection: sin este bloque userInfo, cookies
-  // y headers se mandan a Sentry. Preservamos el default de v10.
-  it("no recolecta PII por default: userInfo, cookies y headers sensibles quedan fuera", () => {
+  // v11 cambió sendDefaultPii por dataCollection y su default es más permisivo:
+  // sin fijar cada categoría se mandan userInfo, cookies, bodies, queries de DB
+  // y prompts de IA. Este bloque es el de la guía de migración para conservar v10.
+  it("conserva el default de v10 en todas las categorías de dataCollection", () => {
     const { dataCollection } = sentryOptions("https://public@o0.ingest.sentry.io/0");
+    const scrubbed = { deny: ["forwarded", "-ip", "remote-", "via", "-user"] };
 
     expect(dataCollection).toEqual({
       userInfo: false,
       cookies: false,
-      httpHeaders: { deny: ["forwarded", "-ip", "remote-", "via", "-user"] },
+      httpHeaders: { request: scrubbed, response: scrubbed },
+      httpBodies: [],
+      urlQueryParams: scrubbed,
+      genAI: { inputs: false, outputs: false },
+      databaseQueryData: false,
+      queues: false,
+      graphQL: { document: false, variables: false },
     });
   });
 });

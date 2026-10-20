@@ -8,9 +8,11 @@ try {
   Sentry = { init: () => {}, captureException: () => {} };
 }
 
-// v11 reemplazó sendDefaultPii por dataCollection: sin este bloque userInfo,
-// cookies y headers se mandan a Sentry. Esto preserva el default de v10.
+// v11 reemplazó sendDefaultPii por dataCollection y su default es más permisivo.
+// Fijamos cada categoría al default de v10 (guía de migración de Sentry, "If you
+// want to keep the v10 default behavior"). No dejar dataCollection sin definir.
 export function sentryOptions(dsn: string) {
+  const scrubbed = { deny: ["forwarded", "-ip", "remote-", "via", "-user"] };
   return {
     dsn,
     environment: process.env.NODE_ENV || "development",
@@ -18,7 +20,13 @@ export function sentryOptions(dsn: string) {
     dataCollection: {
       userInfo: false,
       cookies: false,
-      httpHeaders: { deny: ["forwarded", "-ip", "remote-", "via", "-user"] },
+      httpHeaders: { request: scrubbed, response: scrubbed },
+      httpBodies: [],
+      urlQueryParams: scrubbed,
+      genAI: { inputs: false, outputs: false },
+      databaseQueryData: false,
+      queues: false,
+      graphQL: { document: false, variables: false },
     },
   };
 }
