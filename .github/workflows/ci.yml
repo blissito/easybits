@@ -1,0 +1,88 @@
+# CI de easybits. Bloquean: `verify`, `cli`, `security` y `docker` (en PR).
+# Lo que NO bloquea lleva `continue-on-error` y su motivo aquí mismo; ver docs/agents/ci.md.
+name: ci
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+jobs:
+  verify:
+    name: verify (app)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx prisma generate
+      # Los ./+types/* de React Router se generan; sin esto typecheck falla en limpio.
+      - run: npx react-router typegen
+      - run: npm run typecheck
+      # `npm test` es vitest en modo watch: en CI va la pasada única.
+      - run: npm run test:run
+        env:
+          CI: "true"
+      # NO bloquea: eslint no está en devDependencies y el script sale 127 en main.
+      - run: npm run lint
+        continue-on-error: true
+      # NO bloquea: en la caja de pruebas (3.9 GB de RAM) el build no terminó con 2 GB ni con 3 GB de heap. Con 4 GB no se probó.
+      - run: npm run build
+        continue-on-error: true
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
+  cli:
+    name: cli (tests y typecheck)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: cli
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      # El CLI pide node >=22 (cli/package.json). No copiar el 20 de publish-packages.yml.
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: cli/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run typecheck
+  security:
+    if: github.event_name == 'pull_request'
+    # Siempre en GitHub: gitleaks-action asume /home/runner y en la caja truena (13-oct).
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/dependency-review-action@2031cfc080254a8a887f58cffee85186f0e49e48 # v4
+        with:
+          fail-on-severity: high
+  docker:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      # Sólo comprueba que la imagen se construye; nunca la sube.
+      - run: docker build -t ci-check .
