@@ -10,7 +10,7 @@ Las reglas detalladas del proyecto viven en `CLAUDE.md`: léelo también.
 - `npm run dev` — levantar en local
 - `npm run typecheck` — tipos (bloquea el CI)
 - `npm run test:run` — pruebas en una pasada (bloquea el CI). `npm test` es watch: no lo uses en CI
-- `npm run build` — build (no bloquea el CI). En una máquina de 4 GB no termina: el heap se queda corto (probado con 2 GB y 3 GB)
+- `npm run build` — build (no bloquea el CI). Con 2 GB y 3 GB de heap no terminó en la caja de pruebas (3.9 GB de RAM); en CI corre con 4 GB y, si falla, deja un aviso en el log
 - `npm run lint` — hoy no corre: `eslint` no está en `devDependencies` (no bloquea el CI)
 - CLI: `cd cli && npm ci && npm test && npm run typecheck` (bloquea el CI, job `cli`)
 

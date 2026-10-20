@@ -33,13 +33,22 @@ jobs:
         env:
           CI: "true"
       # NO bloquea: eslint no está en devDependencies y el script sale 127 en main.
-      - run: npm run lint
+      - id: lint
+        run: npm run lint
         continue-on-error: true
-      # NO bloquea: en la caja de pruebas (3.9 GB de RAM) el build no terminó con 2 GB ni con 3 GB de heap. Con 4 GB no se probó.
-      - run: npm run build
+      - name: Aviso si lint falló
+        if: steps.lint.outcome == 'failure'
+        run: echo "::warning::npm run lint falló (no bloquea). Ver el paso lint."
+      # NO bloquea: en la caja de pruebas (3.9 GB de RAM) el build no terminó con 2 GB ni con 3 GB de heap. En CI corre con 4 GB.
+      # Como el paso no bloquea, el job sale verde aunque falle: por eso el aviso de abajo.
+      - id: build
+        run: npm run build
         continue-on-error: true
         env:
           NODE_OPTIONS: --max-old-space-size=4096
+      - name: Aviso si el build falló
+        if: steps.build.outcome == 'failure'
+        run: echo "::warning::npm run build falló (no bloquea). Ver el paso build."
   cli:
     name: cli (tests y typecheck)
     runs-on: ubuntu-latest
@@ -73,7 +82,11 @@ jobs:
       - uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # NO bloquea: el repo no tiene el grafo de dependencias activo y la acción sale en rojo
+      # («Dependency review is not supported on this repository»). Activarlo en Settings → Code security → Dependency graph
+      # y luego quitar continue-on-error. gitleaks sí bloquea.
       - uses: actions/dependency-review-action@2031cfc080254a8a887f58cffee85186f0e49e48 # v4
+        continue-on-error: true
         with:
           fail-on-severity: high
   docker:
