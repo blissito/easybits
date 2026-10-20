@@ -92,7 +92,7 @@
     "cron-parser": "^5.4.0",
     "cross-env": "^7.0.3",
     "docx": "^9.5.1",
-    "entities": "^7.0.1",
+    "entities": "^8.1.0",
     "express": "^4.22.1",
     "fast-xml-parser": "^5.5.6",
     "fixtergeek-mcp-server": "^0.0.8",
