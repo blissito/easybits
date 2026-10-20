@@ -37,7 +37,7 @@ RUN curl -fsSL --retry 3 --retry-delay 2 -o /tmp/mupdf.tgz \
 # de ~540 MB que se subía a GHCR, la caja la volvía a bajar (~36 s) y se re-copiaba
 # (~21 s) aunque ninguna dependencia hubiera cambiado. Mismos pasos que el builder
 # (npm ci con su postinstall de patch-package → prisma generate → prune).
-FROM node:20-slim AS prod-deps
+FROM node:20.19-slim AS prod-deps
 WORKDIR /app
 COPY package.json package-lock.json .npmrc ./
 COPY patches ./patches
@@ -46,7 +46,7 @@ COPY prisma ./prisma
 RUN npx prisma generate && npm prune --omit=dev
 
 # Build stage
-FROM node:20-slim AS builder
+FROM node:20.19-slim AS builder
 WORKDIR /app
 
 # 1. Copy only dependency files first (cached layer). `patches/` DEBE llegar antes
@@ -74,7 +74,7 @@ ENV NODE_OPTIONS="--max-old-space-size=4096"
 RUN --mount=type=cache,target=/app/node_modules/.vite npm run build
 
 # Production stage
-FROM node:20-slim AS runner
+FROM node:20.19-slim AS runner
 WORKDIR /app
 
 # Install Chromium for document screenshots (playwright-core) and

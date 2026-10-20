@@ -39,6 +39,7 @@ Fichas cortas en `docs/agents/`: decisiones, trampas y glosario que el código n
 Léelas antes de tocar su tema; si tu cambio fija una convención o descubres una trampa, escribe o
 pon al día la ficha en el mismo PR y agrega aquí su renglón.
 - [CI](docs/agents/ci.md) — qué corre cada job, cuáles bloquean y cómo reactivar lo que no bloquea
+- [Sentry](docs/agents/sentry.md) — opciones de privacidad (dataCollection), Node mínimo y la trampa de los tests
 
 ## Pull requests
 - Rama nueva desde `main`; el PR explica qué cambia y cómo se probó.
