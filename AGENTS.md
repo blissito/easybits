@@ -39,6 +39,7 @@ Fichas cortas en `docs/agents/`: decisiones, trampas y glosario que el código n
 Léelas antes de tocar su tema; si tu cambio fija una convención o descubres una trampa, escribe o
 pon al día la ficha en el mismo PR y agrega aquí su renglón.
 - [CI](docs/agents/ci.md) — qué corre cada job, cuáles bloquean y cómo reactivar lo que no bloquea
+- [Dependencias](docs/agents/dependencias.md) — peers con legacy-peer-deps, tipos de sharp 0.35 y la familia react-router
 - [Sentry](docs/agents/sentry.md) — opciones de privacidad (dataCollection), Node mínimo y la trampa de los tests
 
 ## Pull requests
