@@ -15,7 +15,10 @@ const TOP_PCT = 0.12;
 const BOTTOM_PCT = 0.18;
 const SIDE_PCT = 0.04;
 
-async function pad(file: string, bg: sharp.Color) {
+// Forma del color de fondo: sharp 0.35 ya no expone sharp.Color como namespace.
+type Color = { r: number; g: number; b: number; alpha: number };
+
+async function pad(file: string, bg: Color) {
   const path = join(BRAND_DIR, file);
   const img = sharp(path);
   const meta = await img.metadata();
