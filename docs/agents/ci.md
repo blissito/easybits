@@ -21,4 +21,5 @@ Qué corre en cada job y si bloquea el PR. Lo que no bloquea sale en el CI igual
 ## Trampas
 - `npm test` en la raíz es vitest en **watch**: en CI va `npm run test:run`.
 - El CLI usa Node 22 (`engines.node >=22`). No copiar el 20 de `publish-packages.yml`.
+- `Publish CLI` (`publish-packages.yml`) tiene su propio `setup-node` 22; el 20 del job sirve a SDK, MCP y eve-sandbox.
 - `gitleaks-action` va siempre en GitHub, no en la caja de trabajo: asume `/home/runner`.
