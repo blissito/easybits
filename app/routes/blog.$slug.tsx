@@ -55,7 +55,7 @@ async function measureFeaturedImage(
       const sharp = (await import("sharp")).default;
       const m = await sharp(path.join(process.cwd(), base, img)).metadata();
       if (m.width && m.height && m.format) {
-        meta = { width: m.width, height: m.height, type: `image/${m.format === "jpg" ? "jpeg" : m.format}` };
+        meta = { width: m.width, height: m.height, type: `image/${m.format}` };
         break;
       }
     } catch {
