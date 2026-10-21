@@ -7,6 +7,9 @@ updates:
       interval: weekly
     open-pull-requests-limit: 5
     groups:
+      # La familia de Sentry sube junta: un major de @sentry/node pide revisar sus hermanos.
+      sentry:
+        patterns: ["@sentry/*"]
       minor-and-patch:
         update-types: [minor, patch]
   - package-ecosystem: npm
