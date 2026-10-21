@@ -22,4 +22,5 @@ Qué corre en cada job y si bloquea el PR. Lo que no bloquea sale en el CI igual
 - `npm test` en la raíz es vitest en **watch**: en CI va `npm run test:run`.
 - El CLI usa Node 22 (`engines.node >=22`). No copiar el 20 de `publish-packages.yml`.
 - `Publish CLI` (`publish-packages.yml`) tiene su propio `setup-node` 22; el 20 del job sirve a SDK, MCP y eve-sandbox.
+- La app compila en ~11 s (`npm run build`, medido en caja de 4 GB con `NODE_OPTIONS=--max-old-space-size=3072`). La preview puede tardar en arrancar por la cola de cajas: esa espera no es de build.
 - `gitleaks-action` va siempre en GitHub, no en la caja de trabajo: asume `/home/runner`.
