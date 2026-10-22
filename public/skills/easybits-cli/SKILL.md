@@ -391,13 +391,10 @@ easybits db rename leads prospects --dry-run --json   # {from,to,references:[{ag
 easybits db rename leads prospects --json             # {rewritten:[agentId], failed:[{agentId,error}]}
 easybits db rm leads --dry-run --json                 # {tables:[{name,rows}]}: what would be lost
 easybits db rm leads --json --yes
-easybits db attach clave --json                       # register the db a machine opens at /v1/db/clave/
+easybits db attach clave --json   # register the db a machine opens at DATABASE_URL …/v1/db/clave/
 ```
 
-`db attach` creates nothing: it adds to the account the database one of its machines already uses
-(the `<name>` in `DATABASE_URL=http://172.20.0.1:8090/v1/db/<name>/`; 404 `not_found` if no machine
-has opened it). It is free of the plan's db limit, and `db rm` on it only unlists it (`detached: true`);
-the app's data stays.
+`db attach` creates nothing (404 if no machine opened it); `db rm` on it only unlists it (`detached`).
 
 `query` and `tables` resolve id or name and never create a database from a typo.
 
