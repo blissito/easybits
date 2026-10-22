@@ -1586,6 +1586,20 @@ await sbx.git.push({ dir: "/data/work", setUpstream: true, token: "$secret:GITHU
 const st = await sbx.git.status("/data/work");   // { branch, ahead, behind, clean, ... }
 \`\`\`
 
+### Codex con tu plan de ChatGPT (Plus/Pro) en tu caja
+Si usas Codex CLI, puedes correrlo **en tu caja con tu propio plan de ChatGPT**, sin \`OPENAI_API_KEY\` ni tokens aparte: es el caso «máquina remota / sin navegador» que OpenAI documenta para Codex. El inicio de sesión lo haces **tú, con tu cuenta**: EasyBits sólo pone la máquina y nunca ve ni guarda tu sesión. (Para los agentes de la Flota, el motor \`codex\` sigue pidiendo \`OPENAI_API_KEY\`.)
+
+\`\`\`bash
+easybits sb create --template node                       # → sb_…
+easybits sb exec sb_… -- npm i -g @openai/codex
+easybits sb bg start sb_… -- codex login --device-auth   # → bg_…
+easybits sb bg status sb_… bg_…                          # muestra el link y un código de 15 min
+\`\`\`
+1. Abre \`https://auth.openai.com/codex/device\` en tu navegador, entra con tu cuenta de ChatGPT y escribe el código que mostró \`bg status\`. Si te dice que no está permitido, activa **inicio de sesión con código de dispositivo** en la configuración de seguridad de ChatGPT (en un workspace, lo activa el admin).
+2. Confirma: \`easybits sb exec sb_… -- codex login status\`. Desde ahí, \`codex exec "…"\` en la caja usa tu plan, y Codex renueva la sesión solo.
+
+La sesión vive en \`~/.codex/auth.json\` de esa caja: **trátala como una contraseña** (no la copies a un repo ni la compartas). Sobrevive a dormir y reanudar la caja, pero no a destruirla: una caja nueva vive 30 min por default, así que para trabajar más créala con \`--ttl\` o usa una máquina permanente (*Hosting*). ¿No puedes usar el código de dispositivo? Haz \`codex login\` en tu compu y súbelo: \`easybits sb files mkdir sb_… /root/.codex\` y \`easybits sb files write sb_… /root/.codex/auth.json ~/.codex/auth.json\`.
+
 ### Kernel persistente (code-interpreter)
 MCP: \`sandbox_run_cell({ sandboxId, code })\` — estado sobrevive entre celdas. Gráficas matplotlib se devuelven como imágenes.
 MCP: \`sandbox_kernel_restart({ sandboxId })\` — reiniciar kernel.

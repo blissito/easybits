@@ -5,7 +5,7 @@ license: MIT
 compatibility: Needs curl or any HTTP client, network access to https://www.easybits.cloud and an EasyBits API key
 metadata:
   author: easybits
-  version: "1.2"
+  version: "1.3"
 ---
 
 # Drive an EasyBits sandbox
@@ -80,6 +80,14 @@ the platform, not by you):
 | `codex-worker` | internal | Fleet worker (Codex). Created by the platform. |
 | `gemini-worker` | internal | Fleet worker (Gemini). Created by the platform. |
 <!-- /generated -->
+
+## Codex on the user's ChatGPT plan
+To run Codex CLI in a box on the user's own ChatGPT Plus/Pro plan (no `OPENAI_API_KEY`): install it
+(`npm i -g @openai/codex`), start `codex login --device-auth` as a **background** process and read its output
+(`bg status`) to show the user the link (`https://auth.openai.com/codex/device`) and the 15-minute code.
+The USER signs in with their own account; never ask for their ChatGPT password or handle the code yourself.
+Check with `codex login status`. The session is `~/.codex/auth.json` in that box: treat it as a password.
+Full steps: the "Codex con tu plan de ChatGPT" section of the docs.
 
 ## Rules
 

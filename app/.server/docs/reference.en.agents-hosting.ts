@@ -230,6 +230,20 @@ await sbx.git.push({ dir: "/data/work", setUpstream: true, token: "$secret:GITHU
 const st = await sbx.git.status("/data/work");   // { branch, ahead, behind, clean, ... }
 \`\`\`
 
+### Codex on your ChatGPT plan (Plus/Pro) in your box
+If you use Codex CLI, you can run it **in your box on your own ChatGPT plan**, with no \`OPENAI_API_KEY\` or separate tokens: it is the "remote / headless machine" case OpenAI documents for Codex. **You** sign in, **with your account**: EasyBits only provides the machine and never sees or stores your session. (For Fleet agents, the \`codex\` engine still asks for \`OPENAI_API_KEY\`.)
+
+\`\`\`bash
+easybits sb create --template node                       # → sb_…
+easybits sb exec sb_… -- npm i -g @openai/codex
+easybits sb bg start sb_… -- codex login --device-auth   # → bg_…
+easybits sb bg status sb_… bg_…                          # shows the link and a 15-minute code
+\`\`\`
+1. Open \`https://auth.openai.com/codex/device\` in your browser, sign in with your ChatGPT account and enter the code \`bg status\` showed. If it says it is not allowed, turn on **device code sign-in** in your ChatGPT security settings (in a workspace, the admin turns it on).
+2. Check it: \`easybits sb exec sb_… -- codex login status\`. From then on, \`codex exec "…"\` in the box uses your plan, and Codex refreshes the session on its own.
+
+The session lives in that box's \`~/.codex/auth.json\`: **treat it like a password** (don't commit it or share it). It survives the box sleeping and resuming, but not being destroyed: a new box lives 30 min by default, so for longer work create it with \`--ttl\` or use a permanent machine (*Hosting*). Can't use the device code? Run \`codex login\` on your computer and upload it: \`easybits sb files mkdir sb_… /root/.codex\` and \`easybits sb files write sb_… /root/.codex/auth.json ~/.codex/auth.json\`.
+
 ### Persistent kernel (code-interpreter)
 MCP: \`sandbox_run_cell({ sandboxId, code })\` — state survives between cells. Matplotlib charts come back as images.
 MCP: \`sandbox_kernel_restart({ sandboxId })\` — restart the kernel.
