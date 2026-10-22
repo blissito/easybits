@@ -34,6 +34,8 @@ export const WEBHOOK_EVENTS = [
   "web.extract.failed",
   "web.crawl.completed",
   "web.crawl.failed",
+  "web.page.changed",
+  "web.monitor.paused",
 ] as const;
 
 export type WebhookEvent = (typeof WEBHOOK_EVENTS)[number];
@@ -74,6 +76,10 @@ export const WEBHOOK_EVENT_DOCS: Record<WebhookEvent, string> = {
     "a large `web_crawl` (maxPages > 20) finished — `{ jobId, startUrl, total, failed, url }`; GET `url` (or `web_crawl_status`) " +
     "for the pages, already charged as they were read",
   "web.crawl.failed": "a large `web_crawl` stopped early (e.g. out of web queries) — same payload with `error`; pages read so far are kept",
+  "web.page.changed":
+    "a page you monitor (`web_monitor_create`) changed — `{ monitorId, url, changedAt, added[], removed[], totalAdded, totalRemoved }` " +
+    "(lines of its main content, up to 40 each)",
+  "web.monitor.paused": "a monitor stopped because you ran out of web queries — `{ monitorId, url, error }`",
 };
 
 const MAX_FAIL_COUNT = 5;

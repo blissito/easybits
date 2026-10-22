@@ -165,6 +165,10 @@ Body: `{ url, maxPages?, country? }`. Up to 20 pages answers right away; 21-2000
 (`202 { jobId }`, ~24 pages/min, charged per page read). Poll `GET /web/crawl/{jobId}?cursor=N` for status
 and pages in blocks, or subscribe a webhook to `web.crawl.completed`.
 
+### POST /web/monitor · GET /web/monitor · DELETE /web/monitor/{id}
+Body: `{ url, everyMinutes? }` (15-10080, default 60). Checks the page's main content on that cadence and fires the
+`web.page.changed` webhook with added/removed lines when it changes. 1 query per check.
+
 ### POST /web/map
 Body: `{ url, search?, limit? }` → `{ urls, total, source, truncated }`. Every URL of a site from its
 sitemap, without reading them. Map first, then fetch only the pages you need.

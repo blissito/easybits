@@ -8,6 +8,7 @@
  *   GET  /api/v2/web/extract/:jobId
  *   POST /api/v2/web/crawl    { url, maxPages?, country? }   maxPages > 20 → 202 { jobId } (segundo plano)
  *   GET  /api/v2/web/crawl/:jobId?cursor=N                   estado + un bloque de páginas
+ *   POST /api/v2/web/monitor  { url, everyMinutes? }  · GET /api/v2/web/monitor · DELETE /api/v2/web/monitor/:id
  *   POST /api/v2/web/map      { url, search?, limit? }   → todas las URLs del sitio, sin leerlas
  *
  * Se mide en consultas (`User.webQueriesBonus`); sin saldo → 402.
@@ -60,10 +61,15 @@ function mapError(e: unknown): Response | null {
   return null;
 }
 
-// GET /api/v2/web/extract/:jobId · GET /api/v2/web/crawl/:jobId?cursor=N
+// GET /api/v2/web/extract/:jobId · GET /api/v2/web/crawl/:jobId?cursor=N · GET /api/v2/web/monitor
 export async function loader({ request, params }: Route.LoaderArgs) {
   const ctx = requireAuth(await authenticateRequest(request));
   const { op, jobId } = params;
+  if (op === "monitor" && !jobId) {
+    const { listMonitors } = await import("~/.server/core/webMonitors");
+    const items = await listMonitors(ctx.user.id);
+    return Response.json({ items, nextCursor: null, hasMore: false, total: items.length });
+  }
   if (op === "crawl" && jobId) {
     const { readCrawlJob } = await import("~/.server/core/webCrawlJobs");
     const cursor = Number(new URL(request.url).searchParams.get("cursor") ?? 0) || 0;
@@ -86,6 +92,30 @@ export async function loader({ request, params }: Route.LoaderArgs) {
 // POST /api/v2/web/:op
 export async function action({ request, params }: Route.ActionArgs) {
   const ctx = requireAuth(await authenticateRequest(request));
+
+  // Monitores: POST /web/monitor { url, everyMinutes? } · DELETE /web/monitor/:id
+  if (params.op === "monitor") {
+    const mon = await import("~/.server/core/webMonitors");
+    if (request.method === "DELETE" && params.jobId) {
+      requireScope(ctx, "DELETE");
+      const ok = await mon.deleteMonitor(ctx.user.id, params.jobId);
+      return ok ? Response.json({ deleted: true }) : Response.json({ error: "monitor not found" }, { status: 404 });
+    }
+    if (request.method !== "POST" || params.jobId) return Response.json({ error: "Method not allowed" }, { status: 405 });
+    requireScope(ctx, "WRITE");
+    const body = (await request.json().catch(() => ({}))) as { url?: string; everyMinutes?: number };
+    if (!body.url) return Response.json({ error: "url is required" }, { status: 400 });
+    const { checkWebQuota } = await import("~/.server/webQuota");
+    if ((await checkWebQuota(ctx.user.id)).available < 1) {
+      return Response.json({ error: "Sin consultas web", code: "QUOTA_EXCEEDED", buy: `${APP_URL}/dash/packs?tab=web` }, { status: 402 });
+    }
+    try {
+      return Response.json(await mon.createMonitor(ctx.user.id, { url: body.url, everyMinutes: body.everyMinutes }), { status: 201 });
+    } catch (e) {
+      return Response.json({ error: e instanceof Error ? e.message : String(e) }, { status: 400 });
+    }
+  }
+
   requireScope(ctx, "WRITE");
   if (request.method !== "POST") return Response.json({ error: "Method not allowed" }, { status: 405 });
   const serviceId = OPS[params.op ?? ""];

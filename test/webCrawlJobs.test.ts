@@ -20,7 +20,7 @@ vi.mock("../app/.server/storage", () => ({ getPlatformDefaultClient: () => store
 vi.mock("../app/.server/webQuota", () => quota);
 vi.mock("../app/.server/webhooks", () => ({ dispatchWebhooks }));
 
-import { advanceCrawlJob, readCrawlJob, type CrawlJobMeta } from "../app/.server/core/webCrawlJobs";
+import { advanceCrawlJob, createCrawlJob, readCrawlJob, type CrawlJobMeta } from "../app/.server/core/webCrawlJobs";
 
 const ME = "a".repeat(24);
 const JOB = "c".repeat(24);
@@ -162,5 +162,17 @@ describe("readCrawlJob", () => {
     db.webJob.findFirst.mockResolvedValue(null);
     expect(await readCrawlJob(ME, JOB)).toBeNull();
     expect(await readCrawlJob(ME, "nope")).toBeNull();
+  });
+});
+
+describe("createCrawlJob", () => {
+  it("normaliza las URLs del sitemap: la raíz con y sin «/» es UNA página (no se cobra dos veces)", async () => {
+    db.webJob.create.mockImplementation(async ({ data }: any) => ({ id: JOB, ...data }));
+    const job = await createCrawlJob(ME, {
+      startUrl: "https://ej.test/",
+      maxPages: 100,
+      seed: ["https://ej.test", "https://ej.test/blog/", "https://ej.test/blog", "https://ej.test/blog#top"],
+    });
+    expect((job.meta as CrawlJobMeta).queue).toEqual(["https://ej.test/", "https://ej.test/blog"]);
   });
 });

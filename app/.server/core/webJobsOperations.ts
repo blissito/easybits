@@ -93,8 +93,10 @@ export async function sweepWebJobs(now = new Date()) {
 
   const { sweepCrawlJobs } = await import("./webCrawlJobs");
   const crawl = await sweepCrawlJobs(now);
+  const { sweepMonitors } = await import("./webMonitors");
+  const monitors = await sweepMonitors(now);
 
-  return { checked: running.length, completed, failed, purged, crawl };
+  return { checked: running.length, completed, failed, purged, crawl, monitors };
 }
 
 /* ── Canario ─────────────────────────────────────────────────────────── */

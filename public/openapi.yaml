@@ -678,6 +678,45 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { description: Job no encontrado. }
 
+  /api/v2/web/monitor:
+    post:
+      tags: [Web]
+      operationId: webMonitorCreate
+      summary: Vigilar una página
+      description: "Cada everyMinutes revisa la página y dispara el webhook web.page.changed con las líneas agregadas/quitadas. 1 consulta por revisión."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url]
+              properties:
+                url: { type: string, format: uri }
+                everyMinutes: { type: integer, minimum: 15, maximum: 10080 }
+      responses:
+        "201": { description: "Monitor creado.", content: { application/json: { schema: { type: object, additionalProperties: true } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "402": { $ref: "#/components/responses/PaymentRequired" }
+    get:
+      tags: [Web]
+      operationId: webMonitorList
+      summary: Listar monitores
+      responses:
+        "200": { description: "{ items, total }", content: { application/json: { schema: { type: object, additionalProperties: true } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /api/v2/web/monitor/{monitorId}:
+    delete:
+      tags: [Web]
+      operationId: webMonitorDelete
+      summary: Dejar de vigilar una página
+      parameters:
+        - { name: monitorId, in: path, required: true, schema: { type: string } }
+      responses:
+        "200": { description: "{ deleted: true }" }
+        "404": { description: Monitor no encontrado. }
+
   /api/v2/web/map:
     post:
       tags: [Web]

@@ -1,7 +1,7 @@
 import { db } from "../db";
 import { dispatchWebhooks } from "../webhooks";
 import { checkWebQuota, chargeWebQueries } from "../webQuota";
-import { crawlOnePage, type CrawledPage } from "../services/providers/brightdata";
+import { canonicalUrl, crawlOnePage, type CrawledPage } from "../services/providers/brightdata";
 
 const APP_URL = process.env.APP_URL || "https://www.easybits.cloud";
 
@@ -36,9 +36,10 @@ export async function createCrawlJob(
   userId: string,
   opts: { startUrl: string; maxPages: number; country?: string; onlyMainContent?: boolean; seed: string[] },
 ) {
-  const queue = [...new Set([opts.startUrl, ...opts.seed])];
+  const start = canonicalUrl(opts.startUrl) ?? opts.startUrl;
+  const queue = [...new Set([start, ...opts.seed].map((u) => canonicalUrl(u)).filter((u): u is string => !!u))];
   const meta: CrawlJobMeta = {
-    startUrl: opts.startUrl,
+    startUrl: start,
     maxPages: Math.min(CRAWL_JOB_MAX_PAGES, opts.maxPages),
     country: opts.country,
     onlyMainContent: opts.onlyMainContent,

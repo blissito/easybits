@@ -724,20 +724,33 @@ const CRAWL_MAX_PAGES = 20;
 const CRAWL_MAX_TOTAL_BYTES = 2_000_000;
 const CRAWL_PAGE_MAX_LEN = 150_000;
 
+/**
+ * Una sola forma por página: sin `#`, la raíz con «/» y las demás rutas sin «/» final.
+ * Sin esto el sitemap («https://ej.com») y los links («https://ej.com/») contaban como dos
+ * páginas: se leían y se cobraban dos veces (medido en prod con fixtergeek.com, 22-oct).
+ */
+export function canonicalUrl(raw: string, base?: URL): string | null {
+  try {
+    const u = base ? new URL(raw, base) : new URL(raw);
+    u.hash = "";
+    if (u.pathname.length > 1 && u.pathname.endsWith("/")) u.pathname = u.pathname.replace(/\/+$/, "");
+    return u.toString();
+  } catch {
+    return null;
+  }
+}
+
 function sameHostLinks(markdown: string, base: URL): string[] {
   const out = new Set<string>();
   const re = /\]\((https?:\/\/[^)\s]+|\/[^)\s]*)\)/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(markdown))) {
-    try {
-      const u = new URL(m[1], base);
-      if (u.host !== base.host) continue;
-      if (/\.(png|jpe?g|gif|svg|webp|pdf|zip|mp4|mp3|css|js)$/i.test(u.pathname)) continue;
-      u.hash = "";
-      out.add(u.toString());
-    } catch {
-      /* link roto: ignorar */
-    }
+    const c = canonicalUrl(m[1], base);
+    if (!c) continue; // link roto
+    const u = new URL(c);
+    if (u.host !== base.host) continue;
+    if (/\.(png|jpe?g|gif|svg|webp|pdf|zip|mp4|mp3|css|js)$/i.test(u.pathname)) continue;
+    out.add(c);
   }
   return [...out];
 }

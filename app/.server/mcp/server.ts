@@ -6933,6 +6933,46 @@ function registerVideoTools(server: McpServer) {
   );
 
   server.tool(
+    "web_monitor_create",
+    "Vigila una página y avisa cuando CAMBIA: cada `everyMinutes` (15 a 10,080, default 60) lee su contenido principal y, si cambió, dispara el webhook `web.page.changed` con las líneas agregadas y quitadas. Cada revisión cuesta 1 consulta (cada hora ≈ 720 al mes). La primera revisión sólo guarda la línea base. Ignora contadores y «hace N minutos».\n\nUse for: precios o stock de un producto, una página de convocatorias o empleos, términos y condiciones, la página de la competencia. Para enterarte necesitas un webhook suscrito a `web.page.changed` (desde el panel o POST /api/v2/webhooks).",
+    {
+      url: z.string().url().describe("Página a vigilar (https://…)."),
+      everyMinutes: z.number().int().min(15).max(10080).optional().describe("Cada cuántos minutos revisar. Default 60."),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { checkWebQuota } = await import("../webQuota");
+      if ((await checkWebQuota(ctx.user.id)).available < 1) throw new Error("Sin consultas web: compra un pack en /dash/packs?tab=web");
+      const { createMonitor } = await import("../core/webMonitors");
+      return ok(await createMonitor(ctx.user.id, params));
+    }),
+  );
+
+  server.tool(
+    "web_monitor_list",
+    "Lista tus monitores de páginas: url, cada cuánto, revisiones, cambios detectados, última revisión y si está activo o pausado (sin consultas).",
+    {},
+    wrapHandler(async (_params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { listMonitors } = await import("../core/webMonitors");
+      const items = await listMonitors(ctx.user.id);
+      return ok(paginate(items, { total: items.length }));
+    }),
+  );
+
+  server.tool(
+    "web_monitor_delete",
+    "Deja de vigilar una página (borra el monitor).",
+    { monitorId: z.string().describe("monitorId de web_monitor_create / web_monitor_list.") },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { deleteMonitor } = await import("../core/webMonitors");
+      if (!(await deleteMonitor(ctx.user.id, params.monitorId))) throw new Error("monitor no encontrado");
+      return ok({ deleted: true, monitorId: params.monitorId });
+    }),
+  );
+
+  server.tool(
     "web_map",
     "Lista TODAS las URLs de un sitio sin leerlas, desde su sitemap (o, si no tiene, los links de su portada). Barato: 1 consulta por documento leído (normalmente 1-3, máx. 10).\n\nHow to use:\n- Required: `url` del sitio.\n- Optional: `search` para quedarte sólo con URLs que contengan ese texto ('/blog/', '/producto/'), `limit` (1-5000, default 1000).\n- Devuelve `urls[]`, `total`, `source` ('sitemap' | 'links') y `truncated` si había más que `limit`.\n\nUse for: ANTES de leer un sitio grande — encuentra las páginas que sirven y lee sólo ésas con `web_fetch`, en vez de rastrear a ciegas con `web_crawl`.",
     {

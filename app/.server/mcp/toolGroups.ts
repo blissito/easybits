@@ -261,7 +261,7 @@ export const DESIGN_ALLOWLIST = new Set<string>([
   "voice_tts_create",
   "list_voices",
   // Web
-  "web_search", "web_fetch", "web_extract", "web_extract_status", "web_crawl", "web_crawl_status", "web_map", "research_scrape", "research_search",
+  "web_search", "web_fetch", "web_extract", "web_extract_status", "web_crawl", "web_crawl_status", "web_map", "web_monitor_create", "web_monitor_list", "web_monitor_delete", "research_scrape", "research_search",
   // Image
   // "image_generate", // DESACTIVADA hasta nuevo aviso (fal.ai sin saldo)
   // Brand
@@ -319,7 +319,7 @@ export const CORE_ALLOWLIST = new Set<string>([
   "generate_captions", "get_caption_status",
   "voice_tts_create",
   "list_voices",
-  "web_search", "web_fetch", "web_extract", "web_extract_status", "web_crawl", "web_crawl_status", "web_map", "research_scrape", "research_search",
+  "web_search", "web_fetch", "web_extract", "web_extract_status", "web_crawl", "web_crawl_status", "web_map", "web_monitor_create", "web_monitor_list", "web_monitor_delete", "research_scrape", "research_search",
   // "image_generate", // DESACTIVADA hasta nuevo aviso (fal.ai sin saldo)
   "character_remember", "character_list", "character_delete",
   "get_default_brand_kit", "list_brand_kits", "extract_brand_kit_from_url",
@@ -696,7 +696,7 @@ export const CLAUDE_DIRECTORY_ALLOWLIST = new Set<string>([
   // Bases de datos
   "db_list", "db_get", "db_create", "db_select", "db_query",
   // Investigación web y ojos
-  "web_search", "web_fetch", "web_extract", "web_extract_status", "web_crawl", "web_crawl_status", "web_map",
+  "web_search", "web_fetch", "web_extract", "web_extract_status", "web_crawl", "web_crawl_status", "web_map", "web_monitor_create", "web_monitor_list", "web_monitor_delete",
   "research_search", "research_scrape", "search_stock_photo", "search_icon", "screenshot_url", "audit_page",
   // Cuenta
   "get_usage_stats",
@@ -777,7 +777,7 @@ export const DOCUMENTOS_ALLOWLIST = new Set<string>([
  * `investigacion` (bucket de la flota) es alias del mismo set.
  */
 export const WEB_ALLOWLIST = new Set<string>([
-  "web_search", "web_fetch", "web_extract", "web_extract_status", "web_crawl", "web_crawl_status", "web_map", "research_scrape", "research_search",
+  "web_search", "web_fetch", "web_extract", "web_extract_status", "web_crawl", "web_crawl_status", "web_map", "web_monitor_create", "web_monitor_list", "web_monitor_delete", "research_scrape", "research_search",
   "list_files", "upload_file",
 ]);
 export const INVESTIGACION_ALLOWLIST = WEB_ALLOWLIST;

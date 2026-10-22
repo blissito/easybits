@@ -188,6 +188,21 @@ export interface WebCrawlJobStatus {
   expired?: boolean;
 }
 
+export interface WebMonitor {
+  monitorId: string;
+  url: string;
+  everyMinutes: number;
+  /** "paused" = se quedó sin consultas web. */
+  status: "active" | "paused" | "stopped";
+  error?: string;
+  checks: number;
+  changes: number;
+  lastCheckedAt: string | null;
+  lastChangedAt: string | null;
+  nextCheckAt: string | null;
+  createdAt: string;
+}
+
 export interface WebMapParams {
   url: string;
   /** Sólo URLs que contengan este texto, p. ej. "/blog/". */
@@ -1701,6 +1716,22 @@ export class EasybitsClient {
       cursor = part.nextCursor;
     }
     return { jobId: started.jobId, status: st.status, pages, error: st.error };
+  }
+
+  /**
+   * Vigila una página cada `everyMinutes` (15-10080, default 60) y dispara el webhook
+   * `web.page.changed` con las líneas agregadas/quitadas cuando cambia. 1 consulta por revisión.
+   */
+  async webMonitorCreate(params: { url: string; everyMinutes?: number }): Promise<WebMonitor> {
+    return this.request<WebMonitor>("/web/monitor", { method: "POST", body: JSON.stringify(params) });
+  }
+
+  async webMonitorList(): Promise<{ items: WebMonitor[]; total: number }> {
+    return this.request<{ items: WebMonitor[]; total: number }>("/web/monitor");
+  }
+
+  async webMonitorDelete(monitorId: string): Promise<{ deleted: true }> {
+    return this.request<{ deleted: true }>(`/web/monitor/${encodeURIComponent(monitorId)}`, { method: "DELETE" });
   }
 
   /** Todas las URLs de un sitio desde su sitemap, sin leerlas. 1 consulta por documento leído (máx. 10). */

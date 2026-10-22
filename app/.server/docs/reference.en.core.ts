@@ -213,7 +213,7 @@ SDK: \`eb.searchFiles(query)\`
 `;
 export const EN_WEB = `## Web — Internet for your agents
 
-Search Google, read any page even if it blocks bots (residential IPs, JS resolved), extract schema-based records from known sites and crawl a whole site. Available through REST, SDK and MCP (toolset \`web\`: \`web_search\`, \`web_fetch\`, \`web_extract\`, \`web_extract_status\`, \`web_crawl\`, \`web_crawl_status\`, \`web_map\`).
+Search Google, read any page even if it blocks bots (residential IPs, JS resolved), extract schema-based records from known sites and crawl a whole site. Available through REST, SDK and MCP (toolset \`web\`: \`web_search\`, \`web_fetch\`, \`web_extract\`, \`web_extract_status\`, \`web_crawl\`, \`web_crawl_status\`, \`web_map\`, \`web_monitor_create\`, \`web_monitor_list\`, \`web_monitor_delete\`).
 
 **Metered in queries, not credits.** 1 query = 1 page read, 1 search, 1 record extracted — and in a crawl, each page it reads (max 20 per call). You get 50 on sign-up; Web packs ($99 MXN → 400, $999 MXN → 10,000) are at \`/dash/packs?tab=web\`, work on any plan and **never expire**. No balance → \`402\` with \`{ error, code, requiredCost, available, buy }\` (\`buy\` is the absolute URL to purchase: hand it to the user).
 
@@ -298,6 +298,11 @@ Body: \`{ url, search?, limit? }\`
 Returns: \`{ url, urls: [ … ], total, source: "sitemap"|"links", truncated }\`
 Every URL of a site from its sitemap (found in \`robots.txt\` or at \`/sitemap.xml\`, following sitemap indexes), **without reading the pages**. If the site has no sitemap, it uses the internal links of the home page. \`search\` filters by text (\`"/blog/"\`); \`limit\` 1-5000, default 1000. Charges 1 query per document read (usually 1-3, max 10). Use it before reading a large site: map, pick, and read only those pages with \`/web/fetch\`.
 SDK: \`eb.webMap({ url, search })\` · MCP: \`web_map({ url, search })\`
+
+### Monitor a page
+\`POST /web/monitor\` \`{ url, everyMinutes? }\` → \`201 { monitorId, url, everyMinutes, status: "active", … }\` · \`GET /web/monitor\` (list) · \`DELETE /web/monitor/:id\`
+Every \`everyMinutes\` (15 to 10,080, default 60) it reads the page's main content and, if it changed, fires the **\`web.page.changed\`** webhook \`{ monitorId, url, changedAt, added: [ … ], removed: [ … ], totalAdded, totalRemoved }\` (lines, up to 40 each side). The first check only stores the baseline. It ignores counters, bare dates and "N minutes ago". Each check costs 1 query (hourly ≈ 720 a month); if you run out, the monitor pauses and \`web.monitor.paused\` arrives. Up to 50 active per account.
+SDK: \`eb.webMonitorCreate({ url, everyMinutes })\` · \`webMonitorList()\` · \`webMonitorDelete(id)\` · MCP: \`web_monitor_create\` · \`web_monitor_list\` · \`web_monitor_delete\`
 
 ### Service status
 \`GET https://www.easybits.cloud/api/health/web\` (public, no key) → \`{ status: "operational"|"degraded"|"down"|"unknown", checkedAt, search, fetch, extract }\`. Every 15 min the platform searches, reads Amazon MX and extracts from Mercado Libre the way a customer would; also shown on \`/status\`.
