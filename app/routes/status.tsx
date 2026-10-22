@@ -17,6 +17,11 @@ interface HealthData {
   timestamp: string;
 }
 
+type WebHealth = {
+  status: "operational" | "degraded" | "down" | "unknown";
+  checkedAt: string | null;
+};
+
 function formatUptime(seconds: number): string {
   const days = Math.floor(seconds / 86400);
   const hours = Math.floor((seconds % 86400) / 3600);
@@ -86,6 +91,8 @@ export default function StatusPage() {
   const [health, setHealth] = useState<HealthData | null>(null);
   const [error, setError] = useState(false);
   const [lastCheck, setLastCheck] = useState<Date | null>(null);
+  // Canario del toolset web (cron `check-web`, cada 15 min): busca, lee y extrae de verdad.
+  const [web, setWeb] = useState<WebHealth | null>(null);
 
   const fetchHealth = async () => {
     try {
@@ -96,6 +103,10 @@ export default function StatusPage() {
     } catch {
       setError(true);
     }
+    fetch("/api/health/web")
+      .then((r) => r.json())
+      .then(setWeb)
+      .catch(() => setWeb(null));
     setLastCheck(new Date());
   };
 
@@ -105,7 +116,8 @@ export default function StatusPage() {
     return () => clearInterval(interval);
   }, []);
 
-  const isOk = health?.status === "ok" && !error;
+  const webStatus = web?.status ?? "checking";
+  const isOk = health?.status === "ok" && !error && webStatus !== "down" && webStatus !== "degraded";
 
   return (
     <section className="min-h-screen bg-white">
@@ -189,6 +201,11 @@ export default function StatusPage() {
             icon={<StorageIcon />}
             status={health ? "operational" : (error ? "unknown" : "checking")}
           />
+          <ServiceRow
+            name="Web (search · fetch · extract)"
+            icon={<GlobeIcon />}
+            status={webStatus}
+          />
         </div>
 
         {/* Details */}
@@ -201,7 +218,12 @@ export default function StatusPage() {
               <DetailRow icon={<ClockIcon />} label="Uptime" value={formatUptime(health.uptime)} />
               <DetailRow icon={<TagIcon />} label="Version" value={health.version} />
               <DetailRow icon={<RefreshIcon />} label="Last check" value={lastCheck?.toLocaleTimeString() ?? "—"} />
-              <DetailRow icon={<GlobeIcon />} label="Region" value="DFW (Dallas)" />
+              <DetailRow icon={<GlobeIcon />} label="Region" value="SBG (Strasbourg)" />
+              <DetailRow
+                icon={<RefreshIcon />}
+                label="Web probe"
+                value={web?.checkedAt ? new Date(web.checkedAt).toLocaleTimeString() : "—"}
+              />
             </div>
           </div>
         )}

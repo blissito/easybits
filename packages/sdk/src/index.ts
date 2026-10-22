@@ -87,7 +87,12 @@ export interface WebSearchResult {
   results: unknown;
 }
 export interface WebFetchParams {
-  url: string;
+  /** Página a leer. No hace falta con `fetchId`. */
+  url?: string;
+  /** De una respuesta con `truncated: true`: lee otro tramo de ESA página, gratis. */
+  fetchId?: string;
+  /** Carácter donde empieza el tramo (usa `nextOffset`). Default 0. */
+  offset?: number;
   country?: string;
   /** true → markdown limpio; default HTML crudo. */
   asMarkdown?: boolean;
@@ -98,7 +103,16 @@ export interface WebFetchResult {
   url: string;
   statusCode: number;
   format: "raw" | "markdown";
+  /** Hasta 200,000 caracteres a partir de `offset`. */
   body: string;
+  offset: number;
+  /** Caracteres de la página COMPLETA. */
+  length: number;
+  /** true = falta texto después de este tramo: pídelo con `{ fetchId, offset: nextOffset }` o usa `webFetchAll`. */
+  truncated: boolean;
+  nextOffset?: number;
+  /** Presente si la página no cupo en un tramo (la copia dura 24 h). */
+  fetchId?: string;
 }
 export interface WebExtractParams {
   /** google_maps | mercadolibre | amazon_product | instagram_profiles | linkedin_company | … */
@@ -129,9 +143,14 @@ export interface WebCrawlParams {
 }
 export interface WebCrawlResult {
   startUrl: string;
-  pages: { url: string; markdown: string }[];
+  /** `truncated` = la página pasaba de 150,000 caracteres; léela entera con `webFetchAll`. */
+  pages: { url: string; markdown: string; truncated: boolean }[];
   /** Links internos vistos y no visitados — pásalos a otra llamada para seguir. */
   pending: string[];
+  /** Por qué paró. */
+  stoppedBy: "maxPages" | "bytes" | "done";
+  /** Páginas que no se pudieron leer (no se cobran). */
+  failed: string[];
 }
 
 export interface ScreenshotParams {
@@ -1543,15 +1562,34 @@ export class EasybitsClient {
     return this.request<WebSearchResult>("/web/search", { method: "POST", body: JSON.stringify(params) });
   }
 
-  /** Lee una página aunque bloquee bots. Cuesta 1 consulta. */
+  /**
+   * Lee una página aunque bloquee bots. Cuesta 1 consulta. Si la página pasa de un tramo
+   * (200,000 caracteres) responde `truncated: true` + `fetchId`; los demás tramos son gratis.
+   */
   async webFetch(params: WebFetchParams): Promise<WebFetchResult> {
     return this.request<WebFetchResult>("/web/fetch", { method: "POST", body: JSON.stringify(params) });
+  }
+
+  /** Lee la página COMPLETA juntando todos sus tramos. Cuesta 1 consulta sin importar el tamaño. */
+  async webFetchAll(params: Omit<WebFetchParams, "fetchId" | "offset">): Promise<WebFetchResult> {
+    const first = await this.webFetch(params);
+    if (!first.truncated || !first.fetchId) return first;
+    const parts = [first.body];
+    let next = first.nextOffset;
+    while (next !== undefined) {
+      const part = await this.webFetch({ fetchId: first.fetchId, offset: next });
+      parts.push(part.body);
+      next = part.truncated ? part.nextOffset : undefined;
+    }
+    const body = parts.join("");
+    return { ...first, body, offset: 0, truncated: false, nextOffset: undefined };
   }
 
   /**
    * Extrae registros con esquema de una fuente conocida. Async: devuelve un job;
    * `mercadolibre` responde al instante con status "done". Cobra 1 consulta por
-   * registro al recogerlos (`webExtractStatus`), una sola vez.
+   * registro al recogerlos (`webExtractStatus`), una sola vez. En producción, en vez
+   * de hacer poll, suscribe un webhook a `web.extract.completed`.
    */
   async webExtract(params: WebExtractParams): Promise<WebExtractJob> {
     return this.request<WebExtractJob>("/web/extract", { method: "POST", body: JSON.stringify(params) });

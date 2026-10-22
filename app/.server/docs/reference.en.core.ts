@@ -234,10 +234,12 @@ curl -X POST https://www.easybits.cloud/api/v2/web/search \\
 
 ### Read a page
 \`POST /web/fetch\`
-Body: \`{ url, country?, asMarkdown?, onlyMainContent? }\`
-Returns: \`{ url, statusCode, format: "html"|"markdown", body }\`
-1 query. The body is truncated at 200 KB. \`asMarkdown: true\` returns markdown; \`onlyMainContent: true\` strips nav, footer, icons and "skip to content" — the usual choice when you are going to READ the page.
-SDK: \`eb.webFetch({ url, asMarkdown, onlyMainContent })\` · MCP: \`web_fetch({ url, asMarkdown })\`
+Body: \`{ url, country?, asMarkdown?, onlyMainContent? }\` — or \`{ fetchId, offset }\` for the next chunk
+Returns: \`{ url, statusCode, format: "raw"|"markdown", body, offset, length, truncated, nextOffset?, fetchId? }\`
+1 query. \`asMarkdown: true\` returns markdown; \`onlyMainContent: true\` strips nav, footer, icons and "skip to content" — the usual choice when you are going to READ the page.
+
+**Nothing is cut silently.** Each response carries up to 200,000 characters and states \`length\` (the whole page) and \`truncated\`. If \`truncated: true\`, ask for the next chunk with \`{ fetchId, offset: nextOffset }\`: it is **free** and comes from the same copy (the page is not requested again, so chunks are consistent with each other). The copy lasts 24 h; after that, \`404\` and you fetch again with \`url\`.
+SDK: \`eb.webFetch({ url, asMarkdown, onlyMainContent })\` · \`eb.webFetchAll({ url })\` (joins every chunk, 1 query) · MCP: \`web_fetch({ url, asMarkdown })\`
 
 \`\`\`bash
 curl -X POST https://www.easybits.cloud/api/v2/web/fetch \\
@@ -255,6 +257,8 @@ Body: \`{ source?, datasetId?, input, limit? }\`
 Returns: \`202 { jobId, status: "running", source }\`. \`mercadolibre\` responds instantly: \`200 { jobId, status: "done", records: [{ title, price, url, seller, … }], total }\`.
 Charges 1 query PER RECORD returned, once, when you collect them. Firing the job costs nothing; a failed job is not charged.
 SDK: \`eb.webExtract(...)\` / \`eb.webExtractAndWait(...)\` (polls every 15 s) · MCP: \`web_extract({ source, input, limit })\`
+
+**No polling (production):** subscribe a webhook to \`web.extract.completed\` (\`POST /webhooks\`). When the job finishes you get \`{ jobId, source, total, url }\` signed with HMAC; \`GET url\` to collect the records (that is when it charges). If the provider fails or the job runs past 2 h you get \`web.extract.failed\` \`{ jobId, source, error }\`, nothing charged. The notice is sent once, at most ~1 min after the job finishes.
 
 ### Extract job status
 \`GET /web/extract/:jobId\`
@@ -274,8 +278,11 @@ curl https://www.easybits.cloud/api/v2/web/extract/$JOB_ID -H "Authorization: Be
 ### Crawl a site
 \`POST /web/crawl\`
 Body: \`{ url, maxPages?, onlyMainContent?, country? }\`
-Returns: \`{ startUrl, pages: [{ url, markdown }], pending: [ … ] }\`
-Reads the start URL and follows its internal links (same domain) up to \`maxPages\` (1-20, default 10). 1 query per page actually read. \`pending\` are the links seen but not visited: pass one to another call to continue. \`onlyMainContent\` recommended for RAG.
+Returns: \`{ startUrl, pages: [{ url, markdown, truncated }], pending: [ … ], stoppedBy: "maxPages"|"bytes"|"done", failed: [ … ] }\`
+Reads the start URL and follows its internal links (same domain) up to \`maxPages\` (1-20, default 10). 1 query per page actually read. \`pending\` are the links seen but not visited: pass one to another call to continue. A page with \`truncated: true\` was over 150,000 characters: read it whole with \`/web/fetch\`. \`failed\` are the pages that could not be read (not charged). \`onlyMainContent\` recommended for RAG.
+
+### Service status
+\`GET https://www.easybits.cloud/api/health/web\` (public, no key) → \`{ status: "operational"|"degraded"|"down"|"unknown", checkedAt, search, fetch, extract }\`. Every 15 min the platform searches, reads Amazon MX and extracts from Mercado Libre the way a customer would; also shown on \`/status\`.
 MCP: \`web_crawl({ url, maxPages })\`
 
 ### Web-specific errors

@@ -816,10 +816,12 @@ curl -X POST https://www.easybits.cloud/api/v2/web/search \\
 
 ### Leer una página
 \`POST /web/fetch\`
-Body: \`{ url, country?, asMarkdown?, onlyMainContent? }\`
-Returns: \`{ url, statusCode, format: "html"|"markdown", body }\`
-1 consulta. El cuerpo se recorta a 200 KB. \`asMarkdown: true\` devuelve markdown; \`onlyMainContent: true\` quita nav, footer, iconos y "skip to content" — lo normal cuando vas a LEER la página.
-SDK: \`eb.webFetch({ url, asMarkdown, onlyMainContent })\` · MCP: \`web_fetch({ url, asMarkdown })\`
+Body: \`{ url, country?, asMarkdown?, onlyMainContent? }\` — o \`{ fetchId, offset }\` para el siguiente tramo
+Returns: \`{ url, statusCode, format: "raw"|"markdown", body, offset, length, truncated, nextOffset?, fetchId? }\`
+1 consulta. \`asMarkdown: true\` devuelve markdown; \`onlyMainContent: true\` quita nav, footer, iconos y "skip to content" — lo normal cuando vas a LEER la página.
+
+**Nada se corta en silencio.** Cada respuesta trae hasta 200,000 caracteres y dice \`length\` (la página entera) y \`truncated\`. Si \`truncated: true\`, pide el siguiente tramo con \`{ fetchId, offset: nextOffset }\`: es **gratis** y sale de la misma copia (no vuelve a pedir la página, así que los tramos son coherentes entre sí). La copia dura 24 h; después, \`404\` y se vuelve a pedir con \`url\`.
+SDK: \`eb.webFetch({ url, asMarkdown, onlyMainContent })\` · \`eb.webFetchAll({ url })\` (junta todos los tramos, 1 consulta) · MCP: \`web_fetch({ url, asMarkdown })\`
 
 \`\`\`bash
 curl -X POST https://www.easybits.cloud/api/v2/web/fetch \\
@@ -837,6 +839,8 @@ Body: \`{ source?, datasetId?, input, limit? }\`
 Returns: \`202 { jobId, status: "running", source }\`. \`mercadolibre\` responde al instante: \`200 { jobId, status: "done", records: [{ title, price, url, seller, … }], total }\`.
 Cobra 1 consulta POR REGISTRO devuelto, una sola vez, al recogerlos. Disparar el job no cuesta; un job que falla no cobra.
 SDK: \`eb.webExtract(...)\` / \`eb.webExtractAndWait(...)\` (poll cada 15 s) · MCP: \`web_extract({ source, input, limit })\`
+
+**Sin poll (producción):** suscribe un webhook al evento \`web.extract.completed\` (\`POST /webhooks\`). Cuando el job termina llega \`{ jobId, source, total, url }\` firmado con HMAC; haz \`GET url\` para recoger los registros (ahí se cobra). Si el proveedor falla o el job pasa de 2 h llega \`web.extract.failed\` \`{ jobId, source, error }\`, sin cobro. El aviso sale una sola vez, a más tardar ~1 min después de terminar.
 
 ### Estado de un extract
 \`GET /web/extract/:jobId\`
@@ -856,8 +860,11 @@ curl https://www.easybits.cloud/api/v2/web/extract/$JOB_ID -H "Authorization: Be
 ### Rastrear un sitio
 \`POST /web/crawl\`
 Body: \`{ url, maxPages?, onlyMainContent?, country? }\`
-Returns: \`{ startUrl, pages: [{ url, markdown }], pending: [ … ] }\`
-Lee la URL de inicio y sigue sus links internos (mismo dominio) hasta \`maxPages\` (1-20, default 10). 1 consulta por página realmente leída. \`pending\` son los links vistos y no visitados: pásale uno a otra llamada para continuar. \`onlyMainContent\` recomendado para RAG.
+Returns: \`{ startUrl, pages: [{ url, markdown, truncated }], pending: [ … ], stoppedBy: "maxPages"|"bytes"|"done", failed: [ … ] }\`
+Lee la URL de inicio y sigue sus links internos (mismo dominio) hasta \`maxPages\` (1-20, default 10). 1 consulta por página realmente leída. \`pending\` son los links vistos y no visitados: pásale uno a otra llamada para continuar. Una página con \`truncated: true\` pasaba de 150,000 caracteres: léela entera con \`/web/fetch\`. \`failed\` son las que no se pudieron leer (no se cobran). \`onlyMainContent\` recomendado para RAG.
+
+### Estado del servicio
+\`GET https://www.easybits.cloud/api/health/web\` (público, sin llave) → \`{ status: "operational"|"degraded"|"down"|"unknown", checkedAt, search, fetch, extract }\`. Cada 15 min la plataforma busca, lee Amazon MX y extrae de Mercado Libre como lo haría un cliente; también se ve en \`/status\`.
 MCP: \`web_crawl({ url, maxPages })\`
 
 ### Errores propios de web

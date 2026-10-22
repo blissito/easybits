@@ -954,18 +954,23 @@ model AiGenerationLog {
 model WebJob {
   id          String   @id @default(auto()) @map("_id") @db.ObjectId
   userId      String   @db.ObjectId
-  kind        String   // "extract" | "crawl"
-  source      String   // "google_maps" | "mercadolibre" | datasetId…
-  providerRef String?  // snapshot_id del proveedor
-  status      String   @default("running") // running | done | error
+  kind        String   // "extract" | "fetch"
+  source      String   // "google_maps" | "mercadolibre" | datasetId… | host (fetch)
+  providerRef String?  // snapshot_id del proveedor (extract) | llave del cuerpo guardado (fetch)
+  // running | ready (extract listo, aún sin recoger ni cobrar) | done | error
+  status      String   @default("running")
   records     Int?
   charged     Boolean  @default(false)
   error       String?
+  bodyLength  Int?     // fetch: caracteres de la página completa
+  meta        Json?    // fetch: { url, statusCode, format }
+  notifiedAt  DateTime? // webhook web.extract.* ya despachado (una sola vez)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   user        User     @relation(fields: [userId], references: [id])
 
   @@index([userId, createdAt])
+  @@index([status, kind])
 }
 
 model Book {

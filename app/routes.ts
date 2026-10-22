@@ -241,6 +241,8 @@ export default [
   route("api/cron/reap-service-boxes", "routes/api/cron/reap-service-boxes.ts"),
   route("api/cron/purge-notifications", "routes/api/cron/purge-notifications.ts"),
   route("api/cron/check-hosting", "routes/api/cron/check-hosting.ts"),
+  route("api/cron/sweep-web-jobs", "routes/api/cron/sweep-web-jobs.ts"),
+  route("api/cron/check-web", "routes/api/cron/check-web.ts"),
   route("api/cron/schedule", "routes/api/cron/schedule.ts"),
   route("api/cron/dispatch-user-crons", "routes/api/cron/dispatch-user-crons.ts"),
   // Webhooks (inbound from external providers)
@@ -249,6 +251,7 @@ export default [
   route("u/unsubscribe", "routes/u.unsubscribe.tsx"),
   // Health
   route("api/health", "routes/api/health.ts"),
+  route("api/health/web", "routes/api/health.web.ts"),
   route("api/version", "routes/api/version.ts"),
   // v2
   ...prefix("api/v2", [

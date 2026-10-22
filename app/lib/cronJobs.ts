@@ -26,6 +26,8 @@ export const CRON_JOBS: CronJob[] = [
   job("prune-backups", "Rotación de respaldos", "30 3 * * *"),
   job("expire-work-boxes", "Caducidad de web apps sin publicar", "0 4 * * *"),
   job("check-hosting", "Monitor de hosting", "*/5 * * * *"),
+  job("check-web", "Canario de web (buscar/leer/extraer)", "*/15 * * * *"),
+  job("sweep-web-jobs", "Avisos de web_extract", "* * * * *"),
   job("dispatch-user-crons", "Crons de usuarios", "* * * * *"),
   job("purge-files", "Purga de archivos borrados", "0 6 * * 0"),
   job("purge-keys", "Purga de llaves revocadas", "0 6 * * 0"),

@@ -6794,21 +6794,35 @@ function registerVideoTools(server: McpServer) {
   };
 
   const WEB_FETCH_DESC =
-    "Lee UNA página web y devuelve su contenido, aunque el sitio bloquee bots (IPs residenciales, JS resuelto). Cuesta 1 consulta.\n\nHow to use:\n- Required: `url` (https://… completa).\n- Optional: `country` (ISO 'mx', 'us'…) para ver la versión local del sitio (precios en MXN, stock local).\n- Optional: `asMarkdown=true` devuelve markdown en vez de HTML; añade `onlyMainContent=true` para quitar nav, footer e iconos (lo normal cuando vas a LEER la página).\n\nUse for: leer una ficha de producto (Amazon MX, Mercado Libre), una noticia, docs de terceros, precios de competencia. Para buscar en Google usa `web_search`; para muchos registros de un sitio conocido usa `web_extract`.";
+    "Lee UNA página web y devuelve su contenido, aunque el sitio bloquee bots (IPs residenciales, JS resuelto). Cuesta 1 consulta.\n\nHow to use:\n- Required: `url` (https://… completa).\n- Optional: `country` (ISO 'mx', 'us'…) para ver la versión local del sitio (precios en MXN, stock local).\n- Optional: `asMarkdown=true` devuelve markdown en vez de HTML; añade `onlyMainContent=true` para quitar nav, footer e iconos (lo normal cuando vas a LEER la página).\n\nPáginas largas: cada respuesta trae hasta 200,000 caracteres y dice `length` (la página entera) y `truncated`. Si `truncated=true`, NO tienes la página completa: pide el siguiente tramo con `{ fetchId, offset: nextOffset }` (sin `url`) — es GRATIS y sale de la misma copia, no vuelve a pedir la página. La copia dura 24 h. Para leer, `asMarkdown+onlyMainContent` suele caber en un tramo.\n\nUse for: leer una ficha de producto (Amazon MX, Mercado Libre), una noticia, docs de terceros, precios de competencia. Para buscar en Google usa `web_search`; para muchos registros de un sitio conocido usa `web_extract`.";
   const WEB_FETCH_SHAPE = {
-    url: z.string().url().describe("Full https:// URL of the target page."),
+    url: z.string().url().optional().describe("Full https:// URL of the target page. Omit when reading another chunk with fetchId."),
+    fetchId: z.string().optional().describe("From a previous truncated response: read another chunk of THAT page, free (no new request)."),
+    offset: z.number().int().min(0).optional().describe("Character offset of the chunk — use `nextOffset` from the previous response. Default 0."),
     country: z.string().length(2).optional().describe("ISO 3166-1 country code (mx, us, gb…) for geo-localized fetch."),
     asMarkdown: z.boolean().optional().describe("If true, returns clean markdown. Default false (raw HTML)."),
     onlyMainContent: z.boolean().optional().describe("Con asMarkdown: quita nav, footer, iconos y 'skip to content'. Úsalo para leer o para RAG."),
   };
-  const webFetchHandler = wrapHandler(async (params: { url: string; country?: string; asMarkdown?: boolean; onlyMainContent?: boolean }, extra) =>
-    runWeb<import("../services/providers/brightdata").BrightdataScrapeOutput>(
+  const webFetchHandler = wrapHandler(async (params: { url?: string; fetchId?: string; offset?: number; country?: string; asMarkdown?: boolean; onlyMainContent?: boolean }, extra) => {
+    if (!params.url && !params.fetchId) throw new Error("Pasa `url` (página nueva) o `fetchId` (otro tramo de una página ya pedida).");
+    return runWeb<import("../services/providers/brightdata").BrightdataScrapeOutput>(
       "research.brightdata.scrape",
-      { url: params.url, country: params.country, asMarkdown: params.asMarkdown, onlyMainContent: params.onlyMainContent },
+      params.fetchId
+        ? { fetchId: params.fetchId, offset: params.offset }
+        : { url: params.url, offset: params.offset, country: params.country, asMarkdown: params.asMarkdown, onlyMainContent: params.onlyMainContent },
       extra,
-      (r) => ({ url: r.data.url, statusCode: r.data.statusCode, format: r.data.format, body: r.data.body }),
-    ),
-  );
+      (r) => ({
+        url: r.data.url,
+        statusCode: r.data.statusCode,
+        format: r.data.format,
+        length: r.data.length,
+        offset: r.data.offset,
+        truncated: r.data.truncated,
+        ...(r.data.truncated ? { nextOffset: r.data.nextOffset, fetchId: r.data.fetchId } : {}),
+        body: r.data.body,
+      }),
+    );
+  });
   server.tool("web_fetch", WEB_FETCH_DESC, WEB_FETCH_SHAPE, webFetchHandler);
   server.tool("research_scrape", `[deprecated → web_fetch] ${WEB_FETCH_DESC}`, WEB_FETCH_SHAPE, webFetchHandler);
 
@@ -6832,7 +6846,7 @@ function registerVideoTools(server: McpServer) {
 
   server.tool(
     "web_extract",
-    "Extrae REGISTROS estructurados (JSON con esquema estable) de una fuente conocida: Google Maps (negocios con teléfono/WhatsApp/web/rating), Mercado Libre, Amazon, Instagram, TikTok, LinkedIn, Facebook, YouTube, Indeed, Trustpilot, inmuebles24… Cobra 1 consulta POR REGISTRO devuelto (no por intento).\n\nHow to use:\n- `source`: una de google_maps | google_maps_reviews | google_shopping | mercadolibre | amazon_product | amazon_reviews | instagram_profiles | instagram_posts | tiktok_profiles | tiktok_posts | facebook_page_posts | facebook_marketplace | youtube_channels | youtube_videos | linkedin_company | linkedin_person | linkedin_jobs | indeed_jobs | trustpilot | inmuebles24 | reddit_posts. O pasa `datasetId` de cualquier otra fuente del catálogo.\n- `input`: según la fuente. google_maps → [{ keyword: 'dentista Polanco CDMX', country: 'MX' }]. mercadolibre → { query: 'iphone 15', page?: 1 }. El resto → [{ url }].\n- `limit`: registros máximos por input (default 20, máx 200).\n\nASYNC: casi todas las fuentes tardan 30-120 s → devuelve { jobId, status:'running' }; haz poll con `web_extract_status` cada ~15 s. `mercadolibre` responde al instante con status:'done' y los `records` (hasta 48 por página).\n\nUse for: listas de prospectos (Maps), comparar precios (MELI/Amazon), monitorear reseñas o perfiles.",
+    "Extrae REGISTROS estructurados (JSON con esquema estable) de una fuente conocida: Google Maps (negocios con teléfono/WhatsApp/web/rating), Mercado Libre, Amazon, Instagram, TikTok, LinkedIn, Facebook, YouTube, Indeed, Trustpilot, inmuebles24… Cobra 1 consulta POR REGISTRO devuelto (no por intento).\n\nHow to use:\n- `source`: una de google_maps | google_maps_reviews | google_shopping | mercadolibre | amazon_product | amazon_reviews | instagram_profiles | instagram_posts | tiktok_profiles | tiktok_posts | facebook_page_posts | facebook_marketplace | youtube_channels | youtube_videos | linkedin_company | linkedin_person | linkedin_jobs | indeed_jobs | trustpilot | inmuebles24 | reddit_posts. O pasa `datasetId` de cualquier otra fuente del catálogo.\n- `input`: según la fuente. google_maps → [{ keyword: 'dentista Polanco CDMX', country: 'MX' }]. mercadolibre → { query: 'iphone 15', page?: 1 }. El resto → [{ url }].\n- `limit`: registros máximos por input (default 20, máx 200).\n\nASYNC: casi todas las fuentes tardan 30-120 s → devuelve { jobId, status:'running' }; haz poll con `web_extract_status` cada ~15 s, o (en producción) suscribe un webhook al evento `web.extract.completed` y recoge los registros cuando llegue el aviso, sin poll. `mercadolibre` responde al instante con status:'done' y los `records` (hasta 48 por página).\n\nUse for: listas de prospectos (Maps), comparar precios (MELI/Amazon), monitorear reseñas o perfiles.",
     {
       source: z.string().optional().describe("Fuente curada (ver descripción). Omitir si pasas datasetId."),
       datasetId: z.string().optional().describe("Dataset del catálogo, para fuentes no curadas."),
@@ -6869,7 +6883,7 @@ function registerVideoTools(server: McpServer) {
 
   server.tool(
     "web_crawl",
-    "Lee una página y SIGUE sus links internos (mismo dominio) hasta `maxPages`, devolviendo markdown por página. Cobra 1 consulta por página realmente leída.\n\nHow to use:\n- Required: `url` de inicio.\n- Optional: `maxPages` (1-20, default 10), `country`, `onlyMainContent` (quita nav/footer/iconos — recomendado para RAG).\n- Devuelve `pages[]` y `pending[]` (links vistos y no visitados): para seguir, llama otra vez con una URL de `pending`.\n\nUse for: aprenderse la documentación de un producto, bajar un blog o catálogo chico para RAG. Para una sola página usa `web_fetch`.",
+    "Lee una página y SIGUE sus links internos (mismo dominio) hasta `maxPages`, devolviendo markdown por página. Cobra 1 consulta por página realmente leída.\n\nHow to use:\n- Required: `url` de inicio.\n- Optional: `maxPages` (1-20, default 10), `country`, `onlyMainContent` (quita nav/footer/iconos — recomendado para RAG).\n- Devuelve `pages[]` (cada una con `truncated` si pasaba de 150,000 caracteres: léela entera con `web_fetch`), `pending[]` (links vistos y no visitados: para seguir, llama otra vez con una URL de ahí), `stoppedBy` ('maxPages' | 'bytes' | 'done') y `failed[]` (páginas que no se pudieron leer, sin cobro).\n\nUse for: aprenderse la documentación de un producto, bajar un blog o catálogo chico para RAG. Para una sola página usa `web_fetch`.",
     {
       url: z.string().url().describe("URL de inicio (https://…)."),
       maxPages: z.number().int().min(1).max(20).optional().describe("Páginas máximas. Default 10."),
@@ -6881,7 +6895,14 @@ function registerVideoTools(server: McpServer) {
         "research.brightdata.crawl",
         params,
         extra,
-        (r) => ({ startUrl: r.data.startUrl, pages: r.data.pages, pending: r.data.pending, total: r.data.pages.length }),
+        (r) => ({
+          startUrl: r.data.startUrl,
+          pages: r.data.pages,
+          pending: r.data.pending,
+          stoppedBy: r.data.stoppedBy,
+          failed: r.data.failed,
+          total: r.data.pages.length,
+        }),
       ),
     ),
   );

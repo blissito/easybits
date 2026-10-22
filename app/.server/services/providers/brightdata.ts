@@ -118,8 +118,12 @@ async function brightdataRequest(input: BrightdataRequestInput): Promise<Brightd
 /* ────────────────────────────────────────────────────────────────────── */
 
 export interface BrightdataScrapeInput {
-  /** Target URL to fetch (full https://...). */
-  url: string;
+  /** Target URL to fetch (full https://...). Not needed with `fetchId`. */
+  url?: string;
+  /** Read another chunk of a page already fetched (free, no new request). */
+  fetchId?: string;
+  /** Character offset of the chunk to return. Default 0. */
+  offset?: number;
   /** ISO 3166-1 country code (us, mx, gb...). Default unset. */
   country?: string;
   /** If true, returns markdown instead of raw HTML. Default false (raw HTML). */
@@ -134,12 +138,41 @@ export interface BrightdataScrapeOutput extends ServiceResult {
   data: {
     url: string;
     statusCode: number;
-    body: string; // HTML or markdown (truncated for safety)
+    /** Up to SCRAPE_BODY_MAX_LEN characters, starting at `offset`. */
+    body: string;
     format: "raw" | "markdown";
+    offset: number;
+    /** Characters of the WHOLE page — compare with body.length. */
+    length: number;
+    /** true = there is more after this chunk; read it with { fetchId, offset: nextOffset }. */
+    truncated: boolean;
+    nextOffset?: number;
+    /** Present when the page is longer than one chunk (kept 24 h). */
+    fetchId?: string;
   };
 }
 
-const SCRAPE_BODY_MAX_LEN = 200_000; // 200KB cap to avoid blowing up MCP responses
+// Tope por respuesta (MCP y REST). Antes se cortaba aquí EN SILENCIO: una búsqueda de
+// Amazon llegaba con 200,000 caracteres exactos y un solo precio, y el agente la daba por
+// completa. Ahora el corte se declara (`truncated`) y el resto se lee por tramos.
+export const SCRAPE_BODY_MAX_LEN = 200_000;
+// Los tramos se leen del cuerpo guardado, no de otra petición: gratis e idéntico.
+export const WEB_FETCH_TTL_MS = 24 * 60 * 60 * 1000;
+const WEB_FETCH_PREFIX = "web/";
+
+function webFetchStore() {
+  // Bucket privado de plataforma; nunca el público (son páginas de terceros).
+  return import("../../storage").then((m) => m.getPlatformDefaultClient({ prefix: WEB_FETCH_PREFIX }));
+}
+
+/** Arma la respuesta de un tramo a partir del cuerpo COMPLETO. */
+export function sliceFetchBody(full: string, offset = 0) {
+  const start = Math.min(Math.max(0, Math.floor(offset)), full.length);
+  const body = full.slice(start, start + SCRAPE_BODY_MAX_LEN);
+  const end = start + body.length;
+  const truncated = end < full.length;
+  return { body, offset: start, length: full.length, truncated, nextOffset: truncated ? end : undefined };
+}
 
 export const brightdataScrapeService: ServiceDef<BrightdataScrapeInput, BrightdataScrapeOutput> = {
   id: "research.brightdata.scrape",
@@ -147,18 +180,48 @@ export const brightdataScrapeService: ServiceDef<BrightdataScrapeInput, Brightda
   displayName: "Web Scrape (Brightdata Unlocker)",
   description:
     "Fetches a single web page via Brightdata Web Unlocker. Bypasses bot detection, returns HTML or markdown.",
-  estimateCost(_input) {
-    return 1; // 1 crédito per page — pricing is per-GB internally, average page fits.
+  estimateCost(input) {
+    // Leer otro tramo de una página ya pedida no vuelve a salir a internet: gratis.
+    return input.fetchId ? 0 : 1;
   },
-  async execute(input) {
+  async execute(input, ctx) {
+    const { db } = await import("../../db");
+
+    // ── Siguiente tramo de una página ya pedida ──
+    if (input.fetchId) {
+      const job = /^[0-9a-f]{24}$/.test(input.fetchId)
+        ? await db.webJob.findFirst({ where: { id: input.fetchId, userId: ctx.userId, kind: "fetch" } })
+        : null;
+      if (!job?.providerRef || Date.now() - job.createdAt.getTime() > WEB_FETCH_TTL_MS) {
+        throw new ServiceProviderError(
+          "research.brightdata.scrape",
+          404,
+          "fetchId no encontrado o vencido (se guarda 24 h). Vuelve a pedir la página con `url`.",
+        );
+      }
+      const store = await webFetchStore();
+      const res = await fetch(await store.getReadUrl(job.providerRef, 300));
+      if (!res.ok) {
+        throw new ServiceProviderError("research.brightdata.scrape", 404, "fetchId vencido. Vuelve a pedir la página con `url`.");
+      }
+      const meta = (job.meta ?? {}) as { url?: string; statusCode?: number; format?: "raw" | "markdown" };
+      const part = sliceFetchBody(await res.text(), input.offset);
+      return {
+        cost: 0,
+        data: { url: meta.url ?? "", statusCode: meta.statusCode ?? 200, format: meta.format ?? "raw", fetchId: job.id, ...part },
+      };
+    }
+
     const url = input.url?.trim();
     if (!url) {
       throw new ServiceProviderError("research.brightdata.scrape", 400, "url is required");
     }
     const zone = input.zone || process.env.BRIGHTDATA_UNLOCKER_ZONE || "mcp_unlocker";
-    const wantMarkdown = !!input.asMarkdown;
+    let full: string;
+    let statusCode = 200;
+    const format: "raw" | "markdown" = input.asMarkdown ? "markdown" : "raw";
 
-    if (wantMarkdown) {
+    if (input.asMarkdown) {
       const resp = (await brightdataRequest({
         zone,
         url,
@@ -167,35 +230,50 @@ export const brightdataScrapeService: ServiceDef<BrightdataScrapeInput, Brightda
         data_format: "markdown",
         serviceId: "research.brightdata.scrape",
       })) as BrightdataResponse;
-      let body = resp.body ?? "";
+      full = resp.body ?? "";
+      statusCode = resp.status_code ?? 200;
       if (input.onlyMainContent) {
         const { extractMainContent } = await import("./parsers/mainContent");
-        body = extractMainContent(body);
+        full = extractMainContent(full);
       }
-      return {
-        data: {
-          url,
-          statusCode: resp.status_code ?? 200,
-          body: body.slice(0, SCRAPE_BODY_MAX_LEN),
-          format: "markdown",
-        },
-      };
-    }
-    const html = (await brightdataRequest({
-      zone,
-      url,
-      format: "raw",
-      country: input.country,
-      serviceId: "research.brightdata.scrape",
-    })) as string;
-    return {
-      data: {
+    } else {
+      full = (await brightdataRequest({
+        zone,
         url,
-        statusCode: 200,
-        body: html.slice(0, SCRAPE_BODY_MAX_LEN),
         format: "raw",
-      },
-    };
+        country: input.country,
+        serviceId: "research.brightdata.scrape",
+      })) as string;
+    }
+
+    const part = sliceFetchBody(full, input.offset);
+    if (part.length <= SCRAPE_BODY_MAX_LEN) {
+      return { cost: 1, data: { url, statusCode, format, ...part } };
+    }
+    // Página grande: se guarda completa para leer los demás tramos sin volver a pedirla.
+    // Si guardar falla, se responde igual (con `truncated` honesto) en vez de perder la consulta.
+    let fetchId: string | undefined;
+    try {
+      const key = `fetch/${ctx.userId}/${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}.txt`;
+      const store = await webFetchStore();
+      await store.putObject(key, Buffer.from(full, "utf8"), "text/plain; charset=utf-8");
+      const job = await db.webJob.create({
+        data: {
+          userId: ctx.userId,
+          kind: "fetch",
+          source: new URL(url).host,
+          providerRef: key,
+          status: "done",
+          charged: true,
+          bodyLength: full.length,
+          meta: { url, statusCode, format },
+        },
+      });
+      fetchId = job.id;
+    } catch (e) {
+      console.warn("[web_fetch] no se pudo guardar la página completa:", e instanceof Error ? e.message : e);
+    }
+    return { cost: 1, data: { url, statusCode, format, fetchId, ...part } };
   },
 };
 
@@ -453,6 +531,15 @@ export const brightdataExtractService: ServiceDef<BrightdataExtractInput, Bright
   },
 };
 
+/** Estado de un snapshot en el proveedor. Lo usan extractStatus y el barrido de avisos. */
+export async function extractProgress(
+  snapshotId: string,
+): Promise<{ state: "running" | "ready" | "failed"; records?: number }> {
+  const prog = (await datasetsRequest(`/progress/${snapshotId}`)) as { status?: string; records?: number };
+  const state = prog.status === "failed" ? "failed" : prog.status === "ready" ? "ready" : "running";
+  return { state, records: typeof prog.records === "number" ? prog.records : undefined };
+}
+
 export interface BrightdataExtractStatusInput {
   jobId: string;
 }
@@ -486,13 +573,16 @@ export const brightdataExtractStatusService: ServiceDef<BrightdataExtractStatusI
     if (!job.providerRef) {
       return { cost: 0, data: { jobId: job.id, status: job.status as "done", source: job.source, total: job.records ?? 0 } };
     }
-    const prog = (await datasetsRequest(`/progress/${job.providerRef}`)) as { status?: string; records?: number; errors?: number };
-    if (prog.status === "failed") {
-      await db.webJob.update({ where: { id: job.id }, data: { status: "error", error: "provider failed" } });
-      return { cost: 0, data: { jobId: job.id, status: "error", source: job.source, error: "provider failed" } };
-    }
-    if (prog.status !== "ready") {
-      return { cost: 0, data: { jobId: job.id, status: "running", source: job.source } };
+    // `ready` lo marca el barrido (webJobSweep) al ver el job listo: no hace falta volver a preguntar.
+    if (job.status !== "ready" && job.status !== "done") {
+      const { state } = await extractProgress(job.providerRef);
+      if (state === "failed") {
+        await db.webJob.update({ where: { id: job.id }, data: { status: "error", error: "provider failed" } });
+        return { cost: 0, data: { jobId: job.id, status: "error", source: job.source, error: "provider failed" } };
+      }
+      if (state !== "ready") {
+        return { cost: 0, data: { jobId: job.id, status: "running", source: job.source } };
+      }
     }
     const records = (await datasetsRequest(`/snapshot/${job.providerRef}?format=json`)) as unknown[];
     const list = Array.isArray(records) ? records : [];
@@ -524,9 +614,14 @@ export interface BrightdataCrawlInput {
 export interface BrightdataCrawlOutput extends ServiceResult {
   data: {
     startUrl: string;
-    pages: { url: string; markdown: string }[];
+    /** `truncated` = la página pasaba de CRAWL_PAGE_MAX_LEN y se cortó (léela entera con web_fetch). */
+    pages: { url: string; markdown: string; truncated: boolean }[];
     /** Links del mismo host encontrados pero no visitados (para continuar). */
     pending: string[];
+    /** Por qué paró: llegó a maxPages, al tope de bytes, o ya no había links. */
+    stoppedBy: "maxPages" | "bytes" | "done";
+    /** Páginas que fallaron al leerse (no se cobran). */
+    failed: string[];
   };
 }
 
@@ -569,13 +664,15 @@ export const brightdataCrawlService: ServiceDef<BrightdataCrawlInput, Brightdata
 
     const queue: string[] = [base.toString()];
     const seen = new Set<string>(queue);
-    const pages: { url: string; markdown: string }[] = [];
+    const pages: { url: string; markdown: string; truncated: boolean }[] = [];
+    const failed: string[] = [];
     let bytes = 0;
     const { extractMainContent } = await import("./parsers/mainContent");
 
     while (queue.length && pages.length < maxPages && bytes < CRAWL_MAX_TOTAL_BYTES) {
       const url = queue.shift()!;
       let md = "";
+      let truncated = false;
       try {
         const resp = (await brightdataRequest({
           zone,
@@ -585,14 +682,17 @@ export const brightdataCrawlService: ServiceDef<BrightdataCrawlInput, Brightdata
           data_format: "markdown",
           serviceId: "research.brightdata.crawl",
         })) as BrightdataResponse;
-        md = (resp.body ?? "").slice(0, CRAWL_PAGE_MAX_LEN);
+        md = resp.body ?? "";
+        truncated = md.length > CRAWL_PAGE_MAX_LEN;
+        md = md.slice(0, CRAWL_PAGE_MAX_LEN);
       } catch {
+        failed.push(url);
         continue; // una página caída no tumba el crawl ni se cobra
       }
       // Los links se sacan del markdown COMPLETO (el nav es donde están);
       // lo que se guarda es la versión limpia si la pidieron.
       const kept = input.onlyMainContent ? extractMainContent(md) : md;
-      pages.push({ url, markdown: kept });
+      pages.push({ url, markdown: kept, truncated });
       bytes += kept.length;
       for (const link of sameHostLinks(md, base)) {
         if (!seen.has(link)) {
@@ -603,7 +703,74 @@ export const brightdataCrawlService: ServiceDef<BrightdataCrawlInput, Brightdata
     }
     return {
       cost: Math.max(1, pages.length),
-      data: { startUrl: base.toString(), pages, pending: queue.slice(0, 100) },
+      data: {
+        startUrl: base.toString(),
+        pages,
+        pending: queue.slice(0, 100),
+        stoppedBy: !queue.length ? "done" : pages.length >= maxPages ? "maxPages" : "bytes",
+        failed,
+      },
     };
   },
 };
+
+/* ────────────────────────────────────────────────────────────────────── */
+/* CANARIO — la plataforma prueba lo que vende, sin cobrarle a nadie       */
+/* ────────────────────────────────────────────────────────────────────── */
+
+export type ProbeResult = { ok: boolean; ms: number; detail: string };
+
+// Un MELI sano trae 48 por página; menos de 10 = cambió el HTML y el parser ya no lo entiende.
+export const CANARY_MELI_MIN_RECORDS = 10;
+
+async function timed(fn: () => Promise<string>): Promise<ProbeResult> {
+  const t = Date.now();
+  try {
+    const detail = await fn();
+    return { ok: true, ms: Date.now() - t, detail };
+  } catch (e) {
+    return { ok: false, ms: Date.now() - t, detail: (e instanceof Error ? e.message : String(e)).slice(0, 200) };
+  }
+}
+
+/**
+ * Las tres cosas que un cliente usa de verdad, contra sitios que bloquean bots:
+ * buscar (SERP), leer (Amazon MX por el Unlocker) y extraer (parser propio de MELI).
+ * Llama al proveedor directo: no pasa por consumeService ni crea WebJobs.
+ */
+export async function probeWebProvider(): Promise<{ search: ProbeResult; fetch: ProbeResult; meli: ProbeResult }> {
+  const unlocker = process.env.BRIGHTDATA_UNLOCKER_ZONE || "mcp_unlocker";
+  const [search, fetchR, meli] = await Promise.all([
+    timed(async () => {
+      const r = await brightdataSearchService.execute({ query: "tienda en linea", country: "mx" }, { userId: "" });
+      const organic = (r.data.results as { organic?: unknown[] } | undefined)?.organic;
+      if (!Array.isArray(organic) || organic.length === 0) throw new Error("sin resultados orgánicos");
+      return `${organic.length} orgánicos`;
+    }),
+    timed(async () => {
+      const html = (await brightdataRequest({
+        zone: unlocker,
+        url: "https://www.amazon.com.mx/s?k=audifonos",
+        format: "raw",
+        country: "mx",
+        serviceId: "research.brightdata.scrape",
+      })) as string;
+      if (html.length < 20_000 || /captcha/i.test(html.slice(0, 5_000))) throw new Error(`página bloqueada o vacía (${html.length} caracteres)`);
+      return `${html.length} caracteres`;
+    }),
+    timed(async () => {
+      const { parseMercadoLibreListing, mercadoLibreListingUrl } = await import("./parsers/mercadolibre");
+      const html = (await brightdataRequest({
+        zone: unlocker,
+        url: mercadoLibreListingUrl("audifonos"),
+        format: "raw",
+        country: "mx",
+        serviceId: "research.brightdata.extract",
+      })) as string;
+      const n = parseMercadoLibreListing(html).length;
+      if (n < CANARY_MELI_MIN_RECORDS) throw new Error(`el parser sacó ${n} productos (mínimo ${CANARY_MELI_MIN_RECORDS}): ¿cambió el HTML?`);
+      return `${n} productos`;
+    }),
+  ]);
+  return { search, fetch: fetchR, meli };
+}
