@@ -1,0 +1,353 @@
+<!doctype html>
+<html lang="es" data-resolution="portrait">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1080, height=1920" />
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <script src="score.gen.js"></script>
+    <style>
+      /* Short-03 «Manda push» · Easybits brutalista: morado #7c3aed, ámbar #fbbf24, fondo #0b0b0f.
+         Contorno 10 px, sombra dura sin desenfoque, letra gigante. Sin gradientes, blur ni glow. */
+      @font-face { font-family: "Jersey"; src: url(assets/fonts/Jersey10.ttf); }
+      @font-face { font-family: "ArchivoBlack"; src: url(assets/fonts/ArchivoBlack.ttf); }
+      @font-face { font-family: "Inter"; src: url(assets/fonts/Inter_Variable.woff2); }
+      @font-face { font-family: "Mono"; src: url(assets/fonts/JetBrainsMono.ttf); }
+      :root { --bg: #0b0b0f; --violet: #7c3aed; --amber: #fbbf24; --ink: #f5f3ef; --black: #0b0b0f; }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { width: 1080px; height: 1920px; overflow: hidden; background: var(--bg); font-family: "Inter", sans-serif; color: var(--ink); }
+      .abs { position: absolute; }
+
+      /* fondo: retícula gruesa que se desliza + palabra gigante en contorno */
+      #grid { position: absolute; left: -120px; top: -120px; width: 1320px; height: 2160px;
+        background-image: linear-gradient(rgba(124,58,237,.22) 4px, transparent 4px), linear-gradient(90deg, rgba(124,58,237,.22) 4px, transparent 4px);
+        background-size: 120px 120px; }
+      #bgw { position: absolute; left: -200px; top: 560px; width: 1480px; text-align: center; font-family: "ArchivoBlack"; font-size: 440px; line-height: 1;
+        color: transparent; -webkit-text-stroke: 6px rgba(251,191,36,.30); transform: rotate(-8deg); white-space: nowrap; }
+
+      /* subtítulo karaoke: una línea, 72 px; dichas en blanco, actual en ámbar, por decir en gris */
+      #cap { position: absolute; left: 60px; width: 960px; top: 272px; height: 110px; z-index: 60; }
+      .cl { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; gap: 20px;
+        font-family: "Inter"; font-weight: 900; font-size: 72px; line-height: 1; letter-spacing: -1.5px; white-space: nowrap; }
+      .cw { color: #5e5b71; }
+
+      .scene { position: absolute; inset: 0; display: none; }
+      #s-A { display: block; }
+      .blk { position: absolute; font-family: "ArchivoBlack"; text-transform: uppercase; border: 10px solid var(--black); white-space: nowrap; line-height: 1; }
+      .tag { position: absolute; font-family: "ArchivoBlack"; font-size: 46px; padding: 18px 28px; border: 10px solid var(--black); box-shadow: 12px 12px 0 var(--ink); white-space: nowrap; text-transform: uppercase; }
+
+      /* la fachada y el edificio: misma toma (cierre circular) */
+      .shop { position: absolute; left: 260px; top: 400px; width: 560px; }
+      .shop img { display: block; width: 100%; }
+      .sign { position: absolute; display: grid; place-items: center; font-family: "ArchivoBlack"; color: var(--black); text-transform: uppercase; line-height: 1; }
+
+      /* ladrillos de la máquina */
+      .brick { position: absolute; left: 190px; width: 640px; height: 108px; display: flex; align-items: center; justify-content: center; gap: 22px;
+        font-family: "ArchivoBlack"; font-size: 52px; border: 10px solid var(--black); text-transform: uppercase; color: var(--black); }
+
+      /* fichas de stack (dominó) */
+      .tile { position: absolute; top: 470px; width: 104px; height: 400px; background: var(--ink); border: 10px solid var(--black); box-shadow: 10px 10px 0 var(--violet);
+        display: grid; place-items: center; }
+      .tile span { display: block; writing-mode: vertical-rl; transform: rotate(180deg); white-space: nowrap; font-family: "ArchivoBlack"; font-size: 44px; color: var(--black); text-transform: uppercase; }
+      .tile i { position: absolute; left: 10px; right: 10px; top: 50%; height: 0; border-top: 6px solid var(--black); display: none; }
+
+      /* terminal */
+      #term { position: absolute; left: 90px; top: 800px; width: 820px; height: 520px; background: #17131f; border: 10px solid var(--black); box-shadow: 16px 16px 0 var(--amber); }
+      #term .bar { height: 64px; background: var(--violet); border-bottom: 10px solid var(--black); display: flex; align-items: center; gap: 16px; padding-left: 22px; }
+      #term .bar b { width: 26px; height: 26px; border-radius: 50%; border: 6px solid var(--black); background: var(--amber); }
+      #term pre { font-family: "Mono"; font-size: 38px; line-height: 1.55; padding: 26px 32px; color: var(--ink); white-space: pre; }
+      #term .ok { color: var(--amber); }
+
+      /* cortinilla: rebanadas sesgadas + un glifo enorme que sella el corte */
+      .slice { position: absolute; top: -300px; width: 330px; height: 2520px; z-index: 90; }
+      #glyph { position: absolute; inset: 0; display: grid; place-items: center; z-index: 95; visibility: hidden; }
+      #glyph b { font-family: "ArchivoBlack"; font-size: 560px; line-height: 1; color: var(--ink); -webkit-text-stroke: 16px var(--black); paint-order: stroke fill; text-shadow: 26px 26px 0 var(--black); }
+
+      /* marca (FlipLetters: dos filas de letras superpuestas) */
+      #word { position: relative; height: 120px; perspective: 1000px; }
+      #word .row { position: absolute; left: 0; top: 0; display: flex; font-family: "Jersey"; font-size: 124px; line-height: 1; color: #fff; transform-style: preserve-3d; }
+      #word .row span { display: inline-block; transform-origin: 50% 50% -30px; }
+    </style>
+  </head>
+  <body>
+    <div id="root" data-composition-id="main" data-start="0" data-width="1080" data-height="1920" data-duration="40.5">
+      <div id="grid"></div>
+      <div id="bgw">TRÁFICO</div>
+
+      <!-- A · empuja / cartón / vacío: una sola toma -->
+      <div class="scene" id="s-A">
+        <!-- huella punteada de donde estaba la fachada: aparece al caer -->
+        <div id="ghost" class="abs" style="left:260px;top:400px;width:560px;height:705px;border:8px dashed rgba(245,243,239,.5);visibility:hidden"></div>
+        <div class="shop" id="fach">
+          <img src="assets/fachada.png" />
+          <div class="sign" style="left:20.5%;width:59.2%;top:3.4%;height:16.8%;font-size:74px">MI APP</div>
+        </div>
+
+        <div class="tag" id="utileria" style="left:150px;top:820px;background:var(--amber);color:var(--black);font-size:104px;transform:rotate(-9deg);visibility:hidden">UTILERÍA</div>
+        <div class="blk" id="x0" style="left:110px;top:480px;font-size:72px;padding:18px 26px;background:var(--ink);color:var(--black);box-shadow:12px 12px 0 var(--violet);visibility:hidden">SERVIDOR<i class="abs strike"></i></div>
+        <div class="blk" id="x1" style="left:150px;top:660px;font-size:72px;padding:18px 26px;background:var(--ink);color:var(--black);box-shadow:12px 12px 0 var(--violet);visibility:hidden">BASE DE DATOS<i class="abs strike"></i></div>
+        <div class="blk" id="x2" style="left:110px;top:840px;font-size:72px;padding:18px 26px;background:var(--ink);color:var(--black);box-shadow:12px 12px 0 var(--violet);visibility:hidden">DOMINIO<i class="abs strike"></i></div>
+        <div class="tag" id="neg" style="left:110px;top:1080px;background:var(--violet);color:var(--ink);font-size:60px;visibility:hidden">BONITA ≠ NEGOCIO</div>
+      </div>
+
+      <!-- máquina: cae la caja y se apilan los ladrillos -->
+      <div class="scene" id="s-maquina">
+        <svg id="box" class="abs" style="left:150px;top:1080px;width:720px;height:300px;overflow:visible;visibility:hidden" viewBox="0 0 720 300">
+          <g id="boxG">
+            <rect x="24" y="24" width="680" height="260" fill="#fbbf24" />
+            <rect x="10" y="10" width="680" height="260" fill="#f5f3ef" stroke="#0b0b0f" stroke-width="14" />
+            <rect x="44" y="50" width="612" height="56" fill="#7c3aed" stroke="#0b0b0f" stroke-width="10" />
+            <rect x="44" y="130" width="612" height="56" fill="#7c3aed" stroke="#0b0b0f" stroke-width="10" />
+            <circle id="led0" cx="606" cy="78" r="14" fill="#0b0b0f" />
+            <circle id="led1" cx="606" cy="158" r="14" fill="#0b0b0f" />
+            <text x="60" y="246" font-family="Mono" font-size="40" font-weight="700" fill="#0b0b0f">microVM · tuya</text>
+          </g>
+        </svg>
+        <div class="brick" id="b0" style="top:960px;background:#7c3aed;color:#f5f3ef;visibility:hidden">Servidor</div>
+        <div class="brick" id="b1" style="top:840px;left:230px;background:#fbbf24;visibility:hidden">Base SQL</div>
+        <div class="brick" id="b2" style="top:720px;left:170px;background:#f5f3ef;visibility:hidden">Archivos</div>
+        <div class="brick" id="b3" style="top:600px;left:220px;background:#7c3aed;color:#f5f3ef;visibility:hidden">Dominio</div>
+        <div class="brick" id="b4" style="top:480px;left:190px;background:#fbbf24;visibility:hidden">WhatsApp</div>
+      </div>
+
+      <!-- stacks: siete fichas + cronómetro -->
+      <div class="scene" id="s-stacks">
+        <div id="tiles"></div>
+        <svg id="watch" class="abs" style="left:150px;top:930px;width:420px;height:460px;overflow:visible;visibility:hidden" viewBox="0 0 420 460">
+          <g id="watchG">
+            <rect x="170" y="10" width="80" height="50" fill="#fbbf24" stroke="#0b0b0f" stroke-width="12" />
+            <circle cx="222" cy="272" r="180" fill="#fbbf24" />
+            <circle cx="210" cy="260" r="180" fill="#f5f3ef" stroke="#0b0b0f" stroke-width="16" />
+            <circle cx="210" cy="260" r="12" fill="#0b0b0f" />
+            <line id="hand" x1="210" y1="260" x2="210" y2="120" stroke="#7c3aed" stroke-width="18" stroke-linecap="square" />
+          </g>
+        </svg>
+        <div class="blk" id="count" style="left:590px;top:1010px;font-size:120px;text-transform:none;padding:20px 26px;background:var(--violet);color:var(--ink);box-shadow:12px 12px 0 var(--amber);visibility:hidden"><span id="cnum">0.0</span>s</div>
+        <div class="tag" id="publ" style="left:590px;top:1220px;background:var(--amber);color:var(--black);font-size:44px;transform:rotate(-4deg);visibility:hidden">PUBLICADO</div>
+      </div>
+
+      <!-- agente: el candado se abre y tu terminal manda -->
+      <div class="scene" id="s-agente">
+        <svg id="lock" class="abs" style="left:380px;top:430px;width:320px;height:340px;overflow:visible;visibility:hidden" viewBox="0 0 320 340">
+          <g id="lockG">
+            <path id="shackle" d="M90 150 V90 a70 70 0 0 1 140 0 V150" fill="none" stroke="#0b0b0f" stroke-width="44" />
+            <path d="M90 150 V90 a70 70 0 0 1 140 0 V150" fill="none" stroke="#f5f3ef" stroke-width="20" id="shackleIn" />
+            <rect x="52" y="156" width="230" height="170" fill="#7c3aed" />
+            <rect x="40" y="144" width="230" height="170" fill="#fbbf24" stroke="#0b0b0f" stroke-width="14" />
+            <circle cx="155" cy="215" r="20" fill="#0b0b0f" />
+            <rect x="146" y="222" width="18" height="50" fill="#0b0b0f" />
+          </g>
+        </svg>
+        <div id="term"><div class="bar"><b></b><b></b><b></b></div><pre id="tx"></pre></div>
+      </div>
+
+      <!-- cierre: la misma toma del inicio, ahora edificio abierto -->
+      <div class="scene" id="s-cta">
+        <div class="shop" id="edif">
+          <img src="assets/edificio.png" />
+          <div class="sign" id="abierto" style="left:19%;width:61.5%;top:2.1%;height:20.4%;font-size:62px">ABIERTO</div>
+        </div>
+        <div id="brand" class="abs" style="left:110px;top:1100px;display:flex;align-items:center;gap:22px">
+          <img id="eyes" src="assets/img/eyes.svg" style="width:124px" />
+          <div id="word"><div class="row front" id="wf"></div><div class="row back" id="wb"></div></div>
+        </div>
+        <div class="blk" id="url" style="left:110px;top:1236px;font-family:Mono;font-weight:700;font-size:52px;text-transform:none;padding:14px 22px;background:var(--amber);color:var(--black);box-shadow:10px 10px 0 var(--violet);visibility:hidden">easybits.cloud</div>
+        <div class="tag" id="hoy" style="left:612px;top:1226px;background:var(--violet);color:var(--ink);font-size:48px;transform:rotate(6deg);visibility:hidden">ÁBRELA HOY<br /><span style="font-size:28px">16 OCT 2026</span></div>
+      </div>
+
+      <!-- el soplo: una nube con cachetes inflados y tres ráfagas que cruzan -->
+        <svg id="soplo" class="abs" style="left:0;top:0;width:1080px;height:1920px;overflow:visible" viewBox="0 0 1080 1920">
+          <g id="wind" fill="none" stroke-linecap="round">
+            <path id="w0" d="M230 760 C420 720 560 800 760 760 S980 700 1060 740" stroke="#0b0b0f" stroke-width="34" />
+            <path id="w0i" d="M230 760 C420 720 560 800 760 760 S980 700 1060 740" stroke="#f5f3ef" stroke-width="16" />
+            <path id="w1" d="M250 860 C460 900 620 820 820 870 S1000 900 1080 880" stroke="#0b0b0f" stroke-width="34" />
+            <path id="w1i" d="M250 860 C460 900 620 820 820 870 S1000 900 1080 880" stroke="#fbbf24" stroke-width="16" />
+            <path id="w2" d="M220 960 C400 930 560 1000 720 960 S900 920 1000 950" stroke="#0b0b0f" stroke-width="34" />
+            <path id="w2i" d="M220 960 C400 930 560 1000 720 960 S900 920 1000 950" stroke="#f5f3ef" stroke-width="16" />
+          </g>
+          <g id="trafTag" style="visibility:hidden"><rect x="430" y="690" width="300" height="76" fill="#fbbf24" stroke="#0b0b0f" stroke-width="10" /><text x="580" y="746" text-anchor="middle" font-family="ArchivoBlack" font-size="46" fill="#0b0b0f">TRÁFICO</text></g>
+          <g id="nube"><image href="assets/nube.png" x="-135" y="662" width="420" height="362" /></g>
+        </svg>
+      <div id="cap"></div>
+      <div id="wipe"></div>
+      <div id="glyph"><b id="glyphT">!</b><img id="glyphL" src="assets/img/eyes.svg" style="position:absolute;width:820px;visibility:hidden;filter:drop-shadow(10px 0 0 #f5f3ef) drop-shadow(-10px 0 0 #f5f3ef) drop-shadow(0 10px 0 #f5f3ef) drop-shadow(0 -10px 0 #f5f3ef) drop-shadow(26px 26px 0 #0b0b0f)" /></div>
+    </div>
+
+    <script>
+      const SC = window.SCORE, T = SC.T;
+      const $ = (s) => document.querySelector(s);
+      window.__timelines = window.__timelines || {};
+      const tl = gsap.timeline({ paused: true });
+      const S = Object.fromEntries(SC.scenes.map((s) => [s.id, s]));
+      const pop = (el, t, from = 0.6, s = 2.2) => {
+        tl.set(el, { visibility: "visible" }, t);
+        tl.fromTo(el, { scale: from }, { scale: 1, duration: 0.3, ease: `back.out(${s})`, immediateRender: false }, t);
+      };
+      const drop = (el, t, dy = -700) => {
+        tl.set(el, { visibility: "visible" }, t - 0.2);
+        tl.fromTo(el, { y: dy }, { y: 0, duration: 0.2, ease: "power3.in", immediateRender: false }, t - 0.2);
+      };
+
+      // fondo: retícula recorre un módulo (bucle finito) y la palabra gigante cambia por escena
+      tl.fromTo("#grid", { x: 0, y: 0 }, { x: 120, y: 120, duration: SC.duration, ease: "none" }, 0);
+      tl.fromTo("#bgw", { x: 0 }, { x: -160, duration: SC.duration, ease: "none" }, 0);
+      const BGW = { maquina: "REAL", stacks: "12 s", agente: "TÚ", cta: "HOY" };
+      Object.entries(BGW).forEach(([id, w]) => tl.set("#bgw", { textContent: w }, S[id].t0));
+
+      // escenas visuales
+      SC.scenes.forEach((s, i) => {
+        if (i === 0 || s.vis === SC.scenes[i - 1].vis) return;
+        tl.set("#s-" + SC.scenes[i - 1].vis, { display: "none" }, s.t0);
+        tl.set("#s-" + s.vis, { display: "block" }, s.t0);
+      });
+
+      // ---- subtítulos karaoke ----
+      const cap = $("#cap");
+      SC.caps.forEach((c, i) => {
+        const line = document.createElement("div"); line.className = "cl";
+        const spans = c.words.map((w) => { const sp = document.createElement("span"); sp.className = "cw"; sp.textContent = w.w; line.appendChild(sp); return sp; });
+        cap.appendChild(line);
+        const tIn = i === 0 ? 0 : c.t - 0.05; // el primer renglón ya está en el cuadro 0 (miniatura)
+        tl.set(line, { display: "flex" }, tIn);
+        tl.set(line, { display: "none" }, c.until);
+        c.words.forEach((w, k) => {
+          tl.set(spans[k], { color: "#fbbf24" }, w.t);
+          const next = c.words[k + 1];
+          tl.set(spans[k], { color: "#f5f3ef" }, next ? next.t : w.e + 0.08);
+        });
+      });
+
+      // ---- A · la ráfaga de tráfico le pega a la fachada y se va de lado ----
+      // la nube entra, se infla y sopla: las ráfagas se dibujan de izquierda a derecha
+      tl.fromTo("#nube", { x: -140 }, { x: 0, duration: 0.32, ease: "back.out(1.6)" }, T.hand);
+      tl.to("#nube", { scale: 1.12, svgOrigin: "60 860", duration: 0.3, ease: "sine.inOut" }, T.push - 0.32);
+      tl.to("#nube", { scale: 0.96, svgOrigin: "60 860", duration: 0.12, ease: "power3.out" }, T.push);
+      ["#w0", "#w0i", "#w1", "#w1i", "#w2", "#w2i"].forEach((id, i) => {
+        const len = document.querySelector(id).getTotalLength();
+        tl.set(id, { strokeDasharray: len, strokeDashoffset: len }, 0);
+        const k = Math.floor(i / 2) * 0.05;
+        tl.to(id, { strokeDashoffset: 0, duration: 0.28, ease: "power2.out" }, T.push + k);
+        tl.to(id, { strokeDashoffset: -len, duration: 0.3, ease: "power2.in" }, T.push + 0.45 + k);
+      });
+      tl.to("#fach", { rotation: 4, duration: 0.12, ease: "power2.out", transformOrigin: "100% 100%" }, T.push);
+      tl.to("#fach", { rotation: 92, duration: T.land - T.push - 0.12, ease: "power3.in", transformOrigin: "100% 100%" }, T.push + 0.12);
+      tl.to("#fach", { rotation: 88, duration: 0.1, repeat: 1, yoyo: true, transformOrigin: "100% 100%" }, T.land);
+      tl.to("#nube", { x: -500, duration: 0.4, ease: "power2.in" }, T.land + 0.1);
+      tl.set("#trafTag", { visibility: "visible" }, T.push + 0.05);
+      tl.fromTo("#trafTag", { x: -360 }, { x: 260, duration: 0.7, ease: "power2.in", immediateRender: false }, T.push + 0.05);
+      tl.set("#trafTag", { visibility: "hidden" }, T.push + 0.75);
+      tl.set("#soplo", { visibility: "hidden" }, T.land + 0.6);
+      tl.to("#fach", { x: 900, duration: 0.45, ease: "power3.in" }, T.carton + 0.35); // el cartón se lo lleva el viento: queda el vacío
+      tl.set("#ghost", { visibility: "visible" }, T.land);
+      tl.to("#s-A", { y: 10, duration: 0.05, repeat: 3, yoyo: true }, T.land);
+      tl.set("#utileria", { visibility: "visible" }, T.carton);
+      tl.fromTo("#utileria", { scale: 2.2, rotation: -20 }, { scale: 1, rotation: -9, duration: 0.24, ease: "back.out(1.8)", immediateRender: false }, T.carton);
+      tl.set("#utileria", { visibility: "hidden" }, T.x[0] - 0.2);
+      // lo que no había: cae cada etiqueta y la tacha una línea
+      T.x.forEach((t, k) => {
+        drop("#x" + k, t);
+        const s = document.getElementById("x" + k).querySelector(".strike");
+        Object.assign(s.style, { left: "-24px", right: "-24px", top: "50%", height: "14px", marginTop: "-7px", background: "#fbbf24", border: "4px solid #0b0b0f", transformOrigin: "0 50%" });
+        tl.fromTo(s, { scaleX: 0 }, { scaleX: 1, duration: 0.16, ease: "power3.out", immediateRender: true }, t + 0.22);
+        tl.to("#x" + k, { rotation: [-3, 2, -2][k], duration: 0.12 }, t + 0.22);
+      });
+      pop("#neg", T.negocio, 0.5, 1.8);
+
+      // ---- máquina: cae la caja, los LED encienden y se apilan los ladrillos ----
+      drop("#box", T.box, -900);
+      tl.to("#s-maquina", { y: 8, duration: 0.05, repeat: 3, yoyo: true }, T.box);
+      tl.to(["#led0", "#led1"], { attr: { fill: "#22c55e" }, duration: 0.01, stagger: 0.12 }, T.box + 0.1);
+      tl.to("#led1", { attr: { fill: "#fbbf24" }, duration: 0.01, repeat: 9, yoyo: true, repeatDelay: 0.3 }, T.box + 0.5);
+      T.bricks.forEach((t, k) => drop("#b" + k, t, -600 - k * 40));
+
+      // ---- stacks: fichas en cascada y el cronómetro cuenta hasta 12.0 ----
+      const STACKS = ["Next", "Remix", "React Router", "Astro", "Svelte", "Nuxt", "TanStack"];
+      STACKS.forEach((n, i) => {
+        const d = document.createElement("div"); d.className = "tile"; d.style.left = 60 + i * 120 + "px";
+        d.innerHTML = `<span style="font-size:${n.length > 8 ? 34 : 44}px">${n}</span>`; $("#tiles").appendChild(d);
+        tl.set(d, { visibility: "hidden" }, 0);
+        tl.set(d, { visibility: "visible" }, T.dom + i * 0.09);
+        tl.fromTo(d, { y: -520, rotation: -14 }, { y: 0, rotation: 0, duration: 0.26, ease: "back.out(1.5)", immediateRender: false }, T.dom + i * 0.09);
+      });
+      pop("#watch", T.pub - 0.3, 0.5);
+      pop("#count", T.pub - 0.3, 0.5);
+      tl.to("#hand", { rotation: 720, svgOrigin: "210 260", duration: T.pubEnd - T.pub, ease: "power1.inOut" }, T.pub);
+      const c = { v: 0 };
+      tl.to(c, { v: 12, duration: T.pubEnd - T.pub, ease: "power1.inOut", onUpdate: () => { $("#cnum").textContent = c.v.toFixed(1); } }, T.pub);
+      tl.set("#cnum", { textContent: "12.0" }, T.pubEnd);
+      tl.to("#count", { backgroundColor: "#fbbf24", color: "#0b0b0f", boxShadow: "12px 12px 0 #7c3aed", duration: 0.05 }, T.pubEnd);
+      pop("#publ", T.pubEnd, 1.8, 2);
+
+      // ---- agente: el candado aparece cerrado y se abre; la terminal escribe ----
+      pop("#lock", T.lock, 0.5);
+      tl.to(["#shackle", "#shackleIn"], { y: -60, rotation: -28, svgOrigin: "230 150", duration: 0.28, ease: "back.out(2)" }, T.unlock);
+      tl.to("#lockG", { rotation: 8, svgOrigin: "155 230", duration: 0.12, repeat: 1, yoyo: true }, T.unlock);
+      const LINES_TX = ["$ easybits launch mi-app", "<span class=ok>✓</span> caja lista", "<span class=ok>✓</span> base y dominio", "<span class=ok>✓</span> publicado · 12.0 s", "→ mi-app.easybits.cloud"];
+      const first = LINES_TX[0], perChar = (T.typeEnd - T.type - 0.4) / first.length;
+      for (let i = 0; i <= first.length; i++) tl.set("#tx", { innerHTML: first.slice(0, i) + (i < first.length ? "▌" : "") }, T.type + i * perChar);
+      for (let k = 1; k < LINES_TX.length; k++) tl.set("#tx", { innerHTML: LINES_TX.slice(0, k + 1).join("\n") }, T.typeEnd - 0.4 + k * 0.1);
+      tl.set("#tx", { innerHTML: "$ ▌" }, 0);
+
+      // ---- cierre: vuelve el soplo (cuento de los cochinitos) y el edificio de ladrillo ni se mueve ----
+      const B = T.blow2;
+      tl.set("#soplo", { visibility: "visible" }, S.cta.t0);
+      tl.set("#nube", { x: -500, scale: 1 }, S.cta.t0);
+      tl.to("#nube", { x: 0, duration: 0.32, ease: "back.out(1.6)" }, B - 0.45);
+      tl.to("#nube", { scale: 1.18, svgOrigin: "60 860", duration: 0.3, ease: "sine.inOut" }, B - 0.3);
+      tl.to("#nube", { scale: 0.96, svgOrigin: "60 860", duration: 0.12, ease: "power3.out" }, B);
+      ["#w0", "#w0i", "#w1", "#w1i", "#w2", "#w2i"].forEach((id, i) => {
+        const len = document.querySelector(id).getTotalLength();
+        const k = Math.floor(i / 2) * 0.05;
+        tl.set(id, { strokeDashoffset: len }, S.cta.t0);
+        tl.to(id, { strokeDashoffset: 0, duration: 0.28, ease: "power2.out" }, B + k);
+        tl.to(id, { strokeDashoffset: -len, duration: 0.3, ease: "power2.in" }, B + 0.45 + k);
+      });
+      tl.set("#trafTag", { visibility: "visible" }, B + 0.05);
+      tl.fromTo("#trafTag", { x: -360 }, { x: -60, duration: 0.25, ease: "power3.out", immediateRender: false }, B + 0.05);
+      tl.to("#trafTag", { rotation: -14, y: 40, svgOrigin: "580 728", duration: 0.2, ease: "back.out(2)" }, B + 0.3);   // choca con el ladrillo y rebota
+      tl.set("#trafTag", { visibility: "hidden" }, B + 0.9);
+      tl.to("#edif", { x: 3, duration: 0.04, repeat: 3, yoyo: true }, B + 0.12);   // apenas tiembla: es ladrillo
+      tl.to("#nube", { scale: 0.7, svgOrigin: "60 860", duration: 0.25, ease: "power2.in" }, B + 0.55);  // se desinfla
+      tl.to("#nube", { x: -560, duration: 0.35, ease: "power2.in" }, B + 0.8);
+      tl.set("#soplo", { visibility: "hidden" }, B + 1.2);
+      // ---- marca, URL y fecha ----
+      tl.fromTo("#edif", { scale: 0.92 }, { scale: 1, duration: 0.4, ease: "back.out(1.6)", transformOrigin: "50% 100%" }, S.cta.t0);
+      ["#wf", "#wb"].forEach((id) => [..."Easybits"].forEach((ch) => { const sp = document.createElement("span"); sp.textContent = ch; $(id).appendChild(sp); }));
+      tl.set("#brand", { opacity: 0 }, 0);
+      tl.set("#wb span", { rotationX: 90, y: "40%", opacity: 0 }, 0);
+      tl.set("#brand", { opacity: 1 }, T.logo);
+      tl.fromTo("#eyes", { scale: 0.4 }, { scale: 1, duration: 0.35, ease: "back.out(2)", immediateRender: false }, T.logo);
+      tl.fromTo("#wf span", { rotationX: -90, opacity: 0 }, { rotationX: 0, opacity: 1, duration: 0.3, stagger: 0.05, ease: "back.out(1.6)", immediateRender: false }, T.logo);
+      tl.to("#wf span", { rotationX: 90, y: "-40%", opacity: 0, duration: 0.3, stagger: 0.05 }, T.url + 0.6);
+      tl.to("#wb span", { rotationX: 0, y: "0%", opacity: 1, duration: 0.3, stagger: 0.05 }, T.url + 0.6);
+      tl.fromTo("#abierto", { scale: 1 }, { scale: 1.12, duration: 0.15, repeat: 1, yoyo: true, ease: "power2.out" }, T.abre);
+      tl.set("#hoy", { visibility: "visible" }, T.hoy);
+      tl.fromTo("#hoy", { scale: 2, rotation: -10 }, { scale: 1, rotation: 6, duration: 0.24, ease: "back.out(1.8)", immediateRender: false }, T.hoy);
+      pop("#url", T.url, 0.8);
+
+      // ---- cortinillas: rebanadas sesgadas con back.out; el glifo sella el corte ----
+      const wipe = $("#wipe");
+      const COLS = ["#7c3aed", "#fbbf24", "#f5f3ef", "#7c3aed", "#fbbf24", "#7c3aed"];
+      SC.scenes.filter((s) => s.glyph).forEach((s) => {
+        const t = s.t0;
+        COLS.forEach((col, k) => {
+          const p = document.createElement("div"); p.className = "slice"; p.style.background = col; p.style.left = -240 + k * 250 + "px";
+          p.style.border = "10px solid #0b0b0f"; wipe.appendChild(p);
+          tl.set(p, { skewX: -16, y: 2600, visibility: "visible" }, 0);
+          tl.to(p, { y: 0, duration: 0.34, ease: "back.out(1.3)" }, t - 0.4 + k * 0.03);
+          tl.to(p, { y: -2700, duration: 0.3, ease: "power3.in" }, t + 0.16 + k * 0.03);
+        });
+        const isLogo = s.glyph === "logo", G = isLogo ? "#glyphL" : "#glyph b";
+        tl.set("#glyphT", { textContent: isLogo ? "" : s.glyph }, t - 0.2);
+        tl.set("#glyphL", { visibility: isLogo ? "visible" : "hidden" }, t - 0.2);
+        tl.set("#glyph", { visibility: "visible" }, t - 0.2);
+        tl.fromTo(G, { scale: 0.3, rotation: -10 }, { scale: 1, rotation: 0, duration: 0.24, ease: "back.out(2.4)", immediateRender: false }, t - 0.2);
+        tl.to(G, { scale: 1.6, opacity: 0, duration: 0.18, ease: "power2.in" }, t + 0.12);
+        tl.set(G, { opacity: 1 }, t + 0.32);
+        tl.set("#glyphL", { visibility: "hidden" }, t + 0.32);
+        tl.set("#glyph", { visibility: "hidden" }, t + 0.32);
+      });
+
+      window.__timelines["main"] = tl;
+    </script>
+  </body>
+</html>

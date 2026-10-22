@@ -1,0 +1,62 @@
+[
+  {
+    "text": "No",
+    "start": 0.03,
+    "end": 0.13,
+    "id": "w0"
+  },
+  {
+    "text": "era",
+    "start": 0.13,
+    "end": 0.33,
+    "id": "w1"
+  },
+  {
+    "text": "una",
+    "start": 0.33,
+    "end": 0.53,
+    "id": "w2"
+  },
+  {
+    "text": "app,",
+    "start": 0.53,
+    "end": 0.86,
+    "id": "w3"
+  },
+  {
+    "text": "era",
+    "start": 1.02,
+    "end": 1.06,
+    "id": "w4"
+  },
+  {
+    "text": "solo",
+    "start": 1.06,
+    "end": 1.33,
+    "id": "w5"
+  },
+  {
+    "text": "un",
+    "start": 1.33,
+    "end": 1.46,
+    "id": "w6"
+  },
+  {
+    "text": "demo",
+    "start": 1.46,
+    "end": 1.73,
+    "id": "w7"
+  },
+  {
+    "text": "de",
+    "start": 1.73,
+    "end": 1.86,
+    "id": "w8"
+  },
+  {
+    "text": "cartón.",
+    "start": 1.86,
+    "end": 2.48,
+    "id": "w9"
+  }
+]

@@ -1,0 +1,74 @@
+[
+  {
+    "text": "EasyBits,",
+    "start": 0.03,
+    "end": 0.6,
+    "id": "w0"
+  },
+  {
+    "text": "la",
+    "start": 0.6,
+    "end": 0.72,
+    "id": "w1"
+  },
+  {
+    "text": "nube",
+    "start": 0.72,
+    "end": 0.96,
+    "id": "w2"
+  },
+  {
+    "text": "para",
+    "start": 0.96,
+    "end": 1.18,
+    "id": "w3"
+  },
+  {
+    "text": "tu",
+    "start": 1.28,
+    "end": 1.32,
+    "id": "w4"
+  },
+  {
+    "text": "agente,",
+    "start": 1.32,
+    "end": 1.82,
+    "id": "w5"
+  },
+  {
+    "text": "abre",
+    "start": 1.82,
+    "end": 2.19,
+    "id": "w6"
+  },
+  {
+    "text": "la",
+    "start": 2.19,
+    "end": 2.37,
+    "id": "w7"
+  },
+  {
+    "text": "tuya",
+    "start": 2.37,
+    "end": 2.73,
+    "id": "w8"
+  },
+  {
+    "text": "hoy",
+    "start": 2.73,
+    "end": 3,
+    "id": "w9"
+  },
+  {
+    "text": "en",
+    "start": 3,
+    "end": 3.22,
+    "id": "w10"
+  },
+  {
+    "text": "EasyBits.cloud.",
+    "start": 3.22,
+    "end": 4.34,
+    "id": "w11"
+  }
+]

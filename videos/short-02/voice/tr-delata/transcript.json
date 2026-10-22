@@ -1,0 +1,68 @@
+[
+  {
+    "text": "El",
+    "start": 0.03,
+    "end": 0.11,
+    "id": "w0"
+  },
+  {
+    "text": "div",
+    "start": 0.11,
+    "end": 0.28,
+    "id": "w1"
+  },
+  {
+    "text": "de",
+    "start": 0.33,
+    "end": 0.41,
+    "id": "w2"
+  },
+  {
+    "text": "píxeles",
+    "start": 0.48,
+    "end": 0.84,
+    "id": "w3"
+  },
+  {
+    "text": "la",
+    "start": 0.84,
+    "end": 0.96,
+    "id": "w4"
+  },
+  {
+    "text": "delata,",
+    "start": 0.96,
+    "end": 1.46,
+    "id": "w5"
+  },
+  {
+    "text": "el",
+    "start": 1.46,
+    "end": 1.56,
+    "id": "w6"
+  },
+  {
+    "text": "texto",
+    "start": 1.72,
+    "end": 1.98,
+    "id": "w7"
+  },
+  {
+    "text": "no",
+    "start": 1.98,
+    "end": 2.1,
+    "id": "w8"
+  },
+  {
+    "text": "es",
+    "start": 2.17,
+    "end": 2.28,
+    "id": "w9"
+  },
+  {
+    "text": "texto.",
+    "start": 2.28,
+    "end": 2.83,
+    "id": "w10"
+  }
+]

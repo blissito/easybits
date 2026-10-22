@@ -1,0 +1,473 @@
+[
+ {
+  "scene": "empuja",
+  "text": "Esto parece una app. Pero, ¿aguanta tráfico de verdad?",
+  "file": "voice/00-empuja.wav",
+  "dur": 3.328,
+  "words": [
+   {
+    "w": "Esto",
+    "s": 0.03,
+    "e": 0.23
+   },
+   {
+    "w": "parece",
+    "s": 0.29,
+    "e": 0.72
+   },
+   {
+    "w": "una",
+    "s": 0.72,
+    "e": 0.93
+   },
+   {
+    "w": "app,",
+    "s": 0.93,
+    "e": 1.31
+   },
+   {
+    "w": "pero",
+    "s": 1.43,
+    "e": 1.61
+   },
+   {
+    "w": "aguanta",
+    "s": 1.61,
+    "e": 2.06
+   },
+   {
+    "w": "tráfico",
+    "s": 2.13,
+    "e": 2.65
+   },
+   {
+    "w": "de",
+    "s": 2.65,
+    "e": 2.8
+   },
+   {
+    "w": "verdad.",
+    "s": 2.8,
+    "e": 3.28
+   }
+  ]
+ },
+ {
+  "scene": "carton",
+  "text": "No era una app. Era solo un demo de cartón.",
+  "file": "voice/01-carton.wav",
+  "dur": 2.56,
+  "words": [
+   {
+    "w": "No",
+    "s": 0.03,
+    "e": 0.13
+   },
+   {
+    "w": "era",
+    "s": 0.13,
+    "e": 0.33
+   },
+   {
+    "w": "una",
+    "s": 0.33,
+    "e": 0.53
+   },
+   {
+    "w": "app,",
+    "s": 0.53,
+    "e": 0.86
+   },
+   {
+    "w": "era",
+    "s": 1.02,
+    "e": 1.06
+   },
+   {
+    "w": "solo",
+    "s": 1.06,
+    "e": 1.33
+   },
+   {
+    "w": "un",
+    "s": 1.33,
+    "e": 1.46
+   },
+   {
+    "w": "demo",
+    "s": 1.46,
+    "e": 1.73
+   },
+   {
+    "w": "de",
+    "s": 1.73,
+    "e": 1.86
+   },
+   {
+    "w": "cartón.",
+    "s": 1.86,
+    "e": 2.48
+   }
+  ]
+ },
+ {
+  "scene": "vacio",
+  "text": "Sin servidor, sin base de datos, sin dominio. Una página bonita no es un negocio.",
+  "file": "voice/02-vacio.wav",
+  "dur": 4.779,
+  "words": [
+   {
+    "w": "Sin",
+    "s": 0.03,
+    "e": 0.16
+   },
+   {
+    "w": "servidor,",
+    "s": 0.18,
+    "e": 0.69
+   },
+   {
+    "w": "sin",
+    "s": 0.76,
+    "e": 0.94
+   },
+   {
+    "w": "base",
+    "s": 0.94,
+    "e": 1.17
+   },
+   {
+    "w": "de",
+    "s": 1.18,
+    "e": 1.3
+   },
+   {
+    "w": "datos,",
+    "s": 1.3,
+    "e": 1.71
+   },
+   {
+    "w": "sin",
+    "s": 1.71,
+    "e": 1.89
+   },
+   {
+    "w": "dominio,",
+    "s": 1.89,
+    "e": 2.45
+   },
+   {
+    "w": "una",
+    "s": 2.45,
+    "e": 2.46
+   },
+   {
+    "w": "página",
+    "s": 2.78,
+    "e": 3.22
+   },
+   {
+    "w": "bonita",
+    "s": 3.22,
+    "e": 3.74
+   },
+   {
+    "w": "no",
+    "s": 3.74,
+    "e": 3.86
+   },
+   {
+    "w": "es",
+    "s": 3.86,
+    "e": 3.98
+   },
+   {
+    "w": "un",
+    "s": 3.98,
+    "e": 4.08
+   },
+   {
+    "w": "negocio.",
+    "s": 4.11,
+    "e": 4.71
+   }
+  ]
+ },
+ {
+  "scene": "maquina",
+  "text": "En Ísibits tu agente construye sobre una máquina de verdad: servidor, base, archivos, dominio y wásap.",
+  "file": "voice/03-maquina.wav",
+  "dur": 6.123,
+  "words": [
+   {
+    "w": "En",
+    "s": 0.03,
+    "e": 0.11
+   },
+   {
+    "w": "EasyBits",
+    "s": 0.11,
+    "e": 0.51
+   },
+   {
+    "w": "tu",
+    "s": 0.6,
+    "e": 0.67
+   },
+   {
+    "w": "agente",
+    "s": 0.67,
+    "e": 1.01
+   },
+   {
+    "w": "construye",
+    "s": 1.01,
+    "e": 1.52
+   },
+   {
+    "w": "sobre",
+    "s": 1.52,
+    "e": 1.81
+   },
+   {
+    "w": "una",
+    "s": 1.81,
+    "e": 1.98
+   },
+   {
+    "w": "máquina",
+    "s": 1.98,
+    "e": 2.38
+   },
+   {
+    "w": "de",
+    "s": 2.38,
+    "e": 2.49
+   },
+   {
+    "w": "verdad,",
+    "s": 2.49,
+    "e": 3.06
+   },
+   {
+    "w": "servidor,",
+    "s": 3.28,
+    "e": 3.76
+   },
+   {
+    "w": "base,",
+    "s": 3.76,
+    "e": 4.18
+   },
+   {
+    "w": "archivos,",
+    "s": 4.18,
+    "e": 4.9
+   },
+   {
+    "w": "dominio",
+    "s": 4.9,
+    "e": 5.48
+   },
+   {
+    "w": "y",
+    "s": 5.48,
+    "e": 5.66
+   },
+   {
+    "w": "WhatsApp.",
+    "s": 5.66,
+    "e": 5.96
+   }
+  ]
+ },
+ {
+  "scene": "stacks",
+  "text": "El framework que quieras. Publicado en doce segundos.",
+  "file": "voice/04-stacks.wav",
+  "dur": 3.157,
+  "words": [
+   {
+    "w": "El",
+    "s": 0.03,
+    "e": 0.11
+   },
+   {
+    "w": "framework",
+    "s": 0.2,
+    "e": 0.61
+   },
+   {
+    "w": "que",
+    "s": 0.78,
+    "e": 0.93
+   },
+   {
+    "w": "quieras",
+    "s": 0.97,
+    "e": 1.36
+   },
+   {
+    "w": "publicado",
+    "s": 1.57,
+    "e": 1.98
+   },
+   {
+    "w": "en",
+    "s": 2.01,
+    "e": 2.12
+   },
+   {
+    "w": "12",
+    "s": 2.12,
+    "e": 2.52
+   },
+   {
+    "w": "segundos.",
+    "s": 2.52,
+    "e": 3.1
+   }
+  ]
+ },
+ {
+  "scene": "agente",
+  "text": "Y no te encierra en su chat: lo manejas desde tu propio agente.",
+  "file": "voice/05-agente.wav",
+  "dur": 3.669,
+  "words": [
+   {
+    "w": "Si",
+    "s": 0.03,
+    "e": 0.12
+   },
+   {
+    "w": "no",
+    "s": 0.12,
+    "e": 0.23
+   },
+   {
+    "w": "te",
+    "s": 0.32,
+    "e": 0.36
+   },
+   {
+    "w": "encierra",
+    "s": 0.36,
+    "e": 0.84
+   },
+   {
+    "w": "en",
+    "s": 0.84,
+    "e": 0.93
+   },
+   {
+    "w": "su",
+    "s": 0.95,
+    "e": 1.07
+   },
+   {
+    "w": "chat,",
+    "s": 1.07,
+    "e": 1.4
+   },
+   {
+    "w": "lo",
+    "s": 1.4,
+    "e": 1.73
+   },
+   {
+    "w": "manejas",
+    "s": 1.73,
+    "e": 2.08
+   },
+   {
+    "w": "desde",
+    "s": 2.08,
+    "e": 2.42
+   },
+   {
+    "w": "tu",
+    "s": 2.42,
+    "e": 2.55
+   },
+   {
+    "w": "propio",
+    "s": 2.55,
+    "e": 2.95
+   },
+   {
+    "w": "agente.",
+    "s": 3.02,
+    "e": 3.57
+   }
+  ]
+ },
+ {
+  "scene": "cta",
+  "text": "Ísibits. La nube para tu agente. Abre la tuya hoy en Ísibits punto claud.",
+  "file": "voice/06-cta.wav",
+  "dur": 4.48,
+  "words": [
+   {
+    "w": "EasyBits,",
+    "s": 0.03,
+    "e": 0.6
+   },
+   {
+    "w": "la",
+    "s": 0.6,
+    "e": 0.72
+   },
+   {
+    "w": "nube",
+    "s": 0.72,
+    "e": 0.96
+   },
+   {
+    "w": "para",
+    "s": 0.96,
+    "e": 1.18
+   },
+   {
+    "w": "tu",
+    "s": 1.28,
+    "e": 1.32
+   },
+   {
+    "w": "agente,",
+    "s": 1.32,
+    "e": 1.82
+   },
+   {
+    "w": "abre",
+    "s": 1.82,
+    "e": 2.19
+   },
+   {
+    "w": "la",
+    "s": 2.19,
+    "e": 2.37
+   },
+   {
+    "w": "tuya",
+    "s": 2.37,
+    "e": 2.73
+   },
+   {
+    "w": "hoy",
+    "s": 2.73,
+    "e": 3
+   },
+   {
+    "w": "en",
+    "s": 3,
+    "e": 3.22
+   },
+   {
+    "w": "EasyBits.cloud.",
+    "s": 3.22,
+    "e": 4.34
+   }
+  ]
+ }
+]

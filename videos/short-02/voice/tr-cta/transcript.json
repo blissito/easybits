@@ -1,0 +1,62 @@
+[
+  {
+    "text": "Si",
+    "start": 0.03,
+    "end": 0.12,
+    "id": "w0"
+  },
+  {
+    "text": "no",
+    "start": 0.12,
+    "end": 0.24,
+    "id": "w1"
+  },
+  {
+    "text": "está",
+    "start": 0.24,
+    "end": 0.48,
+    "id": "w2"
+  },
+  {
+    "text": "en",
+    "start": 0.48,
+    "end": 0.55,
+    "id": "w3"
+  },
+  {
+    "text": "rojo,",
+    "start": 0.61,
+    "end": 0.94,
+    "id": "w4"
+  },
+  {
+    "text": "está",
+    "start": 0.94,
+    "end": 1.14,
+    "id": "w5"
+  },
+  {
+    "text": "igual.",
+    "start": 1.22,
+    "end": 1.68,
+    "id": "w6"
+  },
+  {
+    "text": "Pruébalo",
+    "start": 1.68,
+    "end": 2.18,
+    "id": "w7"
+  },
+  {
+    "text": "en",
+    "start": 2.21,
+    "end": 2.32,
+    "id": "w8"
+  },
+  {
+    "text": "easybits.cloud.",
+    "start": 2.32,
+    "end": 3.64,
+    "id": "w9"
+  }
+]

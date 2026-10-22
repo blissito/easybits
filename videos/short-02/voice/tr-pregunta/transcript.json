@@ -1,0 +1,56 @@
+[
+  {
+    "text": "¿Cómo",
+    "start": 0.06,
+    "end": 0.36,
+    "id": "w0"
+  },
+  {
+    "text": "sabe",
+    "start": 0.36,
+    "end": 0.65,
+    "id": "w1"
+  },
+  {
+    "text": "una",
+    "start": 0.65,
+    "end": 0.87,
+    "id": "w2"
+  },
+  {
+    "text": "IA",
+    "start": 0.87,
+    "end": 1.01,
+    "id": "w3"
+  },
+  {
+    "text": "que",
+    "start": 1.08,
+    "end": 1.23,
+    "id": "w4"
+  },
+  {
+    "text": "copió",
+    "start": 1.24,
+    "end": 1.57,
+    "id": "w5"
+  },
+  {
+    "text": "bien",
+    "start": 1.58,
+    "end": 1.84,
+    "id": "w6"
+  },
+  {
+    "text": "un",
+    "start": 1.84,
+    "end": 1.93,
+    "id": "w7"
+  },
+  {
+    "text": "PDF?",
+    "start": 2.02,
+    "end": 2.34,
+    "id": "w8"
+  }
+]

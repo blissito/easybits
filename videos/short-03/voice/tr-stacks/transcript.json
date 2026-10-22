@@ -1,0 +1,50 @@
+[
+  {
+    "text": "El",
+    "start": 0.03,
+    "end": 0.11,
+    "id": "w0"
+  },
+  {
+    "text": "framework",
+    "start": 0.2,
+    "end": 0.61,
+    "id": "w1"
+  },
+  {
+    "text": "que",
+    "start": 0.78,
+    "end": 0.93,
+    "id": "w2"
+  },
+  {
+    "text": "quieras",
+    "start": 0.97,
+    "end": 1.36,
+    "id": "w3"
+  },
+  {
+    "text": "publicado",
+    "start": 1.57,
+    "end": 1.98,
+    "id": "w4"
+  },
+  {
+    "text": "en",
+    "start": 2.01,
+    "end": 2.12,
+    "id": "w5"
+  },
+  {
+    "text": "12",
+    "start": 2.12,
+    "end": 2.52,
+    "id": "w6"
+  },
+  {
+    "text": "segundos.",
+    "start": 2.52,
+    "end": 3.1,
+    "id": "w7"
+  }
+]

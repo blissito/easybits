@@ -1,0 +1,80 @@
+[
+  {
+    "text": "Si",
+    "start": 0.03,
+    "end": 0.12,
+    "id": "w0"
+  },
+  {
+    "text": "no",
+    "start": 0.12,
+    "end": 0.23,
+    "id": "w1"
+  },
+  {
+    "text": "te",
+    "start": 0.32,
+    "end": 0.36,
+    "id": "w2"
+  },
+  {
+    "text": "encierra",
+    "start": 0.36,
+    "end": 0.84,
+    "id": "w3"
+  },
+  {
+    "text": "en",
+    "start": 0.84,
+    "end": 0.93,
+    "id": "w4"
+  },
+  {
+    "text": "su",
+    "start": 0.95,
+    "end": 1.07,
+    "id": "w5"
+  },
+  {
+    "text": "chat,",
+    "start": 1.07,
+    "end": 1.4,
+    "id": "w6"
+  },
+  {
+    "text": "lo",
+    "start": 1.4,
+    "end": 1.73,
+    "id": "w7"
+  },
+  {
+    "text": "manejas",
+    "start": 1.73,
+    "end": 2.08,
+    "id": "w8"
+  },
+  {
+    "text": "desde",
+    "start": 2.08,
+    "end": 2.42,
+    "id": "w9"
+  },
+  {
+    "text": "tu",
+    "start": 2.42,
+    "end": 2.55,
+    "id": "w10"
+  },
+  {
+    "text": "propio",
+    "start": 2.55,
+    "end": 2.95,
+    "id": "w11"
+  },
+  {
+    "text": "agente.",
+    "start": 3.02,
+    "end": 3.57,
+    "id": "w12"
+  }
+]

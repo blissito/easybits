@@ -1,0 +1,50 @@
+[
+  {
+    "text": "Cuando",
+    "start": 0.05,
+    "end": 0.31,
+    "id": "w0"
+  },
+  {
+    "text": "el",
+    "start": 0.43,
+    "end": 0.46,
+    "id": "w1"
+  },
+  {
+    "text": "clon",
+    "start": 0.46,
+    "end": 0.68,
+    "id": "w2"
+  },
+  {
+    "text": "es",
+    "start": 0.68,
+    "end": 0.79,
+    "id": "w3"
+  },
+  {
+    "text": "fiel,",
+    "start": 0.79,
+    "end": 1.18,
+    "id": "w4"
+  },
+  {
+    "text": "el",
+    "start": 1.18,
+    "end": 1.27,
+    "id": "w5"
+  },
+  {
+    "text": "rojo",
+    "start": 1.36,
+    "end": 1.63,
+    "id": "w6"
+  },
+  {
+    "text": "desaparece.",
+    "start": 1.63,
+    "end": 2.59,
+    "id": "w7"
+  }
+]

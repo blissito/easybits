@@ -1,0 +1,56 @@
+[
+  {
+    "text": "Esto",
+    "start": 0.03,
+    "end": 0.23,
+    "id": "w0"
+  },
+  {
+    "text": "parece",
+    "start": 0.29,
+    "end": 0.72,
+    "id": "w1"
+  },
+  {
+    "text": "una",
+    "start": 0.72,
+    "end": 0.93,
+    "id": "w2"
+  },
+  {
+    "text": "app,",
+    "start": 0.93,
+    "end": 1.31,
+    "id": "w3"
+  },
+  {
+    "text": "pero",
+    "start": 1.43,
+    "end": 1.61,
+    "id": "w4"
+  },
+  {
+    "text": "aguanta",
+    "start": 1.61,
+    "end": 2.06,
+    "id": "w5"
+  },
+  {
+    "text": "tráfico",
+    "start": 2.13,
+    "end": 2.65,
+    "id": "w6"
+  },
+  {
+    "text": "de",
+    "start": 2.65,
+    "end": 2.8,
+    "id": "w7"
+  },
+  {
+    "text": "verdad.",
+    "start": 2.8,
+    "end": 3.28,
+    "id": "w8"
+  }
+]

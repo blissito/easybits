@@ -1,0 +1,56 @@
+[
+  {
+    "text": "Esta",
+    "start": 0.03,
+    "end": 0.21,
+    "id": "w0"
+  },
+  {
+    "text": "copia",
+    "start": 0.3,
+    "end": 0.58,
+    "id": "w1"
+  },
+  {
+    "text": "se",
+    "start": 0.58,
+    "end": 0.71,
+    "id": "w2"
+  },
+  {
+    "text": "ve",
+    "start": 0.71,
+    "end": 0.82,
+    "id": "w3"
+  },
+  {
+    "text": "perfecta,",
+    "start": 0.89,
+    "end": 1.5,
+    "id": "w4"
+  },
+  {
+    "text": "pero",
+    "start": 1.5,
+    "end": 1.83,
+    "id": "w5"
+  },
+  {
+    "text": "es",
+    "start": 1.83,
+    "end": 1.99,
+    "id": "w6"
+  },
+  {
+    "text": "una",
+    "start": 1.99,
+    "end": 2.13,
+    "id": "w7"
+  },
+  {
+    "text": "foto.",
+    "start": 2.23,
+    "end": 2.58,
+    "id": "w8"
+  }
+]

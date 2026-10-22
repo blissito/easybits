@@ -1,0 +1,74 @@
+[
+  {
+    "text": "Tapar",
+    "start": 0.03,
+    "end": 0.27,
+    "id": "w0"
+  },
+  {
+    "text": "una",
+    "start": 0.27,
+    "end": 0.43,
+    "id": "w1"
+  },
+  {
+    "text": "palabra,",
+    "start": 0.43,
+    "end": 0.93,
+    "id": "w2"
+  },
+  {
+    "text": "cambiar",
+    "start": 0.93,
+    "end": 1.32,
+    "id": "w3"
+  },
+  {
+    "text": "la",
+    "start": 1.32,
+    "end": 1.43,
+    "id": "w4"
+  },
+  {
+    "text": "fuente,",
+    "start": 1.43,
+    "end": 1.92,
+    "id": "w5"
+  },
+  {
+    "text": "borrar",
+    "start": 1.92,
+    "end": 2.26,
+    "id": "w6"
+  },
+  {
+    "text": "un",
+    "start": 2.26,
+    "end": 2.37,
+    "id": "w7"
+  },
+  {
+    "text": "logo,",
+    "start": 2.37,
+    "end": 2.74,
+    "id": "w8"
+  },
+  {
+    "text": "todas",
+    "start": 2.74,
+    "end": 3.12,
+    "id": "w9"
+  },
+  {
+    "text": "en",
+    "start": 3.12,
+    "end": 3.27,
+    "id": "w10"
+  },
+  {
+    "text": "rojo.",
+    "start": 3.27,
+    "end": 3.81,
+    "id": "w11"
+  }
+]

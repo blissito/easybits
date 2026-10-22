@@ -1,0 +1,6 @@
+¿Cómo sabe una i a que copió bien un pe de efe?
+Esta copia se ve perfecta… pero es una foto.
+El dif de píxeles la delata: el texto no es texto.
+Tapar una palabra, cambiar la fuente, borrar un logo. Todas en rojo.
+Cuando el clon es fiel, el rojo desaparece.
+Si no está en rojo, está igual. Pruébalo en Ísibits punto claud.

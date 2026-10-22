@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Estrategia EasyBits</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Jersey+10&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0b0b0f; --ink: #f4f2fa; --muted: #9a96a8; --card: #15141c;
+    --line: #2a2735; --purple: #7c3aed; --amber: #fbbf24; --ok: #34d399; --bad: #f87171;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 17px/1.55 Inter, system-ui, sans-serif; }
+  main { max-width: 960px; margin: 0 auto; padding: 48px 16px 96px; }
+  .brand { font-family: "Jersey 10", serif; font-size: 28px; color: var(--amber); letter-spacing: .5px; }
+  h1 { font-size: clamp(34px, 6vw, 58px); line-height: 1.02; margin: 12px 0 18px; font-weight: 800; }
+  h1 em { font-style: normal; color: var(--amber); }
+  h2 { font-size: 26px; margin: 64px 0 16px; font-weight: 800; }
+  h2 span { color: var(--purple); font-family: "Jersey 10", serif; font-size: 34px; margin-right: 10px; }
+  p.lead { font-size: 20px; color: var(--muted); max-width: 720px; }
+  .verdict { margin-top: 28px; background: var(--purple); color: #fff; border: 3px solid #000;
+    box-shadow: 8px 8px 0 var(--amber); padding: 22px 24px; font-size: 19px; }
+  .verdict b { color: var(--amber); }
+  .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+  .card { background: var(--card); border: 2px solid var(--line); padding: 20px; box-shadow: 6px 6px 0 #000; }
+  .card h3 { margin: 0 0 8px; font-size: 18px; }
+  .card p { margin: 0; color: var(--muted); font-size: 15px; }
+  .tag { display: inline-block; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px;
+    padding: 3px 8px; border: 2px solid currentColor; margin-bottom: 10px; }
+  .bad { color: var(--bad); } .ok { color: var(--ok); } .amb { color: var(--amber); }
+  .ladder { display: grid; gap: 0; }
+  .step { display: grid; grid-template-columns: 64px 1fr auto; align-items: center; gap: 16px;
+    border: 2px solid var(--line); border-bottom: 0; padding: 18px 20px; background: var(--card); }
+  .step:last-child { border-bottom: 2px solid var(--line); }
+  .step .n { font-family: "Jersey 10", serif; font-size: 44px; color: var(--purple); line-height: 1; }
+  .step h3 { margin: 0; font-size: 18px; }
+  .step p { margin: 2px 0 0; color: var(--muted); font-size: 15px; }
+  .step .price { font-weight: 800; color: var(--amber); white-space: nowrap; text-align: right; }
+  .bar { display: grid; grid-template-columns: 110px 1fr 46px; gap: 12px; align-items: center; margin: 10px 0; font-size: 15px; }
+  .bar .track { background: #1e1c27; height: 22px; border: 2px solid #000; }
+  .bar .fill { height: 100%; background: var(--purple); }
+  .bar .fill.amb { background: var(--amber); }
+  table { width: 100%; border-collapse: collapse; font-size: 15px; }
+  th, td { text-align: left; padding: 12px 10px; border-bottom: 2px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: 1px; }
+  .plan { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+  .plan .card h3 { color: var(--amber); }
+  .plan ul { margin: 8px 0 0; padding-left: 18px; color: var(--ink); font-size: 15px; }
+  .plan li { margin: 6px 0; }
+  .scroll { overflow-x: auto; }
+  footer { margin-top: 72px; color: var(--muted); font-size: 13px; border-top: 2px solid var(--line); padding-top: 16px; }
+  @media (max-width: 560px) {
+    .step { grid-template-columns: 44px 1fr; }
+    .step .price { grid-column: 2; text-align: left; }
+    .bar { grid-template-columns: 84px 1fr 36px; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <div class="brand">EasyBits · propuesta de estrategia</div>
+  <h1>No te enfoques en scraping.<br>Úsalo como <em>puerta de entrada</em>.</h1>
+  <p class="lead">El scraping atrae clientes, pero se los puede llevar cualquiera. Lo que se queda es la caja que no se borra y que se vuelve el hosting del cliente.</p>
+
+  <div class="verdict">
+    <b>Posicionamiento:</b> la nube donde el integrador mexicano construye, hospeda y cobra sus agentes, en MXN.
+    El cliente entra por la <b>web</b>, se queda por la <b>caja</b> y paga cada mes por el <b>hosting</b> y la <b>flota</b>.
+  </div>
+
+  <h2><span>01</span>Por qué scraping no debe ser el centro</h2>
+  <div class="grid">
+    <div class="card"><div class="tag bad">Revendemos</div><h3>No es nuestro motor</h3>
+      <p>Por debajo corre un proveedor externo. Si sube el precio o nos bloquea, el producto se cae, y no tenemos con qué defendernos.</p></div>
+    <div class="card"><div class="tag bad">Mercado lleno</div><h3>Firecrawl, Apify, Tavily, Exa…</h3>
+      <p>Todos tienen más fondos y SDK en inglés desde hace años. Competir sólo por "leer una página" es pelear por centavos.</p></div>
+    <div class="card"><div class="tag bad">Se cambia fácil</div><h3>Una línea de config</h3>
+      <p>Cambiar de API de scraping es cambiar una URL. Así no se arma un ingreso recurrente que dure.</p></div>
+    <div class="card"><div class="tag ok">Pero sí vende</div><h3>Es lo más fácil de entender</h3>
+      <p>"Tu agente lee internet" se entiende en 3 segundos. Además, Maps→prospectos y Mercado Libre no los resuelve nadie en México.</p></div>
+  </div>
+
+  <h2><span>02</span>Lo que sólo tenemos nosotros</h2>
+  <p class="lead">En el registro oficial de MCP hay 30 mil servidores. Sólo 56 son sandbox, y los tres rivales serios borran la caja al terminar y corren en local.</p>
+  <div class="grid">
+    <div class="card"><div class="tag amb">Hueco real</div><h3>Caja que persiste</h3>
+      <p>Una microVM Firecracker que se duerme y despierta en menos de 1 s con su disco intacto. Lo que el agente construye ahí sigue existiendo al día siguiente.</p></div>
+    <div class="card"><div class="tag amb">Hueco real</div><h3>La caja se vuelve hosting</h3>
+      <p><code>launch_app</code>: de repo a URL pública con release y rollback. Redeploy en 12 s y recuperación tras perder la caja en 11.9 s, ya medidos.</p></div>
+    <div class="card"><div class="tag amb">Hueco real</div><h3>MXN + WhatsApp + flota</h3>
+      <p>Un agente que atiende WhatsApp, con cajas elásticas y un precio en pesos. Ninguna plataforma de EE. UU. te cobra en pesos ni te da soporte en español.</p></div>
+  </div>
+
+  <h2><span>03</span>Nuestras tools no reflejan lo que vale cada cosa</h2>
+  <p class="lead">Tenemos más tools justo donde menos nos van a pagar. Hay que quitar tiempo a diseño y video para dárselo a cajas, hosting y flota.</p>
+  <div class="bar"><span>Diseño+video</span><div class="track"><div class="fill" style="width:100%"></div></div><b>69</b></div>
+  <div class="bar"><span>Web</span><div class="track"><div class="fill amb" style="width:10%"></div></div><b>7</b></div>
+  <div class="bar"><span>Flota</span><div class="track"><div class="fill amb" style="width:4.5%"></div></div><b>3</b></div>
+  <p style="color:var(--muted);font-size:14px">Auditoría del 5 sep 2026. Veredicto: mejor producto = cajas · mejor oferta = hosting · más infravalorado = web.</p>
+
+  <h2><span>04</span>La escalera: de pagar una vez a pagar cada mes</h2>
+  <div class="ladder">
+    <div class="step"><div class="n">1</div><div><h3>Gancho: web gratis</h3><p>50 consultas al registrarse. Ejemplo: "tu agente saca 48 productos de Mercado Libre en una llamada".</p></div><div class="price">$0</div></div>
+    <div class="step"><div class="n">2</div><div><h3>Consumo: packs web</h3><p>Prospectos de Maps y sitios que bloquean. Es dinero, pero no es lo que se repite.</p></div><div class="price">$99 – $999</div></div>
+    <div class="step"><div class="n">3</div><div><h3>Caja: el agente trabaja ahí</h3><p>El plan da acceso a cajas que persisten. Aquí se queda el cliente.</p></div><div class="price">$499 – $2,490/mes</div></div>
+    <div class="step"><div class="n">4</div><div><h3>Hosting: lo que construyó se publica</h3><p>Una máquina por cliente del integrador. Cada una es otra suscripción.</p></div><div class="price">$49 – $1,290/mes c/u</div></div>
+    <div class="step"><div class="n">5</div><div><h3>Flota: atiende WhatsApp</h3><p>El integrador le cobra a su cliente y nosotros le cobramos a él. Es el escalón que más dinero deja.</p></div><div class="price">plan + cajas</div></div>
+  </div>
+
+  <h2><span>05</span>A quién le vendemos</h2>
+  <div class="scroll">
+  <table>
+    <tr><th>Perfil</th><th>Qué le duele</th><th>Qué le damos</th><th>Prioridad</th></tr>
+    <tr><td><b>Integrador / agencia chica</b></td><td>Arma agentes para PyMEs y no sabe dónde hospedarlos ni cómo cobrar</td><td>Una caja por cliente, hosting, flota WhatsApp y facturación en MXN</td><td class="ok"><b>1</b></td></tr>
+    <tr><td><b>Dev con Claude Code / Codex</b></td><td>Su agente necesita una máquina remota que no se borre</td><td>MCP de un clic, caja que persiste, URL pública</td><td class="amb"><b>2</b></td></tr>
+    <tr><td><b>Growth / ventas</b></td><td>Necesita prospectos de Maps y precios de MELI</td><td>Web toolset por consulta</td><td style="color:var(--muted)"><b>3 · gancho</b></td></tr>
+  </table>
+  </div>
+
+  <h2><span>06</span>Plan de 90 días</h2>
+  <div class="plan">
+    <div class="card"><h3>Días 1–30 · mensaje</h3><ul>
+      <li>Home y registro MCP con una sola frase: <i>"la caja de tu agente, que no se borra y se vuelve tu hosting"</i>.</li>
+      <li>Cada landing de <code>/web</code> termina en "y ahora guárdalo en una caja".</li>
+      <li>Shorts: 1 de web (gancho) por cada 2 de caja/hosting.</li>
+    </ul></div>
+    <div class="card"><h3>Días 31–60 · activación</h3><ul>
+      <li>Onboarding: web → caja → <code>launch_app</code> en menos de 10 min, medido contra el uso real (<code>/aprende</code>).</li>
+      <li>Terminar el curso <i>Vende tu agente</i> (lecciones 2–5).</li>
+      <li>Plantilla "agente de prospección": Maps → caja → WhatsApp.</li>
+    </ul></div>
+    <div class="card"><h3>Días 61–90 · ingreso recurrente</h3><ul>
+      <li>10 integradores con 3 o más máquinas vendidas cada uno.</li>
+      <li>Panel del integrador: sus clientes, sus cajas, su margen.</li>
+      <li>Congelar tools nuevas de diseño y video.</li>
+    </ul></div>
+  </div>
+
+  <h2><span>07</span>Qué medir</h2>
+  <div class="grid">
+    <div class="card"><div class="tag amb">Norte</div><h3>Máquinas activas pagadas</h3><p>Es el ingreso que se repite. Todo lo demás está para hacer crecer este número.</p></div>
+    <div class="card"><div class="tag">Activación</div><h3>% web → caja en 7 días</h3><p>Muestra si el gancho lleva a la caja o sólo regala consultas.</p></div>
+    <div class="card"><div class="tag">Expansión</div><h3>Máquinas por integrador</h3><p>Si pasa de 1 a 3, el modelo funciona. Si se queda en 1, somos un VPS más.</p></div>
+  </div>
+
+  <h2><span>08</span>Riesgos</h2>
+  <div class="scroll">
+  <table>
+    <tr><th>Riesgo</th><th>Mitigación</th></tr>
+    <tr><td>El proveedor de scraping sube precio o nos bloquea</td><td>Web es gancho, no el centro. Parsers propios (MELI) donde se pueda. Nunca nombrar al proveedor.</td></tr>
+    <tr><td>Fly Sprites / E2B entran con caja persistente</td><td>Lo que no pueden copiar fácil: MXN, WhatsApp, soporte en español y la comunidad de FixterGeek.</td></tr>
+    <tr><td>Dos fierros en el mismo datacenter (sbg3)</td><td>Respaldo offsite inmutable antes de vender hosting a más gente.</td></tr>
+  </table>
+  </div>
+
+  <footer>Propuesta generada el 10 oct 2026 con datos de las auditorías internas (posicionamiento 5 sep, registro MCP 10 sep, web toolset 4 sep, hosting medido 10 ago).</footer>
+</main>
+</body>
+</html>

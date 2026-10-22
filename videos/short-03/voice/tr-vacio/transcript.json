@@ -1,0 +1,92 @@
+[
+  {
+    "text": "Sin",
+    "start": 0.03,
+    "end": 0.16,
+    "id": "w0"
+  },
+  {
+    "text": "servidor,",
+    "start": 0.18,
+    "end": 0.69,
+    "id": "w1"
+  },
+  {
+    "text": "sin",
+    "start": 0.76,
+    "end": 0.94,
+    "id": "w2"
+  },
+  {
+    "text": "base",
+    "start": 0.94,
+    "end": 1.17,
+    "id": "w3"
+  },
+  {
+    "text": "de",
+    "start": 1.18,
+    "end": 1.3,
+    "id": "w4"
+  },
+  {
+    "text": "datos,",
+    "start": 1.3,
+    "end": 1.71,
+    "id": "w5"
+  },
+  {
+    "text": "sin",
+    "start": 1.71,
+    "end": 1.89,
+    "id": "w6"
+  },
+  {
+    "text": "dominio,",
+    "start": 1.89,
+    "end": 2.45,
+    "id": "w7"
+  },
+  {
+    "text": "una",
+    "start": 2.45,
+    "end": 2.46,
+    "id": "w8"
+  },
+  {
+    "text": "página",
+    "start": 2.78,
+    "end": 3.22,
+    "id": "w9"
+  },
+  {
+    "text": "bonita",
+    "start": 3.22,
+    "end": 3.74,
+    "id": "w10"
+  },
+  {
+    "text": "no",
+    "start": 3.74,
+    "end": 3.86,
+    "id": "w11"
+  },
+  {
+    "text": "es",
+    "start": 3.86,
+    "end": 3.98,
+    "id": "w12"
+  },
+  {
+    "text": "un",
+    "start": 3.98,
+    "end": 4.08,
+    "id": "w13"
+  },
+  {
+    "text": "negocio.",
+    "start": 4.11,
+    "end": 4.71,
+    "id": "w14"
+  }
+]

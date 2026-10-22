@@ -34,3 +34,12 @@ public/skills/index.legacy.json
 public/skills/*.tar.gz
 packages/mcp/skills/
 packages/sdk/skills/
+
+# Shorts: material GENERADO (se regenera desde la fuente del short). La fuente sí va al repo.
+videos/*/*.wav
+videos/*/voice/**/*.wav
+videos/*/voice/**/*.mp3
+videos/*/snaps*/
+videos/*/styleframes/*.png
+videos/*/styleframes/*.jpg
+.DS_Store
