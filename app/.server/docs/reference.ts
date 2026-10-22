@@ -795,7 +795,7 @@ MCP: \`get_node_outline\`, \`patch_node\`
 
   web: `## Web — Internet para tus agentes
 
-Buscar en Google, leer cualquier página aunque bloquee bots (IPs residenciales, JS resuelto), extraer registros con esquema de sitios conocidos y rastrear un sitio completo. Disponible por REST, SDK y MCP (toolset \`web\`: \`web_search\`, \`web_fetch\`, \`web_extract\`, \`web_extract_status\`, \`web_crawl\`, \`web_map\`).
+Buscar en Google, leer cualquier página aunque bloquee bots (IPs residenciales, JS resuelto), extraer registros con esquema de sitios conocidos y rastrear un sitio completo. Disponible por REST, SDK y MCP (toolset \`web\`: \`web_search\`, \`web_fetch\`, \`web_extract\`, \`web_extract_status\`, \`web_crawl\`, \`web_crawl_status\`, \`web_map\`).
 
 **Se mide en consultas, no en créditos.** 1 consulta = 1 página leída, 1 búsqueda, 1 registro extraído — y en un rastreo, cada página que lee (máx. 20 por llamada). Tienes 50 al registrarte; los packs Web ($99 MXN → 400, $999 MXN → 10,000) están en \`/dash/packs?tab=web\`, valen para cualquier plan y **no caducan**. Sin saldo → \`402\` con \`{ error, code, requiredCost, available, buy }\` (\`buy\` es la URL absoluta para comprar: pásasela al usuario).
 
@@ -861,7 +861,13 @@ curl https://www.easybits.cloud/api/v2/web/extract/$JOB_ID -H "Authorization: Be
 \`POST /web/crawl\`
 Body: \`{ url, maxPages?, onlyMainContent?, country? }\`
 Returns: \`{ startUrl, pages: [{ url, markdown, truncated }], pending: [ … ], stoppedBy: "maxPages"|"bytes"|"done", failed: [ … ] }\`
-Lee la URL de inicio y sigue sus links internos (mismo dominio) hasta \`maxPages\` (1-20, default 10). 1 consulta por página realmente leída. \`pending\` son los links vistos y no visitados: pásale uno a otra llamada para continuar. Una página con \`truncated: true\` pasaba de 150,000 caracteres: léela entera con \`/web/fetch\`. \`failed\` son las que no se pudieron leer (no se cobran). \`onlyMainContent\` recomendado para RAG.
+Lee la URL de inicio y sigue sus links internos (mismo dominio) hasta \`maxPages\` (1-20 al momento, default 10). 1 consulta por página realmente leída. \`pending\` son los links vistos y no visitados: pásale uno a otra llamada para continuar. Una página con \`truncated: true\` pasaba de 150,000 caracteres: léela entera con \`/web/fetch\`. \`failed\` son las que no se pudieron leer (no se cobran). \`onlyMainContent\` recomendado para RAG.
+
+### Rastreo grande (segundo plano)
+Con \`maxPages\` de 21 a 2,000, \`POST /web/crawl\` responde \`202 { jobId, status: "running", startUrl, maxPages, queued }\` y el rastreo sigue solo: arranca por el sitemap del sitio (lo de \`/web/map\`), lee ~24 páginas por minuto y **cobra cada página al leerla** (arrancar sólo cobra los documentos del sitemap). Si se te acaban las consultas, se detiene y conserva lo leído.
+\`GET /web/crawl/:jobId?cursor=N\` → \`{ status: "running"|"done"|"error", done, maxPages, queued, failed, pages: [ … ], nextCursor }\`. Gratis. Las páginas vienen en bloques: pide \`cursor: nextCursor\` hasta que sea \`null\`; puedes leer mientras corre. Los resultados se guardan 7 días.
+**Sin poll:** webhook \`web.crawl.completed\` \`{ jobId, startUrl, total, failed, url }\` (o \`web.crawl.failed\` con \`error\`).
+SDK: \`eb.webCrawl({ url, maxPages: 500 })\` → \`{ jobId }\` · \`eb.webCrawlStatus(jobId, cursor)\` · \`eb.webCrawlAll({ url, maxPages: 500 })\` (espera y junta todo) · MCP: \`web_crawl\` + \`web_crawl_status({ jobId, cursor })\`
 
 ### Mapa de un sitio
 \`POST /web/map\`

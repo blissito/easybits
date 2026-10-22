@@ -6883,10 +6883,10 @@ function registerVideoTools(server: McpServer) {
 
   server.tool(
     "web_crawl",
-    "Lee una página y SIGUE sus links internos (mismo dominio) hasta `maxPages`, devolviendo markdown por página. Cobra 1 consulta por página realmente leída.\n\nHow to use:\n- Required: `url` de inicio.\n- Optional: `maxPages` (1-20, default 10), `country`, `onlyMainContent` (quita nav/footer/iconos — recomendado para RAG).\n- Devuelve `pages[]` (cada una con `truncated` si pasaba de 150,000 caracteres: léela entera con `web_fetch`), `pending[]` (links vistos y no visitados: para seguir, llama otra vez con una URL de ahí), `stoppedBy` ('maxPages' | 'bytes' | 'done') y `failed[]` (páginas que no se pudieron leer, sin cobro).\n\nUse for: aprenderse la documentación de un producto, bajar un blog o catálogo chico para RAG. Para una sola página usa `web_fetch`.",
+    "Lee una página y SIGUE sus links internos (mismo dominio) hasta `maxPages`, devolviendo markdown por página. Cobra 1 consulta por página realmente leída.\n\nHow to use:\n- Required: `url` de inicio.\n- Optional: `maxPages` (1-2000, default 10), `country`, `onlyMainContent` (quita nav/footer/iconos — recomendado para RAG).\n- Con `maxPages` ≤ 20 responde al momento. Con más de 20 corre EN SEGUNDO PLANO: devuelve { jobId, status:'running' }, arranca por el sitemap del sitio, lee ~24 páginas por minuto y cobra cada página al leerla. Revisa con `web_crawl_status({ jobId })` o suscribe un webhook a `web.crawl.completed`.\n- Devuelve `pages[]` (cada una con `truncated` si pasaba de 150,000 caracteres: léela entera con `web_fetch`), `pending[]` (links vistos y no visitados: para seguir, llama otra vez con una URL de ahí), `stoppedBy` ('maxPages' | 'bytes' | 'done') y `failed[]` (páginas que no se pudieron leer, sin cobro).\n\nUse for: aprenderse la documentación de un producto, bajar un blog o catálogo chico para RAG. Para una sola página usa `web_fetch`.",
     {
       url: z.string().url().describe("URL de inicio (https://…)."),
-      maxPages: z.number().int().min(1).max(20).optional().describe("Páginas máximas. Default 10."),
+      maxPages: z.number().int().min(1).max(2000).optional().describe("Páginas máximas. ≤20 al momento; 21-2000 en segundo plano (job). Default 10."),
       country: z.string().length(2).optional().describe("ISO country code."),
       onlyMainContent: z.boolean().optional().describe("Quita nav, footer e iconos de cada página (recomendado para RAG)."),
     },
@@ -6895,16 +6895,35 @@ function registerVideoTools(server: McpServer) {
         "research.brightdata.crawl",
         params,
         extra,
-        (r) => ({
-          startUrl: r.data.startUrl,
-          pages: r.data.pages,
-          pending: r.data.pending,
-          stoppedBy: r.data.stoppedBy,
-          failed: r.data.failed,
-          total: r.data.pages.length,
-        }),
+        (r) => "jobId" in r.data
+          ? { ...r.data, hint: "Corre en segundo plano: web_crawl_status({ jobId }) o webhook web.crawl.completed." }
+          : {
+              startUrl: r.data.startUrl,
+              pages: r.data.pages,
+              pending: r.data.pending,
+              stoppedBy: r.data.stoppedBy,
+              failed: r.data.failed,
+              total: r.data.pages.length,
+            },
       ),
     ),
+  );
+
+  server.tool(
+    "web_crawl_status",
+    "Estado y páginas de un rastreo grande (`web_crawl` con maxPages > 20). Gratis: las páginas ya se cobraron al leerse.\n\nDevuelve { status: 'running'|'done'|'error', done, maxPages, queued, failed, items: [páginas de un bloque], nextCursor }. Las páginas vienen por bloques: pide el siguiente con `cursor: nextCursor` hasta que sea null. Puedes leer bloques mientras sigue corriendo. Los resultados se guardan 7 días.",
+    {
+      jobId: z.string().describe("jobId devuelto por web_crawl."),
+      cursor: z.number().int().min(0).optional().describe("Bloque de páginas (0, 1, 2…). Usa nextCursor."),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { readCrawlJob } = await import("../core/webCrawlJobs");
+      const r = await readCrawlJob(ctx.user.id, params.jobId, params.cursor ?? 0);
+      if (!r) throw new Error("jobId no encontrado");
+      const { pages, nextCursor, ...rest } = r;
+      return ok({ ...rest, ...paginate(pages, { nextCursor: nextCursor === null ? undefined : String(nextCursor) }) });
+    }),
   );
 
   server.tool(

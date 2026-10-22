@@ -32,6 +32,8 @@ export const WEBHOOK_EVENTS = [
   "cron.run.failed",
   "web.extract.completed",
   "web.extract.failed",
+  "web.crawl.completed",
+  "web.crawl.failed",
 ] as const;
 
 export type WebhookEvent = (typeof WEBHOOK_EVENTS)[number];
@@ -67,7 +69,11 @@ export const WEBHOOK_EVENT_DOCS: Record<WebhookEvent, string> = {
   "web.extract.completed":
     "a `web_extract` job finished — `{ jobId, source, total, url }`; GET `url` (or `web_extract_status`) to collect " +
     "the records, which charges 1 query per record once. No polling needed",
-  "web.extract.failed": "a `web_extract` job failed or ran past 30 min — `{ jobId, source, error }`, nothing charged",
+  "web.extract.failed": "a `web_extract` job failed or ran past 2 h — `{ jobId, source, error }`, nothing charged",
+  "web.crawl.completed":
+    "a large `web_crawl` (maxPages > 20) finished — `{ jobId, startUrl, total, failed, url }`; GET `url` (or `web_crawl_status`) " +
+    "for the pages, already charged as they were read",
+  "web.crawl.failed": "a large `web_crawl` stopped early (e.g. out of web queries) — same payload with `error`; pages read so far are kept",
 };
 
 const MAX_FAIL_COUNT = 5;

@@ -1189,7 +1189,7 @@ web_extract_status({ jobId })
               description="Lee una página y sigue sus links internos (mismo dominio) hasta maxPages"
               body={[
                 { name: "url", type: "string", desc: "URL de inicio (requerido)" },
-                { name: "maxPages", type: "number", desc: "1-20, default 10. Cada página leída cuesta 1 consulta" },
+                { name: "maxPages", type: "number", desc: "1-20 al momento (default 10); 21-2000 en segundo plano: responde 202 { jobId } y se consulta en GET /web/crawl/:jobId. Cada página leída cuesta 1 consulta" },
                 { name: "onlyMainContent", type: "boolean", desc: "Quita nav, footer e iconos de cada página (recomendado para RAG)" },
                 { name: "country", type: "string", desc: "País en 2 letras: mx (México), us, es, ar, co, cl, pe, br. Ver lista completa abajo" },
               ]}
@@ -1245,6 +1245,7 @@ const data = await res.json();` },
               <McpTool name="web_extract" params="source | datasetId, input, limit?" description="Extrae registros con esquema (Maps, Mercado Libre, Amazon, Instagram…). Async con jobId; 1 consulta por registro." />
               <McpTool name="web_extract_status" params="jobId" description="Estado/registros de un extract. Gratis mientras corre." />
               <McpTool name="web_crawl" params="url, maxPages?, country?, onlyMainContent?" description="Rastrea un sitio siguiendo links internos. 1 consulta por página." />
+              <McpTool name="web_crawl_status" params="jobId, cursor?" description="Estado y páginas (por bloques) de un rastreo grande. Gratis." />
               <McpTool name="web_map" params="url, search?, limit?" description="Todas las URLs de un sitio desde su sitemap, sin leerlas. 1 consulta por documento leído." />
             </div>
             <p className="text-sm text-gray-600 mt-4">

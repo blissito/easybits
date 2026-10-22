@@ -954,7 +954,7 @@ model AiGenerationLog {
 model WebJob {
   id          String   @id @default(auto()) @map("_id") @db.ObjectId
   userId      String   @db.ObjectId
-  kind        String   // "extract" | "fetch"
+  kind        String   // "extract" | "fetch" | "crawl"
   source      String   // "google_maps" | "mercadolibre" | datasetId… | host (fetch)
   providerRef String?  // snapshot_id del proveedor (extract) | llave del cuerpo guardado (fetch)
   // running | ready (extract listo, aún sin recoger ni cobrar) | done | error
@@ -963,8 +963,9 @@ model WebJob {
   charged     Boolean  @default(false)
   error       String?
   bodyLength  Int?     // fetch: caracteres de la página completa
-  meta        Json?    // fetch: { url, statusCode, format }
+  meta        Json?    // fetch: { url, statusCode, format } · crawl: estado de la cola (CrawlJobMeta)
   notifiedAt  DateTime? // webhook web.extract.* ya despachado (una sola vez)
+  leaseUntil  DateTime? // crawl: candado del barrido (dos pasadas no avanzan el mismo job)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   user        User     @relation(fields: [userId], references: [id])

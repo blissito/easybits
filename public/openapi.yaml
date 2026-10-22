@@ -642,9 +642,15 @@ paths:
               required: [url]
               properties:
                 url: { type: string, format: uri }
-                maxPages: { type: integer }
+                maxPages: { type: integer, minimum: 1, maximum: 2000, description: "≤20 al momento; 21-2000 en segundo plano (202 + jobId)." }
                 country: { type: string }
+                onlyMainContent: { type: boolean }
       responses:
+        "202":
+          description: "Rastreo grande en segundo plano: { jobId, status: running, startUrl, maxPages, queued }."
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
         "200":
           description: Páginas rastreadas.
           content:
@@ -652,6 +658,23 @@ paths:
               schema: { type: object, additionalProperties: true }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "402": { $ref: "#/components/responses/PaymentRequired" }
+
+  /api/v2/web/crawl/{jobId}:
+    get:
+      tags: [Web]
+      operationId: webCrawlStatus
+      summary: Estado y páginas de un rastreo grande
+      parameters:
+        - { name: jobId, in: path, required: true, schema: { type: string } }
+        - { name: cursor, in: query, schema: { type: integer, minimum: 0 }, description: "Bloque de páginas (usa nextCursor)." }
+      responses:
+        "200":
+          description: "{ status, done, maxPages, queued, failed, pages, nextCursor }"
+          content:
+            application/json:
+              schema: { type: object, additionalProperties: true }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { description: Job no encontrado. }
 
   /api/v2/web/map:
     post:

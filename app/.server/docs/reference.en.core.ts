@@ -213,7 +213,7 @@ SDK: \`eb.searchFiles(query)\`
 `;
 export const EN_WEB = `## Web — Internet for your agents
 
-Search Google, read any page even if it blocks bots (residential IPs, JS resolved), extract schema-based records from known sites and crawl a whole site. Available through REST, SDK and MCP (toolset \`web\`: \`web_search\`, \`web_fetch\`, \`web_extract\`, \`web_extract_status\`, \`web_crawl\`, \`web_map\`).
+Search Google, read any page even if it blocks bots (residential IPs, JS resolved), extract schema-based records from known sites and crawl a whole site. Available through REST, SDK and MCP (toolset \`web\`: \`web_search\`, \`web_fetch\`, \`web_extract\`, \`web_extract_status\`, \`web_crawl\`, \`web_crawl_status\`, \`web_map\`).
 
 **Metered in queries, not credits.** 1 query = 1 page read, 1 search, 1 record extracted — and in a crawl, each page it reads (max 20 per call). You get 50 on sign-up; Web packs ($99 MXN → 400, $999 MXN → 10,000) are at \`/dash/packs?tab=web\`, work on any plan and **never expire**. No balance → \`402\` with \`{ error, code, requiredCost, available, buy }\` (\`buy\` is the absolute URL to purchase: hand it to the user).
 
@@ -279,7 +279,13 @@ curl https://www.easybits.cloud/api/v2/web/extract/$JOB_ID -H "Authorization: Be
 \`POST /web/crawl\`
 Body: \`{ url, maxPages?, onlyMainContent?, country? }\`
 Returns: \`{ startUrl, pages: [{ url, markdown, truncated }], pending: [ … ], stoppedBy: "maxPages"|"bytes"|"done", failed: [ … ] }\`
-Reads the start URL and follows its internal links (same domain) up to \`maxPages\` (1-20, default 10). 1 query per page actually read. \`pending\` are the links seen but not visited: pass one to another call to continue. A page with \`truncated: true\` was over 150,000 characters: read it whole with \`/web/fetch\`. \`failed\` are the pages that could not be read (not charged). \`onlyMainContent\` recommended for RAG.
+Reads the start URL and follows its internal links (same domain) up to \`maxPages\` (1-20 right away, default 10). 1 query per page actually read. \`pending\` are the links seen but not visited: pass one to another call to continue. A page with \`truncated: true\` was over 150,000 characters: read it whole with \`/web/fetch\`. \`failed\` are the pages that could not be read (not charged). \`onlyMainContent\` recommended for RAG.
+
+### Large crawl (background)
+With \`maxPages\` from 21 to 2,000, \`POST /web/crawl\` answers \`202 { jobId, status: "running", startUrl, maxPages, queued }\` and the crawl keeps going on its own: it starts from the site's sitemap (what \`/web/map\` does), reads ~24 pages per minute and **charges each page as it is read** (starting only charges the sitemap documents). If you run out of queries it stops and keeps what it read.
+\`GET /web/crawl/:jobId?cursor=N\` → \`{ status: "running"|"done"|"error", done, maxPages, queued, failed, pages: [ … ], nextCursor }\`. Free. Pages come in blocks: ask for \`cursor: nextCursor\` until it is \`null\`; you can read while it runs. Results are kept 7 days.
+**No polling:** webhook \`web.crawl.completed\` \`{ jobId, startUrl, total, failed, url }\` (or \`web.crawl.failed\` with \`error\`).
+SDK: \`eb.webCrawl({ url, maxPages: 500 })\` → \`{ jobId }\` · \`eb.webCrawlStatus(jobId, cursor)\` · \`eb.webCrawlAll({ url, maxPages: 500 })\` (waits and joins everything) · MCP: \`web_crawl\` + \`web_crawl_status({ jobId, cursor })\`
 
 ### Map a site
 \`POST /web/map\`

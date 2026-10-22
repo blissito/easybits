@@ -158,8 +158,10 @@ read the rest with `{ fetchId, offset: nextOffset }` (free, same copy, kept 24 h
 Body: `{ input, source?, datasetId?, limit? }` → `{ jobId, status }`. Poll until `status: "done"`;
 the result carries structured records (Maps, Mercado Libre, Amazon, Instagram…).
 
-### POST /web/crawl
-Body: `{ url, maxPages?, country? }`.
+### POST /web/crawl · GET /web/crawl/{jobId}
+Body: `{ url, maxPages?, country? }`. Up to 20 pages answers right away; 21-2000 runs in the background
+(`202 { jobId }`, ~24 pages/min, charged per page read). Poll `GET /web/crawl/{jobId}?cursor=N` for status
+and pages in blocks, or subscribe a webhook to `web.crawl.completed`.
 
 ### POST /web/map
 Body: `{ url, search?, limit? }` → `{ urls, total, source, truncated }`. Every URL of a site from its

@@ -617,7 +617,7 @@ export const brightdataExtractStatusService: ServiceDef<BrightdataExtractStatusI
 
 export interface BrightdataCrawlInput {
   url: string;
-  /** Máximo de páginas a leer (1-20). Default 10. */
+  /** Máximo de páginas a leer. 1-20 responde al momento; 21-2000 corre en segundo plano (job). Default 10. */
   maxPages?: number;
   country?: string;
   /** Quita nav, footer e iconos de cada página. Default false. */
@@ -625,17 +625,29 @@ export interface BrightdataCrawlInput {
 }
 
 export interface BrightdataCrawlOutput extends ServiceResult {
-  data: {
-    startUrl: string;
-    /** `truncated` = la página pasaba de CRAWL_PAGE_MAX_LEN y se cortó (léela entera con web_fetch). */
-    pages: { url: string; markdown: string; truncated: boolean }[];
-    /** Links del mismo host encontrados pero no visitados (para continuar). */
-    pending: string[];
-    /** Por qué paró: llegó a maxPages, al tope de bytes, o ya no había links. */
-    stoppedBy: "maxPages" | "bytes" | "done";
-    /** Páginas que fallaron al leerse (no se cobran). */
-    failed: string[];
-  };
+  data: BrightdataCrawlSync | BrightdataCrawlJobStarted;
+}
+
+/** Rastreo grande: arrancó en segundo plano. */
+export interface BrightdataCrawlJobStarted {
+  jobId: string;
+  status: "running";
+  startUrl: string;
+  maxPages: number;
+  /** URLs ya en la cola al arrancar (la de inicio + las del sitemap). */
+  queued: number;
+}
+
+export interface BrightdataCrawlSync {
+  startUrl: string;
+  /** `truncated` = la página pasaba de CRAWL_PAGE_MAX_LEN y se cortó (léela entera con web_fetch). */
+  pages: { url: string; markdown: string; truncated: boolean }[];
+  /** Links del mismo host encontrados pero no visitados (para continuar). */
+  pending: string[];
+  /** Por qué paró: llegó a maxPages, al tope de bytes, o ya no había links. */
+  stoppedBy: "maxPages" | "bytes" | "done";
+  /** Páginas que fallaron al leerse (no se cobran). */
+  failed: string[];
 }
 
 const CRAWL_MAX_PAGES = 20;
@@ -660,54 +672,90 @@ function sameHostLinks(markdown: string, base: URL): string[] {
   return [...out];
 }
 
+export type CrawledPage = { url: string; markdown: string; truncated: boolean };
+
+/**
+ * Lee UNA página del rastreo como markdown. Devuelve la página (con su versión limpia si se
+ * pidió) y sus links del mismo host, sacados del markdown COMPLETO (el nav es donde están).
+ * `null` = no se pudo leer (no se cobra). La usan el rastreo corto y el de segundo plano.
+ */
+export async function crawlOnePage(
+  url: string,
+  base: URL,
+  opts: { country?: string; onlyMainContent?: boolean },
+): Promise<{ page: CrawledPage; links: string[] } | null> {
+  const zone = process.env.BRIGHTDATA_UNLOCKER_ZONE || "mcp_unlocker";
+  let md: string;
+  try {
+    const resp = (await brightdataRequest({
+      zone,
+      url,
+      format: "json",
+      country: opts.country,
+      data_format: "markdown",
+      serviceId: "research.brightdata.crawl",
+    })) as BrightdataResponse;
+    md = resp.body ?? "";
+  } catch {
+    return null;
+  }
+  const truncated = md.length > CRAWL_PAGE_MAX_LEN;
+  md = md.slice(0, CRAWL_PAGE_MAX_LEN);
+  const { extractMainContent } = await import("./parsers/mainContent");
+  const kept = opts.onlyMainContent ? extractMainContent(md) : md;
+  return { page: { url, markdown: kept, truncated }, links: sameHostLinks(md, base) };
+}
+
 export const brightdataCrawlService: ServiceDef<BrightdataCrawlInput, BrightdataCrawlOutput> = {
   id: "research.brightdata.crawl",
   product: "research",
   displayName: "Web Crawl (sitio completo)",
   description: "Lee una página y sigue sus links internos hasta maxPages. Devuelve markdown por página; cobra 1 consulta por página leída.",
   estimateCost(input) {
+    // Un rastreo grande se cobra por página conforme avanza; para arrancar basta un lote.
     return Math.min(CRAWL_MAX_PAGES, Math.max(1, input.maxPages ?? 10));
   },
-  async execute(input) {
+  async execute(input, ctx) {
     const start = input.url?.trim();
     if (!start) throw new ServiceProviderError("research.brightdata.crawl", 400, "url is required");
     const base = new URL(start);
-    const maxPages = Math.min(CRAWL_MAX_PAGES, Math.max(1, input.maxPages ?? 10));
-    const zone = process.env.BRIGHTDATA_UNLOCKER_ZONE || "mcp_unlocker";
 
+    // ── Rastreo grande: job en segundo plano, cola sembrada con el sitemap ──
+    if ((input.maxPages ?? 10) > CRAWL_MAX_PAGES) {
+      const { createCrawlJob, CRAWL_JOB_MAX_PAGES } = await import("../../core/webCrawlJobs");
+      const maxPages = Math.min(CRAWL_JOB_MAX_PAGES, Math.floor(input.maxPages!));
+      const map = await brightdataMapService.execute({ url: base.toString(), limit: maxPages * 2 }, ctx).catch(() => null);
+      const job = await createCrawlJob(ctx.userId, {
+        startUrl: base.toString(),
+        maxPages,
+        country: input.country,
+        onlyMainContent: input.onlyMainContent,
+        seed: map?.data.urls ?? [],
+      });
+      const meta = job.meta as { queue: string[] };
+      return {
+        cost: map?.cost ?? 0, // los documentos del sitemap; las páginas se cobran al leerse
+        data: { jobId: job.id, status: "running", startUrl: base.toString(), maxPages, queued: meta.queue.length },
+      };
+    }
+
+    const maxPages = Math.min(CRAWL_MAX_PAGES, Math.max(1, input.maxPages ?? 10));
     const queue: string[] = [base.toString()];
     const seen = new Set<string>(queue);
-    const pages: { url: string; markdown: string; truncated: boolean }[] = [];
+    const pages: CrawledPage[] = [];
     const failed: string[] = [];
     let bytes = 0;
-    const { extractMainContent } = await import("./parsers/mainContent");
 
     while (queue.length && pages.length < maxPages && bytes < CRAWL_MAX_TOTAL_BYTES) {
       const url = queue.shift()!;
-      let md = "";
-      let truncated = false;
-      try {
-        const resp = (await brightdataRequest({
-          zone,
-          url,
-          format: "json",
-          country: input.country,
-          data_format: "markdown",
-          serviceId: "research.brightdata.crawl",
-        })) as BrightdataResponse;
-        md = resp.body ?? "";
-        truncated = md.length > CRAWL_PAGE_MAX_LEN;
-        md = md.slice(0, CRAWL_PAGE_MAX_LEN);
-      } catch {
+      const got = await crawlOnePage(url, base, input);
+      if (!got) {
         failed.push(url);
         continue; // una página caída no tumba el crawl ni se cobra
       }
-      // Los links se sacan del markdown COMPLETO (el nav es donde están);
-      // lo que se guarda es la versión limpia si la pidieron.
-      const kept = input.onlyMainContent ? extractMainContent(md) : md;
-      pages.push({ url, markdown: kept, truncated });
-      bytes += kept.length;
-      for (const link of sameHostLinks(md, base)) {
+      pages.push(got.page);
+      bytes += got.page.markdown.length;
+      for (const link of got.links) {
         if (!seen.has(link)) {
           seen.add(link);
           queue.push(link);

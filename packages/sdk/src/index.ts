@@ -135,7 +135,7 @@ export interface WebExtractJob {
 }
 export interface WebCrawlParams {
   url: string;
-  /** 1-20, default 10. */
+  /** 1-20 responde al momento; 21-2000 corre en segundo plano y devuelve un job. Default 10. */
   maxPages?: number;
   country?: string;
   /** Quita nav, footer e iconos de cada página (recomendado para RAG). */
@@ -151,6 +151,30 @@ export interface WebCrawlResult {
   stoppedBy: "maxPages" | "bytes" | "done";
   /** Páginas que no se pudieron leer (no se cobran). */
   failed: string[];
+}
+
+/** Rastreo grande (maxPages > 20) que arrancó en segundo plano. */
+export interface WebCrawlJobStarted {
+  jobId: string;
+  status: "running";
+  startUrl: string;
+  maxPages: number;
+  queued: number;
+}
+export interface WebCrawlJobStatus {
+  jobId: string;
+  status: "running" | "done" | "error";
+  startUrl: string;
+  done: number;
+  maxPages: number;
+  queued: number;
+  failed: number;
+  error?: string;
+  /** Páginas de UN bloque; pide el siguiente con `nextCursor` hasta que sea null. */
+  pages: { url: string; markdown: string; truncated: boolean }[];
+  nextCursor: number | null;
+  /** true = pasaron 7 días y los resultados se borraron. */
+  expired?: boolean;
 }
 
 export interface WebMapParams {
@@ -1629,9 +1653,43 @@ export class EasybitsClient {
     throw new EasybitsError(504, `web extract ${job.jobId} still running after timeout`);
   }
 
-  /** Lee una página y sigue sus links internos hasta maxPages. 1 consulta por página. */
-  async webCrawl(params: WebCrawlParams): Promise<WebCrawlResult> {
-    return this.request<WebCrawlResult>("/web/crawl", { method: "POST", body: JSON.stringify(params) });
+  /**
+   * Lee una página y sigue sus links internos hasta maxPages. 1 consulta por página.
+   * Con maxPages > 20 corre en segundo plano y devuelve `{ jobId }`: usa `webCrawlStatus`,
+   * `webCrawlAll` o un webhook `web.crawl.completed`.
+   */
+  async webCrawl(params: WebCrawlParams): Promise<WebCrawlResult | WebCrawlJobStarted> {
+    return this.request<WebCrawlResult | WebCrawlJobStarted>("/web/crawl", { method: "POST", body: JSON.stringify(params) });
+  }
+
+  /** Estado de un rastreo grande + un bloque de páginas (`cursor` = número de bloque). Gratis. */
+  async webCrawlStatus(jobId: string, cursor = 0): Promise<WebCrawlJobStatus> {
+    return this.request<WebCrawlJobStatus>(`/web/crawl/${encodeURIComponent(jobId)}?cursor=${cursor}`);
+  }
+
+  /** Lanza un rastreo grande, espera a que termine y junta todas sus páginas. */
+  async webCrawlAll(
+    params: WebCrawlParams,
+    opts?: { intervalMs?: number; timeoutMs?: number },
+  ): Promise<{ jobId: string; status: "done" | "error"; pages: WebCrawlJobStatus["pages"]; error?: string }> {
+    const started = await this.webCrawl(params);
+    if (!("jobId" in started)) return { jobId: "", status: "done", pages: started.pages };
+    const interval = opts?.intervalMs ?? 30_000;
+    const deadline = Date.now() + (opts?.timeoutMs ?? 3 * 60 * 60_000);
+    let st = await this.webCrawlStatus(started.jobId);
+    while (st.status === "running") {
+      if (Date.now() > deadline) throw new EasybitsError(504, `web crawl ${started.jobId} still running after timeout`);
+      await new Promise((r) => setTimeout(r, interval));
+      st = await this.webCrawlStatus(started.jobId);
+    }
+    const pages = [...st.pages];
+    let cursor = st.nextCursor;
+    while (cursor !== null) {
+      const part = await this.webCrawlStatus(started.jobId, cursor);
+      pages.push(...part.pages);
+      cursor = part.nextCursor;
+    }
+    return { jobId: started.jobId, status: st.status, pages, error: st.error };
   }
 
   /** Todas las URLs de un sitio desde su sitemap, sin leerlas. 1 consulta por documento leído (máx. 10). */

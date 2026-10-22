@@ -5,7 +5,8 @@
  *   POST /api/v2/web/fetch    { url, country?, asMarkdown? }
  *   POST /api/v2/web/extract  { source?, datasetId?, input, limit? } → { jobId, status }
  *   GET  /api/v2/web/extract/:jobId
- *   POST /api/v2/web/crawl    { url, maxPages?, country? }
+ *   POST /api/v2/web/crawl    { url, maxPages?, country? }   maxPages > 20 → 202 { jobId } (segundo plano)
+ *   GET  /api/v2/web/crawl/:jobId?cursor=N                   estado + un bloque de páginas
  *   POST /api/v2/web/map      { url, search?, limit? }   → todas las URLs del sitio, sin leerlas
  *
  * Se mide en consultas (`User.webQueriesBonus`); sin saldo → 402.
@@ -58,10 +59,16 @@ function mapError(e: unknown): Response | null {
   return null;
 }
 
-// GET /api/v2/web/extract/:jobId
+// GET /api/v2/web/extract/:jobId · GET /api/v2/web/crawl/:jobId?cursor=N
 export async function loader({ request, params }: Route.LoaderArgs) {
   const ctx = requireAuth(await authenticateRequest(request));
   const { op, jobId } = params;
+  if (op === "crawl" && jobId) {
+    const { readCrawlJob } = await import("~/.server/core/webCrawlJobs");
+    const cursor = Number(new URL(request.url).searchParams.get("cursor") ?? 0) || 0;
+    const r = await readCrawlJob(ctx.user.id, jobId, cursor);
+    return r ? Response.json(r) : Response.json({ error: "job not found" }, { status: 404 });
+  }
   if (op !== "extract" || !jobId) return Response.json({ error: "Not found" }, { status: 404 });
   try {
     const r = await consumeService<BrightdataExtractStatusOutput>(
@@ -87,7 +94,8 @@ export async function action({ request, params }: Route.ActionArgs) {
     const r = await consumeService<
       BrightdataSearchOutput | BrightdataScrapeOutput | BrightdataExtractOutput | BrightdataCrawlOutput
     >(serviceId, body, { userId: ctx.user.id });
-    return Response.json(r.data, { status: params.op === "extract" ? 202 : 200 });
+    const accepted = params.op === "extract" || (params.op === "crawl" && "jobId" in (r.data as object));
+    return Response.json(r.data, { status: accepted ? 202 : 200 });
   } catch (e) {
     return mapError(e) ?? Response.json({ error: "Internal error" }, { status: 500 });
   }

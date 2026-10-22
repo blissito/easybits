@@ -91,7 +91,10 @@ export async function sweepWebJobs(now = new Date()) {
     });
   }
 
-  return { checked: running.length, completed, failed, purged };
+  const { sweepCrawlJobs } = await import("./webCrawlJobs");
+  const crawl = await sweepCrawlJobs(now);
+
+  return { checked: running.length, completed, failed, purged, crawl };
 }
 
 /* ── Canario ─────────────────────────────────────────────────────────── */
