@@ -195,6 +195,8 @@ export const HELP_ES: Record<string, string> = {
   "SQL databases (libSQL)": "Bases de datos SQL (libSQL)",
   "List your databases": "Enlista tus bases de datos",
   "Create a database": "Crea una base de datos",
+  "Add to your account the database one of your machines already uses": "Agrega a tu cuenta la base que ya usa una de tus máquinas",
+  "the machine's DATABASE_URL ends in /v1/db/clave/": "el DATABASE_URL de la máquina termina en /v1/db/clave/",
   "What it is for": "Para qué es",
   "Delete a database (irreversible)": "Borra una base de datos (irreversible)",
   "Show its tables and rows; delete nothing": "Enseña sus tablas y filas; no borra nada",
