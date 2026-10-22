@@ -34,6 +34,7 @@ const BRIGHTDATA_URL = "https://api.brightdata.com/request";
 const CAPTCHA_RETRIES = 3;
 const CAPTCHA_BACKOFF_MS = [1200, 2500]; // tras el intento 1 y 2
 const RETRYABLE_BRD_CODES = new Set(["expect_body", "captcha"]);
+const GATEWAY_STATUSES = new Set([502, 503, 504]);
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -81,9 +82,20 @@ async function brightdataRequest(input: BrightdataRequestInput): Promise<Brightd
     });
 
     const text = await res.text();
+    // Un 502/503/504 de la API misma es su balanceador (medido en prod 22-oct: «502 Bad
+    // Gateway» en una lectura de MELI que al reintentar pasó): se reintenta como el captcha.
+    if (GATEWAY_STATUSES.has(res.status) && attempt < CAPTCHA_RETRIES - 1) {
+      await sleep(CAPTCHA_BACKOFF_MS[attempt] ?? 2500);
+      continue;
+    }
     // Fallo de la API misma (llave, zona inexistente, payload malo): no se reintenta.
+    // El mensaje nunca nombra al proveedor ni le pasa su HTML al cliente.
     if (!res.ok) {
-      throw new ServiceProviderError(input.serviceId, res.status, `Brightdata: ${text.slice(0, 300)}`);
+      console.warn(`[web] proveedor ${res.status}: ${text.slice(0, 300)}`);
+      const msg = GATEWAY_STATUSES.has(res.status)
+        ? "el servicio web no respondió; reintenta en unos segundos"
+        : `el servicio web rechazó la petición (${res.status})`;
+      throw new ServiceProviderError(input.serviceId, res.status, msg);
     }
     // format=raw → HTML body directly. format=json → JSON envelope.
     if (input.format === "raw") return text;
@@ -91,7 +103,7 @@ async function brightdataRequest(input: BrightdataRequestInput): Promise<Brightd
     try {
       parsed = JSON.parse(text) as BrightdataResponse;
     } catch {
-      throw new ServiceProviderError(input.serviceId, res.status, `Brightdata: invalid JSON response`);
+      throw new ServiceProviderError(input.serviceId, res.status, "el servicio web devolvió una respuesta ilegible");
     }
     // El envelope viene con HTTP 200 aunque el target haya fallado: un captcha de
     // Google llega como status_code 502 (`expect_body`/`captcha`) y el cooldown
@@ -107,7 +119,7 @@ async function brightdataRequest(input: BrightdataRequestInput): Promise<Brightd
         await sleep(CAPTCHA_BACKOFF_MS[attempt] ?? 2500);
         continue;
       }
-      throw new ServiceProviderError(input.serviceId, upstream, `Brightdata: ${reason}`);
+      throw new ServiceProviderError(input.serviceId, upstream, `el sitio respondió ${upstream} (${reason})`);
     }
     return parsed;
   }
@@ -418,7 +430,8 @@ async function datasetsRequest(path: string, init?: RequestInit): Promise<unknow
   });
   const text = await res.text();
   if (!res.ok) {
-    throw new ServiceProviderError("research.brightdata.extract", res.status, text.slice(0, 300));
+    console.warn(`[web] datasets ${res.status}: ${text.slice(0, 300)}`);
+    throw new ServiceProviderError("research.brightdata.extract", res.status, `el servicio de extracción rechazó la petición (${res.status})`);
   }
   try {
     return JSON.parse(text);
@@ -762,7 +775,9 @@ export async function probeWebProvider(): Promise<{ search: ProbeResult; fetch: 
       const { parseMercadoLibreListing, mercadoLibreListingUrl } = await import("./parsers/mercadolibre");
       const html = (await brightdataRequest({
         zone: unlocker,
-        url: mercadoLibreListingUrl("audifonos"),
+        // Búsqueda específica a propósito: un término genérico («audifonos») cae en una página
+        // de categoría con menos tarjetas (medido: 4-10) y daría falsas alarmas.
+        url: mercadoLibreListingUrl("iphone 15"),
         format: "raw",
         country: "mx",
         serviceId: "research.brightdata.extract",

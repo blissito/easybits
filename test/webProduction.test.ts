@@ -105,6 +105,24 @@ describe("web_fetch sin cortes mudos", () => {
   });
 });
 
+describe("errores del proveedor", () => {
+  it("un 502 de su balanceador se reintenta y pasa", async () => {
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response("<h1>502 Bad Gateway</h1>", { status: 502 }))
+      .mockResolvedValueOnce(new Response("<html>ok</html>"));
+    const r = await brightdataScrapeService.execute({ url: "https://x.test/" }, { userId: ME });
+    expect(r.data.body).toBe("<html>ok</html>");
+  });
+
+  it("si sigue fallando, el error no nombra al proveedor ni trae su HTML", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response("<h1>502 Bad Gateway</h1> Brightdata", { status: 502 }));
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const err = await brightdataScrapeService.execute({ url: "https://x.test/" }, { userId: ME }).catch((e) => e);
+    expect(err.providerStatus).toBe(502);
+    expect(err.providerMessage).not.toMatch(/brightdata|<h1>/i);
+  });
+});
+
 describe("sweepWebJobs: aviso al terminar, una sola vez", () => {
   const job = { id: JOB, userId: ME, source: "google_maps", providerRef: "s_1", createdAt: new Date() };
   const progress = (body: unknown) => vi.spyOn(globalThis, "fetch").mockResolvedValue(Response.json(body));

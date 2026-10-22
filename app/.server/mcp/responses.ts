@@ -115,7 +115,7 @@ export function failService(
     return fail(`${label}: ${e.providerMessage}.${hint}`, {
       code: e.code,
       providerStatus: e.providerStatus,
-      retryable: e.providerStatus === 429,
+      retryable: e.providerStatus === 429 || [502, 503, 504].includes(e.providerStatus ?? 0),
     });
   }
   return null;

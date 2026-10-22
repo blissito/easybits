@@ -49,7 +49,9 @@ function mapError(e: unknown): Response | null {
         { status: 429, headers: { "Retry-After": "60" } },
       );
     }
-    return Response.json({ error: e.providerMessage, code: e.code }, { status: 502 });
+    // 400/404 son del cliente (input malo, jobId o fetchId que no existe): no son caídas.
+    const status = e.providerStatus === 400 || e.providerStatus === 404 ? e.providerStatus : 502;
+    return Response.json({ error: e.providerMessage, code: e.code }, { status });
   }
   return null;
 }
