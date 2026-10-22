@@ -1,6 +1,6 @@
 import type { Route } from "./+types/databases";
 import { authenticateRequest, requireAuth } from "~/.server/apiAuth";
-import { listDatabases, createDatabase } from "~/.server/core/databaseOperations";
+import { listDatabases, createDatabase, attachDatabase } from "~/.server/core/databaseOperations";
 
 // GET /api/v2/databases
 export async function loader({ request }: Route.LoaderArgs) {
@@ -15,6 +15,11 @@ export async function action({ request }: Route.ActionArgs) {
 
   if (request.method === "POST") {
     const body = await request.json();
+    // `attach: true`: registra la base que una máquina tuya ya usa (`/v1/db/<name>/`), sin crear nada.
+    if (body.attach === true) {
+      const result = await attachDatabase(ctx, { name: body.name, description: body.description });
+      return Response.json(result, { status: 201 });
+    }
     const result = await createDatabase(ctx, {
       name: body.name,
       description: body.description,
