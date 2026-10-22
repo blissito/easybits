@@ -101,6 +101,22 @@ export const db: Command = {
         emit(ctx, d, () => console.log(t(`Created ${d.name} (${d.id})`, `Creada ${d.name} (${d.id})`)));
       },
     },
+    attach: {
+      summary: "Add to your account the database one of your machines already uses",
+      usage: "easybits db attach <name> [--description <text>]",
+      options: { description: { type: "string", value: "text", description: "What it is for" } },
+      examples: [
+        "easybits db attach clave   # the machine's DATABASE_URL ends in /v1/db/clave/",
+        "easybits db query clave \"SELECT count(*) FROM users\" --json",
+      ],
+      // No crea nada: el servidor deriva el namespace de tu cuenta + nombre y exige que exista.
+      // Desde ahí sirven query/tables/export; `db rm` sólo la quita de la lista.
+      async run(ctx) {
+        const name = need(ctx, 0, "name", this.usage);
+        const d = await api<{ id: string; name: string }>(ctx, "POST", "/databases", { name, attach: true, description: str(ctx, "description") });
+        emit(ctx, d, () => console.log(t(`Attached ${d.name} (${d.id})`, `Adjunta ${d.name} (${d.id})`)));
+      },
+    },
     rm: {
       aliases: ["delete", "drop"],
       summary: "Delete a database (irreversible)",
@@ -130,8 +146,14 @@ export const db: Command = {
         const hit = await findDb(ctx, ref);
         // Irreversible: se teclea el nombre, como `gh repo delete` / `turso db destroy`.
         await confirm(ctx, t(`Delete database ${hit.name} (${hit.id}) and all its data?`, `¿Borrar la base ${hit.name} (${hit.id}) con todos sus datos?`), { typeName: hit.name });
-        const r = await eb.deleteDatabase(hit.id);
-        emit(ctx, { ...r, id: hit.id, name: hit.name }, () => console.log(t(`Deleted ${hit.name} (${hit.id})`, `Borrada ${hit.name} (${hit.id})`)));
+        const r = (await eb.deleteDatabase(hit.id)) as { success: boolean; detached?: boolean };
+        emit(ctx, { ...r, id: hit.id, name: hit.name }, () =>
+          console.log(
+            r.detached
+              ? t(`Removed ${hit.name} from your list; its machine keeps the data`, `${hit.name} salió de tu lista; su máquina conserva los datos`)
+              : t(`Deleted ${hit.name} (${hit.id})`, `Borrada ${hit.name} (${hit.id})`),
+          ),
+        );
       },
     },
     rename: {

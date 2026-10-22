@@ -5,7 +5,7 @@ license: MIT
 compatibility: Needs Node 22+ (npx is enough), network access to https://www.easybits.cloud and an EasyBits API key
 metadata:
   author: easybits
-  version: "1.29"
+  version: "1.30"
 ---
 
 # Use the EasyBits CLI
@@ -391,7 +391,10 @@ easybits db rename leads prospects --dry-run --json   # {from,to,references:[{ag
 easybits db rename leads prospects --json             # {rewritten:[agentId], failed:[{agentId,error}]}
 easybits db rm leads --dry-run --json                 # {tables:[{name,rows}]}: what would be lost
 easybits db rm leads --json --yes
+easybits db attach clave --json   # register the db a machine opens at DATABASE_URL …/v1/db/clave/
 ```
+
+`db attach` creates nothing (404 if no machine opened it); `db rm` on it only unlists it (`detached`).
 
 `query` and `tables` resolve id or name and never create a database from a typo.
 

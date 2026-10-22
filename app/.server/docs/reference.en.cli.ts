@@ -300,9 +300,12 @@ easybits db ls
 easybits db rename leads prospects --dry-run         # which agent prompts name it
 easybits db rm leads --dry-run                       # tables and rows that would be lost
 easybits db rm leads --yes
+easybits db attach clave                             # the database your machine opens at /v1/db/clave/
 \`\`\`
 
 \`query\` and \`tables\` take the id or the name, and never create a database from a mistyped name. With \`--json\`, \`tables\` returns \`[{name, rows, columns:[{name,type,pk}], links:[{column, permanent, expiring, external, empty}]}]\`: for each text column holding links, how many are **permanent** (EasyBits public storage), **expiring** (signed URLs), from elsewhere or empty.
+
+**Attach**: \`db attach <name>\` adds to your account the database one of your machines already uses (\`DATABASE_URL=http://172.20.0.1:8090/v1/db/<name>/\`). Nothing is created or copied; from then on \`db query|tables|ls\` work on it. It does not count toward your plan's database limit, and \`db rm\` only removes it from your list: the data stays on the machine.
 
 **Rename**: \`db rename <db> <new-name> [--skip-prompts] [--dry-run]\` changes the name (the id stays, so the \`db_*\` tools keep working) and rewrites it in your ghosty-lite/goose agents' prompts where it appears as a standalone word: never inside \`x.com\`, \`@x\`, \`x_test\` or in capitals (the brand). \`--dry-run\` shows each prompt and line; a prompt that fails is reported (exit 1) and the new name stays. Skills and env are not scanned.
 
