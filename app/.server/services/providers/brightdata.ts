@@ -775,8 +775,8 @@ export async function probeWebProvider(): Promise<{ search: ProbeResult; fetch: 
       const { parseMercadoLibreListing, mercadoLibreListingUrl } = await import("./parsers/mercadolibre");
       const html = (await brightdataRequest({
         zone: unlocker,
-        // Búsqueda específica a propósito: un término genérico («audifonos») cae en una página
-        // de categoría con menos tarjetas (medido: 4-10) y daría falsas alarmas.
+        // Búsqueda estable (la misma del fixture): el canario debe saltar por una rotura, no
+        // porque cambió el surtido de una búsqueda.
         url: mercadoLibreListingUrl("iphone 15"),
         format: "raw",
         country: "mx",

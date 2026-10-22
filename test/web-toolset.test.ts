@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
+import zlib from "node:zlib";
 
 // ── Parser Mercado Libre (fixture real de 2026-09-04) ──────────────────────
 import { parseMercadoLibreListing, mercadoLibreListingUrl } from "../app/.server/services/providers/parsers/mercadolibre";
@@ -15,6 +16,16 @@ describe("parseMercadoLibreListing", () => {
     expect(r[0]).toMatchObject({ title: expect.stringContaining("iPhone 15"), price: 14999, seller: "Apple" });
     expect(r[0].url).toMatch(/^https:\/\/www\.mercadolibre\.com\.mx\//);
     expect(r[0].url).not.toContain("#");
+  });
+  it("lee los productos aunque MELI sirva la variante sin tarjetas HTML (sólo estado)", () => {
+    // Medido 22-oct: 2 de 5 descargas de «audifonos» venían así y el parser viejo sacaba 0-5.
+    const gz = fs.readFileSync(path.join(__dirname, "fixtures/meli-audifonos-state-only.html.gz"));
+    const r = parseMercadoLibreListing(zlib.gunzipSync(gz).toString("utf8"));
+    expect(r.length).toBeGreaterThanOrEqual(55);
+    expect(r.filter((x) => !x.url || x.price == null).length).toBe(0);
+    // Un anuncio no queda apuntando al contador de clics, y el precio es el actual, no el tachado.
+    expect(r.some((x) => x.url.includes("click1."))).toBe(false);
+    expect(r[0]).toMatchObject({ price: 269.7, url: "https://www.mercadolibre.com.mx/p/MLM77313670" });
   });
   it("arma la URL del listado con slug y paginación por offset de 48", () => {
     expect(mercadoLibreListingUrl("iPhone 15 Pro")).toBe("https://listado.mercadolibre.com.mx/iphone-15-pro");
