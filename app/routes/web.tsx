@@ -11,9 +11,9 @@ const ENTRY = WEB_PACKS.reduce((a, b) => (a.price <= b.price ? a : b));
 
 export const meta = () => [
   ...getBasicMetaTags({
-    title: "Búsqueda y scraping para agentes — internet que no bloquea | EasyBits",
+    title: "Scraping para producción para agentes de IA — internet que no bloquea | EasyBits",
     description:
-      "Tu agente busca en Google y Bing desde 195 países, lee páginas que bloquean bots y extrae registros con esquema de Maps, Mercado Libre, Amazon y miles de fuentes. Se cobra por consulta, en MXN.",
+      "Tu agente busca en Google y Bing desde 195 países, lee páginas que bloquean bots y extrae registros con esquema de Maps, Mercado Libre, Amazon y miles de fuentes. Listo para producción: respuestas completas, aviso por webhook y estado público. Se cobra por consulta, en MXN.",
     url: "https://www.easybits.cloud/web",
   }),
   { tagName: "link", rel: "canonical", href: "https://www.easybits.cloud/web" },
@@ -41,8 +41,8 @@ export default function Web({ loaderData }: Route.ComponentProps) {
           title: "Internet que",
           highlight: "no te bloquea",
           subtitle:
-            "Un agente sin internet es un agente adivinando. El tuyo busca, lee y extrae de la web real — la que le cierra la puerta a un scraper normal.",
-          proof: `Buscadores desde 195 países · miles de fuentes con esquema · desde \$${ENTRY.price} por ${ENTRY.queries} consultas`,
+            "Un agente sin internet es un agente adivinando. El tuyo busca, lee y extrae de la web real — la que le cierra la puerta a un scraper normal. Y está listo para producción: ninguna página llega cortada sin avisar, cada extracción avisa por webhook al terminar y el estado del servicio se publica cada 15 minutos.",
+          proof: `Buscadores desde 195 países · miles de fuentes con esquema · estado público en /status · desde \$${ENTRY.price} por ${ENTRY.queries} consultas`,
           bentos: [
             {
               title: "Buscar como si fueras de allá",
@@ -61,6 +61,7 @@ export default function Web({ loaderData }: Route.ComponentProps) {
               bullets: [
                 "HTML limpio o markdown para LLM",
                 "Sitios con protección anti-bot incluidos",
+                "Páginas enteras: si una no cabe en una respuesta, te avisa y el resto sale gratis",
                 "Rastreo de un sitio completo cuando hace falta",
                 "Sin mantener proxies ni navegadores tú",
               ],
@@ -72,7 +73,7 @@ export default function Web({ loaderData }: Route.ComponentProps) {
               bullets: [
                 "Maps, Mercado Libre, Amazon, Instagram y miles más",
                 "Campos tipados, listos para tu base de datos",
-                "Trabajos grandes en asíncrono, con estado consultable",
+                "Trabajos grandes en asíncrono, con webhook firmado cuando terminan",
                 "La misma tool desde MCP, SDK o REST",
               ],
               image: "https://i.imgur.com/JjN1Q0l.png",
