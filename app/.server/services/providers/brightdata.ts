@@ -441,12 +441,19 @@ async function datasetsRequest(path: string, init?: RequestInit): Promise<unknow
 }
 
 export interface BrightdataExtractInput {
+  /** Cualquier página: con `schema`, un modelo llena ese JSON Schema desde la página (síncrono). */
+  url?: string;
+  /** JSON Schema de lo que quieres sacar de `url`. */
+  schema?: Record<string, unknown>;
+  /** Instrucción opcional para el modelo: «sólo los planes mensuales», «precios en MXN». */
+  prompt?: string;
   /** Fuente curada (ver EXTRACT_SOURCES) o "mercadolibre". */
   source?: string;
   /** Dataset del proveedor directo (cualquiera del catálogo), si no hay `source`. */
   datasetId?: string;
-  /** Inputs según la fuente: [{url}] o [{keyword,country}] o {query} para mercadolibre. */
-  input: Record<string, unknown> | Record<string, unknown>[];
+  /** Inputs según la fuente: [{url}] o [{keyword,country}] o {query} para mercadolibre. No va con `url`+`schema`. */
+  input?: Record<string, unknown> | Record<string, unknown>[];
+  country?: string;
   /** Tope de registros por input (fuentes discover). Default 20, máx 200. */
   limit?: number;
 }
@@ -459,7 +466,21 @@ export interface BrightdataExtractOutput extends ServiceResult {
     /** Sólo cuando status=done (parsers síncronos, p. ej. mercadolibre). */
     records?: unknown[];
     total?: number;
+    /** `url`+`schema`: el objeto que llenó el modelo, ya validado contra el esquema. */
+    data?: unknown;
+    /** `url`+`schema`: la página pasaba del tope que lee el modelo y se cortó. */
+    truncated?: boolean;
   };
+}
+
+// Lo que lee el modelo de una página. ~60K caracteres ≈ 15K tokens: cabe una ficha o un
+// listado largo y mantiene el costo por llamada acotado.
+const SCHEMA_EXTRACT_MAX_CHARS = 60_000;
+// 1 consulta por leer la página + 1 por cada ~4,000 tokens del modelo (entrada + salida).
+// Con Haiku eso cubre su costo real incluso en el pack grande ($0.10 MXN por consulta).
+export const SCHEMA_TOKENS_PER_QUERY = 4000;
+export function schemaExtractCost(totalTokens: number) {
+  return 1 + Math.max(1, Math.ceil(totalTokens / SCHEMA_TOKENS_PER_QUERY));
 }
 
 const EXTRACT_DEFAULT_LIMIT = 20;
@@ -472,6 +493,7 @@ export const brightdataExtractService: ServiceDef<BrightdataExtractInput, Bright
   description:
     "Extrae registros estructurados de una fuente conocida (Google Maps, Instagram, Amazon, Mercado Libre…). Async: devuelve jobId; se cobra por registro al recoger.",
   estimateCost(input) {
+    if (input.url && input.schema) return schemaExtractCost(SCHEMA_EXTRACT_MAX_CHARS / 4); // peor caso
     // Pre-check con el tope pedido; el cobro real ocurre en extractStatus con
     // los registros devueltos (o aquí mismo para parsers síncronos).
     const inputs = Array.isArray(input.input) ? input.input.length : 1;
@@ -481,6 +503,54 @@ export const brightdataExtractService: ServiceDef<BrightdataExtractInput, Bright
     const { db } = await import("../../db");
     const source = input.source?.trim();
     const limit = Math.min(EXTRACT_MAX_LIMIT, Math.max(1, input.limit ?? EXTRACT_DEFAULT_LIMIT));
+    // ── Cualquier URL con un esquema: página → markdown limpio → el modelo llena el JSON Schema ──
+    if (input.url || input.schema) {
+      if (!input.url || !input.schema || typeof input.schema !== "object") {
+        throw new ServiceProviderError("research.brightdata.extract", 400, "pasa `url` y `schema` (un JSON Schema) juntos");
+      }
+      const zone = process.env.BRIGHTDATA_UNLOCKER_ZONE || "mcp_unlocker";
+      const resp = (await brightdataRequest({
+        zone,
+        url: input.url,
+        format: "json",
+        country: input.country,
+        data_format: "markdown",
+        serviceId: "research.brightdata.extract",
+      })) as BrightdataResponse;
+      const { extractMainContent } = await import("./parsers/mainContent");
+      const full = extractMainContent(resp.body ?? "");
+      const page = full.slice(0, SCHEMA_EXTRACT_MAX_CHARS);
+      const { generateObject, jsonSchema } = await import("ai");
+      const { getAiModel, resolveModelLocal } = await import("../../aiModels");
+      const model = resolveModelLocal(await getAiModel("webExtractSchema"));
+      let result;
+      try {
+        result = await generateObject({
+          model,
+          schema: jsonSchema(input.schema as Parameters<typeof jsonSchema>[0]),
+          system:
+            "Extraes datos de una página web a un JSON Schema. Usa SÓLO lo que dice la página: si un dato no está, déjalo vacío o null; nunca lo inventes ni lo completes con lo que sabes.",
+          prompt: `${input.prompt ? `Instrucción: ${input.prompt}
+
+` : ""}Página (${input.url}):
+
+${page}`,
+        });
+      } catch (e) {
+        throw new ServiceProviderError(
+          "research.brightdata.extract",
+          422,
+          `el modelo no pudo llenar el esquema: ${(e instanceof Error ? e.message : String(e)).slice(0, 200)}`,
+        );
+      }
+      const tokens = (result.usage?.inputTokens ?? 0) + (result.usage?.outputTokens ?? 0);
+      return {
+        cost: schemaExtractCost(tokens),
+        data: { jobId: "", status: "done", source: new URL(input.url).host, data: result.object, truncated: full.length > page.length },
+      };
+    }
+
+    if (!input.input) throw new ServiceProviderError("research.brightdata.extract", 400, "input is required");
     const inputs = Array.isArray(input.input) ? input.input : [input.input];
     if (!inputs.length) {
       throw new ServiceProviderError("research.brightdata.extract", 400, "input is required");

@@ -582,16 +582,18 @@ paths:
     post:
       tags: [Web]
       operationId: webExtract
-      summary: Extraer datos estructurados (asíncrono)
-      description: Devuelve un `jobId`; consulta el estado en `GET /web/extract/{jobId}`.
+      summary: Extraer datos estructurados
+      description: "Dos modos. Fuente conocida (`source`/`datasetId` + `input`): 202 con `jobId`, estado en `GET /web/extract/{jobId}`. Cualquier página (`url` + `schema`): 200 con `data` llenado por un modelo, al momento."
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [input]
               properties:
+                url: { type: string, format: uri, description: "Cualquier página. Va con schema." }
+                schema: { type: object, additionalProperties: true, description: "JSON Schema de lo que quieres sacar de url." }
+                prompt: { type: string, description: "Instrucción opcional para el modelo." }
                 source: { type: string }
                 datasetId: { type: string }
                 input: {}

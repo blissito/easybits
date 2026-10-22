@@ -19,6 +19,16 @@ vi.mock("../app/.server/db", () => ({ db }));
 vi.mock("../app/.server/storage", () => ({ getPlatformDefaultClient: () => store }));
 vi.mock("../app/.server/webhooks", () => ({ dispatchWebhooks }));
 vi.mock("../app/.server/emails/sendTransactional", () => ({ sendTransactional }));
+const generateObject = vi.hoisted(() => vi.fn());
+const schemaHook = vi.hoisted(() => ({ fail: false }));
+vi.mock("ai", () => ({
+  generateObject,
+  jsonSchema: (s: unknown) => {
+    if (schemaHook.fail) throw new Error("No object generated");
+    return { jsonSchema: s };
+  },
+}));
+vi.mock("../app/.server/aiModels", () => ({ getAiModel: async () => "haiku", resolveModelLocal: (id: string) => ({ id }) }));
 
 import {
   brightdataScrapeService,
@@ -27,7 +37,7 @@ import {
 } from "../app/.server/services/providers/brightdata";
 import fs from "node:fs";
 import path from "node:path";
-import { probeWebProvider, brightdataMapService, parseSitemap } from "../app/.server/services/providers/brightdata";
+import { probeWebProvider, brightdataMapService, parseSitemap, brightdataExtractService, schemaExtractCost } from "../app/.server/services/providers/brightdata";
 import { canaryStatus, EXTRACT_GIVE_UP_MS, runWebCanary, sweepWebJobs } from "../app/.server/core/webJobsOperations";
 
 const ME = "a".repeat(24);
@@ -286,5 +296,55 @@ describe("web_map", () => {
   it("parseSitemap distingue índice de lista", () => {
     expect(parseSitemap("<sitemapindex><sitemap><loc>https://a/s.xml</loc></sitemap></sitemapindex>")).toEqual({ urls: [], sitemaps: ["https://a/s.xml"] });
     expect(parseSitemap("<urlset><url><loc> https://a/x </loc></url></urlset>").urls).toEqual(["https://a/x"]);
+  });
+});
+
+describe("web_extract con url + schema", () => {
+  const schema = { type: "object", properties: { plans: { type: "array", items: { type: "object" } } } };
+  const page = (md: string) =>
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => Response.json({ status_code: 200, body: md }));
+
+  beforeEach(() => generateObject.mockClear());
+
+  it("lee la página, le pasa el esquema al modelo y cobra según los tokens", async () => {
+    page("# Precios\nByte $199 MXN");
+    generateObject.mockResolvedValue({ object: { plans: [{ name: "Byte", priceMxn: 199 }] }, usage: { inputTokens: 9000, outputTokens: 600 } });
+    const r = await brightdataExtractService.execute({ url: "https://ej.test/planes", schema, prompt: "sólo mensuales" }, { userId: ME });
+    expect(r.data).toMatchObject({ status: "done", source: "ej.test", data: { plans: [{ name: "Byte", priceMxn: 199 }] }, truncated: false });
+    expect(r.cost).toBe(schemaExtractCost(9600)); // 1 + ceil(9600/4000) = 4
+    expect(r.cost).toBe(4);
+    const call = generateObject.mock.calls[0][0];
+    expect(call.schema).toEqual({ jsonSchema: schema });
+    expect(call.prompt).toContain("Instrucción: sólo mensuales");
+    expect(call.prompt).toContain("Byte $199 MXN");
+    expect(call.system).toMatch(/nunca lo inventes/);
+  });
+
+  it("una página enorme se corta para el modelo y lo dice", async () => {
+    page("x".repeat(200_000));
+    generateObject.mockResolvedValue({ object: {}, usage: { inputTokens: 15000, outputTokens: 10 } });
+    const r = await brightdataExtractService.execute({ url: "https://ej.test/", schema }, { userId: ME });
+    expect(r.data.truncated).toBe(true);
+    expect(generateObject.mock.calls[0][0].prompt.length).toBeLessThan(61_000);
+  });
+
+  it("si el modelo no puede llenar el esquema → 422, sin cobro", async () => {
+    page("hola");
+    // La falla se simula en jsonSchema (función normal, dentro del mismo try que generateObject):
+    // un vi.fn que lanza queda reportado como error del test en esta suite aunque el código lo atrape.
+    schemaHook.fail = true;
+    const err = await brightdataExtractService.execute({ url: "https://ej.test/", schema }, { userId: ME }).then(
+      () => null,
+      (e) => e,
+    );
+    expect(err?.name).toBe("ServiceProviderError");
+    expect(err?.providerStatus).toBe(422);
+    expect(err?.providerMessage).toMatch(/no pudo llenar el esquema/);
+    schemaHook.fail = false;
+  });
+
+  it("url sin schema (o al revés) → 400", async () => {
+    await expect(brightdataExtractService.execute({ url: "https://ej.test/" }, { userId: ME })).rejects.toMatchObject({ providerStatus: 400 });
+    await expect(brightdataExtractService.execute({ schema }, { userId: ME })).rejects.toMatchObject({ providerStatus: 400 });
   });
 });

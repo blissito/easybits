@@ -4,6 +4,7 @@
  *   POST /api/v2/web/search   { query, engine?, country? }
  *   POST /api/v2/web/fetch    { url, country?, asMarkdown? }
  *   POST /api/v2/web/extract  { source?, datasetId?, input, limit? } → { jobId, status }
+ *                             { url, schema, prompt? } → 200 { data } (cualquier página, síncrono)
  *   GET  /api/v2/web/extract/:jobId
  *   POST /api/v2/web/crawl    { url, maxPages?, country? }   maxPages > 20 → 202 { jobId } (segundo plano)
  *   GET  /api/v2/web/crawl/:jobId?cursor=N                   estado + un bloque de páginas
@@ -53,7 +54,7 @@ function mapError(e: unknown): Response | null {
       );
     }
     // 400/404 son del cliente (input malo, jobId o fetchId que no existe): no son caídas.
-    const status = e.providerStatus === 400 || e.providerStatus === 404 ? e.providerStatus : 502;
+    const status = [400, 404, 422].includes(e.providerStatus ?? 0) ? e.providerStatus! : 502;
     return Response.json({ error: e.providerMessage, code: e.code }, { status });
   }
   return null;
@@ -94,7 +95,9 @@ export async function action({ request, params }: Route.ActionArgs) {
     const r = await consumeService<
       BrightdataSearchOutput | BrightdataScrapeOutput | BrightdataExtractOutput | BrightdataCrawlOutput
     >(serviceId, body, { userId: ctx.user.id });
-    const accepted = params.op === "extract" || (params.op === "crawl" && "jobId" in (r.data as object));
+    // 202 = quedó corriendo (extract de fuente, rastreo grande); lo síncrono responde 200.
+    const d = r.data as { status?: string; jobId?: string };
+    const accepted = (params.op === "extract" && d.status === "running") || (params.op === "crawl" && !!d.jobId);
     return Response.json(r.data, { status: accepted ? 202 : 200 });
   } catch (e) {
     return mapError(e) ?? Response.json({ error: "Internal error" }, { status: 500 });

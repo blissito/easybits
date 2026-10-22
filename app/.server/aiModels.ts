@@ -18,7 +18,9 @@ export type DocModelOperation =
   // tier (20 requests/día) — a volumen de producción devolvería null por cuota y la
   // etapa dejaría de moverse EN SILENCIO. Haiku es el mismo modelo que ya usan
   // autoTagFile/searchFilesWithAI en core/ai.ts.
-  | "wabaPaymentSignal";
+  | "wabaPaymentSignal"
+  // web_extract con `schema` sobre cualquier URL: llena un JSON Schema desde el markdown de la página.
+  | "webExtractSchema";
 
 // gemini-2.5-pro quedó retirado para la llave del proyecto (404 "no longer available to new
 // users", 2026-09-25) y los Gemini Flash están en el tier gratuito de 20/día, que falla en
@@ -32,6 +34,7 @@ const DEFAULTS: Record<DocModelOperation, string> = {
   docRegeneratePage: "claude-haiku-4-5-20251001",
   docAutoDescribe: "claude-haiku-4-5-20251001",
   wabaPaymentSignal: "claude-haiku-4-5-20251001",
+  webExtractSchema: "claude-haiku-4-5-20251001",
 };
 
 let cache: Record<string, string> | null = null;

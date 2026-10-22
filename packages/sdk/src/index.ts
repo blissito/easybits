@@ -115,12 +115,19 @@ export interface WebFetchResult {
   fetchId?: string;
 }
 export interface WebExtractParams {
+  /** Cualquier página: con `schema`, un modelo llena ese JSON Schema desde la página (responde al momento). */
+  url?: string;
+  /** JSON Schema de lo que quieres sacar de `url`. */
+  schema?: Record<string, unknown>;
+  /** Instrucción opcional para el modelo, p. ej. "sólo los planes mensuales". */
+  prompt?: string;
+  country?: string;
   /** google_maps | mercadolibre | amazon_product | instagram_profiles | linkedin_company | … */
   source?: string;
   /** Dataset del catálogo, para fuentes no curadas. */
   datasetId?: string;
-  /** Según la fuente: [{ url }] | [{ keyword, country }] | { query, page? }. */
-  input: Record<string, unknown> | Record<string, unknown>[];
+  /** Según la fuente: [{ url }] | [{ keyword, country }] | { query, page? }. No va con `url`+`schema`. */
+  input?: Record<string, unknown> | Record<string, unknown>[];
   /** Registros máximos por input (default 20, máx 200). */
   limit?: number;
 }
@@ -132,6 +139,10 @@ export interface WebExtractJob {
   records?: unknown[];
   total?: number;
   error?: string;
+  /** Con `url`+`schema`: el objeto que llenó el modelo, ya validado contra el esquema. */
+  data?: unknown;
+  /** Con `url`+`schema`: la página era más larga de lo que lee el modelo. */
+  truncated?: boolean;
 }
 export interface WebCrawlParams {
   url: string;

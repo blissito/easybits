@@ -157,6 +157,8 @@ read the rest with `{ fetchId, offset: nextOffset }` (free, same copy, kept 24 h
 ### POST /web/extract · GET /web/extract/{jobId}
 Body: `{ input, source?, datasetId?, limit? }` → `{ jobId, status }`. Poll until `status: "done"`;
 the result carries structured records (Maps, Mercado Libre, Amazon, Instagram…).
+Any page with your own schema: `{ url, schema, prompt? }` → `200 { data }` right away (a model fills the
+JSON Schema from the page; missing fields stay null, never invented; 1 query + 1 per ~4K model tokens).
 
 ### POST /web/crawl · GET /web/crawl/{jobId}
 Body: `{ url, maxPages?, country? }`. Up to 20 pages answers right away; 21-2000 runs in the background

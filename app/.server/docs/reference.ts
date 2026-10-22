@@ -842,6 +842,11 @@ SDK: \`eb.webExtract(...)\` / \`eb.webExtractAndWait(...)\` (poll cada 15 s) · 
 
 **Sin poll (producción):** suscribe un webhook al evento \`web.extract.completed\` (\`POST /webhooks\`). Cuando el job termina llega \`{ jobId, source, total, url }\` firmado con HMAC; haz \`GET url\` para recoger los registros (ahí se cobra). Si el proveedor falla o el job pasa de 2 h llega \`web.extract.failed\` \`{ jobId, source, error }\`, sin cobro. El aviso sale una sola vez, a más tardar ~1 min después de terminar.
 
+### Extraer con tu esquema, de cualquier página
+\`POST /web/extract\` con \`{ url, schema, prompt?, country? }\` → \`200 { status: "done", source, data, truncated }\`
+Lee la página (aunque bloquee bots), un modelo llena tu **JSON Schema** con lo que dice y \`data\` sale validado contra él. Lo que no esté en la página queda vacío o \`null\`: nunca se inventa. \`prompt\` afina («sólo los planes mensuales», «precios en MXN»). Responde al momento. Cobra 1 consulta por la página + 1 por cada ~4,000 tokens que lee el modelo (una página típica: 3-6). El modelo lee hasta ~60,000 caracteres; si la página es más larga, \`truncated: true\`. Si no puede llenar el esquema: \`422\`, sin cobro.
+SDK: \`eb.webExtract({ url, schema })\` · MCP: \`web_extract({ url, schema, prompt })\`
+
 ### Estado de un extract
 \`GET /web/extract/:jobId\`
 Returns: \`{ jobId, status: "running"|"done"|"error", records?, total? }\`

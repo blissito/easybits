@@ -260,6 +260,11 @@ SDK: \`eb.webExtract(...)\` / \`eb.webExtractAndWait(...)\` (polls every 15 s) �
 
 **No polling (production):** subscribe a webhook to \`web.extract.completed\` (\`POST /webhooks\`). When the job finishes you get \`{ jobId, source, total, url }\` signed with HMAC; \`GET url\` to collect the records (that is when it charges). If the provider fails or the job runs past 2 h you get \`web.extract.failed\` \`{ jobId, source, error }\`, nothing charged. The notice is sent once, at most ~1 min after the job finishes.
 
+### Extract with your schema, from any page
+\`POST /web/extract\` with \`{ url, schema, prompt?, country? }\` → \`200 { status: "done", source, data, truncated }\`
+Reads the page (even if it blocks bots), a model fills your **JSON Schema** with what it says, and \`data\` comes validated against it. Anything not on the page is left empty or \`null\`: never made up. \`prompt\` refines it ("monthly plans only", "prices in MXN"). Answers right away. Charges 1 query for the page + 1 per ~4,000 tokens the model reads (a typical page: 3-6). The model reads up to ~60,000 characters; if the page is longer, \`truncated: true\`. If it cannot fill the schema: \`422\`, nothing charged.
+SDK: \`eb.webExtract({ url, schema })\` · MCP: \`web_extract({ url, schema, prompt })\`
+
 ### Extract job status
 \`GET /web/extract/:jobId\`
 Returns: \`{ jobId, status: "running"|"done"|"error", records?, total? }\`

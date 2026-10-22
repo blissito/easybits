@@ -6846,11 +6846,15 @@ function registerVideoTools(server: McpServer) {
 
   server.tool(
     "web_extract",
-    "Extrae REGISTROS estructurados (JSON con esquema estable) de una fuente conocida: Google Maps (negocios con teléfono/WhatsApp/web/rating), Mercado Libre, Amazon, Instagram, TikTok, LinkedIn, Facebook, YouTube, Indeed, Trustpilot, inmuebles24… Cobra 1 consulta POR REGISTRO devuelto (no por intento).\n\nHow to use:\n- `source`: una de google_maps | google_maps_reviews | google_shopping | mercadolibre | amazon_product | amazon_reviews | instagram_profiles | instagram_posts | tiktok_profiles | tiktok_posts | facebook_page_posts | facebook_marketplace | youtube_channels | youtube_videos | linkedin_company | linkedin_person | linkedin_jobs | indeed_jobs | trustpilot | inmuebles24 | reddit_posts. O pasa `datasetId` de cualquier otra fuente del catálogo.\n- `input`: según la fuente. google_maps → [{ keyword: 'dentista Polanco CDMX', country: 'MX' }]. mercadolibre → { query: 'iphone 15', page?: 1 }. El resto → [{ url }].\n- `limit`: registros máximos por input (default 20, máx 200).\n\nASYNC: casi todas las fuentes tardan 30-120 s → devuelve { jobId, status:'running' }; haz poll con `web_extract_status` cada ~15 s, o (en producción) suscribe un webhook al evento `web.extract.completed` y recoge los registros cuando llegue el aviso, sin poll. `mercadolibre` responde al instante con status:'done' y los `records` (hasta 48 por página).\n\nUse for: listas de prospectos (Maps), comparar precios (MELI/Amazon), monitorear reseñas o perfiles.",
+    "Extrae datos estructurados. DOS modos:\n\n1) CUALQUIER PÁGINA con tu esquema: pasa `url` + `schema` (JSON Schema) y opcional `prompt`; un modelo lee la página (aunque bloquee bots) y devuelve { data } ya validado contra el esquema, al momento. Lo que no esté en la página sale vacío/null, nunca inventado. Cobra 1 consulta por la página + 1 por cada ~4,000 tokens que lee el modelo (típico 3-6). Ej.: url de una página de precios + schema { plans: [{ name, priceMxn, features[] }] }.\n\n2) FUENTE CONOCIDA: registros con esquema estable de Google Maps (negocios con teléfono/WhatsApp/web/rating), Mercado Libre, Amazon, Instagram, TikTok, LinkedIn, Facebook, YouTube, Indeed, Trustpilot, inmuebles24… Cobra 1 consulta POR REGISTRO devuelto (no por intento).\n\nHow to use:\n- `source`: una de google_maps | google_maps_reviews | google_shopping | mercadolibre | amazon_product | amazon_reviews | instagram_profiles | instagram_posts | tiktok_profiles | tiktok_posts | facebook_page_posts | facebook_marketplace | youtube_channels | youtube_videos | linkedin_company | linkedin_person | linkedin_jobs | indeed_jobs | trustpilot | inmuebles24 | reddit_posts. O pasa `datasetId` de cualquier otra fuente del catálogo.\n- `input`: según la fuente. google_maps → [{ keyword: 'dentista Polanco CDMX', country: 'MX' }]. mercadolibre → { query: 'iphone 15', page?: 1 }. El resto → [{ url }].\n- `limit`: registros máximos por input (default 20, máx 200).\n\nASYNC: casi todas las fuentes tardan 30-120 s → devuelve { jobId, status:'running' }; haz poll con `web_extract_status` cada ~15 s, o (en producción) suscribe un webhook al evento `web.extract.completed` y recoge los registros cuando llegue el aviso, sin poll. `mercadolibre` responde al instante con status:'done' y los `records` (hasta 48 por página).\n\nUse for: listas de prospectos (Maps), comparar precios (MELI/Amazon), monitorear reseñas o perfiles.",
     {
-      source: z.string().optional().describe("Fuente curada (ver descripción). Omitir si pasas datasetId."),
+      url: z.string().url().optional().describe("Modo 1: cualquier página. Va con `schema`."),
+      schema: z.record(z.unknown()).optional().describe("Modo 1: JSON Schema de lo que quieres sacar de `url`."),
+      prompt: z.string().max(2000).optional().describe("Modo 1: instrucción para el modelo ('sólo planes mensuales', 'precios en MXN')."),
+      country: z.string().length(2).optional().describe("Modo 1: ver la página como desde ese país (ISO)."),
+      source: z.string().optional().describe("Modo 2: fuente curada (ver descripción). Omitir si pasas datasetId."),
       datasetId: z.string().optional().describe("Dataset del catálogo, para fuentes no curadas."),
-      input: z.union([z.record(z.unknown()), z.array(z.record(z.unknown()))]).describe("Inputs según la fuente: [{url}] | [{keyword,country}] | {query}."),
+      input: z.union([z.record(z.unknown()), z.array(z.record(z.unknown()))]).optional().describe("Modo 2: inputs según la fuente: [{url}] | [{keyword,country}] | {query}."),
       limit: z.number().int().min(1).max(200).optional().describe("Máximo de registros por input. Default 20."),
     },
     wrapHandler(async (params, extra) =>
@@ -6858,7 +6862,9 @@ function registerVideoTools(server: McpServer) {
         "research.brightdata.extract",
         params,
         extra,
-        (r) => r.data.status === "done"
+        (r) => r.data.data !== undefined
+          ? { status: "done", source: r.data.source, data: r.data.data, truncated: r.data.truncated }
+          : r.data.status === "done"
           ? { jobId: r.data.jobId, status: "done", source: r.data.source, ...paginate(r.data.records ?? [], { total: r.data.total }) }
           : { jobId: r.data.jobId, status: "running", source: r.data.source, hint: "Poll web_extract_status({ jobId }) cada ~15 s." },
       ),
