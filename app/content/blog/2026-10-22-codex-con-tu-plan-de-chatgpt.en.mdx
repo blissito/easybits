@@ -1,0 +1,62 @@
+---
+title: "Codex on your ChatGPT plan, in your Easybits boxes"
+description: "If you pay for ChatGPT Plus or Pro, you already have Codex. Now you run it in any Easybits box on that same plan, with no OPENAI_API_KEY: sign in once, the session goes to your vault and into each box with one command."
+date: "2026-10-22"
+author: "Easybits Team"
+tags: ["codex", "chatgpt", "openai", "sandboxes", "cli"]
+kind: "lanzamiento"
+featuredImage: "/blog/assets/blog-codex-chatgpt-cover.png"
+published: true
+---
+
+# Codex on your ChatGPT plan, in your Easybits boxes
+
+Codex comes included with ChatGPT Plus and Pro. Until today, running it inside an Easybits box required an `OPENAI_API_KEY`, and every task was billed separately, per token, even if you already paid for the plan.
+
+Starting today, Codex runs in your boxes on **your ChatGPT plan**.
+
+## How it works
+
+The first time, in any box with Node:
+
+```bash
+easybits sb create --template node --ttl 3600
+easybits sb codex login sb_…
+```
+
+The command installs Codex and gives you an OpenAI link and a 15-minute code. You open the link, sign in with your ChatGPT account, enter the code, and the session is stored encrypted in your Easybits vault.
+
+After that, any new box is one step:
+
+```bash
+easybits sb codex connect sb_…
+easybits sb exec sb_… -- codex exec "explain this repo and suggest tests"
+```
+
+`connect` puts your session in the box and installs Codex if it is missing. The same step exists in MCP (`sandbox_codex_connect`), the SDK (`sb.codexConnect()`) and the REST API (`POST /sandboxes/:id/codex-connect`), so an agent that manages your boxes can do it on its own.
+
+## Why you do the sign-in
+
+You sign in yourself, on OpenAI's page, with your account. Easybits never sees your password: it stores the session Codex leaves behind and puts it only in your boxes. It is the case OpenAI documents for Codex on a remote machine, the same as installing it on your own server.
+
+Fleet agents on the `codex` engine still use `OPENAI_API_KEY`: offering the ChatGPT plan inside a hosted service requires OpenAI's approval, and Easybits has already asked for it.
+
+## What keeps it from breaking
+
+OpenAI changes the session token every time Codex renews it. If an old copy replaced the new one, the session would stop working within days. So:
+
+- `connect` never replaces a session the box already has.
+- When you delete a box through the API, its renewed session is saved to your vault automatically before it is destroyed.
+- The session enters the box over stdin and is stored with mode 600, so it does not show up in the process list.
+
+One session works in one box at a time. If two boxes renew the same token, they clobber each other and one will have to sign in again.
+
+## Get started
+
+If you already have `~/.codex/auth.json` on your computer, upload it and skip the login:
+
+```bash
+easybits secrets set CODEX_AUTH < ~/.codex/auth.json
+```
+
+You need CLI 0.21 or newer (`npm i -g @easybits.cloud/cli`). The full steps are in the [documentation](https://www.easybits.cloud/en/docs#agents).

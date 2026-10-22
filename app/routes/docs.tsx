@@ -91,6 +91,7 @@ const SECTIONS = [
   { id: "documents", label: "Documentos" },
   { id: "video-projects", label: "Video" },
   { id: "agents", label: "Agentes & Sandboxes" },
+  { id: "codex-chatgpt", label: "Codex con tu ChatGPT" },
   { id: "ghosty-lite", label: "Ghosty Lite" },
   { id: "flota", label: "Flota" },
   { id: "agentes-en-tu-app", label: "Agentes en tu app" },
@@ -107,7 +108,7 @@ const SECTIONS = [
 ] as const;
 
 // Sections that show the "Nuevo" badge in the nav (recently shipped).
-const NEW_SECTIONS = new Set<string>(["crons", "cli", "eve", "agentes-en-tu-app", "ghosty-lite", "flota", "video-projects", "calls", "secrets", "images", "web"]);
+const NEW_SECTIONS = new Set<string>(["codex-chatgpt", "crons", "cli", "eve", "agentes-en-tu-app", "ghosty-lite", "flota", "video-projects", "calls", "secrets", "images", "web"]);
 
 export default function DocsPage({ loaderData }: Route.ComponentProps) {
   const { toolCount, groupCounts, groups, templates, cliMarkdown, sandboxErrorsMarkdown, databaseErrorsMarkdown, cronsMarkdown } = loaderData;
@@ -444,6 +445,17 @@ export default function DocsPage({ loaderData }: Route.ComponentProps) {
             <p className="text-gray-600 mb-4">
               URL base: <code className="bg-gray-100 px-2 py-0.5 rounded font-mono text-sm">https://www.easybits.cloud/api/v2</code>
             </p>
+            <a
+              href="#codex-chatgpt"
+              className="block mb-6 bg-black text-white border-2 border-black rounded-xl p-5 shadow-[4px_4px_0px_0px_rgba(124,58,237,1)] hover:-translate-y-0.5 transition-transform"
+            >
+              <span className="inline-block text-[11px] font-bold uppercase tracking-wide bg-[#7c3aed] px-2 py-0.5 rounded mb-2">Nuevo</span>
+              <p className="text-lg font-bold">Codex con tu plan de ChatGPT, en tus cajas</p>
+              <p className="text-sm text-gray-300 mt-1">
+                Inicias sesión una vez con tu cuenta de ChatGPT Plus o Pro y cualquier caja de Easybits corre Codex con tu plan, sin{" "}
+                <code className="bg-white/10 px-1 rounded">OPENAI_API_KEY</code>. Un comando: <code className="bg-white/10 px-1 rounded">easybits sb codex connect</code>. Ver cómo →
+              </p>
+            </a>
             <div className="mb-6 bg-blue-50 border-2 border-blue-300 rounded-xl p-4 text-sm">
               <strong>Otras formas de integrarte:</strong> REST API (abajo),{" "}
               <a href="#sdk" className="underline font-medium">SDK tipado</a> ({`npm i @easybits.cloud/sdk`}), o{" "}
@@ -2427,6 +2439,69 @@ sandbox_git_log({ sandboxId, dir, limit?, cursor? })` },
             <div className="mt-8">
               <Markdown>{sandboxErrorsMarkdown}</Markdown>
             </div>
+          </section>
+
+          {/* Codex con el plan de ChatGPT del usuario en sus cajas (vault CODEX_AUTH) */}
+          <section id="codex-chatgpt" className="mb-16">
+            <h2 className="text-2xl font-bold mb-4">Codex con tu plan de ChatGPT</h2>
+            <p className="text-gray-600 mb-4 text-sm">
+              Si pagas ChatGPT Plus o Pro, ya tienes Codex incluido. Aquí lo corres <strong>en tus cajas de Easybits con ese mismo plan</strong>: sin{" "}
+              <code className="bg-gray-100 px-1 rounded">OPENAI_API_KEY</code> y sin pagar tokens aparte. Inicias sesión una vez con tu cuenta; tu sesión queda cifrada en tu vault
+              (secreto <code className="bg-gray-100 px-1 rounded">CODEX_AUTH</code>) y se pone en cualquier caja con un comando.
+            </p>
+
+            <div className="mb-6 bg-violet-50 border-2 border-violet-300 rounded-xl p-4 text-sm">
+              <strong>El inicio de sesión es tuyo.</strong> Lo haces tú, con tu cuenta, en la página de OpenAI. Easybits nunca ve tu contraseña: sólo guarda la sesión que deja Codex
+              y la usa en <strong>tus</strong> cajas. Es el caso «máquina remota» que OpenAI documenta para Codex. Los agentes de la{" "}
+              <a href="#flota" className="underline">Flota</a> con el motor <code className="bg-gray-100 px-1 rounded">codex</code> siguen pidiendo{" "}
+              <code className="bg-gray-100 px-1 rounded">OPENAI_API_KEY</code>.
+            </div>
+
+            <h3 className="text-lg font-bold mb-3">1. Inicia sesión una vez</h3>
+            <p className="text-gray-600 text-sm mb-2">En cualquier caja con Node. El comando instala Codex, te da un link y un código, espera a que entres y guarda la sesión en tu vault:</p>
+            <CodeExample
+              title="bash"
+              code={`easybits sb create --template node --ttl 3600      # → sb_…
+easybits sb codex login sb_…
+
+#  1. Abre:   https://auth.openai.com/codex/device
+#  2. Código: ABCD-1234   (15 min)
+#  Listo. Sesión guardada en tu vault (CODEX_AUTH)`}
+            />
+            <p className="text-gray-600 text-sm mt-3 mb-6">
+              Si OpenAI te dice que el código no está permitido, activa <strong>inicio de sesión con código de dispositivo</strong> en la configuración de seguridad de ChatGPT
+              (en un workspace lo activa el admin). ¿Ya tienes <code className="bg-gray-100 px-1 rounded">~/.codex/auth.json</code> en tu compu? Súbelo y te saltas este paso:{" "}
+              <code className="bg-gray-100 px-1 rounded">easybits secrets set CODEX_AUTH &lt; ~/.codex/auth.json</code>.
+            </p>
+
+            <h3 className="text-lg font-bold mb-3">2. Conecta cualquier caja</h3>
+            <TabbedCode
+              tabs={[
+                { label: "CLI", code: `easybits sb codex connect sb_…
+easybits sb exec sb_… -- codex exec "explica este repo y propón tests"` },
+                { label: "MCP", code: `sandbox_codex_connect({ sandboxId: "sb_…" })
+sandbox_exec({ sandboxId: "sb_…", command: "codex exec \"explica este repo\"" })` },
+                { label: "SDK", code: `const sb = await eb.sandboxes.get("sb_…");
+await sb.codexConnect();                       // { session: "written", codex: "installed" }
+const r = await sb.exec('codex exec "explica este repo"');` },
+                { label: "cURL", code: `curl -X POST https://www.easybits.cloud/api/v2/sandboxes/sb_…/codex-connect \
+  -H "Authorization: Bearer $EASYBITS_API_KEY"
+# → { "session": "written", "codex": "installed", "path": "~/.codex/auth.json" }` },
+              ]}
+            />
+
+            <h3 className="text-lg font-bold mt-8 mb-3">Para que la sesión no se muera</h3>
+            <ul className="list-disc list-inside text-sm text-gray-600 space-y-1 mb-4">
+              <li>OpenAI cambia el token cada vez que Codex lo renueva. Por eso <code className="bg-gray-100 px-1 rounded">connect</code> nunca reemplaza una sesión que la caja ya tenga (con <code className="bg-gray-100 px-1 rounded">--force</code> sí).</li>
+              <li>Al borrar una caja por la API, su sesión renovada se guarda sola en tu vault. A mano: <code className="bg-gray-100 px-1 rounded">easybits sb codex save sb_…</code>.</li>
+              <li>Una sesión, una caja a la vez: dos cajas renovando el mismo token se lo pisan y una tendría que volver a iniciar sesión.</li>
+              <li>En la caja vive en <code className="bg-gray-100 px-1 rounded">~/.codex/auth.json</code> con permisos 600 y entra por stdin, así que no aparece en la lista de procesos.</li>
+            </ul>
+            <p className="text-sm text-gray-600">
+              Una caja nueva vive 30 minutos por default: créala con <code className="bg-gray-100 px-1 rounded">--ttl</code> para trabajar más, o usa una{" "}
+              <a href="#hosting" className="underline">máquina permanente</a>. Más contexto en el{" "}
+              <a href="/blog/codex-con-tu-plan-de-chatgpt" className="underline">post del blog</a>.
+            </p>
           </section>
 
           {/* Ghosty Lite — agente ACP en su propia microVM, cerebro medido con TU llave */}

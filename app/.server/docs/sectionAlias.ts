@@ -10,6 +10,7 @@ export const DOCS_SECTION_ALIAS: Record<string, string> = {
   payments: "account",
   email: "account",
   "ghosty-lite": "agents",
+  "codex-chatgpt": "agents",
   "agentes-en-tu-app": "flota",
   secrets: "agents",
   llm: "account",

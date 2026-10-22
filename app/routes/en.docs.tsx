@@ -108,6 +108,18 @@ export default function EnDocsPage({ loaderData }: Route.ComponentProps) {
             Sandboxes, web, files, databases, documents and hosting for AI agents. Base URL:{" "}
             <code className="bg-gray-100 px-2 py-0.5 rounded font-mono text-sm">https://www.easybits.cloud/api/v2</code>
           </p>
+          <a
+            href="#agents"
+            className="block mb-6 bg-black text-white border-2 border-black rounded-xl p-5 shadow-[4px_4px_0px_0px_rgba(124,58,237,1)] hover:-translate-y-0.5 transition-transform"
+          >
+            <span className="inline-block text-[11px] font-bold uppercase tracking-wide bg-[#7c3aed] px-2 py-0.5 rounded mb-2">New</span>
+            <p className="text-lg font-bold">Codex on your ChatGPT plan, in your boxes</p>
+            <p className="text-sm text-gray-300 mt-1">
+              Sign in once with your ChatGPT Plus or Pro account and any Easybits box runs Codex on your plan, with no{" "}
+              <code className="bg-white/10 px-1 rounded">OPENAI_API_KEY</code>. One command: <code className="bg-white/10 px-1 rounded">easybits sb codex connect</code>. See
+              "Codex on your ChatGPT plan" under Agents →
+            </p>
+          </a>
           <div className="mb-6">
             <SkillsInstall locale="en" />
           </div>
