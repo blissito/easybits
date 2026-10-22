@@ -4,6 +4,7 @@ import type { Command, Ctx } from "../types.js";
 import { ENV_FILE_OPTION, bool, envFrom, int, list, need, readStdin, str } from "../args.js";
 import { emit, fmtBytes, fmtDate, table } from "../output.js";
 import { getClient } from "../client.js";
+import { api } from "../api.js";
 import { CliError, usageError } from "../errors.js";
 import { YES_OPTION, confirm, requireYesIfHeadless } from "../prompt.js";
 import { t } from "../i18n.js";
@@ -124,6 +125,17 @@ function printGit(op: string, r: any) {
 /** El sandbox del posicional `i` (bg y git llevan la acción primero). */
 async function sandboxAt(ctx: Ctx, i: number, usage: string) {
   return (await getClient(ctx)).sandboxes.get(need(ctx, i, "sandbox", usage));
+}
+
+const CODEX_USAGE = "easybits sandboxes codex <login|connect|save> <sandbox> [--force] [--no-install]";
+
+// Lo que imprime `codex login --device-auth`, sin colores: el link y el código de un solo uso.
+export function parseDeviceAuth(out: string): { url?: string; code?: string } {
+  const plain = out.replace(/\x1b\[[0-9;]*m/g, "");
+  return {
+    url: plain.match(/https:\/\/auth\.openai\.com\/\S+/)?.[0],
+    code: plain.match(/\b[A-Z0-9]{4}-[A-Z0-9]{4,6}\b/)?.[0],
+  };
 }
 
 const FILES_USAGE = "easybits sandboxes files <ls|read|write|rm|mv|mkdir> <sandbox> <path> [local-file|new-path]";
@@ -434,6 +446,89 @@ export const sandboxes: Command = {
         } else {
           throw usageError(t(`Unknown bg action "${action}".`, `Acción de bg desconocida "${action}".`), BG_USAGE);
         }
+      },
+    },
+    codex: {
+      summary: "Codex on YOUR ChatGPT plan in a box: login once, then connect any box from your vault",
+      usage: CODEX_USAGE,
+      options: {
+        force: { type: "boolean", description: "connect: replace the session the box already has" },
+        "no-install": { type: "boolean", description: "connect/login: don't install Codex if it's missing" },
+      },
+      examples: [
+        "easybits sb codex login sb_abc123      # shows a link + code; you sign in; the session goes to your vault",
+        "easybits sb codex connect sb_def456    # puts that session in another box (installs Codex if missing)",
+        "easybits sb codex save sb_abc123       # saves the box's (renewed) session back to the vault",
+      ],
+      async run(ctx) {
+        const action = need(ctx, 0, "login|connect|save", CODEX_USAGE);
+        const id = need(ctx, 1, "sandbox", CODEX_USAGE);
+        const path = `/sandboxes/${encodeURIComponent(id)}`;
+        if (action === "connect") {
+          const r = await api<{ session: string; codex?: string }>(ctx, "POST", `${path}/codex-connect`, {
+            force: bool(ctx, "force"),
+            install: !bool(ctx, "no-install"),
+          });
+          return emit(ctx, r, () => {
+            console.log(
+              r.session === "kept"
+                ? t("The box already had a Codex session: kept it (use --force to replace it).", "La caja ya tenía sesión de Codex: se conservó (usa --force para reemplazarla).")
+                : t("Codex session from your vault is in the box.", "La sesión de Codex de tu vault ya está en la caja."),
+            );
+            if (r.codex === "no_npm") console.log(t("Codex isn't installed and the box has no npm: use a node template.", "Codex no está instalado y la caja no tiene npm: usa un template node."));
+            console.log(t(`Try it: easybits sb exec ${id} -- codex exec "hola"`, `Pruébalo: easybits sb exec ${id} -- codex exec "hola"`));
+          });
+        }
+        if (action === "save") {
+          const r = await api<{ saved: boolean; reason?: string }>(ctx, "POST", `${path}/codex-save`, {});
+          return emit(ctx, r, () =>
+            console.log(r.saved ? t("Saved to your vault as CODEX_AUTH.", "Guardada en tu vault como CODEX_AUTH.") : t(`Not saved: ${r.reason}`, `No se guardó: ${r.reason}`)),
+          );
+        }
+        if (action !== "login") throw usageError(t(`Unknown codex action "${action}".`, `Acción de codex desconocida "${action}".`), CODEX_USAGE);
+
+        // login: instala Codex, arranca el login por código en segundo plano, muestra link y código,
+        // espera a que la persona inicie sesión y guarda la sesión en el vault.
+        const sb = await sandboxAt(ctx, 1, CODEX_USAGE);
+        if (!bool(ctx, "no-install")) {
+          const i = await sb.exec("command -v codex >/dev/null 2>&1 || npm i -g @openai/codex >/dev/null 2>&1; command -v codex", { timeoutSeconds: 240 });
+          if (!i.stdout.trim()) throw new CliError(t("Couldn't install Codex in the box (needs npm: use a node template).", "No se pudo instalar Codex en la caja (necesita npm: usa un template node)."));
+        }
+        const bg = await sb.execBackground("codex login --device-auth");
+        const started = Date.now();
+        let shown = false;
+        for (;;) {
+          await new Promise((r) => setTimeout(r, 2000));
+          const st = await sb.bgStatus(bg.execId);
+          const { url, code } = parseDeviceAuth(`${st.stdout ?? ""}\n${st.stderr ?? ""}`);
+          if (!shown && url && code) {
+            shown = true;
+            if (ctx.json) console.log(JSON.stringify({ url, code, expiresInMinutes: 15 }));
+            else {
+              console.log(t("1. Open:  ", "1. Abre:  ") + url);
+              console.log(t("2. Code:  ", "2. Código: ") + code + t("  (15 min)", "  (15 min)"));
+              console.log(t("Waiting for you to sign in with your ChatGPT account…", "Esperando a que inicies sesión con tu cuenta de ChatGPT…"));
+            }
+          }
+          if (st.status !== "running") {
+            if (st.exitCode !== 0) {
+              const tail = `${st.stderr ?? ""}${st.stdout ?? ""}`.replace(/\x1b\[[0-9;]*m/g, "").trim().split("\n").slice(-3).join(" ");
+              throw new CliError(t(`Codex login failed: ${tail}`, `El login de Codex falló: ${tail}`));
+            }
+            break;
+          }
+          if (Date.now() - started > 16 * 60_000) {
+            await sb.bgKill(bg.execId).catch(() => undefined);
+            throw new CliError(t("The code expired (15 min). Run it again.", "El código venció (15 min). Vuelve a correrlo."));
+          }
+        }
+        const r = await api<{ saved: boolean }>(ctx, "POST", `${path}/codex-save`, {});
+        return emit(ctx, { signedIn: true, ...r }, () =>
+          console.log(t(
+            `Signed in. Session saved to your vault (CODEX_AUTH): connect any other box with  easybits sb codex connect <sandbox>`,
+            `Listo. Sesión guardada en tu vault (CODEX_AUTH): conecta cualquier otra caja con  easybits sb codex connect <sandbox>`,
+          )),
+        );
       },
     },
     git: {

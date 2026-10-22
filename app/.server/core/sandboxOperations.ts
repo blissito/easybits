@@ -1361,6 +1361,12 @@ export async function destroySandbox(
   // sandbox_destroy + agent_run_destroy (que delega aquí) ya no dan 403.
   // El destroy de agentes PERSISTENTES sigue gateado con DELETE en destroyAgent().
   requireScope(ctx, "WRITE");
+  // Codex con el plan del usuario: si Codex renovó la sesión dentro de la caja, guardarla en
+  // el vault antes de que se pierda (OpenAI rota el refresh token). Best-effort, ≤8 s.
+  if (!opts?.asOperator) {
+    const { saveCodexBeforeDestroy } = await import("./codexAuth");
+    await saveCodexBeforeDestroy(ctx, sandboxId);
+  }
   // eb.compute: revocar las virtual keys del sandbox (fire-and-forget).
   void revokeSandboxKeys(sandboxId);
   // asOperator: solo flujos deliberados de plataforma (releasePermanent,

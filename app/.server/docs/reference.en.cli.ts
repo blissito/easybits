@@ -67,6 +67,9 @@ easybits sandboxes bg kill sb_abc123 exec_123                           # SIGTER
 easybits sandboxes git clone sb_abc123 --repo https://github.com/you/app.git --dir /data/work/app --git-token '$secret:GITHUB_TOKEN'
 easybits sandboxes git status sb_abc123 --dir /data/work/app
 easybits sandboxes git commit sb_abc123 --dir /data/work/app --all -m "fix: checkout"
+easybits sandboxes codex login sb_abc123     # Codex on YOUR ChatGPT plan: shows a link + code, you sign in, saved to your vault
+easybits sandboxes codex connect sb_def456   # puts that session in another box (installs Codex if missing)
+easybits sandboxes codex save sb_abc123      # saves the renewed session back to the vault
 easybits sandboxes git push sb_abc123 --dir /data/work/app --git-token '$secret:GITHUB_TOKEN'
 easybits sandboxes git pull sb_abc123 --dir /data/work/app --rebase       # exits 1 if there are conflicts
 easybits sandboxes git checkout sb_abc123 --dir /data/work/app --branch feature/x --create

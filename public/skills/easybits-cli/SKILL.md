@@ -5,7 +5,7 @@ license: MIT
 compatibility: Needs Node 22+ (npx is enough), network access to https://www.easybits.cloud and an EasyBits API key
 metadata:
   author: easybits
-  version: "1.30"
+  version: "1.31"
 ---
 
 # Use the EasyBits CLI
@@ -115,6 +115,8 @@ easybits sb git status "$ID" --dir /data/work/app --json   # {branch, ahead, beh
 easybits sb git commit "$ID" --dir /data/work/app --all -m "msg" --json   # {sha} or {nothingToCommit:true} (not an error)
 easybits sb git push "$ID" --dir /data/work/app --git-token '$secret:GITHUB_TOKEN' --json
 easybits sb git pull|checkout|log "$ID" --dir /data/work/app …   # pull exits 1 on conflicts
+easybits sb codex login "$ID"   # Codex on the USER's ChatGPT plan: prints a link + code (--json: {url, code}); THE USER signs in; session saved to vault CODEX_AUTH
+easybits sb codex connect "$ID2" --json   # puts that session in another box, installs Codex if missing → {session: "written"|"kept", codex}
 easybits sb logs "$ID" --unit myapp --lines 100 --since "10 min ago" --grep ERROR
 easybits sb suspend "$ID" && easybits sb resume "$ID"
 easybits sb snapshot "$ID" --name checkpoint

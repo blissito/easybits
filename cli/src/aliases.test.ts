@@ -73,3 +73,10 @@ test("domains de la cuenta (forma nueva) pasa igual y sin aviso", () => {
     assert.equal(r.notes.length, 0, s);
   }
 });
+
+import { parseDeviceAuth } from "./commands/sandboxes.js";
+test("codex login: saca link y código de la salida de codex login --device-auth (con colores)", () => {
+  const out = "Follow these steps\n1. Open this link\n   \u001b[94mhttps://auth.openai.com/codex/device\u001b[0m\n2. Enter this one-time code \u001b[90m(expires in 15 minutes)\u001b[0m\n   \u001b[94mAB12-CD3EF\u001b[0m\n";
+  assert.deepEqual(parseDeviceAuth(out), { url: "https://auth.openai.com/codex/device", code: "AB12-CD3EF" });
+  assert.deepEqual(parseDeviceAuth("cargando…"), { url: undefined, code: undefined });
+});

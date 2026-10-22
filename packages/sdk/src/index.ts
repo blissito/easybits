@@ -3447,6 +3447,20 @@ export class Sandbox {
     return this.req(this.base(), { method: "DELETE" });
   }
 
+  // ── Codex con el plan de ChatGPT del usuario ──
+  /**
+   * Pone la sesión de Codex del vault (secreto CODEX_AUTH = tu ~/.codex/auth.json) en esta caja
+   * e instala Codex si falta. No pisa una sesión que la caja ya tenga salvo `force`.
+   * `session`: "written" (se puso la del vault) | "kept" (la caja ya tenía una).
+   */
+  codexConnect(opts?: { force?: boolean; install?: boolean }): Promise<{ sandboxId: string; session: "written" | "kept"; codex?: string; path: string }> {
+    return this.post("/codex-connect", opts ?? {});
+  }
+  /** Guarda en el vault (CODEX_AUTH) la sesión de Codex de esta caja si es más nueva. */
+  codexSave(): Promise<{ sandboxId: string; saved: boolean; reason?: string; lastRefresh?: string | null }> {
+    return this.post("/codex-save", {});
+  }
+
   // ── Snapshot + fork (copy-on-write clone) ──
   /**
    * Capture a named, persisted image of this running box WITHOUT stopping it.

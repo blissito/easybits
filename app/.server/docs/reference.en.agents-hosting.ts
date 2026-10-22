@@ -231,18 +231,23 @@ const st = await sbx.git.status("/data/work");   // { branch, ahead, behind, cle
 \`\`\`
 
 ### Codex on your ChatGPT plan (Plus/Pro) in your box
-If you use Codex CLI, you can run it **in your box on your own ChatGPT plan**, with no \`OPENAI_API_KEY\` or separate tokens: it is the "remote / headless machine" case OpenAI documents for Codex. **You** sign in, **with your account**: EasyBits only provides the machine and never sees or stores your session. (For Fleet agents, the \`codex\` engine still asks for \`OPENAI_API_KEY\`.)
+If you use Codex CLI, you can run it **in your boxes on your own ChatGPT plan**, with no \`OPENAI_API_KEY\` or separate tokens: it is the "remote machine" case OpenAI documents for Codex. **You** sign in, **with your account**; your session is stored encrypted in your vault and only used in YOUR boxes. (Fleet agents on the \`codex\` engine still ask for \`OPENAI_API_KEY\` until OpenAI approves use in hosted apps.)
 
+**Once** (any \`node\` box):
 \`\`\`bash
-easybits sb create --template node                       # → sb_…
-easybits sb exec sb_… -- npm i -g @openai/codex
-easybits sb bg start sb_… -- codex login --device-auth   # → bg_…
-easybits sb bg status sb_… bg_…                          # shows the link and a 15-minute code
+easybits sb create --template node --ttl 3600       # → sb_…
+easybits sb codex login sb_…                        # installs Codex, gives you a link + code, waits for you to sign in → saves to your vault
 \`\`\`
-1. Open \`https://auth.openai.com/codex/device\` in your browser, sign in with your ChatGPT account and enter the code \`bg status\` showed. If it says it is not allowed, turn on **device code sign-in** in your ChatGPT security settings (in a workspace, the admin turns it on).
-2. Check it: \`easybits sb exec sb_… -- codex login status\`. From then on, \`codex exec "…"\` in the box uses your plan, and Codex refreshes the session on its own.
+Open the link (\`https://auth.openai.com/codex/device\`), sign in with your ChatGPT account and enter the code (valid 15 min). If it says it is not allowed, turn on **device code sign-in** in your ChatGPT security settings (in a workspace, the admin turns it on).
 
-The session lives in that box's \`~/.codex/auth.json\`: **treat it like a password** (don't commit it or share it). It survives the box sleeping and resuming, but not being destroyed: a new box lives 30 min by default, so for longer work create it with \`--ttl\` or use a permanent machine (*Hosting*). Can't use the device code? Run \`codex login\` on your computer and upload it: \`easybits sb files mkdir sb_… /root/.codex\` and \`easybits sb files write sb_… /root/.codex/auth.json ~/.codex/auth.json\`.
+**Then, in any box**, one step:
+\`\`\`bash
+easybits sb codex connect sb_…                      # puts your vault session in the box and installs Codex if missing
+easybits sb exec sb_… -- codex exec "explain this repo"
+\`\`\`
+API: \`POST /sandboxes/:id/codex-connect\` \`{ force?, install? }\` → \`{ session: "written"|"kept", codex }\` · \`POST /sandboxes/:id/codex-save\` → \`{ saved }\`. MCP: \`sandbox_codex_connect\` · \`sandbox_codex_save\`. SDK: \`sb.codexConnect()\` · \`sb.codexSave()\`. Already have \`~/.codex/auth.json\` on your computer? Paste it as-is as the **\`CODEX_AUTH\`** secret in your vault (\`/dash/developer/secrets\` or \`easybits secrets set CODEX_AUTH < ~/.codex/auth.json\`) and skip the login.
+
+**How the session is kept alive:** OpenAI **rotates** the refresh token every time Codex renews. So \`connect\` never overwrites a session the box already has (it may be newer; \`--force\` replaces it), and when you delete a box through the API its renewed session is saved to your vault automatically first (or by hand with \`codex save\`). Use one session in **one box at a time**: two boxes renewing the same token clobber each other and one would have to sign in again. In the box it lives at \`~/.codex/auth.json\` (mode 600): treat it like a password.
 
 ### Persistent kernel (code-interpreter)
 MCP: \`sandbox_run_cell({ sandboxId, code })\` — state survives between cells. Matplotlib charts come back as images.

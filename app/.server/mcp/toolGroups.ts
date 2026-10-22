@@ -482,6 +482,8 @@ export const SANDBOX_ALLOWLIST = new Set<string>([
   "sandbox_list_template_snapshots",
   "sandbox_delete_template_snapshot",
   "sandbox_exec",
+  "sandbox_codex_connect",
+  "sandbox_codex_save",
   "sandbox_run_code",
   "sandbox_files_write",
   "sandbox_files_read",

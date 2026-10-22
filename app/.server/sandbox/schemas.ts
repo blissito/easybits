@@ -32,6 +32,7 @@ export const SANDBOX_ACTIONS = [
   "ssh-enable", "ssh-disable", "ssh-ticket",
   "domain-add", "domain-remove", "domain-list", "domain-verify",
   "network-policy",
+  "codex-connect", "codex-save",
 ] as const;
 export type SandboxAction = (typeof SANDBOX_ACTIONS)[number];
 

@@ -365,6 +365,8 @@ paths:
           - domain-list
           - domain-verify
           - network-policy
+          - codex-connect
+          - codex-save
           # /generated
     post:
       tags: [Sandboxes]

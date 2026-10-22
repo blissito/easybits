@@ -12,7 +12,7 @@ test("comandos, subcomandos y flags salen de la tabla", () => {
   assert.ok(top.kind === "words" && !top.words.some((w) => w.startsWith("__")));
   const subs = words("agents");
   assert.ok(subs.kind === "words" && subs.words.includes("export") && subs.words.includes("get"));
-  assert.deepEqual(words("sb"), { kind: "words", words: ["ls", "create", "get", "exec", "logs", "files", "domains", "suspend", "resume", "destroy", "bg", "git", "snapshot"] });
+  assert.deepEqual(words("sb"), { kind: "words", words: ["ls", "create", "get", "exec", "logs", "files", "domains", "suspend", "resume", "destroy", "bg", "codex", "git", "snapshot"] });
   const flags = words("apply ./x", "--");
   assert.ok(flags.kind === "words" && flags.words.includes("--prune") && flags.words.includes("--json"));
 });

@@ -5,7 +5,7 @@ license: MIT
 compatibility: Needs curl or any HTTP client, network access to https://www.easybits.cloud and an EasyBits API key
 metadata:
   author: easybits
-  version: "1.3"
+  version: "1.4"
 ---
 
 # Drive an EasyBits sandbox
@@ -82,12 +82,11 @@ the platform, not by you):
 <!-- /generated -->
 
 ## Codex on the user's ChatGPT plan
-To run Codex CLI in a box on the user's own ChatGPT Plus/Pro plan (no `OPENAI_API_KEY`): install it
-(`npm i -g @openai/codex`), start `codex login --device-auth` as a **background** process and read its output
-(`bg status`) to show the user the link (`https://auth.openai.com/codex/device`) and the 15-minute code.
-The USER signs in with their own account; never ask for their ChatGPT password or handle the code yourself.
-Check with `codex login status`. The session is `~/.codex/auth.json` in that box: treat it as a password.
-Full steps: the "Codex con tu plan de ChatGPT" section of the docs.
+To run Codex CLI in a box on the user's own ChatGPT Plus/Pro plan (no `OPENAI_API_KEY`):
+- If the vault has a session (secret `CODEX_AUTH`): `sandbox_codex_connect({ sandboxId })` (REST `POST /sandboxes/:id/codex-connect`) — one call, installs Codex if missing.
+- If not: start `codex login --device-auth` with `sandbox_exec_background`, read the link and the 15-minute code with `sandbox_exec_status`, show them to the USER, wait until the process exits 0, then `sandbox_codex_save`. The user signs in with their own account; never ask for their ChatGPT password.
+- One session in one box at a time (OpenAI rotates the refresh token). Deleting a box through the API saves its renewed session first.
+Only for the user's boxes, not Fleet agents. Full steps: the "Codex con tu plan de ChatGPT" section of the docs.
 
 ## Rules
 

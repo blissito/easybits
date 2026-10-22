@@ -55,7 +55,8 @@ const invalid = (issues: unknown) =>
 // action ∈ extend | suspend | resume | snapshot | fork | exec | run-code |
 //          run-cell | kernel-restart | logs | runtime | apply-patch | expose |
 //          expose-raw | unexpose-raw | ssh-enable | ssh-disable |
-//          domain-add | domain-remove | domain-list | domain-verify | network-policy
+//          domain-add | domain-remove | domain-list | domain-verify | network-policy |
+//          codex-connect | codex-save
 // GET /api/v2/sandboxes/:id/logs?unit=&lines=&since=&grep= y GET .../network-policy — las acciones de lectura.
 // Sin este loader un GET a cualquier acción reventaba con "Unexpected Server Error" (ruta
 // sin loader), que obligaba a ir por `journalctl` vía exec. Las demás acciones: 405 con la
@@ -265,6 +266,21 @@ async function dispatch(
       if (typeof body.domain !== "string" || !body.domain.trim())
         return Response.json({ error: "domain required" }, { status: 400 });
       return Response.json(await verifySandboxDomain(ctx, body.domain));
+    // Codex con el plan de ChatGPT del usuario: vault (CODEX_AUTH) ↔ ~/.codex/auth.json de la caja.
+    case "codex-connect":
+    case "codex-save": {
+      const codex = await import("~/.server/core/codexAuth");
+      try {
+        return Response.json(
+          action === "codex-connect"
+            ? await codex.connectCodex(ctx, id, { force: body?.force === true, install: body?.install !== false })
+            : await codex.saveCodex(ctx, id),
+        );
+      } catch (e) {
+        if (e instanceof Response) throw e;
+        return Response.json({ error: e instanceof Error ? e.message : String(e) }, { status: 400 });
+      }
+    }
     default: {
       const _exhaustive: never = action as never;
       return _exhaustive;

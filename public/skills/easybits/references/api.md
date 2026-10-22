@@ -124,6 +124,8 @@ All actions (the enum is derived from the server, see `openapi.yaml`):
 - `domain-list`
 - `domain-verify`
 - `network-policy`
+- `codex-connect`
+- `codex-save`
 <!-- /generated -->
 
 - `idle`: `{ suspendOnIdle, idleTtlSeconds?, hardTtlSeconds? }` — change the idle policy of an

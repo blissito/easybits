@@ -2423,6 +2423,32 @@ How to embed safely (the only reliable rule):
   );
 
   server.tool(
+    "sandbox_codex_connect",
+    "Pone la sesión de Codex del usuario (su plan de ChatGPT Plus/Pro, guardada en su vault como CODEX_AUTH) en ~/.codex/auth.json de una caja, en un paso, e instala Codex si falta y hay npm. Desde ahí `codex exec …` en la caja usa SU plan, sin OPENAI_API_KEY. No pisa una sesión que la caja ya tenga (puede ser más nueva; `force: true` la reemplaza). Si el vault no tiene sesión: que el usuario haga `codex login --device-auth` una vez en una caja (arráncalo con sandbox_exec_background y lee el link y el código con sandbox_exec_status; muéstraselos, él inicia sesión con su cuenta) y luego sandbox_codex_save. Sólo para cajas del usuario, no para agentes de la Flota.",
+    {
+      sandboxId: z.string().describe("Sandbox ID"),
+      force: z.boolean().optional().describe("Reemplazar la sesión que ya tenga la caja. Default false."),
+      install: z.boolean().optional().describe("Instalar Codex (npm) si falta. Default true."),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { connectCodex } = await import("../core/codexAuth");
+      return ok(await connectCodex(ctx, params.sandboxId, { force: params.force, install: params.install }));
+    })
+  );
+
+  server.tool(
+    "sandbox_codex_save",
+    "Guarda en el vault del usuario (CODEX_AUTH) la sesión de Codex de una caja (~/.codex/auth.json): después de que el usuario hizo `codex login --device-auth` ahí, o para guardar la versión renovada (OpenAI rota el token al renovar). Sólo guarda si la de la caja es más nueva que la del vault. Al borrar una caja por la API esto pasa solo.",
+    { sandboxId: z.string().describe("Sandbox ID") },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      const { saveCodex } = await import("../core/codexAuth");
+      return ok(await saveCodex(ctx, params.sandboxId));
+    })
+  );
+
+  server.tool(
     "sandbox_run_code",
     "Run a snippet of Python/Node/Bash inline (no need to write a file first). Output captured. Default lang=python. NOTE: each call runs a FRESH process (python3 -c / node -e / bash -c) — there is NO persistent kernel, so variables do NOT survive between calls. Put dependent lines in a single call, or persist state to a file with sandbox_files_write. For stateful Python across cells (and matplotlib charts), use sandbox_run_cell on a 'code-interpreter' sandbox.",
     {

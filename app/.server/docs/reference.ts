@@ -213,6 +213,9 @@ easybits sandboxes bg kill sb_abc123 exec_123                           # SIGTER
 easybits sandboxes git clone sb_abc123 --repo https://github.com/tu/app.git --dir /data/work/app --git-token '$secret:GITHUB_TOKEN'
 easybits sandboxes git status sb_abc123 --dir /data/work/app
 easybits sandboxes git commit sb_abc123 --dir /data/work/app --all -m "fix: checkout"
+easybits sandboxes codex login sb_abc123     # Codex con TU plan de ChatGPT: muestra link + código, inicias sesión y se guarda en tu vault
+easybits sandboxes codex connect sb_def456   # pone esa sesión en otra caja (instala Codex si falta)
+easybits sandboxes codex save sb_abc123      # devuelve al vault la sesión renovada
 easybits sandboxes git push sb_abc123 --dir /data/work/app --git-token '$secret:GITHUB_TOKEN'
 easybits sandboxes git pull sb_abc123 --dir /data/work/app --rebase       # sale con 1 si hay conflictos
 easybits sandboxes git checkout sb_abc123 --dir /data/work/app --branch feature/x --create
@@ -1587,18 +1590,23 @@ const st = await sbx.git.status("/data/work");   // { branch, ahead, behind, cle
 \`\`\`
 
 ### Codex con tu plan de ChatGPT (Plus/Pro) en tu caja
-Si usas Codex CLI, puedes correrlo **en tu caja con tu propio plan de ChatGPT**, sin \`OPENAI_API_KEY\` ni tokens aparte: es el caso «máquina remota / sin navegador» que OpenAI documenta para Codex. El inicio de sesión lo haces **tú, con tu cuenta**: EasyBits sólo pone la máquina y nunca ve ni guarda tu sesión. (Para los agentes de la Flota, el motor \`codex\` sigue pidiendo \`OPENAI_API_KEY\`.)
+Si usas Codex CLI, puedes correrlo **en tus cajas con tu propio plan de ChatGPT**, sin \`OPENAI_API_KEY\` ni tokens aparte: es el caso «máquina remota» que OpenAI documenta para Codex. El inicio de sesión lo haces **tú, con tu cuenta**; tu sesión queda cifrada en tu vault y sólo se usa en TUS cajas. (Los agentes de la Flota con el motor \`codex\` siguen pidiendo \`OPENAI_API_KEY\` hasta que OpenAI apruebe el uso en apps alojadas.)
 
+**Una vez** (cualquier caja \`node\`):
 \`\`\`bash
-easybits sb create --template node                       # → sb_…
-easybits sb exec sb_… -- npm i -g @openai/codex
-easybits sb bg start sb_… -- codex login --device-auth   # → bg_…
-easybits sb bg status sb_… bg_…                          # muestra el link y un código de 15 min
+easybits sb create --template node --ttl 3600       # → sb_…
+easybits sb codex login sb_…                        # instala Codex, te da link + código, esperas a iniciar sesión → guarda en tu vault
 \`\`\`
-1. Abre \`https://auth.openai.com/codex/device\` en tu navegador, entra con tu cuenta de ChatGPT y escribe el código que mostró \`bg status\`. Si te dice que no está permitido, activa **inicio de sesión con código de dispositivo** en la configuración de seguridad de ChatGPT (en un workspace, lo activa el admin).
-2. Confirma: \`easybits sb exec sb_… -- codex login status\`. Desde ahí, \`codex exec "…"\` en la caja usa tu plan, y Codex renueva la sesión solo.
+Abre el link (\`https://auth.openai.com/codex/device\`), entra con tu cuenta de ChatGPT y escribe el código (dura 15 min). Si dice que no está permitido, activa **inicio de sesión con código de dispositivo** en la configuración de seguridad de ChatGPT (en un workspace, lo activa el admin).
 
-La sesión vive en \`~/.codex/auth.json\` de esa caja: **trátala como una contraseña** (no la copies a un repo ni la compartas). Sobrevive a dormir y reanudar la caja, pero no a destruirla: una caja nueva vive 30 min por default, así que para trabajar más créala con \`--ttl\` o usa una máquina permanente (*Hosting*). ¿No puedes usar el código de dispositivo? Haz \`codex login\` en tu compu y súbelo: \`easybits sb files mkdir sb_… /root/.codex\` y \`easybits sb files write sb_… /root/.codex/auth.json ~/.codex/auth.json\`.
+**Después, en cualquier caja**, un paso:
+\`\`\`bash
+easybits sb codex connect sb_…                      # pone tu sesión del vault e instala Codex si falta
+easybits sb exec sb_… -- codex exec "explica este repo"
+\`\`\`
+API: \`POST /sandboxes/:id/codex-connect\` \`{ force?, install? }\` → \`{ session: "written"|"kept", codex }\` · \`POST /sandboxes/:id/codex-save\` → \`{ saved }\`. MCP: \`sandbox_codex_connect\` · \`sandbox_codex_save\`. SDK: \`sb.codexConnect()\` · \`sb.codexSave()\`. ¿Ya tienes \`~/.codex/auth.json\` en tu compu? Pégalo tal cual como secreto **\`CODEX_AUTH\`** en tu vault (\`/dash/developer/secrets\` o \`easybits secrets set CODEX_AUTH < ~/.codex/auth.json\`) y salta el login.
+
+**Cómo se cuida la sesión:** OpenAI **rota** el token de renovación cada vez que Codex renueva. Por eso \`connect\` nunca pisa una sesión que la caja ya tenga (puede ser más nueva; \`--force\` la reemplaza), y al borrar una caja por la API su sesión renovada se guarda sola en el vault antes de destruirla (o a mano con \`codex save\`). Usa la misma sesión en **una caja a la vez**: dos cajas renovando el mismo token se lo pisan y una tendría que volver a iniciar sesión. En la caja vive en \`~/.codex/auth.json\` (permisos 600): trátala como contraseña.
 
 ### Kernel persistente (code-interpreter)
 MCP: \`sandbox_run_cell({ sandboxId, code })\` — estado sobrevive entre celdas. Gráficas matplotlib se devuelven como imágenes.
