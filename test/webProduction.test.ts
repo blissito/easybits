@@ -37,7 +37,7 @@ import {
 } from "../app/.server/services/providers/brightdata";
 import fs from "node:fs";
 import path from "node:path";
-import { probeWebProvider, brightdataMapService, parseSitemap, brightdataExtractService, schemaExtractCost } from "../app/.server/services/providers/brightdata";
+import { probeWebProvider, brightdataMapService, parseSitemap, brightdataExtractService, schemaExtractCost, strictJsonSchema } from "../app/.server/services/providers/brightdata";
 import { canaryStatus, EXTRACT_GIVE_UP_MS, runWebCanary, sweepWebJobs } from "../app/.server/core/webJobsOperations";
 
 const ME = "a".repeat(24);
@@ -314,7 +314,7 @@ describe("web_extract con url + schema", () => {
     expect(r.cost).toBe(schemaExtractCost(9600)); // 1 + ceil(9600/4000) = 4
     expect(r.cost).toBe(4);
     const call = generateObject.mock.calls[0][0];
-    expect(call.schema).toEqual({ jsonSchema: schema });
+    expect(call.schema).toEqual({ jsonSchema: strictJsonSchema(schema) });
     expect(call.prompt).toContain("Instrucción: sólo mensuales");
     expect(call.prompt).toContain("Byte $199 MXN");
     expect(call.system).toMatch(/nunca lo inventes/);
@@ -346,5 +346,30 @@ describe("web_extract con url + schema", () => {
   it("url sin schema (o al revés) → 400", async () => {
     await expect(brightdataExtractService.execute({ url: "https://ej.test/" }, { userId: ME })).rejects.toMatchObject({ providerStatus: 400 });
     await expect(brightdataExtractService.execute({ schema }, { userId: ME })).rejects.toMatchObject({ providerStatus: 400 });
+  });
+});
+
+describe("strictJsonSchema", () => {
+  it("pone additionalProperties:false en CADA objeto (raíz, propiedades, items, anyOf, $defs) y respeta lo explícito", () => {
+    const out = strictJsonSchema({
+      type: "object",
+      properties: {
+        plans: { type: "array", items: { type: "object", properties: { name: { type: "string" } } } },
+        meta: { type: ["object", "null"], properties: { a: { type: "string" } } },
+        free: { type: "object", additionalProperties: true },
+        pick: { anyOf: [{ type: "object", properties: { x: { type: "number" } } }, { type: "string" }] },
+        // una propiedad que SE LLAMA "properties" no se confunde con la palabra clave
+        properties: { type: "string" },
+      },
+      $defs: { Plan: { type: "object", properties: { n: { type: "string" } } } },
+    }) as any;
+    expect(out.additionalProperties).toBe(false);
+    expect(out.properties.plans.items.additionalProperties).toBe(false);
+    expect(out.properties.meta.additionalProperties).toBe(false);
+    expect(out.properties.free.additionalProperties).toBe(true);
+    expect(out.properties.pick.anyOf[0].additionalProperties).toBe(false);
+    expect(out.properties.pick.anyOf[1]).toEqual({ type: "string" });
+    expect(out.properties.properties).toEqual({ type: "string" });
+    expect(out.$defs.Plan.additionalProperties).toBe(false);
   });
 });

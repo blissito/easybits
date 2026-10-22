@@ -479,6 +479,30 @@ const SCHEMA_EXTRACT_MAX_CHARS = 60_000;
 // 1 consulta por leer la página + 1 por cada ~4,000 tokens del modelo (entrada + salida).
 // Con Haiku eso cubre su costo real incluso en el pack grande ($0.10 MXN por consulta).
 export const SCHEMA_TOKENS_PER_QUERY = 4000;
+/**
+ * El modelo exige `additionalProperties: false` en CADA objeto del esquema (falló en prod el
+ * 22-oct con un esquema normal: «For 'object' type, 'additionalProperties' must be explicitly
+ * set to false»). Nadie lo escribe a mano, así que se completa aquí, recorriendo todo el árbol.
+ * Lo que el usuario sí haya puesto se respeta.
+ */
+export function strictJsonSchema<T>(node: T): T {
+  if (Array.isArray(node)) return node.map((n) => strictJsonSchema(n)) as T;
+  if (!node || typeof node !== "object") return node;
+  const out: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(node as Record<string, unknown>)) {
+    // `properties`/`$defs`/`definitions` son mapas de nombre→esquema: se recorre cada valor.
+    if ((k === "properties" || k === "$defs" || k === "definitions") && v && typeof v === "object" && !Array.isArray(v)) {
+      out[k] = Object.fromEntries(Object.entries(v as Record<string, unknown>).map(([n, s]) => [n, strictJsonSchema(s)]));
+    } else {
+      out[k] = strictJsonSchema(v);
+    }
+  }
+  const t = out.type;
+  const isObject = t === "object" || (Array.isArray(t) && t.includes("object")) || (t === undefined && "properties" in out);
+  if (isObject && out.additionalProperties === undefined) out.additionalProperties = false;
+  return out as T;
+}
+
 export function schemaExtractCost(totalTokens: number) {
   return 1 + Math.max(1, Math.ceil(totalTokens / SCHEMA_TOKENS_PER_QUERY));
 }
@@ -527,7 +551,7 @@ export const brightdataExtractService: ServiceDef<BrightdataExtractInput, Bright
       try {
         result = await generateObject({
           model,
-          schema: jsonSchema(input.schema as Parameters<typeof jsonSchema>[0]),
+          schema: jsonSchema(strictJsonSchema(input.schema) as Parameters<typeof jsonSchema>[0]),
           system:
             "Extraes datos de una página web a un JSON Schema. Usa SÓLO lo que dice la página: si un dato no está, déjalo vacío o null; nunca lo inventes ni lo completes con lo que sabes.",
           prompt: `${input.prompt ? `Instrucción: ${input.prompt}
