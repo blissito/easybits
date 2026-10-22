@@ -27,7 +27,7 @@ import {
 } from "../app/.server/services/providers/brightdata";
 import fs from "node:fs";
 import path from "node:path";
-import { probeWebProvider } from "../app/.server/services/providers/brightdata";
+import { probeWebProvider, brightdataMapService, parseSitemap } from "../app/.server/services/providers/brightdata";
 import { canaryStatus, EXTRACT_GIVE_UP_MS, runWebCanary, sweepWebJobs } from "../app/.server/core/webJobsOperations";
 
 const ME = "a".repeat(24);
@@ -220,5 +220,52 @@ describe("canario", () => {
     expect(r.fetch.ok).toBe(true);
     expect(r.meli).toMatchObject({ ok: true, detail: "48 productos" });
     expect(canaryStatus(r)).toBe("operational");
+  });
+});
+
+describe("web_map", () => {
+  // El desbloqueador recibe { url } en el body: se responde según la URL pedida.
+  const site = (pages: Record<string, string>) =>
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (_u, init) => {
+      const { url, format } = JSON.parse(String((init as RequestInit).body));
+      const body = pages[url];
+      if (body === undefined) return format === "json" ? Response.json({ status_code: 404, body: "" }) : new Response("", { status: 404 });
+      return format === "json" ? Response.json({ status_code: 200, body }) : new Response(body);
+    });
+
+  it("lee robots → índice de sitemaps → sitemaps, filtra y cobra por documento", async () => {
+    site({
+      "https://ej.test/robots.txt": "User-agent: *\nSitemap: https://ej.test/sitemap_index.xml\n",
+      "https://ej.test/sitemap_index.xml": `<sitemapindex><sitemap><loc>https://ej.test/s1.xml</loc></sitemap><sitemap><loc>https://ej.test/s2.xml.gz</loc></sitemap></sitemapindex>`,
+      "https://ej.test/s1.xml": `<urlset><url><loc>https://ej.test/blog/a</loc></url><url><loc><![CDATA[https://www.ej.test/blog/b?x=1&amp;y=2]]></loc></url><url><loc>https://ej.test/precios</loc></url><url><loc>https://otro.test/blog/z</loc></url></urlset>`,
+    });
+    const r = await brightdataMapService.execute({ url: "https://ej.test/", search: "/blog/" }, { userId: ME });
+    expect(r.data).toMatchObject({
+      source: "sitemap",
+      total: 2,
+      truncated: false,
+      urls: ["https://ej.test/blog/a", "https://www.ej.test/blog/b?x=1&y=2"],
+    });
+    expect(r.cost).toBe(3); // robots + índice + s1 (el .gz no se pide)
+  });
+
+  it("sin sitemap usa los links internos de la portada", async () => {
+    site({ "https://ej.test/": "[Precios](/precios) [Blog](https://ej.test/blog) [Fuera](https://otro.test/x)" });
+    const r = await brightdataMapService.execute({ url: "https://ej.test/" }, { userId: ME });
+    expect(r.data.source).toBe("links");
+    expect(r.data.urls.sort()).toEqual(["https://ej.test/blog", "https://ej.test/precios"]);
+  });
+
+  it("respeta limit y avisa que había más", async () => {
+    const locs = Array.from({ length: 30 }, (_, i) => `<url><loc>https://ej.test/p${i}</loc></url>`).join("");
+    site({ "https://ej.test/robots.txt": "", "https://ej.test/sitemap.xml": `<urlset>${locs}</urlset>` });
+    const r = await brightdataMapService.execute({ url: "https://ej.test/", limit: 10 }, { userId: ME });
+    expect(r.data).toMatchObject({ total: 30, truncated: true });
+    expect(r.data.urls).toHaveLength(10);
+  });
+
+  it("parseSitemap distingue índice de lista", () => {
+    expect(parseSitemap("<sitemapindex><sitemap><loc>https://a/s.xml</loc></sitemap></sitemapindex>")).toEqual({ urls: [], sitemaps: ["https://a/s.xml"] });
+    expect(parseSitemap("<urlset><url><loc> https://a/x </loc></url></urlset>").urls).toEqual(["https://a/x"]);
   });
 });

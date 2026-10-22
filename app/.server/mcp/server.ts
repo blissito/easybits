@@ -6908,6 +6908,24 @@ function registerVideoTools(server: McpServer) {
   );
 
   server.tool(
+    "web_map",
+    "Lista TODAS las URLs de un sitio sin leerlas, desde su sitemap (o, si no tiene, los links de su portada). Barato: 1 consulta por documento leído (normalmente 1-3, máx. 10).\n\nHow to use:\n- Required: `url` del sitio.\n- Optional: `search` para quedarte sólo con URLs que contengan ese texto ('/blog/', '/producto/'), `limit` (1-5000, default 1000).\n- Devuelve `urls[]`, `total`, `source` ('sitemap' | 'links') y `truncated` si había más que `limit`.\n\nUse for: ANTES de leer un sitio grande — encuentra las páginas que sirven y lee sólo ésas con `web_fetch`, en vez de rastrear a ciegas con `web_crawl`.",
+    {
+      url: z.string().url().describe("URL del sitio (https://…)."),
+      search: z.string().max(200).optional().describe("Sólo URLs que contengan este texto, p. ej. '/blog/'."),
+      limit: z.number().int().min(1).max(5000).optional().describe("Máximo de URLs. Default 1000."),
+    },
+    wrapHandler(async (params, extra) =>
+      runWeb<import("../services/providers/brightdata").BrightdataMapOutput>(
+        "research.brightdata.map",
+        params,
+        extra,
+        (r) => ({ url: r.data.url, source: r.data.source, truncated: r.data.truncated, ...paginate(r.data.urls, { total: r.data.total }) }),
+      ),
+    ),
+  );
+
+  server.tool(
     "search_stock_photo",
     "Busca una FOTO de stock libre de regalías en bancos gratuitos (Pexels, Unsplash, Pixabay, Openverse) y devuelve su URL lista para usar. Úsala cuando pidan una imagen, foto o fotografía REAL para una landing, documento, presentación o post — NO genera nada con IA, busca fotos existentes (para generar usa `create_or_edit_image`).\n\nHow to use:\n- `query` en INGLÉS da muchos mejores resultados en todos los bancos, aunque el usuario pregunte en español (ej. pide 'barbería' → busca 'barbershop').\n- `save: true` la guarda en la biblioteca del usuario y devuelve `fileId` (reusable como referencia o para embeber).\n- Devuelve `attribution`: MUÉSTRALA al usuario. Unsplash y Pixabay exigen acreditar al autor.\n- REVISA el campo `alt` antes de usar la foto: los bancos casi nunca devuelven vacío, así que una consulta rara devuelve algo IRRELEVANTE en vez de un error. Si `alt` no tiene que ver con lo pedido, dilo y reformula la búsqueda en vez de insertar la imagen.\n- Cost: 1 crédito por búsqueda.",
     {

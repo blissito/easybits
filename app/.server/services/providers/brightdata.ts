@@ -789,3 +789,109 @@ export async function probeWebProvider(): Promise<{ search: ProbeResult; fetch: 
   ]);
   return { search, fetch: fetchR, meli };
 }
+
+/* ────────────────────────────────────────────────────────────────────── */
+/* MAP — todas las URLs de un sitio, sin leerlas                          */
+/* ────────────────────────────────────────────────────────────────────── */
+
+export interface BrightdataMapInput {
+  url: string;
+  /** Sólo URLs que contengan este texto (p. ej. "/blog/"). */
+  search?: string;
+  /** Máximo de URLs a devolver (1-5000). Default 1000. */
+  limit?: number;
+}
+
+export interface BrightdataMapOutput extends ServiceResult {
+  data: {
+    url: string;
+    urls: string[];
+    total: number;
+    /** De dónde salieron: el sitemap del sitio o, si no tiene, los links de la portada. */
+    source: "sitemap" | "links";
+    /** true = había más que `limit`. */
+    truncated: boolean;
+  };
+}
+
+const MAP_MAX_LIMIT = 5000;
+const MAP_MAX_DOCS = 10; // robots + sitemaps leídos; cada uno es una petición (y una consulta)
+
+/** `<loc>` de un sitemap o de un índice de sitemaps. */
+export function parseSitemap(xml: string): { urls: string[]; sitemaps: string[] } {
+  const locs = [...xml.matchAll(/<loc>\s*(?:<!\[CDATA\[)?\s*([^<\]\s]+)\s*(?:\]\]>)?\s*<\/loc>/gi)].map((m) =>
+    m[1].replace(/&amp;/g, "&"),
+  );
+  const isIndex = /<sitemapindex[\s>]/i.test(xml);
+  return isIndex ? { urls: [], sitemaps: locs } : { urls: locs, sitemaps: [] };
+}
+
+export const brightdataMapService: ServiceDef<BrightdataMapInput, BrightdataMapOutput> = {
+  id: "research.brightdata.map",
+  product: "research",
+  displayName: "Web Map (URLs de un sitio)",
+  description: "Lista las URLs de un sitio desde su sitemap (o los links de su portada) sin leerlas. Cobra 1 consulta por documento leído (máx. 10).",
+  estimateCost() {
+    return 1;
+  },
+  async execute(input) {
+    const start = input.url?.trim();
+    if (!start) throw new ServiceProviderError("research.brightdata.map", 400, "url is required");
+    const base = new URL(start);
+    const limit = Math.min(MAP_MAX_LIMIT, Math.max(1, input.limit ?? 1000));
+    const zone = process.env.BRIGHTDATA_UNLOCKER_ZONE || "mcp_unlocker";
+    let docs = 0;
+    const get = async (url: string) => {
+      docs++;
+      try {
+        return (await brightdataRequest({ zone, url, format: "raw", serviceId: "research.brightdata.map" })) as string;
+      } catch {
+        return ""; // un sitemap caído no tumba el mapa
+      }
+    };
+
+    // 1. robots.txt declara los sitemaps; si no declara ninguno, se prueba /sitemap.xml.
+    const robots = await get(new URL("/robots.txt", base).toString());
+    const queue = [...robots.matchAll(/^\s*sitemap:\s*(\S+)/gim)].map((m) => m[1]);
+    if (!queue.length) queue.push(new URL("/sitemap.xml", base).toString());
+
+    const found = new Set<string>();
+    const seenMaps = new Set<string>();
+    while (queue.length && docs < MAP_MAX_DOCS && found.size < limit * 2) {
+      const sm = queue.shift()!;
+      if (seenMaps.has(sm) || /\.gz($|\?)/i.test(sm)) continue; // .gz llega binario por el desbloqueador
+      seenMaps.add(sm);
+      const { urls, sitemaps } = parseSitemap(await get(sm));
+      queue.push(...sitemaps);
+      for (const u of urls) {
+        try {
+          if (new URL(u).host.replace(/^www\./, "") === base.host.replace(/^www\./, "")) found.add(u);
+        } catch {
+          /* loc roto */
+        }
+      }
+    }
+
+    // 2. Sin sitemap: los links internos de la portada.
+    let source: "sitemap" | "links" = "sitemap";
+    if (!found.size && docs < MAP_MAX_DOCS) {
+      source = "links";
+      docs++;
+      const resp = (await brightdataRequest({
+        zone,
+        url: base.toString(),
+        format: "json",
+        data_format: "markdown",
+        serviceId: "research.brightdata.map",
+      })) as BrightdataResponse;
+      for (const link of sameHostLinks(resp.body ?? "", base)) found.add(link);
+    }
+
+    const needle = input.search?.trim().toLowerCase();
+    const all = [...found].filter((u) => !needle || u.toLowerCase().includes(needle));
+    return {
+      cost: Math.max(1, docs),
+      data: { url: base.toString(), urls: all.slice(0, limit), total: all.length, source, truncated: all.length > limit },
+    };
+  },
+};

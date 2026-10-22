@@ -153,6 +153,22 @@ export interface WebCrawlResult {
   failed: string[];
 }
 
+export interface WebMapParams {
+  url: string;
+  /** Sólo URLs que contengan este texto, p. ej. "/blog/". */
+  search?: string;
+  /** 1-5000, default 1000. */
+  limit?: number;
+}
+export interface WebMapResult {
+  url: string;
+  urls: string[];
+  total: number;
+  /** De dónde salieron: el sitemap o, si no hay, los links de la portada. */
+  source: "sitemap" | "links";
+  truncated: boolean;
+}
+
 export interface ScreenshotParams {
   /** HTML completo y auto-contenido. GANA sobre `url` — permite ver un borrador sin publicarlo. */
   html?: string;
@@ -1616,6 +1632,11 @@ export class EasybitsClient {
   /** Lee una página y sigue sus links internos hasta maxPages. 1 consulta por página. */
   async webCrawl(params: WebCrawlParams): Promise<WebCrawlResult> {
     return this.request<WebCrawlResult>("/web/crawl", { method: "POST", body: JSON.stringify(params) });
+  }
+
+  /** Todas las URLs de un sitio desde su sitemap, sin leerlas. 1 consulta por documento leído (máx. 10). */
+  async webMap(params: WebMapParams): Promise<WebMapResult> {
+    return this.request<WebMapResult>("/web/map", { method: "POST", body: JSON.stringify(params) });
   }
 
   // ── Sites (/dash/sitios) ────────────────────────────────────

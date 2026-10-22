@@ -151,7 +151,8 @@ Body: `{ query, engine?: "google"|"bing"|"yandex"|"duckduckgo", country?: "mx"|"
 
 ### POST /web/fetch
 Body: `{ url, country?, asMarkdown?: true, onlyMainContent?: true }` → page content. Works on
-sites that block bots. Use `asMarkdown: true` unless you need raw HTML.
+sites that block bots. Use `asMarkdown: true` unless you need raw HTML. Check `truncated`: if true,
+read the rest with `{ fetchId, offset: nextOffset }` (free, same copy, kept 24 h).
 
 ### POST /web/extract · GET /web/extract/{jobId}
 Body: `{ input, source?, datasetId?, limit? }` → `{ jobId, status }`. Poll until `status: "done"`;
@@ -159,6 +160,10 @@ the result carries structured records (Maps, Mercado Libre, Amazon, Instagram…
 
 ### POST /web/crawl
 Body: `{ url, maxPages?, country? }`.
+
+### POST /web/map
+Body: `{ url, search?, limit? }` → `{ urls, total, source, truncated }`. Every URL of a site from its
+sitemap, without reading them. Map first, then fetch only the pages you need.
 
 ## Files (CDN)
 

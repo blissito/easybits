@@ -6,6 +6,7 @@
  *   POST /api/v2/web/extract  { source?, datasetId?, input, limit? } → { jobId, status }
  *   GET  /api/v2/web/extract/:jobId
  *   POST /api/v2/web/crawl    { url, maxPages?, country? }
+ *   POST /api/v2/web/map      { url, search?, limit? }   → todas las URLs del sitio, sin leerlas
  *
  * Se mide en consultas (`User.webQueriesBonus`); sin saldo → 402.
  */
@@ -26,6 +27,7 @@ const OPS: Record<string, string> = {
   fetch: "research.brightdata.scrape",
   extract: "research.brightdata.extract",
   crawl: "research.brightdata.crawl",
+  map: "research.brightdata.map",
 };
 
 // URL ABSOLUTA: el cliente puede ser un agente en un chat, donde "/dash/packs"

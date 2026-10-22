@@ -795,7 +795,7 @@ MCP: \`get_node_outline\`, \`patch_node\`
 
   web: `## Web — Internet para tus agentes
 
-Buscar en Google, leer cualquier página aunque bloquee bots (IPs residenciales, JS resuelto), extraer registros con esquema de sitios conocidos y rastrear un sitio completo. Disponible por REST, SDK y MCP (toolset \`web\`: \`web_search\`, \`web_fetch\`, \`web_extract\`, \`web_extract_status\`, \`web_crawl\`).
+Buscar en Google, leer cualquier página aunque bloquee bots (IPs residenciales, JS resuelto), extraer registros con esquema de sitios conocidos y rastrear un sitio completo. Disponible por REST, SDK y MCP (toolset \`web\`: \`web_search\`, \`web_fetch\`, \`web_extract\`, \`web_extract_status\`, \`web_crawl\`, \`web_map\`).
 
 **Se mide en consultas, no en créditos.** 1 consulta = 1 página leída, 1 búsqueda, 1 registro extraído — y en un rastreo, cada página que lee (máx. 20 por llamada). Tienes 50 al registrarte; los packs Web ($99 MXN → 400, $999 MXN → 10,000) están en \`/dash/packs?tab=web\`, valen para cualquier plan y **no caducan**. Sin saldo → \`402\` con \`{ error, code, requiredCost, available, buy }\` (\`buy\` es la URL absoluta para comprar: pásasela al usuario).
 
@@ -862,6 +862,13 @@ curl https://www.easybits.cloud/api/v2/web/extract/$JOB_ID -H "Authorization: Be
 Body: \`{ url, maxPages?, onlyMainContent?, country? }\`
 Returns: \`{ startUrl, pages: [{ url, markdown, truncated }], pending: [ … ], stoppedBy: "maxPages"|"bytes"|"done", failed: [ … ] }\`
 Lee la URL de inicio y sigue sus links internos (mismo dominio) hasta \`maxPages\` (1-20, default 10). 1 consulta por página realmente leída. \`pending\` son los links vistos y no visitados: pásale uno a otra llamada para continuar. Una página con \`truncated: true\` pasaba de 150,000 caracteres: léela entera con \`/web/fetch\`. \`failed\` son las que no se pudieron leer (no se cobran). \`onlyMainContent\` recomendado para RAG.
+
+### Mapa de un sitio
+\`POST /web/map\`
+Body: \`{ url, search?, limit? }\`
+Returns: \`{ url, urls: [ … ], total, source: "sitemap"|"links", truncated }\`
+Todas las URLs de un sitio desde su sitemap (lo encuentra en \`robots.txt\` o en \`/sitemap.xml\`, y sigue los índices de sitemaps), **sin leer las páginas**. Si el sitio no tiene sitemap, usa los links internos de la portada. \`search\` filtra por texto (\`"/blog/"\`); \`limit\` 1-5000, default 1000. Cobra 1 consulta por documento leído (normalmente 1-3, máx. 10). Úsalo antes de leer un sitio grande: mapea, elige y lee sólo esas páginas con \`/web/fetch\`.
+SDK: \`eb.webMap({ url, search })\` · MCP: \`web_map({ url, search })\`
 
 ### Estado del servicio
 \`GET https://www.easybits.cloud/api/health/web\` (público, sin llave) → \`{ status: "operational"|"degraded"|"down"|"unknown", checkedAt, search, fetch, extract }\`. Cada 15 min la plataforma busca, lee Amazon MX y extrae de Mercado Libre como lo haría un cliente; también se ve en \`/status\`.

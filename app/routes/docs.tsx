@@ -1086,8 +1086,8 @@ const data = await res.json();` },
                 { name: "asMarkdown", type: "boolean", desc: "true → markdown en vez de HTML" },
                 { name: "onlyMainContent", type: "boolean", desc: "Con asMarkdown: quita nav, footer, iconos y 'skip to content'. Lo normal cuando vas a leer la página" },
               ]}
-              response={`{ "url": "…", "statusCode": 200, "format": "markdown", "body": "# …" }`}
-              note="1 consulta. El cuerpo se recorta a 200 KB."
+              response={`{ "url": "…", "statusCode": 200, "format": "markdown", "body": "# …", "length": 1727117, "offset": 0, "truncated": true, "nextOffset": 200000, "fetchId": "…" }`}
+              note="1 consulta. Cada respuesta trae hasta 200,000 caracteres. Si truncated=true, pide el resto con { fetchId, offset: nextOffset }: gratis, de la misma copia (dura 24 h)."
             />
             <TabbedCode
               tabs={[
@@ -1193,7 +1193,7 @@ web_extract_status({ jobId })
                 { name: "onlyMainContent", type: "boolean", desc: "Quita nav, footer e iconos de cada página (recomendado para RAG)" },
                 { name: "country", type: "string", desc: "País en 2 letras: mx (México), us, es, ar, co, cl, pe, br. Ver lista completa abajo" },
               ]}
-              response={`{ "startUrl": "…", "pages": [ { "url", "markdown" } ], "pending": [ "…" ] }`}
+              response={`{ "startUrl": "…", "pages": [ { "url", "markdown", "truncated" } ], "pending": [ "…" ], "stoppedBy": "maxPages", "failed": [] }`}
               note="1 consulta por página realmente leída. `pending` son los links vistos y no visitados: pásale uno a otra llamada para continuar."
             />
             <TabbedCode
@@ -1213,6 +1213,28 @@ const data = await res.json();` },
                 { label: "MCP", code: `web_crawl({ url: "https://docs.ejemplo.com", maxPages: 20 })` },
               ]}
             />
+            <Endpoint
+              method="POST"
+              path="/web/map"
+              description="Todas las URLs de un sitio desde su sitemap (o los links de la portada), sin leerlas. Úsalo antes de leer un sitio grande"
+              body={[
+                { name: "url", type: "string", desc: "URL del sitio (requerido)" },
+                { name: "search", type: "string", desc: "Sólo URLs que contengan este texto, p. ej. /blog/" },
+                { name: "limit", type: "number", desc: "1-5000, default 1000. Cuesta 1 consulta por documento leído (normalmente 1-3)" },
+              ]}
+              response={`{ "url": "...", "urls": ["https://..."], "total": 412, "source": "sitemap", "truncated": false }`}
+              note="Mapea, elige y lee sólo esas páginas con /web/fetch: más barato que rastrear a ciegas."
+            />
+            <TabbedCode
+              tabs={[
+                { label: "SDK", code: `const { urls } = await eb.webMap({ url: "https://docs.ejemplo.com", search: "/guias/" });` },
+                { label: "cURL", code: `curl -X POST https://www.easybits.cloud/api/v2/web/map \\
+  -H "Authorization: Bearer $EASYBITS_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{"url":"https://docs.ejemplo.com","search":"/guias/"}'` },
+                { label: "MCP", code: `web_map({ url: "https://docs.ejemplo.com", search: "/guias/" })` },
+              ]}
+            />
             <div className="mb-8" />
 
             <h3 className="text-lg font-bold mb-3">Tools MCP</h3>
@@ -1223,6 +1245,7 @@ const data = await res.json();` },
               <McpTool name="web_extract" params="source | datasetId, input, limit?" description="Extrae registros con esquema (Maps, Mercado Libre, Amazon, Instagram…). Async con jobId; 1 consulta por registro." />
               <McpTool name="web_extract_status" params="jobId" description="Estado/registros de un extract. Gratis mientras corre." />
               <McpTool name="web_crawl" params="url, maxPages?, country?, onlyMainContent?" description="Rastrea un sitio siguiendo links internos. 1 consulta por página." />
+              <McpTool name="web_map" params="url, search?, limit?" description="Todas las URLs de un sitio desde su sitemap, sin leerlas. 1 consulta por documento leído." />
             </div>
             <p className="text-sm text-gray-600 mt-4">
               Ejemplo de flujo: <code className="bg-gray-100 px-1 rounded">web_search("ubiquiti u6 mesh precio", country: "mx")</code> → tomar el link de Amazon MX →{" "}
