@@ -188,6 +188,28 @@ export interface WebCrawlJobStatus {
   expired?: boolean;
 }
 
+export type WebInteractAction =
+  | { type: "click"; selector: string }
+  | { type: "type"; selector: string; text: string }
+  | { type: "press"; key: string }
+  | { type: "scroll"; y?: number | "bottom" }
+  | { type: "wait"; ms?: number; selector?: string }
+  | { type: "select"; selector: string; value: string }
+  | { type: "goto"; url: string };
+export interface WebInteractResult {
+  url: string;
+  title: string;
+  text: string;
+  length: number;
+  truncated: boolean;
+  /** Acciones que sí corrieron. */
+  done: number;
+  /** Si una falló: su índice y el motivo (la página viene como quedó). */
+  failedAt?: number;
+  error?: string;
+  screenshotUrl?: string;
+}
+
 export interface WebMonitor {
   monitorId: string;
   url: string;
@@ -1716,6 +1738,14 @@ export class EasybitsClient {
       cursor = part.nextCursor;
     }
     return { jobId: started.jobId, status: st.status, pages, error: st.error };
+  }
+
+  /**
+   * Abre `url` en un navegador remoto, ejecuta `actions` (clic, escribir, Enter, scroll, esperar,
+   * elegir, ir a) y devuelve el texto de la página final. 5 consultas por sesión (≤90 s).
+   */
+  async webInteract(params: { url: string; actions?: WebInteractAction[]; screenshot?: boolean }): Promise<WebInteractResult> {
+    return this.request<WebInteractResult>("/web/interact", { method: "POST", body: JSON.stringify(params) });
   }
 
   /**

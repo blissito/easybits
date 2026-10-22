@@ -795,7 +795,7 @@ MCP: \`get_node_outline\`, \`patch_node\`
 
   web: `## Web — Internet para tus agentes
 
-Buscar en Google, leer cualquier página aunque bloquee bots (IPs residenciales, JS resuelto), extraer registros con esquema de sitios conocidos y rastrear un sitio completo. Disponible por REST, SDK y MCP (toolset \`web\`: \`web_search\`, \`web_fetch\`, \`web_extract\`, \`web_extract_status\`, \`web_crawl\`, \`web_crawl_status\`, \`web_map\`, \`web_monitor_create\`, \`web_monitor_list\`, \`web_monitor_delete\`).
+Buscar en Google, leer cualquier página aunque bloquee bots (IPs residenciales, JS resuelto), extraer registros con esquema de sitios conocidos y rastrear un sitio completo. Disponible por REST, SDK y MCP (toolset \`web\`: \`web_search\`, \`web_fetch\`, \`web_extract\`, \`web_extract_status\`, \`web_crawl\`, \`web_crawl_status\`, \`web_map\`, \`web_interact\`, \`web_monitor_create\`, \`web_monitor_list\`, \`web_monitor_delete\`).
 
 **Se mide en consultas, no en créditos.** 1 consulta = 1 página leída, 1 búsqueda, 1 registro extraído — y en un rastreo, cada página que lee (máx. 20 por llamada). Tienes 50 al registrarte; los packs Web ($99 MXN → 400, $999 MXN → 10,000) están en \`/dash/packs?tab=web\`, valen para cualquier plan y **no caducan**. Sin saldo → \`402\` con \`{ error, code, requiredCost, available, buy }\` (\`buy\` es la URL absoluta para comprar: pásasela al usuario).
 
@@ -880,6 +880,11 @@ Body: \`{ url, search?, limit? }\`
 Returns: \`{ url, urls: [ … ], total, source: "sitemap"|"links", truncated }\`
 Todas las URLs de un sitio desde su sitemap (lo encuentra en \`robots.txt\` o en \`/sitemap.xml\`, y sigue los índices de sitemaps), **sin leer las páginas**. Si el sitio no tiene sitemap, usa los links internos de la portada. \`search\` filtra por texto (\`"/blog/"\`); \`limit\` 1-5000, default 1000. Cobra 1 consulta por documento leído (normalmente 1-3, máx. 10). Úsalo antes de leer un sitio grande: mapea, elige y lee sólo esas páginas con \`/web/fetch\`.
 SDK: \`eb.webMap({ url, search })\` · MCP: \`web_map({ url, search })\`
+
+### Interactuar con una página (navegador remoto)
+\`POST /web/interact\` \`{ url, actions?, screenshot? }\` → \`{ url, title, text, length, truncated, done, failedAt?, error?, screenshotUrl? }\`
+Abre la página en un navegador remoto (pasa bloqueos de bots), ejecuta las acciones en orden y devuelve el texto visible de cómo quedó. Para lo que \`/web/fetch\` no alcanza: buscadores internos, formularios, «ver más», pestañas, filtros. Acciones (máx. 25): \`{ type: "click", selector }\` · \`{ type: "type", selector, text }\` · \`{ type: "press", key }\` · \`{ type: "select", selector, value }\` · \`{ type: "scroll", y?: px | "bottom" }\` · \`{ type: "wait", ms? | selector? }\` · \`{ type: "goto", url }\`. Si una falla, se detiene y devuelve \`failedAt\` + \`error\` con la página como quedó. \`screenshot: true\` añade una captura (URL privada, 24 h). **5 consultas por sesión** (≤90 s).
+SDK: \`eb.webInteract({ url, actions })\` · MCP: \`web_interact({ url, actions })\`
 
 ### Vigilar una página
 \`POST /web/monitor\` \`{ url, everyMinutes? }\` → \`201 { monitorId, url, everyMinutes, status: "active", … }\` · \`GET /web/monitor\` (lista) · \`DELETE /web/monitor/:id\`

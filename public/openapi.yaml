@@ -678,6 +678,42 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "404": { description: Job no encontrado. }
 
+  /api/v2/web/interact:
+    post:
+      tags: [Web]
+      operationId: webInteract
+      summary: Interactuar con una página (navegador remoto)
+      description: "Ejecuta clics, escritura, Enter, scroll y esperas en un navegador remoto y devuelve el texto de la página final. 5 consultas por sesión."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url]
+              properties:
+                url: { type: string, format: uri }
+                actions:
+                  type: array
+                  maxItems: 25
+                  items:
+                    type: object
+                    required: [type]
+                    properties:
+                      type: { type: string, enum: [click, type, press, scroll, wait, select, goto] }
+                      selector: { type: string }
+                      text: { type: string }
+                      key: { type: string }
+                      value: { type: string }
+                      url: { type: string }
+                      ms: { type: integer }
+                      y: {}
+                screenshot: { type: boolean }
+      responses:
+        "200": { description: "{ url, title, text, length, truncated, done, failedAt?, error?, screenshotUrl? }", content: { application/json: { schema: { type: object, additionalProperties: true } } } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "402": { $ref: "#/components/responses/PaymentRequired" }
+
   /api/v2/web/monitor:
     post:
       tags: [Web]

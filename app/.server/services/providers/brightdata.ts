@@ -1029,3 +1029,175 @@ export const brightdataMapService: ServiceDef<BrightdataMapInput, BrightdataMapO
     };
   },
 };
+
+/* ────────────────────────────────────────────────────────────────────── */
+/* INTERACT — navegador remoto: clics, escribir, scroll antes de leer     */
+/* ────────────────────────────────────────────────────────────────────── */
+
+export type InteractAction =
+  | { type: "click"; selector: string }
+  | { type: "type"; selector: string; text: string }
+  | { type: "press"; key: string }
+  | { type: "scroll"; y?: number | "bottom" }
+  | { type: "wait"; ms?: number; selector?: string }
+  | { type: "select"; selector: string; value: string }
+  | { type: "goto"; url: string };
+
+export interface BrightdataInteractInput {
+  url: string;
+  actions?: InteractAction[];
+  /** true = también una captura PNG de cómo quedó la página (URL privada, 24 h). */
+  screenshot?: boolean;
+  country?: string;
+}
+
+export interface BrightdataInteractOutput extends ServiceResult {
+  data: {
+    url: string;
+    title: string;
+    /** Texto visible de la página al terminar (hasta 100,000 caracteres). */
+    text: string;
+    length: number;
+    truncated: boolean;
+    /** Acciones que sí corrieron. */
+    done: number;
+    /** Si una acción falló: cuál (índice) y por qué. La página se devuelve como quedó. */
+    failedAt?: number;
+    error?: string;
+    screenshotUrl?: string;
+  };
+}
+
+// El navegador remoto cuesta varias veces más que leer una página (cobra por tráfico de una
+// sesión completa con JS, imágenes y fuentes): tarifa plana por sesión.
+export const INTERACT_COST = 5;
+export const INTERACT_MAX_ACTIONS = 25;
+const INTERACT_TEXT_MAX = 100_000;
+const INTERACT_BUDGET_MS = 90_000;
+const BROWSER_ZONE = process.env.BRIGHTDATA_BROWSER_ZONE || "mcp_browser";
+
+// Usuario y contraseña de la zona del navegador: se piden a la API de la cuenta con la misma
+// llave (sin secreto nuevo) y se guardan 10 min.
+let browserAuth: { ws: string; at: number } | null = null;
+async function browserEndpoint(): Promise<string> {
+  if (browserAuth && Date.now() - browserAuth.at < 10 * 60_000) return browserAuth.ws;
+  const h = { Authorization: `Bearer ${getApiKey()}` };
+  const status = (await (await fetch("https://api.brightdata.com/status", { headers: h })).json()) as { customer?: string };
+  const pw = (await (await fetch(`https://api.brightdata.com/zone/passwords?zone=${BROWSER_ZONE}`, { headers: h })).json()) as {
+    passwords?: string[];
+  };
+  if (!status.customer || !pw.passwords?.[0]) {
+    throw new ServiceConfigError("research.brightdata.interact", "BRIGHTDATA browser zone");
+  }
+  const ws = `wss://brd-customer-${status.customer}-zone-${BROWSER_ZONE}:${pw.passwords[0]}@brd.superproxy.io:9222`;
+  browserAuth = { ws, at: Date.now() };
+  return ws;
+}
+
+/** Valida y acota las acciones (lo que llega del agente no se ejecuta a ciegas). */
+export function validateActions(actions: unknown): InteractAction[] {
+  if (actions === undefined) return [];
+  if (!Array.isArray(actions)) throw new ServiceProviderError("research.brightdata.interact", 400, "`actions` debe ser una lista");
+  if (actions.length > INTERACT_MAX_ACTIONS) {
+    throw new ServiceProviderError("research.brightdata.interact", 400, `máximo ${INTERACT_MAX_ACTIONS} acciones por sesión`);
+  }
+  return actions.map((a, i) => {
+    const t = (a as { type?: string })?.type;
+    const need = (k: string) => {
+      if (typeof (a as Record<string, unknown>)[k] !== "string" || !(a as Record<string, string>)[k]) {
+        throw new ServiceProviderError("research.brightdata.interact", 400, `acción ${i} (${t}): falta \`${k}\``);
+      }
+    };
+    switch (t) {
+      case "click": need("selector"); break;
+      case "type": need("selector"); need("text"); break;
+      case "press": need("key"); break;
+      case "select": need("selector"); need("value"); break;
+      case "goto": need("url"); break;
+      case "scroll": case "wait": break;
+      default:
+        throw new ServiceProviderError("research.brightdata.interact", 400, `acción ${i}: tipo desconocido «${t}» (click, type, press, scroll, wait, select, goto)`);
+    }
+    return a as InteractAction;
+  });
+}
+
+export const brightdataInteractService: ServiceDef<BrightdataInteractInput, BrightdataInteractOutput> = {
+  id: "research.brightdata.interact",
+  product: "research",
+  displayName: "Web Interact (navegador remoto)",
+  description: "Abre la página en un navegador remoto, ejecuta clics/escritura/scroll y devuelve cómo quedó. Tarifa plana por sesión.",
+  estimateCost() {
+    return INTERACT_COST;
+  },
+  async execute(input, ctx) {
+    if (!input.url) throw new ServiceProviderError("research.brightdata.interact", 400, "url is required");
+    const actions = validateActions(input.actions);
+    const { chromium } = await import("playwright-core");
+    const ws = await browserEndpoint();
+    const deadline = Date.now() + INTERACT_BUDGET_MS;
+    const left = () => Math.max(1_000, deadline - Date.now());
+
+    const browser = await chromium.connectOverCDP(ws, { timeout: 30_000 }).catch((e) => {
+      throw new ServiceProviderError("research.brightdata.interact", 502, `el navegador remoto no respondió: ${String(e?.message ?? e).slice(0, 120)}`);
+    });
+    try {
+      const page = await browser.newPage();
+      await page.goto(input.url, { timeout: Math.min(45_000, left()), waitUntil: "domcontentloaded" });
+      let done = 0;
+      let failedAt: number | undefined;
+      let error: string | undefined;
+      for (const [i, a] of actions.entries()) {
+        try {
+          const timeout = Math.min(15_000, left());
+          if (a.type === "click") await page.click(a.selector, { timeout });
+          else if (a.type === "type") await page.fill(a.selector, a.text, { timeout });
+          else if (a.type === "press") await page.keyboard.press(a.key);
+          else if (a.type === "select") await page.selectOption(a.selector, a.value, { timeout });
+          else if (a.type === "goto") await page.goto(a.url, { timeout, waitUntil: "domcontentloaded" });
+          else if (a.type === "scroll") {
+            await page.evaluate((y) => window.scrollTo(0, y === "bottom" ? document.body.scrollHeight : Number(y ?? window.innerHeight)), a.y ?? null);
+            await page.waitForTimeout(500);
+          } else if (a.type === "wait") {
+            if (a.selector) await page.waitForSelector(a.selector, { timeout });
+            else await page.waitForTimeout(Math.min(10_000, Math.max(0, a.ms ?? 1_000)));
+          }
+          // Un clic o un Enter pueden navegar: esperar a que la página nueva tenga contenido.
+          if (a.type === "click" || a.type === "press") await page.waitForLoadState("domcontentloaded", { timeout: 10_000 }).catch(() => undefined);
+          done++;
+        } catch (e) {
+          failedAt = i;
+          error = String((e as Error)?.message ?? e).split("\n")[0].slice(0, 200);
+          break;
+        }
+      }
+      const full = (await page.evaluate(() => document.body?.innerText ?? "").catch(() => "")).trim();
+      let screenshotUrl: string | undefined;
+      if (input.screenshot) {
+        const png = await page.screenshot({ fullPage: false }).catch(() => null);
+        if (png) {
+          const { getPlatformDefaultClient } = await import("../../storage");
+          const store = getPlatformDefaultClient({ prefix: "web/" });
+          const key = `interact/${ctx.userId}/${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}.png`;
+          await store.putObject(key, png, "image/png");
+          screenshotUrl = await store.getReadUrl(key, 24 * 3600);
+        }
+      }
+      return {
+        cost: INTERACT_COST,
+        data: {
+          url: page.url(),
+          title: (await page.title().catch(() => "")).slice(0, 300),
+          text: full.slice(0, INTERACT_TEXT_MAX),
+          length: full.length,
+          truncated: full.length > INTERACT_TEXT_MAX,
+          done,
+          ...(failedAt !== undefined ? { failedAt, error } : {}),
+          ...(screenshotUrl ? { screenshotUrl } : {}),
+        },
+      };
+    } finally {
+      await browser.close().catch(() => undefined);
+    }
+  },
+};

@@ -10,6 +10,7 @@
  *   GET  /api/v2/web/crawl/:jobId?cursor=N                   estado + un bloque de páginas
  *   POST /api/v2/web/monitor  { url, everyMinutes? }  · GET /api/v2/web/monitor · DELETE /api/v2/web/monitor/:id
  *   POST /api/v2/web/map      { url, search?, limit? }   → todas las URLs del sitio, sin leerlas
+ *   POST /api/v2/web/interact { url, actions[], screenshot? } → navegador remoto: clics/escribir/scroll
  *
  * Se mide en consultas (`User.webQueriesBonus`); sin saldo → 402.
  */
@@ -31,6 +32,7 @@ const OPS: Record<string, string> = {
   extract: "research.brightdata.extract",
   crawl: "research.brightdata.crawl",
   map: "research.brightdata.map",
+  interact: "research.brightdata.interact",
 };
 
 // URL ABSOLUTA: el cliente puede ser un agente en un chat, donde "/dash/packs"

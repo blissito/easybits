@@ -213,7 +213,7 @@ SDK: \`eb.searchFiles(query)\`
 `;
 export const EN_WEB = `## Web — Internet for your agents
 
-Search Google, read any page even if it blocks bots (residential IPs, JS resolved), extract schema-based records from known sites and crawl a whole site. Available through REST, SDK and MCP (toolset \`web\`: \`web_search\`, \`web_fetch\`, \`web_extract\`, \`web_extract_status\`, \`web_crawl\`, \`web_crawl_status\`, \`web_map\`, \`web_monitor_create\`, \`web_monitor_list\`, \`web_monitor_delete\`).
+Search Google, read any page even if it blocks bots (residential IPs, JS resolved), extract schema-based records from known sites and crawl a whole site. Available through REST, SDK and MCP (toolset \`web\`: \`web_search\`, \`web_fetch\`, \`web_extract\`, \`web_extract_status\`, \`web_crawl\`, \`web_crawl_status\`, \`web_map\`, \`web_interact\`, \`web_monitor_create\`, \`web_monitor_list\`, \`web_monitor_delete\`).
 
 **Metered in queries, not credits.** 1 query = 1 page read, 1 search, 1 record extracted — and in a crawl, each page it reads (max 20 per call). You get 50 on sign-up; Web packs ($99 MXN → 400, $999 MXN → 10,000) are at \`/dash/packs?tab=web\`, work on any plan and **never expire**. No balance → \`402\` with \`{ error, code, requiredCost, available, buy }\` (\`buy\` is the absolute URL to purchase: hand it to the user).
 
@@ -298,6 +298,11 @@ Body: \`{ url, search?, limit? }\`
 Returns: \`{ url, urls: [ … ], total, source: "sitemap"|"links", truncated }\`
 Every URL of a site from its sitemap (found in \`robots.txt\` or at \`/sitemap.xml\`, following sitemap indexes), **without reading the pages**. If the site has no sitemap, it uses the internal links of the home page. \`search\` filters by text (\`"/blog/"\`); \`limit\` 1-5000, default 1000. Charges 1 query per document read (usually 1-3, max 10). Use it before reading a large site: map, pick, and read only those pages with \`/web/fetch\`.
 SDK: \`eb.webMap({ url, search })\` · MCP: \`web_map({ url, search })\`
+
+### Interact with a page (remote browser)
+\`POST /web/interact\` \`{ url, actions?, screenshot? }\` → \`{ url, title, text, length, truncated, done, failedAt?, error?, screenshotUrl? }\`
+Opens the page in a remote browser (gets past bot blocks), runs the actions in order and returns the visible text of where it ended up. For what \`/web/fetch\` cannot do: site search boxes, forms, "load more", tabs, filters. Actions (max 25): \`{ type: "click", selector }\` · \`{ type: "type", selector, text }\` · \`{ type: "press", key }\` · \`{ type: "select", selector, value }\` · \`{ type: "scroll", y?: px | "bottom" }\` · \`{ type: "wait", ms? | selector? }\` · \`{ type: "goto", url }\`. If one fails it stops and returns \`failedAt\` + \`error\` with the page as it was. \`screenshot: true\` adds a capture (private URL, 24 h). **5 queries per session** (≤90 s).
+SDK: \`eb.webInteract({ url, actions })\` · MCP: \`web_interact({ url, actions })\`
 
 ### Monitor a page
 \`POST /web/monitor\` \`{ url, everyMinutes? }\` → \`201 { monitorId, url, everyMinutes, status: "active", … }\` · \`GET /web/monitor\` (list) · \`DELETE /web/monitor/:id\`

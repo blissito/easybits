@@ -165,6 +165,11 @@ Body: `{ url, maxPages?, country? }`. Up to 20 pages answers right away; 21-2000
 (`202 { jobId }`, ~24 pages/min, charged per page read). Poll `GET /web/crawl/{jobId}?cursor=N` for status
 and pages in blocks, or subscribe a webhook to `web.crawl.completed`.
 
+### POST /web/interact
+Body: `{ url, actions?, screenshot? }` → visible text of the final page. Remote browser; actions in order:
+`click {selector}`, `type {selector,text}`, `press {key}`, `select {selector,value}`, `scroll {y}`, `wait {ms|selector}`,
+`goto {url}` (max 25). Stops at the failing one (`failedAt`, `error`). 5 queries per session.
+
 ### POST /web/monitor · GET /web/monitor · DELETE /web/monitor/{id}
 Body: `{ url, everyMinutes? }` (15-10080, default 60). Checks the page's main content on that cadence and fires the
 `web.page.changed` webhook with added/removed lines when it changes. 1 query per check.

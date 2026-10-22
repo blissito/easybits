@@ -1246,6 +1246,7 @@ const data = await res.json();` },
               <McpTool name="web_extract_status" params="jobId" description="Estado/registros de un extract. Gratis mientras corre." />
               <McpTool name="web_crawl" params="url, maxPages?, country?, onlyMainContent?" description="Rastrea un sitio siguiendo links internos. 1 consulta por página." />
               <McpTool name="web_crawl_status" params="jobId, cursor?" description="Estado y páginas (por bloques) de un rastreo grande. Gratis." />
+              <McpTool name="web_interact" params="url, actions?, screenshot?" description="Navegador remoto: clics, escribir, Enter, scroll; devuelve la página final. 5 consultas por sesión." />
               <McpTool name="web_monitor_create" params="url, everyMinutes?" description="Vigila una página y avisa por webhook (web.page.changed) cuando cambia. 1 consulta por revisión." />
               <McpTool name="web_monitor_list" params="" description="Tus monitores con revisiones y cambios detectados." />
               <McpTool name="web_monitor_delete" params="monitorId" description="Deja de vigilar una página." />

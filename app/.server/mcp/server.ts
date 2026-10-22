@@ -6933,6 +6933,39 @@ function registerVideoTools(server: McpServer) {
   );
 
   server.tool(
+    "web_interact",
+    "Abre una página en un NAVEGADOR REMOTO (pasa bloqueos de bots), ejecuta acciones como una persona y devuelve cómo quedó: texto visible, URL final, título y, si lo pides, una captura. Para lo que `web_fetch` no alcanza: buscadores internos, formularios, botones «ver más», pestañas, filtros, paginación con JS.\n\nHow to use:\n- `url` de inicio y `actions` en orden (máx. 25): { type:'click', selector } · { type:'type', selector, text } · { type:'press', key:'Enter' } · { type:'select', selector, value } · { type:'scroll', y?: px | 'bottom' } · { type:'wait', ms? | selector? } · { type:'goto', url }.\n- Selectores CSS o de Playwright ('text=Ver más', 'input[name=q]').\n- Si una acción falla, se detiene y devuelve `failedAt` + `error` junto con la página como quedó: ajusta el selector y vuelve a intentar.\n- Cuesta 5 consultas por sesión (≤90 s). Para sólo leer una página usa `web_fetch` (1 consulta).",
+    {
+      url: z.string().url().describe("Página de inicio (https://…)."),
+      actions: z
+        .array(
+          z.object({
+            type: z.enum(["click", "type", "press", "scroll", "wait", "select", "goto"]),
+            selector: z.string().optional(),
+            text: z.string().optional(),
+            key: z.string().optional(),
+            value: z.string().optional(),
+            url: z.string().optional(),
+            ms: z.number().int().min(0).max(10000).optional(),
+            y: z.union([z.number(), z.literal("bottom")]).optional(),
+          }),
+        )
+        .max(25)
+        .optional()
+        .describe("Acciones en orden."),
+      screenshot: z.boolean().optional().describe("true = también una captura PNG (URL privada, 24 h)."),
+    },
+    wrapHandler(async (params, extra) =>
+      runWeb<import("../services/providers/brightdata").BrightdataInteractOutput>(
+        "research.brightdata.interact",
+        params,
+        extra,
+        (r) => r.data,
+      ),
+    ),
+  );
+
+  server.tool(
     "web_monitor_create",
     "Vigila una página y avisa cuando CAMBIA: cada `everyMinutes` (15 a 10,080, default 60) lee su contenido principal y, si cambió, dispara el webhook `web.page.changed` con las líneas agregadas y quitadas. Cada revisión cuesta 1 consulta (cada hora ≈ 720 al mes). La primera revisión sólo guarda la línea base. Ignora contadores y «hace N minutos».\n\nUse for: precios o stock de un producto, una página de convocatorias o empleos, términos y condiciones, la página de la competencia. Para enterarte necesitas un webhook suscrito a `web.page.changed` (desde el panel o POST /api/v2/webhooks).",
     {
