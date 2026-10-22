@@ -857,12 +857,15 @@ export const brightdataMapService: ServiceDef<BrightdataMapInput, BrightdataMapO
 
     const found = new Set<string>();
     const seenMaps = new Set<string>();
-    while (queue.length && docs < MAP_MAX_DOCS && found.size < limit * 2) {
+    // Deja 1 documento libre para caer a los links de la portada si los sitemaps no dan nada.
+    while (queue.length && docs < MAP_MAX_DOCS - 1 && found.size < limit * 2) {
       const sm = queue.shift()!;
       if (seenMaps.has(sm) || /\.gz($|\?)/i.test(sm)) continue; // .gz llega binario por el desbloqueador
       seenMaps.add(sm);
       const { urls, sitemaps } = parseSitemap(await get(sm));
-      queue.push(...sitemaps);
+      // Los hijos de un índice van PRIMERO: Liverpool declara su índice y luego 13 sitemaps de
+      // imágenes que dan 404; en orden de llegada se gastaba el cupo en ésos y daba 0 URLs.
+      queue.unshift(...sitemaps);
       for (const u of urls) {
         try {
           if (new URL(u).host.replace(/^www\./, "") === base.host.replace(/^www\./, "")) found.add(u);

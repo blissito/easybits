@@ -249,6 +249,25 @@ describe("web_map", () => {
     expect(r.cost).toBe(3); // robots + índice + s1 (el .gz no se pide)
   });
 
+  it("lee primero los hijos del índice aunque robots declare muchos sitemaps muertos (caso Liverpool)", async () => {
+    const dead = Array.from({ length: 13 }, (_, i) => `Sitemap: https://ej.test/${i}img.xml`).join("\n");
+    site({
+      "https://ej.test/robots.txt": `Sitemap: https://ej.test/index.xml\n${dead}`,
+      "https://ej.test/index.xml": `<sitemapindex><sitemap><loc>https://ej.test/bebes.xml</loc></sitemap></sitemapindex>`,
+      "https://ej.test/bebes.xml": `<urlset><url><loc>https://ej.test/p/1</loc></url></urlset>`,
+    });
+    const r = await brightdataMapService.execute({ url: "https://ej.test/" }, { userId: ME });
+    expect(r.data).toMatchObject({ source: "sitemap", urls: ["https://ej.test/p/1"] });
+  });
+
+  it("si los sitemaps se comen el cupo sin dar nada, todavía cae a los links", async () => {
+    const dead = Array.from({ length: 20 }, (_, i) => `Sitemap: https://ej.test/${i}.xml`).join("\n");
+    site({ "https://ej.test/robots.txt": dead, "https://ej.test/": "[A](/a)" });
+    const r = await brightdataMapService.execute({ url: "https://ej.test/" }, { userId: ME });
+    expect(r.data).toMatchObject({ source: "links", urls: ["https://ej.test/a"] });
+    expect(r.cost).toBe(10);
+  });
+
   it("sin sitemap usa los links internos de la portada", async () => {
     site({ "https://ej.test/": "[Precios](/precios) [Blog](https://ej.test/blog) [Fuera](https://otro.test/x)" });
     const r = await brightdataMapService.execute({ url: "https://ej.test/" }, { userId: ME });
