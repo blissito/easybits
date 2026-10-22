@@ -169,6 +169,7 @@ easybits db query leads "SELECT * FROM leads" --json
 easybits db rename leads prospects --dry-run   # which agent prompts name it
 easybits db rm leads --dry-run                 # tables and rows that would be lost
 easybits db rm leads --yes
+easybits db attach clave                     # the database your machine opens at /v1/db/clave/
 
 # Agents
 easybits agents ls
@@ -311,6 +312,14 @@ Host *.ghosty
 - Skill: `npx skills add https://easybits.cloud` (includes `easybits-cli`).
 
 Full reference: https://www.easybits.cloud/docs#cli · https://www.easybits.cloud/en/docs/cli.md
+
+## Changes in 0.20.0
+
+- `db attach <name> [--description <text>]`: adds to your account the database one of your machines
+  already uses (`DATABASE_URL=http://172.20.0.1:8090/v1/db/<name>/`). Nothing is created or copied;
+  from then on `db query|tables|ls` work on it. It does not count toward your plan's database limit,
+  and `db rm` only removes it from your list: the machine keeps its data. New API:
+  `POST /api/v2/databases { name, attach: true }`.
 
 ## Changes in 0.17.1
 

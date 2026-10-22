@@ -806,6 +806,10 @@ model Database {
   // contra DB_LIMITS y su namespace es el del mesh (meshNamespace) para que la caja la
   // abra por /v1/db sin credenciales. Falta decidir dónde se cobra.
   siteId      String?  @db.ObjectId
+  // Base que ya usaba una máquina del dueño por el mesh (`/v1/db/<name>/`) y se registró con
+  // `easybits db attach`: sus datos son de la app, así que `db rm` sólo la quita de la lista
+  // (nunca borra el namespace) y no se le crea la tabla de log. ⚠️ Mongo: filtrar con `attached: true`.
+  attached    Boolean?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 

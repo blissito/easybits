@@ -446,9 +446,12 @@ easybits db ls
 easybits db rename leads prospectos --dry-run        # qué prompts de agentes la nombran
 easybits db rm leads --dry-run                       # tablas y filas que se perderían
 easybits db rm leads --yes
+easybits db attach clave                             # la base que tu máquina abre en /v1/db/clave/
 \`\`\`
 
 \`query\` y \`tables\` aceptan el id o el nombre, y nunca crean una base por un nombre mal escrito. Con \`--json\`, \`tables\` da \`[{name, rows, columns:[{name,type,pk}], links:[{column, permanent, expiring, external, empty}]}]\`: por cada columna de texto con ligas, cuántas son **permanentes** (almacenamiento público de EasyBits), **caducan** (URLs firmadas), son de fuera o están vacías.
+
+**Adjuntar**: \`db attach <nombre>\` agrega a tu cuenta la base que una de tus máquinas ya usa (\`DATABASE_URL=http://172.20.0.1:8090/v1/db/<nombre>/\`). No crea ni copia nada; desde ahí sirven \`db query|tables|ls\`. No cuenta contra el límite de bases de tu plan y \`db rm\` sólo la quita de tu lista: los datos se quedan en la máquina.
 
 **Renombrar**: \`db rename <db> <nombre-nuevo> [--skip-prompts] [--dry-run]\` cambia el nombre (el id no cambia, así que las tools \`db_*\` siguen funcionando) y reescribe el nombre en los prompts de tus agentes ghosty-lite/goose donde aparece como palabra suelta: nunca dentro de \`x.com\`, \`@x\`, \`x_prueba\` ni en mayúsculas (la marca). \`--dry-run\` enseña cada prompt y renglón; si un prompt falla se reporta (sale con 1) y el nombre nuevo se queda. Skills y env no se revisan.
 

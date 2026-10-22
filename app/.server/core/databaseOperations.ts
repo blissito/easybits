@@ -45,7 +45,7 @@ const CREATE_LOG_TABLE_SQL = `CREATE TABLE IF NOT EXISTS "${LOG_TABLE}" (
 export type QuerySource = "ui" | "mcp" | "api" | "sdk";
 
 function logQuery(
-  namespace: string,
+  database: { namespace: string; attached?: boolean | null },
   sqlText: string,
   args: unknown[],
   source: QuerySource,
@@ -55,7 +55,9 @@ function logQuery(
   error?: string
 ) {
   if (sqlText.includes(LOG_TABLE)) return; // prevent recursion
-  sqldExec(namespace, [{
+  // Una base adjunta es la de una app: no se le mete nuestra tabla (su ORM la vería ajena).
+  if (database.attached) return;
+  sqldExec(database.namespace, [{
     sql: `INSERT INTO "${LOG_TABLE}" (sql_text, args, source, rows_affected, duration_ms, status, error) VALUES (?, ?, ?, ?, ?, ?, ?)`,
     args: [
       sqlText.slice(0, 4000),
@@ -82,6 +84,7 @@ export async function listDatabases(ctx: AuthContext) {
       createdAt: true,
       updatedAt: true,
       siteId: true,
+      attached: true,
     },
   });
   // La base de una web app se llama `site-<id>`: sin el nombre del sitio nadie (ni un agente)
@@ -95,7 +98,8 @@ export async function listDatabases(ctx: AuthContext) {
     : [];
   const byId = new Map(sites.map((x) => [x.id, x]));
   return {
-    items: databases.map(({ siteId, ...d }) => {
+    items: databases.map(({ siteId, attached, ...rest }) => {
+      const d = attached ? { ...rest, attached: true } : rest;
       const site = siteId ? byId.get(siteId) : undefined;
       return site ? { ...d, site: { id: site.id, name: site.name, domain: site.domain, machine: site.sandboxId } } : d;
     }),
@@ -111,6 +115,44 @@ export async function listDatabases(ctx: AuthContext) {
 export function meshNamespace(ownerId: string, name: string): string {
   if (!/^[A-Za-z0-9_-]+$/.test(name) || name.includes("__")) throw new Error(`nombre de base inválido para el mesh: ${name}`);
   return "o" + crypto.createHash("sha256").update(ownerId).digest("hex").slice(0, 16) + "__" + name;
+}
+
+/**
+ * Registra en la cuenta la base que una máquina del dueño ya usa por el mesh
+ * (`DATABASE_URL=http://172.20.0.1:8090/v1/db/<name>/`). No crea nada: el namespace es el que
+ * el host deriva del dueño (`meshNamespace`), así que sólo se puede adjuntar una base PROPIA, y
+ * tiene que existir. No cuenta contra DB_LIMITS: la paga la máquina, como la de un sitio.
+ */
+export async function attachDatabase(ctx: AuthContext, opts: { name: string; description?: string }) {
+  requireScope(ctx, "WRITE");
+  const name = opts.name?.trim() ?? "";
+  const fail = (status: number, error: string, code?: string) =>
+    new Response(JSON.stringify({ error, ...(code ? { code } : {}) }), { status, headers: { "Content-Type": "application/json" } });
+  if (!name || name.length > 64 || !/^[a-zA-Z0-9_-]+$/.test(name) || name.includes("__")) {
+    throw fail(400, "Name must be the one in the machine's DATABASE_URL (/v1/db/<name>/): letters, digits, - and _");
+  }
+  const namespace = meshNamespace(ctx.user.id, name);
+  const registered = await db.database.findFirst({ where: { OR: [{ namespace }, { userId: ctx.user.id, name }] } });
+  if (registered) {
+    if (registered.namespace === namespace && registered.userId === ctx.user.id) {
+      return { id: registered.id, name: registered.name, namespace, description: registered.description, attached: true, createdAt: registered.createdAt };
+    }
+    throw fail(409, `Database "${name}" already exists`, "conflict");
+  }
+  // Que exista: sqld responde namespace_missing si ninguna máquina la ha abierto.
+  try {
+    await sqldQuery(namespace, "SELECT 1", []);
+  } catch (err) {
+    if (err instanceof SqldError && err.kind === "namespace_missing") {
+      throw fail(404, `None of your machines has a database "${name}" (/v1/db/${name}/). Use the name in its DATABASE_URL.`, "not_found");
+    }
+    throw sqldErrorResponse(err);
+  }
+  const database = await db.database.create({
+    data: { name, namespace, description: opts.description || null, userId: ctx.user.id, attached: true },
+  });
+  dispatchWebhooks(ctx.user.id, "database.created", { id: database.id, name: database.name });
+  return { id: database.id, name, namespace, description: database.description, attached: true, createdAt: database.createdAt };
 }
 
 export async function createDatabase(
@@ -139,7 +181,15 @@ export async function createDatabase(
   const maxDbs = DB_LIMITS[planKey];
   const count = opts.siteId
     ? 0
-    : await db.database.count({ where: { userId: ctx.user.id, OR: [{ siteId: null }, { siteId: { isSet: false } }] } });
+    : await db.database.count({
+        where: {
+          userId: ctx.user.id,
+          AND: [
+            { OR: [{ siteId: null }, { siteId: { isSet: false } }] },
+            { OR: [{ attached: null }, { attached: { isSet: false } }, { attached: false }] },
+          ],
+        },
+      });
   if (count >= maxDbs) {
     throw new Response(
       JSON.stringify({ error: `Max ${maxDbs} databases on plan ${planKey}. Upgrade at https://www.easybits.cloud/planes` }),
@@ -270,14 +320,15 @@ export async function deleteDatabase(ctx: AuthContext, dbId: string) {
     });
   }
   await db.database.delete({ where: { id: dbId } });
-  await sqldDeleteNamespace(database.namespace).catch(() => {});
+  // Una base adjunta es de la app de la máquina: se quita de la lista, los datos se quedan.
+  if (!database.attached) await sqldDeleteNamespace(database.namespace).catch(() => {});
 
   dispatchWebhooks(ctx.user.id, "database.deleted", {
     id: database.id,
     name: database.name,
   });
 
-  return { success: true };
+  return { success: true, ...(database.attached ? { detached: true } : {}) };
 }
 
 const WRITE_WORDS = /\b(insert|update|delete|replace|upsert|create|drop|alter|attach|detach|vacuum|reindex|analyze|savepoint|release|rollback|commit|begin)\b/i;
@@ -316,10 +367,10 @@ export async function queryDatabase(
   const start = performance.now();
   try {
     const result = await sqldQuery(database.namespace, sql, args);
-    logQuery(database.namespace, sql, args, source, performance.now() - start, result.affected_row_count, "ok");
+    logQuery(database, sql, args, source, performance.now() - start, result.affected_row_count, "ok");
     return result;
   } catch (err) {
-    logQuery(database.namespace, sql, args, source, performance.now() - start, 0, "error", err instanceof Error ? err.message : String(err));
+    logQuery(database, sql, args, source, performance.now() - start, 0, "error", err instanceof Error ? err.message : String(err));
     throw sqldErrorResponse(err);
   }
 }
@@ -352,11 +403,11 @@ export async function execDatabase(
     const totalAffected = results.reduce((s, r) => s + (r.affected_row_count || 0), 0);
     const durationMs = performance.now() - start;
     const summary = statements.length === 1 ? statements[0].sql : `[batch: ${statements.length} statements]`;
-    logQuery(database.namespace, summary, [], source, durationMs, totalAffected, "ok");
+    logQuery(database, summary, [], source, durationMs, totalAffected, "ok");
     return { results };
   } catch (err) {
     const summary = statements.length === 1 ? statements[0].sql : `[batch: ${statements.length} statements]`;
-    logQuery(database.namespace, summary, [], source, performance.now() - start, 0, "error", err instanceof Error ? err.message : String(err));
+    logQuery(database, summary, [], source, performance.now() - start, 0, "error", err instanceof Error ? err.message : String(err));
     throw sqldErrorResponse(err);
   }
 }
@@ -441,6 +492,7 @@ export async function getQueryHistory(
   }
   const limit = Math.min(opts.limit || 50, 200);
   const offset = opts.offset || 0;
+  if (database.attached) return { items: [], total: 0 };
 
   // Ensure log table exists (for DBs created before this feature)
   await sqldExec(database.namespace, [{ sql: CREATE_LOG_TABLE_SQL }]).catch(() => {});
