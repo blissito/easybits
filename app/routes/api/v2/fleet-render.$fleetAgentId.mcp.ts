@@ -11,6 +11,7 @@ import { compareRender } from "~/.server/core/renderCompare";
 import { COMPARE_RENDER_DESC, compareRenderShape, compareRenderHint } from "~/.server/mcp/compareRenderTool";
 import { CLONE_PDF_DESC, clonePdfShape, clonePdfHint } from "~/.server/mcp/clonePdfTool";
 import { clonePdf } from "~/.server/core/pdfClone";
+import { startRemoveBackground, removeBackgroundStatus, type RemoveBackgroundStatus } from "~/.server/core/fleetVideo";
 import { browserOnBox, BrowserSessionGone, type BrowserAction, type BrowserView } from "~/.server/core/renderClient";
 import { hasLiveTurn, pushBrowserFrame } from "~/.server/core/siteTurns.server";
 import { getPlatformPublicClient, buildPublicAssetUrl } from "~/.server/storage";
@@ -246,6 +247,72 @@ function buildRenderServer(ctx: AuthContext, panel?: { fleetAgentId: string; gro
       return fail((e as Error).message);
     }
   });
+
+  // ── Quitar fondo (BiRefNet en la caja de video) ──
+  // Asíncrono: una imagen tarda ~30 s (cabe esperando aquí), un video minutos u horas.
+  const bgHint = (r: RemoveBackgroundStatus) =>
+    r.state === "done"
+      ? "Listo. Manda `url` como ADJUNTO; ya está en Files del owner."
+      : r.state === "failed"
+        ? `Falló: ${r.error ?? "sin detalle"}`
+        : `Sigue en proceso (${r.step ?? r.state}). Avísale a la persona y consulta con remove_background_status({job_id: "${r.jobId}"}) en otro turno; no te quedes en un bucle.`;
+
+  tool(
+    "remove_background",
+    "QUITA EL FONDO de una imagen o un video con BiRefNet (sirve con personajes, sprites, productos y personas, no sólo gente). Devuelve un PNG con alfa (imagen) o un MOV ProRes 4444 con alfa / un .zip de PNGs (video), guardado en Files del owner como { fileId, url }.\n\n- Entrada: `file_id` (de Files) o `url` https pública.\n- Es LENTO: ~22 s por cuadro. Una imagen suele quedar dentro de esta llamada (espera hasta `wait_seconds`). Un video son ~22 s × cuadros (10 s a 30 fps ≈ 2 h): devuelve `job_id` y lo consultas con `remove_background_status` en otro turno.\n- Tope: 300 cuadros por video. Para bajar el costo usa `fps` (un sprite a 12 fps se ve bien) o recorta con `start`/`duration`; si te pasas, el error te dice cuántos cuadros son.\n- MOV ProRes pesa mucho (cientos de MB por minuto); `png-zip` si lo van a editar cuadro por cuadro.\n- Gratis, no consume créditos.",
+    {
+      file_id: z.string().optional().describe("archivo de Files (imagen o video)"),
+      url: z.string().url().optional().describe("URL https pública de la imagen o el video"),
+      format: z.enum(["png", "mov", "png-zip"]).optional().describe("imagen → png; video → mov (default) o png-zip"),
+      fps: z.number().min(1).max(60).optional().describe("video: cuadros por segundo a procesar"),
+      start: z.number().min(0).optional().describe("video: segundo de inicio"),
+      duration: z.number().positive().optional().describe("video: duración del tramo en segundos"),
+      keep_audio: z.boolean().optional().describe("video → mov: conservar el audio (default true)"),
+      file_name: z.string().max(120).optional().describe("nombre base del archivo de salida"),
+      wait_seconds: z.number().int().min(0).max(50).optional().describe("cuánto esperar el resultado aquí antes de devolver job_id. Default 45."),
+    },
+    async (p) => {
+      try {
+        if (!p.file_id && !p.url) return fail("Pasa `file_id` o `url`.");
+        const { jobId } = await startRemoveBackground(ctx, {
+          fileId: p.file_id,
+          url: p.url,
+          format: p.format,
+          fps: p.fps,
+          start: p.start,
+          duration: p.duration,
+          keepAudio: p.keep_audio,
+          fileName: p.file_name,
+        });
+        const deadline = Date.now() + (p.wait_seconds ?? 45) * 1000;
+        let r: RemoveBackgroundStatus = { jobId, state: "queued" };
+        while (Date.now() < deadline) {
+          await new Promise((res) => setTimeout(res, 3000));
+          r = await removeBackgroundStatus(ctx, jobId);
+          if (r.state === "done" || r.state === "failed") break;
+        }
+        if (r.state === "failed") return fail(bgHint(r));
+        return ok({ ...r, job_id: jobId, hint: bgHint(r) });
+      } catch (e) {
+        return fail((e as Error).message);
+      }
+    }
+  );
+
+  tool(
+    "remove_background_status",
+    "Estado de un `remove_background` que no terminó en su llamada. `done` trae { fileId, url } (ya en Files: mándalo como ADJUNTO); `running` trae `step` con el avance y los minutos estimados.",
+    { job_id: z.string().describe("el job_id `bg_…` que devolvió remove_background") },
+    async (p) => {
+      try {
+        const r = await removeBackgroundStatus(ctx, p.job_id);
+        if (r.state === "failed") return fail(bgHint(r));
+        return ok({ ...r, hint: bgHint(r) });
+      } catch (e) {
+        return fail((e as Error).message);
+      }
+    }
+  );
 
   // ── Navegador con estado (nivel 1 de computer use) ──
   // La página sigue viva entre llamadas en la caja de render del owner. El agente apunta

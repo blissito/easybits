@@ -4,7 +4,7 @@ import { renderViaHyperframesBox } from "~/.server/core/fleetVideo";
 
 // POST /api/v2/videos/render
 // Renders a self-contained HyperFrames composition (HTML + GSAP timeline) to MP4
-// via the owner's on-demand hyperframes-svc box, stores it in the owner's Files,
+// via the owner's on-demand video-svc box, stores it in the owner's Files,
 // and returns { file: { fileId, url, contentType, size, renderMs } }.
 //
 // Synchronous: a short clip renders in tens of seconds. If renders grow long,

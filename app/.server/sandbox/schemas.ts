@@ -15,7 +15,7 @@ export const SANDBOX_TEMPLATES = [
   "ghosty-studio",
   "code-interpreter", "desktop-ghosty", "computer-ghosty", "computer-ghosty-gemini",
   "livekit-svc", "whisper-svc", "kokoro-svc", "voice-svc", "render-svc", "collab-svc",
-  "hyperframes-svc",
+  "video-svc",
   // eve (Vercel) self-hosted: Node 24 + pnpm + eve CLI, /data persistente, :3000.
   "eve-nitro",
 ] as const;

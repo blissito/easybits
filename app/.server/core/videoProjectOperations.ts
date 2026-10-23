@@ -1,6 +1,6 @@
 // Video projects — a stateful, doc-style resource of ordered scenes that
 // compiles to a HyperFrames composition and renders to MP4 via the on-demand
-// hyperframes-svc box (see fleetVideo.ts). Mirrors documentOperations.ts: every
+// video-svc box (see fleetVideo.ts). Mirrors documentOperations.ts: every
 // mutation is ownership-guarded, keeps a previousScenes undo snapshot, and is a
 // no-op when nothing changes.
 //

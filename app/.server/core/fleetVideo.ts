@@ -1,5 +1,5 @@
 // Fleet video — HTML (HyperFrames composition) → MP4 for FleetAgents / API.
-// Mirrors fleetRender.ts: consumes the on-demand hyperframes-svc box (HyperFrames
+// Mirrors fleetRender.ts: consumes the on-demand video-svc box (HyperFrames
 // by HeyGen, Apache 2.0) keyed per-owner. The box drives chrome-headless-shell +
 // ffmpeg to render a self-contained composition; no browser logic here — we just
 // POST the HTML and upload the MP4 bytes to the owner's Files, returning a public
@@ -10,8 +10,10 @@
 // data-height data-fps>` and `class="clip"` children carrying data-start/
 // data-duration/data-track-index, plus a paused GSAP timeline registered on
 // `window.__timelines`. Infinite tweens (repeat:-1) break deterministic capture —
-// callers must use finite repeats. See templates/hyperframes-svc/server.mjs.
+// callers must use finite repeats. See templates/video-svc/server.mjs.
 import type { AuthContext } from "../apiAuth";
+import { nanoid } from "nanoid";
+import { db } from "../db";
 import { ensureServiceBox, touchServiceBox } from "./fleetServiceOperations";
 
 /** An asset the box downloads into the project's assets/ dir before rendering. */
@@ -156,4 +158,182 @@ export async function renderViaHyperframesBox(
     size: out.bytes.length,
     renderMs: out.renderMs,
   };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Quitar fondo (BiRefNet) — job asíncrono en la MISMA caja de video.
+//
+// La caja de EasyBits no tiene credenciales de storage (el spec `video` no pasa
+// env), así que la app elige la llave en el bucket público, le da a la caja una URL
+// de PUT prefirmada y registra el File cuando lee el estado `done`. El jobId que
+// ve el agente lleva la llave adentro (`bg_<jobIdDeLaCaja>_<llave>`): no hace falta
+// tabla, y como la llave siempre se arma con el ownerId del ctx, un jobId ajeno no
+// apunta a archivos de otra cuenta.
+//
+// Lento a propósito del modelo: ~22 s por cuadro con 4 vCPU (medido). Una imagen
+// cabe en un turno; un video son minutos u horas y se consulta en turnos después.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface RemoveBackgroundInput {
+  /** URL https pública de la imagen o el video. */
+  url?: string;
+  /** O un archivo de Files del owner. */
+  fileId?: string;
+  /** Imagen → "png" (único). Video → "mov" (ProRes 4444 con alfa, default) o "png-zip". */
+  format?: "png" | "mov" | "png-zip";
+  /** Video: cuadros por segundo a procesar (baja el costo; default el del video). */
+  fps?: number;
+  /** Video: segundo de inicio del tramo. */
+  start?: number;
+  /** Video: duración del tramo en segundos. */
+  duration?: number;
+  /** Video → mov: conservar el audio original. Default true. */
+  keepAudio?: boolean;
+  /** Nombre base del archivo de salida. */
+  fileName?: string;
+}
+
+export interface RemoveBackgroundStatus {
+  jobId: string;
+  state: "queued" | "running" | "done" | "failed";
+  step?: string;
+  error?: string | null;
+  detail?: Record<string, unknown>;
+  fileId?: string;
+  url?: string;
+  contentType?: string;
+  size?: number;
+}
+
+const BG_JOB_RE = /^bg_([0-9a-f-]{36})_([A-Za-z0-9_-]{12})$/;
+// La URL de PUT tiene que sobrevivir a la cola + la inferencia. 6 h = el TTL de los
+// jobs en la caja: un job que tarde más ya no se puede leer de todos modos.
+const BG_PUT_TTL_S = 6 * 60 * 60;
+
+async function sourceUrlFor(ctx: AuthContext, input: RemoveBackgroundInput): Promise<string> {
+  if (input.fileId) {
+    const file = await db.file.findUnique({ where: { id: input.fileId } });
+    if (!file || file.ownerId !== ctx.user.id) throw new Error("archivo no encontrado");
+    if (file.access === "public" && file.url) return file.url;
+    const { getReadClientForPlatformFile, getClientForFile } = await import("../storage");
+    const client = file.storageProviderId
+      ? await getClientForFile(file.storageProviderId, ctx.user.id)
+      : getReadClientForPlatformFile(file);
+    return client.getReadUrl(file.storageKey, BG_PUT_TTL_S);
+  }
+  const url = input.url?.trim();
+  if (!url || !/^https:\/\//i.test(url)) throw new Error("pasa `fileId` o una `url` https pública");
+  return url;
+}
+
+/** Encola el recorte en la caja de video del owner. Devuelve al instante. */
+export async function startRemoveBackground(
+  ctx: AuthContext,
+  input: RemoveBackgroundInput
+): Promise<{ jobId: string; state: string }> {
+  const url = await sourceUrlFor(ctx, input);
+  const box = await ensureBox(ctx);
+  if (!box?.videoUrl) throw new Error("video box unavailable (host down or plan cap)");
+
+  const keyId = nanoid(12).replace(/[^A-Za-z0-9_-]/g, "_");
+  const storageKey = `${ctx.user.id}/${keyId}`;
+  const { getPlatformPublicClient } = await import("../storage");
+  const putUrl = await getPlatformPublicClient().getPutUrl(storageKey, { timeout: BG_PUT_TTL_S });
+
+  const r = await fetch(`${box.videoUrl}/jobs`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      type: "remove-background",
+      url,
+      putUrl,
+      format: input.format,
+      fps: input.fps,
+      start: input.start,
+      duration: input.duration,
+      keepAudio: input.keepAudio,
+      name: input.fileName,
+    }),
+    signal: AbortSignal.timeout(60_000),
+  });
+  void touchServiceBox(box.sandboxId);
+  const body = (await r.json().catch(() => ({}))) as { jobId?: string; state?: string; error?: string };
+  if (!r.ok || !body.jobId) throw new Error(body.error || `la caja de video contestó ${r.status}`);
+  return { jobId: `bg_${body.jobId}_${keyId}`, state: body.state || "queued" };
+}
+
+/**
+ * Estado del recorte. Al primer `done` registra el File (idempotente por storageKey)
+ * y devuelve `{fileId, url}`.
+ */
+export async function removeBackgroundStatus(ctx: AuthContext, jobId: string): Promise<RemoveBackgroundStatus> {
+  const m = BG_JOB_RE.exec(jobId || "");
+  if (!m) throw new Error("jobId inválido (es el `bg_…` que devolvió remove_background)");
+  const [, boxJobId, keyId] = m;
+  const storageKey = `${ctx.user.id}/${keyId}`;
+
+  const box = await ensureBox(ctx);
+  if (!box?.videoUrl) throw new Error("video box unavailable (host down or plan cap)");
+  const r = await fetch(`${box.videoUrl}/jobs/${boxJobId}`, { signal: AbortSignal.timeout(30_000) });
+  void touchServiceBox(box.sandboxId);
+  if (r.status === 404) {
+    // La caja se recicló o pasó el TTL. Si el archivo alcanzó a subir, igual se entrega.
+    const existing = await db.file.findFirst({ where: { storageKey, ownerId: ctx.user.id } });
+    if (existing) return fileStatus(jobId, existing);
+    throw new Error("job desconocido o caducado (la caja de video se recicló o pasaron 6 h)");
+  }
+  const j = (await r.json().catch(() => ({}))) as {
+    state?: RemoveBackgroundStatus["state"];
+    step?: string;
+    error?: string | null;
+    size?: number | null;
+    detail?: Record<string, unknown>;
+  };
+  const out: RemoveBackgroundStatus = {
+    jobId,
+    state: j.state || "failed",
+    step: j.step,
+    error: j.error,
+    detail: j.detail,
+  };
+  if (out.state !== "done") return out;
+
+  const existing = await db.file.findFirst({ where: { storageKey, ownerId: ctx.user.id } });
+  if (existing) return { ...out, ...fileStatus(jobId, existing) };
+
+  const { getPlatformPublicClient, buildPublicAssetUrl } = await import("../storage");
+  const head = await getPlatformPublicClient().headObject(storageKey);
+  if (!head?.size) throw new Error("la caja dijo listo pero el archivo no está en el storage");
+  const name = String(j.detail?.name || "sin-fondo.png");
+  const contentType = String(j.detail?.mime || "application/octet-stream");
+  let file;
+  try {
+    file = await db.file.create({
+      data: {
+        name,
+        storageKey,
+        slug: storageKey,
+        size: head.size,
+        contentType,
+        ownerId: ctx.user.id,
+        access: "public",
+        url: buildPublicAssetUrl(storageKey),
+        status: "DONE",
+        source: "remove-background",
+      },
+    });
+  } catch (e: any) {
+    // Dos lecturas del estado a la vez: la otra ya lo registró (storageKey es único).
+    if (e?.code !== "P2002") throw e;
+    file = await db.file.findFirst({ where: { storageKey, ownerId: ctx.user.id } });
+    if (!file) throw e;
+  }
+  return { ...out, ...fileStatus(jobId, file) };
+}
+
+function fileStatus(
+  jobId: string,
+  f: { id: string; url: string | null; contentType: string; size: number }
+): RemoveBackgroundStatus {
+  return { jobId, state: "done", fileId: f.id, url: f.url || "", contentType: f.contentType, size: f.size };
 }

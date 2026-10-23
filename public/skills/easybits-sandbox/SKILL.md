@@ -75,7 +75,7 @@ the platform, not by you):
 | `voice-svc` | service | Voice (STT + TTS) for the fleet; service_start('voice'). |
 | `render-svc` | service | Chromium for PDF/PNG/audits; service_start('render'). |
 | `collab-svc` | service | GTeams collaborative editor (Yjs). |
-| `hyperframes-svc` | service | HyperFrames video rendering. |
+| `video-svc` | service | HyperFrames video rendering. |
 | `claude-worker` | internal | Fleet worker (Claude). Created by the platform. |
 | `codex-worker` | internal | Fleet worker (Codex). Created by the platform. |
 | `gemini-worker` | internal | Fleet worker (Gemini). Created by the platform. |

@@ -60,7 +60,7 @@ export const TEMPLATE_CATALOG: Record<SandboxTemplate, TemplateInfo> = {
   "voice-svc": { kind: "service", summary: "Voz (STT + TTS) para la flota; service_start('voice').", summaryEn: "Voice (STT + TTS) for the fleet; service_start('voice')." },
   "render-svc": { kind: "service", summary: "Chromium para PDF/PNG/auditoría; service_start('render').", summaryEn: "Chromium for PDF/PNG/audits; service_start('render')." },
   "collab-svc": { kind: "service", summary: "Editor colaborativo (Yjs) de GTeams.", summaryEn: "GTeams collaborative editor (Yjs)." },
-  "hyperframes-svc": { kind: "service", summary: "Render de video HyperFrames.", summaryEn: "HyperFrames video rendering." },
+  "video-svc": { kind: "service", summary: "Render de video HyperFrames.", summaryEn: "HyperFrames video rendering." },
 };
 
 export const KIND_LABEL: Record<TemplateKind, { es: string; en: string }> = {

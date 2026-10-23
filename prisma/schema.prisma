@@ -1177,7 +1177,7 @@ model VideoGeneration {
 
 /// Stateful video project — a doc-style resource of ordered scenes that
 /// compiles to a HyperFrames composition (modular orchestrator) rendered to MP4
-/// via the on-demand hyperframes-svc box. Distinct from VideoGeneration (Runway,
+/// via the on-demand video-svc box. Distinct from VideoGeneration (Runway,
 /// AI clip). Editing surface = REST/MCP/SDK doc-style tools; see
 /// videoProjectOperations.ts.
 model VideoProject {

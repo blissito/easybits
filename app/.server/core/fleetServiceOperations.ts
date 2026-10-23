@@ -51,6 +51,10 @@ interface ServiceSpec {
   // cajas que llaman de vuelta a EasyBits (collab: auth + persistencia). Default
   // {} (voice/render son self-contained, no necesitan credenciales).
   env?: () => Record<string, string>;
+  // busyPath: ruta que contesta `{busy}` (video-svc: `/busy`). Si existe, el reaper la
+  // consulta antes de dormir la caja: un job asíncrono (quitar el fondo a un video son
+  // horas) no toca `lastActiveAt` mientras corre, y dormirla a los `idleMin` lo congelaba.
+  busyPath?: string;
 }
 
 // Registro de servicios. Añadir un servicio nuevo = una entrada aquí + (si hace
@@ -100,21 +104,24 @@ const SERVICE_REGISTRY: Record<string, ServiceSpec> = {
     suspendOnIdle: true,
     hardTtlMin: 60,
   },
-  // video: HyperFrames (HeyGen, Apache 2.0) HTML→MP4 box. Heavy image (chrome-
-  // headless-shell + ffmpeg + node_modules, ~4GB RAM) → snapshot/resume pays off.
-  // Keyed per OWNER like render, so every video render for that owner shares ONE
-  // box. Idle windows generous vs render because a render can take tens of seconds
-  // (don't suspend mid-job). Hard-reaped after 120 min suspended.
+  // video: caja `video-svc` (ex hyperframes-svc, renombrada 2026-10-23): HyperFrames
+  // HTML→MP4, montaje, subtítulos y quitar fondo con BiRefNet (job asíncrono). 12 GB de
+  // RAM y 4 vCPU (config/templates.yaml de sandbox-host): BiRefNet pica ~7.3 GB y tiene
+  // que caber junto a un render de Chrome. Imagen pesada (chrome-headless-shell, ffmpeg,
+  // node_modules y el modelo de ~1 GB) → snapshot/resume paga. Keyed per OWNER like
+  // render, so every video job for that owner shares ONE box. `busyPath` evita que el
+  // reaper la duerma con un job en curso. Hard-reaped after 120 min suspended.
   video: {
-    template: "hyperframes-svc",
-    unit: "hyperframes-svc-runtime",
-    envFile: "/etc/hyperframes-svc-runtime/.env",
+    template: "video-svc",
+    unit: "video-svc-runtime",
+    envFile: "/etc/video-svc-runtime/.env",
     ports: [9500],
     readyPaths: { 9500: "/health" },
     ttlSeconds: 1800,
     idleMin: 15,
     suspendOnIdle: true,
     hardTtlMin: 120,
+    busyPath: "/busy",
   },
   // collab: servidor Hocuspocus/Yjs para co-edición de documentos. Caja estándar
   // (2GB) por owner, compartida por toda su flota. Suspende a los 10 min (snapshot
@@ -502,6 +509,22 @@ export async function listServiceBoxReapInfo(
 // idle past its kind's idleMin → destroy. If the box is already gone (host TTL)
 // past the host TTL window, drop the orphan row. Simpler than reapIdleStudios:
 // no participant polling — a service box has no "active call" concept.
+// ¿La caja dice que tiene trabajo en vuelo o en cola? Ante la duda (no contesta, otro
+// formato) se responde false: el comportamiento de antes, dormirla por inactividad.
+async function boxIsBusy(ctx: AuthContext, sandboxId: string, spec: ServiceSpec): Promise<boolean> {
+  try {
+    const urls = await exposeAll(ctx, sandboxId, spec.ports);
+    const base = urls[spec.ports[0]];
+    if (!base || !spec.busyPath) return false;
+    const r = await fetch(`${base.replace(/\/$/, "")}${spec.busyPath}`, { signal: AbortSignal.timeout(5000) });
+    if (!r.ok) return false;
+    const j = (await r.json().catch(() => null)) as { busy?: boolean } | null;
+    return j?.busy === true;
+  } catch {
+    return false;
+  }
+}
+
 export async function reapIdleServiceBoxes(): Promise<{ checked: number; destroyed: number; suspended: number }> {
   let destroyed = 0;
   let suspended = 0;
@@ -535,6 +558,11 @@ export async function reapIdleServiceBoxes(): Promise<{ checked: number; destroy
         continue;
       }
       if (now - box.lastActiveAt.getTime() >= idleMin * 60_000) {
+        if (spec?.busyPath && (await boxIsBusy(ctx, box.sandboxId, spec))) {
+          // Trabajando sin que nadie la toque (job largo): se le da otra ventana.
+          await touchServiceBox(box.sandboxId);
+          continue;
+        }
         if (spec?.suspendOnIdle) {
           // Park, don't kill. Keep the row + lastActiveAt (now the suspended-since
           // clock). Next ensureServiceBox resumes it in ~700ms.
