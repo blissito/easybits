@@ -147,6 +147,36 @@ export default function SiteEditor() {
   // vista previa (tres columnas apretaban las dos) y se abre sola cuando el agente usa el navegador.
   const [showComputer, setShowComputer] = useState(false);
   const autoComputer = useRef(false);
+  // Ancho del chat (escritorio): se arrastra el divisor y se recuerda en este navegador.
+  const [chatW, setChatW] = useState(384);
+  const [resizing, setResizing] = useState(false);
+  useEffect(() => {
+    try {
+      const w = Number(localStorage.getItem("eb-sitios-chat-w"));
+      if (w >= 320) setChatW(w);
+    } catch {}
+  }, []);
+  const startResize = (e: React.PointerEvent) => {
+    e.preventDefault();
+    const x0 = e.clientX;
+    const w0 = chatW;
+    let w = w0;
+    setResizing(true);
+    const move = (ev: PointerEvent) => {
+      w = Math.round(Math.min(Math.max(w0 + ev.clientX - x0, 320), window.innerWidth * 0.6));
+      setChatW(w);
+    };
+    const up = () => {
+      setResizing(false);
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", up);
+      try {
+        localStorage.setItem("eb-sitios-chat-w", String(w));
+      } catch {}
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", up);
+  };
   const [replayUrl, setReplayUrl] = useState<string | null>(null);
   const [replayError, setReplayError] = useState<string | null>(null);
   // Liga pública del replay del último turno (privado hasta que la pides) y se copia.
@@ -654,7 +684,8 @@ export default function SiteEditor() {
       {/* Chat */}
       <aside
         {...dropProps}
-        className={`${mobileTab === "chat" ? "flex" : "hidden"} relative md:flex w-full md:max-w-sm flex-col md:border-r border-gray-200 bg-white min-w-0`}
+        style={{ "--chat-w": `${chatW}px` } as React.CSSProperties}
+        className={`${mobileTab === "chat" ? "flex" : "hidden"} relative md:flex w-full md:w-[var(--chat-w)] md:shrink-0 flex-col md:border-r border-gray-200 bg-white min-w-0`}
       >
         {dragging && (
           <div className="pointer-events-none absolute inset-2 z-20 grid place-items-center rounded-2xl border-2 border-dashed border-brand-500 bg-brand-500/10 text-sm font-bold text-brand-500">
@@ -751,6 +782,17 @@ export default function SiteEditor() {
           placeholder={attached ? "¿Qué hago con esta imagen?" : selection ? "¿Qué cambio en ese elemento?" : "Escribe un cambio…"}
         />
       </aside>
+      {/* Divisor: arrastrar cambia el ancho del chat. Mientras se arrastra, una capa encima
+          evita que el iframe de la vista previa se trague el puntero. */}
+      <div
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Cambiar el ancho del chat"
+        onPointerDown={startResize}
+        onDoubleClick={() => setChatW(384)}
+        className="hidden md:block w-1.5 -mx-[3px] z-10 shrink-0 cursor-col-resize hover:bg-brand-500/40 active:bg-brand-500/60"
+      />
+      {resizing && <div className="fixed inset-0 z-50 cursor-col-resize" />}
 
       {/* Preview */}
       <main className={`${mobileTab === "preview" ? "flex" : "hidden"} md:flex flex-1 flex-col min-w-0`}>
