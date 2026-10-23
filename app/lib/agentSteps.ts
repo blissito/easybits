@@ -33,6 +33,9 @@ export type AgentStep = {
   detail?: string;
   /** Comando completo, cuando lo hay (terminal). */
   command?: string;
+  /** Lo que el agente dijo que iba a hacer justo antes (su narración): el panel lo muestra
+   *  en vez de repetir el comando, como un experto explicándole a otro. */
+  intent?: string;
   status: "running" | "ok" | "error";
   startedAt: number;
   endedAt?: number;
@@ -103,4 +106,14 @@ export function publicStep(s: AgentStep): AgentStep {
     out.browser = { ...b, url: bareUrl(b.url) };
   }
   return out;
+}
+
+/** Última frase de la narración entre dos herramientas: «Reviso cómo presenta sus planes». */
+export function lastIntent(narration: string): string | undefined {
+  const clean = narration.replace(/\s+/g, " ").trim();
+  if (!clean) return undefined;
+  const parts = clean.split(/(?<=[.!?…:])\s+/).filter((x) => x.replace(/[^\p{L}\p{N}]/gu, "").length > 3);
+  const last = parts[parts.length - 1];
+  if (!last) return undefined;
+  return last.length > 180 ? last.slice(0, 179) + "…" : last;
 }

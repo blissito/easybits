@@ -104,9 +104,10 @@ export function AgentComputer({
           <p className="text-[11px] font-bold uppercase tracking-wider text-gray-500">
             La computadora {owner} · usa {KIND_LABEL[step.kind]}
           </p>
-          <p className="truncate text-sm">
-            <span className="font-bold">{stepVerb(step)}</span>
-            {(step.browser?.url || step.detail || step.command) && <span className="ml-1.5 font-mono text-xs text-gray-500">{step.browser?.url ?? step.detail ?? step.command}</span>}
+          {/* Lo que el agente dijo que iba a hacer; el comando ya se ve abajo, en la terminal. */}
+          <p className="text-sm leading-snug">
+            <span className="font-bold">{step.intent ?? stepVerb(step)}</span>
+            {(step.browser?.url || step.detail) && <span className="ml-1.5 font-mono text-xs text-gray-500">{step.browser?.url ?? step.detail}</span>}
           </p>
         </div>
       </div>

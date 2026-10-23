@@ -15,7 +15,7 @@ import { recordFleetTurnUsage } from "./fleetUsage";
 import { getEngineForAgent } from "~/lib/fleetEngines";
 import { narracionAMarkdown, partirNarracion } from "~/lib/narracion";
 import { isDraining, registerDrain } from "~/.server/lifecycle.server";
-import { MAX_STEPS, publicStep, stepKind, upsertStep, type AgentStep, type BrowserFrame } from "~/lib/agentSteps";
+import { MAX_STEPS, lastIntent, publicStep, stepKind, upsertStep, type AgentStep, type BrowserFrame } from "~/lib/agentSteps";
 
 type Site = Awaited<ReturnType<typeof getSite>>;
 export type TurnEvent = { type: string; [k: string]: unknown };
@@ -37,6 +37,8 @@ type Live = {
   text: string;
   tools: string[];
   cortes: number[];
+  /** Intención vigente: la última narración antes de una herramienta (la heredan las siguientes). */
+  intent?: string;
   /** «La computadora del agente»: un paso por herramienta (ver ~/lib/agentSteps). */
   steps: AgentStep[];
   finished: boolean;
@@ -296,6 +298,7 @@ async function runAgentTurn(spec: AgentTurnSpec, l: Live, input: { agentText: st
           // narración («Reviso…», «Instalo…») de la respuesta, igual que en vivo.
           onTool: (name, ev) => {
             if (ev?.phase === "start" || !ev) {
+              l.intent = lastIntent(l.text.slice(l.cortes[l.cortes.length - 1] ?? 0)) ?? l.intent;
               if (l.text.trim() && l.cortes[l.cortes.length - 1] !== l.text.length) l.cortes.push(l.text.length);
               l.tools.push(name);
             }
@@ -305,7 +308,7 @@ async function runAgentTurn(spec: AgentTurnSpec, l: Live, input: { agentText: st
               const end = ev.phase === "end";
               const step = end
                 ? { id: ev.id, status: ev.ok === false ? ("error" as const) : ("ok" as const), endedAt: Date.now() }
-                : { id: ev.id, tool: name, kind: stepKind(name), detail: ev.detail, command: ev.command, status: "running" as const, startedAt: Date.now() };
+                : { id: ev.id, tool: name, kind: stepKind(name), detail: ev.detail, command: ev.command, intent: l.intent, status: "running" as const, startedAt: Date.now() };
               if (end || l.steps.length < MAX_STEPS) pushStep(l, step);
             }
             if (ev?.phase === "end") extras = extras.then(emitExtras);

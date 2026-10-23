@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { stepKind, upsertStep, type AgentStep, publicStep } from "~/lib/agentSteps";
+import { stepKind, upsertStep, type AgentStep, publicStep, lastIntent } from "~/lib/agentSteps";
 import { applyTurnEvent, type Msg } from "~/components/sitios/ChatMessages";
 import { ok } from "~/.server/mcp/responses";
 
@@ -55,5 +55,13 @@ describe("publicStep (replay público)", () => {
   });
   it("deja sólo el nombre del archivo en el editor", () => {
     expect(publicStep({ id: "2", tool: "Write", kind: "editor", detail: "/data/app/src/db.ts", status: "ok", startedAt: 0 }).detail).toBe("db.ts");
+  });
+});
+
+describe("lastIntent", () => {
+  it("toma la última frase de la narración antes de la herramienta", () => {
+    expect(lastIntent("Listo el esquema. Ahora pruebo que /admin pida login.\n")).toBe("Ahora pruebo que /admin pida login.");
+    expect(lastIntent("   ")).toBeUndefined();
+    expect(lastIntent("…")).toBeUndefined();
   });
 });
