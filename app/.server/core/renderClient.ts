@@ -221,6 +221,56 @@ export async function auditOnBox(
   return body;
 }
 
+/** Una acción del navegador con estado de la caja (ver render-svc/browserSessions.ts). */
+export type BrowserAction =
+  | { type: "click"; ref?: string; text?: string }
+  | { type: "type"; ref: string; text: string; submit?: boolean }
+  | { type: "press"; key: string }
+  | { type: "select"; ref: string; value: string }
+  | { type: "scroll"; direction?: "down" | "up"; amount?: number }
+  | { type: "wait"; ms: number }
+  | { type: "goto"; url: string }
+  | { type: "back" };
+
+export interface BrowserView {
+  sessionId: string;
+  url: string;
+  title: string;
+  /** Elementos con los que se puede interactuar; `ref` vale hasta la siguiente acción. */
+  elements: Array<{ ref: string; tag: string; name: string; role?: string; type?: string; href?: string; offscreen?: boolean }>;
+  text: string;
+  textTruncated: boolean;
+  /** JPEG del viewport en base64, sólo si se pidió. */
+  screenshot?: string;
+  /** act: cuántas acciones corrieron y la que falló (las siguientes no se intentan). */
+  done?: number;
+  failed?: { index: number; action: BrowserAction; error: string } | null;
+}
+
+/** La sesión expiró o la caja se durmió: hay que abrir otra. */
+export class BrowserSessionGone extends Error {}
+
+/**
+ * Navegador con estado en la caja de render del owner: `open` → `act`/`look` → `close`.
+ * La página sigue viva entre llamadas (cookies, login) hasta ~3 min sin uso.
+ */
+export async function browserOnBox(
+  ctx: AuthContext,
+  op: "open" | "act" | "look" | "close",
+  payload: Record<string, unknown>
+): Promise<BrowserView> {
+  try {
+    // act puede encadenar hasta 25 acciones con sus esperas de navegación.
+    const { res } = await postToBox(ctx, `/browser/${op}`, payload, op === "act" ? 150_000 : 60_000);
+    return (await res.json()) as BrowserView;
+  } catch (e) {
+    if (e instanceof RenderBoxError && e.status === 404 && e.message.includes("session_gone")) {
+      throw new BrowserSessionGone("La sesión del navegador ya no existe (expiró o la caja se durmió). Abre otra con browser_open.");
+    }
+    throw e;
+  }
+}
+
 /**
  * Render `payload` on the owner's render box. Returns the bytes + broken-image
  * count, or `null` if the box path didn't produce a result (→ caller falls back

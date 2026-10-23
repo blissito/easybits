@@ -11,6 +11,7 @@ import { compareRender } from "~/.server/core/renderCompare";
 import { COMPARE_RENDER_DESC, compareRenderShape, compareRenderHint } from "~/.server/mcp/compareRenderTool";
 import { CLONE_PDF_DESC, clonePdfShape, clonePdfHint } from "~/.server/mcp/clonePdfTool";
 import { clonePdf } from "~/.server/core/pdfClone";
+import { browserOnBox, BrowserSessionGone, type BrowserView } from "~/.server/core/renderClient";
 
 // Dedicated, always-on `render` MCP server for FleetAgents — Streamable-HTTP.
 // Injected per-turn into EVERY fleet agent (NOT gated by the easybits builtin
@@ -219,6 +220,92 @@ function buildRenderServer(ctx: AuthContext): McpServer {
       return ok({ ...r, hint: clonePdfHint(r) });
     } catch (e) {
       return fail((e as Error).message);
+    }
+  });
+
+  // ── Navegador con estado (nivel 1 de computer use) ──
+  // La página sigue viva entre llamadas en la caja de render del owner. El agente apunta
+  // por `ref` (de `elements`), no por coordenadas, y pide captura sólo cuando la necesita.
+  const BROWSER_RULES =
+    "\n\n- Cada respuesta trae `url`, `title`, `text` (texto visible) y `elements`: lo que se puede tocar, con su `ref`. Los `ref` cambian tras cada acción: usa los de la ÚLTIMA respuesta." +
+    "\n- `screenshot: true` añade la captura del viewport como imagen. Pídela sólo cuando el texto no baste (diseño, CAPTCHA, imágenes): pesa en tu contexto." +
+    "\n- La sesión dura ~3 min sin uso. Si responde que ya no existe, abre otra." +
+    "\n- Sólo URLs públicas. No escribas contraseñas, tarjetas ni datos sensibles, ni resuelvas CAPTCHAs: pídeselo a la persona.";
+
+  const browserReply = (v: BrowserView, hint?: string) => {
+    const { screenshot, ...rest } = v;
+    const r = ok({ ...rest, ...(hint ? { hint } : {}) }) as { content: unknown[] };
+    if (screenshot) r.content.push({ type: "image", data: screenshot, mimeType: "image/jpeg" });
+    return r;
+  };
+  const browserFail = (e: unknown) => fail(e instanceof BrowserSessionGone ? e.message : (e as Error).message);
+
+  const actionSchema = z.discriminatedUnion("type", [
+    z.object({ type: z.literal("click"), ref: z.string().optional(), text: z.string().optional().describe("texto visible, si no tienes ref") }),
+    z.object({ type: z.literal("type"), ref: z.string(), text: z.string(), submit: z.boolean().optional().describe("Enter al terminar") }),
+    z.object({ type: z.literal("press"), key: z.string().describe("Enter, Tab, Escape, ArrowDown…") }),
+    z.object({ type: z.literal("select"), ref: z.string(), value: z.string().describe("etiqueta o valor de la opción") }),
+    z.object({ type: z.literal("scroll"), direction: z.enum(["down", "up"]).optional(), amount: z.number().int().min(50).max(5000).optional() }),
+    z.object({ type: z.literal("wait"), ms: z.number().int().min(0).max(10000) }),
+    z.object({ type: z.literal("goto"), url: z.string().url() }),
+    z.object({ type: z.literal("back") }),
+  ]);
+
+  tool(
+    "browser_open",
+    "Abre un navegador REAL (Chromium en tu caja) en una URL pública y lo deja abierto para que sigas actuando con `browser_act`: llenar formularios, buscar, navegar varias páginas, entrar a un sitio que necesita clics. Devuelve `sessionId`. Para sólo LEER una página usa web_fetch; para capturarla, screenshot_url." + BROWSER_RULES,
+    {
+      url: z.string().url().describe("URL pública (https://…)"),
+      mobile: z.boolean().optional().describe("emular celular (390px, touch)"),
+      screenshot: z.boolean().optional(),
+    },
+    async (p) => {
+      try {
+        const v = await browserOnBox(ctx, "open", { url: p.url, mobile: p.mobile, screenshot: p.screenshot });
+        return browserReply(v, `Sesión ${v.sessionId} abierta. Actúa con browser_act y ciérrala con browser_close al terminar.`);
+      } catch (e) {
+        return browserFail(e);
+      }
+    }
+  );
+
+  tool(
+    "browser_act",
+    "Ejecuta acciones EN ORDEN sobre una sesión de `browser_open` (máx. 25): click (por `ref` o `text`), type (llena un campo; `submit` da Enter), press, select, scroll, wait, goto, back. Se detiene en la primera que falla y devuelve la página como quedó, con `failed` diciendo cuál y por qué." + BROWSER_RULES,
+    {
+      session_id: z.string().describe("el sessionId de browser_open"),
+      actions: z.array(actionSchema).min(1).max(25),
+      screenshot: z.boolean().optional(),
+    },
+    async (p) => {
+      try {
+        const v = await browserOnBox(ctx, "act", { sessionId: p.session_id, actions: p.actions, screenshot: p.screenshot });
+        return browserReply(v, v.failed ? `Falló la acción ${v.failed.index + 1}: ${v.failed.error}. La página quedó como se ve.` : undefined);
+      } catch (e) {
+        return browserFail(e);
+      }
+    }
+  );
+
+  tool(
+    "browser_look",
+    "Vuelve a mirar una sesión abierta sin tocarla (por ejemplo, tras esperar a que algo cargue). `screenshot: true` para verla." + BROWSER_RULES,
+    { session_id: z.string(), screenshot: z.boolean().optional() },
+    async (p) => {
+      try {
+        return browserReply(await browserOnBox(ctx, "look", { sessionId: p.session_id, screenshot: p.screenshot }));
+      } catch (e) {
+        return browserFail(e);
+      }
+    }
+  );
+
+  tool("browser_close", "Cierra una sesión de navegador cuando terminaste. Libera la caja.", { session_id: z.string() }, async (p) => {
+    try {
+      await browserOnBox(ctx, "close", { sessionId: p.session_id });
+      return ok({ closed: true });
+    } catch (e) {
+      return browserFail(e);
     }
   });
 

@@ -10,16 +10,19 @@ export const Hero = ({ loggedIn = false }: { loggedIn?: boolean }) => {
     <section className=" h-fit pt-10 md:pt-6 pb-6 md:pb-0  md:min-h-[88vh] text-center md:text-left flex-wrap-reverse md:flex-nowrap flex justify-between items-center px-4 md:px-[5%] xl:px-0 w-full max-w-7xl mx-auto gap-0 lg:gap-10">
       <div className="w-full md:w-[50%] ">
         <TextBlurEffect>
-          <h1 className="text-4xl  md:text-5xl lg:text-6xl xl:text-[72px] leading-tight font-bold">
-            Tu app{" "}
+          {/* Titular más largo que el anterior: un escalón menos de tamaño para que quepa en 3-4 renglones. */}
+          <h1 className="text-4xl md:text-5xl xl:text-6xl leading-tight font-bold">
+            Tu aplicación web{" "}
             <span className="underline decoration-4 decoration-brand-500 underline-offset-4">
-              en producción
+              con base de datos y login seguro
             </span>
-            , desde una frase.
+            , desde una petición.
           </h1>
 
           <p className="text-iron text-xl lg:text-2xl xl:text-2xl font-extralight mb-6 md:mb-10 mt-2 md:mt-6">
-            Un agente la construye en su propia máquina, con base de datos, login y tu dominio. A precios mexicanos.
+            Un agente la construye en una microVM aislada de calibre industrial, lista para recibir tráfico de producción en tu dominio.
+            <br />
+            A precios mexicanos.
           </p>
         </TextBlurEffect>
         <div className="flex justify-center md:justify-start">
@@ -150,7 +153,7 @@ const FloatingMotif = ({
 }) => {
   return (
     <motion.img
-      className={className}
+      className={twMerge("pointer-events-none", className)}
       src={src}
       alt={alt}
       animate={{ y: [-range, range, -range] }}

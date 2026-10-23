@@ -71,7 +71,11 @@ export default function NewSite() {
   // La caja de trabajo mide lo que pide el stack; al publicar se cobra ese tamaño.
   const work = HOSTING_CATALOG[workBoxTierKey(stack === "node" ? null : stack)];
   // Plantilla de la caja dorada: la que toca al prompt hasta que se elige otra ("none" = desde cero).
-  const [templatePick, setTemplatePick] = useState<SiteTemplateKey | "none" | null>(null);
+  // La plantilla elegida en el hero de la home viaja por la URL (?template=).
+  const [templatePick, setTemplatePick] = useState<SiteTemplateKey | "none" | null>(() => {
+    const t = searchParams.get("template");
+    return t === "none" || isSiteTemplate(t) ? t : null;
+  });
   const template = templatePick ?? templateFor(prompt);
   const withTemplates = kind === "webapp" && stack !== "node" && stackHasTemplates(stack);
   return (

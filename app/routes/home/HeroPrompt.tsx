@@ -1,7 +1,9 @@
 import { AnimatePresence, LayoutGroup, motion, useReducedMotion } from "motion/react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { LuArrowUp, LuBriefcase, LuCamera, LuRocket, LuX, LuExternalLink } from "react-icons/lu";
+import { LuArrowUp, LuChevronDown, LuPencilLine, LuX, LuExternalLink } from "react-icons/lu";
+import { AgentArt, BookingArt, FinanceArt, GymArt, InvoiceArt } from "./heroIllustrations";
 import { templateFor, templateHtml } from "./heroTemplates";
+import { SITE_TEMPLATES, type SiteTemplateKey } from "~/lib/siteTemplates";
 import { BotMessage, UserMessage, applyTurnEvent, type Msg } from "~/components/sitios/ChatMessages";
 
 /**
@@ -11,26 +13,40 @@ import { BotMessage, UserMessage, applyTurnEvent, type Msg } from "~/components/
  * lado; sin sesión, el chat pide entrar y el prompt viaja a /dash/sitios/new.
  */
 
+// Apps que ya hemos construido con clientes (base de datos + backend), con su nombre real.
+// Evitar la palabra «app» fuera de la de finanzas: templateFor la usa para la plantilla de muestra.
 const CHIPS = [
   {
-    Icon: LuBriefcase,
-    label: "Despacho contable",
-    prompt:
-      "Sitio para un despacho contable: hero con el beneficio principal, servicios (contabilidad, nómina, declaraciones, facturación), a quién atendemos, equipo, testimonios y formulario de contacto. Sobrio y confiable.",
+    Art: GymArt,
+    label: "Administrador de gimnasio",
+    prompt: "Administrador de gimnasio: aplicación fullstack con base de datos y login.",
   },
   {
-    Icon: LuCamera,
-    label: "Portafolio",
-    prompt:
-      "Portafolio para un fotógrafo de bodas: hero con una foto a pantalla completa, galería por categorías, paquetes con precio, proceso en 4 pasos, testimonios y contacto. Estética editorial, tipografía serif.",
+    Art: FinanceArt,
+    label: "App para mis finanzas",
+    prompt: "App para mis finanzas: aplicación fullstack con base de datos y login.",
   },
   {
-    Icon: LuRocket,
-    label: "Lanzamiento",
-    prompt:
-      "Landing de lanzamiento para una app de finanzas personales: propuesta de valor con lista de espera, 3 beneficios, cómo funciona, preguntas frecuentes y CTA final. Moderna y directa.",
+    Art: InvoiceArt,
+    label: "Reemplazo de Aspel y Compaq",
+    prompt: "Reemplazo de Aspel y Compaq: aplicación fullstack con base de datos y login.",
+  },
+  {
+    Art: BookingArt,
+    label: "Aplicación de reservas",
+    prompt: "Aplicación de reservas: aplicación fullstack con base de datos y login.",
+  },
+  {
+    Art: AgentArt,
+    label: "Agente de IA",
+    prompt: "Agente de IA: aplicación fullstack con base de datos y login.",
   },
 ];
+
+// Texto con el que abre «O descríbelo tú»: el visitante sólo completa su negocio.
+const CUSTOM_PREFILL = "Quiero una aplicación con base de datos y login para ";
+
+const templateLabel = (k: SiteTemplateKey) => SITE_TEMPLATES.find((t) => t.key === k)!.label;
 
 const EMPTY_BOT: Msg = { role: "bot", text: "", tools: [] };
 
@@ -39,6 +55,11 @@ type Site = { id: string; name: string; kind: "static" | "webapp"; previewUrl: s
 
 export function HeroPrompt({ loggedIn }: { loggedIn: boolean }) {
   const [text, setText] = useState("");
+  // Botones primero: el textarea sólo aparece si el visitante quiere describir lo suyo.
+  const [custom, setCustom] = useState(false);
+  // Plantilla del select (sin elegir = null). La que realmente se mandó vive en sentTemplate.
+  const [template, setTemplate] = useState<SiteTemplateKey | null>(null);
+  const [sentTemplate, setSentTemplate] = useState<SiteTemplateKey | null>(null);
   const [sent, setSent] = useState("");
   const [phase, setPhase] = useState<Phase>("idle");
   // La respuesta del agente: mismo mensaje y mismo formato que el editor (ChatMessages).
@@ -131,18 +152,19 @@ export function HeroPrompt({ loggedIn }: { loggedIn: boolean }) {
     [apply]
   );
 
-  async function submit(value: string) {
+  async function submit(value: string, chosen?: SiteTemplateKey) {
     const clean = value.trim();
     if (!clean || open) return;
     setSent(clean);
     setText("");
+    setSentTemplate(chosen ?? null);
     if (!loggedIn) return setPhase("auth");
     setPhase("creating");
     try {
       const res = await fetch("/api/v2/sites", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: clean }),
+        body: JSON.stringify({ prompt: clean, ...(chosen && { template: chosen }) }),
       });
       if (res.status === 401) return setPhase("auth");
       const created = await res.json().catch(() => null);
@@ -184,68 +206,111 @@ export function HeroPrompt({ loggedIn }: { loggedIn: boolean }) {
     }
   }
 
-  const loginHref = `/login?next=${encodeURIComponent(`/dash/sitios/new?kind=webapp&prompt=${encodeURIComponent(sent)}`)}`;
+  const loginHref = `/login?next=${encodeURIComponent(`/dash/sitios/new?kind=webapp&prompt=${encodeURIComponent(sent)}${sentTemplate ? `&template=${sentTemplate}` : ""}`)}`;
   const spring = reduce ? { duration: 0 } : { type: "spring" as const, stiffness: 260, damping: 30 };
 
   return (
     <LayoutGroup>
-      {/* Reserva el alto del prompt mientras está abierto el chat: el hero no salta. */}
-      <div className="w-full max-w-xl min-h-[188px]">
+      {/* Reserva el alto del bloque mientras está abierto el chat: el hero no salta. */}
+      <div className="w-full max-w-xl min-h-[420px]">
         {!open && (
-          <motion.form
-            layoutId="eb-generator"
-            transition={spring}
-            onSubmit={(e) => {
-              e.preventDefault();
-              submit(text);
-            }}
-            className="w-full rounded-2xl border-2 border-black bg-white shadow-[6px_6px_0_0_#000] focus-within:shadow-[6px_6px_0_0_#9870ED] transition-shadow text-left"
-          >
-            <label htmlFor="hero-prompt" className="sr-only">
-              Describe el sitio que quieres
-            </label>
-            <textarea
-              id="hero-prompt"
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              onKeyDown={(e) => {
-                // Enter envía, Shift+Enter salta de línea.
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  submit(text);
-                }
-              }}
-              rows={3}
-              placeholder="Describe tu sitio: un consultorio dental con citas por WhatsApp…"
-              className="block w-full resize-none rounded-t-2xl border-0 bg-transparent px-5 pt-4 pb-1 text-base md:text-lg shadow-none outline-none ring-0 focus:border-0 focus:outline-none focus:ring-0 placeholder:text-gray-400"
-            />
-            <div className="flex items-center justify-end sm:justify-between gap-3 px-4 pb-3">
-              <span className="hidden sm:inline text-xs text-gray-400 font-mono">Enter para enviar · Shift+Enter, otra línea</span>
-              <button
-                id="EmpezarGratisHome"
-                type="submit"
-                disabled={!text.trim()}
-                aria-label="Construir"
-                className="flex items-center gap-1.5 rounded-xl border-2 border-black bg-brand-500 px-4 py-2 font-bold text-black shadow-[3px_3px_0_0_#000] transition-all hover:-translate-y-0.5 active:translate-y-0 active:shadow-none disabled:opacity-40 disabled:hover:translate-y-0"
-              >
-                Construir <LuArrowUp className="size-4" />
-              </button>
-            </div>
-          </motion.form>
-        )}
-        {!open && (
-          <div className="mt-4 flex flex-wrap gap-2 justify-center md:justify-start">
-            {CHIPS.map(({ Icon, label, prompt }) => (
-              <button
-                key={label}
-                type="button"
-                onClick={() => setText(prompt)}
-                className="flex items-center gap-1.5 rounded-full border-2 border-black bg-white px-3 py-1 text-sm hover:bg-brand-500/15 transition-colors"
-              >
-                <Icon className="size-4 text-brand-500" /> {label}
-              </button>
-            ))}
-          </div>
+          <motion.div layoutId="eb-generator" transition={spring} className="w-full text-left">
+            <AnimatePresence mode="wait" initial={false}>
+              {!custom ? (
+                <motion.div
+                  key="examples"
+                  initial={{ opacity: 0, y: -12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -12, scale: 0.98 }}
+                  transition={{ duration: reduce ? 0 : 0.22 }}
+                >
+                  <p className="mb-3 text-base font-bold text-center md:text-left">
+                    Elige una aplicación fullstack de ejemplo y un agente la construye frente a ti:
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {CHIPS.map(({ Art, label, prompt }, i) => (
+                      <button
+                        key={label}
+                        id={i === 0 ? "EmpezarGratisHome" : undefined}
+                        type="button"
+                        onClick={() => submit(prompt)}
+                        className={`group flex items-center gap-3 rounded-2xl border-2 border-black bg-white p-3 text-left shadow-[4px_4px_0_0_#000] transition-all hover:-translate-y-0.5 hover:bg-brand-500/10 hover:shadow-[6px_6px_0_0_#000] active:translate-y-0 active:shadow-none focus-visible:outline-none focus-visible:shadow-[6px_6px_0_0_#9870ED] ${i === CHIPS.length - 1 ? "sm:col-span-2" : ""}`}
+                      >
+                        <Art className="size-12 md:size-14 shrink-0 transition-transform group-hover:-rotate-6" />
+                        <span className="font-bold leading-tight md:text-lg">{label}</span>
+                      </button>
+                    ))}
+                  </div>
+
+                  <p className="mt-6 mb-2 text-base font-bold text-center md:text-left">O empieza desde una plantilla:</p>
+                  <TemplateSelect
+                    value={template}
+                    onChange={setTemplate}
+                    onBuild={(t) => submit(`Aplicación fullstack con base de datos y login, a partir de la plantilla «${templateLabel(t)}».`, t)}
+                  />
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setText(CUSTOM_PREFILL);
+                      setCustom(true);
+                    }}
+                    className="mt-5 flex w-full items-center justify-center md:justify-start gap-1.5 text-sm font-bold underline decoration-2 decoration-brand-500 underline-offset-4 hover:text-brand-500"
+                  >
+                    <LuPencilLine className="size-4" /> O descríbelo tú
+                  </button>
+                </motion.div>
+              ) : (
+                <motion.form
+                  key="custom"
+                  initial={{ opacity: 0, y: 16, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 16 }}
+                  transition={{ duration: reduce ? 0 : 0.25 }}
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    submit(text);
+                  }}
+                  className="w-full rounded-2xl border-2 border-black bg-white shadow-[6px_6px_0_0_#000] focus-within:shadow-[6px_6px_0_0_#9870ED] transition-shadow"
+                >
+                  <label htmlFor="hero-prompt" className="sr-only">
+                    Describe la aplicación que quieres
+                  </label>
+                  <textarea
+                    id="hero-prompt"
+                    autoFocus
+                    // El cursor queda al final del texto prellenado, listo para seguir escribiendo.
+                    onFocus={(e) => e.currentTarget.setSelectionRange(e.currentTarget.value.length, e.currentTarget.value.length)}
+                    value={text}
+                    onChange={(e) => setText(e.target.value)}
+                    onKeyDown={(e) => {
+                      // Enter envía, Shift+Enter salta de línea; ESC regresa a los ejemplos.
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        submit(text);
+                      }
+                      if (e.key === "Escape") setCustom(false);
+                    }}
+                    rows={5}
+                    className="block w-full resize-none rounded-t-2xl border-0 bg-transparent px-5 pt-4 pb-1 text-base md:text-lg shadow-none outline-none ring-0 focus:border-0 focus:outline-none focus:ring-0 placeholder:text-gray-400"
+                  />
+                  <div className="flex items-center justify-between gap-3 px-4 pb-3">
+                    <button type="button" onClick={() => setCustom(false)} className="text-sm text-gray-500 hover:text-black">
+                      ← Ver ejemplos
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={text.trim() === CUSTOM_PREFILL.trim() || !text.trim()}
+                      aria-label="Construir"
+                      className="flex items-center gap-1.5 rounded-xl border-2 border-black bg-brand-500 px-4 py-2 font-bold text-black shadow-[3px_3px_0_0_#000] transition-all hover:-translate-y-0.5 active:translate-y-0 active:shadow-none disabled:opacity-40 disabled:hover:translate-y-0"
+                    >
+                      Construir <LuArrowUp className="size-4" />
+                    </button>
+                  </div>
+                </motion.form>
+              )}
+            </AnimatePresence>
+          </motion.div>
         )}
       </div>
 
@@ -320,7 +385,7 @@ export function HeroPrompt({ loggedIn }: { loggedIn: boolean }) {
                 {site?.previewUrl && (site.kind === "webapp" ? previewReady : tools > 0) ? (
                   <iframe key={previewKey} src={site.previewUrl} title="Vista previa" className="h-full w-full" />
                 ) : (
-                  <TemplatePreview prompt={sent} />
+                  <TemplatePreview prompt={sent} template={sentTemplate} />
                 )}
               </div>
             </motion.div>
@@ -344,7 +409,7 @@ function AuthPrompt({ href }: { href: string }) {
 }
 
 /** Plantilla de muestra según el prompt, hasta que el agente escriba el primer archivo. */
-function TemplatePreview({ prompt }: { prompt: string }) {
+function TemplatePreview({ prompt, template }: { prompt: string; template: SiteTemplateKey | null }) {
   return (
     <div className="flex h-full flex-col">
       {/* Barra propia: la etiqueta nunca se encima con el nav del sitio. */}
@@ -353,7 +418,112 @@ function TemplatePreview({ prompt }: { prompt: string }) {
         <span className="text-xs font-bold">Ejemplo</span>
         <span className="text-xs text-gray-500">· tu sitio aparece aquí</span>
       </div>
-      <iframe srcDoc={templateHtml(templateFor(prompt))} title="Ejemplo de sitio" sandbox="" className="min-h-0 w-full flex-1" />
+      <iframe srcDoc={templateHtml(template ?? templateFor(prompt))} title="Ejemplo de sitio" sandbox="" className="min-h-0 w-full flex-1" />
+    </div>
+  );
+}
+
+/** Miniatura de una plantilla: su HTML de muestra escalado, sin interacción. */
+function TemplateThumb({ k, className = "" }: { k: SiteTemplateKey; className?: string }) {
+  return (
+    <div className={`relative overflow-hidden rounded-lg border-2 border-black bg-white ${className}`}>
+      <iframe
+        srcDoc={templateHtml(k)}
+        title=""
+        aria-hidden="true"
+        tabIndex={-1}
+        sandbox=""
+        className="pointer-events-none absolute left-0 top-0 h-[600px] w-[800px] origin-top-left"
+        style={{ transform: "scale(var(--thumb-scale))" }}
+      />
+    </div>
+  );
+}
+
+/** Select grande de plantillas: el botón muestra la elegida y la lista, la vista previa de cada una. */
+function TemplateSelect({
+  value,
+  onChange,
+  onBuild,
+}: {
+  value: SiteTemplateKey | null;
+  onChange: (k: SiteTemplateKey) => void;
+  onBuild: (k: SiteTemplateKey) => void;
+}) {
+  const [openList, setOpenList] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  // Cierra con clic afuera y con ESC.
+  useEffect(() => {
+    if (!openList) return;
+    const onDown = (e: MouseEvent) => !ref.current?.contains(e.target as Node) && setOpenList(false);
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpenList(false);
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [openList]);
+
+  return (
+    <div ref={ref} className="relative">
+      <div className="flex items-stretch gap-3">
+        <button
+          type="button"
+          aria-haspopup="listbox"
+          aria-expanded={openList}
+          onClick={() => setOpenList((o) => !o)}
+          className="flex min-w-0 flex-1 items-center gap-3 rounded-2xl border-2 border-black bg-white p-2.5 text-left shadow-[4px_4px_0_0_#000] transition-all hover:-translate-y-0.5 focus-visible:outline-none focus-visible:shadow-[4px_4px_0_0_#9870ED]"
+        >
+          {value ? (
+            <TemplateThumb k={value} className="h-12 w-16 shrink-0 [--thumb-scale:0.08]" />
+          ) : (
+            <span className="grid h-12 w-16 shrink-0 place-items-center rounded-lg border-2 border-dashed border-gray-400 text-gray-400">?</span>
+          )}
+          <span className="min-w-0 flex-1 truncate font-bold md:text-lg">{value ? templateLabel(value) : "Elige una plantilla"}</span>
+          <LuChevronDown className={`size-5 shrink-0 transition-transform ${openList ? "rotate-180" : ""}`} />
+        </button>
+        <button
+          type="button"
+          disabled={!value}
+          onClick={() => value && onBuild(value)}
+          className="flex shrink-0 items-center gap-1.5 rounded-2xl border-2 border-black bg-brand-500 px-4 font-bold text-black shadow-[4px_4px_0_0_#000] transition-all hover:-translate-y-0.5 active:translate-y-0 active:shadow-none disabled:opacity-40 disabled:hover:translate-y-0"
+        >
+          Construir <LuArrowUp className="size-4" />
+        </button>
+      </div>
+
+      <AnimatePresence>
+        {openList && (
+          <motion.ul
+            role="listbox"
+            initial={{ opacity: 0, y: -6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            transition={{ duration: 0.15 }}
+            className="absolute left-0 right-0 top-full z-30 mt-2 grid grid-cols-2 gap-3 rounded-2xl border-2 border-black bg-white p-3 shadow-[6px_6px_0_0_#000]"
+          >
+            {SITE_TEMPLATES.map((t) => (
+              <li key={t.key}>
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={value === t.key}
+                  onClick={() => {
+                    onChange(t.key);
+                    setOpenList(false);
+                  }}
+                  className={`w-full rounded-xl border-2 p-2 text-left transition-all hover:-translate-y-0.5 ${value === t.key ? "border-black bg-brand-500/15" : "border-transparent hover:border-black"}`}
+                >
+                  <TemplateThumb k={t.key} className="aspect-[4/3] w-full [--thumb-scale:0.29]" />
+                  <span className="mt-1.5 block text-sm font-bold">{t.label}</span>
+                </button>
+              </li>
+            ))}
+          </motion.ul>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
