@@ -5316,10 +5316,10 @@ export function mapSSETokenToChunk(
                 // Tool del agente → checklist en vivo. Pasa TAL CUAL (id, phase, ok, detail…): el
                 // cierre llega con `name: ""` y `phase: "end"`; sin `phase` se leía como OTRA tool que
                 // empieza sin nombre («tool ×N» en el piloto) y ninguna se cerraba.
-                const t = evt as { name: string; id?: string; phase?: string; ok?: boolean; detail?: string; command?: string; todos?: unknown };
+                const t = evt as { name: string; id?: string; phase?: string; ok?: boolean; detail?: string; command?: string; todos?: unknown; result?: unknown };
                 controller.enqueue(
                   encoder.encode(
-                    `data: ${JSON.stringify({ type: "tool", name: t.name, id: t.id, phase: t.phase, ok: t.ok, detail: t.detail, command: t.command, todos: t.todos })}\n\n`
+                    `data: ${JSON.stringify({ type: "tool", name: t.name, id: t.id, phase: t.phase, ok: t.ok, detail: t.detail, command: t.command, todos: t.todos, result: t.result })}\n\n`
                   )
                 );
               } else if (evt.type === "done") {

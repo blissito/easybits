@@ -15,7 +15,7 @@ import { recordFleetTurnUsage } from "./fleetUsage";
 import { getEngineForAgent } from "~/lib/fleetEngines";
 import { narracionAMarkdown, partirNarracion } from "~/lib/narracion";
 import { isDraining, registerDrain } from "~/.server/lifecycle.server";
-import { MAX_STEPS, lastIntent, publicStep, stepKind, upsertStep, type AgentStep, type BrowserFrame } from "~/lib/agentSteps";
+import { MAX_STEPS, lastIntent, publicStep, stepKind, stepsSignature, upsertStep, type AgentStep, type BrowserFrame } from "~/lib/agentSteps";
 
 type Site = Awaited<ReturnType<typeof getSite>>;
 export type TurnEvent = { type: string; [k: string]: unknown };
@@ -307,8 +307,8 @@ async function runAgentTurn(spec: AgentTurnSpec, l: Live, input: { agentText: st
             if (ev?.id) {
               const end = ev.phase === "end";
               const step = end
-                ? { id: ev.id, status: ev.ok === false ? ("error" as const) : ("ok" as const), endedAt: Date.now() }
-                : { id: ev.id, tool: name, kind: stepKind(name), detail: ev.detail, command: ev.command, intent: l.intent, status: "running" as const, startedAt: Date.now() };
+                ? { id: ev.id, status: ev.ok === false ? ("error" as const) : ("ok" as const), endedAt: Date.now(), ...(ev.result ? { result: ev.result } : {}) }
+                : { id: ev.id, tool: name, kind: stepKind(name), detail: ev.detail, command: ev.command, intent: l.intent, status: "running" as const, startedAt: Date.now(), ...(ev.todos ? { todos: ev.todos } : {}) };
               if (end || l.steps.length < MAX_STEPS) pushStep(l, step);
             }
             if (ev?.phase === "end") extras = extras.then(emitExtras);
@@ -378,6 +378,7 @@ export function subscribeSiteTurn(groupId: string, send: (e: TurnEvent) => void,
   let stopped = false;
   let lastText: string | null = null;
   let lastTools = -1;
+  let lastSteps = "";
   const poll = async () => {
     if (stopped) return;
     await sweepGroup(groupId).catch(() => undefined);
@@ -386,10 +387,15 @@ export function subscribeSiteTurn(groupId: string, send: (e: TurnEvent) => void,
     if (!row) return send({ type: "idle" });
     const recent = row.endedAt && Date.now() - row.endedAt.getTime() < 10 * 60_000;
     if (row.state === "running") {
-      if (row.text !== lastText || row.tools.length !== lastTools) {
+      const steps = (row.steps as AgentStep[] | null) ?? [];
+      // Un paso que sólo ganó captura o resultado no cambia el texto ni el número de tools:
+      // sin esta firma, quien sigue la fila desde otro proceso no lo veía.
+      const sig = stepsSignature(steps);
+      if (row.text !== lastText || row.tools.length !== lastTools || sig !== lastSteps) {
         lastText = row.text;
         lastTools = row.tools.length;
-        send({ type: "snapshot", turnId: row.turnId, text: row.text, tools: row.tools, cortes: row.cortes, steps: (row.steps as AgentStep[] | null) ?? [] });
+        lastSteps = sig;
+        send({ type: "snapshot", turnId: row.turnId, text: row.text, tools: row.tools, cortes: row.cortes, steps });
       }
       setTimeout(() => void poll(), 2_000);
       return;

@@ -257,8 +257,12 @@ export class BrowserSessionGone extends Error {}
 // Llave de las cajas de render (render-svc la exige si la trae en su env). Sin ella, local/dev.
 const boxKeyHeader = (): Record<string, string> => (process.env.RENDER_BOX_KEY ? { "x-box-key": process.env.RENDER_BOX_KEY } : {});
 
-/** Pase de «tomar el control»: dueño de la caja + token de la caja + sitio, firmado. */
-type TakeoverPass = { o: string; t: string; s: string; e: number };
+/**
+ * Pase de «tomar el control»: dueño de la caja + token de la caja + sitio, firmado.
+ * `m: "watch"` = pase de sólo mirar: `t` es el id de la sesión del navegador y sólo sirve para
+ * la pestaña en vivo (sin clics ni teclas, el agente sigue al mando).
+ */
+type TakeoverPass = { o: string; t: string; s: string; e: number; m?: "watch" };
 const passSecret = () => process.env.RENDER_BOX_KEY || process.env.SECRET || "dev";
 const passSig = (body: string) => createHmac("sha256", passSecret()).update(body).digest("base64url");
 
@@ -286,6 +290,22 @@ export async function takeoverOnBox(ctx: AuthContext, sessionId: string, siteId:
   const body = Buffer.from(JSON.stringify({ o: ctx.user.id, t: token, s: siteId, e: Date.now() + expiresInMs } satisfies TakeoverPass)).toString("base64url");
   const base = `/api/v2/sites/${siteId}/takeover/${body}.${passSig(body)}`;
   return { liveUrl: `${base}/live`, inputUrl: `${base}/input`, releaseUrl: `${base}/release`, viewport, expiresInMs };
+}
+
+/** Pase para mirar la pestaña en vivo mientras el agente la maneja. */
+export function watchPass(ownerId: string, sessionId: string, siteId: string) {
+  const body = Buffer.from(JSON.stringify({ o: ownerId, t: sessionId, s: siteId, e: Date.now() + 10 * 60_000, m: "watch" } satisfies TakeoverPass)).toString("base64url");
+  return { liveUrl: `/api/v2/sites/${siteId}/takeover/${body}.${passSig(body)}/live` };
+}
+
+/**
+ * Proxy a `/browser/watch/live` de la caja. Quien llama ya comprobó que el turno sigue vivo
+ * (la caja está despierta). No cuenta como uso: mirar no mantiene viva la caja.
+ */
+export async function watchOnBox(ctx: AuthContext, sessionId: string, signal?: AbortSignal) {
+  const box = await ensureServiceBox(ctx, "render");
+  if (!box.renderUrl) throw new RenderBoxError("render box unavailable (host down or plan cap)");
+  return fetch(`${box.renderUrl}/browser/watch/live?sessionId=${encodeURIComponent(sessionId)}`, { headers: boxKeyHeader(), signal });
 }
 
 /** Proxy de la app a `/browser/human/*` de la caja del dueño. Devuelve la respuesta tal cual (SSE incluido). */

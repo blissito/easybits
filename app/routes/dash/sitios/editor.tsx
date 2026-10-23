@@ -7,7 +7,7 @@ import { resolveTier, sleepPrice } from "~/lib/hostingCatalog";
 import { db } from "~/.server/db";
 import { ChatComposer } from "~/components/sitios/ChatComposer";
 import { BotMessage, UserMessage, applyTurnEvent, type Msg } from "~/components/sitios/ChatMessages";
-import { AgentComputer, requestTakeover } from "~/components/sitios/AgentComputer";
+import { AgentComputer, requestTakeover, requestWatch } from "~/components/sitios/AgentComputer";
 import type { AgentStep } from "~/lib/agentSteps";
 import { DeleteSiteArt, GithubRepoArt } from "~/components/sitios/DialogArt";
 import { Modal } from "~/components/common/Modal";
@@ -147,6 +147,9 @@ export default function SiteEditor() {
   // vista previa (tres columnas apretaban las dos) y se abre sola cuando el agente usa el navegador.
   const [showComputer, setShowComputer] = useState(false);
   const autoComputer = useRef(false);
+  // Paso que la persona picó en el chat (de cualquier mensaje) y el que se ve en el panel.
+  const [focus, setFocus] = useState<{ msgIdx: number; id: string; at: number } | null>(null);
+  const [viewedStep, setViewedStep] = useState<string | null>(null);
   // Ancho del chat (escritorio): se arrastra el divisor y se recuerda en este navegador.
   const [chatW, setChatW] = useState(384);
   const [resizing, setResizing] = useState(false);
@@ -555,6 +558,20 @@ export default function SiteEditor() {
   const previewUrl = site.previewUrl ? `${site.previewUrl}?eb_edit=1` : null;
   // Pasos del último turno del agente (el que está corriendo o el más reciente).
   const lastSteps = [...msgs].reverse().find((m) => m.role === "bot" && m.steps?.length)?.steps ?? [];
+  // El panel muestra el turno del paso que se picó en el chat; sin eso, el último.
+  const focusSteps = focus ? msgs[focus.msgIdx]?.steps : undefined;
+  const panelSteps = focusSteps ?? lastSteps;
+  const panelIsLast = !focusSteps || focusSteps === lastSteps;
+  const selectStep = (msgIdx: number) => (id: string) => {
+    autoComputer.current = false;
+    setShowComputer(true);
+    setMobileTab("preview");
+    setFocus({ msgIdx, id, at: Date.now() });
+  };
+  // Un turno nuevo vuelve a seguir lo último.
+  useEffect(() => {
+    if (busy) setFocus(null);
+  }, [busy]);
   // Se abre una vez por turno al primer paso del navegador y, si se abrió sola, al terminar
   // regresa a la vista previa con el resultado. Si la persona cambia de pestaña, manda ella.
   const usingBrowser = busy && lastSteps.some((st) => st.kind === "browser");
@@ -733,7 +750,13 @@ export default function SiteEditor() {
                 m.role === "user" ? (
                   <UserMessage key={i} msg={m} />
                 ) : (
-                  <BotMessage key={i} msg={m} live={busy && i === msgs.length - 1} />
+                  <BotMessage
+                    key={i}
+                    msg={m}
+                    live={busy && i === msgs.length - 1}
+                    selectedStepId={showComputer && m.steps === panelSteps ? viewedStep : null}
+                    onSelectStep={selectStep(i)}
+                  />
                 )
               )}
               {cutTurn && !busy && (
@@ -815,7 +838,7 @@ export default function SiteEditor() {
               </button>
             ))}
           </div>
-          {showComputer && !busy && lastSteps.length > 0 && (
+          {showComputer && !busy && panelIsLast && lastSteps.length > 0 && (
             replayUrl ? (
               <span className="flex shrink-0 items-center gap-2 text-xs font-bold">
                 <a href={replayUrl} target="_blank" rel="noreferrer" className="text-brand-500">
@@ -957,7 +980,15 @@ export default function SiteEditor() {
         </div>
         {showComputer && (
           <div className="min-h-0 min-w-0 flex-1 pb-12 md:pb-0">
-            <AgentComputer steps={lastSteps} live={busy} onTakeover={(sid) => requestTakeover(site.id, sid)} />
+            <AgentComputer
+              key={focus ? `m${focus.msgIdx}` : "last"}
+              steps={panelSteps}
+              live={busy && panelIsLast}
+              onTakeover={(sid) => requestTakeover(site.id, sid)}
+              onWatch={(sid) => requestWatch(site.id, sid)}
+              jumpTo={focus}
+              onStepChange={setViewedStep}
+            />
           </div>
         )}
         </div>

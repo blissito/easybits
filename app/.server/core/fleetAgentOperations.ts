@@ -45,6 +45,7 @@ import {
   type ReclaimCandidate,
 } from "~/.server/core/fleetCapacity";
 import { getUserPlan, PLANS } from "~/lib/plans";
+import { cleanStepResult, cleanTodos, type StepResult, type StepTodo } from "~/lib/agentSteps";
 import { engineHasVision, getEngineForAgent, getEngine, resolveEngineSecret } from "~/lib/fleetEngines";
 import { profileToToolsParam, DEFAULT_PROFILE, GROUP_ALLOWLISTS, type ToolGroupKey } from "~/.server/mcp/toolGroups";
 import { getPlatformDefaultClient, buildPublicAssetUrl } from "~/.server/storage";
@@ -1305,6 +1306,10 @@ export type FleetToolEvent = {
   command?: string;
   /** Sólo en `end`, medido correlacionando por `id`. */
   durationMs?: number;
+  /** Plan del agente (TodoWrite), tal cual lo escribió. */
+  todos?: StepTodo[];
+  /** Sólo en `end`: lo que obtuvo la tool (salida, resultados, diff), recortado. */
+  result?: StepResult;
 };
 
 export type FleetTurnUsage = {
@@ -1378,6 +1383,8 @@ export async function collectStream(
           ok?: boolean;
           detail?: string;
           command?: string;
+          todos?: unknown;
+          result?: unknown;
           usage?: Record<string, unknown>;
           model?: string;
         };
@@ -1411,6 +1418,8 @@ export async function collectStream(
             detail: evt.detail,
             command: typeof evt.command === "string" ? evt.command.slice(0, 2000) : undefined,
             durationMs: end && started ? Date.now() - started.at : undefined,
+            todos: cleanTodos(evt.todos),
+            result: end ? cleanStepResult(evt.result) : undefined,
           });
           // Frontera de bloque: lo dicho ANTES de la tool ya es un mensaje completo.
           // Sólo en el START — el `end` no abre bloque nuevo, y contarlo partía el

@@ -1,7 +1,9 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { LuChevronLeft, LuChevronRight, LuFileCode, LuGlobe, LuPause, LuPlay, LuSearch, LuTerminal, LuWrench } from "react-icons/lu";
-import { KIND_LABEL, stepVerb, type AgentStep, type StepKind } from "~/lib/agentSteps";
+import { LuChevronLeft, LuChevronRight, LuFileCode, LuGlobe, LuListChecks, LuPause, LuPlay, LuSearch, LuTerminal, LuWrench } from "react-icons/lu";
+import { KIND_LABEL, currentPlan, stepVerb, type AgentStep, type StepKind, type StepTodo } from "~/lib/agentSteps";
+
+type BrowserTarget = NonNullable<NonNullable<AgentStep["browser"]>["target"]>;
 
 /**
  * «La computadora del agente»: lo que el agente está haciendo, paso por paso, al lado del
@@ -30,14 +32,59 @@ export async function requestTakeover(siteId: string, sessionId: string): Promis
   return d;
 }
 
+/** Pide la pestaña en vivo (sólo mirar) de un navegador del turno en curso. */
+export async function requestWatch(siteId: string, sessionId: string): Promise<{ liveUrl: string }> {
+  const r = await fetch(`/api/v2/sites/${siteId}/watch`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ sessionId }) });
+  const d = await r.json().catch(() => null);
+  if (!r.ok || !d?.liveUrl) throw new Error(d?.error ?? "No se pudo ver el navegador en vivo");
+  return d;
+}
+
+type LiveFrame = { data: string; url: string };
+
+/**
+ * La pestaña en vivo por SSE (screencast de la caja). Chrome sólo manda frame cuando algo
+ * cambia: se queda el último, así una página quieta nunca deja la vista vacía. `gone` = el
+ * navegador se cerró o expiró (el EventSource no reintenta tras un 404).
+ */
+function useScreencast(url: string | null) {
+  const [frame, setFrame] = useState<LiveFrame | null>(null);
+  const [gone, setGone] = useState(false);
+  useEffect(() => {
+    setFrame(null);
+    setGone(false);
+    if (!url) return;
+    const es = new EventSource(url);
+    es.onmessage = (e) => {
+      try {
+        setFrame(JSON.parse(e.data));
+      } catch {
+        /* frame malformado */
+      }
+    };
+    es.addEventListener("gone", () => {
+      setGone(true);
+      es.close();
+    });
+    es.onerror = () => {
+      if (es.readyState === EventSource.CLOSED) setGone(true);
+    };
+    return () => es.close();
+  }, [url]);
+  return { frame, gone };
+}
+
 export type TakeoverUrls = { liveUrl: string; inputUrl: string; releaseUrl: string; viewport: { width: number; height: number } | null };
 
 export function AgentComputer({
-  steps,
+  steps: allSteps,
   live,
   agentName,
   autoplay = false,
   onTakeover,
+  onWatch,
+  jumpTo,
+  onStepChange,
 }: {
   steps: AgentStep[];
   live: boolean;
@@ -45,10 +92,18 @@ export function AgentComputer({
   autoplay?: boolean;
   /** «Tomar el control» del navegador; sin esto el botón no aparece (replay, otras superficies). */
   onTakeover?: (sessionId: string) => Promise<TakeoverUrls>;
+  /** Ver el navegador moverse en vivo mientras el agente lo usa; sin esto, sólo capturas por paso. */
+  onWatch?: (sessionId: string) => Promise<{ liveUrl: string }>;
+  /** Llevar el panel a un paso desde fuera (el chat); `at` distingue dos clics al mismo paso. */
+  jumpTo?: { id: string; at: number } | null;
+  /** El paso que se ve ahora (null = siguiendo en vivo), para resaltarlo en el chat. */
+  onStepChange?: (id: string | null) => void;
 }) {
   const [takeover, setTakeover] = useState<TakeoverUrls | null>(null);
   const [takeoverError, setTakeoverError] = useState<string | null>(null);
   const owner = agentName ? `de ${agentName}` : "del agente";
+  // El plan (TodoWrite) no es un paso que se mire: va en su franja, arriba.
+  const steps = useMemo(() => allSteps.filter((s) => !/todowrite/i.test(s.tool)), [allSteps]);
   // null = seguir en vivo (el último paso). Un número = el visitante retrocedió a ese paso.
   const [pinned, setPinned] = useState<number | null>(autoplay && steps.length > 1 ? 0 : null);
   const [playing, setPlaying] = useState(autoplay);
@@ -60,7 +115,40 @@ export function AgentComputer({
   const prevFrame = raw?.kind === "browser" && !raw.browser ? steps.slice(0, idx).reverse().find((s) => s.browser?.image)?.browser : undefined;
   const step = prevFrame ? { ...raw, browser: { ...prevFrame, action: undefined, target: undefined, url: raw.detail ?? prevFrame.url } } : raw;
   const stale = !!prevFrame;
+  // De dónde vuela el cursor: el último elemento que tocó antes de este paso.
+  const fromTarget = raw?.kind === "browser" ? steps.slice(0, idx).reverse().find((s) => s.browser?.target)?.browser?.target : undefined;
   const following = pinned === null;
+
+  // Pestaña en vivo: sólo siguiendo el último paso de un turno en curso, y nunca mientras la
+  // persona tiene el control (esa vista trae su propio stream). Vive aquí y no en BrowserView
+  // para no reconectar en cada paso (la vista se remonta con cada captura).
+  const watchSession = onWatch && live && following && !takeover && raw?.kind === "browser" ? (step?.browser?.sessionId ?? null) : null;
+  const [watch, setWatch] = useState<{ sessionId: string; liveUrl: string } | null>(null);
+  useEffect(() => {
+    if (!watchSession) return setWatch(null);
+    if (watch?.sessionId === watchSession) return;
+    let cancelled = false;
+    onWatch!(watchSession)
+      .then((w) => !cancelled && setWatch({ sessionId: watchSession, liveUrl: w.liveUrl }))
+      .catch(() => !cancelled && setWatch(null));
+    return () => {
+      cancelled = true;
+    };
+  }, [watchSession]);
+  const screencast = useScreencast(watch && watch.sessionId === watchSession ? watch.liveUrl : null);
+  const liveFrame = watchSession && !screencast.gone ? screencast.frame : null;
+
+  // El chat pidió un paso: se fija ahí (aunque sea el último, para que no siga brincando).
+  useEffect(() => {
+    if (!jumpTo) return;
+    const i = steps.findIndex((s) => s.id === jumpTo.id);
+    if (i === -1) return;
+    setPlaying(false);
+    setPinned(i);
+  }, [jumpTo?.at]);
+  useEffect(() => {
+    onStepChange?.(pinned === null ? null : (steps[idx]?.id ?? null));
+  }, [pinned === null ? null : steps[idx]?.id]);
 
   // Si el visitante regresa al último paso con la barra, vuelve a seguir en vivo.
   const go = (i: number) => setPinned(i >= last ? null : Math.max(0, i));
@@ -98,6 +186,9 @@ export function AgentComputer({
 
   const Icon = ICON[step.kind];
   const running = live && following && step.status === "running";
+  const plan = currentPlan(allSteps.filter((s) => s.startedAt <= step.startedAt));
+  const View = VIEWS[step.kind] ?? GenericView;
+  const repeats = repeatCount(steps, idx);
   return (
     <div className="flex h-full min-h-0 flex-col bg-white">
       {/* Encabezado: qué herramienta usa y qué hace con ella. */}
@@ -117,6 +208,8 @@ export function AgentComputer({
         </div>
       </div>
 
+      {plan && <PlanStrip todos={plan} live={live && following} />}
+
       {/* La vista de la herramienta. */}
       <div className="relative min-h-0 flex-1 overflow-hidden bg-gray-50">
         <AnimatePresence mode="popLayout" initial={false}>
@@ -133,7 +226,9 @@ export function AgentComputer({
             ) : step.kind === "browser" ? (
               <BrowserView
                 step={step}
-                stale={stale}
+                stale={stale && !liveFrame}
+                liveFrame={liveFrame}
+                fromTarget={fromTarget}
                 onTakeover={
                   onTakeover && live && following && step.browser?.sessionId
                     ? async () => {
@@ -148,12 +243,8 @@ export function AgentComputer({
                 }
                 error={takeoverError}
               />
-            ) : step.kind === "terminal" ? (
-              <TerminalView steps={steps} idx={idx} running={running} />
-            ) : step.kind === "editor" ? (
-              <EditorView steps={steps} idx={idx} />
             ) : (
-              <GenericView step={step} running={running} />
+              <View steps={steps} idx={idx} step={step} running={running} />
             )}
           </motion.div>
         </AnimatePresence>
@@ -219,7 +310,8 @@ export function AgentComputer({
           <StatusDot status={step.status} running={running} />
           <span className="min-w-0 flex-1 truncate">
             <span className="font-bold">{stepVerb(step)}</span>
-            {step.detail && <span className="text-gray-500"> · {step.detail}</span>}
+            {(step.browser?.action || step.detail) && <span className="text-gray-500"> · {step.browser?.action ?? step.detail}</span>}
+            {repeats > 1 && <span className="ml-1 rounded-full bg-gray-100 px-1.5 font-mono text-gray-500">×{repeats}</span>}
           </span>
           <span className="shrink-0 font-mono text-gray-400">
             {secondsOf(step, running)} · {idx + 1}/{steps.length}
@@ -242,7 +334,23 @@ function StatusDot({ status, running }: { status: AgentStep["status"]; running: 
 }
 
 /** Navegador: barra con la URL, la captura y el elemento tocado marcado encima. */
-function BrowserView({ step, stale, onTakeover, error }: { step: AgentStep; stale?: boolean; onTakeover?: () => void; error?: string | null }) {
+function BrowserView({
+  step,
+  stale,
+  liveFrame,
+  fromTarget,
+  onTakeover,
+  error,
+}: {
+  step: AgentStep;
+  stale?: boolean;
+  /** Último frame de la pestaña en vivo: gana sobre la captura del paso, que queda de respaldo. */
+  liveFrame?: LiveFrame | null;
+  /** Elemento del clic anterior: el cursor fantasma sale de ahí. */
+  fromTarget?: BrowserTarget;
+  onTakeover?: () => void;
+  error?: string | null;
+}) {
   const f = step.browser;
   const imgRef = useRef<HTMLImageElement>(null);
   const [scale, setScale] = useState(0);
@@ -267,19 +375,25 @@ function BrowserView({ step, stale, onTakeover, error }: { step: AgentStep; stal
             <span className="size-2.5 rounded-full border border-black bg-green-400" />
           </span>
           <span className="mx-auto min-w-0 truncate rounded-md border border-gray-300 bg-white px-3 py-0.5 text-center font-mono text-[11px] text-gray-600">
-            {f?.url ?? step.detail ?? "abriendo…"}
+            {liveFrame?.url ?? f?.url ?? step.detail ?? "abriendo…"}
           </span>
         </div>
         <div className="relative min-h-0 flex-1 overflow-auto">
           {f ? (
             <div className="relative">
-              <img ref={imgRef} src={f.image} alt={f.title || "Página que ve el agente"} className={`block w-full ${stale ? "opacity-50" : ""}`} />
+              <img
+                ref={imgRef}
+                src={liveFrame ? `data:image/jpeg;base64,${liveFrame.data}` : f.image}
+                alt={f.title || "Página que ve el agente"}
+                className={`block w-full ${stale ? "opacity-50" : ""}`}
+              />
+              {f.target && scale > 0 && <GhostCursor key={`c-${f.image}`} from={fromTarget} to={f.target} scale={scale} />}
               {f.target && scale > 0 && (
                 <motion.span
                   key={f.image}
                   initial={{ opacity: 0, scale: 1.4 }}
                   animate={{ opacity: 1, scale: 1 }}
-                  transition={{ type: "spring", stiffness: 380, damping: 22 }}
+                  transition={{ type: "spring", stiffness: 380, damping: 22, delay: CURSOR_S }}
                   className="pointer-events-none absolute rounded-md border-[3px] border-brand-500 shadow-[0_0_0_4px_rgba(152,112,237,0.25)]"
                   style={{ left: f.target.x * scale - 4, top: f.target.y * scale - 4, width: f.target.width * scale + 8, height: f.target.height * scale + 8 }}
                 />
@@ -307,11 +421,95 @@ function BrowserView({ step, stale, onTakeover, error }: { step: AgentStep; stal
   );
 }
 
+/** Lo que tarda el cursor en llegar; el recuadro y el clic se encienden al aterrizar. */
+const CURSOR_S = 0.45;
+
+const centerOf = (t: BrowserTarget, k: number) => ({ x: (t.x + t.width / 2) * k, y: (t.y + t.height / 2) * k });
+
+/**
+ * Cursor fantasma: vuela del elemento anterior al que el agente tocó y marca el clic con una
+ * onda. Las capturas cambian a saltos; el ojo sigue el movimiento. Lo pinta el visor (no la
+ * página), así sirve igual en vivo y en replay. Sin elemento anterior, entra desde arriba.
+ */
+function GhostCursor({ from, to, scale }: { from?: BrowserTarget; to: BrowserTarget; scale: number }) {
+  const end = centerOf(to, scale);
+  const start = from ? centerOf(from, scale) : { x: end.x, y: Math.max(0, end.y - 80) };
+  return (
+    <>
+      <motion.span
+        aria-hidden
+        className="pointer-events-none absolute left-0 top-0 z-10"
+        initial={{ x: start.x, y: start.y, opacity: from ? 1 : 0 }}
+        animate={{ x: end.x, y: end.y, opacity: 1 }}
+        transition={{ duration: CURSOR_S, ease: [0.22, 1, 0.36, 1] }}
+      >
+        <svg width="22" height="26" viewBox="0 0 22 26" className="drop-shadow-[2px_2px_0_#000]">
+          <path d="M2 2 L2 21 L7.5 16 L11 24 L14.5 22.5 L11 15 L18.5 15 Z" fill="#9870ED" stroke="#000" strokeWidth="2" strokeLinejoin="round" />
+        </svg>
+      </motion.span>
+      <motion.span
+        aria-hidden
+        className="pointer-events-none absolute size-6 rounded-full border-[3px] border-brand-500"
+        style={{ left: end.x - 12, top: end.y - 12 }}
+        initial={{ scale: 0, opacity: 0 }}
+        animate={{ scale: [0, 2.2], opacity: [1, 0] }}
+        transition={{ duration: 0.5, delay: CURSOR_S, ease: "easeOut" }}
+      />
+    </>
+  );
+}
+
 /** Nombre de la herramienta sin el prefijo del MCP: `sandbox_files_edit`, no `mcp__easybits__sandbox_files_edit`. */
 const toolName = (t: string) => t.replace(/^mcp__[^_]+(?:_[^_]+)*?__/, "");
 
-/** Terminal: todos los comandos del turno hasta el paso elegido; el actual resaltado. */
-function TerminalView({ steps, idx, running }: { steps: AgentStep[]; idx: number; running: boolean }) {
+/** Lo que recibe cada vista del registro: todos los pasos, el elegido y si sigue corriendo. */
+type ViewProps = { steps: AgentStep[]; idx: number; step: AgentStep; running: boolean };
+
+/** Una vista por herramienta (patrón de Suna); lo que no tenga la suya cae en GenericView. */
+const VIEWS: Partial<Record<StepKind, (p: ViewProps) => React.ReactElement>> = {
+  terminal: TerminalView,
+  editor: EditorView,
+  search: SearchView,
+};
+
+/** Cuántas veces seguidas se repitió el mismo paso hasta aquí («Desplazó ×4»). */
+function repeatCount(steps: AgentStep[], idx: number): number {
+  const key = (s: AgentStep) => `${s.tool}|${s.detail ?? ""}|${s.command ?? ""}|${s.browser?.action ?? ""}`;
+  let n = 1;
+  while (idx - n >= 0 && key(steps[idx - n]) === key(steps[idx])) n++;
+  return n;
+}
+
+/** El plan del agente palomeándose: hecho, en curso, pendiente. */
+function PlanStrip({ todos, live }: { todos: StepTodo[]; live: boolean }) {
+  const done = todos.filter((t) => t.status === "completed").length;
+  const current = todos.find((t) => t.status === "in_progress");
+  return (
+    <details open className="group border-b-2 border-black bg-white px-4 py-2 text-xs">
+      <summary className="flex cursor-pointer list-none items-center gap-2 font-bold">
+        <LuListChecks className="size-4 text-brand-500" />
+        <span className="min-w-0 flex-1 truncate">
+          Plan · {done} de {todos.length}
+          {current && <span className="font-normal text-gray-500"> · {current.activeForm ?? current.content}</span>}
+        </span>
+        <LuChevronRight className="size-3.5 transition-transform group-open:rotate-90" />
+      </summary>
+      <ul className="mt-1.5 max-h-28 space-y-0.5 overflow-auto">
+        {todos.map((t, i) => (
+          <li key={i} className={`flex items-start gap-2 ${t.status === "completed" ? "text-gray-400 line-through" : ""}`}>
+            <span className="mt-0.5 w-3 shrink-0 text-center">
+              {t.status === "completed" ? "✓" : t.status === "in_progress" ? <span className={`inline-block size-2 rounded-full bg-brand-500 ${live ? "animate-pulse" : ""}`} /> : "○"}
+            </span>
+            <span className={t.status === "in_progress" ? "font-bold" : ""}>{t.content}</span>
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
+}
+
+/** Terminal: todos los comandos del turno hasta el paso elegido, con su salida; el actual resaltado. */
+function TerminalView({ steps, idx, running }: ViewProps) {
   const lines = useMemo(() => steps.slice(0, idx + 1).map((s, i) => ({ s, i })).filter(({ s }) => s.kind === "terminal"), [steps, idx]);
   const end = useRef<HTMLDivElement>(null);
   // Al último comando, sin mover la página entera (scrollIntoView arrastraba al documento).
@@ -327,8 +525,19 @@ function TerminalView({ steps, idx, running }: { steps: AgentStep[]; idx: number
             <span className="text-[#85DDCB]">$ </span>
             {s.command || s.detail || toolName(s.tool)}
           </div>
-          <div className={s.status === "error" ? "text-red-400" : "text-gray-500"}>
-            {i === idx && running ? <span className="animate-pulse">▍</span> : s.status === "error" ? "✗ terminó con error" : "✓ listo"}
+          {s.result?.summary && (
+            <pre className={`mt-1 whitespace-pre-wrap break-all text-gray-400 ${i === idx ? "max-h-80 overflow-auto" : "line-clamp-3"}`}>{s.result.summary}</pre>
+          )}
+          <div className={s.status === "error" || (s.result?.exitCode ?? 0) !== 0 ? "text-red-400" : "text-gray-500"}>
+            {i === idx && running ? (
+              <span className="animate-pulse">▍</span>
+            ) : (s.result?.exitCode ?? 0) !== 0 ? (
+              `✗ salió con código ${s.result!.exitCode}`
+            ) : s.status === "error" ? (
+              "✗ terminó con error"
+            ) : (
+              "✓ listo"
+            )}
           </div>
         </div>
       ))}
@@ -337,8 +546,8 @@ function TerminalView({ steps, idx, running }: { steps: AgentStep[]; idx: number
   );
 }
 
-/** Editor: los archivos que tocó el turno (árbol plano) y el actual al frente. */
-function EditorView({ steps, idx }: { steps: AgentStep[]; idx: number }) {
+/** Editor: los archivos que tocó el turno (árbol plano) y el cambio del actual. */
+function EditorView({ steps, idx }: ViewProps) {
   const cur = steps[idx];
   const files = useMemo(() => {
     const seen = new Map<string, AgentStep>();
@@ -355,25 +564,98 @@ function EditorView({ steps, idx }: { steps: AgentStep[]; idx: number }) {
           </p>
         ))}
       </div>
-      <div className="grid min-w-0 flex-1 place-items-center p-6 text-center">
-        <div>
-          <LuFileCode className="mx-auto size-10 text-brand-500" />
-          <p className="mt-3 font-mono text-sm font-bold">{cur.detail ?? toolName(cur.tool)}</p>
-          <p className="mt-1 text-xs text-gray-500">{stepVerb(cur)}</p>
+      {cur.result?.diff ? (
+        <div className="min-w-0 flex-1 overflow-auto bg-white font-mono text-[12px] leading-5">
+          <p className="sticky top-0 border-b-2 border-black bg-gray-100 px-3 py-1 font-bold">
+            {cur.result.diff.file ?? cur.detail} <span className="font-normal text-gray-500">· {stepVerb(cur)}</span>
+          </p>
+          {cur.result.diff.removed.map((l, i) => (
+            <div key={`r${i}`} className="whitespace-pre-wrap break-all bg-red-50 px-3 text-red-800">
+              <span className="select-none text-red-400">− </span>
+              {l}
+            </div>
+          ))}
+          {cur.result.diff.added.map((l, i) => (
+            <div key={`a${i}`} className="whitespace-pre-wrap break-all bg-green-50 px-3 text-green-800">
+              <span className="select-none text-green-500">+ </span>
+              {l}
+            </div>
+          ))}
         </div>
-      </div>
+      ) : (
+        <div className="grid min-w-0 flex-1 place-items-center p-6 text-center">
+          <div>
+            <LuFileCode className="mx-auto size-10 text-brand-500" />
+            <p className="mt-3 font-mono text-sm font-bold">{cur.detail ?? toolName(cur.tool)}</p>
+            <p className="mt-1 text-xs text-gray-500">
+              {stepVerb(cur)}
+              {cur.result?.summary && ` · ${cur.result.summary}`}
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-function GenericView({ step, running }: { step: AgentStep; running: boolean }) {
+const hostOf = (u: string) => {
+  try {
+    return new URL(u).hostname.replace(/^www\./, "");
+  } catch {
+    return u;
+  }
+};
+
+/** Búsqueda: la consulta arriba y lo que encontró, como lista de resultados. */
+function SearchView(p: ViewProps) {
+  const items = p.step.result?.items;
+  if (!items?.length) return <GenericView {...p} />;
+  return (
+    <div className="h-full overflow-auto p-4">
+      <div className="flex items-center gap-2 rounded-full border-2 border-black bg-white px-3 py-1.5 text-sm shadow-[2px_2px_0_0_#000]">
+        <LuSearch className="size-4 shrink-0 text-brand-500" />
+        <span className="min-w-0 truncate font-bold">{p.step.detail ?? stepVerb(p.step)}</span>
+      </div>
+      <ul className="mt-3 space-y-2">
+        {items.map((it, i) => (
+          <motion.li
+            key={it.url ?? it.path ?? i}
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: i * 0.05 }}
+            className="rounded-lg border-2 border-black bg-white px-3 py-2"
+          >
+            {it.url ? (
+              <a href={it.url} target="_blank" rel="noreferrer noopener" className="block min-w-0 hover:underline">
+                <span className="flex items-center gap-1.5 text-[11px] text-gray-500">
+                  <img src={`https://icons.duckduckgo.com/ip3/${hostOf(it.url)}.ico`} alt="" className="size-3.5" loading="lazy" />
+                  {hostOf(it.url)}
+                </span>
+                <span className="mt-0.5 block truncate text-sm font-bold">{it.title}</span>
+              </a>
+            ) : (
+              <span className="block truncate font-mono text-xs">{it.path}</span>
+            )}
+          </motion.li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function GenericView({ step, running }: ViewProps) {
   const Icon = ICON[step.kind];
   return (
-    <div className="grid h-full place-items-center p-6 text-center">
-      <div>
+    <div className="grid h-full place-items-center overflow-auto p-6 text-center">
+      <div className="min-w-0 max-w-full">
         <Icon className={`mx-auto size-10 text-brand-500 ${running ? "animate-pulse" : ""}`} />
         <p className="mt-3 text-sm font-bold">{stepVerb(step)}</p>
-        {step.detail && <p className="mt-1 max-w-xs break-words font-mono text-xs text-gray-500">{step.detail}</p>}
+        {step.detail && <p className="mx-auto mt-1 max-w-xs break-words font-mono text-xs text-gray-500">{step.detail}</p>}
+        {step.result?.summary && (
+          <pre className="mx-auto mt-3 max-h-64 max-w-md overflow-auto whitespace-pre-wrap break-words rounded-lg border-2 border-black bg-white p-3 text-left font-mono text-[11px] text-gray-700">
+            {step.result.summary}
+          </pre>
+        )}
       </div>
     </div>
   );
@@ -397,23 +679,14 @@ function EmptyComputer({ owner, live }: { owner: string; live: boolean }) {
  * el replay (como ChatGPT: lo que escribe la persona no queda en capturas).
  */
 function TakeoverView({ urls, onDone }: { urls: TakeoverUrls; onDone: () => void }) {
-  const [frame, setFrame] = useState<{ data: string; url: string } | null>(null);
-  const [gone, setGone] = useState(false);
+  const { frame, gone: streamGone } = useScreencast(urls.liveUrl);
+  const [inputGone, setGone] = useState(false);
+  const gone = streamGone || inputGone;
   const imgRef = useRef<HTMLImageElement>(null);
   const boxRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const es = new EventSource(urls.liveUrl);
-    es.onmessage = (e) => {
-      try {
-        setFrame(JSON.parse(e.data));
-      } catch {
-        /* frame malformado */
-      }
-    };
-    es.onerror = () => setGone(true);
     boxRef.current?.focus();
-    return () => es.close();
   }, [urls.liveUrl]);
 
   const send = (ev: Record<string, unknown>) =>

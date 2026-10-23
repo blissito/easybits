@@ -1,8 +1,10 @@
 import type { Route } from "./+types/replay.$token";
 import { data } from "react-router";
+import { useState } from "react";
 import { Streamdown } from "streamdown";
 import { getSharedReplay } from "~/.server/core/siteTurns.server";
 import { AgentComputer } from "~/components/sitios/AgentComputer";
+import { TurnSummary } from "~/components/sitios/ChatMessages";
 import { partirNarracion } from "~/lib/narracion";
 
 // Replay compartido de un turno: la petición, la respuesta del agente y su computadora paso a
@@ -18,6 +20,7 @@ export async function loader({ params }: Route.LoaderArgs) {
 export default function Replay({ loaderData }: Route.ComponentProps) {
   const { userText, text, steps, startedAt } = loaderData;
   const { resto } = partirNarracion(text, []);
+  const [jump, setJump] = useState<{ id: string; at: number } | null>(null);
   return (
     <div className="flex h-dvh flex-col bg-gray-50 md:flex-row">
       <aside className="flex max-h-[45dvh] flex-col gap-4 overflow-y-auto border-b-2 border-black bg-white p-5 md:max-h-none md:w-[38%] md:max-w-md md:border-b-0 md:border-r-2">
@@ -30,13 +33,14 @@ export default function Replay({ loaderData }: Route.ComponentProps) {
         <div className="eb-md text-[15px] leading-6">
           <Streamdown linkSafety={{ enabled: false }}>{resto || text}</Streamdown>
         </div>
+        <TurnSummary steps={steps} onSelectStep={(id) => setJump({ id, at: Date.now() })} />
         <a href="/" className="mt-auto rounded-xl border-2 border-black bg-brand-500 px-4 py-2 text-center font-bold shadow-[3px_3px_0_0_#000]">
           Construye la tuya en EasyBits →
         </a>
       </aside>
       <main className="min-h-0 flex-1 p-3 md:p-5">
         <div className="h-full overflow-hidden rounded-xl border-2 border-black bg-white shadow-[6px_6px_0_0_#000]">
-          <AgentComputer steps={steps} live={false} autoplay />
+          <AgentComputer steps={steps} live={false} autoplay jumpTo={jump} />
         </div>
       </main>
     </div>

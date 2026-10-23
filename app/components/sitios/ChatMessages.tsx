@@ -3,7 +3,7 @@ import { Link } from "react-router";
 import { Streamdown } from "streamdown";
 import { LuCheck } from "react-icons/lu";
 import { partirNarracion } from "~/lib/narracion";
-import { upsertStep, type AgentStep } from "~/lib/agentSteps";
+import { formatWorked, stepVerb, turnSummary, upsertStep, type AgentStep } from "~/lib/agentSteps";
 
 // Mensajes del chat del creador de sitios. Los usan el editor (/dash/sitios/:id) y el
 // morph del hero de la home: un solo formato (pasos con palomita, markdown, tools
@@ -50,9 +50,55 @@ function useElapsed(live: boolean) {
   return Math.round((Date.now() - start) / 1000);
 }
 
-export function BotMessage({ msg, live }: { msg: Msg; live: boolean }) {
+/**
+ * Cierre del turno: «Trabajó 3 min · 9 pasos» y unas capturas como prueba. Picar una lleva la
+ * computadora a ese paso (si hay `onSelectStep`).
+ */
+export function TurnSummary({ steps, onSelectStep }: { steps: AgentStep[]; onSelectStep?: (id: string) => void }) {
+  const r = turnSummary(steps);
+  if (!r) return null;
+  return (
+    <div className="mt-3 rounded-xl border-2 border-black bg-white p-2.5 shadow-[3px_3px_0_0_#000]">
+      <p className="text-xs font-bold">
+        Trabajó {formatWorked(r.ms)} · {r.count} {r.count === 1 ? "paso" : "pasos"}
+        {r.errors > 0 && <span className="font-normal text-gray-500"> · {r.errors} con error</span>}
+      </p>
+      {r.thumbs.length > 0 && (
+        <div className="mt-2 grid grid-cols-3 gap-1.5">
+          {r.thumbs.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              disabled={!onSelectStep}
+              onClick={() => onSelectStep?.(t.id)}
+              className="overflow-hidden rounded-md border-2 border-black enabled:hover:-translate-y-0.5 enabled:transition"
+              title={t.title}
+            >
+              <img src={t.image} alt={t.title || "Captura del navegador del agente"} loading="lazy" className="aspect-[4/3] w-full object-cover object-top" />
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function BotMessage({
+  msg,
+  live,
+  selectedStepId,
+  onSelectStep,
+}: {
+  msg: Msg;
+  live: boolean;
+  /** Paso que muestra la computadora ahora: se resalta en la lista. */
+  selectedStepId?: string | null;
+  /** Picar un paso lleva la computadora a él. */
+  onSelectStep?: (id: string) => void;
+}) {
   const { pasos, resto } = partirNarracion(msg.text, msg.cortes);
   const secs = useElapsed(live);
+  const steps = (msg.steps ?? []).filter((s) => !/todowrite/i.test(s.tool));
   return (
     <div className="min-w-0 text-[15px] leading-6 text-gray-900">
       {msg.tools && msg.tools.length > 0 && (
@@ -60,7 +106,28 @@ export function BotMessage({ msg, live }: { msg: Msg; live: boolean }) {
           <summary className="inline-flex cursor-pointer select-none items-center gap-1.5 rounded-full border border-gray-200 px-2.5 py-1 hover:text-gray-600">
             ⚙ {summarizeTools(msg.tools)}
           </summary>
-          <p className="mt-2 font-mono text-[11px] leading-5 break-all">{msg.tools.join(" · ")}</p>
+          {steps.length > 0 && onSelectStep ? (
+            <ol className="mt-2 flex flex-col gap-0.5">
+              {steps.map((s) => (
+                <li key={s.id}>
+                  <button
+                    type="button"
+                    data-step-id={s.id}
+                    onClick={() => onSelectStep(s.id)}
+                    className={`flex w-full items-center gap-2 rounded-md px-2 py-1 text-left hover:bg-brand-500/10 ${selectedStepId === s.id ? "bg-brand-500/15 font-bold text-gray-800" : ""}`}
+                  >
+                    <span className={`size-1.5 shrink-0 rounded-full ${s.status === "error" ? "bg-red-500" : s.status === "running" ? "animate-pulse bg-brand-500" : "bg-green-500"}`} />
+                    <span className="min-w-0 truncate">
+                      {s.intent ?? stepVerb(s)}
+                      {s.detail && <span className="font-mono text-[11px] text-gray-400"> · {s.detail}</span>}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ol>
+          ) : (
+            <p className="mt-2 font-mono text-[11px] leading-5 break-all">{msg.tools.join(" · ")}</p>
+          )}
         </details>
       )}
       {pasos.length > 0 && (
@@ -91,6 +158,7 @@ export function BotMessage({ msg, live }: { msg: Msg; live: boolean }) {
           </span>
         )
       )}
+      {!live && steps.length > 0 && onSelectStep && <TurnSummary steps={steps} onSelectStep={onSelectStep} />}
       {msg.quota && (
         <div className="mt-3 flex gap-2">
           <Link to="/dash/packs" className="px-3 py-1 rounded-lg bg-black text-white text-xs font-bold">Recargar</Link>

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { stepKind, upsertStep, type AgentStep, publicStep, lastIntent } from "~/lib/agentSteps";
+import { stepKind, upsertStep, type AgentStep, publicStep, lastIntent, cleanStepResult, cleanTodos, currentPlan, stepsSignature, turnSummary, formatWorked } from "~/lib/agentSteps";
 import { applyTurnEvent, type Msg } from "~/components/sitios/ChatMessages";
 import { ok } from "~/.server/mcp/responses";
 
@@ -63,5 +63,83 @@ describe("lastIntent", () => {
     expect(lastIntent("Listo el esquema. Ahora pruebo que /admin pida login.\n")).toBe("Ahora pruebo que /admin pida login.");
     expect(lastIntent("   ")).toBeUndefined();
     expect(lastIntent("…")).toBeUndefined();
+  });
+});
+
+describe("resultado del paso", () => {
+  it("el cierre trae el resultado y un frame posterior no lo borra", () => {
+    let s: AgentStep[] = [];
+    s = upsertStep(s, { id: "t1", tool: "Bash", kind: "terminal", status: "running", startedAt: 1 });
+    s = upsertStep(s, { id: "t1", status: "ok", endedAt: 2, result: { summary: "listo", exitCode: 0 } });
+    s = upsertStep(s, { id: "t1", endedAt: 3 });
+    expect(s[0].result).toEqual({ summary: "listo", exitCode: 0 });
+  });
+
+  it("el servidor no le cree el tamaño ni la forma al worker", () => {
+    const r = cleanStepResult({
+      summary: "x".repeat(10_000),
+      exitCode: "0",
+      items: [{ title: "ok", url: "https://a.mx" }, { title: "malo", url: "javascript:alert(1)" }, ...Array(20).fill({ title: "t", path: "a.ts" })],
+      diff: { removed: Array(100).fill("y".repeat(500)), added: "no-arreglo" },
+    })!;
+    expect(r.summary!.length).toBeLessThanOrEqual(2000);
+    expect(r.exitCode).toBeUndefined();
+    expect(r.items!.length).toBeLessThanOrEqual(10);
+    expect(r.items!.some((i) => i.url?.startsWith("javascript"))).toBe(false);
+    expect(r.diff!.removed.length).toBeLessThanOrEqual(41);
+    expect(r.diff!.removed[0].length).toBeLessThanOrEqual(200);
+    expect(cleanStepResult("texto")).toBeUndefined();
+  });
+
+  it("el replay público sólo conserva los enlaces de una búsqueda, sin query", () => {
+    const s = publicStep({
+      id: "3",
+      tool: "Bash",
+      kind: "terminal",
+      status: "ok",
+      startedAt: 0,
+      result: { summary: "DATABASE_URL=mongodb://u:p@h", exitCode: 0, diff: { removed: ["a"], added: ["b"] }, items: [{ title: "A", url: "https://a.mx/x?k=1" }, { title: "f", path: "/data/secreto.ts" }] },
+    });
+    expect(s.result).toEqual({ items: [{ title: "A", url: "https://a.mx/x" }] });
+    expect(publicStep({ id: "4", tool: "Bash", kind: "terminal", status: "ok", startedAt: 0, result: { summary: "x" } }).result).toBeUndefined();
+  });
+
+  it("el plan vigente es el último que escribió el agente", () => {
+    const steps: AgentStep[] = [
+      { id: "a", tool: "TodoWrite", kind: "other", status: "ok", startedAt: 0, todos: [{ content: "uno", status: "in_progress" }] },
+      { id: "b", tool: "Bash", kind: "terminal", status: "ok", startedAt: 1 },
+      { id: "c", tool: "TodoWrite", kind: "other", status: "ok", startedAt: 2, todos: [{ content: "uno", status: "completed" }] },
+    ];
+    expect(currentPlan(steps)?.[0].status).toBe("completed");
+    expect(currentPlan(steps, 1)?.[0].status).toBe("in_progress");
+    expect(stepKind("TodoWrite")).toBe("other");
+    expect(cleanTodos([{ content: "x", status: "raro" }, { nada: 1 }])).toEqual([{ content: "x", status: "pending" }]);
+  });
+
+  it("la firma cambia cuando un paso sólo gana captura o resultado", () => {
+    const base: AgentStep[] = [{ id: "a", tool: "Bash", kind: "terminal", status: "running", startedAt: 0 }];
+    const a = stepsSignature(base);
+    expect(stepsSignature(upsertStep(base, { id: "a", result: { summary: "x" } }))).not.toBe(a);
+    expect(stepsSignature(upsertStep(base, { id: "a", browser: { url: "u", title: "t", image: "i" } }))).not.toBe(a);
+  });
+});
+
+describe("cierre del turno", () => {
+  const st = (id: string, t: number, image?: string): AgentStep => ({ id, tool: image ? "mcp__render__browser_act" : "Bash", kind: image ? "browser" : "terminal", status: "ok", startedAt: t, endedAt: t + 1000, ...(image ? { browser: { url: "u", title: id, image } } : {}) });
+  it("cuenta pasos sin el plan, mide el tiempo y reparte capturas distintas", () => {
+    const steps = [
+      { id: "p", tool: "TodoWrite", kind: "other" as const, status: "ok" as const, startedAt: 0 },
+      st("a", 0, "1.jpg"), st("b", 10_000, "1.jpg"), st("c", 20_000, "2.jpg"), st("d", 30_000), ...Array.from({ length: 8 }, (_, i) => st(`x${i}`, 40_000 + i * 1000, `${i + 3}.jpg`)),
+    ];
+    const r = turnSummary(steps)!;
+    expect(r.count).toBe(12);
+    expect(r.ms).toBe(48_000);
+    expect(r.thumbs).toHaveLength(6);
+    expect(new Set(r.thumbs.map((t) => t.image)).size).toBe(6);
+    expect(r.thumbs[0].id).toBe("a");
+    expect(r.thumbs[5].image).toBe("10.jpg");
+    expect(turnSummary([])).toBeNull();
+    expect(formatWorked(48_000)).toBe("48 s");
+    expect(formatWorked(185_000)).toBe("3 min");
   });
 });
