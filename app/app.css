@@ -489,3 +489,21 @@ body.hide-mobile-menu .mobile-menu-btn { display: none; }
 .eb-md table { display: block; max-width: 100%; overflow-x: auto; font-size: 0.85rem; }
 .eb-md blockquote { border-left: 3px solid #e5e7eb; padding-left: 0.75rem; color: #6b7280; margin: 0.6rem 0; }
 .eb-paso code { background: #f3f4f6; padding: 0 0.3rem; border-radius: 0.25rem; font-size: 0.85em; font-family: ui-monospace, monospace; }
+
+/* Home → editor de Sitios: el cuadro de texto del hero sube y se vuelve la primera burbuja
+   del chat (view-transition-name «eb-prompt» en HeroPrompt y en el editor). */
+::view-transition-group(eb-prompt) {
+  animation-duration: 0.5s;
+  animation-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 0.3s;
+}
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+}

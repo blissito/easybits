@@ -635,9 +635,16 @@ export default function SiteEditor() {
             className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden"
           >
             <div ref={columnRef} className="flex flex-col gap-6 px-4 py-6">
-              {msgs.length === 0 && (
-                <p className="text-sm text-gray-400 text-center mt-10">Describe qué quieres y el agente lo construye.</p>
-              )}
+              {msgs.length === 0 &&
+                (firstPrompt ? (
+                  // Llega de la home: la burbuja existe desde el primer render para que la View
+                  // Transition lleve el cuadro de texto de la home justo aquí.
+                  <div style={{ viewTransitionName: "eb-prompt" }}>
+                    <UserMessage msg={{ role: "user", text: firstPrompt }} />
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-400 text-center mt-10">Describe qué quieres y el agente lo construye.</p>
+                ))}
               {msgs.map((m, i) =>
                 m.role === "user" ? (
                   <UserMessage key={i} msg={m} />
