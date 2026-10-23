@@ -57,20 +57,14 @@ export function HeroPrompt({ loggedIn }: { loggedIn: boolean }) {
   const say = (text: string, extra: Partial<Msg> = {}) => setBot((p) => ({ ...p, text, ...extra }));
   const tools = bot.tools?.length ?? 0;
   const [site, setSite] = useState<Site | null>(null);
-  const [pane, setPane] = useState<"preview" | "computer">("preview");
+  // «La computadora del agente» es opcional: transparente si la abres, fuera de la vista si no.
+  const [showComputer, setShowComputer] = useState(false);
   const [previewKey, setPreviewKey] = useState(0);
   // La caja responde en su servidor de desarrollo: hasta entonces se ve la plantilla de muestra.
   const [previewReady, setPreviewReady] = useState(false);
   const reduce = useReducedMotion();
   const open = phase !== "idle";
   const working = phase === "creating" || phase === "running";
-  // La primera vez que el agente abre el navegador, el panel salta a su computadora (como
-  // Manus); si el visitante ya eligió pestaña, se respeta.
-  const paneTouched = useRef(false);
-  const hasBrowser = !!bot.steps?.some((s) => s.browser);
-  useEffect(() => {
-    if (hasBrowser && !paneTouched.current) setPane("computer");
-  }, [hasBrowser]);
   // La vista previa se recarga con el trabajo del agente, pero no más de una vez cada 6 s.
   const lastReload = useRef(0);
   const siteRef = useRef<Site | null>(null);
@@ -335,38 +329,32 @@ export function HeroPrompt({ loggedIn }: { loggedIn: boolean }) {
               animate={{ opacity: 1, transition: { delay: reduce ? 0 : 0.35 } }}
               className="hidden md:flex min-w-0 flex-1 flex-col gap-3 bg-gray-50 p-4"
             >
-              {/* Vista previa de la app o «la computadora del agente» (lo que hace, paso a paso). */}
-              <div role="tablist" className="flex gap-2">
-                {(
-                  [
-                    ["preview", "Vista previa"],
-                    ["computer", "Computadora del agente"],
-                  ] as const
-                ).map(([k, label]) => (
-                  <button
-                    key={k}
-                    role="tab"
-                    type="button"
-                    aria-selected={pane === k}
-                    onClick={() => {
-                      paneTouched.current = true;
-                      setPane(k);
-                    }}
-                    className={`flex items-center gap-1.5 rounded-lg border-2 px-3 py-1 text-sm font-bold transition-all ${pane === k ? "border-black bg-white shadow-[3px_3px_0_0_#000]" : "border-transparent text-gray-500 hover:text-black"}`}
-                  >
-                    {k === "computer" && working && <span className="size-2 animate-pulse rounded-full bg-green-500" />}
-                    {label}
-                    {k === "computer" && (bot.steps?.length ?? 0) > 0 && <span className="font-mono text-xs text-gray-400">{bot.steps!.length}</span>}
-                  </button>
-                ))}
+              {/* La vista previa siempre; «la computadora del agente» es opcional: se abre al lado y se oculta. */}
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-bold">Vista previa</span>
+                <button
+                  type="button"
+                  aria-pressed={showComputer}
+                  onClick={() => setShowComputer((v) => !v)}
+                  className={`ml-auto flex items-center gap-1.5 rounded-lg border-2 border-black px-3 py-1 text-sm font-bold transition-all ${showComputer ? "bg-black text-white" : "bg-white shadow-[3px_3px_0_0_#000] hover:-translate-y-0.5"}`}
+                >
+                  {working && <span className="size-2 animate-pulse rounded-full bg-green-500" />}
+                  {showComputer ? "Ocultar lo que hace el agente" : "Ver lo que hace el agente"}
+                  {(bot.steps?.length ?? 0) > 0 && <span className={`font-mono text-xs ${showComputer ? "text-gray-300" : "text-gray-400"}`}>{bot.steps!.length}</span>}
+                </button>
               </div>
-              <div className="relative min-h-0 flex-1 overflow-hidden rounded-xl border-2 border-black bg-white">
-                {pane === "computer" ? (
-                  <AgentComputer steps={bot.steps ?? []} live={working} onTakeover={site ? (sid) => requestTakeover(site.id, sid) : undefined} />
-                ) : site?.previewUrl && (site.kind === "webapp" ? previewReady : tools > 0) ? (
-                  <iframe key={previewKey} src={site.previewUrl} title="Vista previa" className="h-full w-full" />
-                ) : (
-                  <TemplatePreview prompt={sent} />
+              <div className="flex min-h-0 min-w-0 flex-1 gap-3">
+                <div className="relative min-h-0 min-w-0 flex-1 overflow-hidden rounded-xl border-2 border-black bg-white">
+                  {site?.previewUrl && (site.kind === "webapp" ? previewReady : tools > 0) ? (
+                    <iframe key={previewKey} src={site.previewUrl} title="Vista previa" className="h-full w-full" />
+                  ) : (
+                    <TemplatePreview prompt={sent} />
+                  )}
+                </div>
+                {showComputer && (
+                  <div className="relative min-h-0 w-[48%] min-w-0 shrink-0 overflow-hidden rounded-xl border-2 border-black bg-white">
+                    <AgentComputer steps={bot.steps ?? []} live={working} onTakeover={site ? (sid) => requestTakeover(site.id, sid) : undefined} />
+                  </div>
                 )}
               </div>
             </motion.div>

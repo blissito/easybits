@@ -129,7 +129,8 @@ export default function SiteEditor() {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   // Lado derecho: la vista previa o «la computadora del agente» del último turno.
-  const [pane, setPane] = useState<"preview" | "computer">("preview");
+  // «La computadora del agente» es opcional: se abre junto a la vista previa y se oculta.
+  const [showComputer, setShowComputer] = useState(false);
   const [replayUrl, setReplayUrl] = useState<string | null>(null);
   const [replayError, setReplayError] = useState<string | null>(null);
   // Liga pública del replay del último turno (privado hasta que la pides) y se copia.
@@ -485,11 +486,6 @@ export default function SiteEditor() {
   const previewUrl = site.previewUrl ? `${site.previewUrl}?eb_edit=1` : null;
   // Pasos del último turno del agente (el que está corriendo o el más reciente).
   const lastSteps = [...msgs].reverse().find((m) => m.role === "bot" && m.steps?.length)?.steps ?? [];
-  // Cuando el agente abre el navegador en un turno en curso, el panel muestra su computadora.
-  const browsing = busy && lastSteps.some((x) => x.browser);
-  useEffect(() => {
-    if (browsing) setPane("computer");
-  }, [browsing]);
   // Una web app en su caja de trabajo aún no tiene producción: «Abrir» lleva a la vista previa.
   const unpublished = site.kind === "webapp" && !!site.sandbox?.workBox;
   const openUrl = site.archivedAt ? null : site.url ?? (unpublished ? site.previewUrl : null);
@@ -699,27 +695,16 @@ export default function SiteEditor() {
       {/* Preview */}
       <main className={`${mobileTab === "preview" ? "flex" : "hidden"} md:flex flex-1 flex-col min-w-0`}>
         <div className="px-4 py-2 border-b border-gray-200 bg-white flex items-center gap-3 text-sm overflow-x-auto whitespace-nowrap">
-          <div role="tablist" className="flex shrink-0 gap-1 rounded-lg border-2 border-black p-0.5">
-            {(
-              [
-                ["preview", "Vista previa"],
-                ["computer", "Computadora"],
-              ] as const
-            ).map(([k, label]) => (
-              <button
-                key={k}
-                role="tab"
-                type="button"
-                aria-selected={pane === k}
-                onClick={() => setPane(k)}
-                className={`flex items-center gap-1.5 rounded-md px-2.5 py-0.5 text-xs font-bold ${pane === k ? "bg-black text-white" : "text-gray-600 hover:bg-gray-100"}`}
-              >
-                {k === "computer" && busy && <span className="size-1.5 animate-pulse rounded-full bg-green-500" />}
-                {label}
-              </button>
-            ))}
-          </div>
-          {pane === "computer" && !busy && lastSteps.length > 0 && (
+          <button
+            type="button"
+            aria-pressed={showComputer}
+            onClick={() => setShowComputer((v) => !v)}
+            className={`flex shrink-0 items-center gap-1.5 rounded-lg border-2 border-black px-2.5 py-0.5 text-xs font-bold ${showComputer ? "bg-black text-white" : "hover:bg-gray-100"}`}
+          >
+            {busy && <span className="size-1.5 animate-pulse rounded-full bg-green-500" />}
+            {showComputer ? "Ocultar lo que hace el agente" : "Ver lo que hace el agente"}
+          </button>
+          {showComputer && !busy && lastSteps.length > 0 && (
             replayUrl ? (
               <span className="flex shrink-0 items-center gap-2 text-xs font-bold">
                 <a href={replayUrl} target="_blank" rel="noreferrer" className="text-brand-500">
@@ -817,11 +802,10 @@ export default function SiteEditor() {
         {githubNotice && <p className="px-4 py-2 text-xs bg-brand-500/10 border-b-2 border-brand-500/30">{githubNotice}</p>}
         {actionError && <p className="px-4 py-2 text-xs bg-red-50 border-b-2 border-red-300">{actionError}</p>}
         {replayError && <p className="px-4 py-2 text-xs bg-red-50 border-b-2 border-red-300">{replayError}</p>}
-        {pane === "computer" ? (
-          <div className="flex-1 min-h-0 pb-12 md:pb-0">
-            <AgentComputer steps={lastSteps} live={busy} onTakeover={(sid) => requestTakeover(site.id, sid)} />
-          </div>
-        ) : site.kind === "webapp" && !site.sandboxId ? (
+        <div className="flex min-h-0 min-w-0 flex-1">
+        {/* En celular no caben las dos: con la computadora abierta se oculta la vista previa. */}
+        <div className={`${showComputer ? "hidden md:flex" : "flex"} min-h-0 min-w-0 flex-1 flex-col`}>
+        {site.kind === "webapp" && !site.sandboxId ? (
           <div className="flex-1 flex flex-col items-center justify-center gap-3 text-center px-6">
             <p className="font-bold">Falta la máquina de esta web app</p>
             <p className="text-sm text-gray-500 max-w-md">Se cobra aparte del plan. Completa el pago y vuelve aquí; la máquina se crea sola al confirmarse.</p>
@@ -859,6 +843,13 @@ export default function SiteEditor() {
         ) : (
           <div className="flex-1 flex items-center justify-center text-gray-400 text-sm">Sin vista previa todavía</div>
         )}
+        </div>
+        {showComputer && (
+          <div className="min-h-0 w-full min-w-0 shrink-0 pb-12 md:w-[45%] md:border-l-2 md:border-black md:pb-0">
+            <AgentComputer steps={lastSteps} live={busy} onTakeover={(sid) => requestTakeover(site.id, sid)} />
+          </div>
+        )}
+        </div>
       </main>
       {/* Pestañas móvil */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-30 grid grid-cols-2 border-t border-gray-200 bg-white">

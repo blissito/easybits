@@ -300,6 +300,9 @@ function BrowserView({ step, onTakeover, error }: { step: AgentStep; onTakeover?
   );
 }
 
+/** Nombre de la herramienta sin el prefijo del MCP: `sandbox_files_edit`, no `mcp__easybits__sandbox_files_edit`. */
+const toolName = (t: string) => t.replace(/^mcp__[^_]+(?:_[^_]+)*?__/, "");
+
 /** Terminal: todos los comandos del turno hasta el paso elegido; el actual resaltado. */
 function TerminalView({ steps, idx, running }: { steps: AgentStep[]; idx: number; running: boolean }) {
   const lines = useMemo(() => steps.slice(0, idx + 1).map((s, i) => ({ s, i })).filter(({ s }) => s.kind === "terminal"), [steps, idx]);
@@ -315,7 +318,7 @@ function TerminalView({ steps, idx, running }: { steps: AgentStep[]; idx: number
         <div key={s.id} className={`mb-2 ${i === idx ? "" : "opacity-60"}`}>
           <div className="break-all">
             <span className="text-[#85DDCB]">$ </span>
-            {s.command || s.detail || s.tool}
+            {s.command || s.detail || toolName(s.tool)}
           </div>
           <div className={s.status === "error" ? "text-red-400" : "text-gray-500"}>
             {i === idx && running ? <span className="animate-pulse">▍</span> : s.status === "error" ? "✗ terminó con error" : "✓ listo"}
@@ -348,7 +351,7 @@ function EditorView({ steps, idx }: { steps: AgentStep[]; idx: number }) {
       <div className="grid min-w-0 flex-1 place-items-center p-6 text-center">
         <div>
           <LuFileCode className="mx-auto size-10 text-brand-500" />
-          <p className="mt-3 font-mono text-sm font-bold">{cur.detail ?? cur.tool}</p>
+          <p className="mt-3 font-mono text-sm font-bold">{cur.detail ?? toolName(cur.tool)}</p>
           <p className="mt-1 text-xs text-gray-500">{stepVerb(cur)}</p>
         </div>
       </div>
