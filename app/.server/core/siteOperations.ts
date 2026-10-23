@@ -750,6 +750,9 @@ export function siteTurnPrompt(site: Awaited<ReturnType<typeof getSite>>, select
     // 28 tools sin una palabra y la vista previa no cambiaba hasta el final (14-oct).
     `El usuario te ve trabajar en vivo: antes de cada grupo de acciones escríbele UNA línea corta de lo que vas a hacer ("Armo la portada con tu foto…"). Y que la vista previa cambie pronto: primero deja la página principal mostrando un esqueleto de lo que pidió, luego llena el detalle.`,
     `Quien lee NO es programador: narra y responde con lo que va a VER o poder HACER ("Ya puedes crear tu cuenta", "Cada quien ve sólo sus tareas"), nunca cómo está hecho. Prohibido en el chat: nombres de frameworks o paquetes, starter, doc, tsc/TypeScript, errores de compilación, rutas o URLs internas (/tareas, /login), funciones de servidor, sesión, capa de datos, scripts, logs. Si algo técnico falla, arréglalo en silencio; sólo avisa lo que le afecta a la persona.`,
+    // Con WebFetch la investigación no deja nada que ver en «la computadora del agente» (23-oct):
+    // el usuario pidió «busca qué es brendago.design» y sólo vio pasos sin capturas.
+    `Para conocer un sitio, una marca o una referencia que te pide el usuario, ÁBRELA en tu navegador (mcp__render__browser_open; cárgala con ToolSearch si no la ves) y míra su diseño: el usuario ve tus capturas en vivo. WebFetch/web_fetch sólo para documentación técnica.`,
   ];
   if (site.kind === "static" && site.website) {
     lines.push(
