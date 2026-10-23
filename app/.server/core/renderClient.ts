@@ -294,7 +294,8 @@ export async function humanOnBox(ctx: AuthContext, op: "live" | "input" | "relea
   if (!box.renderUrl) throw new RenderBoxError("render box unavailable (host down or plan cap)");
   // La persona manejando cuenta como uso: sin esto el reaper duerme la caja a los 5 min.
   void touchServiceBox(box.sandboxId);
-  return fetch(`${box.renderUrl}/browser/human/${op}`, {
+  // `?token=` sólo para cajas horneadas antes del header x-takeover-token: quitarlo tras el rebake.
+  return fetch(`${box.renderUrl}/browser/human/${op}?token=${encodeURIComponent(token)}`, {
     method: op === "live" ? "GET" : "POST",
     headers: { "content-type": "application/json", "x-takeover-token": token, ...boxKeyHeader() },
     body: op === "live" ? undefined : body || "{}",
