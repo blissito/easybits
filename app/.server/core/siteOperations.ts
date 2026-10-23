@@ -22,6 +22,8 @@ import { launchApp, setMachineSecrets, setRunspec } from "./releaseOperations";
 import { createDatabase } from "./databaseOperations";
 import { SECRETS_FILE, writeSecretsFile } from "./secretsFile";
 import { MESH_DB_PASSTHROUGH } from "./sandboxOperations";
+import { applyInlineTextEdit } from "@ghostystudio/pointer/text-edit";
+import { replaceJsxText } from "~/lib/jsxTextEdit";
 import { execCommand, exposeSandboxPort, getSandbox, listFiles, readFile, waitUntilRunning, writeFile } from "./sandboxOperations";
 import { DEFAULT_SITE_THEME, SITE_THEMES, parseThemeColors, replaceStaticTheme, themeBlockStatic, themeCssTw4, validThemeColors, type ThemeColors } from "~/lib/siteTheme";
 import { PREVIEW_DEPS_MARK, PREVIEW_PORT, PREVIEW_UNIT, STARTER_DIR, stackHasAuth, previewInstallScript, starterFiles, starterPrompt, starterRunspec, stackThemeFiles, themeRule, starterSnapshot, starterTemplate } from "~/.server/starters";
@@ -695,6 +697,49 @@ export async function setSiteTheme(ctx: AuthContext, siteId: string, input: { th
   if (!src) throw noTokens();
   await src.write(colors);
   return { colors };
+}
+
+/**
+ * Texto editado con doble clic en la vista previa, sin modelo ni cobro. Estático: el nodo del
+ * index.html por splice (`applyInlineTextEdit`). Web app: el JSX del único archivo con ese
+ * `data-eb-id` (`replaceJsxText`). Lo que no sea seguro devuelve `ok:false` y el editor se lo
+ * pasa al agente como un turno normal.
+ */
+export async function editSiteText(
+  ctx: AuthContext,
+  siteId: string,
+  edit: { dataId: string; text: string; html?: string }
+): Promise<{ ok: true } | { ok: false; reason: string }> {
+  requireScope(ctx, "WRITE");
+  const dataId = edit.dataId.replace(/[^A-Za-z0-9_-]/g, "");
+  if (!dataId) return { ok: false, reason: "ese elemento no tiene id" };
+  const site = await getSite(ctx, siteId);
+  if (site.kind === "static" && site.website) {
+    const website = await db.website.findUnique({ where: { id: site.website.id }, select: { id: true, prefix: true } });
+    const file = website
+      ? await db.file.findFirst({ where: { ownerId: ctx.user.id, name: `${website.prefix}index.html`, status: { not: "DELETED" } }, select: { url: true } })
+      : null;
+    const html = file?.url ? await fetch(file.url).then((r) => (r.ok ? r.text() : null)).catch(() => null) : null;
+    if (!html) return { ok: false, reason: "no pude leer la página" };
+    const { JSDOM } = await import("jsdom");
+    const r = applyInlineTextEdit(html, { ...edit, dataId }, new new JSDOM("").window.DOMParser(), "data-eb-id");
+    if (!r.ok) return r;
+    await deployWebsiteFile(ctx, { websiteId: website!.id, fileName: "index.html", contentType: "text/html", content: r.html });
+    return { ok: true };
+  }
+  if (site.kind !== "webapp" || !site.sandboxId) return { ok: false, reason: "este sitio no tiene código editable" };
+  const found = await execCommand(ctx, site.sandboxId, {
+    command: `grep -rlF --include=*.tsx --include=*.jsx --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=dist --exclude-dir=.output 'data-eb-id="${dataId}"' /app`,
+    timeoutSeconds: 20,
+  }).catch(() => null);
+  const paths = (found?.stdout ?? "").split("\n").map((l: string) => l.trim()).filter(Boolean);
+  if (paths.length !== 1) return { ok: false, reason: paths.length ? "ese id está en varios archivos" : "no encontré ese texto en el código" };
+  const src = await readFile(ctx, site.sandboxId, { path: paths[0] }).catch(() => null);
+  if (!src) return { ok: false, reason: "no pude leer el archivo" };
+  const r = replaceJsxText(src.content, dataId, edit);
+  if (!r.ok) return r;
+  await writeFile(ctx, site.sandboxId, { path: paths[0], content: r.source });
+  return { ok: true };
 }
 
 /** Contexto por turno: qué sitio es y cómo tocarlo. Se appendea (capa 3), no pisa. */

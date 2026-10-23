@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { pickModeMessage, pickThemeMessage, readPickMessage, readPickReady } from "@ghostystudio/pointer/picked";
+import { readEditedText } from "~/lib/eb-picker";
 import { Link, data, redirect, useFetcher, useLoaderData, useRevalidator, useSearchParams } from "react-router";
 import toast from "react-hot-toast";
 import { resolveTier, sleepPrice } from "~/lib/hostingCatalog";
@@ -15,7 +16,7 @@ import { ThemePicker } from "~/components/sitios/ThemePicker";
 import { LuArrowDown, LuMousePointerClick, LuTrash2 } from "react-icons/lu";
 import { getUserOrRedirect } from "~/.server/getters";
 import type { AuthContext } from "~/.server/apiAuth";
-import { attachNewestMachine, deleteSite, getSite, publishSite, reviveSite, siteAdminLoginUrl, siteEngineFor } from "~/.server/core/siteOperations";
+import { attachNewestMachine, deleteSite, editSiteText, getSite, publishSite, reviveSite, siteAdminLoginUrl, siteEngineFor } from "~/.server/core/siteOperations";
 import { githubAppEnabled } from "~/.server/core/githubApp";
 import { siteRepo } from "~/.server/core/githubSiteOperations";
 import type { Route } from "./+types/editor";
@@ -56,7 +57,7 @@ export const loader = async ({ request, params }: Route.LoaderArgs) => {
 
 // Sondear la vista previa no cambia nada: sin esto cada sondeo recargaría el loader.
 export const shouldRevalidate = ({ formData, defaultShouldRevalidate }: { formData?: FormData; defaultShouldRevalidate: boolean }) =>
-  formData?.get("intent") === "preview-status" ? false : defaultShouldRevalidate;
+  formData?.get("intent") === "preview-status" || formData?.get("intent") === "edit-text" ? false : defaultShouldRevalidate;
 
 export const action = async ({ request, params }: Route.ActionArgs) => {
   const user = await getUserOrRedirect(request);
@@ -74,6 +75,15 @@ export const action = async ({ request, params }: Route.ActionArgs) => {
         return data({ launch: await publishSite(ctx, params.id!) });
       case "admin-login":
         return data({ adminUrl: await siteAdminLoginUrl(ctx, params.id!) });
+      case "edit-text":
+        // Doble clic sobre un texto de la vista previa: se guarda sin modelo (editSiteText).
+        return data({
+          textEdit: await editSiteText(ctx, params.id!, {
+            dataId: String(form.get("dataId") || ""),
+            text: String(form.get("text") || ""),
+            html: String(form.get("html") || ""),
+          }),
+        });
       case "delete": {
         // La lista confirma qué se borró y si la máquina dejó de cobrarse.
         const { name, kind, sandbox } = await getSite(ctx, params.id!);
@@ -119,6 +129,11 @@ export default function SiteEditor() {
   const fetcher = useFetcher<typeof action>();
   // «Entrar como admin»: el servidor firma un enlace de un solo uso y la vista previa lo abre.
   const admin = useFetcher<typeof action>();
+  // Texto editado en la vista previa: se guarda directo; si no es seguro, lo hace el agente.
+  const textEdit = useFetcher<typeof action>();
+  const textEditRef = useRef(textEdit);
+  textEditRef.current = textEdit;
+  const pendingText = useRef<{ dataId: string; text: string } | null>(null);
   useEffect(() => {
     const url = admin.data && "adminUrl" in admin.data ? admin.data.adminUrl : null;
     if (url && iframeRef.current) iframeRef.current.src = url;
@@ -265,6 +280,12 @@ export default function SiteEditor() {
         (e.source as Window).postMessage(pickModeMessage(pointingRef.current ? "on" : "off"), "*");
         return;
       }
+      const edited = readEditedText(e.data);
+      if (edited) {
+        pendingText.current = { dataId: edited.dataId, text: edited.text };
+        textEditRef.current.submit({ intent: "edit-text", ...edited }, { method: "post" });
+        return;
+      }
       const msg = readPickMessage(e.data);
       if (!msg) return;
       setSelection(msg.picked?.id ? { id: msg.picked.id, tag: msg.picked.tag } : null);
@@ -405,7 +426,7 @@ export default function SiteEditor() {
   }, [site.id, consume, patchLast]);
 
   const send = useCallback(
-    async (text: string, opts?: { continueTurnId?: string }) => {
+    async (text: string, opts?: { continueTurnId?: string; selection?: Selection }) => {
       text = text.trim();
       if ((!text && !attached) || busy) return;
       sentRef.current = true;
@@ -414,7 +435,7 @@ export default function SiteEditor() {
       setBusy(true);
       setInput("");
       siguiendo.current = true;
-      const sel = selection;
+      const sel = opts?.selection ?? selection;
       const img = attached;
       setSelection(null);
       setAttached(null);
@@ -470,6 +491,23 @@ export default function SiteEditor() {
     },
     [busy, selection, attached, site.id, consume, attach]
   );
+
+  // Resultado del texto editado en la vista previa.
+  useEffect(() => {
+    const r = textEdit.state === "idle" && textEdit.data && "textEdit" in textEdit.data ? textEdit.data.textEdit : null;
+    const p = pendingText.current;
+    if (!r || !p) return;
+    pendingText.current = null;
+    if (r.ok) {
+      toast.success("Texto guardado");
+      // La web app recarga sola (servidor dev); el estático hay que recargarlo.
+      if (site.kind !== "webapp") setPreviewKey((k) => k + 1);
+      return;
+    }
+    toast(`${r.reason}: se lo paso al agente`);
+    void send(`Cambia el texto de este elemento por: «${p.text}»`, { selection: { id: p.dataId, tag: "texto" } });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [textEdit.state, textEdit.data]);
 
   // Primer mensaje que llegó desde /new por la URL: se manda solo y se limpia.
   const firstPrompt = params.get("prompt");
