@@ -5,6 +5,7 @@ import { AgentArt, BookingArt, FinanceArt, GymArt, InvoiceArt } from "./heroIllu
 import { templateFor, templateHtml } from "./heroTemplates";
 import { SITE_TEMPLATES, type SiteTemplateKey } from "~/lib/siteTemplates";
 import { BotMessage, UserMessage, applyTurnEvent, type Msg } from "~/components/sitios/ChatMessages";
+import { AgentComputer, requestTakeover } from "~/components/sitios/AgentComputer";
 
 /**
  * Prompt del hero. Al enviar, la caja se transforma (layoutId, sin cambiar de ruta)
@@ -67,11 +68,20 @@ export function HeroPrompt({ loggedIn }: { loggedIn: boolean }) {
   const say = (text: string, extra: Partial<Msg> = {}) => setBot((p) => ({ ...p, text, ...extra }));
   const tools = bot.tools?.length ?? 0;
   const [site, setSite] = useState<Site | null>(null);
+  const [pane, setPane] = useState<"preview" | "computer">("preview");
   const [previewKey, setPreviewKey] = useState(0);
   // La caja responde en su servidor de desarrollo: hasta entonces se ve la plantilla de muestra.
   const [previewReady, setPreviewReady] = useState(false);
   const reduce = useReducedMotion();
   const open = phase !== "idle";
+  const working = phase === "creating" || phase === "running";
+  // La primera vez que el agente abre el navegador, el panel salta a su computadora (como
+  // Manus); si el visitante ya eligió pestaña, se respeta.
+  const paneTouched = useRef(false);
+  const hasBrowser = !!bot.steps?.some((s) => s.browser);
+  useEffect(() => {
+    if (hasBrowser && !paneTouched.current) setPane("computer");
+  }, [hasBrowser]);
   // La vista previa se recarga con el trabajo del agente, pero no más de una vez cada 6 s.
   const lastReload = useRef(0);
   const siteRef = useRef<Site | null>(null);
@@ -379,10 +389,37 @@ export function HeroPrompt({ loggedIn }: { loggedIn: boolean }) {
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1, transition: { delay: reduce ? 0 : 0.35 } }}
-              className="hidden md:flex flex-1 bg-gray-50 p-4"
+              className="hidden md:flex flex-1 flex-col gap-3 bg-gray-50 p-4"
             >
-              <div className="relative flex-1 overflow-hidden rounded-xl border-2 border-black bg-white">
-                {site?.previewUrl && (site.kind === "webapp" ? previewReady : tools > 0) ? (
+              {/* Vista previa de la app o «la computadora del agente» (lo que hace, paso a paso). */}
+              <div role="tablist" className="flex gap-2">
+                {(
+                  [
+                    ["preview", "Vista previa"],
+                    ["computer", "Computadora del agente"],
+                  ] as const
+                ).map(([k, label]) => (
+                  <button
+                    key={k}
+                    role="tab"
+                    type="button"
+                    aria-selected={pane === k}
+                    onClick={() => {
+                      paneTouched.current = true;
+                      setPane(k);
+                    }}
+                    className={`flex items-center gap-1.5 rounded-lg border-2 px-3 py-1 text-sm font-bold transition-all ${pane === k ? "border-black bg-white shadow-[3px_3px_0_0_#000]" : "border-transparent text-gray-500 hover:text-black"}`}
+                  >
+                    {k === "computer" && working && <span className="size-2 animate-pulse rounded-full bg-green-500" />}
+                    {label}
+                    {k === "computer" && (bot.steps?.length ?? 0) > 0 && <span className="font-mono text-xs text-gray-400">{bot.steps!.length}</span>}
+                  </button>
+                ))}
+              </div>
+              <div className="relative min-h-0 flex-1 overflow-hidden rounded-xl border-2 border-black bg-white">
+                {pane === "computer" ? (
+                  <AgentComputer steps={bot.steps ?? []} live={working} onTakeover={site ? (sid) => requestTakeover(site.id, sid) : undefined} />
+                ) : site?.previewUrl && (site.kind === "webapp" ? previewReady : tools > 0) ? (
                   <iframe key={previewKey} src={site.previewUrl} title="Vista previa" className="h-full w-full" />
                 ) : (
                   <TemplatePreview prompt={sent} template={sentTemplate} />

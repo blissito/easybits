@@ -42,7 +42,8 @@ const CATALOG: McpCatalogEntry[] = [
   { name: "docs", label: "Documentación de EasyBits (pública)", transport: "http", url: DOCS_MCP_URL },
 ];
 const GROUP_CONFIGS: Record<string, GroupConfig> = {
-  "*": { mcpServers: ["docs"], disabledBuiltins: ["easybits", "wa"] },
+  // render fuera: es público y anónimo; no debe poder navegar ni renderizar a costa de la casa.
+  "*": { mcpServers: ["docs"], disabledBuiltins: ["easybits", "wa", "render"] },
 };
 const PERSONA_ENV = {
   ASSISTANT_NAME: BITTOR_NAME,

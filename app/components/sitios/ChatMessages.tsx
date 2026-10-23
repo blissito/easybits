@@ -3,6 +3,7 @@ import { Link } from "react-router";
 import { Streamdown } from "streamdown";
 import { LuCheck } from "react-icons/lu";
 import { partirNarracion } from "~/lib/narracion";
+import { upsertStep, type AgentStep } from "~/lib/agentSteps";
 
 // Mensajes del chat del creador de sitios. Los usan el editor (/dash/sitios/:id) y el
 // morph del hero de la home: un solo formato (pasos con palomita, markdown, tools
@@ -10,7 +11,8 @@ import { partirNarracion } from "~/lib/narracion";
 
 // `cortes`: largo del texto cuando arrancó cada herramienta — separa la narración
 // («Reviso…», «Instalo…») de la respuesta final (ver ~/lib/narracion).
-export type Msg = { role: "user" | "bot"; text: string; tools?: string[]; cortes?: number[]; imageUrl?: string; quota?: boolean };
+// `steps`: lo que pinta el panel «la computadora del agente» (navegador, terminal, editor).
+export type Msg = { role: "user" | "bot"; text: string; tools?: string[]; cortes?: number[]; steps?: AgentStep[]; imageUrl?: string; quota?: boolean };
 
 // Tools del turno agrupadas y contraídas: "3 búsquedas · 2 acciones" en vez de una
 // lista cruda de nombres internos (tool_search_tool_bm25, mcp_easybits_run_tool…).
@@ -116,7 +118,8 @@ export function applyTurnEvent(p: Msg, e: { type: string; [k: string]: any }): {
   let msg = p;
   let cut: string | null | undefined;
   if (e.type === "chunk") msg = { ...p, text: p.text + e.value };
-  else if (e.type === "snapshot") msg = { ...p, text: e.text ?? "", tools: e.tools ?? [], cortes: e.cortes ?? [] };
+  else if (e.type === "snapshot") msg = { ...p, text: e.text ?? "", tools: e.tools ?? [], cortes: e.cortes ?? [], steps: e.steps ?? p.steps };
+  else if (e.type === "step" && e.step?.id) msg = { ...p, steps: upsertStep(p.steps ?? [], e.step) };
   else if (e.type === "tool" && e.phase === "start")
     msg = {
       ...p,

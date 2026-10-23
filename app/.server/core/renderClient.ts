@@ -242,6 +242,9 @@ export interface BrowserView {
   textTruncated: boolean;
   /** JPEG del viewport en base64, sólo si se pidió. */
   screenshot?: string;
+  viewport?: { width: number; height: number } | null;
+  /** act: recuadro del último elemento tocado (px del viewport); null si la acción navegó. */
+  target?: { x: number; y: number; width: number; height: number } | null;
   /** act: cuántas acciones corrieron y la que falló (las siguientes no se intentan). */
   done?: number;
   failed?: { index: number; action: BrowserAction; error: string } | null;
@@ -251,12 +254,31 @@ export interface BrowserView {
 export class BrowserSessionGone extends Error {}
 
 /**
+ * «Tomar el control»: la caja entrega un token de un solo dueño y el navegador de la persona
+ * habla DIRECTO con ella (pestaña en vivo por SSE + clics/teclas por POST, con CORS).
+ */
+export async function takeoverOnBox(ctx: AuthContext, sessionId: string) {
+  const box = await ensureServiceBox(ctx, "render");
+  if (!box.renderUrl) throw new RenderBoxError("render box unavailable (host down or plan cap)");
+  const r = await browserOnBox(ctx, "takeover", { sessionId });
+  const { token, expiresInMs, viewport } = r as unknown as { token: string; expiresInMs: number; viewport: { width: number; height: number } };
+  const q = `?token=${encodeURIComponent(token)}`;
+  return {
+    liveUrl: `${box.renderUrl}/browser/human/live${q}`,
+    inputUrl: `${box.renderUrl}/browser/human/input${q}`,
+    releaseUrl: `${box.renderUrl}/browser/human/release${q}`,
+    viewport,
+    expiresInMs,
+  };
+}
+
+/**
  * Navegador con estado en la caja de render del owner: `open` → `act`/`look` → `close`.
  * La página sigue viva entre llamadas (cookies, login) hasta ~3 min sin uso.
  */
 export async function browserOnBox(
   ctx: AuthContext,
-  op: "open" | "act" | "look" | "close",
+  op: "open" | "act" | "look" | "close" | "takeover",
   payload: Record<string, unknown>
 ): Promise<BrowserView> {
   try {
@@ -264,6 +286,9 @@ export async function browserOnBox(
     const { res } = await postToBox(ctx, `/browser/${op}`, payload, op === "act" ? 150_000 : 60_000);
     return (await res.json()) as BrowserView;
   } catch (e) {
+    if (e instanceof RenderBoxError && e.status === 409 && e.message.includes("human_in_control")) {
+      throw new Error("La persona tomó el control de este navegador. Espera a que te lo devuelva y luego usa browser_look para ver cómo quedó.");
+    }
     if (e instanceof RenderBoxError && e.status === 404 && e.message.includes("session_gone")) {
       throw new BrowserSessionGone("La sesión del navegador ya no existe (expiró o la caja se durmió). Abre otra con browser_open.");
     }

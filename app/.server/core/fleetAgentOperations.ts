@@ -1135,13 +1135,20 @@ export function resolveGroupToolsManifest(
 // box). Injected into EVERY turn for EVERY fleet agent, NOT subject to
 // disabledBuiltins/catalog — so the agent can render even with the EasyBits MCP
 // off in the group. Auth = the fleetAgent token (header + ?token= belt-and-braces).
-function renderMcpServer(fleetAgent: { id: string }, workerToken: string): Record<string, unknown> {
+// Las tools del MCP render llegan DIFERIDAS: sin esto el agente decía «no tengo navegador» sin
+// buscarlas (medido 23-oct: sólo las usó cuando se le pidió cargarlas con ToolSearch).
+const BROWSER_TOOLS_HINT =
+  "Tienes un navegador real: para navegar, buscar en un sitio, hacer clics o llenar formularios en una página pública usa mcp__render__browser_open y luego mcp__render__browser_act (cárgalas con ToolSearch si no las ves). Para sólo leer una página basta web_fetch.";
+
+function renderMcpServer(fleetAgent: { id: string }, workerToken: string, groupId?: string): Record<string, unknown> {
   const base = (process.env.BASE_URL || "https://www.easybits.cloud").replace(/\/$/, "");
   // Auth = token del worker (scope MESSAGE), sólo por header. El `?token=` se retiró: dejaba una credencial en los logs de acceso
   // del host, en el Referer y en cualquier proxy intermedio.
   const url = `${base}/api/v2/fleet-render/${fleetAgent.id}/mcp`;
   return {
-    render: { type: "http", url, headers: { Authorization: `Bearer ${workerToken}` } },
+    // X-Eb-Group: la conversación, para que las capturas del navegador (browser_*) lleguen al
+    // panel «la computadora del agente» de ESE turno. No es credencial: sólo enruta.
+    render: { type: "http", url, headers: { Authorization: `Bearer ${workerToken}`, ...(groupId ? { "X-Eb-Group": groupId } : {}) } },
   };
 }
 
@@ -1294,6 +1301,8 @@ export type FleetToolEvent = {
   ok?: boolean;
   /** Argumento corto (archivo/URL/query) para saber QUÉ hizo, no sólo con qué tool. */
   detail?: string;
+  /** Comando completo (Bash y tools con `command`): la terminal del panel lo muestra. */
+  command?: string;
   /** Sólo en `end`, medido correlacionando por `id`. */
   durationMs?: number;
 };
@@ -1368,6 +1377,7 @@ export async function collectStream(
           phase?: "start" | "end";
           ok?: boolean;
           detail?: string;
+          command?: string;
           usage?: Record<string, unknown>;
           model?: string;
         };
@@ -1399,6 +1409,7 @@ export async function collectStream(
             phase: evt.phase ?? "start",
             ok: evt.ok,
             detail: evt.detail,
+            command: typeof evt.command === "string" ? evt.command.slice(0, 2000) : undefined,
             durationMs: end && started ? Date.now() - started.at : undefined,
           });
           // Frontera de bloque: lo dicho ANTES de la tool ya es un mensaje completo.
@@ -3297,6 +3308,7 @@ async function runTurn(
             assetManifest,
             dbScope,
             toolsManifest,
+            turnDisabledBuiltins.includes("render") ? null : BROWSER_TOOLS_HINT,
             msg.appendSystemPrompt,
           ]
             .filter(Boolean)
@@ -3312,7 +3324,7 @@ async function runTurn(
             // debe poder renderizar aunque el grupo apague el MCP de easybits), pero un
             // grupo que los apague EXPLÍCITAMENTE ahora es respetado: antes se mergeaban
             // incondicionalmente y el interruptor de la UI no hacía nada.
-            ...(turnDisabledBuiltins.includes("render") ? {} : renderMcpServer(fleetAgent, workerTokens.message)),
+            ...(turnDisabledBuiltins.includes("render") ? {} : renderMcpServer(fleetAgent, workerTokens.message, msg.groupId)),
             ...(turnDisabledBuiltins.includes("artifact") ? {} : artifactMcpServer(fleetAgent, workerTokens.message)),
             // vision → un motor ciego puede VER una imagen con see_image en vez de
             // confabular. El multimodal simplemente no la llama.

@@ -1588,6 +1588,10 @@ model FleetTurn {
   text            String    @default("")
   cortes          Int[]
   tools           String[]
+  /// «La computadora del agente»: un paso por herramienta (~/lib/agentSteps AgentStep[]).
+  steps           Json?
+  /// Liga pública del replay (/replay/:token). Null = privado (default, como Manus 2.0).
+  shareToken      String?
   instance        String    // proceso dueño (pid + arranque): sólo él lo tiene en memoria
   heartbeatAt     DateTime  @default(now())
   error           String?
@@ -1597,6 +1601,7 @@ model FleetTurn {
 
   @@index([groupId, startedAt])
   @@index([state, heartbeatAt])
+  @@index([shareToken])
 }
 
 model FleetAgentMessage {

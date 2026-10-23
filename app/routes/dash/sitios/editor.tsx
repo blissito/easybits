@@ -6,6 +6,8 @@ import { resolveTier, sleepPrice } from "~/lib/hostingCatalog";
 import { db } from "~/.server/db";
 import { ChatComposer } from "~/components/sitios/ChatComposer";
 import { BotMessage, UserMessage, applyTurnEvent, type Msg } from "~/components/sitios/ChatMessages";
+import { AgentComputer, requestTakeover } from "~/components/sitios/AgentComputer";
+import type { AgentStep } from "~/lib/agentSteps";
 import { DeleteSiteArt, GithubRepoArt } from "~/components/sitios/DialogArt";
 import { Modal } from "~/components/common/Modal";
 import { BrutalButton } from "~/components/common/BrutalButton";
@@ -126,6 +128,20 @@ export default function SiteEditor() {
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
+  // Lado derecho: la vista previa o «la computadora del agente» del último turno.
+  const [pane, setPane] = useState<"preview" | "computer">("preview");
+  const [replayUrl, setReplayUrl] = useState<string | null>(null);
+  const [replayError, setReplayError] = useState<string | null>(null);
+  // Liga pública del replay del último turno (privado hasta que la pides) y se copia.
+  const shareReplay = async () => {
+    const r = await fetch(`/api/v2/sites/${site.id}/replay`, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" })
+      .then((x) => x.json())
+      .catch(() => null);
+    if (!r?.url) return setReplayError(r?.error ?? "No se pudo crear la liga del replay");
+    setReplayError(null);
+    setReplayUrl(r.url);
+    void navigator.clipboard?.writeText(r.url).catch(() => {});
+  };
   // Turno que se cortó por un reinicio de la plataforma: se ofrece «Continuar».
   const [cutTurn, setCutTurn] = useState<string | null>(null);
   const sentRef = useRef(false);
@@ -177,7 +193,7 @@ export default function SiteEditor() {
         messages?: Array<{ role: string; text: string }>;
         tokens?: { remaining: number; limit: number };
         activeTurn?: { turnId: string } | null;
-        lastTurn?: { turnId: string; state: string } | null;
+        lastTurn?: { turnId: string; state: string; steps?: AgentStep[] } | null;
       }) => {
         if (d.tokens) setTokens(d.tokens);
         // No pisar un turno que ya arrancó (el primer prompt se manda antes de
@@ -186,6 +202,9 @@ export default function SiteEditor() {
         if (sentRef.current) return;
         const hist: Msg[] = (d.messages ?? []).map((m) => ({ role: m.role === "user" ? "user" : "bot", text: m.text }));
         // Turno en curso (recargaste a media obra): su burbuja se llena con el snapshot.
+        // Sin turno en curso, el último mensaje del agente lleva los pasos guardados (replay).
+        const lastBot = hist.map((m) => m.role).lastIndexOf("bot");
+        if (!d.activeTurn && lastBot >= 0 && d.lastTurn?.steps?.length) hist[lastBot] = { ...hist[lastBot], steps: d.lastTurn.steps };
         setMsgs(d.activeTurn ? [...hist, { role: "bot", text: "", tools: [] }] : hist);
         if (d.lastTurn?.state === "interrupted" && !d.activeTurn) setCutTurn(d.lastTurn.turnId);
         if (d.activeTurn) void attach();
@@ -456,6 +475,13 @@ export default function SiteEditor() {
   // Static carga el picker desde /s/:slug; una webapp TanStack lo carga su __root
   // (starter). En Node libre el parámetro no hace nada.
   const previewUrl = site.previewUrl ? `${site.previewUrl}?eb_edit=1` : null;
+  // Pasos del último turno del agente (el que está corriendo o el más reciente).
+  const lastSteps = [...msgs].reverse().find((m) => m.role === "bot" && m.steps?.length)?.steps ?? [];
+  // Cuando el agente abre el navegador en un turno en curso, el panel muestra su computadora.
+  const browsing = busy && lastSteps.some((x) => x.browser);
+  useEffect(() => {
+    if (browsing) setPane("computer");
+  }, [browsing]);
   // Una web app en su caja de trabajo aún no tiene producción: «Abrir» lleva a la vista previa.
   const unpublished = site.kind === "webapp" && !!site.sandbox?.workBox;
   const openUrl = site.archivedAt ? null : site.url ?? (unpublished ? site.previewUrl : null);
@@ -665,6 +691,37 @@ export default function SiteEditor() {
       {/* Preview */}
       <main className={`${mobileTab === "preview" ? "flex" : "hidden"} md:flex flex-1 flex-col min-w-0`}>
         <div className="px-4 py-2 border-b border-gray-200 bg-white flex items-center gap-3 text-sm overflow-x-auto whitespace-nowrap">
+          <div role="tablist" className="flex shrink-0 gap-1 rounded-lg border-2 border-black p-0.5">
+            {(
+              [
+                ["preview", "Vista previa"],
+                ["computer", "Computadora"],
+              ] as const
+            ).map(([k, label]) => (
+              <button
+                key={k}
+                role="tab"
+                type="button"
+                aria-selected={pane === k}
+                onClick={() => setPane(k)}
+                className={`flex items-center gap-1.5 rounded-md px-2.5 py-0.5 text-xs font-bold ${pane === k ? "bg-black text-white" : "text-gray-600 hover:bg-gray-100"}`}
+              >
+                {k === "computer" && busy && <span className="size-1.5 animate-pulse rounded-full bg-green-500" />}
+                {label}
+              </button>
+            ))}
+          </div>
+          {pane === "computer" && !busy && lastSteps.length > 0 && (
+            replayUrl ? (
+              <a href={replayUrl} target="_blank" rel="noreferrer" className="shrink-0 text-xs font-bold text-brand-500">
+                Liga copiada · abrir replay ↗
+              </a>
+            ) : (
+              <button type="button" onClick={shareReplay} className="shrink-0 rounded-lg border-2 border-black px-2.5 py-0.5 text-xs font-bold hover:bg-brand-500/15">
+                Compartir replay
+              </button>
+            )
+          )}
           {/* Sin publicar, el puerto de producción (3000) no sirve nada: se abre la vista previa. */}
           {openUrl ? (
             <>
@@ -746,7 +803,12 @@ export default function SiteEditor() {
         )}
         {githubNotice && <p className="px-4 py-2 text-xs bg-brand-500/10 border-b-2 border-brand-500/30">{githubNotice}</p>}
         {actionError && <p className="px-4 py-2 text-xs bg-red-50 border-b-2 border-red-300">{actionError}</p>}
-        {site.kind === "webapp" && !site.sandboxId ? (
+        {replayError && <p className="px-4 py-2 text-xs bg-red-50 border-b-2 border-red-300">{replayError}</p>}
+        {pane === "computer" ? (
+          <div className="flex-1 min-h-0 pb-12 md:pb-0">
+            <AgentComputer steps={lastSteps} live={busy} onTakeover={(sid) => requestTakeover(site.id, sid)} />
+          </div>
+        ) : site.kind === "webapp" && !site.sandboxId ? (
           <div className="flex-1 flex flex-col items-center justify-center gap-3 text-center px-6">
             <p className="font-bold">Falta la máquina de esta web app</p>
             <p className="text-sm text-gray-500 max-w-md">Se cobra aparte del plan. Completa el pago y vuelve aquí; la máquina se crea sola al confirmarse.</p>

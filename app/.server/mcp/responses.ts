@@ -27,9 +27,12 @@ type McpTextResponse = {
 
 /** Respuesta de éxito. Misma forma que ya usaban los ~134 handlers. */
 export function ok(data: unknown): McpTextResponse {
+  // El SDK exige que `structuredContent` sea un objeto: con `null` o un arreglo respondía
+  // «Invalid tools/call result» y la tool parecía rota (service_status sin caja, 23-oct).
+  const isRecord = typeof data === "object" && data !== null && !Array.isArray(data);
   return {
     content: [{ type: "text", text: JSON.stringify(data, null, 2) }],
-    structuredContent: data as object,
+    ...(isRecord ? { structuredContent: data as object } : {}),
   };
 }
 

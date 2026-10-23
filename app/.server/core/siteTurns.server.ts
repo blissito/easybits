@@ -15,6 +15,7 @@ import { recordFleetTurnUsage } from "./fleetUsage";
 import { getEngineForAgent } from "~/lib/fleetEngines";
 import { narracionAMarkdown, partirNarracion } from "~/lib/narracion";
 import { isDraining, registerDrain } from "~/.server/lifecycle.server";
+import { MAX_STEPS, stepKind, upsertStep, type AgentStep, type BrowserFrame } from "~/lib/agentSteps";
 
 type Site = Awaited<ReturnType<typeof getSite>>;
 export type TurnEvent = { type: string; [k: string]: unknown };
@@ -32,9 +33,12 @@ const TERMINAL = new Set(["done", "error", "capacity", "interrupted", "cancelled
 type Live = {
   turnId: string;
   groupId: string;
+  fleetAgentId: string;
   text: string;
   tools: string[];
   cortes: number[];
+  /** «La computadora del agente»: un paso por herramienta (ver ~/lib/agentSteps). */
+  steps: AgentStep[];
   finished: boolean;
   listeners: Set<(e: TurnEvent) => void>;
   /** «Detener» explícito: corta la lectura del worker (routeMessage `signal`). */
@@ -55,6 +59,39 @@ export class TurnBusy extends Error {
   constructor(readonly activeTurnId: string) {
     super("Ya hay un turno en curso en esta conversación");
   }
+}
+
+/** Aplica un cambio a un paso y lo emite completo (`step`): el cliente reemplaza por `id`. */
+function pushStep(l: Live, patch: Partial<AgentStep> & { id: string }) {
+  l.steps = upsertStep(l.steps, patch);
+  const step = l.steps.find((s) => s.id === patch.id);
+  if (step) emit(l, { type: "step", step });
+}
+
+/** ¿Esta sesión del navegador es del turno en curso de la conversación? («Tomar el control»). */
+export function liveBrowserSession(groupId: string, sessionId: string): { fleetAgentId: string } | null {
+  const l = live.get(groupId);
+  if (!l || l.finished) return null;
+  return l.steps.some((s) => s.browser?.sessionId === sessionId) ? { fleetAgentId: l.fleetAgentId } : null;
+}
+
+/** ¿Hay un panel mirando esta conversación? Si no (WhatsApp, otros canales), no se sube nada. */
+export function hasLiveTurn(fleetAgentId: string, groupId: string) {
+  const l = live.get(groupId);
+  return !!l && !l.finished && l.fleetAgentId === fleetAgentId;
+}
+
+/**
+ * Captura del navegador del agente (MCP render, tools browser_*) para el turno en vivo de esa
+ * conversación. Se cuelga del paso de navegador que está corriendo; si el worker aún no
+ * anunció la tool, crea uno propio. No-op si el turno no vive en este proceso.
+ */
+export function pushBrowserFrame(fleetAgentId: string, groupId: string, frame: BrowserFrame, tool: string) {
+  const l = live.get(groupId);
+  // Sólo el agente de esa conversación: el groupId viaja en un header del worker.
+  if (!l || l.finished || l.fleetAgentId !== fleetAgentId) return;
+  const running = [...l.steps].reverse().find((s) => s.kind === "browser" && s.status === "running");
+  pushStep(l, running ? { id: running.id, browser: frame } : { id: `browser-${Date.now()}`, tool, kind: "browser", status: "ok", startedAt: Date.now(), endedAt: Date.now(), browser: frame });
 }
 
 function emit(l: Live, e: TurnEvent) {
@@ -145,7 +182,7 @@ export async function startAgentTurn(ctx: AuthContext, spec: AgentTurnSpec): Pro
       startedAt,
     },
   });
-  const l: Live = { turnId, groupId, text: "", tools: [], cortes: [], finished: false, listeners: new Set(), abort: new AbortController() };
+  const l: Live = { turnId, groupId, fleetAgentId: spec.fleetAgentId, text: "", tools: [], cortes: [], steps: [], finished: false, listeners: new Set(), abort: new AbortController() };
   live.set(groupId, l);
   void runAgentTurn(spec, l, { agentText, isContinue: !!continuesTurnId, startedAt }).catch((e) =>
     console.error(`[${spec.surface}] turno`, turnId, e)
@@ -202,7 +239,7 @@ async function runAgentTurn(spec: AgentTurnSpec, l: Live, input: { agentText: st
   let dirty = false;
   const flush = () =>
     db.fleetTurn
-      .update({ where: { turnId: l.turnId }, data: { text: l.text, tools: l.tools, cortes: l.cortes, heartbeatAt: new Date() } })
+      .update({ where: { turnId: l.turnId }, data: { text: l.text, tools: l.tools, cortes: l.cortes, steps: l.steps, heartbeatAt: new Date() } })
       .catch(() => undefined);
   // Latido: aunque el agente pase minutos en una herramienta sin escribir, la fila dice
   // que este proceso sigue vivo (si no, el barrido lo daría por muerto).
@@ -264,6 +301,13 @@ async function runAgentTurn(spec: AgentTurnSpec, l: Live, input: { agentText: st
             }
             dirty = true;
             emit(l, { type: "tool", name, id: ev?.id, phase: ev?.phase, ok: ev?.ok });
+            if (ev?.id) {
+              const end = ev.phase === "end";
+              const step = end
+                ? { id: ev.id, status: ev.ok === false ? ("error" as const) : ("ok" as const), endedAt: Date.now() }
+                : { id: ev.id, tool: name, kind: stepKind(name), detail: ev.detail, command: ev.command, status: "running" as const, startedAt: Date.now() };
+              if (end || l.steps.length < MAX_STEPS) pushStep(l, step);
+            }
             if (ev?.phase === "end") extras = extras.then(emitExtras);
           },
         }
@@ -285,7 +329,7 @@ async function runAgentTurn(spec: AgentTurnSpec, l: Live, input: { agentText: st
     await db.fleetTurn
       .update({
         where: { turnId: l.turnId },
-        data: { state, error, text: l.text, tools: l.tools, cortes: l.cortes, heartbeatAt: new Date(), endedAt: new Date() },
+        data: { state, error, text: l.text, tools: l.tools, cortes: l.cortes, steps: l.steps, heartbeatAt: new Date(), endedAt: new Date() },
       })
       .catch((e) => console.error(`[${spec.surface}] cierre del turno`, l.turnId, e));
     if (state === "done") emit(l, { type: "done", value: reply });
@@ -324,7 +368,7 @@ async function saveNarrated(fleetAgentId: string, groupId: string, reply: string
 export function subscribeSiteTurn(groupId: string, send: (e: TurnEvent) => void, opts: { snapshot: boolean }): () => void {
   const l = live.get(groupId);
   if (l && !l.finished) {
-    if (opts.snapshot) send({ type: "snapshot", turnId: l.turnId, text: l.text, tools: l.tools, cortes: l.cortes });
+    if (opts.snapshot) send({ type: "snapshot", turnId: l.turnId, text: l.text, tools: l.tools, cortes: l.cortes, steps: l.steps });
     l.listeners.add(send);
     return () => l.listeners.delete(send);
   }
@@ -342,7 +386,7 @@ export function subscribeSiteTurn(groupId: string, send: (e: TurnEvent) => void,
       if (row.text !== lastText || row.tools.length !== lastTools) {
         lastText = row.text;
         lastTools = row.tools.length;
-        send({ type: "snapshot", turnId: row.turnId, text: row.text, tools: row.tools, cortes: row.cortes });
+        send({ type: "snapshot", turnId: row.turnId, text: row.text, tools: row.tools, cortes: row.cortes, steps: (row.steps as AgentStep[] | null) ?? [] });
       }
       setTimeout(() => void poll(), 2_000);
       return;
@@ -382,18 +426,49 @@ export async function cancelAgentTurn(groupId: string, turnId: string): Promise<
   return row.state === "running" ? "elsewhere" : "stopped";
 }
 
+/**
+ * Liga pública del replay de un turno (el último si no se dice cuál). Privado por default: sólo
+ * existe cuando el dueño la pide, y es la misma cada vez (idempotente).
+ */
+export async function shareTurnReplay(groupId: string, turnId?: string): Promise<string> {
+  const row = await db.fleetTurn.findFirst({
+    where: { groupId, ...(turnId ? { turnId } : { state: { not: "running" } }) },
+    orderBy: { startedAt: "desc" },
+    select: { id: true, shareToken: true },
+  });
+  if (!row) throw new Response("Turno no encontrado", { status: 404 });
+  if (row.shareToken) return row.shareToken;
+  const { randomBytes } = await import("node:crypto");
+  const shareToken = randomBytes(18).toString("base64url");
+  await db.fleetTurn.update({ where: { id: row.id }, data: { shareToken } });
+  return shareToken;
+}
+
+/** El replay compartido: lo que pidió la persona, lo que respondió el agente y sus pasos. */
+export async function getSharedReplay(token: string) {
+  if (!/^[\w-]{20,40}$/.test(token)) return null;
+  const row = await db.fleetTurn.findFirst({
+    where: { shareToken: token },
+    select: { userText: true, text: true, steps: true, startedAt: true, endedAt: true, state: true },
+  });
+  // Sin sessionId: con él, quien vea el replay podría manejar un navegador aún vivo.
+  const steps = ((row?.steps as AgentStep[] | null) ?? []).map((s) => (s.browser ? { ...s, browser: { ...s.browser, sessionId: undefined } } : s));
+  return row ? { ...row, steps } : null;
+}
+
 /** Estado para el editor al cargar: turno en curso o el último cortado (para «Continuar»). */
 export async function siteTurnStatus(groupId: string) {
   await sweepGroup(groupId).catch(() => undefined);
   const row = await db.fleetTurn.findFirst({
     where: { groupId },
     orderBy: { startedAt: "desc" },
-    select: { turnId: true, state: true },
+    select: { turnId: true, state: true, steps: true },
   });
   if (!row) return { activeTurn: null, lastTurn: null };
   return {
     activeTurn: row.state === "running" ? { turnId: row.turnId } : null,
-    lastTurn: { turnId: row.turnId, state: row.state },
+    // `steps`: al recargar, el panel «la computadora del agente» muestra el replay del último turno.
+    lastTurn: { turnId: row.turnId, state: row.state, steps: (row.steps as AgentStep[] | null) ?? [] },
   };
 }
 

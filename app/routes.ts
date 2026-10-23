@@ -86,6 +86,7 @@ export default [
   route("/videos/:storageKey", "routes/videos/public.tsx"),
   // Hosted standalone form (intake) — served at /f/:slug
   route("/f/:slug", "routes/f.$slug.tsx"),
+  route("/replay/:token", "routes/replay.$token.tsx"),
   // embed share
   route("/embed/video/:storageKey", "routes/videos/video.tsx"),
   // AI Chat
@@ -567,6 +568,8 @@ export default [
   // auth gate for a room + Yjs binary state persistence (externalized to storage).
   // Chat del creador de sitios (sesión del dueño; SSE)
   route("api/v2/sites/:id/chat", "routes/api/v2/sites.$id.chat.ts"),
+  route("api/v2/sites/:id/replay", "routes/api/v2/sites.$id.replay.ts"),
+  route("api/v2/sites/:id/takeover", "routes/api/v2/sites.$id.takeover.ts"),
   // Tema del sitio (botón «Tema», API/SDK/MCP)
   route("api/v2/sites/:id/theme", "routes/api/v2/sites.$id.theme.ts"),
   // Lista de sitios para API/SDK/CLI (Bearer)

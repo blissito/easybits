@@ -11,7 +11,10 @@ import { compareRender } from "~/.server/core/renderCompare";
 import { COMPARE_RENDER_DESC, compareRenderShape, compareRenderHint } from "~/.server/mcp/compareRenderTool";
 import { CLONE_PDF_DESC, clonePdfShape, clonePdfHint } from "~/.server/mcp/clonePdfTool";
 import { clonePdf } from "~/.server/core/pdfClone";
-import { browserOnBox, BrowserSessionGone, type BrowserView } from "~/.server/core/renderClient";
+import { browserOnBox, BrowserSessionGone, type BrowserAction, type BrowserView } from "~/.server/core/renderClient";
+import { hasLiveTurn, pushBrowserFrame } from "~/.server/core/siteTurns.server";
+import { getPlatformPublicClient, buildPublicAssetUrl } from "~/.server/storage";
+import { randomUUID } from "node:crypto";
 
 // Dedicated, always-on `render` MCP server for FleetAgents — Streamable-HTTP.
 // Injected per-turn into EVERY fleet agent (NOT gated by the easybits builtin
@@ -33,7 +36,28 @@ const PAPER: Record<string, { w: number; h: number }> = {
   legal: { w: 8.5, h: 14 },
 };
 
-function buildRenderServer(ctx: AuthContext): McpServer {
+/** Qué hizo la última acción, en palabras, para el panel («Escribió “Cholula”»). */
+function actionLabel(actions: BrowserAction[] | undefined, names: Map<string, string>): string | undefined {
+  const a = actions?.[actions.length - 1];
+  if (!a) return undefined;
+  const el = "ref" in a && a.ref ? names.get(a.ref) : undefined;
+  const q = (t?: string) => (t ? `«${t.slice(0, 40)}»` : "");
+  switch (a.type) {
+    case "click": return `Clic en ${q(el ?? a.text) || "un elemento"}`;
+    case "type": return `Escribió ${q(a.text)}${a.submit ? " y dio Enter" : ""}`;
+    case "press": return `Tecla ${a.key}`;
+    case "select": return `Eligió ${q(a.value)}`;
+    case "scroll": return a.direction === "up" ? "Subió en la página" : "Bajó en la página";
+    case "wait": return "Esperó a que cargara";
+    case "goto": return `Fue a ${a.url}`;
+    case "back": return "Regresó a la página anterior";
+  }
+}
+
+// Nombres de los elementos de la última vista por sesión: el paso dice «Clic en Buscar», no «ref 3».
+const lastNames = new Map<string, Map<string, string>>();
+
+function buildRenderServer(ctx: AuthContext, panel?: { fleetAgentId: string; groupId: string }): McpServer {
   const server = new McpServer({ name: "easybits-render", version: "1.0.0" });
   // ok()/fail() return structuredContent: unknown, which the SDK's stricter
   // CallToolResult type rejects; server.ts dodges this via wrapHandler→any. Same here.
@@ -232,10 +256,32 @@ function buildRenderServer(ctx: AuthContext): McpServer {
     "\n- La sesión dura ~3 min sin uso. Si responde que ya no existe, abre otra." +
     "\n- Sólo URLs públicas. No escribas contraseñas, tarjetas ni datos sensibles, ni resuelvas CAPTCHAs: pídeselo a la persona.";
 
-  const browserReply = (v: BrowserView, hint?: string) => {
+  // La caja SIEMPRE manda captura: el panel «la computadora del agente» la necesita. Al modelo
+  // sólo le llega si la pidió (pesa en su contexto).
+  const browserReply = async (v: BrowserView, opts: { wanted?: boolean; hint?: string; tool: string; actions?: BrowserAction[] }) => {
     const { screenshot, ...rest } = v;
-    const r = ok({ ...rest, ...(hint ? { hint } : {}) }) as { content: unknown[] };
-    if (screenshot) r.content.push({ type: "image", data: screenshot, mimeType: "image/jpeg" });
+    const names = lastNames.get(v.sessionId);
+    if (panel && screenshot && hasLiveTurn(panel.fleetAgentId, panel.groupId)) {
+      try {
+        const key = `agent-frames/${randomUUID()}.jpg`;
+        await getPlatformPublicClient().putObject(key, Buffer.from(screenshot, "base64"), "image/jpeg");
+        pushBrowserFrame(panel.fleetAgentId, panel.groupId, {
+          url: v.url,
+          title: v.title,
+          image: buildPublicAssetUrl(key),
+          viewport: v.viewport ?? undefined,
+          target: v.target ?? undefined,
+          action: v.failed ? `Falló: ${v.failed.error}` : actionLabel(opts.actions, names ?? new Map()),
+          sessionId: v.sessionId,
+        }, opts.tool);
+      } catch (e) {
+        console.error("[render] frame del panel", (e as Error).message);
+      }
+    }
+    lastNames.set(v.sessionId, new Map(v.elements.map((e) => [e.ref, e.name])));
+    if (lastNames.size > 200) lastNames.delete(lastNames.keys().next().value!);
+    const r = ok({ ...rest, ...(opts.hint ? { hint: opts.hint } : {}) }) as { content: unknown[] };
+    if (screenshot && opts.wanted) r.content.push({ type: "image", data: screenshot, mimeType: "image/jpeg" });
     return r;
   };
   const browserFail = (e: unknown) => fail(e instanceof BrowserSessionGone ? e.message : (e as Error).message);
@@ -261,8 +307,8 @@ function buildRenderServer(ctx: AuthContext): McpServer {
     },
     async (p) => {
       try {
-        const v = await browserOnBox(ctx, "open", { url: p.url, mobile: p.mobile, screenshot: p.screenshot });
-        return browserReply(v, `Sesión ${v.sessionId} abierta. Actúa con browser_act y ciérrala con browser_close al terminar.`);
+        const v = await browserOnBox(ctx, "open", { url: p.url, mobile: p.mobile, screenshot: true });
+        return browserReply(v, { wanted: p.screenshot, tool: "browser_open", hint: `Sesión ${v.sessionId} abierta. Actúa con browser_act y ciérrala con browser_close al terminar.` });
       } catch (e) {
         return browserFail(e);
       }
@@ -279,8 +325,13 @@ function buildRenderServer(ctx: AuthContext): McpServer {
     },
     async (p) => {
       try {
-        const v = await browserOnBox(ctx, "act", { sessionId: p.session_id, actions: p.actions, screenshot: p.screenshot });
-        return browserReply(v, v.failed ? `Falló la acción ${v.failed.index + 1}: ${v.failed.error}. La página quedó como se ve.` : undefined);
+        const v = await browserOnBox(ctx, "act", { sessionId: p.session_id, actions: p.actions, screenshot: true });
+        return browserReply(v, {
+          wanted: p.screenshot,
+          tool: "browser_act",
+          actions: p.actions,
+          hint: v.failed ? `Falló la acción ${v.failed.index + 1}: ${v.failed.error}. La página quedó como se ve.` : undefined,
+        });
       } catch (e) {
         return browserFail(e);
       }
@@ -293,7 +344,7 @@ function buildRenderServer(ctx: AuthContext): McpServer {
     { session_id: z.string(), screenshot: z.boolean().optional() },
     async (p) => {
       try {
-        return browserReply(await browserOnBox(ctx, "look", { sessionId: p.session_id, screenshot: p.screenshot }));
+        return browserReply(await browserOnBox(ctx, "look", { sessionId: p.session_id, screenshot: true }), { wanted: p.screenshot, tool: "browser_look" });
       } catch (e) {
         return browserFail(e);
       }
@@ -331,7 +382,8 @@ async function handle(request: Request, fleetAgentId: string): Promise<Response>
   const ctx = await ctxForOwner(fleetAgent.ownerId);
   if (!ctx) return Response.json({ error: "owner not found" }, { status: 401 });
 
-  const server = buildRenderServer(ctx);
+  const groupId = request.headers.get("x-eb-group");
+  const server = buildRenderServer(ctx, groupId ? { fleetAgentId: fleetAgent.id, groupId } : undefined);
   const transport = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined });
   await server.connect(transport);
   return transport.handleRequest(request, { authInfo: ctx as any });
