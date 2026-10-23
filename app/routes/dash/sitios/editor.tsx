@@ -142,6 +142,14 @@ export default function SiteEditor() {
     setReplayUrl(r.url);
     void navigator.clipboard?.writeText(r.url).catch(() => {});
   };
+  const unshareReplay = async () => {
+    await fetch(`/api/v2/sites/${site.id}/replay`, { method: "DELETE" }).catch(() => null);
+    setReplayUrl(null);
+  };
+  // Un turno nuevo deja vieja la liga del anterior.
+  useEffect(() => {
+    if (busy) setReplayUrl(null);
+  }, [busy]);
   // Turno que se cortó por un reinicio de la plataforma: se ofrece «Continuar».
   const [cutTurn, setCutTurn] = useState<string | null>(null);
   const sentRef = useRef(false);
@@ -713,9 +721,14 @@ export default function SiteEditor() {
           </div>
           {pane === "computer" && !busy && lastSteps.length > 0 && (
             replayUrl ? (
-              <a href={replayUrl} target="_blank" rel="noreferrer" className="shrink-0 text-xs font-bold text-brand-500">
-                Liga copiada · abrir replay ↗
-              </a>
+              <span className="flex shrink-0 items-center gap-2 text-xs font-bold">
+                <a href={replayUrl} target="_blank" rel="noreferrer" className="text-brand-500">
+                  Liga copiada · abrir replay ↗
+                </a>
+                <button type="button" onClick={unshareReplay} className="text-gray-500 underline hover:text-black">
+                  Dejar de compartir
+                </button>
+              </span>
             ) : (
               <button type="button" onClick={shareReplay} className="shrink-0 rounded-lg border-2 border-black px-2.5 py-0.5 text-xs font-bold hover:bg-brand-500/15">
                 Compartir replay

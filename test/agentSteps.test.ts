@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { stepKind, upsertStep, type AgentStep } from "~/lib/agentSteps";
+import { stepKind, upsertStep, type AgentStep, publicStep } from "~/lib/agentSteps";
 import { applyTurnEvent, type Msg } from "~/components/sitios/ChatMessages";
 import { ok } from "~/.server/mcp/responses";
 
@@ -35,5 +35,25 @@ describe("ok() del MCP", () => {
     expect(ok(null)).not.toHaveProperty("structuredContent");
     expect(ok([1, 2])).not.toHaveProperty("structuredContent");
     expect(ok({ a: 1 }).structuredContent).toEqual({ a: 1 });
+  });
+});
+
+describe("publicStep (replay público)", () => {
+  it("quita comando, sessionId y la query de la URL", () => {
+    const s = publicStep({
+      id: "1",
+      tool: "mcp__render__browser_open",
+      kind: "browser",
+      detail: "https://x.com/a?token=secreto",
+      command: 'curl -H "Authorization: Bearer eb_sk_123"',
+      status: "ok",
+      startedAt: 0,
+      browser: { url: "https://x.com/a?token=secreto#k", title: "X", image: "i.jpg", sessionId: "s1" },
+    });
+    expect(JSON.stringify(s)).not.toMatch(/secreto|eb_sk_|s1/);
+    expect(s.browser?.url).toBe("https://x.com/a");
+  });
+  it("deja sólo el nombre del archivo en el editor", () => {
+    expect(publicStep({ id: "2", tool: "Write", kind: "editor", detail: "/data/app/src/db.ts", status: "ok", startedAt: 0 }).detail).toBe("db.ts");
   });
 });

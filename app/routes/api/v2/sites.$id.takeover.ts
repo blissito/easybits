@@ -7,9 +7,9 @@ import { liveBrowserSession } from "~/.server/core/siteTurns.server";
 import { takeoverOnBox } from "~/.server/core/renderClient";
 
 // POST /api/v2/sites/:id/takeover {sessionId} — «Tomar el control» del navegador del agente.
-// Sólo una sesión que aparece en el turno EN CURSO de este sitio. Devuelve las URLs de la caja
-// (pestaña en vivo + clics/teclas) con un token de un solo dueño; el navegador habla directo
-// con la caja. Ruta de recurso: sin export default.
+// Sólo una sesión que aparece en el turno EN CURSO de este sitio. Devuelve URLs de EasyBits
+// (pestaña en vivo + clics/teclas) con un pase firmado; la caja nunca llega al navegador
+// (proxy en sites.$id.takeover.$op.ts). Ruta de recurso: sin export default.
 export async function action({ request, params }: Route.ActionArgs) {
   const user = await getUserOrNull(request).catch(() => null);
   if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
@@ -23,7 +23,7 @@ export async function action({ request, params }: Route.ActionArgs) {
   const owner = agent && (await db.user.findUnique({ where: { id: agent.ownerId } }));
   if (!owner) return Response.json({ error: "Agente no encontrado" }, { status: 404 });
   try {
-    return Response.json(await takeoverOnBox({ user: owner, scopes: ["READ", "WRITE"] } as AuthContext, sessionId));
+    return Response.json(await takeoverOnBox({ user: owner, scopes: ["READ", "WRITE"] } as AuthContext, sessionId, site.id));
   } catch (e) {
     return Response.json({ error: (e as Error).message }, { status: 502 });
   }

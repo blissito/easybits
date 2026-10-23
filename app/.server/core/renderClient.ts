@@ -17,6 +17,7 @@
  * brought up, ensureServiceBox throws → we render in-process. Ownerless callers
  * (e.g. the public quiz) have no budget to charge → they render in-process too.
  */
+import { createHmac, timingSafeEqual } from "node:crypto";
 import { db } from "../db";
 import type { AuthContext } from "../apiAuth";
 import { ensureServiceBox, touchServiceBox } from "./fleetServiceOperations";
@@ -170,7 +171,7 @@ async function postToBox(
   }
   const res = await fetch(`${box.renderUrl}${route}`, {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", ...boxKeyHeader() },
     body: JSON.stringify(payload),
     signal: AbortSignal.timeout(timeoutMs),
   });
@@ -253,23 +254,52 @@ export interface BrowserView {
 /** La sesión expiró o la caja se durmió: hay que abrir otra. */
 export class BrowserSessionGone extends Error {}
 
+// Llave de las cajas de render (render-svc la exige si la trae en su env). Sin ella, local/dev.
+const boxKeyHeader = (): Record<string, string> => (process.env.RENDER_BOX_KEY ? { "x-box-key": process.env.RENDER_BOX_KEY } : {});
+
+/** Pase de «tomar el control»: dueño de la caja + token de la caja + sitio, firmado. */
+type TakeoverPass = { o: string; t: string; s: string; e: number };
+const passSecret = () => process.env.RENDER_BOX_KEY || process.env.SECRET || "dev";
+const passSig = (body: string) => createHmac("sha256", passSecret()).update(body).digest("base64url");
+
+export function readTakeoverPass(pass: string, siteId: string): TakeoverPass | null {
+  const [body, sig] = pass.split(".");
+  if (!body || !sig) return null;
+  const a = Buffer.from(sig);
+  const b = Buffer.from(passSig(body));
+  if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
+  try {
+    const p = JSON.parse(Buffer.from(body, "base64url").toString()) as TakeoverPass;
+    return p.s === siteId && p.e > Date.now() ? p : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
- * «Tomar el control»: la caja entrega un token de un solo dueño y el navegador de la persona
- * habla DIRECTO con ella (pestaña en vivo por SSE + clics/teclas por POST, con CORS).
+ * «Tomar el control»: la caja entrega un token de un solo dueño, pero la persona NUNCA habla con
+ * la caja: recibe URLs de EasyBits con un pase firmado y la app hace de proxy (sites.$id.takeover.$op).
  */
-export async function takeoverOnBox(ctx: AuthContext, sessionId: string) {
-  const box = await ensureServiceBox(ctx, "render");
-  if (!box.renderUrl) throw new RenderBoxError("render box unavailable (host down or plan cap)");
+export async function takeoverOnBox(ctx: AuthContext, sessionId: string, siteId: string) {
   const r = await browserOnBox(ctx, "takeover", { sessionId });
   const { token, expiresInMs, viewport } = r as unknown as { token: string; expiresInMs: number; viewport: { width: number; height: number } };
-  const q = `?token=${encodeURIComponent(token)}`;
-  return {
-    liveUrl: `${box.renderUrl}/browser/human/live${q}`,
-    inputUrl: `${box.renderUrl}/browser/human/input${q}`,
-    releaseUrl: `${box.renderUrl}/browser/human/release${q}`,
-    viewport,
-    expiresInMs,
-  };
+  const body = Buffer.from(JSON.stringify({ o: ctx.user.id, t: token, s: siteId, e: Date.now() + expiresInMs } satisfies TakeoverPass)).toString("base64url");
+  const base = `/api/v2/sites/${siteId}/takeover/${body}.${passSig(body)}`;
+  return { liveUrl: `${base}/live`, inputUrl: `${base}/input`, releaseUrl: `${base}/release`, viewport, expiresInMs };
+}
+
+/** Proxy de la app a `/browser/human/*` de la caja del dueño. Devuelve la respuesta tal cual (SSE incluido). */
+export async function humanOnBox(ctx: AuthContext, op: "live" | "input" | "release", token: string, body?: string, signal?: AbortSignal) {
+  const box = await ensureServiceBox(ctx, "render");
+  if (!box.renderUrl) throw new RenderBoxError("render box unavailable (host down or plan cap)");
+  // La persona manejando cuenta como uso: sin esto el reaper duerme la caja a los 5 min.
+  void touchServiceBox(box.sandboxId);
+  return fetch(`${box.renderUrl}/browser/human/${op}`, {
+    method: op === "live" ? "GET" : "POST",
+    headers: { "content-type": "application/json", "x-takeover-token": token, ...boxKeyHeader() },
+    body: op === "live" ? undefined : body || "{}",
+    signal,
+  });
 }
 
 /**

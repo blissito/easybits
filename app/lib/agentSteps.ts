@@ -78,3 +78,29 @@ export function upsertStep(steps: AgentStep[], patch: Partial<AgentStep> & { id:
 
 /** Tope de pasos guardados por turno: un turno largo no debe crecer la fila sin límite. */
 export const MAX_STEPS = 300;
+
+/** URL sin query ni hash: un `?token=` o `#access_token` no sale en un replay. */
+function bareUrl(u: string): string {
+  try {
+    const x = new URL(u);
+    return x.origin + x.pathname;
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * Un paso tal como se ve en un replay PÚBLICO: sin el comando (puede traer llaves), sin
+ * `detail` salvo el nombre del archivo, URLs sin query y sin `sessionId` (con él, quien vea el
+ * replay podría manejar un navegador aún vivo).
+ */
+export function publicStep(s: AgentStep): AgentStep {
+  const { command: _c, detail, browser, ...rest } = s;
+  const out: AgentStep = { ...rest };
+  if (s.kind === "editor" && detail) out.detail = detail.split("/").pop();
+  if (browser) {
+    const { sessionId: _s, ...b } = browser;
+    out.browser = { ...b, url: bareUrl(b.url) };
+  }
+  return out;
+}

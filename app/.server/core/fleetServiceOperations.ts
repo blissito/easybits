@@ -91,6 +91,8 @@ const SERVICE_REGISTRY: Record<string, ServiceSpec> = {
     template: "render-svc",
     unit: "render-svc-runtime",
     envFile: "/etc/render-svc-runtime/.env",
+    // Llave de la caja: render-svc exige `x-box-key` si la trae (renderClient la manda).
+    env: () => ({ RENDER_BOX_KEY: process.env.RENDER_BOX_KEY || "" }),
     ports: [9300],
     readyPaths: { 9300: "/health" },
     ttlSeconds: 1800,

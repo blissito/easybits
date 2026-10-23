@@ -15,7 +15,7 @@ import { recordFleetTurnUsage } from "./fleetUsage";
 import { getEngineForAgent } from "~/lib/fleetEngines";
 import { narracionAMarkdown, partirNarracion } from "~/lib/narracion";
 import { isDraining, registerDrain } from "~/.server/lifecycle.server";
-import { MAX_STEPS, stepKind, upsertStep, type AgentStep, type BrowserFrame } from "~/lib/agentSteps";
+import { MAX_STEPS, publicStep, stepKind, upsertStep, type AgentStep, type BrowserFrame } from "~/lib/agentSteps";
 
 type Site = Awaited<ReturnType<typeof getSite>>;
 export type TurnEvent = { type: string; [k: string]: unknown };
@@ -444,6 +444,11 @@ export async function shareTurnReplay(groupId: string, turnId?: string): Promise
   return shareToken;
 }
 
+/** Deja de compartir: la liga pública responde 404 desde ya. */
+export async function unshareTurnReplays(groupId: string) {
+  await db.fleetTurn.updateMany({ where: { groupId, shareToken: { not: null } }, data: { shareToken: null } });
+}
+
 /** El replay compartido: lo que pidió la persona, lo que respondió el agente y sus pasos. */
 export async function getSharedReplay(token: string) {
   if (!/^[\w-]{20,40}$/.test(token)) return null;
@@ -451,8 +456,7 @@ export async function getSharedReplay(token: string) {
     where: { shareToken: token },
     select: { userText: true, text: true, steps: true, startedAt: true, endedAt: true, state: true },
   });
-  // Sin sessionId: con él, quien vea el replay podría manejar un navegador aún vivo.
-  const steps = ((row?.steps as AgentStep[] | null) ?? []).map((s) => (s.browser ? { ...s, browser: { ...s.browser, sessionId: undefined } } : s));
+  const steps = ((row?.steps as AgentStep[] | null) ?? []).map(publicStep);
   return row ? { ...row, steps } : null;
 }
 
