@@ -2,6 +2,11 @@ import type { Config } from "@react-router/dev/config";
 
 export default {
   ssr: true,
+  // Desde react-router 7.18 una acción se rechaza (400 «Bad Request») si el Origin no coincide
+  // con request.url, ESQUEMA incluido. Detrás de Caddy la app ve http:// y el navegador manda
+  // https:// → todo POST .data (login incluido) fallaba desde el bump del 20-oct. Sólo nuestros
+  // dominios: NUNCA *.easybits.cloud, que sirve sitios de usuarios (sería CSRF abierto).
+  allowedActionOrigins: ["www.easybits.cloud", "easybits.cloud"],
   prerender: async () => [
     // Rutas de marketing: contenido fijo que vale la pena servir ya horneado.
     "/inicio",
