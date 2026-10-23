@@ -54,7 +54,12 @@ export function AgentComputer({
   const [playing, setPlaying] = useState(autoplay);
   const last = steps.length - 1;
   const idx = pinned === null ? last : Math.min(pinned, last);
-  const step = steps[idx];
+  const raw = steps[idx];
+  // Un paso del navegador sin captura propia («abriendo…», cerrar) muestra la última captura,
+  // atenuada: antes se quedaba en «Cargando la página…» hasta el final del turno.
+  const prevFrame = raw?.kind === "browser" && !raw.browser ? steps.slice(0, idx).reverse().find((s) => s.browser?.image)?.browser : undefined;
+  const step = prevFrame ? { ...raw, browser: { ...prevFrame, action: undefined, target: undefined, url: raw.detail ?? prevFrame.url } } : raw;
+  const stale = !!prevFrame;
   const following = pinned === null;
 
   // Si el visitante regresa al último paso con la barra, vuelve a seguir en vivo.
@@ -128,6 +133,7 @@ export function AgentComputer({
             ) : step.kind === "browser" ? (
               <BrowserView
                 step={step}
+                stale={stale}
                 onTakeover={
                   onTakeover && live && following && step.browser?.sessionId
                     ? async () => {
@@ -236,7 +242,7 @@ function StatusDot({ status, running }: { status: AgentStep["status"]; running: 
 }
 
 /** Navegador: barra con la URL, la captura y el elemento tocado marcado encima. */
-function BrowserView({ step, onTakeover, error }: { step: AgentStep; onTakeover?: () => void; error?: string | null }) {
+function BrowserView({ step, stale, onTakeover, error }: { step: AgentStep; stale?: boolean; onTakeover?: () => void; error?: string | null }) {
   const f = step.browser;
   const imgRef = useRef<HTMLImageElement>(null);
   const [scale, setScale] = useState(0);
@@ -267,7 +273,7 @@ function BrowserView({ step, onTakeover, error }: { step: AgentStep; onTakeover?
         <div className="relative min-h-0 flex-1 overflow-auto">
           {f ? (
             <div className="relative">
-              <img ref={imgRef} src={f.image} alt={f.title || "Página que ve el agente"} className="block w-full" />
+              <img ref={imgRef} src={f.image} alt={f.title || "Página que ve el agente"} className={`block w-full ${stale ? "opacity-50" : ""}`} />
               {f.target && scale > 0 && (
                 <motion.span
                   key={f.image}
