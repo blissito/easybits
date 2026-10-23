@@ -286,7 +286,7 @@ function BrowserView({ step, stale, onTakeover, error }: { step: AgentStep; stal
               )}
             </div>
           ) : (
-            <div className="grid h-full place-items-center text-sm text-gray-400">Cargando la página…</div>
+            <div className="grid h-full place-items-center text-sm text-gray-400">{step.status === "running" ? "Cargando la página…" : "Este paso no dejó captura"}</div>
           )}
         </div>
       </div>
