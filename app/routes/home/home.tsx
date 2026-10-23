@@ -18,7 +18,6 @@ import type { User } from "@prisma/client";
 import getBasicMetaTags from "~/utils/getBasicMetaTags";
 import { Steps } from "./Steps";
 import { VideoShort } from "./VideoShort";
-import { ReplayDemo } from "./ReplayDemo";
 import { getUserOrNull } from "~/.server/getters";
 import { PLANS } from "~/lib/plans";
 
@@ -128,7 +127,6 @@ export default function Home({ loaderData }: Route.ComponentProps) {
       </a>
 
       <Hero loggedIn={!!user?.id} />
-      <ReplayDemo />
 
       {/* ── Productos: seis sustantivos, un componente ── */}
       <Bento
