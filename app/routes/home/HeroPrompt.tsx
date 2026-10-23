@@ -315,7 +315,7 @@ export function HeroPrompt({ loggedIn }: { loggedIn: boolean }) {
             <motion.div
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0, transition: { delay: reduce ? 0 : 0.3 } }}
-              className="flex w-full md:w-[38%] md:max-w-md flex-col gap-6 overflow-y-auto px-4 py-6 md:border-r-2 md:border-black"
+              className="flex w-full md:w-[38%] md:min-w-[320px] md:max-w-md md:shrink-0 flex-col gap-6 overflow-y-auto px-4 py-6 md:border-r-2 md:border-black"
             >
               <UserMessage msg={{ role: "user", text: sent }} />
               {phase === "auth" ? (
@@ -333,7 +333,7 @@ export function HeroPrompt({ loggedIn }: { loggedIn: boolean }) {
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1, transition: { delay: reduce ? 0 : 0.35 } }}
-              className="hidden md:flex flex-1 flex-col gap-3 bg-gray-50 p-4"
+              className="hidden md:flex min-w-0 flex-1 flex-col gap-3 bg-gray-50 p-4"
             >
               {/* Vista previa de la app o «la computadora del agente» (lo que hace, paso a paso). */}
               <div role="tablist" className="flex gap-2">
