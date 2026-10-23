@@ -63,6 +63,15 @@ export function HeroPrompt({ loggedIn }: { loggedIn: boolean }) {
   // La caja responde en su servidor de desarrollo: hasta entonces se ve la plantilla de muestra.
   const [previewReady, setPreviewReady] = useState(false);
   const reduce = useReducedMotion();
+  // «Continuar»: el último sitio de la persona. El editor se re-engancha solo al turno en curso.
+  const [lastSite, setLastSite] = useState<{ id: string; name: string } | null>(null);
+  useEffect(() => {
+    if (!loggedIn) return;
+    fetch("/api/v2/sites")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => d?.items?.[0] && setLastSite({ id: d.items[0].id, name: d.items[0].name }))
+      .catch(() => {});
+  }, [loggedIn]);
   const open = phase !== "idle";
   const working = phase === "creating" || phase === "running";
   // La vista previa se recarga con el trabajo del agente, pero no más de una vez cada 6 s.
@@ -246,6 +255,14 @@ export function HeroPrompt({ loggedIn }: { loggedIn: boolean }) {
             </form>
 
             <div className="mt-4 flex flex-wrap justify-center md:justify-start gap-2">
+              {lastSite && (
+                <a
+                  href={`/dash/sitios/${lastSite.id}`}
+                  className="flex max-w-full items-center gap-1.5 rounded-full border-2 border-black bg-brand-500 py-1 pl-3 pr-3 text-sm font-bold shadow-[2px_2px_0_0_#000] transition-all hover:-translate-y-0.5 active:translate-y-0 active:shadow-none"
+                >
+                  <span className="truncate">Continuar «{lastSite.name}»</span> →
+                </a>
+              )}
               {CHIPS.map(({ Art, label, prompt }) => (
                 <button
                   key={label}

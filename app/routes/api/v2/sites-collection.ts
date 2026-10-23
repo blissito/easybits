@@ -9,8 +9,14 @@ import { paginate } from "~/.server/mcp/responses";
 
 // GET /api/v2/sites — los sitios de /dash/sitios (estáticos y web apps, con su motor).
 // Ruta de recurso: sólo loader, sin export default (si no, sirve el shell de la SPA).
+// También con la sesión del navegador: el hero de la home ofrece «Continuar» el último sitio.
 export async function loader({ request }: Route.LoaderArgs) {
-  const ctx = requireAuth(await authenticateRequest(request));
+  let auth = await authenticateRequest(request);
+  if (!auth) {
+    const user = await getUserOrNull(request).catch(() => null);
+    if (user) auth = { user, scopes: ["READ"] } as AuthContext;
+  }
+  const ctx = requireAuth(auth);
   const items = await listSiteSummaries(ctx);
   return Response.json(paginate(items, { total: items.length }));
 }
