@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { stepKind, upsertStep, type AgentStep, publicStep, lastIntent, cleanStepResult, cleanTodos, currentPlan, stepsSignature, turnSummary, formatWorked } from "~/lib/agentSteps";
+import { stepKind, upsertStep, type AgentStep, publicStep, lastIntent, cleanStepResult, cleanTodos, currentPlan, stepsSignature, turnSummary, formatWorked, normalizeStepResult, isPlumbing } from "~/lib/agentSteps";
 import { applyTurnEvent, type Msg } from "~/components/sitios/ChatMessages";
 import { ok } from "~/.server/mcp/responses";
 
@@ -141,5 +141,17 @@ describe("cierre del turno", () => {
     expect(turnSummary([])).toBeNull();
     expect(formatWorked(48_000)).toBe("48 s");
     expect(formatWorked(185_000)).toBe("3 min");
+  });
+});
+
+describe("presentación del resultado", () => {
+  it("sandbox_exec ({exitCode, stdout, stderr}) se lee como terminal", () => {
+    expect(normalizeStepResult({ summary: '{"exitCode":2,"stdout":"a\\nb","stderr":"err"}' })).toEqual({ summary: "a\nb\nerr", exitCode: 2 });
+    expect(normalizeStepResult({ summary: '{"ok":true}' })).toEqual({ summary: '{"ok":true}' });
+    expect(normalizeStepResult({ summary: "texto" })).toEqual({ summary: "texto" });
+  });
+  it("el plan y ToolSearch son trámite, no pasos", () => {
+    for (const t of ["TodoWrite", "TaskCreate", "TaskUpdate", "ToolSearch", "mcp__easybits__discover_tools"]) expect(isPlumbing(t)).toBe(true);
+    for (const t of ["Bash", "WebSearch", "mcp__easybits__sandbox_exec"]) expect(isPlumbing(t)).toBe(false);
   });
 });

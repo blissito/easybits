@@ -3,7 +3,7 @@ import { Link } from "react-router";
 import { Streamdown } from "streamdown";
 import { LuCheck } from "react-icons/lu";
 import { partirNarracion } from "~/lib/narracion";
-import { formatWorked, stepVerb, turnSummary, upsertStep, type AgentStep } from "~/lib/agentSteps";
+import { formatWorked, isPlumbing, stepVerb, turnSummary, upsertStep, type AgentStep } from "~/lib/agentSteps";
 
 // Mensajes del chat del creador de sitios. Los usan el editor (/dash/sitios/:id) y el
 // morph del hero de la home: un solo formato (pasos con palomita, markdown, tools
@@ -98,7 +98,7 @@ export function BotMessage({
 }) {
   const { pasos, resto } = partirNarracion(msg.text, msg.cortes);
   const secs = useElapsed(live);
-  const steps = (msg.steps ?? []).filter((s) => !/todowrite/i.test(s.tool));
+  const steps = (msg.steps ?? []).filter((s) => !isPlumbing(s.tool));
   return (
     <div className="min-w-0 text-[15px] leading-6 text-gray-900">
       {msg.tools && msg.tools.length > 0 && (

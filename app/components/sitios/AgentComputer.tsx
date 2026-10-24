@@ -1,7 +1,7 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { LuChevronLeft, LuChevronRight, LuFileCode, LuGlobe, LuListChecks, LuPause, LuPlay, LuSearch, LuTerminal, LuWrench } from "react-icons/lu";
-import { KIND_LABEL, currentPlan, stepVerb, type AgentStep, type StepKind, type StepTodo } from "~/lib/agentSteps";
+import { KIND_LABEL, currentPlan, isPlumbing, stepVerb, type AgentStep, type StepKind, type StepTodo } from "~/lib/agentSteps";
 
 type BrowserTarget = NonNullable<NonNullable<AgentStep["browser"]>["target"]>;
 
@@ -103,7 +103,7 @@ export function AgentComputer({
   const [takeoverError, setTakeoverError] = useState<string | null>(null);
   const owner = agentName ? `de ${agentName}` : "del agente";
   // El plan (TodoWrite) no es un paso que se mire: va en su franja, arriba.
-  const steps = useMemo(() => allSteps.filter((s) => !/todowrite/i.test(s.tool)), [allSteps]);
+  const steps = useMemo(() => allSteps.filter((s) => !isPlumbing(s.tool)), [allSteps]);
   // null = seguir en vivo (el último paso). Un número = el visitante retrocedió a ese paso.
   const [pinned, setPinned] = useState<number | null>(autoplay && steps.length > 1 ? 0 : null);
   const [playing, setPlaying] = useState(autoplay);

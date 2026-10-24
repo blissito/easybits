@@ -59,11 +59,19 @@ export type AgentStep = {
   todos?: StepTodo[];
 };
 
+/**
+ * Herramientas de trámite (el plan, buscar qué tools hay): no son trabajo que mirar. El plan
+ * sale en su franja; lo demás no se pinta como paso ni cuenta en el cierre.
+ */
+export function isPlumbing(tool: string): boolean {
+  return /todowrite|^task(create|update|list|get|output|stop)$|toolsearch|tool_search|discover_tools/i.test(tool);
+}
+
 export function stepKind(tool: string): StepKind {
   const t = tool.toLowerCase();
   if (/browser_|render_url|screenshot|web_interact/.test(t)) return "browser";
   if (/websearch|web_search|research_search|search_docs|grep|glob|tool_?search|discover/.test(t)) return "search";
-  if (/todowrite/.test(t)) return "other";
+  if (isPlumbing(t)) return "other";
   if (/write|edit|patch|notebook|read|file|theme/.test(t)) return "editor";
   if (/bash|exec|_bg|logs|restart|launch|gs_box|sandbox|run_tool|npm|deploy/.test(t)) return "terminal";
   return "other";
@@ -149,6 +157,23 @@ export function cleanTodos(v: unknown): StepTodo[] | undefined {
   return todos.length ? todos : undefined;
 }
 
+/**
+ * La salida de una tool que regresa JSON de ejecución (`sandbox_exec` de EasyBits:
+ * `{exitCode, stdout, stderr}`) se lee como la de una terminal, no como JSON crudo.
+ */
+export function normalizeStepResult(r: StepResult | undefined): StepResult | undefined {
+  if (!r?.summary || !/^\s*\{/.test(r.summary)) return r;
+  let o: Record<string, unknown>;
+  try {
+    o = JSON.parse(r.summary);
+  } catch {
+    return r;
+  }
+  if (!o || typeof o !== "object" || !("stdout" in o || "stderr" in o)) return r;
+  const out = [o.stdout, o.stderr].filter((x) => typeof x === "string" && x.trim()).join("\n").trim();
+  return { ...r, summary: out || undefined, ...(typeof o.exitCode === "number" ? { exitCode: o.exitCode } : {}) };
+}
+
 /** El plan vigente del turno: el último paso que lo escribió. */
 export function currentPlan(steps: AgentStep[], upTo = steps.length - 1): StepTodo[] | undefined {
   for (let i = Math.min(upTo, steps.length - 1); i >= 0; i--) if (steps[i].todos?.length) return steps[i].todos;
@@ -212,7 +237,7 @@ export function lastIntent(narration: string): string | undefined {
  * largo del turno como prueba de lo que hizo (las del plan no cuentan como paso).
  */
 export function turnSummary(steps: AgentStep[], maxThumbs = 6) {
-  const real = steps.filter((s) => !/todowrite/i.test(s.tool));
+  const real = steps.filter((s) => !isPlumbing(s.tool));
   if (!real.length) return null;
   const start = Math.min(...real.map((s) => s.startedAt));
   const end = Math.max(...real.map((s) => s.endedAt ?? s.startedAt));
