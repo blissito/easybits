@@ -1132,7 +1132,10 @@ export const brightdataBrowserSessionService: ServiceDef<Record<string, never>, 
     return INTERACT_COST;
   },
   async execute() {
-    return { cost: INTERACT_COST, data: { ws: await browserEndpoint() } };
+    // Salida desde México: sin esto Bright Data elegía cualquier país y Google respondía en
+    // portugués («Pesquisa Google») con resultados de Brasil.
+    const ws = (await browserEndpoint()).replace(/(-zone-[^:]+):/, "$1-country-mx:");
+    return { cost: INTERACT_COST, data: { ws } };
   },
 };
 

@@ -35,6 +35,31 @@ import { QuotaExceededError } from "~/.server/services/errors";
 // ese caso: navegar todo por ahí costaría por GB lo que hoy es gratis.
 /** Sesiones que ya van por el navegador antibot: no se reabren otra vez. */
 const remoteSessions = new Set<string>();
+// Hosts que bloquean al Chromium de la caja: van DIRECTO al navegador antibot y se ahorran el
+// intento local (5-15 s perdidos por página). Los buscadores bloquean siempre; el resto se
+// aprende la primera vez que un host regresa captcha y se recuerda una hora.
+const ALWAYS_BLOCKED = /(^|\.)(google\.[a-z.]+|duckduckgo\.com|bing\.com|search\.brave\.com|yandex\.[a-z]+)$/;
+const learnedBlocked = new Map<string, number>();
+const hostOf = (u: string) => {
+  try {
+    return new URL(u).hostname.toLowerCase();
+  } catch {
+    return "";
+  }
+};
+const knownBlocked = (u: string) => {
+  const h = hostOf(u);
+  if (!h) return false;
+  if (ALWAYS_BLOCKED.test(h)) return true;
+  const at = learnedBlocked.get(h);
+  return !!at && Date.now() - at < 60 * 60_000;
+};
+const learnBlocked = (u: string) => {
+  const h = hostOf(u);
+  if (!h) return;
+  learnedBlocked.set(h, Date.now());
+  if (learnedBlocked.size > 500) learnedBlocked.delete(learnedBlocked.keys().next().value!);
+};
 const DOMAIN_LIMIT_HINT =
   "El navegador antibot sólo navega dentro del dominio con que se abrió. Para otro sitio, abre otra sesión con browser_open.";
 
@@ -312,7 +337,7 @@ function buildRenderServer(ctx: AuthContext, panel?: { fleetAgentId: string; gro
     }
   };
   const ANTIBOT_HINT = (id: string) =>
-    `La página pedía captcha: la reabrí por el navegador antibot (sesión ${id}, cuesta 5 consultas web). ${DOMAIN_LIMIT_HINT}`;
+    `Esta página bloquea navegadores automáticos: la abrí por el navegador antibot (sesión ${id}, cuesta 5 consultas web). ${DOMAIN_LIMIT_HINT}`;
 
   const actionSchema = z.discriminatedUnion("type", [
     z.object({ type: z.literal("click"), ref: z.string().optional(), text: z.string().optional().describe("texto visible, si no tienes ref") }),
@@ -335,8 +360,13 @@ function buildRenderServer(ctx: AuthContext, panel?: { fleetAgentId: string; gro
     },
     async (p) => {
       try {
+        if (knownBlocked(p.url)) {
+          const r = await antibot(p.url, p.mobile);
+          if ("v" in r) return browserReply(r.v, { wanted: p.screenshot, tool: "browser_open", hint: ANTIBOT_HINT(r.v.sessionId) });
+        }
         const v = await browserOnBox(ctx, "open", { url: p.url, mobile: p.mobile, screenshot: true });
         if (looksBlocked(v)) {
+          learnBlocked(p.url);
           const r = await antibot(p.url, p.mobile);
           if ("v" in r) {
             await browserOnBox(ctx, "close", { sessionId: v.sessionId }).catch(() => undefined);
@@ -364,6 +394,7 @@ function buildRenderServer(ctx: AuthContext, panel?: { fleetAgentId: string; gro
         const v = await browserOnBox(ctx, "act", { sessionId: p.session_id, actions: p.actions, screenshot: true });
         // Una acción que llevó a un muro antibot: se sigue en el navegador antibot desde esa URL.
         if (!remoteSessions.has(p.session_id) && looksBlocked(v) && /^https?:/.test(v.url)) {
+          learnBlocked(v.url);
           const r = await antibot(v.url);
           if ("v" in r) {
             await browserOnBox(ctx, "close", { sessionId: p.session_id }).catch(() => undefined);
