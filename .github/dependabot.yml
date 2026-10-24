@@ -19,6 +19,9 @@ updates:
     groups:
       cli-minor-and-patch:
         update-types: [minor, patch]
+      # tsup va en grupo aparte: sus majores cambian el Node mínimo y se revisan juntos.
+      cli-tsup:
+        patterns: ["tsup"]
   - package-ecosystem: github-actions
     directory: "/"
     schedule:
