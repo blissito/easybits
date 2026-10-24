@@ -18,6 +18,7 @@ import { randomUUID } from "node:crypto";
 import { consumeService } from "~/.server/services/consume";
 import { QuotaExceededError } from "~/.server/services/errors";
 import { INTERACT_COST } from "~/.server/services/providers/brightdata";
+import { releaseHandoff, waitForRelease } from "~/.server/core/browserHandoff";
 
 // Dedicated, always-on `render` MCP server for FleetAgents — Streamable-HTTP.
 // Injected per-turn into EVERY fleet agent (NOT gated by the easybits builtin
@@ -308,11 +309,19 @@ function buildRenderServer(ctx: AuthContext, panel?: { fleetAgentId: string; gro
     "\n\n- Cada respuesta trae `url`, `title`, `text` (texto visible) y `elements`: lo que se puede tocar, con su `ref`. Los `ref` cambian tras cada acción: usa los de la ÚLTIMA respuesta." +
     "\n- `screenshot: true` añade la captura del viewport como imagen. Pídela sólo cuando el texto no baste (diseño, CAPTCHA, imágenes): pesa en tu contexto." +
     "\n- La sesión dura ~3 min sin uso. Si responde que ya no existe, abre otra." +
-    "\n- Sólo URLs públicas. No escribas contraseñas, tarjetas ni datos sensibles, ni resuelvas CAPTCHAs: pídeselo a la persona.";
+    "\n- Sólo URLs públicas. No escribas contraseñas, tarjetas ni datos sensibles, ni resuelvas CAPTCHAs: pídeselo a la persona con `browser_ask_human` (inicia sesión, pasa el captcha o el código y te devuelve el control en el mismo turno)." +
+    "\n- Antes de decir que algo quedó, compruébalo en la página (el texto o la URL de la última respuesta). Si la página no cambia tras una acción, no la repitas igual: cambia de plan o pide ayuda.";
+  // Una página con campo de contraseña: que pida ayuda en vez de escribirla.
+  const LOGIN_HINT = "La página pide iniciar sesión. No escribas la contraseña: llama browser_ask_human para que la persona entre y te devuelva el control.";
+  const loginHint = (v: BrowserView) => (v.elements?.some((e) => (e as { type?: string }).type === "password") ? LOGIN_HINT : undefined);
+  // Pedir ayuda: tramos de 2 min (la llamada MCP no se queda colgada más) hasta 10 min en total.
+  const ASK_CHUNK_MS = 120_000;
+  const ASK_TOTAL_MS = 10 * 60_000;
+  const askedAt = new Map<string, number>();
 
   // La caja SIEMPRE manda captura: el panel «la computadora del agente» la necesita. Al modelo
   // sólo le llega si la pidió (pesa en su contexto).
-  const browserReply = async (v: BrowserView, opts: { wanted?: boolean; hint?: string; tool: string; actions?: BrowserAction[] }) => {
+  const browserReply = async (v: BrowserView, opts: { wanted?: boolean; hint?: string; tool: string; actions?: BrowserAction[]; needsHuman?: string; extra?: Record<string, unknown> }) => {
     // `pageShot` (la página completa) es sólo para el panel: al modelo nunca le llega.
     const { screenshot, pageShot, scrollY, ...rest } = v;
     const names = lastNames.get(v.sessionId);
@@ -329,6 +338,8 @@ function buildRenderServer(ctx: AuthContext, panel?: { fleetAgentId: string; gro
           ...(pageShot && scrollY ? { scrollY } : {}),
           action: v.failed ? `Falló: ${v.failed.error}` : actionLabel(opts.actions, names ?? new Map()),
           sessionId: v.sessionId,
+          // El panel enseña «Te necesito aquí · …» con «Tomar el control» al frente y se abre solo.
+          ...(opts.needsHuman ? { needsHuman: opts.needsHuman } : {}),
         }, opts.tool);
       } catch (e) {
         console.error("[render] frame del panel", (e as Error).message);
@@ -336,7 +347,7 @@ function buildRenderServer(ctx: AuthContext, panel?: { fleetAgentId: string; gro
     }
     lastNames.set(v.sessionId, new Map(v.elements.map((e) => [e.ref, e.name])));
     if (lastNames.size > 200) lastNames.delete(lastNames.keys().next().value!);
-    const r = ok({ ...rest, ...(opts.hint ? { hint: opts.hint } : {}) }) as { content: unknown[] };
+    const r = ok({ ...rest, ...(opts.extra ?? {}), ...(opts.hint ? { hint: opts.hint } : {}) }) as { content: unknown[] };
     if (screenshot && opts.wanted) r.content.push({ type: "image", data: screenshot, mimeType: "image/jpeg" });
     return r;
   };
@@ -416,7 +427,7 @@ function buildRenderServer(ctx: AuthContext, panel?: { fleetAgentId: string; gro
           }
           return browserReply(v, { wanted: p.screenshot, tool: "browser_open", hint: `La página pide captcha y no se pudo usar el navegador antibot (${r.error}). No lo resuelvas tú: usa web_search/web_fetch o pídele ayuda a la persona.` });
         }
-        return browserReply(v, { wanted: p.screenshot, tool: "browser_open", hint: `Sesión ${v.sessionId} abierta. Actúa con browser_act y ciérrala con browser_close al terminar.` });
+        return browserReply(v, { wanted: p.screenshot, tool: "browser_open", hint: loginHint(v) ?? `Sesión ${v.sessionId} abierta. Actúa con browser_act y ciérrala con browser_close al terminar.` });
       } catch (e) {
         return browserFail(e);
       }
@@ -473,8 +484,40 @@ function buildRenderServer(ctx: AuthContext, panel?: { fleetAgentId: string; gro
     }
   );
 
+  tool(
+    "browser_ask_human",
+    "Cuando la página necesita a la persona (iniciar sesión, un captcha, un código de verificación, confirmar un pago, cualquier dato que no debes escribir tú), llama ESTA tool en vez de terminar tu respuesta. La persona ve el aviso con «Tomar el control» en la computadora del agente, lo resuelve en ese mismo navegador y te lo devuelve: la tool regresa `done: true` con la página como quedó y sigues en el mismo turno. Si regresa `waiting: true`, vuélvela a llamar igual para seguir esperando (hasta ~10 min en total). `instructions`: qué tiene que hacer, en una frase corta y clara («Inicia sesión con tu cuenta de Deník»).",
+    {
+      session_id: z.string().describe("el sessionId de browser_open"),
+      instructions: z.string().describe("qué tiene que hacer la persona, en una frase"),
+      reason: z.enum(["login", "captcha", "code", "payment", "other"]).optional(),
+      screenshot: z.boolean().optional(),
+    },
+    async (p) => {
+      try {
+        const sid = p.session_id;
+        const instructions = p.instructions.trim().slice(0, 300) || "El agente necesita tu ayuda en esta página.";
+        const first = askedAt.get(sid) ?? Date.now();
+        askedAt.set(sid, first);
+        if (askedAt.size > 200) askedAt.delete(askedAt.keys().next().value!);
+        // La captura de ahora con el aviso: el panel enseña «Tomar el control» al frente.
+        await browserReply(await browserOnBox(ctx, "look", { sessionId: sid, screenshot: true, fullPage: true }), { tool: "browser_ask_human", needsHuman: instructions });
+        const released = await waitForRelease(sid, Math.min(ASK_CHUNK_MS, Math.max(0, first + ASK_TOTAL_MS - Date.now())));
+        const v = await browserOnBox(ctx, "look", { sessionId: sid, screenshot: true, fullPage: true });
+        if (released || Date.now() - first >= ASK_TOTAL_MS) askedAt.delete(sid);
+        if (released) return browserReply(v, { wanted: p.screenshot, tool: "browser_ask_human", extra: { done: true }, hint: "La persona terminó y te devolvió el control. Revisa la página y sigue." });
+        if (!askedAt.has(sid)) return browserReply(v, { wanted: p.screenshot, tool: "browser_ask_human", extra: { done: false, reason: "timeout" }, hint: "La persona no respondió en 10 min. Cierra el navegador y dile en tu respuesta qué falta para seguir." });
+        return browserReply(v, { wanted: p.screenshot, tool: "browser_ask_human", needsHuman: instructions, extra: { done: false, waiting: true }, hint: "La persona todavía no termina. Vuelve a llamar browser_ask_human con lo mismo para seguir esperando." });
+      } catch (e) {
+        return browserFail(e);
+      }
+    }
+  );
+
   tool("browser_close", "Cierra una sesión de navegador cuando terminaste. Libera la caja.", { session_id: z.string() }, async (p) => {
     try {
+      askedAt.delete(p.session_id);
+      releaseHandoff(p.session_id);
       await browserOnBox(ctx, "close", { sessionId: p.session_id });
       return ok({ closed: true });
     } catch (e) {

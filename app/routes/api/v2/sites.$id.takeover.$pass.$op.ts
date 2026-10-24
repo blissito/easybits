@@ -5,6 +5,7 @@ import type { AuthContext } from "~/.server/apiAuth";
 import { getSite, siteGroupId } from "~/.server/core/siteOperations";
 import { humanOnBox, readTakeoverPass, watchOnBox } from "~/.server/core/renderClient";
 import { liveBrowserSession } from "~/.server/core/siteTurns.server";
+import { releaseHandoff } from "~/.server/core/browserHandoff";
 
 // «Tomar el control» por EasyBits: GET …/live (SSE de la pestaña) y POST …/input|release.
 // Con un pase de sólo mirar (`m: "watch"`, de sites.$id.watch) únicamente sirve …/live.
@@ -37,6 +38,8 @@ async function proxy(request: Request, params: Route.LoaderArgs["params"]) {
   }
   try {
     const res = await humanOnBox(ctx, op, pass.t, op === "live" ? undefined : await request.text(), request.signal);
+    // «Devolver el control» despierta al agente que esperaba en browser_ask_human (mismo turno).
+    if (op === "release" && res.ok && pass.i) releaseHandoff(pass.i);
     if (op === "live" && res.ok) {
       return new Response(res.body, { headers: { "content-type": "text/event-stream", "cache-control": "no-cache", "x-accel-buffering": "no" } });
     }

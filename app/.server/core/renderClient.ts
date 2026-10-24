@@ -268,10 +268,11 @@ const boxKeyHeader = (): Record<string, string> => (process.env.RENDER_BOX_KEY ?
 
 /**
  * Pase de «tomar el control»: dueño de la caja + token de la caja + sitio, firmado.
+ * `i`: id de la sesión del navegador (para despertar al agente que pidió ayuda al devolver el control).
  * `m: "watch"` = pase de sólo mirar: `t` es el id de la sesión del navegador y sólo sirve para
  * la pestaña en vivo (sin clics ni teclas, el agente sigue al mando).
  */
-type TakeoverPass = { o: string; t: string; s: string; e: number; m?: "watch" };
+type TakeoverPass = { o: string; t: string; s: string; e: number; m?: "watch"; i?: string };
 const passSecret = () => process.env.RENDER_BOX_KEY || process.env.SECRET || "dev";
 const passSig = (body: string) => createHmac("sha256", passSecret()).update(body).digest("base64url");
 
@@ -296,7 +297,7 @@ export function readTakeoverPass(pass: string, siteId: string): TakeoverPass | n
 export async function takeoverOnBox(ctx: AuthContext, sessionId: string, siteId: string) {
   const r = await browserOnBox(ctx, "takeover", { sessionId });
   const { token, expiresInMs, viewport } = r as unknown as { token: string; expiresInMs: number; viewport: { width: number; height: number } };
-  const body = Buffer.from(JSON.stringify({ o: ctx.user.id, t: token, s: siteId, e: Date.now() + expiresInMs } satisfies TakeoverPass)).toString("base64url");
+  const body = Buffer.from(JSON.stringify({ o: ctx.user.id, t: token, s: siteId, e: Date.now() + expiresInMs, i: sessionId } satisfies TakeoverPass)).toString("base64url");
   const base = `/api/v2/sites/${siteId}/takeover/${body}.${passSig(body)}`;
   return { liveUrl: `${base}/live`, inputUrl: `${base}/input`, releaseUrl: `${base}/release`, viewport, expiresInMs };
 }
