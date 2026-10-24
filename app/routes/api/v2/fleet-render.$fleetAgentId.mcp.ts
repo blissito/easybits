@@ -370,7 +370,7 @@ function buildRenderServer(ctx: AuthContext, panel?: { fleetAgentId: string; gro
     } catch (e) {
       const error = e instanceof QuotaExceededError ? "ya no quedan consultas web para el navegador antibot" : (e as Error).message;
       console.error("[render] antibot", url, error);
-      antibotFailed = /timeout|timed out/i.test(error) ? "no respondió a tiempo" : "no conectó";
+      antibotFailed = e instanceof QuotaExceededError ? "no se usó: se acabaron tus consultas web" : /timeout|timed out/i.test(error) ? "no respondió a tiempo" : "no conectó";
       return { error };
     }
   };
