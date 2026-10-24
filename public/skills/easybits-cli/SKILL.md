@@ -291,8 +291,7 @@ A key cannot mint a key with more scopes than its own (400 `your credential cann
 ```bash
 easybits sites ls --json      # [{ id, name, kind: static|webapp, engine, stack, url, websiteId, sandboxId, archivedAt }]
 easybits sites create --prompt "Landing for my dental clinic" --json   # {id, name, kind, stack, template, previewUrl, url: null, editorUrl}
-easybits sites create --prompt "Task tracker with login" --stack next --json
-easybits sites create --name "Promo" --kind static --json
+easybits sites create --name "Promo" --kind static --json      # or --stack next, --engine/--model
 easybits sites model "$SITE" [<model>] --json                    # no model: engines+currentModel; model applies to ALL sites of that engine
 easybits sites theme get "$SITE" --json                          # {supported, colors:{primary:"#…",…}}
 easybits sites theme set "$SITE" --theme dracula --json          # or --colors file.json|- (every token)
