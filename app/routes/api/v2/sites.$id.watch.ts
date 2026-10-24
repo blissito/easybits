@@ -4,7 +4,7 @@ import { getUserOrNull } from "~/.server/getters";
 import type { AuthContext } from "~/.server/apiAuth";
 import { getSite, siteGroupId } from "~/.server/core/siteOperations";
 import { liveBrowserSession } from "~/.server/core/siteTurns.server";
-import { watchPass } from "~/.server/core/renderClient";
+import { watchLiveKitOnBox, watchPass } from "~/.server/core/renderClient";
 
 // POST /api/v2/sites/:id/watch {sessionId} — ver en vivo el navegador del agente sin quitarle
 // el mando. Misma regla que takeover: sólo una sesión del turno EN CURSO de este sitio. Devuelve
@@ -21,5 +21,7 @@ export async function action({ request, params }: Route.ActionArgs) {
   // La caja de render es del dueño del agente (no necesariamente del dueño del sitio).
   const agent = await db.fleetAgent.findUnique({ where: { id: turn.fleetAgentId }, select: { ownerId: true } });
   if (!agent) return Response.json({ error: "Agente no encontrado" }, { status: 404 });
-  return Response.json(watchPass(agent.ownerId, sessionId, site.id));
+  const owner = await db.user.findUnique({ where: { id: agent.ownerId } });
+  const livekit = owner ? await watchLiveKitOnBox({ user: owner, scopes: ["READ", "WRITE"] } as AuthContext, sessionId) : undefined;
+  return Response.json({ ...watchPass(agent.ownerId, sessionId, site.id), ...(livekit ? { livekit } : {}) });
 }

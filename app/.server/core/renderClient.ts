@@ -308,6 +308,12 @@ export async function takeoverOnBox(ctx: AuthContext, sessionId: string, siteId:
   return { liveUrl: `${base}/live`, inputUrl: `${base}/input`, releaseUrl: `${base}/release`, viewport, expiresInMs, ...(livekit ? { livekit } : {}) };
 }
 
+/** Mirar por WebRTC: token de sólo ver de la sala de la sesión, o nada (entonces el SSE del pase). */
+export async function watchLiveKitOnBox(ctx: AuthContext, sessionId: string): Promise<{ wsUrl: string; token: string } | undefined> {
+  const r = (await browserOnBox(ctx, "watch", { sessionId }).catch(() => null)) as unknown as { livekit?: { wsUrl: string; token: string } | null } | null;
+  return r?.livekit ?? undefined;
+}
+
 /** Pase para mirar la pestaña en vivo mientras el agente la maneja. */
 export function watchPass(ownerId: string, sessionId: string, siteId: string) {
   const body = Buffer.from(JSON.stringify({ o: ownerId, t: sessionId, s: siteId, e: Date.now() + 10 * 60_000, m: "watch" } satisfies TakeoverPass)).toString("base64url");
@@ -361,7 +367,7 @@ const lastHumanTouch = new Map<string, number>();
  */
 export async function browserOnBox(
   ctx: AuthContext,
-  op: "open" | "act" | "look" | "close" | "takeover",
+  op: "open" | "act" | "look" | "close" | "takeover" | "watch",
   payload: Record<string, unknown>
 ): Promise<BrowserView> {
   try {
