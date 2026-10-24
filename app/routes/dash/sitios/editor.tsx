@@ -923,6 +923,12 @@ export default function SiteEditor() {
               </button>
             )
           )}
+          {/* En la computadora sólo va lo de la computadora: publicar ($/mes), dominios, tema o señalar
+              son del sitio y, mirando al agente investigar otra web, daban a entender que algo se iba a
+              cobrar o publicar (bliss, 24-oct). */}
+          {showComputer && <span className="flex-1" />}
+          {!showComputer && (
+          <>
           {/* Sin publicar, el puerto de producción (3000) no sirve nada: se abre la vista previa. */}
           {openUrl ? (
             <>
@@ -994,6 +1000,8 @@ export default function SiteEditor() {
           <button type="button" onClick={() => setDelDialog(true)} className="text-gray-500 hover:text-red-600" title="Eliminar sitio" aria-label="Eliminar sitio">
             <LuTrash2 className="h-4 w-4" />
           </button>
+          </>
+          )}
         </div>
         {launch && (
           <p className="px-4 py-2 text-xs bg-green-50 border-b-2 border-green-300">

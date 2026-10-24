@@ -24,6 +24,9 @@ export async function requestWatch(siteId: string, sessionId: string): Promise<{
   return d;
 }
 
+// Sitios es para gente no técnica: la terminal y lo genérico salen como tarjeta de trabajo y los
+// diffs como «Antes / Ahora»; el comando queda en «Ver detalles técnicos» (investigación del
+// 23-oct: la terminal cruda abruma, Lovable la esconde).
 export function AgentComputer(props: AgentComputerProps) {
-  return <Computer {...props} />;
+  return <Computer technical={false} {...props} />;
 }
