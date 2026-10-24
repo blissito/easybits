@@ -341,27 +341,37 @@ function buildRenderServer(ctx: AuthContext, panel?: { fleetAgentId: string; gro
   };
   const browserFail = (e: unknown) => fail(e instanceof BrowserSessionGone ? e.message : (e as Error).message);
 
-  /** Reabre en el navegador antibot. Regresa la vista nueva o por qué no se pudo. */
+  // Lo que el panel cuenta de la espera es lo que de verdad pasa: si el antibot falla se dice y por
+  // qué, en vez de que el siguiente aviso («salió un captcha») tape la falla anterior.
+  const note = (text: string, icon: "antibot" | "page" = "antibot") => {
+    if (panel) noteBrowserStep(panel.fleetAgentId, panel.groupId, { icon, text });
+  };
+  let antibotFailed: string | null = null;
+  /** Reabre en el navegador antibot. Regresa la vista nueva o por qué no se pudo. Sólo cobra si abrió. */
   const antibot = async (url: string, mobile?: boolean, why: "known" | "captcha" = "known"): Promise<{ v: BrowserView } | { error: string }> => {
-    if (panel) {
-      noteBrowserStep(panel.fleetAgentId, panel.groupId, {
-        icon: "antibot",
-        text:
-          why === "captcha"
-            ? "Salió un captcha: lo reintento por el navegador antibot · suele tardar ~20 s"
-            : `${hostOf(url) || "Este sitio"} bloquea navegadores automáticos: lo abro por el navegador antibot · suele tardar ~20 s`,
-      });
-    }
+    note(
+      antibotFailed
+        ? `El navegador antibot falló a la primera (${antibotFailed}): lo reintento · suele tardar ~20 s`
+        : why === "captcha"
+          ? "Salió un captcha: lo reintento por el navegador antibot · suele tardar ~20 s"
+          : `${hostOf(url) || "Este sitio"} bloquea navegadores automáticos: lo abro por el navegador antibot · suele tardar ~20 s`
+    );
     try {
-      const r = await consumeService<{ cost: number; data: { ws: string } }>("research.brightdata.browser", {}, { userId: ctx.user.id });
+      let v: BrowserView | undefined;
       // Sin página completa: por el navegador antibot se paga por GB y la captura entera pesa
       // varias veces lo del viewport.
-      const v = await browserOnBox(ctx, "open", { url, mobile, screenshot: true, cdp: r.data.ws });
-      remoteSessions.add(v.sessionId);
+      await consumeService<{ cost: number; data: { ws: string } }>("research.brightdata.browser", {}, { userId: ctx.user.id }, async (r) => {
+        v = await browserOnBox(ctx, "open", { url, mobile, screenshot: true, cdp: r.data.ws });
+      });
+      remoteSessions.add(v!.sessionId);
       if (remoteSessions.size > 500) remoteSessions.delete(remoteSessions.keys().next().value!);
-      return { v };
+      antibotFailed = null;
+      return { v: v! };
     } catch (e) {
-      return { error: e instanceof QuotaExceededError ? "ya no quedan consultas web para el navegador antibot" : (e as Error).message };
+      const error = e instanceof QuotaExceededError ? "ya no quedan consultas web para el navegador antibot" : (e as Error).message;
+      console.error("[render] antibot", url, error);
+      antibotFailed = /timeout|timed out/i.test(error) ? "no respondió a tiempo" : "no conectó";
+      return { error };
     }
   };
   const ANTIBOT_HINT = (id: string) =>
@@ -391,6 +401,7 @@ function buildRenderServer(ctx: AuthContext, panel?: { fleetAgentId: string; gro
         if (knownBlocked(p.url)) {
           const r = await antibot(p.url, p.mobile);
           if ("v" in r) return browserReply(r.v, { wanted: p.screenshot, tool: "browser_open", hint: ANTIBOT_HINT(r.v.sessionId) });
+          note(`El navegador antibot ${antibotFailed}: lo intento con el navegador normal`, "page");
         }
         const v = await browserOnBox(ctx, "open", { url: p.url, mobile: p.mobile, screenshot: true, fullPage: true });
         if (looksBlocked(v)) {

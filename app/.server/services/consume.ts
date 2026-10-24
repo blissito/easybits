@@ -25,6 +25,7 @@ export async function consumeService<O extends ServiceResult = ServiceResult>(
   serviceId: string,
   input: unknown,
   ctx: ServiceCtx,
+  use?: (result: O) => Promise<unknown>,
 ): Promise<O> {
   const def = getService(serviceId);
   if (!def) {
@@ -42,6 +43,8 @@ export async function consumeService<O extends ServiceResult = ServiceResult>(
     }
     const start = Date.now();
     const result = (await def.execute(input, ctx)) as O;
+    // Lo que se compra para usarlo después (la sesión del navegador antibot): si ese uso falla, no se cobra.
+    if (use) await use(result);
     await chargeWebQueries(ctx.userId, {
       cost: result.cost ?? cost,
       type: serviceId,
