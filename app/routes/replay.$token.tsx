@@ -33,7 +33,7 @@ export default function Replay({ loaderData }: Route.ComponentProps) {
         <div className="eb-md text-[15px] leading-6">
           <Streamdown linkSafety={{ enabled: false }}>{resto || text}</Streamdown>
         </div>
-        <TurnSummary steps={steps} onSelectStep={(id) => setJump({ id, at: Date.now() })} />
+        <TurnSummary steps={steps} onSelect={(id) => setJump({ id, at: Date.now() })} />
         <a href="/" className="mt-auto rounded-xl border-2 border-black bg-brand-500 px-4 py-2 text-center font-bold shadow-[3px_3px_0_0_#000]">
           Construye la tuya en EasyBits →
         </a>

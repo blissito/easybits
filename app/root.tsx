@@ -11,6 +11,9 @@ import {
 } from "react-router";
 
 import type { Route } from "./+types/root";
+// La computadora del agente (paquete compartido con GTeams y /c) trae su CSS propio `.gc-`;
+// va ANTES de app.css para que el tema de EasyBits (`.gc-scope` en app.css) le gane.
+import computerCss from "@ghostystudio/computer/styles.css?url";
 import stylesheet from "./app.css?url";
 import useGoogleTM from "./utils/useGoogleTM";
 import useHotjar from "./utils/useHotjar";
@@ -42,6 +45,7 @@ export const links: Route.LinksFunction = () => [
     rel: "stylesheet",
     href: "https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap",
   },
+  { rel: "stylesheet", href: computerCss },
   { rel: "stylesheet", href: stylesheet },
 ];
 

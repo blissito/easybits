@@ -507,3 +507,17 @@ body.hide-mobile-menu .mobile-menu-btn { display: none; }
     animation: none !important;
   }
 }
+
+/* La computadora del agente (@ghostystudio/computer) con el tema de EasyBits: morado de la marca
+   y brutalismo (borde negro de 2px, sombra dura). Las variables las define el paquete. */
+.gc-scope {
+  --gc-brand: #9870ed;
+  --gc-brand-soft: rgba(152, 112, 237, 0.15);
+  --gc-border-w: 2px;
+  --gc-line: #000;
+  --gc-shadow: 3px 3px 0 0 #000;
+  --gc-shadow-float: 3px 3px 0 0 #000;
+  --gc-radius: 12px;
+  --gc-term-bg: #0b0b0f;
+  --gc-term-prompt: #85ddcb;
+}
