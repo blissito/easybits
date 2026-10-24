@@ -306,8 +306,13 @@ async function runAgentTurn(spec: AgentTurnSpec, l: Live, input: { agentText: st
             emit(l, { type: "tool", name, id: ev?.id, phase: ev?.phase, ok: ev?.ok });
             if (ev?.id) {
               const end = ev.phase === "end";
+              const prev = end ? l.steps.find((s) => s.id === ev.id) : undefined;
+              const result = ev.result ? normalizeStepResult(ev.result, prev?.kind) : undefined;
+              // Una herramienta de navegador que regresó imagen pero no frame (screenshot_url,
+              // web_interact…): su primera imagen ES lo que vio. Un solo camino para todas.
+              const shot = prev?.kind === "browser" && !prev.browser && result?.images?.[0];
               const step = end
-                ? { id: ev.id, status: ev.ok === false ? ("error" as const) : ("ok" as const), endedAt: Date.now(), ...(ev.result ? { result: normalizeStepResult(ev.result, l.steps.find((s) => s.id === ev.id)?.kind) } : {}), ...(ev.todos ? { todos: ev.todos } : {}) }
+                ? { id: ev.id, status: ev.ok === false ? ("error" as const) : ("ok" as const), endedAt: Date.now(), ...(result ? { result } : {}), ...(ev.todos ? { todos: ev.todos } : {}), ...(shot ? { browser: { url: prev?.detail ?? "", title: shot.title ?? "", image: shot.url } } : {}) }
                 : { id: ev.id, tool: name, kind: stepKind(name), detail: ev.detail, command: ev.command, intent: l.intent, status: "running" as const, startedAt: Date.now(), ...(ev.todos ? { todos: ev.todos } : {}) };
               if (end || l.steps.length < MAX_STEPS) pushStep(l, step);
             }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { stepKind, upsertStep, type AgentStep, publicStep, lastIntent, cleanStepResult, cleanTodos, currentPlan, stepsSignature, turnSummary, formatWorked, normalizeStepResult, isPlumbing } from "~/lib/agentSteps";
+import { stepKind, upsertStep, type AgentStep, publicStep, lastIntent, cleanStepResult, cleanTodos, currentPlan, stepsSignature, turnSummary, formatWorked, normalizeStepResult, isPlumbing, stepImages } from "~/lib/agentSteps";
 import { applyTurnEvent, type Msg } from "~/components/sitios/ChatMessages";
 import { ok } from "~/.server/mcp/responses";
 
@@ -166,5 +166,26 @@ describe("búsqueda impresa como JSON", () => {
     ]);
     expect(r.summary).toBeUndefined();
     expect(normalizeStepResult({ summary: '"hola\\nmundo"' })?.summary).toBe("hola\nmundo");
+  });
+});
+
+describe("imágenes del turno (un solo camino)", () => {
+  it("stepImages junta frames del navegador e imágenes de cualquier herramienta, sin repetir", () => {
+    const steps: AgentStep[] = [
+      { id: "a", tool: "mcp__render__browser_open", kind: "browser", status: "ok", startedAt: 0, browser: { url: "u", title: "Inicio", image: "https://cdn/1.jpg" } },
+      { id: "b", tool: "mcp__render__screenshot_url", kind: "browser", status: "ok", startedAt: 1, result: { images: [{ url: "https://cdn/2" }, { url: "https://cdn/1.jpg" }] } },
+      { id: "c", tool: "gs_render_png", kind: "other", status: "ok", startedAt: 2, result: { images: [{ url: "https://cdn/3.png", title: "cap.png" }] } },
+    ];
+    expect(stepImages(steps)).toEqual([
+      { id: "a", image: "https://cdn/1.jpg", title: "Inicio" },
+      { id: "b", image: "https://cdn/2" },
+      { id: "c", image: "https://cdn/3.png", title: "cap.png" },
+    ]);
+    expect(turnSummary(steps)!.thumbs).toHaveLength(3);
+  });
+  it("el servidor sólo acepta imágenes https y el replay público las conserva", () => {
+    expect(cleanStepResult({ images: [{ url: "javascript:x" }, { url: "https://cdn/ok.png", title: 5 }] })).toEqual({ images: [{ url: "https://cdn/ok.png" }] });
+    const p = publicStep({ id: "x", tool: "Bash", kind: "terminal", status: "ok", startedAt: 0, result: { summary: "secreto", images: [{ url: "https://cdn/a.png" }] } });
+    expect(p.result).toEqual({ images: [{ url: "https://cdn/a.png" }] });
   });
 });

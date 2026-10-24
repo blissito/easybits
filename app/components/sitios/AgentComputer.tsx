@@ -125,7 +125,7 @@ export function AgentComputer({
   // Un paso sin nada que enseñar (una búsqueda que aún corre o no trajo lista, una tool sin
   // salida) no borra la pantalla: se queda el navegador con una pastilla de lo que hace, como
   // Manus. Antes el panel brincaba de la página a un ícono en blanco y de regreso.
-  const weak = !!raw && (raw.kind === "search" || raw.kind === "other") && !raw.result?.items?.length && !raw.result?.summary;
+  const weak = !!raw && (raw.kind === "search" || raw.kind === "other") && !raw.result?.items?.length && !raw.result?.summary && !raw.result?.images?.length;
   const backdrop = weak ? steps.slice(0, idx).reverse().find((s) => s.browser?.image) : undefined;
 
   // Pestaña en vivo: sólo siguiendo el último paso de un turno en curso, y nunca mientras la
@@ -196,7 +196,8 @@ export function AgentComputer({
   const Icon = ICON[step.kind];
   const running = live && following && step.status === "running";
   const plan = currentPlan(allSteps.filter((s) => s.startedAt <= step.startedAt));
-  const View = VIEWS[step.kind] ?? GenericView;
+  // Lo que regresó imágenes (un render, una captura del SDK) se ve como imagen, sea cual sea su tipo.
+  const View = step.kind !== "browser" && step.result?.images?.length ? ImageView : (VIEWS[step.kind] ?? GenericView);
   const repeats = repeatCount(steps, idx);
   return (
     <div className="flex h-full min-h-0 flex-col bg-white">
@@ -619,6 +620,37 @@ const hostOf = (u: string) => {
     return u;
   }
 };
+
+/** Imágenes que produjo el paso (render, captura, foto): la primera grande y las demás en tira. */
+function ImageView({ step }: ViewProps) {
+  const images = step.result?.images ?? [];
+  const [sel, setSel] = useState(0);
+  const cur = images[Math.min(sel, images.length - 1)];
+  return (
+    <div className="flex h-full flex-col p-3">
+      <div className="min-h-0 flex-1 overflow-auto rounded-xl border-2 border-black bg-white">
+        <a href={cur.url} target="_blank" rel="noreferrer noopener">
+          <img src={cur.url} alt={cur.title ?? stepVerb(step)} className="block w-full" />
+        </a>
+      </div>
+      {images.length > 1 && (
+        <div className="mt-2 flex gap-2 overflow-x-auto">
+          {images.map((i, n) => (
+            <button
+              key={i.url}
+              type="button"
+              onClick={() => setSel(n)}
+              className={`h-14 w-20 shrink-0 overflow-hidden rounded-md border-2 ${n === sel ? "border-brand-500" : "border-black"}`}
+            >
+              <img src={i.url} alt={i.title ?? ""} className="h-full w-full object-cover object-top" loading="lazy" />
+            </button>
+          ))}
+        </div>
+      )}
+      {cur.title && <p className="mt-2 truncate font-mono text-xs text-gray-500">{cur.title}</p>}
+    </div>
+  );
+}
 
 /** Búsqueda: la consulta arriba y lo que encontró, como lista de resultados. */
 function SearchView(p: ViewProps) {

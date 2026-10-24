@@ -413,11 +413,18 @@ export default function SiteEditor() {
       if (!last || last.role !== "bot") return m;
       return [...m.slice(0, -1), fn(last)];
     }), []);
+  // Sitio estático: la vista previa sirve lo publicado, no un dev server. Cada paso que termina
+  // de escribir o publicar la recarga (agrupado en 1.5 s); antes sólo se veía al final del turno.
+  const previewReload = useRef<ReturnType<typeof setTimeout> | null>(null);
   const applyEvent = useCallback((e: { type: string; [k: string]: any }): boolean => {
     patchLast((p) => applyTurnEvent(p, e).msg);
     if (e.type === "interrupted") setCutTurn(e.turnId ?? null);
+    if (site.kind !== "webapp" && e.type === "step" && e.step?.status === "ok" && (e.step.kind === "editor" || e.step.kind === "terminal")) {
+      if (previewReload.current) clearTimeout(previewReload.current);
+      previewReload.current = setTimeout(() => setPreviewKey((k) => k + 1), 1500);
+    }
     return ["done", "error", "capacity", "interrupted", "idle"].includes(e.type);
-  }, [patchLast]);
+  }, [patchLast, site.kind]);
 
   /** Lee un SSE del turno. true = llegó el evento final; false = se cortó antes (deploy, red). */
   const consume = useCallback(async (res: Response): Promise<boolean> => {

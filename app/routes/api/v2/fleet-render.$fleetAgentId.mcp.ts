@@ -201,6 +201,21 @@ function buildRenderServer(ctx: AuthContext, panel?: { fleetAgentId: string; gro
           selector: p.selector,
           padding: p.padding,
         });
+        // La captura también es lo que «ve» el agente: va al panel como frame del navegador.
+        // Sin esto el paso se quedaba en «Cargando la página…» aunque el agente sí capturaba.
+        if (panel && r.url && hasLiveTurn(panel.fleetAgentId, panel.groupId)) {
+          pushBrowserFrame(
+            panel.fleetAgentId,
+            panel.groupId,
+            {
+              url: p.url ?? "Borrador (HTML sin publicar)",
+              title: p.url ? new URL(p.url).hostname : "Borrador",
+              image: r.url,
+              action: (p.data_id ?? p.dataId ?? p.selector) ? `Captura de ${p.data_id ?? p.dataId ?? p.selector}` : `Captura ${r.preset}`,
+            },
+            "screenshot_url"
+          );
+        }
         return ok({
           ...r,
           hint: r.warning

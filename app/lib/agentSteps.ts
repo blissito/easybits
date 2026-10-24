@@ -33,6 +33,8 @@ export type StepResult = {
   items?: { title: string; url?: string; path?: string }[];
   /** Cambio de un archivo: líneas quitadas y puestas. */
   diff?: { file?: string; removed: string[]; added: string[] };
+  /** Imágenes que produjo la herramienta (captura, render, foto). Un solo camino al panel y al chat. */
+  images?: { url: string; title?: string }[];
 };
 
 /** Una tarea del plan del agente (TodoWrite). */
@@ -134,6 +136,13 @@ export function cleanStepResult(v: unknown): StepResult | undefined {
       .filter((i) => i.title && (i.url || i.path));
     if (items.length) out.items = items;
   }
+  if (Array.isArray(r.images)) {
+    const images = r.images
+      .filter((i): i is Record<string, unknown> => !!i && typeof i === "object" && typeof i.url === "string" && /^https:\/\//.test(i.url))
+      .slice(0, 6)
+      .map((i) => ({ url: clip(i.url, 1000)!, ...(typeof i.title === "string" ? { title: clip(i.title, 200) } : {}) }));
+    if (images.length) out.images = images;
+  }
   if (r.diff && typeof r.diff === "object") {
     const d = r.diff as Record<string, unknown>;
     const diff = { file: clip(d.file, 200), removed: lines(d.removed), added: lines(d.added) };
@@ -234,7 +243,8 @@ export function publicStep(s: AgentStep): AgentStep {
   // De un resultado sólo salen los enlaces de una búsqueda: la salida de un comando o un
   // diff pueden traer datos del cliente.
   const links = result?.items?.filter((i) => i.url).map((i) => ({ title: i.title, url: bareUrl(i.url!) })).filter((i) => i.url);
-  if (links?.length) out.result = { items: links };
+  // Las imágenes del turno son lo que se compartió (capturas, renders), igual que los frames.
+  if (links?.length || result?.images?.length) out.result = { ...(links?.length ? { items: links } : {}), ...(result?.images?.length ? { images: result.images } : {}) };
   if (browser) {
     const { sessionId: _s, ...b } = browser;
     out.browser = { ...b, url: bareUrl(b.url) };
@@ -261,16 +271,10 @@ export function turnSummary(steps: AgentStep[], maxThumbs = 6) {
   if (!real.length) return null;
   const start = Math.min(...real.map((s) => s.startedAt));
   const end = Math.max(...real.map((s) => s.endedAt ?? s.startedAt));
-  const seen = new Set<string>();
-  const frames = real.filter((s) => {
-    const img = s.browser?.image;
-    if (!img || seen.has(img)) return false;
-    seen.add(img);
-    return true;
-  });
+  const frames = stepImages(real);
   const n = Math.min(maxThumbs, frames.length);
   const thumbs = n <= 1 ? frames.slice(0, n) : Array.from({ length: n }, (_, i) => frames[Math.round((i * (frames.length - 1)) / (n - 1))]);
-  return { ms: Math.max(0, end - start), count: real.length, errors: real.filter((s) => s.status === "error").length, thumbs: thumbs.map((s) => ({ id: s.id, image: s.browser!.image, title: s.browser!.title })) };
+  return { ms: Math.max(0, end - start), count: real.length, errors: real.filter((s) => s.status === "error").length, thumbs };
 }
 
 /** «3 min», «45 s»: para el cierre del turno. */
@@ -279,4 +283,23 @@ export function formatWorked(ms: number): string {
   if (s < 60) return `${s} s`;
   const m = Math.round(s / 60);
   return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${m % 60} min`;
+}
+
+/**
+ * Todas las imágenes del turno, en orden y sin repetir: la captura del navegador de cada paso y
+ * las que regresó cualquier herramienta. El cierre, el panel y las tarjetas del chat leen de aquí.
+ */
+export function stepImages(steps: AgentStep[]): { id: string; image: string; title?: string }[] {
+  const seen = new Set<string>();
+  const out: { id: string; image: string; title?: string }[] = [];
+  const add = (id: string, image: string, title?: string) => {
+    if (seen.has(image)) return;
+    seen.add(image);
+    out.push({ id, image, ...(title ? { title } : {}) });
+  };
+  for (const s of steps) {
+    if (s.browser?.image) add(s.id, s.browser.image, s.browser.title);
+    for (const i of s.result?.images ?? []) add(s.id, i.url, i.title);
+  }
+  return out;
 }

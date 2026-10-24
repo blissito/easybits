@@ -3,7 +3,7 @@ import { Link } from "react-router";
 import { Streamdown } from "streamdown";
 import { LuCheck } from "react-icons/lu";
 import { partirNarracion } from "~/lib/narracion";
-import { formatWorked, isPlumbing, stepVerb, turnSummary, upsertStep, type AgentStep } from "~/lib/agentSteps";
+import { formatWorked, isPlumbing, stepImages, stepVerb, turnSummary, upsertStep, type AgentStep } from "~/lib/agentSteps";
 
 // Mensajes del chat del creador de sitios. Los usan el editor (/dash/sitios/:id) y el
 // morph del hero de la home: un solo formato (pasos con palomita, markdown, tools
@@ -99,6 +99,32 @@ export function BotMessage({
   const { pasos, resto } = partirNarracion(msg.text, msg.cortes);
   const secs = useElapsed(live);
   const steps = (msg.steps ?? []).filter((s) => !isPlumbing(s.tool));
+  // Las ligas que el agente pega a imágenes de su propio turno (capturas, renders) se ven como
+  // imagen y abren su paso en la computadora: antes salían como URLs crudas de storage.
+  const images = new Map(stepImages(steps).map((i) => [i.image, i]));
+  const components = images.size
+    ? {
+        a: ({ href, children, ...rest }: React.AnchorHTMLAttributes<HTMLAnchorElement>) => {
+          const img = href ? images.get(href) : undefined;
+          if (!img)
+            return (
+              <a href={href} {...rest}>
+                {children}
+              </a>
+            );
+          return (
+            <button
+              type="button"
+              onClick={() => onSelectStep?.(img.id)}
+              className="my-1.5 block w-full max-w-xs overflow-hidden rounded-lg border-2 border-black bg-white text-left shadow-[2px_2px_0_0_#000] transition hover:-translate-y-0.5"
+              title={onSelectStep ? "Ver en la computadora" : undefined}
+            >
+              <img src={img.image} alt={img.title ?? "Imagen del agente"} loading="lazy" className="max-h-48 w-full object-cover object-top" />
+            </button>
+          );
+        },
+      }
+    : undefined;
   return (
     <div className="min-w-0 text-[15px] leading-6 text-gray-900">
       {msg.tools && msg.tools.length > 0 && (
@@ -144,7 +170,9 @@ export function BotMessage({
       )}
       {resto ? (
         <div className="eb-md min-w-0 break-words">
-          <Streamdown linkSafety={{ enabled: false }}>{resto}</Streamdown>
+          <Streamdown linkSafety={{ enabled: false }} components={components}>
+            {resto}
+          </Streamdown>
         </div>
       ) : (
         live && (
