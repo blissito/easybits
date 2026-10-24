@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { Route } from "./+types/fleet-render.$fleetAgentId.mcp";
 import { authFleetAgent } from "~/.server/apiAuth";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -97,7 +98,10 @@ function actionLabel(actions: BrowserAction[] | undefined, names: Map<string, st
 // Nombres de los elementos de la última vista por sesión: el paso dice «Clic en Buscar», no «ref 3».
 const lastNames = new Map<string, Map<string, string>>();
 
-function buildRenderServer(ctx: AuthContext, panel?: { fleetAgentId: string; groupId: string }): McpServer {
+function buildRenderServer(ctx: AuthContext, panel?: { fleetAgentId: string; groupId: string }, agentId?: string): McpServer {
+  // Perfil del agente en su caja de render: las cookies del login que hizo la persona al tomar el
+  // control se guardan y el siguiente navegador ya entra con sesión. La caja es del dueño y pide llave.
+  const profile = agentId ? createHash("sha256").update(`browser-profile:${agentId}`).digest("hex").slice(0, 40) : undefined;
   const server = new McpServer({ name: "easybits-render", version: "1.0.0" });
   // ok()/fail() return structuredContent: unknown, which the SDK's stricter
   // CallToolResult type rejects; server.ts dodges this via wrapHandler→any. Same here.
@@ -417,7 +421,7 @@ function buildRenderServer(ctx: AuthContext, panel?: { fleetAgentId: string; gro
           if ("v" in r) return browserReply(r.v, { wanted: p.screenshot, tool: "browser_open", hint: ANTIBOT_HINT(r.v.sessionId) });
           note(`El navegador antibot ${antibotFailed}: lo intento con el navegador normal`, "page");
         }
-        const v = await browserOnBox(ctx, "open", { url: p.url, mobile: p.mobile, screenshot: true, fullPage: true });
+        const v = await browserOnBox(ctx, "open", { url: p.url, mobile: p.mobile, screenshot: true, fullPage: true, profile });
         if (looksBlocked(v)) {
           learnBlocked(p.url);
           const r = await antibot(p.url, p.mobile, "captcha");
@@ -548,7 +552,7 @@ async function handle(request: Request, fleetAgentId: string): Promise<Response>
   if (!ctx) return Response.json({ error: "owner not found" }, { status: 401 });
 
   const groupId = request.headers.get("x-eb-group");
-  const server = buildRenderServer(ctx, groupId ? { fleetAgentId: fleetAgent.id, groupId } : undefined);
+  const server = buildRenderServer(ctx, groupId ? { fleetAgentId: fleetAgent.id, groupId } : undefined, fleetAgent.id);
   const transport = new WebStandardStreamableHTTPServerTransport({ sessionIdGenerator: undefined });
   await server.connect(transport);
   return transport.handleRequest(request, { authInfo: ctx as any });
