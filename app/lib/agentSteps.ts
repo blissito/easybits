@@ -82,6 +82,8 @@ export function stepKind(tool: string): StepKind {
 /** Verbo del paso en español, como la píldora de Manus («Navegando», «Creando archivo»). */
 export function stepVerb(s: Pick<AgentStep, "tool" | "kind">): string {
   const t = s.tool.toLowerCase();
+  if (/screenshot/.test(t)) return "Tomando captura";
+  if (/render|compare_render|export_document/.test(t)) return "Generando imagen";
   if (s.kind === "browser") return /open/.test(t) ? "Abriendo página" : /look/.test(t) ? "Mirando la página" : /close/.test(t) ? "Cerrando navegador" : "Usando el navegador";
   if (s.kind === "search") return /grep|glob/.test(t) ? "Buscando en archivos" : "Buscando";
   if (s.kind === "editor") return /read/.test(t) ? "Leyendo archivo" : /write/.test(t) ? "Creando archivo" : "Editando archivo";

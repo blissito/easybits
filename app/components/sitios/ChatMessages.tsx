@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { Streamdown } from "streamdown";
-import { LuCheck } from "react-icons/lu";
+import { LuCheck, LuImage } from "react-icons/lu";
 import { partirNarracion } from "~/lib/narracion";
 import { formatWorked, isPlumbing, stepImages, stepVerb, turnSummary, upsertStep, type AgentStep } from "~/lib/agentSteps";
 
@@ -54,7 +54,7 @@ function useElapsed(live: boolean) {
  * Cierre del turno: «Trabajó 3 min · 9 pasos» y unas capturas como prueba. Picar una lleva la
  * computadora a ese paso (si hay `onSelectStep`).
  */
-export function TurnSummary({ steps, onSelectStep }: { steps: AgentStep[]; onSelectStep?: (id: string) => void }) {
+export function TurnSummary({ steps, onSelectStep, hideThumbs }: { steps: AgentStep[]; onSelectStep?: (id: string) => void; hideThumbs?: boolean }) {
   const r = turnSummary(steps);
   if (!r) return null;
   return (
@@ -63,7 +63,7 @@ export function TurnSummary({ steps, onSelectStep }: { steps: AgentStep[]; onSel
         Trabajó {formatWorked(r.ms)} · {r.count} {r.count === 1 ? "paso" : "pasos"}
         {r.errors > 0 && <span className="font-normal text-gray-500"> · {r.errors} con error</span>}
       </p>
-      {r.thumbs.length > 0 && (
+      {!hideThumbs && r.thumbs.length > 0 && (
         <div className="mt-2 grid grid-cols-3 gap-1.5">
           {r.thumbs.map((t) => (
             <button
@@ -79,6 +79,33 @@ export function TurnSummary({ steps, onSelectStep }: { steps: AgentStep[]; onSel
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Entregables del turno en cuadrícula (Suna `FileAttachmentGrid`): 1-3 columnas, alto fijo,
+ * «+N» después de 5. Picar una la abre en la computadora, junto a su paso.
+ */
+function ImageGrid({ images, onSelect }: { images: { id: string; image: string; title?: string }[]; onSelect?: (id: string) => void }) {
+  const shown = images.slice(0, 5);
+  const rest = images.length - shown.length;
+  const cols = shown.length === 1 ? "grid-cols-1" : shown.length === 2 ? "grid-cols-2" : "grid-cols-3";
+  return (
+    <div className={`mt-3 grid gap-2 ${cols}`}>
+      {shown.map((i, n) => (
+        <button
+          key={i.image}
+          type="button"
+          disabled={!onSelect}
+          onClick={() => onSelect?.(i.id)}
+          className="relative h-36 overflow-hidden rounded-lg border-2 border-black bg-gray-100 shadow-[2px_2px_0_0_#000] enabled:transition enabled:hover:-translate-y-0.5"
+          title={i.title}
+        >
+          <img src={i.image} alt={i.title ?? "Imagen del agente"} loading="lazy" className="h-full w-full object-cover object-top" />
+          {n === shown.length - 1 && rest > 0 && <span className="absolute inset-0 grid place-items-center bg-black/55 text-lg font-bold text-white">+{rest}</span>}
+        </button>
+      ))}
     </div>
   );
 }
@@ -102,6 +129,8 @@ export function BotMessage({
   // Las ligas que el agente pega a imágenes de su propio turno (capturas, renders) se ven como
   // imagen y abren su paso en la computadora: antes salían como URLs crudas de storage.
   const images = new Map(stepImages(steps).map((i) => [i.image, i]));
+  // Lo que el agente ENTREGÓ (las imágenes que menciona en su respuesta), en el orden en que las nombra.
+  const delivered = images.size ? [...new Set([...(resto ?? "").matchAll(/https?:\/\/[^\s)\]>"']+/g)].map((m) => m[0]))].map((u) => images.get(u)).filter((x) => !!x) : [];
   const components = images.size
     ? {
         a: ({ href, children, ...rest }: React.AnchorHTMLAttributes<HTMLAnchorElement>) => {
@@ -112,14 +141,15 @@ export function BotMessage({
                 {children}
               </a>
             );
+          // En el texto, una pastilla; la imagen va en la cuadrícula de abajo (patrón de Suna).
           return (
             <button
               type="button"
               onClick={() => onSelectStep?.(img.id)}
-              className="my-1.5 block w-full max-w-xs overflow-hidden rounded-lg border-2 border-black bg-white text-left shadow-[2px_2px_0_0_#000] transition hover:-translate-y-0.5"
-              title={onSelectStep ? "Ver en la computadora" : undefined}
+              className="inline-flex items-center gap-1 rounded-full border border-brand-500/40 bg-brand-500/10 px-2 py-0.5 align-baseline text-[13px] font-semibold text-brand-500 hover:bg-brand-500/20"
             >
-              <img src={img.image} alt={img.title ?? "Imagen del agente"} loading="lazy" className="max-h-48 w-full object-cover object-top" />
+              <LuImage className="size-3.5" />
+              {typeof children === "string" && /^https?:/.test(children) ? `imagen ${delivered.indexOf(img) + 1}` : children}
             </button>
           );
         },
@@ -186,7 +216,8 @@ export function BotMessage({
           </span>
         )
       )}
-      {!live && steps.length > 0 && onSelectStep && <TurnSummary steps={steps} onSelectStep={onSelectStep} />}
+      {!live && delivered.length > 0 && <ImageGrid images={delivered} onSelect={onSelectStep} />}
+      {!live && steps.length > 0 && onSelectStep && <TurnSummary steps={steps} onSelectStep={onSelectStep} hideThumbs={delivered.length > 0} />}
       {msg.quota && (
         <div className="mt-3 flex gap-2">
           <Link to="/dash/packs" className="px-3 py-1 rounded-lg bg-black text-white text-xs font-bold">Recargar</Link>
