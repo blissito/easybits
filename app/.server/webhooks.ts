@@ -36,6 +36,8 @@ export const WEBHOOK_EVENTS = [
   "web.crawl.failed",
   "web.page.changed",
   "web.monitor.paused",
+  "agent.approval_requested",
+  "agent.approval_resolved",
 ] as const;
 
 export type WebhookEvent = (typeof WEBHOOK_EVENTS)[number];
@@ -45,6 +47,10 @@ export type WebhookEvent = (typeof WEBHOOK_EVENTS)[number];
  * English like the rest of that surface — and written ONCE.
  */
 export const WEBHOOK_EVENT_DOCS: Record<WebhookEvent, string> = {
+  "agent.approval_requested":
+    "a fleet agent hit a tool its rules mark `ask` and is waiting — `{ approvalId, fleetAgentId, groupId, tool, summary, " +
+    "expiresAt, approveUrl, denyUrl }`. POST `approveUrl`/`denyUrl` (signed, one use) after your user decides; never forward them to the agent",
+  "agent.approval_resolved": "an approval was decided — `{ approvalId, fleetAgentId, groupId, tool, decision, resolvedBy }`",
   "file.created": "new file uploaded",
   "file.updated": "file name, access, or metadata changed",
   "file.deleted": "file soft-deleted",

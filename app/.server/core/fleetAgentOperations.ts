@@ -46,6 +46,7 @@ import {
 } from "~/.server/core/fleetCapacity";
 import { getUserPlan, PLANS } from "~/lib/plans";
 import { cleanStepResult, cleanTodos, type StepResult, type StepTodo } from "~/lib/agentSteps";
+import { cleanToolRules, TOOL_RULES_ENV, type ToolRule } from "~/lib/toolPolicy";
 import { engineHasVision, getEngineForAgent, getEngine, resolveEngineSecret } from "~/lib/fleetEngines";
 import { profileToToolsParam, DEFAULT_PROFILE, GROUP_ALLOWLISTS, type ToolGroupKey } from "~/.server/mcp/toolGroups";
 import { getPlatformDefaultClient, buildPublicAssetUrl } from "~/.server/storage";
@@ -604,7 +605,16 @@ export type GroupConfig = {
   // el canal Teams (cfgId "teams") hoy: EasyBits no sabe de la conexión (vive en
   // GTeams), así que la infiere del primer mensaje. Prende el indicador en /dash/flota.
   connectedAt?: string;
+  // Reglas por herramienta: permitir, preguntar (una persona aprueba antes de que corra) o
+  // negar. Ver lib/toolPolicy.ts y core/fleetApprovals.ts. Heredan de "*" como el resto.
+  toolRules?: ToolRule[];
 };
+
+/** Las reglas por herramienta del canal (o las del default `"*"`), saneadas. */
+export function resolveToolRules(fleetAgent: { groupConfigs?: unknown }, cfgId: string): ToolRule[] {
+  const all = (fleetAgent.groupConfigs as Record<string, GroupConfig> | null) ?? {};
+  return cleanToolRules(all[cfgId]?.toolRules ?? all["*"]?.toolRules);
+}
 
 // Builtins (easybits/wa) the group turned OFF. Absent/[] = all builtins ON
 // (backward-compatible default). The worker removes these from its merged MCP set
@@ -3208,6 +3218,7 @@ async function runTurn(
         process.env.FLEET_DEFAULT_TIMEZONE ||
         "America/Mexico_City";
       const codeCaps = await resolveGroupCodeCaps(fleetAgent, cfgId, fleetAgent.ownerId);
+      const turnRules = resolveToolRules(fleetAgent, cfgId);
       // Credenciales ACOTADAS que el worker presenta a los MCP internos. Antes iba
       // `fleetAgent.token` (omnipotente): una inyección de prompt en el turno de
       // cualquier tenant podía borrar el agente con la credencial que él mismo lleva.
@@ -3241,7 +3252,14 @@ async function runTurn(
           // conversación pertenece, y el registro en el CRM se saltaba en silencio
           // ("sin FORMMY_SECRET_KEY o sin NANOCLAW_CHAT_JID"). Va por turno, no al spawn,
           // porque una misma VM atiende hasta maxWorkersPerVm conversaciones distintas.
-          turnEnv: { ...(codeCaps?.env ?? {}), ...(msg.turnEnvExtra ?? {}), NANOCLAW_CHAT_JID: msg.groupId },
+          turnEnv: {
+            ...(codeCaps?.env ?? {}),
+            ...(msg.turnEnvExtra ?? {}),
+            NANOCLAW_CHAT_JID: msg.groupId,
+            // Reglas por herramienta del canal: el hook del worker decide allow/deny y pregunta
+            // a la app en `ask`. Sólo viajan si hay reglas (sin ellas el turno es el de siempre).
+            ...(turnRules.length ? { [TOOL_RULES_ENV]: JSON.stringify(turnRules) } : {}),
+          },
           // Per-grupo: la dnk_pub_ del org dueño de este grupo. El body gana
           // (canales web la mandan por turno); cae a fleetAgent.groupKeys[cfgId]
           // (registrado al crear el grupo, ruta WhatsApp). cfgId = configGroupId
@@ -3360,6 +3378,7 @@ async function runTurn(
       // evento existiera seguiría dando duración y tools, que ya es más que nada.
       let workerUsage: FleetTurnUsage | undefined;
       let toolCalls = 0;
+      const toolLog: { tool: string; ok: boolean; ms?: number }[] = [];
       // Detener: cortar la lectura no basta en ghosty-gc (su cerebro seguía el turno y
       // gastando tokens); se le pide que lo interrumpa. claude-worker ya corta al colgar.
       const stopOnBox =
@@ -3377,12 +3396,13 @@ async function runTurn(
       reply = await collectStream(
         stream,
         opts.onChunk,
-        opts.onUsage || opts.onTool
-          ? (name, ev) => {
-              if (!ev || ev.phase === "start") toolCalls++;
-              opts.onTool?.(name, ev);
-            }
-          : undefined,
+        // Siempre: la bitácora de herramientas cubre todos los canales, no sólo los que
+        // pasan callback.
+        (name, ev) => {
+          if (!ev || ev.phase === "start") toolCalls++;
+          else if (ev.phase === "end" && name) toolLog.push({ tool: name.slice(0, 200), ok: ev.ok !== false, ms: ev.durationMs });
+          opts.onTool?.(name, ev);
+        },
         opts.onBlock && (async (t) => { earlyBlocks.push(t); await opts.onBlock!(t); }),
         // SIEMPRE se captura, aunque el caller no pase `onUsage`: si no, el canal de
         // más volumen (WhatsApp/WABA, que no pasa callback) no medía absolutamente nada.
@@ -3397,6 +3417,14 @@ async function runTurn(
       };
       opts.onUsage?.(turnUsage);
       lastTurnUsage = turnUsage;
+      // Bitácora: una fila por herramienta terminada, en un solo insert al cerrar el turno.
+      if (toolLog.length) {
+        void db.toolCallLog
+          .createMany({
+            data: toolLog.slice(0, 300).map((t) => ({ ownerId: fleetAgent.ownerId, fleetAgentId: fleetAgent.id, groupId: msg.groupId, turnId, tool: t.tool, ok: t.ok, ms: t.ms ?? null })),
+          })
+          .catch((e) => console.error("[fleet] bitácora de herramientas", e instanceof Error ? e.message : e));
+      }
       // Contabilidad dentro de routeMessage, no en las rutas: así queda cubierto todo
       // canal (Baileys, WABA, HTTP, SSE) de una vez y no depende de que cada superficie
       // se acuerde de registrar.

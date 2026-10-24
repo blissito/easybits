@@ -13,7 +13,10 @@ import { isPlumbing, stepVerb, upsertStep, type AgentStep } from "~/lib/agentSte
 // `cortes`: largo del texto cuando arrancó cada herramienta — separa la narración
 // («Reviso…», «Instalo…») de la respuesta final (ver ~/lib/narracion).
 // `steps`: lo que pinta el panel «la computadora del agente» (navegador, terminal, editor).
-export type Msg = { role: "user" | "bot"; text: string; tools?: string[]; cortes?: number[]; steps?: AgentStep[]; imageUrl?: string; quota?: boolean };
+export type Msg = { role: "user" | "bot"; text: string; tools?: string[]; cortes?: number[]; steps?: AgentStep[]; imageUrl?: string; quota?: boolean; approvals?: Approval[] };
+
+/** Una herramienta que espera la aprobación de la persona (reglas «preguntar» del agente). */
+export type Approval = { id: string; tool: string; summary: string; expiresAt: string; status?: "awaiting" | "approved" | "denied" | "error"; error?: string };
 
 // Tools del turno agrupadas y contraídas: "3 búsquedas · 2 acciones" en vez de una
 // lista cruda de nombres internos (tool_search_tool_bm25, mcp_easybits_run_tool…).
@@ -60,6 +63,7 @@ export function BotMessage({
   live,
   selectedStepId,
   onSelectStep,
+  onApproval,
 }: {
   msg: Msg;
   live: boolean;
@@ -67,6 +71,8 @@ export function BotMessage({
   selectedStepId?: string | null;
   /** Picar un paso lleva la computadora a él. */
   onSelectStep?: (id: string) => void;
+  /** Decide una aprobación de la tarjeta; sin esto la tarjeta no ofrece botones. */
+  onApproval?: (a: Approval, decision: "approve" | "deny") => void;
 }) {
   const { pasos, resto } = partirNarracion(msg.text, msg.cortes);
   const secs = useElapsed(live);
@@ -135,6 +141,9 @@ export function BotMessage({
           </span>
         )
       )}
+      {(msg.approvals ?? []).map((a) => (
+        <ApprovalCard key={a.id} a={a} onDecide={onApproval} />
+      ))}
       {!live && delivered.length > 0 && <ImageGrid images={delivered} onSelect={onSelectStep} />}
       {!live && steps.length > 0 && onSelectStep && <TurnSummary steps={steps} onSelect={onSelectStep} hideThumbs={delivered.length > 0} />}
       {msg.quota && (
@@ -143,6 +152,36 @@ export function BotMessage({
           <Link to="/planes" className="px-3 py-1 rounded-lg border-2 border-black text-xs font-bold">Subir de plan</Link>
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * «El agente quiere hacer esto y espera tu permiso»: la tool, con sus argumentos tal cual (el
+ * resumen lo arma el servidor, no el modelo), y Aprobar / Negar. Aprobada, el agente la hace la
+ * próxima vez que lo intente (le avisamos con un mensaje).
+ */
+function ApprovalCard({ a, onDecide }: { a: Approval; onDecide?: (a: Approval, d: "approve" | "deny") => void }) {
+  const done = a.status === "approved" || a.status === "denied";
+  return (
+    <div className="mt-3 rounded-xl border-2 border-black bg-amber-50 p-3 shadow-[3px_3px_0_0_#000]">
+      <p className="text-xs font-bold uppercase tracking-wider text-amber-700">El agente espera tu permiso</p>
+      <p className="mt-1 break-words font-mono text-[12px] leading-5 text-gray-800">{a.summary}</p>
+      {done ? (
+        <p className={`mt-2 text-sm font-bold ${a.status === "approved" ? "text-green-700" : "text-red-700"}`}>
+          {a.status === "approved" ? "✓ Aprobado: se lo digo al agente para que lo haga." : "✗ Negado: el agente no lo hará."}
+        </p>
+      ) : onDecide ? (
+        <div className="mt-2 flex gap-2">
+          <button type="button" onClick={() => onDecide(a, "approve")} className="rounded-lg border-2 border-black bg-brand-500 px-3 py-1 text-sm font-bold text-white shadow-[2px_2px_0_0_#000] hover:-translate-y-0.5">
+            Aprobar
+          </button>
+          <button type="button" onClick={() => onDecide(a, "deny")} className="rounded-lg border-2 border-black bg-white px-3 py-1 text-sm font-bold hover:bg-gray-100">
+            Negar
+          </button>
+        </div>
+      ) : null}
+      {a.status === "error" && <p className="mt-1 text-xs text-red-600">{a.error}</p>}
     </div>
   );
 }
@@ -166,6 +205,8 @@ export function applyTurnEvent(p: Msg, e: { type: string; [k: string]: any }): {
   if (e.type === "chunk") msg = { ...p, text: p.text + e.value };
   else if (e.type === "snapshot") msg = { ...p, text: e.text ?? "", tools: e.tools ?? [], cortes: e.cortes ?? [], steps: e.steps ?? p.steps };
   else if (e.type === "step" && e.step?.id) msg = { ...p, steps: upsertStep(p.steps ?? [], e.step) };
+  else if (e.type === "approval" && e.approval?.id && !p.approvals?.some((a) => a.id === e.approval.id))
+    msg = { ...p, approvals: [...(p.approvals ?? []), { ...e.approval, status: "awaiting" }] };
   else if (e.type === "tool" && e.phase === "start")
     msg = {
       ...p,

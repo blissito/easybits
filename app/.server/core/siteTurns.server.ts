@@ -88,6 +88,17 @@ export function hasLiveTurn(fleetAgentId: string, groupId: string) {
  * conversación. Se cuelga del paso de navegador que está corriendo; si el worker aún no
  * anunció la tool, crea uno propio. No-op si el turno no vive en este proceso.
  */
+/**
+ * Una herramienta del turno espera la aprobación de la persona (reglas `ask`, fleetApprovals):
+ * la tarjeta sale en el chat del turno en curso. Si el turno ya no vive aquí, la persona la ve
+ * en el webhook o en la lista de aprobaciones.
+ */
+export function emitApproval(fleetAgentId: string, groupId: string, approval: { id: string; tool: string; summary: string; expiresAt: string }) {
+  const l = live.get(groupId);
+  if (!l || l.finished || l.fleetAgentId !== fleetAgentId) return;
+  emit(l, { type: "approval", approval });
+}
+
 /** Aviso honesto del paso de navegador en curso (antibot, captcha): el panel lo pinta en vivo. */
 export function noteBrowserStep(fleetAgentId: string, groupId: string, note: Omit<StepNote, "at">) {
   const l = live.get(groupId);

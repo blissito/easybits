@@ -1866,6 +1866,21 @@ por canal o tenant: \`"mi-app"\`, \`"waba:<integrationId>"\`, \`"crm:acme"\`.
 Los MCP se montan al CREAR la sesión, no en cada turno: para comprobar un cambio de
 configuración, prueba con un \`groupId\` nuevo.
 
+### Reglas por herramienta y aprobaciones
+Decide qué puede hacer el agente **por herramienta**: permitir, **preguntar** (una persona
+aprueba antes de que corra) o negar. Por canal (\`cfgId\`; \`"*"\` = default que heredan todos).
+\`PUT /fleet-agents/:id/tool-rules\` con \`{ cfgId?, rules: [{ pattern, action }] }\` (scope MANAGE) ·
+\`GET /fleet-agents/:id/tool-rules?cfgId=\`. \`pattern\` admite \`*\`: \`mcp__denik__create_*\`,
+\`mcp__easybits__*_delete\`, \`Bash\`. Si varias coinciden: negar gana a preguntar y preguntar a
+permitir. Sin reglas, todo pasa (como siempre).
+
+Cuando una tool queda en «preguntar», el agente no la corre: se crea una aprobación y te llega
+el webhook \`agent.approval_requested\` con \`approveUrl\`/\`denyUrl\` firmadas de un solo uso
+(llámalas con POST desde tu servidor cuando tu usuario decida; nunca se las pases al agente).
+\`GET /fleet-agents/:id/approvals?status=awaiting\` lista las pendientes. Aprobada, la siguiente
+vez que el agente haga **esa misma llamada** (misma tool y argumentos, misma conversación, ≤ 24 h)
+pasa una vez. Cada tool que corre queda en la bitácora (90 días).
+
 ### Credenciales con alcance (para embeber el agente en tu app)
 \`POST /fleet-agents/:id/tokens\` con \`{ name, scopes:["MESSAGE"|"MANAGE"|"ADMIN"], publishable?, cfgId?, allowedOrigins? }\`
 → \`{ token: { id, prefix, raw } }\`. El \`raw\` se muestra **una sola vez**.

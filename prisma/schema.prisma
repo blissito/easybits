@@ -2095,17 +2095,46 @@ model CronJobState {
 model AgentAction {
   id         String    @id @default(auto()) @map("_id") @db.ObjectId
   ownerId    String    @db.ObjectId
-  tool       String // run_cron | pause_cron | create_cron | update_cron | delete_cron | run_my_cron
+  // Copiloto: run_cron | pause_cron | create_cron | update_cron | delete_cron | run_my_cron.
+  // Flota (toolRules "ask"): el nombre real de la tool del agente (mcp__denik__create_booking, Bash…).
+  tool       String
   args       Json
   summary    String
-  status     String    @default("pending") // pending | executing | executed | failed | rejected | expired
+  // Copiloto: pending | executing | executed | failed | rejected | expired.
+  // Flota (estados propios para que el copiloto nunca las tome): awaiting → approved | denied → used | expired.
+  status     String    @default("pending")
   result     Json?
   error      String?
   createdAt  DateTime  @default(now())
   resolvedAt DateTime?
   resolvedBy String?
+  // Aprobaciones de la flota (app/.server/core/fleetApprovals.ts): de qué agente y conversación,
+  // y la huella de la llamada exacta (tool + argumentos) que la aprobación deja pasar UNA vez.
+  fleetAgentId String?   @db.ObjectId
+  groupId      String?
+  inputHash    String?
+  usedAt       DateTime?
 
   @@index([ownerId, status, createdAt])
+  @@index([fleetAgentId, groupId, inputHash, status])
+}
+
+/// Bitácora de herramientas de la flota: una fila por tool terminada (todos los canales), con
+/// la aprobación que la dejó pasar si hubo. Retención 90 días (cron purge-notifications).
+model ToolCallLog {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  ownerId      String   @db.ObjectId
+  fleetAgentId String   @db.ObjectId
+  groupId      String
+  turnId       String?
+  tool         String
+  ok           Boolean
+  ms           Int?
+  approvalId   String?
+  createdAt    DateTime @default(now())
+
+  @@index([fleetAgentId, createdAt])
+  @@index([createdAt])
 }
 
 // Cron de un usuario (`/api/v2/crons`, MCP create_cron…). Lo despacha la tarea de plataforma

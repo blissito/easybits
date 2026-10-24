@@ -6,7 +6,7 @@ import toast from "react-hot-toast";
 import { resolveTier, sleepPrice } from "~/lib/hostingCatalog";
 import { db } from "~/.server/db";
 import { ChatComposer } from "~/components/sitios/ChatComposer";
-import { BotMessage, UserMessage, applyTurnEvent, type Msg } from "~/components/sitios/ChatMessages";
+import { BotMessage, UserMessage, applyTurnEvent, type Approval, type Msg } from "~/components/sitios/ChatMessages";
 import { AgentComputer, requestTakeover, requestWatch } from "~/components/sitios/AgentComputer";
 import type { AgentStep } from "~/lib/agentSteps";
 import { DeleteSiteArt, GithubRepoArt } from "~/components/sitios/DialogArt";
@@ -575,6 +575,30 @@ export default function SiteEditor() {
     setMobileTab("preview");
     setFocus({ msgIdx, id, at: Date.now() });
   };
+  // Aprobaciones del agente (reglas «preguntar»): la persona decide en la tarjeta del chat y, si
+  // aprueba, se lo decimos al agente con un mensaje normal para que repita la llamada (pasa una
+  // vez). Si el turno sigue corriendo, el aviso sale en cuanto termine.
+  const [approvalNote, setApprovalNote] = useState<string | null>(null);
+  const decideApproval = async (msgIdx: number, a: Approval, decision: "approve" | "deny") => {
+    const patch = (status: Approval["status"], error?: string) =>
+      setMsgs((ms) => ms.map((m, j) => (j === msgIdx ? { ...m, approvals: m.approvals?.map((x) => (x.id === a.id ? { ...x, status, error } : x)) } : m)));
+    const r = await fetch(`/api/v2/fleet-agents/approvals/${a.id}/${decision}`, { method: "POST" }).catch(() => null);
+    const d = r ? await r.json().catch(() => null) : null;
+    if (!r?.ok) return patch("error", d?.error ?? "No se pudo registrar tu decisión");
+    patch(decision === "approve" ? "approved" : "denied");
+    setApprovalNote(
+      decision === "approve"
+        ? `Aprobado: ${a.summary}. Ya puedes hacerlo: repite exactamente esa misma acción.`
+        : `No apruebo: ${a.summary}. No lo hagas; sigue sin eso.`
+    );
+  };
+  useEffect(() => {
+    if (!approvalNote || busy) return;
+    const note = approvalNote;
+    setApprovalNote(null);
+    void send(note);
+  }, [approvalNote, busy]);
+
   // Un turno nuevo vuelve a seguir lo último.
   useEffect(() => {
     if (busy) setFocus(null);
@@ -763,6 +787,7 @@ export default function SiteEditor() {
                     live={busy && i === msgs.length - 1}
                     selectedStepId={showComputer && m.steps === panelSteps ? viewedStep : null}
                     onSelectStep={selectStep(i)}
+                    onApproval={(a, d) => void decideApproval(i, a, d)}
                   />
                 )
               )}

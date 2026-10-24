@@ -295,6 +295,11 @@ export default [
     // FleetAgent — superficie WhatsApp always-on que rutea a workers efímeros
     route("fleet-agents", "routes/api/v2/fleet-agents.ts"),
     route("fleet-agents/wa-action", "routes/api/v2/fleet-agents.wa-action.ts"),
+    // Aprobaciones de la flota (reglas «preguntar»): el worker pregunta, la persona decide.
+    route("fleet-agents/approvals/check", "routes/api/v2/fleet-agents.approvals.check.ts"),
+    route("fleet-agents/approvals/:approvalId/:decision", "routes/api/v2/fleet-agents.approvals.$approvalId.$decision.ts"),
+    route("fleet-agents/:fleetAgentId/approvals", "routes/api/v2/fleet-agents.$fleetAgentId.approvals.ts"),
+    route("fleet-agents/:fleetAgentId/tool-rules", "routes/api/v2/fleet-agents.$fleetAgentId.tool-rules.ts"),
     route("fleet-agents/:fleetAgentId/delete", "routes/api/v2/fleet-agents.$fleetAgentId.delete.ts"),
     route("fleet-agents/:fleetAgentId/message", "routes/api/v2/fleet-agents.$fleetAgentId.message.ts"),
     route("fleet-agents/:fleetAgentId/message-stream", "routes/api/v2/fleet-agents.$fleetAgentId.message-stream.ts"),
