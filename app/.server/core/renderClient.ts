@@ -254,6 +254,11 @@ export interface BrowserView {
 /** La sesión expiró o la caja se durmió: hay que abrir otra. */
 export class BrowserSessionGone extends Error {}
 
+// Muro antibot (captcha, «tráfico inusual», reto de Cloudflare) en lo que vio el navegador.
+const BLOCKED_RE =
+  /captcha|unusual traffic|tr[áa]fico inusual|are you a robot|eres un robot|verify (that )?you are (a )?human|made by a human|just a moment\.\.\.|attention required|checking your browser|access denied|press (&|and) hold/i;
+export const looksBlocked = (v: Pick<BrowserView, "title" | "text">) => BLOCKED_RE.test(`${v.title}\n${(v.text ?? "").slice(0, 3000)}`);
+
 // Llave de las cajas de render (render-svc la exige si la trae en su env). Sin ella, local/dev.
 const boxKeyHeader = (): Record<string, string> => (process.env.RENDER_BOX_KEY ? { "x-box-key": process.env.RENDER_BOX_KEY } : {});
 

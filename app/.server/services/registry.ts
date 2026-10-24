@@ -35,6 +35,7 @@ import {
   brightdataCrawlService,
   brightdataMapService,
   brightdataInteractService,
+  brightdataBrowserSessionService,
 } from "./providers/brightdata";
 import { stockPhotoSearchService } from "./providers/stockPhotos";
 import { auditService, compareService, cloneService, screenshotService } from "./providers/render";
@@ -50,6 +51,7 @@ export const SERVICES = {
   "research.brightdata.crawl": brightdataCrawlService,
   "research.brightdata.map": brightdataMapService,
   "research.brightdata.interact": brightdataInteractService,
+  "research.brightdata.browser": brightdataBrowserSessionService,
   "image.fal.generate": falImageService,
   "image.gemini.edit": geminiEditImageService,
   "image.gemini.describe": describeImageService,

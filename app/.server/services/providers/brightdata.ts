@@ -1118,6 +1118,24 @@ async function browserEndpoint(): Promise<string> {
   return ws;
 }
 
+/**
+ * Sesión del navegador antibot para el navegador del agente (render-svc la abre por CDP cuando
+ * la página local regresó captcha). Sólo entrega el endpoint; pasar por consumeService cobra
+ * la sesión a las consultas web del dueño, con la misma tarifa plana que web_interact.
+ */
+export const brightdataBrowserSessionService: ServiceDef<Record<string, never>, ServiceResult & { data: { ws: string } }> = {
+  id: "research.brightdata.browser",
+  product: "research",
+  displayName: "Navegador antibot (sesión)",
+  description: "Una sesión del navegador del agente por el navegador remoto de Bright Data, para páginas que piden captcha. Tarifa plana por sesión.",
+  estimateCost() {
+    return INTERACT_COST;
+  },
+  async execute() {
+    return { cost: INTERACT_COST, data: { ws: await browserEndpoint() } };
+  },
+};
+
 /** Valida y acota las acciones (lo que llega del agente no se ejecuta a ciegas). */
 export function validateActions(actions: unknown): InteractAction[] {
   if (actions === undefined) return [];

@@ -11,10 +11,12 @@ import { compareRender } from "~/.server/core/renderCompare";
 import { COMPARE_RENDER_DESC, compareRenderShape, compareRenderHint } from "~/.server/mcp/compareRenderTool";
 import { CLONE_PDF_DESC, clonePdfShape, clonePdfHint } from "~/.server/mcp/clonePdfTool";
 import { clonePdf } from "~/.server/core/pdfClone";
-import { browserOnBox, BrowserSessionGone, type BrowserAction, type BrowserView } from "~/.server/core/renderClient";
+import { browserOnBox, BrowserSessionGone, looksBlocked, type BrowserAction, type BrowserView } from "~/.server/core/renderClient";
 import { hasLiveTurn, pushBrowserFrame } from "~/.server/core/siteTurns.server";
 import { getPlatformPublicClient, buildPublicAssetUrl } from "~/.server/storage";
 import { randomUUID } from "node:crypto";
+import { consumeService } from "~/.server/services/consume";
+import { QuotaExceededError } from "~/.server/services/errors";
 
 // Dedicated, always-on `render` MCP server for FleetAgents — Streamable-HTTP.
 // Injected per-turn into EVERY fleet agent (NOT gated by the easybits builtin
@@ -24,6 +26,17 @@ import { randomUUID } from "node:crypto";
 //
 // Mirrors handler.ts (the /api/mcp Streamable-HTTP setup) but with a tiny tool
 // surface and fleetAgent-token auth instead of an API key.
+
+// ── Navegador antibot ──────────────────────────────────────────────────────────────────
+// El Chromium de la caja sale de una IP de datacenter: buscadores y sitios con Cloudflare le
+// ponen captcha y el agente se atoraba (23-oct, DuckDuckGo/Bing/Google en un turno de Sitios).
+// Si la página que abrió es un muro antibot, la misma sesión se reabre por el navegador
+// remoto de Bright Data (CDP) y se cobra como consulta web (tarifa plana por sesión). Sólo en
+// ese caso: navegar todo por ahí costaría por GB lo que hoy es gratis.
+/** Sesiones que ya van por el navegador antibot: no se reabren otra vez. */
+const remoteSessions = new Set<string>();
+const DOMAIN_LIMIT_HINT =
+  "El navegador antibot sólo navega dentro del dominio con que se abrió. Para otro sitio, abre otra sesión con browser_open.";
 
 async function ctxForOwner(ownerId: string): Promise<AuthContext | null> {
   const user = await db.user.findUnique({ where: { id: ownerId } });
@@ -286,6 +299,21 @@ function buildRenderServer(ctx: AuthContext, panel?: { fleetAgentId: string; gro
   };
   const browserFail = (e: unknown) => fail(e instanceof BrowserSessionGone ? e.message : (e as Error).message);
 
+  /** Reabre en el navegador antibot. Regresa la vista nueva o por qué no se pudo. */
+  const antibot = async (url: string, mobile?: boolean): Promise<{ v: BrowserView } | { error: string }> => {
+    try {
+      const r = await consumeService<{ cost: number; data: { ws: string } }>("research.brightdata.browser", {}, { userId: ctx.user.id });
+      const v = await browserOnBox(ctx, "open", { url, mobile, screenshot: true, cdp: r.data.ws });
+      remoteSessions.add(v.sessionId);
+      if (remoteSessions.size > 500) remoteSessions.delete(remoteSessions.keys().next().value!);
+      return { v };
+    } catch (e) {
+      return { error: e instanceof QuotaExceededError ? "ya no quedan consultas web para el navegador antibot" : (e as Error).message };
+    }
+  };
+  const ANTIBOT_HINT = (id: string) =>
+    `La página pedía captcha: la reabrí por el navegador antibot (sesión ${id}, cuesta 5 consultas web). ${DOMAIN_LIMIT_HINT}`;
+
   const actionSchema = z.discriminatedUnion("type", [
     z.object({ type: z.literal("click"), ref: z.string().optional(), text: z.string().optional().describe("texto visible, si no tienes ref") }),
     z.object({ type: z.literal("type"), ref: z.string(), text: z.string(), submit: z.boolean().optional().describe("Enter al terminar") }),
@@ -308,6 +336,14 @@ function buildRenderServer(ctx: AuthContext, panel?: { fleetAgentId: string; gro
     async (p) => {
       try {
         const v = await browserOnBox(ctx, "open", { url: p.url, mobile: p.mobile, screenshot: true });
+        if (looksBlocked(v)) {
+          const r = await antibot(p.url, p.mobile);
+          if ("v" in r) {
+            await browserOnBox(ctx, "close", { sessionId: v.sessionId }).catch(() => undefined);
+            return browserReply(r.v, { wanted: p.screenshot, tool: "browser_open", hint: ANTIBOT_HINT(r.v.sessionId) });
+          }
+          return browserReply(v, { wanted: p.screenshot, tool: "browser_open", hint: `La página pide captcha y no se pudo usar el navegador antibot (${r.error}). No lo resuelvas tú: usa web_search/web_fetch o pídele ayuda a la persona.` });
+        }
         return browserReply(v, { wanted: p.screenshot, tool: "browser_open", hint: `Sesión ${v.sessionId} abierta. Actúa con browser_act y ciérrala con browser_close al terminar.` });
       } catch (e) {
         return browserFail(e);
@@ -326,11 +362,24 @@ function buildRenderServer(ctx: AuthContext, panel?: { fleetAgentId: string; gro
     async (p) => {
       try {
         const v = await browserOnBox(ctx, "act", { sessionId: p.session_id, actions: p.actions, screenshot: true });
+        // Una acción que llevó a un muro antibot: se sigue en el navegador antibot desde esa URL.
+        if (!remoteSessions.has(p.session_id) && looksBlocked(v) && /^https?:/.test(v.url)) {
+          const r = await antibot(v.url);
+          if ("v" in r) {
+            await browserOnBox(ctx, "close", { sessionId: p.session_id }).catch(() => undefined);
+            return browserReply(r.v, { wanted: p.screenshot, tool: "browser_act", hint: `${ANTIBOT_HINT(r.v.sessionId)} La sesión ${p.session_id} se cerró: sigue con la nueva.` });
+          }
+        }
+        const domainLimit = v.failed && /navigate_domains_limit/.test(v.failed.error);
         return browserReply(v, {
           wanted: p.screenshot,
           tool: "browser_act",
           actions: p.actions,
-          hint: v.failed ? `Falló la acción ${v.failed.index + 1}: ${v.failed.error}. La página quedó como se ve.` : undefined,
+          hint: domainLimit
+            ? DOMAIN_LIMIT_HINT
+            : v.failed
+              ? `Falló la acción ${v.failed.index + 1}: ${v.failed.error}. La página quedó como se ve.`
+              : undefined,
         });
       } catch (e) {
         return browserFail(e);
