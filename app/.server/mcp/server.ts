@@ -15,7 +15,7 @@
 //    (2) que esté en el toolGroup correcto en toolGroups.ts, (3) que el
 //    cliente tenga el conector configurado.
 // ─────────────────────────────────────────────────────────────────────────────
-import { getSiteTheme, listSiteSummaries, setSiteTheme } from "~/.server/core/siteOperations";
+import { engineChoicesFor, getSiteTheme, listSiteSummaries, setSiteEngine, setSiteTheme } from "~/.server/core/siteOperations";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   registerAppTool,
@@ -5676,6 +5676,22 @@ function registerSiteTools(server: McpServer) {
       const ctx = extra.authInfo as unknown as AuthContext;
       if (!params.themeId && !params.colors) return ok(await getSiteTheme(ctx, params.siteId));
       return ok(await setSiteTheme(ctx, params.siteId, { themeId: params.themeId, colors: params.colors }));
+    })
+  );
+
+  server.tool(
+    "site_set_engine",
+    "See or change what builds a site-builder site: its engine (claude = the user's Claude, easybits = included Haiku…) and model. Omit `engine` and `model` to read: returns { engines } with each usable engine, its models and `currentModel`. The engine belongs to the site; the MODEL belongs to the account's builder for that engine, so it applies to EVERY site with that engine, from the next turn (no recycle). If the engine needs a key the account lacks (`needsSecret`), pass it as `secretValue`.",
+    {
+      siteId: z.string().describe("Site id (from list_sites)"),
+      engine: z.string().optional().describe("Engine id (from the read)"),
+      model: z.string().optional().describe("Model id of that engine (from the read)"),
+      secretValue: z.string().optional().describe("The engine's key, only when needsSecret"),
+    },
+    wrapHandler(async (params, extra) => {
+      const ctx = extra.authInfo as unknown as AuthContext;
+      if (!params.engine && !params.model) return ok({ engines: (await engineChoicesFor(ctx.user.id)).filter((e) => e.creatable) });
+      return ok(await setSiteEngine(ctx, params.siteId, { engine: params.engine, model: params.model, secretValue: params.secretValue }));
     })
   );
 

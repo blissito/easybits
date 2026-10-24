@@ -55,7 +55,7 @@ export function siteRows(items: SiteRow[]) {
 
 /** Valida kind/stack/template y arma el cuerpo de POST /sites. Puro para probarlo. */
 export function createBody(
-  o: { prompt?: string; name?: string; kind?: string; stack?: string; template?: string },
+  o: { prompt?: string; name?: string; kind?: string; stack?: string; template?: string; engine?: string; model?: string },
   usage: string,
 ): Record<string, string> {
   const kind = o.kind ?? "webapp";
@@ -76,9 +76,14 @@ export function createBody(
   }
   if (!o.prompt && !o.name) throw usageError(t("Give --prompt (what to build) or --name.", "Pasa --prompt (qué construir) o --name."), usage);
   const body: Record<string, string> = { kind };
-  for (const k of ["prompt", "name", "stack", "template"] as const) if (o[k]) body[k] = o[k]!;
+  for (const k of ["prompt", "name", "stack", "template", "engine", "model"] as const) if (o[k]) body[k] = o[k]!;
   return body;
 }
+
+/** Un motor de `GET /sites/engines`. */
+export type EngineRow = { id: string; label: string; included: boolean; needsSecret: boolean; models: { id: string; label: string }[]; currentModel: string | null };
+
+const MODEL_USAGE = "easybits sites model <site> [<model>] [--engine <id>] [--key <value>]";
 
 const THEME_USAGE = "easybits sites theme <get|set> <site> [--theme <id> | --colors <file.json|->]";
 
@@ -105,7 +110,7 @@ export const sites: Command = {
   aliases: ["site"],
   group: "Hosting",
   summary: "Your site-builder sites (/dash/sitios): static and web apps",
-  synopsis: "sites <ls|create|theme>",
+  synopsis: "sites <ls|create|model|theme>",
   subs: {
     ls: {
       aliases: ["list"],
@@ -126,13 +131,15 @@ export const sites: Command = {
     create: {
       aliases: ["new"],
       summary: "Create a site from a prompt; its builder agent picks it up in the editor",
-      usage: "easybits sites create (--prompt <text> | --name <name>) [--kind webapp|static] [--stack <stack>] [--template <key>]",
+      usage: "easybits sites create (--prompt <text> | --name <name>) [--kind webapp|static] [--stack <stack>] [--template <key>] [--engine <id>] [--model <id>]",
       options: {
         prompt: { type: "string", value: "text", description: "What to build; also names the site if --name is missing" },
         name: { type: "string", value: "name", description: "Site name" },
         kind: { type: "string", value: "kind", description: "webapp (default: its own machine, published later) or static (CDN website)" },
         stack: { type: "string", value: "stack", description: "Web app stack: tanstack (default), next, react-router, remix, nuxt, sveltekit, astro, elysia" },
         template: { type: "string", value: "key", description: "Starting template (tanstack/react-router): consultorio, despacho, portafolio, lanzamiento" },
+        engine: { type: "string", value: "id", description: "What builds it: claude (your Claude), easybits (included)… see sites model" },
+        model: { type: "string", value: "id", description: "Model of that engine; applies to all your sites with that engine" },
       },
       examples: [
         'easybits sites create --prompt "Landing for my dental clinic in Puebla"',
@@ -141,7 +148,7 @@ export const sites: Command = {
       ],
       async run(ctx) {
         const body = createBody(
-          { prompt: str(ctx, "prompt"), name: str(ctx, "name"), kind: str(ctx, "kind"), stack: str(ctx, "stack"), template: str(ctx, "template") },
+          { prompt: str(ctx, "prompt"), name: str(ctx, "name"), kind: str(ctx, "kind"), stack: str(ctx, "stack"), template: str(ctx, "template"), engine: str(ctx, "engine"), model: str(ctx, "model") },
           this.usage,
         );
         const site = await api<CreatedSite>(ctx, "POST", "/sites", body);
@@ -154,6 +161,46 @@ export const sites: Command = {
           if (site.previewUrl) console.log(`${t("Preview", "Vista previa")}: ${site.previewUrl}`);
           console.log(site.url ? `URL: ${site.url}` : t("Not published yet: publish it from the editor.", "Todavía sin publicar: publícalo desde el editor."));
         });
+      },
+    },
+    model: {
+      aliases: ["engine"],
+      summary: "See or change what builds a site: engine and model (the model applies to all your sites with that engine)",
+      usage: MODEL_USAGE,
+      options: {
+        engine: { type: "string", value: "id", description: "Switch the site to this engine" },
+        key: { type: "string", value: "value", description: "The engine's key, if your account doesn't have it yet" },
+      },
+      examples: [
+        "easybits sites model my-shop                       # engines, models and the current one",
+        "easybits sites model my-shop claude-sonnet-5-5",
+        "easybits sites model my-shop --engine easybits",
+      ],
+      async run(ctx) {
+        const id = need(ctx, 0, "site", MODEL_USAGE);
+        const model = ctx.args[1];
+        const engine = str(ctx, "engine");
+        if (!model && !engine) {
+          const [{ items }, { items: mine }] = await Promise.all([
+            api<{ items: EngineRow[] }>(ctx, "GET", "/sites/engines"),
+            api<{ items: SiteRow[] }>(ctx, "GET", "/sites"),
+          ]);
+          const site = mine.find((s) => s.id === id);
+          emit(ctx, { site: site ? { id: site.id, engine: site.engine } : null, engines: items }, () => {
+            if (site) console.log(t(`${site.name} builds with: ${site.engine}`, `${site.name} se construye con: ${site.engine}`));
+            table(
+              items.flatMap((e) => e.models.map((m) => ({ engine: e.id, model: m.id, label: m.label, now: m.id === e.currentModel ? "●" : "", key: e.needsSecret ? t("needs key", "pide llave") : "" }))),
+              [["engine", "ENGINE"], ["model", "MODEL"], ["label", "LABEL"], ["now", "NOW"], ["key", "KEY"]],
+            );
+          });
+          return;
+        }
+        const r = await api<{ engine: string; label: string; model: string | null }>(ctx, "POST", `/sites/${encodeURIComponent(id)}/engine`, {
+          ...(engine ? { engine } : {}),
+          ...(model ? { model } : {}),
+          ...(str(ctx, "key") ? { secretValue: str(ctx, "key") } : {}),
+        });
+        emit(ctx, r, () => console.log(t(`Now builds with ${r.label} · ${r.model ?? "default"} (from the next message, on all your ${r.label} sites).`, `Ahora construye con ${r.label} · ${r.model ?? "default"} (desde el siguiente mensaje, en todos tus sitios con ${r.label}).`)));
       },
     },
     theme: {

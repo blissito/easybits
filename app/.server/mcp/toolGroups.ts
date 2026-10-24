@@ -800,7 +800,7 @@ export const DB_ALLOWLIST = new Set<string>([
 
 /** Sitios — websites CRUD + deploy de archivos + inyección de HTML. Administrativo. */
 export const SITIOS_ALLOWLIST = new Set<string>([
-  "list_sites", "site_set_theme",
+  "list_sites", "site_set_theme", "site_set_engine",
   "list_websites", "create_website", "update_website", "delete_website",
   "deploy_website_file", "upload_website_file", "list_website_files", "inject_html",
   "list_domains", "add_domain", "verify_domain", "set_domain_website", "delete_domain",

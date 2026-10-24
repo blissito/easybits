@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { pickModeMessage, pickThemeMessage, readPickMessage, readPickReady } from "@ghostystudio/pointer/picked";
 import { readEditedText } from "~/lib/eb-picker";
+import { ModelPill, useEngines, type ModelPick } from "~/components/sitios/ModelPill";
 import { Link, data, redirect, useFetcher, useLoaderData, useRevalidator, useSearchParams } from "react-router";
 import toast from "react-hot-toast";
 import { resolveTier, sleepPrice } from "~/lib/hostingCatalog";
@@ -51,6 +52,7 @@ export const loader = async ({ request, params }: Route.LoaderArgs) => {
     site,
     publishPrice: workTier ? sleepPrice(workTier) : null,
     engineLabel: siteEngineFor(site).label.replace(/^Ghosty · /, ""),
+    engineId: siteEngineFor(site).id,
     github: { enabled: githubAppEnabled(), repo: gh?.fullName ?? null },
   };
 };
@@ -122,7 +124,27 @@ function fmtTokens(n: number) {
 type Selection = { id: string; tag: string } | null;
 
 export default function SiteEditor() {
-  const { site, engineLabel, github, publishPrice } = useLoaderData<typeof loader>();
+  const { site, engineLabel, engineId, github, publishPrice } = useLoaderData<typeof loader>();
+  // Motor y modelo del sitio, cambiables desde la cabecera (el modelo vale para la cuenta).
+  const { engines, reload: reloadEngines } = useEngines();
+  const [engineNow, setEngineNow] = useState(engineId);
+  const [engineBusy, setEngineBusy] = useState(false);
+  const [engineError, setEngineError] = useState<string | null>(null);
+  const changeEngine = async (p: ModelPick) => {
+    setEngineBusy(true);
+    setEngineError(null);
+    try {
+      const r = await fetch(`/api/v2/sites/${site.id}/engine`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(p) });
+      const d = await r.json().catch(() => null);
+      if (!r.ok) throw new Error(d?.error || `Error ${r.status}`);
+      setEngineNow(d.engine);
+      await reloadEngines();
+    } catch (e) {
+      setEngineError(e instanceof Error ? e.message : "error de red");
+    } finally {
+      setEngineBusy(false);
+    }
+  };
   const revalidator = useRevalidator();
   const [params, setParams] = useSearchParams();
   const githubNotice = GITHUB_NOTICE[params.get("github") ?? ""] ?? null;
@@ -780,7 +802,10 @@ export default function SiteEditor() {
           <Link to="/dash/sitios" className="text-gray-400 hover:text-black">←</Link>
           <div className="min-w-0 flex-1">
             <p className="font-bold truncate">{site.name}</p>
-            <p className="text-[11px] text-gray-400">{site.kind === "webapp" ? "Web app" : "Sitio estático"} · {engineLabel}</p>
+            <div className="flex items-center gap-1.5 text-[11px] text-gray-400">
+              {site.kind === "webapp" ? "Web app" : "Sitio estático"} ·{" "}
+              {engines ? <ModelPill engines={engines} value={{ engine: engineNow, model: null }} onPick={changeEngine} busy={engineBusy} error={engineError} /> : engineLabel}
+            </div>
           </div>
           {tokens && (
             <Link to="/dash/packs" title="Tokens LLM disponibles en tu cuenta"

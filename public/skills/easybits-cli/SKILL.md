@@ -5,7 +5,7 @@ license: MIT
 compatibility: Needs Node 22+ (npx is enough), network access to https://www.easybits.cloud and an EasyBits API key
 metadata:
   author: easybits
-  version: "1.31"
+  version: "1.32"
 ---
 
 # Use the EasyBits CLI
@@ -293,6 +293,7 @@ easybits sites ls --json      # [{ id, name, kind: static|webapp, engine, stack,
 easybits sites create --prompt "Landing for my dental clinic" --json   # {id, name, kind, stack, template, previewUrl, url: null, editorUrl}
 easybits sites create --prompt "Task tracker with login" --stack next --json
 easybits sites create --name "Promo" --kind static --json
+easybits sites model "$SITE" [<model>] --json                    # no model: engines+currentModel; model applies to ALL sites of that engine
 easybits sites theme get "$SITE" --json                          # {supported, colors:{primary:"#…",…}}
 easybits sites theme set "$SITE" --theme dracula --json          # or --colors file.json|- (every token)
 ```

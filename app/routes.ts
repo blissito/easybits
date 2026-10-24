@@ -579,6 +579,8 @@ export default [
   route("api/v2/sites/:id/takeover/:pass/:op", "routes/api/v2/sites.$id.takeover.$pass.$op.ts"),
   // Tema del sitio (botón «Tema», API/SDK/MCP)
   route("api/v2/sites/:id/theme", "routes/api/v2/sites.$id.theme.ts"),
+  route("api/v2/sites/:id/engine", "routes/api/v2/sites.$id.engine.ts"),
+  route("api/v2/sites/engines", "routes/api/v2/sites.engines.ts"),
   // Lista de sitios para API/SDK/CLI (Bearer)
   route("api/v2/sites", "routes/api/v2/sites-collection.ts"),
   route("api/v2/collab/authenticate", "routes/api/v2/collab.authenticate.ts"),

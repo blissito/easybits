@@ -514,6 +514,21 @@ export interface Website {
 }
 
 /** Un sitio del creador de sitios (/dash/sitios): estático o web app, con su motor. */
+/** Un motor con que se construyen sitios (`GET /sites/engines`). */
+export interface SiteEngine {
+  id: string;
+  label: string;
+  /** El de la casa: no pide llave. */
+  included: boolean;
+  /** Hay que mandar `secretValue` al elegirlo. */
+  needsSecret: boolean;
+  secretPlaceholder: string;
+  models: { id: string; label: string }[];
+  defaultModel: string | null;
+  /** Con qué construye hoy este motor en la cuenta (vale para todos sus sitios). */
+  currentModel: string | null;
+}
+
 export interface Site {
   id: string;
   name: string;
@@ -1784,6 +1799,16 @@ export class EasybitsClient {
   /** Cambia el tema sin turno del modelo: una paleta (`themeId`) o todos los tokens (`colors`, #rrggbb). */
   async setSiteTheme(siteId: string, theme: { themeId: string } | { colors: Record<string, string> }): Promise<{ colors: Record<string, string> }> {
     return this.request(`/sites/${siteId}/theme`, { method: "POST", body: JSON.stringify(theme) });
+  }
+
+  /** Motores con que se puede construir un sitio y el modelo con que construye hoy cada uno (`currentModel`, por cuenta). */
+  async siteEngines(): Promise<{ items: SiteEngine[]; nextCursor: string | null; hasMore: boolean; total?: number }> {
+    return this.request("/sites/engines");
+  }
+
+  /** Cambia motor y/o modelo de un sitio. El modelo vale para todos los sitios de ese motor, desde el siguiente turno. */
+  async setSiteEngine(siteId: string, opts: { engine?: string; model?: string; secretValue?: string }): Promise<{ siteId: string; engine: string; label: string; model: string | null }> {
+    return this.request(`/sites/${siteId}/engine`, { method: "POST", body: JSON.stringify(opts) });
   }
 
   // ── Websites ────────────────────────────────────────────────

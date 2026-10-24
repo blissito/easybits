@@ -215,6 +215,8 @@ easybits sites ls                    # your site-builder sites (/dash/sitios): k
 easybits sites create --prompt "Landing for my dental clinic"   # web app (TanStack) in its own machine
 easybits sites create --prompt "Task tracker with login" --stack next --json
 easybits sites create --name "Promo" --kind static              # CDN website instead of a machine
+easybits sites model my-clinic                                  # engine + model that build it (● = current)
+easybits sites model my-clinic claude-sonnet-5-5                # the model applies to all your sites with that engine
 easybits sites theme get my-clinic                              # site by name or id
 easybits sites theme set my-clinic --theme dracula              # or --colors theme.json (every token)
 easybits websites ls                 # every static website (also documents and agent-published pages)

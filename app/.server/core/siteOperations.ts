@@ -55,7 +55,16 @@ function builderNameFor(engineId: string) {
 
 /** Para el selector: motores + si su llave ya está en el vault (sin exponer nombres). */
 export async function engineChoicesFor(userId: string) {
-  const owned = new Set((await listSecrets(userId)).map((s) => s.name));
+  const [secrets, builders] = await Promise.all([
+    listSecrets(userId),
+    db.fleetAgent.findMany({ where: { ownerId: userId, name: { startsWith: BUILDER_NAME } }, select: { name: true, persona: true } }),
+  ]);
+  const owned = new Set(secrets.map((s) => s.name));
+  // El modelo con el que construye hoy cada motor en esta cuenta: el del builder (por cuenta, no por sitio).
+  const modelOf = (e: FleetEngine) => {
+    const env = (builders.find((b) => b.name === builderNameFor(e.id))?.persona as { env?: Record<string, string> } | null)?.env;
+    return (e.modelEnv && env?.[e.modelEnv]) || e.siteModel || e.defaultModel || null;
+  };
   return FLEET_ENGINES.filter((e) => !e.deprecated).map((e) => ({
     id: e.id,
     label: e.label.replace(/^Ghosty · /, ""),
@@ -69,7 +78,37 @@ export async function engineChoicesFor(userId: string) {
     secretKind: e.secret?.kind ?? null,
     models: e.models ?? [],
     defaultModel: e.siteModel ?? e.defaultModel ?? null,
+    currentModel: modelOf(e),
   }));
+}
+
+/** Si el motor pide llave y la cuenta no la tiene, la guarda (o falla pidiéndola). Igual que al crear. */
+async function ensureEngineSecret(ctx: AuthContext, engine: FleetEngine, secretValue?: string) {
+  if (!engine.secret) return;
+  const owned = (await listSecrets(ctx.user.id)).some((s) => s.name === engine.secret!.name);
+  if (owned) return;
+  const val = (secretValue ?? "").trim();
+  if (!val) throw new Response(`Falta la llave de ${engine.label.replace(/^Ghosty · /, "")}`, { status: 400 });
+  await createSecret(ctx.user.id, { name: engine.secret.name, value: val });
+}
+
+/**
+ * Cambia el motor y/o el modelo con que se construye un sitio. El motor es del sitio; el modelo es
+ * del builder de ese motor en la cuenta, así que vale para TODOS los sitios de ese motor. Aplica en
+ * el siguiente turno: el env de la caja se refresca al despertar (spawnEnvHash), sin reciclarla.
+ */
+export async function setSiteEngine(ctx: AuthContext, siteId: string, opts: { engine?: string; model?: string | null; secretValue?: string }) {
+  requireScope(ctx, "WRITE");
+  const site = await db.site.findFirst({ where: { id: siteId, ownerId: ctx.user.id, ...NOT_DELETED }, select: { id: true, engine: true } });
+  if (!site) throw new Response("Site not found", { status: 404 });
+  const engine = opts.engine ? getEngine(opts.engine) : siteEngineFor(site);
+  if (!engine || engine.deprecated || !siteEngineUsable(engine)) throw new Response("Ese motor aún no está disponible", { status: 400 });
+  if (opts.model && !engine.models?.some((m) => m.id === opts.model)) throw new Response(`Ese modelo no es de ${engine.label.replace(/^Ghosty · /, "")}`, { status: 400 });
+  await ensureEngineSecret(ctx, engine, opts.secretValue);
+  await ensureBuilderAgent(ctx, engine.id, opts.model);
+  if ((site.engine ?? DEFAULT_SITE_ENGINE) !== engine.id) await db.site.update({ where: { id: site.id }, data: { engine: engine.id } });
+  const choice = (await engineChoicesFor(ctx.user.id)).find((e) => e.id === engine.id)!;
+  return { siteId: site.id, engine: engine.id, label: choice.label, model: choice.currentModel };
 }
 // Regalo de arranque: una cuenta SIN saldo (Byte post-promo) recibe tokens al crear
 // su primer sitio, una sola vez por cuenta (sello en metadata.sitesStarterGrantAt).
@@ -119,17 +158,26 @@ export async function ensureBuilderAgent(ctx: AuthContext, engineId: string = DE
       if (engine.modelEnv && siteModel) env[engine.modelEnv] = siteModel;
       await db.fleetAgent.update({
         where: { id: existing.id },
-        data: { workerTemplate: engine.template, platformClaude: !!engine.platformClaude, persona: { ...persona, siteModelPicked: false, env } },
+        data: { workerTemplate: engine.template, platformClaude: !!engine.platformClaude, persona: { ...persona, siteModelPicked: !!picked, env } },
       });
       await recycleFleetAgentBoxes({ id: existing.id, ownerId: ctx.user.id }).catch(() => {});
       return { id: existing.id, token: existing.token };
     }
-    // Modelo elegido a mano al crear    // Builder con el modelo viejo (el default del motor o ninguno): se sube al de sitios. El env
-    // se refresca solo al despertar la caja (spawnEnvHash), sin reciclarla. Uno que el dueño
-    // cambió a mano a otro modelo se respeta.
+    // Modelo elegido a mano (al crear un sitio o desde la pastilla): gana y queda marcado.
+    // Si no, un builder con el modelo viejo (el default del motor o ninguno) se sube al de sitios.
+    // El env se refresca solo al despertar la caja (spawnEnvHash), sin reciclarla.
     if (engine.modelEnv && siteModel) {
       const persona = (existing.persona as { env?: Record<string, string>; siteModelPicked?: boolean } | null) ?? {};
       const cur = persona.env?.[engine.modelEnv];
+      if (picked) {
+        if (cur !== picked || !persona.siteModelPicked) {
+          await db.fleetAgent.update({
+            where: { id: existing.id },
+            data: { persona: { ...persona, siteModelPicked: true, env: { ...(persona.env ?? {}), [engine.modelEnv]: picked } } },
+          });
+        }
+        return { id: existing.id, token: existing.token };
+      }
       // Uno que el dueño eligió (al crear un sitio) nunca se sube solo.
       if (!persona.siteModelPicked && cur !== siteModel && (!cur || cur === engine.defaultModel)) {
         await db.fleetAgent.update({
@@ -315,14 +363,7 @@ export async function createSite(
   if (!siteEngineUsable(engine)) throw new Response("Ese motor aún no está disponible", { status: 400 });
   // "Si la llave no está, que te la pida": BYOK guarda la credencial en el vault del
   // dueño con su nombre canónico; el spawn del worker la lee de ahí.
-  if (engine.secret) {
-    const owned = (await listSecrets(ctx.user.id)).some((s) => s.name === engine.secret!.name);
-    if (!owned) {
-      const val = (opts.secretValue ?? "").trim();
-      if (!val) throw new Response(`Falta la llave de ${engine.label.replace(/^Ghosty · /, "")}`, { status: 400 });
-      await createSecret(ctx.user.id, { name: engine.secret.name, value: val });
-    }
-  }
+  await ensureEngineSecret(ctx, engine, opts.secretValue);
   await ensureBuilderAgent(ctx, engine.id, opts.model);
   // El regalo solo tiene sentido en el motor medido: BYOK no gasta tokens de la cuenta.
   if (engineIsMetered(engine)) await grantStarterTokensIfNeeded(ctx.user.id).catch(() => {});

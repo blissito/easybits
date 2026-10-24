@@ -21,7 +21,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   return Response.json(paginate(items, { total: items.length }));
 }
 
-// POST /api/v2/sites {prompt?, name?, kind?, stack?, template?} — crea un sitio. Por default
+// POST /api/v2/sites {prompt?, name?, kind?, stack?, template?, engine?, model?, secretValue?} — crea un sitio. Por default
 // es una web app TanStack en su propia caja, nacida de la caja dorada con la plantilla que
 // corresponde al prompt (construir es gratis; se cobra al publicar). kind "static" = sitio CDN.
 // Acepta API key o la sesión del navegador: el hero de la home lo crea sin salir de la página.
@@ -33,17 +33,20 @@ export async function action({ request }: Route.ActionArgs) {
     if (user) ctx = { user, scopes: ["READ", "WRITE"] } as AuthContext;
   }
   ctx = requireAuth(ctx);
-  const body = (await request.json().catch(() => ({}))) as { name?: string; prompt?: string; kind?: string; stack?: string; template?: string };
+  const body = (await request.json().catch(() => ({}))) as { name?: string; prompt?: string; kind?: string; stack?: string; template?: string; engine?: string; model?: string; secretValue?: string };
   const prompt = String(body.prompt ?? "").trim();
   const name = String(body.name ?? "").trim() || nameFromPrompt(prompt);
-  // Mismo default que /dash/sitios/new: Claude si ya tiene su llave; si no, el medido.
+  // El motor que pidieron (pastilla del home, SDK, CLI); si no, el default de /dash/sitios/new:
+  // Claude si ya tiene su llave, si no el medido.
   const engines = await engineChoicesFor(ctx.user.id);
-  const engine = engines.some((e) => e.id === "claude" && e.creatable && !e.needsSecret) ? "claude" : DEFAULT_SITE_ENGINE;
+  const engine =
+    typeof body.engine === "string" && body.engine ? body.engine : engines.some((e) => e.id === "claude" && e.creatable && !e.needsSecret) ? "claude" : DEFAULT_SITE_ENGINE;
+  const model = typeof body.model === "string" && body.model ? body.model : null;
   try {
     const kind = body.kind === "static" ? "static" : "webapp";
     const stack = kind === "webapp" ? (isSiteStack(body.stack) ? body.stack : "tanstack") : null;
     const template = stackHasTemplates(stack) ? (isSiteTemplate(body.template) ? body.template : templateFor(prompt)) : null;
-    const { site } = await createSite(ctx, { kind, name, engine, stack, template, sleep: true });
+    const { site } = await createSite(ctx, { kind, name, engine, model, secretValue: body.secretValue, stack, template, sleep: true });
     const full = await getSite(ctx, site.id);
     return Response.json(
       { id: site.id, name, kind, stack, template, previewUrl: full.previewUrl, url: full.url, editorUrl: `/dash/sitios/${site.id}` },

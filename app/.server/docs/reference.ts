@@ -382,6 +382,8 @@ easybits sites ls                                                 # tus sitios d
 easybits sites create --prompt "Landing de mi consultorio dental" # web app (TanStack) en su propia máquina
 easybits sites create --prompt "Lista de tareas con login" --stack next --json
 easybits sites create --name "Promo" --kind static                # website en el CDN en vez de máquina
+easybits sites model mi-consultorio                              # motor + modelo con que se construye (● = el actual)
+easybits sites model mi-consultorio claude-sonnet-5-5            # el modelo vale para todos tus sitios con ese motor
 easybits sites theme get mi-consultorio                           # colores actuales (por nombre o id)
 easybits sites theme set mi-consultorio --theme dracula           # una paleta, sin turno del modelo
 jq .colors tema.json | easybits sites theme set mi-consultorio --colors -   # o cada token en #rrggbb
@@ -1122,6 +1124,12 @@ SDK: \`eb.listSites()\` · MCP: \`list_sites\` · CLI: \`easybits sites ls\`
 Change a site-builder site's colors without a model turn (same as the «Tema» button). Sites use color tokens (\`primary\`, \`primary-light\`, \`primary-dark\`, \`secondary\`, \`accent\`, \`surface\`, \`surface-alt\`, \`surface-deep\`, \`on-surface\`, \`on-surface-muted\`, \`on-surface-deep\`, \`on-primary\`, \`on-secondary\`, \`on-accent\`) as Tailwind classes; the theme file inside the site is the source of truth (web app: \`eb-theme.css\`, hot-reloads in the preview; static: the \`eb-theme\` block of \`index.html\`). \`themeId\` is a palette (\`minimal\`, \`calido\`, \`oceano\`, \`noche\`, \`dracula\`, \`nord\`, \`tokyo-night\`, \`github-light\`…); \`colors\` must carry every token as \`#rrggbb\`.
 Returns: GET \`{ supported, colors }\` · POST \`{ colors }\`. \`409 no_tokens\` = the site predates themes (literal colors): ask the builder to adapt it first. Remix and Elysia web apps don't support themes yet.
 SDK: \`eb.getSiteTheme(id)\` · \`eb.setSiteTheme(id, { themeId })\` · MCP: \`site_set_theme\`
+
+### Site engine and model
+\`GET /sites/engines\` · \`POST /sites/:id/engine\` \`{ engine?, model?, secretValue? }\`
+What builds a site-builder site. The engine belongs to the site (\`claude\` = the user's Claude, \`easybits\` = included); the model belongs to the account's builder for that engine, so changing it applies to EVERY site with that engine, from the next turn. \`POST /sites\` also accepts \`engine\` and \`model\`. If the engine needs a key the account lacks (\`needsSecret\`), send it as \`secretValue\`.
+Returns: GET \`{ items: [{ id, label, included, needsSecret, models, defaultModel, currentModel }] }\` · POST \`{ siteId, engine, label, model }\`.
+SDK: \`eb.siteEngines()\` · \`eb.setSiteEngine(id, { model })\` · MCP: \`site_set_engine\` · CLI: \`easybits sites model <site> [<model>]\`
 
 ### List websites
 \`GET /websites\`

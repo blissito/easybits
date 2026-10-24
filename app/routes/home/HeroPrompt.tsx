@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { LuArrowUp } from "react-icons/lu";
+import { ModelPill, useEngines, type ModelPick } from "~/components/sitios/ModelPill";
 import { AgentArt, BookingArt, FinanceArt, GymArt, InvoiceArt } from "./heroIllustrations";
 
 /**
@@ -54,6 +55,11 @@ export function HeroPrompt({ loggedIn }: { loggedIn: boolean }) {
       .then((d) => d?.items?.[0] && setLastSite({ id: d.items[0].id, name: d.items[0].name }))
       .catch(() => {});
   }, [loggedIn]);
+  // Con qué se construye: el mismo default que el servidor (tu Claude si ya tienes llave; si no, el de la casa).
+  const { engines } = useEngines(loggedIn);
+  const [pick, setPick] = useState<ModelPick | null>(null);
+  const defaultEngine = engines?.find((e) => e.id === "claude" && !e.needsSecret) ?? engines?.find((e) => e.included) ?? engines?.[0];
+  const chosen = pick ?? (defaultEngine ? { engine: defaultEngine.id, model: null } : null);
 
   async function submit(value: string) {
     const clean = value.trim();
@@ -67,7 +73,7 @@ export function HeroPrompt({ loggedIn }: { loggedIn: boolean }) {
       const res = await fetch("/api/v2/sites", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt: clean }),
+        body: JSON.stringify({ prompt: clean, ...(pick ?? {}) }),
       });
       if (res.status === 401) return navigate(`/login?next=${encodeURIComponent(next)}`);
       const created = await res.json().catch(() => null);
@@ -108,7 +114,8 @@ export function HeroPrompt({ loggedIn }: { loggedIn: boolean }) {
           placeholder="Quiero una aplicación con base de datos y login para mi negocio de…"
           className="block w-full resize-none rounded-t-2xl border-0 bg-transparent px-5 pt-4 pb-1 text-base md:text-lg shadow-none outline-none ring-0 focus:border-0 focus:outline-none focus:ring-0 placeholder:text-gray-400"
         />
-        <div className="flex justify-end px-4 pb-3">
+        <div className="flex items-center justify-between gap-2 px-4 pb-3">
+          <div>{engines && chosen && <ModelPill engines={engines} value={chosen} onPick={(p) => setPick(p)} />}</div>
           <button
             id="EmpezarGratisHome"
             type="submit"

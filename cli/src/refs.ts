@@ -68,6 +68,7 @@ export const REF_ARGS: Record<string, { index: number; kind: RefKind }> = {
   "db query": { index: 0, kind: "db" },
   "db photos": { index: 1, kind: "db" },
   "sites theme": { index: 1, kind: "site" },
+  "sites model": { index: 0, kind: "site" },
   "fleet get": { index: 0, kind: "fleet" },
   "fleet capabilities": { index: 0, kind: "fleet" },
   "fleet configure": { index: 0, kind: "fleet" },
