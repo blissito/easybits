@@ -17,6 +17,7 @@ import { getPlatformPublicClient, buildPublicAssetUrl } from "~/.server/storage"
 import { randomUUID } from "node:crypto";
 import { consumeService } from "~/.server/services/consume";
 import { QuotaExceededError } from "~/.server/services/errors";
+import { INTERACT_COST } from "~/.server/services/providers/brightdata";
 
 // Dedicated, always-on `render` MCP server for FleetAgents — Streamable-HTTP.
 // Injected per-turn into EVERY fleet agent (NOT gated by the easybits builtin
@@ -347,14 +348,16 @@ function buildRenderServer(ctx: AuthContext, panel?: { fleetAgentId: string; gro
     if (panel) noteBrowserStep(panel.fleetAgentId, panel.groupId, { icon, text });
   };
   let antibotFailed: string | null = null;
+  // El costo, a la vista de la persona en el momento (no sólo en lo que lee el agente).
+  const ANTIBOT_PRICE = `${INTERACT_COST} consultas web si abre`;
   /** Reabre en el navegador antibot. Regresa la vista nueva o por qué no se pudo. Sólo cobra si abrió. */
   const antibot = async (url: string, mobile?: boolean, why: "known" | "captcha" = "known"): Promise<{ v: BrowserView } | { error: string }> => {
     note(
       antibotFailed
-        ? `El navegador antibot falló a la primera (${antibotFailed}): lo reintento · suele tardar ~20 s`
+        ? `El navegador antibot falló a la primera (${antibotFailed}): lo reintento · ${ANTIBOT_PRICE} · suele tardar ~20 s`
         : why === "captcha"
-          ? "Salió un captcha: lo reintento por el navegador antibot · suele tardar ~20 s"
-          : `${hostOf(url) || "Este sitio"} bloquea navegadores automáticos: lo abro por el navegador antibot · suele tardar ~20 s`
+          ? `Salió un captcha: lo reintento por el navegador antibot · ${ANTIBOT_PRICE} · suele tardar ~20 s`
+          : `${hostOf(url) || "Este sitio"} bloquea navegadores automáticos: lo abro por el navegador antibot · ${ANTIBOT_PRICE} · suele tardar ~20 s`
     );
     try {
       let v: BrowserView | undefined;
@@ -375,7 +378,7 @@ function buildRenderServer(ctx: AuthContext, panel?: { fleetAgentId: string; gro
     }
   };
   const ANTIBOT_HINT = (id: string) =>
-    `Esta página bloquea navegadores automáticos: la abrí por el navegador antibot (sesión ${id}, cuesta 5 consultas web). ${DOMAIN_LIMIT_HINT}`;
+    `Esta página bloquea navegadores automáticos: la abrí por el navegador antibot (sesión ${id}, cuesta ${INTERACT_COST} consultas web). ${DOMAIN_LIMIT_HINT}`;
 
   const actionSchema = z.discriminatedUnion("type", [
     z.object({ type: z.literal("click"), ref: z.string().optional(), text: z.string().optional().describe("texto visible, si no tienes ref") }),

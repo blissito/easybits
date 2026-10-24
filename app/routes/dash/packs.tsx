@@ -221,7 +221,8 @@ export default function PacksPage({ loaderData }: Route.ComponentProps) {
           <p className="text-sm text-iron mb-4 max-w-xl">
             Internet para tus agentes: buscar en Google, leer cualquier página aunque bloquee bots,
             extraer registros (Google Maps, Mercado Libre, Amazon, Instagram…) y rastrear sitios.
-            1 consulta = 1 página, 1 búsqueda o 1 registro. No caducan. Tienes{" "}
+            1 consulta = 1 página, 1 búsqueda o 1 registro; cuando un sitio pide captcha, abrirlo por el
+            navegador antibot gasta 5 (sólo si abre). No caducan. Tienes{" "}
             <b>{webQueries.toLocaleString("es-MX")} consultas</b>.
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
