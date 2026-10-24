@@ -1,7 +1,7 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { LuChevronLeft, LuChevronRight, LuFileCode, LuGlobe, LuListChecks, LuPause, LuPlay, LuSearch, LuTerminal, LuWrench } from "react-icons/lu";
-import { KIND_LABEL, currentPlan, isPlumbing, normalizeStepResult, stepVerb, type AgentStep, type StepKind, type StepTodo } from "~/lib/agentSteps";
+import { KIND_LABEL, currentPlan, isPlumbing, normalizeStepResult, stepVerb, type StepNote, type AgentStep, type StepKind, type StepTodo } from "~/lib/agentSteps";
 
 type BrowserTarget = NonNullable<NonNullable<AgentStep["browser"]>["target"]>;
 
@@ -234,10 +234,15 @@ export function AgentComputer({
             {takeover ? (
               <TakeoverView urls={takeover} onDone={() => setTakeover(null)} />
             ) : backdrop ? (
-              <BrowserView
-                step={{ ...backdrop, browser: { ...backdrop.browser!, action: `${stepVerb(step)}${step.detail ? ` · ${step.detail}` : ""}…`, target: undefined } }}
-                stale
-              />
+              <div className="relative h-full">
+                {running && <WaitPill note={waitNoteFor(step)} />}
+                <BrowserView
+                  step={{ ...backdrop, status: "ok", browser: { ...backdrop.browser!, action: running ? undefined : `${stepVerb(step)}${step.detail ? ` · ${step.detail}` : ""}`, target: undefined } }}
+                  stale
+                />
+              </div>
+            ) : weak && running ? (
+              <WaitCard note={waitNoteFor(step)} running />
             ) : step.kind === "browser" ? (
               <BrowserView
                 step={step}
@@ -329,7 +334,7 @@ export function AgentComputer({
             {repeats > 1 && <span className="ml-1 rounded-full bg-gray-100 px-1.5 font-mono text-gray-500">×{repeats}</span>}
           </span>
           <span className="shrink-0 font-mono text-gray-400">
-            {secondsOf(step, running)} · {idx + 1}/{steps.length}
+            <StepSeconds step={step} running={running} /> · {idx + 1}/{steps.length}
           </span>
         </div>
       </div>
@@ -337,8 +342,18 @@ export function AgentComputer({
   );
 }
 
-function secondsOf(s: AgentStep, running: boolean) {
-  const end = s.endedAt ?? (running ? Date.now() : s.startedAt);
+/** Duración del paso; si corre, cuenta en vivo (sin leer la hora en el render: hidratación). */
+function StepSeconds({ step, running }: { step: AgentStep; running: boolean }) {
+  const live = useSince(step.startedAt, running && !step.endedAt);
+  return <>{step.endedAt || !running ? secondsOf(step) : fmtSecs(live)}</>;
+}
+
+function fmtSecs(secs: number) {
+  return secs < 60 ? `${secs} s` : `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}`;
+}
+
+function secondsOf(s: AgentStep) {
+  const end = s.endedAt ?? s.startedAt;
   const secs = Math.max(0, Math.round((end - s.startedAt) / 1000));
   return secs < 60 ? `${secs} s` : `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}`;
 }
@@ -394,6 +409,7 @@ function BrowserView({
           </span>
         </div>
         <div className="relative min-h-0 flex-1 overflow-auto">
+          {f && step.status === "running" && (stale || step.note) && <WaitPill note={waitNoteFor(step)} />}
           {f ? (
             <div className="relative">
               <img
@@ -415,7 +431,11 @@ function BrowserView({
               )}
             </div>
           ) : (
-            <div className="grid h-full place-items-center text-sm text-gray-400">{step.status === "running" ? "Cargando la página…" : "Este paso no dejó captura"}</div>
+            step.status === "running" ? (
+              <WaitCard note={waitNoteFor(step)} running />
+            ) : (
+              <div className="grid h-full place-items-center text-sm text-gray-400">Este paso no dejó captura</div>
+            )
           )}
         </div>
       </div>
@@ -434,6 +454,110 @@ function BrowserView({
       {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
     </div>
   );
+}
+
+// ── Esperas honestas ─────────────────────────────────────────────────────────────────
+// Mientras un paso tarda, el panel dice QUÉ pasa y cuánto suele tardar, con su animación y un
+// contador: «Este sitio bloquea robots: lo abro por el navegador antibot · ~20 s». Antes un
+// «Cargando la página…» mudo hacía pensar que se había trabado (bliss, 23-oct).
+
+/** Segundos desde `since`, al segundo. */
+function useSince(since: number, on = true) {
+  // Arranca en `since` (0 s) y cuenta ya en el navegador: con Date.now() en el render, el HTML del
+  // servidor y el del cliente traían segundos distintos y React rehacía el árbol (hidratación).
+  const [now, setNow] = useState(since);
+  useEffect(() => {
+    setNow(Date.now());
+    if (!on) return;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [on]);
+  return Math.max(0, Math.round((now - since) / 1000));
+}
+
+/** Ícono animado de cada espera, plano: contorno negro, rellenos sólidos de la marca. */
+function WaitIcon({ icon, size = 72 }: { icon: StepNote["icon"]; size?: number }) {
+  if (icon === "antibot") {
+    // Escudo con una línea que lo escanea y un candado que se cierra.
+    return (
+      <svg width={size} height={size} viewBox="0 0 72 72" aria-hidden>
+        <path d="M36 6 L60 15 V33 C60 49 49 60 36 66 C23 60 12 49 12 33 V15 Z" fill="#EFE7FF" stroke="#000" strokeWidth="3" strokeLinejoin="round" />
+        <rect x="26" y="34" width="20" height="15" rx="3" fill="#9870ED" stroke="#000" strokeWidth="2.5" />
+        <motion.path d="M30 34 V29 C30 25 33 23 36 23 C39 23 42 25 42 29 V34" fill="none" stroke="#000" strokeWidth="2.5" animate={{ pathLength: [0.6, 1, 0.6] }} transition={{ duration: 1.2, repeat: Infinity }} />
+        <motion.line x1="16" x2="56" stroke="#9870ED" strokeWidth="3" strokeLinecap="round" animate={{ y1: [16, 56, 16], y2: [16, 56, 16] }} transition={{ duration: 2.2, repeat: Infinity, ease: "easeInOut" }} />
+      </svg>
+    );
+  }
+  if (icon === "search") {
+    // Lupa que recorre renglones de resultados.
+    return (
+      <svg width={size} height={size} viewBox="0 0 72 72" aria-hidden>
+        <rect x="8" y="10" width="56" height="52" rx="6" fill="#fff" stroke="#000" strokeWidth="3" />
+        {[22, 34, 46].map((y, i) => (
+          <motion.rect key={y} x="16" y={y} width="40" height="5" rx="2.5" fill="#D9CCFA" style={{ transformBox: "fill-box", originX: 0 }} animate={{ scaleX: [0.2, 1, 0.2] }} transition={{ duration: 1.6, repeat: Infinity, delay: i * 0.25 }} />
+        ))}
+        <motion.g animate={{ x: [0, 18, 6, 0], y: [0, 10, 20, 0] }} transition={{ duration: 2.4, repeat: Infinity, ease: "easeInOut" }}>
+          <circle cx="40" cy="24" r="9" fill="#EFE7FF" stroke="#000" strokeWidth="3" />
+          <line x1="47" y1="31" x2="54" y2="38" stroke="#000" strokeWidth="4" strokeLinecap="round" />
+        </motion.g>
+      </svg>
+    );
+  }
+  // Ventana del navegador con su barra de carga.
+  return (
+    <svg width={size} height={size} viewBox="0 0 72 72" aria-hidden>
+      <rect x="6" y="12" width="60" height="48" rx="6" fill="#fff" stroke="#000" strokeWidth="3" />
+      <line x1="6" y1="24" x2="66" y2="24" stroke="#000" strokeWidth="3" />
+      <circle cx="13" cy="18" r="2" fill="#F87171" />
+      <circle cx="19" cy="18" r="2" fill="#FBBF24" />
+      <circle cx="25" cy="18" r="2" fill="#4ADE80" />
+      <motion.rect x="12" y="32" width="48" height="6" rx="3" fill="#9870ED" style={{ transformBox: "fill-box", originX: 0 }} animate={{ scaleX: [0, 1] }} transition={{ duration: 1.8, repeat: Infinity, ease: "easeInOut" }} />
+      <rect x="12" y="44" width="30" height="4" rx="2" fill="#E5E7EB" />
+      <rect x="12" y="51" width="22" height="4" rx="2" fill="#E5E7EB" />
+    </svg>
+  );
+}
+
+/** Espera a pantalla completa: el ícono grande, qué pasa y el contador. */
+function WaitCard({ note, running }: { note: Omit<StepNote, "at"> & { at: number }; running: boolean }) {
+  const secs = useSince(note.at, running);
+  return (
+    <div className="grid h-full place-items-center p-6 text-center">
+      <div className="max-w-sm">
+        <div className="mx-auto w-fit">
+          <WaitIcon icon={note.icon} />
+        </div>
+        <p className="mt-3 text-sm font-bold leading-snug">{note.text}</p>
+        {running && <p className="mt-1 font-mono text-xs text-gray-500">{secs} s</p>}
+      </div>
+    </div>
+  );
+}
+
+/** La misma espera, chica, encima de la última captura. */
+function WaitPill({ note }: { note: Omit<StepNote, "at"> & { at: number } }) {
+  const secs = useSince(note.at);
+  return (
+    <div className="pointer-events-none absolute left-1/2 top-14 z-10 flex max-w-[90%] -translate-x-1/2 items-center gap-2 rounded-full border-2 border-black bg-white py-1 pl-1.5 pr-3 text-xs font-bold shadow-[3px_3px_0_0_#000]">
+      <WaitIcon icon={note.icon} size={26} />
+      <span className="min-w-0 truncate">{note.text}</span>
+      <span className="shrink-0 font-mono font-normal text-gray-500">{secs} s</span>
+    </div>
+  );
+}
+
+/** Qué decir mientras corre un paso, si él mismo no trae aviso. */
+function waitNoteFor(step: AgentStep): StepNote {
+  if (step.note) return step.note;
+  if (step.kind === "search") return { icon: "search", text: `Buscando en la web${step.detail ? ` «${step.detail}»` : ""} · suele tardar 10–30 s`, at: step.startedAt };
+  const host = (() => {
+    try {
+      return new URL(step.detail?.startsWith("http") ? step.detail : `https://${step.detail}`).hostname;
+    } catch {
+      return "";
+    }
+  })();
+  return { icon: "page", text: /screenshot/.test(step.tool) ? `Tomando captura${host ? ` de ${host}` : ""}` : `Abriendo ${host || "la página"}`, at: step.startedAt };
 }
 
 /** Lo que tarda el cursor en llegar; el recuadro y el clic se encienden al aterrizar. */

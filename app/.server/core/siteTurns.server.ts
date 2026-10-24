@@ -15,7 +15,7 @@ import { recordFleetTurnUsage } from "./fleetUsage";
 import { getEngineForAgent } from "~/lib/fleetEngines";
 import { narracionAMarkdown, partirNarracion } from "~/lib/narracion";
 import { isDraining, registerDrain } from "~/.server/lifecycle.server";
-import { MAX_STEPS, lastIntent, normalizeStepResult, publicStep, stepKind, stepsSignature, upsertStep, type AgentStep, type BrowserFrame } from "~/lib/agentSteps";
+import { MAX_STEPS, lastIntent, normalizeStepResult, publicStep, stepKind, stepsSignature, upsertStep, type AgentStep, type BrowserFrame, type StepNote } from "~/lib/agentSteps";
 
 type Site = Awaited<ReturnType<typeof getSite>>;
 export type TurnEvent = { type: string; [k: string]: unknown };
@@ -88,6 +88,14 @@ export function hasLiveTurn(fleetAgentId: string, groupId: string) {
  * conversación. Se cuelga del paso de navegador que está corriendo; si el worker aún no
  * anunció la tool, crea uno propio. No-op si el turno no vive en este proceso.
  */
+/** Aviso honesto del paso de navegador en curso (antibot, captcha): el panel lo pinta en vivo. */
+export function noteBrowserStep(fleetAgentId: string, groupId: string, note: Omit<StepNote, "at">) {
+  const l = live.get(groupId);
+  if (!l || l.finished || l.fleetAgentId !== fleetAgentId) return;
+  const running = [...l.steps].reverse().find((s) => s.kind === "browser" && s.status === "running");
+  if (running) pushStep(l, { id: running.id, note: { ...note, at: Date.now() } });
+}
+
 export function pushBrowserFrame(fleetAgentId: string, groupId: string, frame: BrowserFrame, tool: string) {
   const l = live.get(groupId);
   // Sólo el agente de esa conversación: el groupId viaja en un header del worker.

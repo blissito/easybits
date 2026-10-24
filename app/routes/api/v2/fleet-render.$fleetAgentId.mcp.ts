@@ -12,7 +12,7 @@ import { COMPARE_RENDER_DESC, compareRenderShape, compareRenderHint } from "~/.s
 import { CLONE_PDF_DESC, clonePdfShape, clonePdfHint } from "~/.server/mcp/clonePdfTool";
 import { clonePdf } from "~/.server/core/pdfClone";
 import { browserOnBox, BrowserSessionGone, looksBlocked, type BrowserAction, type BrowserView } from "~/.server/core/renderClient";
-import { hasLiveTurn, pushBrowserFrame } from "~/.server/core/siteTurns.server";
+import { hasLiveTurn, noteBrowserStep, pushBrowserFrame } from "~/.server/core/siteTurns.server";
 import { getPlatformPublicClient, buildPublicAssetUrl } from "~/.server/storage";
 import { randomUUID } from "node:crypto";
 import { consumeService } from "~/.server/services/consume";
@@ -340,7 +340,16 @@ function buildRenderServer(ctx: AuthContext, panel?: { fleetAgentId: string; gro
   const browserFail = (e: unknown) => fail(e instanceof BrowserSessionGone ? e.message : (e as Error).message);
 
   /** Reabre en el navegador antibot. Regresa la vista nueva o por qué no se pudo. */
-  const antibot = async (url: string, mobile?: boolean): Promise<{ v: BrowserView } | { error: string }> => {
+  const antibot = async (url: string, mobile?: boolean, why: "known" | "captcha" = "known"): Promise<{ v: BrowserView } | { error: string }> => {
+    if (panel) {
+      noteBrowserStep(panel.fleetAgentId, panel.groupId, {
+        icon: "antibot",
+        text:
+          why === "captcha"
+            ? "Salió un captcha: lo reintento por el navegador antibot · suele tardar ~20 s"
+            : `${hostOf(url) || "Este sitio"} bloquea navegadores automáticos: lo abro por el navegador antibot · suele tardar ~20 s`,
+      });
+    }
     try {
       const r = await consumeService<{ cost: number; data: { ws: string } }>("research.brightdata.browser", {}, { userId: ctx.user.id });
       const v = await browserOnBox(ctx, "open", { url, mobile, screenshot: true, cdp: r.data.ws });
@@ -382,7 +391,7 @@ function buildRenderServer(ctx: AuthContext, panel?: { fleetAgentId: string; gro
         const v = await browserOnBox(ctx, "open", { url: p.url, mobile: p.mobile, screenshot: true });
         if (looksBlocked(v)) {
           learnBlocked(p.url);
-          const r = await antibot(p.url, p.mobile);
+          const r = await antibot(p.url, p.mobile, "captcha");
           if ("v" in r) {
             await browserOnBox(ctx, "close", { sessionId: v.sessionId }).catch(() => undefined);
             return browserReply(r.v, { wanted: p.screenshot, tool: "browser_open", hint: ANTIBOT_HINT(r.v.sessionId) });
@@ -410,7 +419,7 @@ function buildRenderServer(ctx: AuthContext, panel?: { fleetAgentId: string; gro
         // Una acción que llevó a un muro antibot: se sigue en el navegador antibot desde esa URL.
         if (!remoteSessions.has(p.session_id) && looksBlocked(v) && /^https?:/.test(v.url)) {
           learnBlocked(v.url);
-          const r = await antibot(v.url);
+          const r = await antibot(v.url, undefined, "captcha");
           if ("v" in r) {
             await browserOnBox(ctx, "close", { sessionId: p.session_id }).catch(() => undefined);
             return browserReply(r.v, { wanted: p.screenshot, tool: "browser_act", hint: `${ANTIBOT_HINT(r.v.sessionId)} La sesión ${p.session_id} se cerró: sigue con la nueva.` });

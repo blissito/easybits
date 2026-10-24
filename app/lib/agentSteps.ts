@@ -37,6 +37,8 @@ export type StepResult = {
   images?: { url: string; title?: string }[];
 };
 
+export type StepNote = { text: string; icon: "antibot" | "search" | "page"; at: number };
+
 /** Una tarea del plan del agente (TodoWrite). */
 export type StepTodo = { content: string; status: "pending" | "in_progress" | "completed"; activeForm?: string };
 
@@ -56,6 +58,12 @@ export type AgentStep = {
   startedAt: number;
   endedAt?: number;
   browser?: BrowserFrame;
+  /**
+   * Qué está pasando mientras el paso corre, dicho con honestidad y con cuánto suele tardar
+   * («Este sitio bloquea robots: lo abro por el navegador antibot · ~20 s»). El panel lo pinta
+   * con su animación y un contador; antes sólo decía «Cargando…».
+   */
+  note?: StepNote;
   result?: StepResult;
   /** El plan completo, en el paso donde el agente lo escribió o lo actualizó. */
   todos?: StepTodo[];
@@ -83,7 +91,7 @@ export function stepKind(tool: string): StepKind {
 export function stepVerb(s: Pick<AgentStep, "tool" | "kind">): string {
   const t = s.tool.toLowerCase();
   if (/screenshot/.test(t)) return "Tomando captura";
-  if (/render|compare_render|export_document/.test(t)) return "Generando imagen";
+  if (/render_(url|html)|compare_render|export_document|gs_render/.test(t)) return "Generando imagen";
   if (s.kind === "browser") return /open/.test(t) ? "Abriendo página" : /look/.test(t) ? "Mirando la página" : /close/.test(t) ? "Cerrando navegador" : "Usando el navegador";
   if (s.kind === "search") return /grep|glob/.test(t) ? "Buscando en archivos" : "Buscando";
   if (s.kind === "editor") return /read/.test(t) ? "Leyendo archivo" : /write/.test(t) ? "Creando archivo" : "Editando archivo";
