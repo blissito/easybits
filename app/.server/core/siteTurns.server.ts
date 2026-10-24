@@ -487,7 +487,7 @@ export async function getSharedReplay(token: string) {
   if (!/^[\w-]{20,40}$/.test(token)) return null;
   const row = await db.fleetTurn.findFirst({
     where: { shareToken: token },
-    select: { userText: true, text: true, steps: true, startedAt: true, endedAt: true, state: true },
+    select: { userText: true, text: true, cortes: true, steps: true, startedAt: true, endedAt: true, state: true },
   });
   const steps = ((row?.steps as AgentStep[] | null) ?? []).map(publicStep);
   return row ? { ...row, steps } : null;

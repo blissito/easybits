@@ -1,11 +1,9 @@
 import type { Route } from "./+types/replay.$token";
 import { data } from "react-router";
 import { useState } from "react";
-import { Streamdown } from "streamdown";
 import { getSharedReplay } from "~/.server/core/siteTurns.server";
 import { AgentComputer } from "~/components/sitios/AgentComputer";
-import { TurnSummary } from "~/components/sitios/ChatMessages";
-import { partirNarracion } from "~/lib/narracion";
+import { BotMessage } from "~/components/sitios/ChatMessages";
 
 // Replay compartido de un turno: la petición, la respuesta del agente y su computadora paso a
 // paso. Sólo existe si el dueño generó la liga (privado por default).
@@ -18,9 +16,10 @@ export async function loader({ params }: Route.LoaderArgs) {
 }
 
 export default function Replay({ loaderData }: Route.ComponentProps) {
-  const { userText, text, steps, startedAt } = loaderData;
-  const { resto } = partirNarracion(text, []);
+  const { userText, text, cortes, steps, startedAt } = loaderData;
   const [jump, setJump] = useState<{ id: string; at: number } | null>(null);
+  // «Ver cómo lo hice» vuelve a reproducir el turno desde el primer paso (remonta el panel).
+  const [run, setRun] = useState(0);
   return (
     <div className="flex h-dvh flex-col bg-gray-50 md:flex-row">
       <aside className="flex max-h-[45dvh] flex-col gap-4 overflow-y-auto border-b-2 border-black bg-white p-5 md:max-h-none md:w-[38%] md:max-w-md md:border-b-0 md:border-r-2">
@@ -30,17 +29,23 @@ export default function Replay({ loaderData }: Route.ComponentProps) {
         </a>
         <p className="text-xs text-gray-400">{new Date(startedAt).toLocaleString("es-MX", { dateStyle: "long", timeStyle: "short" })}</p>
         <div className="self-end max-w-[90%] rounded-2xl bg-brand-500 px-4 py-3 text-[15px] leading-[22px] text-white whitespace-pre-wrap">{userText}</div>
-        <div className="eb-md text-[15px] leading-6">
-          <Streamdown linkSafety={{ enabled: false }}>{resto || text}</Streamdown>
-        </div>
-        <TurnSummary steps={steps} onSelect={(id) => setJump({ id, at: Date.now() })} />
+        {/* La misma respuesta que en el chat del editor: pasos palomeados, texto y comprobante. */}
+        <BotMessage
+          msg={{ role: "bot", text, cortes: (cortes as number[] | null) ?? [], steps }}
+          live={false}
+          onSelectStep={(id) => setJump({ id, at: Date.now() })}
+          onOpenReceipt={() => {
+            setJump(null);
+            setRun((n) => n + 1);
+          }}
+        />
         <a href="/" className="mt-auto rounded-xl border-2 border-black bg-brand-500 px-4 py-2 text-center font-bold shadow-[3px_3px_0_0_#000]">
           Construye la tuya en EasyBits →
         </a>
       </aside>
       <main className="min-h-0 flex-1 p-3 md:p-5">
         <div className="h-full overflow-hidden rounded-xl border-2 border-black bg-white shadow-[6px_6px_0_0_#000]">
-          <AgentComputer steps={steps} live={false} autoplay jumpTo={jump} />
+          <AgentComputer key={run} steps={steps} live={false} autoplay jumpTo={jump} />
         </div>
       </main>
     </div>
