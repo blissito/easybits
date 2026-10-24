@@ -296,10 +296,16 @@ export function readTakeoverPass(pass: string, siteId: string): TakeoverPass | n
  */
 export async function takeoverOnBox(ctx: AuthContext, sessionId: string, siteId: string) {
   const r = await browserOnBox(ctx, "takeover", { sessionId });
-  const { token, expiresInMs, viewport } = r as unknown as { token: string; expiresInMs: number; viewport: { width: number; height: number } };
+  const { token, expiresInMs, viewport, livekit } = r as unknown as {
+    token: string;
+    expiresInMs: number;
+    viewport: { width: number; height: number };
+    // Video WebRTC: la persona entra a la LiveKit de la caja con un token de 10 min, sólo de esa sala.
+    livekit?: { wsUrl: string; token: string };
+  };
   const body = Buffer.from(JSON.stringify({ o: ctx.user.id, t: token, s: siteId, e: Date.now() + expiresInMs, i: sessionId } satisfies TakeoverPass)).toString("base64url");
   const base = `/api/v2/sites/${siteId}/takeover/${body}.${passSig(body)}`;
-  return { liveUrl: `${base}/live`, inputUrl: `${base}/input`, releaseUrl: `${base}/release`, viewport, expiresInMs };
+  return { liveUrl: `${base}/live`, inputUrl: `${base}/input`, releaseUrl: `${base}/release`, viewport, expiresInMs, ...(livekit ? { livekit } : {}) };
 }
 
 /** Pase para mirar la pestaña en vivo mientras el agente la maneja. */

@@ -7,6 +7,7 @@ import {
   waitUntilRunning,
   startAgent,
   exposeSandboxPort,
+  exposeSandboxRawPort,
   destroySandbox,
   suspendSandbox,
   resumeSandbox,
@@ -51,6 +52,27 @@ interface ServiceSpec {
   // cajas que llaman de vuelta a EasyBits (collab: auth + persistencia). Default
   // {} (voice/render son self-contained, no necesitan credenciales).
   env?: () => Record<string, string>;
+  // Env que sólo se conoce con la caja ya creada (p. ej. puertos crudos que reparte el host).
+  // Corre antes de startAgent; si falla, la caja arranca sin esas variables.
+  prestartEnv?: (ctx: AuthContext, sandboxId: string) => Promise<Record<string, string>>;
+}
+
+// «Tomar el control» por WebRTC: el LiveKit va DENTRO de la caja render (una VM no alcanza por UDP
+// a otra del mismo fierro). Port-preserving: la caja liga el puerto que reparte el host, así que
+// NODE_PORT/LK_TCP_PORT son los del host. Si el host no los da (plantilla sin raw_ports), la caja
+// arranca headless y la toma sigue por SSE.
+async function renderLiveKitEnv(ctx: AuthContext, sandboxId: string): Promise<Record<string, string>> {
+  const [udp, tcp, signal] = await Promise.all([
+    exposeSandboxRawPort(ctx, sandboxId, 7882, "udp"),
+    exposeSandboxRawPort(ctx, sandboxId, 7881, "tcp"),
+    exposeSandboxPort(ctx, sandboxId, 7880),
+  ]);
+  if (!udp.ok || !tcp.ok || !signal.url) return {};
+  return {
+    NODE_PORT: String(udp.hostPort),
+    LK_TCP_PORT: String(tcp.hostPort),
+    LK_PUBLIC_WS_URL: signal.url.replace(/^http/, "ws").replace(/\/$/, ""),
+  };
 }
 
 // Registro de servicios. Añadir un servicio nuevo = una entrada aquí + (si hace
@@ -93,6 +115,7 @@ const SERVICE_REGISTRY: Record<string, ServiceSpec> = {
     envFile: "/etc/render-svc-runtime/.env",
     // Llave de la caja: render-svc exige `x-box-key` si la trae (renderClient la manda).
     env: () => ({ RENDER_BOX_KEY: process.env.RENDER_BOX_KEY || "" }),
+    prestartEnv: renderLiveKitEnv,
     ports: [9300],
     readyPaths: { 9300: "/health" },
     ttlSeconds: 1800,
@@ -395,6 +418,13 @@ export async function spawnServiceBox(ctx: AuthContext, kind: string): Promise<S
   });
   await waitUntilRunning(ctx, sb.sandboxId, { timeoutMs: 60_000 });
 
+  const lateEnv = spec.prestartEnv
+    ? await spec.prestartEnv(ctx, sb.sandboxId).catch((e) => {
+        console.warn(`service ${kind}: prestartEnv falló, arranca sin él:`, (e as Error).message);
+        return {};
+      })
+    : {};
+
   // 2. Start the runtime unit. startAgent probes ports[0] (whisper :9000); the
   //    second port (kokoro :9101) we verify ourselves below.
   await startAgent(ctx, sb.sandboxId, {
@@ -405,7 +435,7 @@ export async function spawnServiceBox(ctx: AuthContext, kind: string): Promise<S
     timeoutSeconds: 45,
     // Casi todas las cajas son self-contained (env {}); collab necesita
     // EASYBITS_BASE_URL + COLLAB_SECRET para llamar de vuelta (auth + persistencia).
-    env: spec.env?.() ?? {},
+    env: { ...(spec.env?.() ?? {}), ...lateEnv },
   });
 
   // 3. Expose every port as a public capability URL.
