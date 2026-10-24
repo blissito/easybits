@@ -264,6 +264,9 @@ export default function SiteEditor() {
         const lastBot = hist.map((m) => m.role).lastIndexOf("bot");
         if (!d.activeTurn && lastBot >= 0 && d.lastTurn?.steps?.length) hist[lastBot] = { ...hist[lastBot], steps: d.lastTurn.steps };
         setMsgs(d.activeTurn ? [...hist, { role: "bot", text: "", tools: [] }] : hist);
+        // Al recargar: si el último turno sólo investigó (sin editar el sitio), abre en la computadora.
+        const ls = d.lastTurn?.steps ?? [];
+        if (!d.activeTurn && !ls.some((st) => st.kind === "editor") && ls.some((st) => st.kind === "browser" || st.kind === "search")) setShowComputer(true);
         if (d.lastTurn?.state === "interrupted" && !d.activeTurn) setCutTurn(d.lastTurn.turnId);
         if (d.activeTurn) void attach();
       })
@@ -630,10 +633,25 @@ export default function SiteEditor() {
       setShowComputer(true);
     }
   }, [watchNow]);
+  // Al terminar, el panel enseña lo que el turno tocó: si cambió el sitio, la vista previa; si sólo
+  // investigó (navegador o búsqueda, sin editar), la computadora con lo que vio. Antes regresaba
+  // siempre a la vista previa y una pregunta sobre otra web terminaba enseñando el sitio.
+  const wasBusy = useRef(false);
   useEffect(() => {
-    if (busy || !autoComputer.current) return;
+    if (busy) {
+      wasBusy.current = true;
+      return;
+    }
+    if (!wasBusy.current) return;
+    wasBusy.current = false;
+    const edited = lastSteps.some((st) => st.kind === "editor");
+    const looked = lastSteps.some((st) => st.kind === "browser" || st.kind === "search");
+    if (edited) {
+      if (autoComputer.current) setShowComputer(false);
+    } else if (looked) {
+      setShowComputer(true);
+    }
     autoComputer.current = false;
-    setShowComputer(false);
   }, [busy]);
   // Una web app en su caja de trabajo aún no tiene producción: «Abrir» lleva a la vista previa.
   const unpublished = site.kind === "webapp" && !!site.sandbox?.workBox;
