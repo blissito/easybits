@@ -161,11 +161,31 @@ export function cleanTodos(v: unknown): StepTodo[] | undefined {
  * La salida de una tool que regresa JSON de ejecución (`sandbox_exec` de EasyBits:
  * `{exitCode, stdout, stderr}`) se lee como la de una terminal, no como JSON crudo.
  */
-export function normalizeStepResult(r: StepResult | undefined): StepResult | undefined {
-  if (!r?.summary || !/^\s*\{/.test(r.summary)) return r;
+export function normalizeStepResult(r: StepResult | undefined, kind?: StepKind): StepResult | undefined {
+  if (!r?.summary) return r;
+  // `console.log(JSON.stringify(texto))`: un string entre comillas con \n literales.
+  if (/^\s*"/.test(r.summary)) {
+    try {
+      const un = JSON.parse(r.summary.trim().replace(/"?\s*(…|\.\.\.)?\s*$/, '"'));
+      if (typeof un === "string") r = { ...r, summary: un };
+    } catch {
+      r = { ...r, summary: r.summary!.trim().replace(/^"|"$/g, "").replace(/\\n/g, "\n").replace(/\\"/g, '"') };
+    }
+  }
+  // Una búsqueda que regresó markdown: sus ligas son los resultados (la vista de búsqueda).
+  if (kind === "search" && !r.items?.length) {
+    const items: NonNullable<StepResult["items"]> = [];
+    for (const m of r.summary!.matchAll(/\[([^\]\n]{3,200})\]\((https?:\/\/[^\s)]+)\)/g)) {
+      if (items.some((i) => i.url === m[2])) continue;
+      items.push({ title: m[1], url: m[2] });
+      if (items.length >= 8) break;
+    }
+    if (items.length) return { ...r, items, summary: undefined };
+  }
+  if (!/^\s*\{/.test(r.summary!)) return r;
   let o: Record<string, unknown>;
   try {
-    o = JSON.parse(r.summary);
+    o = JSON.parse(r.summary!);
   } catch {
     return r;
   }

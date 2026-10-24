@@ -155,3 +155,16 @@ describe("presentación del resultado", () => {
     for (const t of ["Bash", "WebSearch", "mcp__easybits__sandbox_exec"]) expect(isPlumbing(t)).toBe(false);
   });
 });
+
+describe("búsqueda impresa como JSON", () => {
+  it("un string entre comillas con \\n literales se lee como lista de resultados", () => {
+    const summary = JSON.stringify("# Tacos Cholula Puebla\n\n- [Cholula - Wikipedia](https://es.wikipedia.org/wiki/Cholula) — ciudad\n- [Cholula, Puebla](https://www.gob.mx/sectur) — x").slice(0, 150);
+    const r = normalizeStepResult({ summary }, "search")!;
+    expect(r.items).toEqual([
+      { title: "Cholula - Wikipedia", url: "https://es.wikipedia.org/wiki/Cholula" },
+      { title: "Cholula, Puebla", url: "https://www.gob.mx/sectur" },
+    ]);
+    expect(r.summary).toBeUndefined();
+    expect(normalizeStepResult({ summary: '"hola\\nmundo"' })?.summary).toBe("hola\nmundo");
+  });
+});

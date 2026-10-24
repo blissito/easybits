@@ -307,7 +307,7 @@ async function runAgentTurn(spec: AgentTurnSpec, l: Live, input: { agentText: st
             if (ev?.id) {
               const end = ev.phase === "end";
               const step = end
-                ? { id: ev.id, status: ev.ok === false ? ("error" as const) : ("ok" as const), endedAt: Date.now(), ...(ev.result ? { result: normalizeStepResult(ev.result) } : {}), ...(ev.todos ? { todos: ev.todos } : {}) }
+                ? { id: ev.id, status: ev.ok === false ? ("error" as const) : ("ok" as const), endedAt: Date.now(), ...(ev.result ? { result: normalizeStepResult(ev.result, l.steps.find((s) => s.id === ev.id)?.kind) } : {}), ...(ev.todos ? { todos: ev.todos } : {}) }
                 : { id: ev.id, tool: name, kind: stepKind(name), detail: ev.detail, command: ev.command, intent: l.intent, status: "running" as const, startedAt: Date.now(), ...(ev.todos ? { todos: ev.todos } : {}) };
               if (end || l.steps.length < MAX_STEPS) pushStep(l, step);
             }

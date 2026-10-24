@@ -1,7 +1,7 @@
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { LuChevronLeft, LuChevronRight, LuFileCode, LuGlobe, LuListChecks, LuPause, LuPlay, LuSearch, LuTerminal, LuWrench } from "react-icons/lu";
-import { KIND_LABEL, currentPlan, isPlumbing, stepVerb, type AgentStep, type StepKind, type StepTodo } from "~/lib/agentSteps";
+import { KIND_LABEL, currentPlan, isPlumbing, normalizeStepResult, stepVerb, type AgentStep, type StepKind, type StepTodo } from "~/lib/agentSteps";
 
 type BrowserTarget = NonNullable<NonNullable<AgentStep["browser"]>["target"]>;
 
@@ -103,7 +103,11 @@ export function AgentComputer({
   const [takeoverError, setTakeoverError] = useState<string | null>(null);
   const owner = agentName ? `de ${agentName}` : "del agente";
   // El plan (TodoWrite) no es un paso que se mire: va en su franja, arriba.
-  const steps = useMemo(() => allSteps.filter((s) => !isPlumbing(s.tool)), [allSteps]);
+  // Los turnos ya guardados también se leen con la forma buena (búsqueda como lista, exec como terminal).
+  const steps = useMemo(
+    () => allSteps.filter((s) => !isPlumbing(s.tool)).map((s) => (s.result ? { ...s, result: normalizeStepResult(s.result, s.kind) } : s)),
+    [allSteps]
+  );
   // null = seguir en vivo (el último paso). Un número = el visitante retrocedió a ese paso.
   const [pinned, setPinned] = useState<number | null>(autoplay && steps.length > 1 ? 0 : null);
   const [playing, setPlaying] = useState(autoplay);
@@ -118,6 +122,11 @@ export function AgentComputer({
   // De dónde vuela el cursor: el último elemento que tocó antes de este paso.
   const fromTarget = raw?.kind === "browser" ? steps.slice(0, idx).reverse().find((s) => s.browser?.target)?.browser?.target : undefined;
   const following = pinned === null;
+  // Un paso sin nada que enseñar (una búsqueda que aún corre o no trajo lista, una tool sin
+  // salida) no borra la pantalla: se queda el navegador con una pastilla de lo que hace, como
+  // Manus. Antes el panel brincaba de la página a un ícono en blanco y de regreso.
+  const weak = !!raw && (raw.kind === "search" || raw.kind === "other") && !raw.result?.items?.length && !raw.result?.summary;
+  const backdrop = weak ? steps.slice(0, idx).reverse().find((s) => s.browser?.image) : undefined;
 
   // Pestaña en vivo: sólo siguiendo el último paso de un turno en curso, y nunca mientras la
   // persona tiene el control (esa vista trae su propio stream). Vive aquí y no en BrowserView
@@ -214,7 +223,7 @@ export function AgentComputer({
       <div className="relative min-h-0 flex-1 overflow-hidden bg-gray-50">
         <AnimatePresence mode="popLayout" initial={false}>
           <motion.div
-            key={takeover ? "takeover" : `${step.kind}-${step.kind === "browser" ? step.browser?.image : step.kind === "terminal" ? "t" : step.id}`}
+            key={takeover ? "takeover" : backdrop ? `browser-${backdrop.browser!.image}` : `${step.kind}-${step.kind === "browser" ? step.browser?.image : step.kind === "terminal" ? "t" : step.id}`}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -223,6 +232,11 @@ export function AgentComputer({
           >
             {takeover ? (
               <TakeoverView urls={takeover} onDone={() => setTakeover(null)} />
+            ) : backdrop ? (
+              <BrowserView
+                step={{ ...backdrop, browser: { ...backdrop.browser!, action: `${stepVerb(step)}${step.detail ? ` · ${step.detail}` : ""}…`, target: undefined } }}
+                stale
+              />
             ) : step.kind === "browser" ? (
               <BrowserView
                 step={step}
