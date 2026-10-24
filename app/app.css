@@ -521,3 +521,7 @@ body.hide-mobile-menu .mobile-menu-btn { display: none; }
   --gc-term-bg: #0b0b0f;
   --gc-term-prompt: #85ddcb;
 }
+.gc-scope .gc-card-thumb {
+  border-width: var(--gc-border-w);
+  border-color: var(--gc-line);
+}

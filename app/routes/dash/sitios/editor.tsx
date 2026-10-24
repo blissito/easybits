@@ -8,7 +8,7 @@ import { db } from "~/.server/db";
 import { ChatComposer } from "~/components/sitios/ChatComposer";
 import { BotMessage, UserMessage, applyTurnEvent, type Approval, type Msg } from "~/components/sitios/ChatMessages";
 import { AgentComputer, requestTakeover, requestWatch } from "~/components/sitios/AgentComputer";
-import type { AgentStep } from "~/lib/agentSteps";
+import { worthWatching, type AgentStep } from "~/lib/agentSteps";
 import { DeleteSiteArt, GithubRepoArt } from "~/components/sitios/DialogArt";
 import { Modal } from "~/components/common/Modal";
 import { BrutalButton } from "~/components/common/BrutalButton";
@@ -573,7 +573,17 @@ export default function SiteEditor() {
     autoComputer.current = false;
     setShowComputer(true);
     setMobileTab("preview");
+    setReplay(false);
     setFocus({ msgIdx, id, at: Date.now() });
+  };
+  // El comprobante del turno abre la computadora repitiéndolo desde el primer paso.
+  const [replay, setReplay] = useState(false);
+  const openReceipt = (msgIdx: number) => () => {
+    autoComputer.current = false;
+    setShowComputer(true);
+    setMobileTab("preview");
+    setReplay(true);
+    setFocus({ msgIdx, id: "", at: Date.now() });
   };
   // Aprobaciones del agente (reglas «preguntar»): la persona decide en la tarjeta del chat y, si
   // aprueba, se lo decimos al agente con un mensaje normal para que repita la llamada (pasa una
@@ -603,15 +613,23 @@ export default function SiteEditor() {
   useEffect(() => {
     if (busy) setFocus(null);
   }, [busy]);
-  // Se abre una vez por turno al primer paso del navegador y, si se abrió sola, al terminar
-  // regresa a la vista previa con el resultado. Si la persona cambia de pestaña, manda ella.
-  const usingBrowser = busy && lastSteps.some((st) => st.kind === "browser");
+  // Se abre sola sólo si vale la pena mirarla (worthWatching: ≥ 15 s, una espera como el
+  // antibot o el navegador falló): un turno de 11 s ya no tapa la vista previa con una foto fija.
+  // Si se abrió sola, al terminar regresa a la vista previa. Si la persona cambia de pestaña, manda ella.
+  const [tick, setTick] = useState(0);
   useEffect(() => {
-    if (usingBrowser && !autoComputer.current) {
+    if (!busy) return;
+    const iv = setInterval(() => setTick(Date.now()), 1000);
+    return () => clearInterval(iv);
+  }, [busy]);
+  const watchNow = busy && tick > 0 && worthWatching(lastSteps, tick);
+  useEffect(() => {
+    if (watchNow && !autoComputer.current) {
       autoComputer.current = true;
+      setReplay(false);
       setShowComputer(true);
     }
-  }, [usingBrowser]);
+  }, [watchNow]);
   useEffect(() => {
     if (busy || !autoComputer.current) return;
     autoComputer.current = false;
@@ -787,6 +805,7 @@ export default function SiteEditor() {
                     live={busy && i === msgs.length - 1}
                     selectedStepId={showComputer && m.steps === panelSteps ? viewedStep : null}
                     onSelectStep={selectStep(i)}
+                    onOpenReceipt={openReceipt(i)}
                     onApproval={(a, d) => void decideApproval(i, a, d)}
                   />
                 )
@@ -1013,8 +1032,9 @@ export default function SiteEditor() {
         {showComputer && (
           <div className="min-h-0 min-w-0 flex-1 pb-12 md:pb-0">
             <AgentComputer
-              key={focus ? `m${focus.msgIdx}` : "last"}
+              key={focus ? `m${focus.msgIdx}${replay ? "r" : ""}` : "last"}
               steps={panelSteps}
+              autoplay={replay}
               live={busy && panelIsLast}
               onTakeover={(sid) => requestTakeover(site.id, sid)}
               onWatch={(sid) => requestWatch(site.id, sid)}

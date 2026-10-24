@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { Streamdown } from "streamdown";
 import { LuCheck } from "react-icons/lu";
-import { ImageGrid, TurnSummary, useImageLinks } from "@ghostystudio/computer/react";
+import { ImageGrid, TurnReceipt, TurnSummary, useImageLinks } from "@ghostystudio/computer/react";
 import { partirNarracion } from "~/lib/narracion";
 import { isPlumbing, stepVerb, upsertStep, type AgentStep } from "~/lib/agentSteps";
 
@@ -64,6 +64,7 @@ export function BotMessage({
   selectedStepId,
   onSelectStep,
   onApproval,
+  onOpenReceipt,
 }: {
   msg: Msg;
   live: boolean;
@@ -73,6 +74,8 @@ export function BotMessage({
   onSelectStep?: (id: string) => void;
   /** Decide una aprobación de la tarjeta; sin esto la tarjeta no ofrece botones. */
   onApproval?: (a: Approval, decision: "approve" | "deny") => void;
+  /** «▶ Ver cómo lo revisé»: abre la computadora repitiendo el turno. */
+  onOpenReceipt?: () => void;
 }) {
   const { pasos, resto } = partirNarracion(msg.text, msg.cortes);
   const secs = useElapsed(live);
@@ -80,9 +83,11 @@ export function BotMessage({
   // Las ligas a imágenes del turno salen como pastilla «imagen N» y las entregadas van en
   // cuadrícula bajo la respuesta (patrón FileAttachmentGrid de Suna, en el paquete).
   const { delivered, components } = useImageLinks(resto ?? "", steps, onSelectStep);
+  const receipt = !live && steps.length > 0 && !!onOpenReceipt;
   return (
     <div className="min-w-0 text-[15px] leading-6 text-gray-900">
-      {msg.tools && msg.tools.length > 0 && (
+      {/* Terminado, el comprobante (abajo) sustituye la lista de herramientas. */}
+      {msg.tools && msg.tools.length > 0 && !receipt && (
         <details className="group mb-3 text-xs text-gray-400">
           <summary className="inline-flex cursor-pointer select-none items-center gap-1.5 rounded-full border border-gray-200 px-2.5 py-1 hover:text-gray-600">
             ⚙ {summarizeTools(msg.tools)}
@@ -145,7 +150,11 @@ export function BotMessage({
         <ApprovalCard key={a.id} a={a} onDecide={onApproval} />
       ))}
       {!live && delivered.length > 0 && <ImageGrid images={delivered} onSelect={onSelectStep} />}
-      {!live && steps.length > 0 && onSelectStep && <TurnSummary steps={steps} onSelect={onSelectStep} hideThumbs={delivered.length > 0} />}
+      {receipt && (
+        <div className="mt-3">
+          <TurnReceipt steps={steps} onOpen={onOpenReceipt} />
+        </div>
+      )}
       {msg.quota && (
         <div className="mt-3 flex gap-2">
           <Link to="/dash/packs" className="px-3 py-1 rounded-lg bg-black text-white text-xs font-bold">Recargar</Link>
