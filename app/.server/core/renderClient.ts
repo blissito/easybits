@@ -320,17 +320,34 @@ export async function watchOnBox(ctx: AuthContext, sessionId: string, signal?: A
 
 /** Proxy de la app a `/browser/human/*` de la caja del dueño. Devuelve la respuesta tal cual (SSE incluido). */
 export async function humanOnBox(ctx: AuthContext, op: "live" | "input" | "release", token: string, body?: string, signal?: AbortSignal) {
-  const box = await ensureServiceBox(ctx, "render");
+  // Cada tecla y cada movimiento del mouse pasa por aquí: ensureServiceBox (DB + host) en cada
+  // uno volvía el control remoto inusable. La caja ya está despierta mientras alguien la maneja,
+  // así que su URL se recuerda un rato y sólo se vuelve a resolver si falla.
+  const cached = humanBoxCache.get(ctx.user.id);
+  const box = cached && cached.until > Date.now() ? cached : await ensureServiceBox(ctx, "render");
   if (!box.renderUrl) throw new RenderBoxError("render box unavailable (host down or plan cap)");
+  if (box !== cached) humanBoxCache.set(ctx.user.id, { renderUrl: box.renderUrl, sandboxId: box.sandboxId, until: Date.now() + 60_000 });
   // La persona manejando cuenta como uso: sin esto el reaper duerme la caja a los 5 min.
-  void touchServiceBox(box.sandboxId);
-  return fetch(`${box.renderUrl}/browser/human/${op}`, {
-    method: op === "live" ? "GET" : "POST",
-    headers: { "content-type": "application/json", "x-takeover-token": token, ...boxKeyHeader() },
-    body: op === "live" ? undefined : body || "{}",
-    signal,
-  });
+  if (op !== "input" || Date.now() - (lastHumanTouch.get(box.sandboxId) ?? 0) > 30_000) {
+    lastHumanTouch.set(box.sandboxId, Date.now());
+    void touchServiceBox(box.sandboxId);
+  }
+  try {
+    const res = await fetch(`${box.renderUrl}/browser/human/${op}`, {
+      method: op === "live" ? "GET" : "POST",
+      headers: { "content-type": "application/json", "x-takeover-token": token, ...boxKeyHeader() },
+      body: op === "live" ? undefined : body || "{}",
+      signal,
+    });
+    if (res.status >= 502) humanBoxCache.delete(ctx.user.id);
+    return res;
+  } catch (e) {
+    humanBoxCache.delete(ctx.user.id);
+    throw e;
+  }
 }
+const humanBoxCache = new Map<string, { renderUrl: string; sandboxId: string; until: number }>();
+const lastHumanTouch = new Map<string, number>();
 
 /**
  * Navegador con estado en la caja de render del owner: `open` → `act`/`look` → `close`.
