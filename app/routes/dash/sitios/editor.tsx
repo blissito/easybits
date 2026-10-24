@@ -13,7 +13,7 @@ import { DeleteSiteArt, GithubRepoArt } from "~/components/sitios/DialogArt";
 import { Modal } from "~/components/common/Modal";
 import { BrutalButton } from "~/components/common/BrutalButton";
 import { ThemePicker } from "~/components/sitios/ThemePicker";
-import { LuArrowDown, LuMousePointerClick, LuTrash2 } from "react-icons/lu";
+import { LuArrowDown, LuCheck, LuExternalLink, LuLink2Off, LuMousePointerClick, LuTrash2 } from "react-icons/lu";
 import { getUserOrRedirect } from "~/.server/getters";
 import type { AuthContext } from "~/.server/apiAuth";
 import { attachNewestMachine, deleteSite, editSiteText, getSite, publishSite, reviveSite, siteAdminLoginUrl, siteEngineFor } from "~/.server/core/siteOperations";
@@ -909,12 +909,15 @@ export default function SiteEditor() {
           </div>
           {showComputer && !busy && panelIsLast && lastSteps.length > 0 && (
             replayUrl ? (
-              <span className="flex shrink-0 items-center gap-2 text-xs font-bold">
-                <a href={replayUrl} target="_blank" rel="noreferrer" className="text-brand-500">
-                  Liga copiada · abrir replay ↗
+              <span className="flex shrink-0 items-center gap-1 text-xs font-bold">
+                <span className="flex items-center gap-1 rounded-lg border-2 border-black bg-brand-500/15 px-2 py-0.5">
+                  <LuCheck className="h-3.5 w-3.5" strokeWidth={3} /> Liga copiada
+                </span>
+                <a href={replayUrl} target="_blank" rel="noreferrer" title="Abrir el replay" aria-label="Abrir el replay" className="rounded-lg p-1 text-gray-600 hover:bg-gray-100 hover:text-black">
+                  <LuExternalLink className="h-4 w-4" />
                 </a>
-                <button type="button" onClick={unshareReplay} className="text-gray-500 underline hover:text-black">
-                  Dejar de compartir
+                <button type="button" onClick={unshareReplay} title="Dejar de compartir" aria-label="Dejar de compartir" className="rounded-lg p-1 text-gray-600 hover:bg-gray-100 hover:text-red-600">
+                  <LuLink2Off className="h-4 w-4" />
                 </button>
               </span>
             ) : (
