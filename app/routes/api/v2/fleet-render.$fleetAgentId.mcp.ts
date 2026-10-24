@@ -312,18 +312,20 @@ function buildRenderServer(ctx: AuthContext, panel?: { fleetAgentId: string; gro
   // La caja SIEMPRE manda captura: el panel «la computadora del agente» la necesita. Al modelo
   // sólo le llega si la pidió (pesa en su contexto).
   const browserReply = async (v: BrowserView, opts: { wanted?: boolean; hint?: string; tool: string; actions?: BrowserAction[] }) => {
-    const { screenshot, ...rest } = v;
+    // `pageShot` (la página completa) es sólo para el panel: al modelo nunca le llega.
+    const { screenshot, pageShot, scrollY, ...rest } = v;
     const names = lastNames.get(v.sessionId);
     if (panel && screenshot && hasLiveTurn(panel.fleetAgentId, panel.groupId)) {
       try {
         const key = `agent-frames/${randomUUID()}.jpg`;
-        await getPlatformPublicClient().putObject(key, Buffer.from(screenshot, "base64"), "image/jpeg");
+        await getPlatformPublicClient().putObject(key, Buffer.from(pageShot ?? screenshot, "base64"), "image/jpeg");
         pushBrowserFrame(panel.fleetAgentId, panel.groupId, {
           url: v.url,
           title: v.title,
           image: buildPublicAssetUrl(key),
           viewport: v.viewport ?? undefined,
           target: v.target ?? undefined,
+          ...(pageShot && scrollY ? { scrollY } : {}),
           action: v.failed ? `Falló: ${v.failed.error}` : actionLabel(opts.actions, names ?? new Map()),
           sessionId: v.sessionId,
         }, opts.tool);
@@ -352,6 +354,8 @@ function buildRenderServer(ctx: AuthContext, panel?: { fleetAgentId: string; gro
     }
     try {
       const r = await consumeService<{ cost: number; data: { ws: string } }>("research.brightdata.browser", {}, { userId: ctx.user.id });
+      // Sin página completa: por el navegador antibot se paga por GB y la captura entera pesa
+      // varias veces lo del viewport.
       const v = await browserOnBox(ctx, "open", { url, mobile, screenshot: true, cdp: r.data.ws });
       remoteSessions.add(v.sessionId);
       if (remoteSessions.size > 500) remoteSessions.delete(remoteSessions.keys().next().value!);
@@ -388,7 +392,7 @@ function buildRenderServer(ctx: AuthContext, panel?: { fleetAgentId: string; gro
           const r = await antibot(p.url, p.mobile);
           if ("v" in r) return browserReply(r.v, { wanted: p.screenshot, tool: "browser_open", hint: ANTIBOT_HINT(r.v.sessionId) });
         }
-        const v = await browserOnBox(ctx, "open", { url: p.url, mobile: p.mobile, screenshot: true });
+        const v = await browserOnBox(ctx, "open", { url: p.url, mobile: p.mobile, screenshot: true, fullPage: true });
         if (looksBlocked(v)) {
           learnBlocked(p.url);
           const r = await antibot(p.url, p.mobile, "captcha");
@@ -415,7 +419,7 @@ function buildRenderServer(ctx: AuthContext, panel?: { fleetAgentId: string; gro
     },
     async (p) => {
       try {
-        const v = await browserOnBox(ctx, "act", { sessionId: p.session_id, actions: p.actions, screenshot: true });
+        const v = await browserOnBox(ctx, "act", { sessionId: p.session_id, actions: p.actions, screenshot: true, fullPage: true });
         // Una acción que llevó a un muro antibot: se sigue en el navegador antibot desde esa URL.
         if (!remoteSessions.has(p.session_id) && looksBlocked(v) && /^https?:/.test(v.url)) {
           learnBlocked(v.url);
@@ -448,7 +452,7 @@ function buildRenderServer(ctx: AuthContext, panel?: { fleetAgentId: string; gro
     { session_id: z.string(), screenshot: z.boolean().optional() },
     async (p) => {
       try {
-        return browserReply(await browserOnBox(ctx, "look", { sessionId: p.session_id, screenshot: true }), { wanted: p.screenshot, tool: "browser_look" });
+        return browserReply(await browserOnBox(ctx, "look", { sessionId: p.session_id, screenshot: true, fullPage: true }), { wanted: p.screenshot, tool: "browser_look" });
       } catch (e) {
         return browserFail(e);
       }

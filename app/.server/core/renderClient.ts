@@ -243,6 +243,10 @@ export interface BrowserView {
   textTruncated: boolean;
   /** JPEG del viewport en base64, sólo si se pidió. */
   screenshot?: string;
+  /** Con `fullPage: true`: la página completa en JPEG (tope 6000 px de alto) para el panel, y
+   *  cuánto había desplazado el agente, para ubicar el recuadro del clic. Nunca va al modelo. */
+  pageShot?: string;
+  scrollY?: number;
   viewport?: { width: number; height: number } | null;
   /** act: recuadro del último elemento tocado (px del viewport); null si la acción navegó. */
   target?: { x: number; y: number; width: number; height: number } | null;
