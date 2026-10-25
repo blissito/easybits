@@ -6,13 +6,7 @@ import type { SiteStackId } from "~/lib/siteStacks";
 import { TEMPLATE_STACKS, type SiteTemplateKey } from "~/lib/siteTemplates";
 import { themeCssTw4, type ThemeColors } from "~/lib/siteTheme";
 import { stackThemeFiles } from "./index";
-// Plantilla «agente» (TanStack): salió de un sitio real (24-oct). Varios archivos, no sólo la página.
-import agentLib from "./agente/agent.ts.txt?raw";
-import agentApp from "./agente/app.tsx.txt?raw";
-import agentIndex from "./agente/index.tsx.txt?raw";
-import agentPage from "./agente/Page.tsx.txt?raw";
-import agentLogin from "./agente/login.tsx.txt?raw";
-import agentRoot from "./agente/__root.tsx.txt?raw";
+import { AGENTE_PAGE, AGENTE_TANSTACK } from "./agente";
 
 /** Dónde viven las plantillas dentro de la caja dorada (rootfs, como el starter). */
 export const TEMPLATES_DIR = "/opt/eb-templates";
@@ -240,15 +234,9 @@ export function Page() {
       surface: "#ffffff", "surface-alt": "#f5f3ff", "on-primary": "#ffffff", "on-secondary": "#ffffff", "on-accent": "#ffffff",
       "on-surface": "#1d1640", "on-surface-muted": "#6b6787",
     }),
-    page: agentPage,
+    page: AGENTE_PAGE,
     files: {
-      tanstack: {
-        "src/lib/agent.ts": agentLib,
-        "src/routes/app.tsx": agentApp,
-        "src/routes/index.tsx": agentIndex,
-        "src/routes/login.tsx": agentLogin,
-        "src/routes/__root.tsx": agentRoot,
-      },
+      tanstack: AGENTE_TANSTACK,
     },
   },
 };
