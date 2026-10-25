@@ -3,7 +3,7 @@ import { db } from "~/.server/db";
 import { getUserOrNull } from "~/.server/getters";
 import type { AuthContext } from "~/.server/apiAuth";
 import { ensureBuilderAgent, getSite, siteGroupId, siteEngineFor } from "~/.server/core/siteOperations";
-import { AppDraining, startSiteTurn, subscribeSiteTurn, siteTurnStatus, TurnBusy, TERMINAL_TURN_EVENTS, type TurnEvent } from "~/.server/core/siteTurns.server";
+import { AppDraining, startSiteTurn, steerAgentTurn, subscribeSiteTurn, siteTurnStatus, TurnBusy, TERMINAL_TURN_EVENTS, type TurnEvent } from "~/.server/core/siteTurns.server";
 import { engineIsMetered } from "~/lib/fleetEngines";
 import { checkLLMTokenLimit } from "~/.server/llmTokenLimit";
 
@@ -114,6 +114,19 @@ export async function action({ request, params }: Route.ActionArgs) {
       : undefined;
   if (image && image.base64.length > 7_000_000) {
     return Response.json({ error: "image_too_large", message: "La imagen supera 5 MB." }, { status: 413 });
+  }
+  // STEER: con un turno corriendo, el mensaje entra a ése (sin selección ni imagen: van
+  // en el prompt del turno, no en el texto inyectado). Si el turno ya terminó, sigue como
+  // turno normal.
+  if (body?.steer === true && !image) {
+    const r = await steerAgentTurn(siteGroupId(site.id), text);
+    if (r === "injected") return Response.json({ steered: true }, { status: 202 });
+    if (r !== "not_live") {
+      return Response.json(
+        { error: "steer_unavailable", message: r === "unsupported" ? "Este motor no recibe mensajes a media respuesta; espera a que termine." : "El agente está terminando en otro servidor; reintenta en unos segundos." },
+        { status: 409 }
+      );
+    }
   }
   const continueTurnId = typeof body?.continueTurnId === "string" ? body.continueTurnId : undefined;
   try {

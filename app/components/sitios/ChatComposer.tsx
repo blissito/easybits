@@ -16,6 +16,7 @@ export function ChatComposer({
   busy,
   canSend,
   placeholder,
+  steer = false,
   accept = "image/png,image/jpeg,image/webp",
 }: {
   value: string;
@@ -25,10 +26,13 @@ export function ChatComposer({
   busy: boolean;
   canSend: boolean;
   placeholder: string;
+  /** Con `busy`, escribir sí se manda: entra al turno en curso (steer) en vez de esperar. */
+  steer?: boolean;
   accept?: string;
 }) {
+  const canSteer = busy && steer && canSend;
   const submit = () => {
-    if (!busy && canSend) onSend();
+    if ((!busy || canSteer) && canSend) onSend();
   };
 
   return (
@@ -79,11 +83,11 @@ export function ChatComposer({
         />
         <button
           type="submit"
-          disabled={busy || !canSend}
-          aria-label={busy ? "Trabajando…" : "Enviar"}
+          disabled={(busy && !canSteer) || !canSend}
+          aria-label={canSteer ? "Enviar al agente mientras trabaja" : busy ? "Trabajando…" : "Enviar"}
           className="shrink-0 grid place-items-center w-8 h-8 rounded-full bg-black text-white disabled:bg-gray-200 disabled:text-gray-400 transition-colors"
         >
-          {busy ? <LuLoaderCircle className="w-4 h-4 animate-spin" /> : <LuArrowUp className="w-4 h-4" />}
+          {busy && !canSteer ? <LuLoaderCircle className="w-4 h-4 animate-spin" /> : <LuArrowUp className="w-4 h-4" />}
         </button>
       </div>
       <p className="hidden md:block mt-1 px-1 text-[10px] text-gray-400">Enter envía · Shift+Enter salto de línea · arrastra o pega un mockup</p>

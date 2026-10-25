@@ -442,6 +442,25 @@ export default function SiteEditor() {
   // de escribir o publicar la recarga (agrupado en 1.5 s); antes sólo se veía al final del turno.
   const previewReload = useRef<ReturnType<typeof setTimeout> | null>(null);
   const applyEvent = useCallback((e: { type: string; [k: string]: any }): boolean => {
+    if (e.type === "steer") {
+      // La persona escribió a media respuesta: su mensaje y lo que siga del agente van en burbujas nuevas.
+      setMsgs((m) => [...m, { role: "user", text: String(e.text ?? "") }, { role: "bot", text: "", tools: [] }]);
+      return false;
+    }
+    if (e.type === "step" && e.step?.id) {
+      // Un paso que arrancó antes del steer termina en su burbuja, no en la nueva.
+      let handled = false;
+      setMsgs((m) => {
+        for (let i = m.length - 2; i >= 0; i--) {
+          if (m[i].role === "bot" && m[i].steps?.some((s) => s.id === e.step.id)) {
+            handled = true;
+            return m.map((x, j) => (j === i ? applyTurnEvent(x, e).msg : x));
+          }
+        }
+        return m;
+      });
+      if (handled) return false;
+    }
     patchLast((p) => applyTurnEvent(p, e).msg);
     if (e.type === "interrupted") setCutTurn(e.turnId ?? null);
     if (site.kind !== "webapp" && e.type === "step" && e.step?.status === "ok" && (e.step.kind === "editor" || e.step.kind === "terminal")) {
@@ -490,6 +509,32 @@ export default function SiteEditor() {
       setPreviewKey((k) => k + 1);
     }
   }, [site.id, consume, patchLast]);
+
+  /** STEER: con el agente trabajando, el mensaje entra a su turno; el evento `steer` del stream lo pinta. */
+  const steer = useCallback(async (text: string) => {
+    text = text.trim();
+    if (!text) return;
+    setInput("");
+    const res = await fetch(`/api/v2/sites/${site.id}/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ text, steer: true }),
+    }).catch(() => null);
+    if (res?.status === 202) return;
+    // El turno terminó en la carrera: se arrancó uno normal; nos enganchamos a él.
+    if (res?.ok) {
+      setMsgs((m) => [...m, { role: "user", text }, { role: "bot", text: "", tools: [] }]);
+      setBusy(true);
+      await consume(res).catch(() => false);
+      setBusy(false);
+      setTurnDone(true);
+      setPreviewKey((k) => k + 1);
+      return;
+    }
+    const err = await res?.json().catch(() => null);
+    setInput(text);
+    toast.error(err?.message || "No se pudo enviar; espera a que el agente termine.");
+  }, [site.id, consume]);
 
   const send = useCallback(
     async (text: string, opts?: { continueTurnId?: string; selection?: Selection }) => {
@@ -892,9 +937,10 @@ export default function SiteEditor() {
         <ChatComposer
           value={input}
           onChange={setInput}
-          onSend={() => void send(input)}
+          onSend={() => void (busy ? steer(input) : send(input))}
           onFile={attachFile}
           busy={busy}
+          steer={!attached}
           canSend={!!input.trim() || !!attached}
           placeholder={attached ? "¿Qué hago con esta imagen?" : selection ? "¿Qué cambio en ese elemento?" : "Escribe un cambio…"}
         />

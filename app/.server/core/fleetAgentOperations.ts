@@ -20,6 +20,7 @@ import {
   resumeSandbox,
   destroySandbox,
   openAgentChunkStream,
+  openAgentMessageStream,
   execCommand,
   readFile,
   writeFile,
@@ -2895,6 +2896,30 @@ export async function routeMessage(
     }
     throw e;
   }
+}
+
+/**
+ * STEER: mete `text` al turno que YA corre en la caja de esta conversación, en vez de
+ * esperar a que termine. La respuesta sale por el stream del turno vivo (el de
+ * `routeMessage`), no por aquí. Sólo claude-worker lo sabe hacer (`inject` en /message).
+ *  - `injected`: entró al turno.
+ *  - `not_live`: la caja ya no tiene turno vivo (terminó en la carrera); no se ejecutó nada.
+ *  - `unsupported`: el motor no sabe de steer o la conversación no tiene caja.
+ */
+export async function steerLiveTurn(fleetAgentId: string, groupId: string, text: string): Promise<"injected" | "not_live" | "unsupported"> {
+  const route = await db.fleetAgentRoute.findUnique({ where: { fleetAgentId_groupId: { fleetAgentId, groupId } } });
+  if (!route?.agentId) return "unsupported";
+  const worker = await db.agent.findUnique({ where: { id: route.agentId } });
+  if (!worker || worker.template !== "claude-worker" || (worker.protocol ?? "sse") !== "sse") return "unsupported";
+  const { stream } = await openAgentMessageStream(worker.sandboxId, worker.ownerId, {
+    port: worker.port ?? 3000,
+    path: worker.messagePath ?? "/message",
+    // injectOnly: si el turno ya terminó, el worker NO lo corre como turno normal por
+    // este stream (nadie lo leería y la respuesta se perdería).
+    rawBody: { content: text, sessionId: route.sessionUuid, inject: true, injectOnly: true },
+  });
+  const body = await new Response(stream).text();
+  return /"type":"injected"/.test(body) ? "injected" : "not_live";
 }
 
 /**
