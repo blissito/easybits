@@ -692,7 +692,10 @@ export default function SiteEditor() {
     const iv = setInterval(() => setTick(Date.now()), 1000);
     return () => clearInterval(iv);
   }, [busy]);
-  const watchNow = busy && tick > 0 && worthWatching(lastSteps, tick);
+  // Además, sólo si hay algo que VER (navegador o un aviso que pide a la persona): mientras edita y
+  // corre comandos, la vista previa enseña más que «Ejecutó un comando ✓» (24-oct).
+  const watchNow =
+    busy && tick > 0 && worthWatching(lastSteps, tick) && lastSteps.some((st) => st.kind === "browser" || !!st.note || !!st.browser?.needsHuman);
   useEffect(() => {
     if (watchNow && !autoComputer.current) {
       autoComputer.current = true;
