@@ -53,7 +53,7 @@ export default function SitesList() {
           {sites.map((s) => (
             <Link
               key={s.id}
-              to={`/dash/sitios/${s.id}`}
+              to={`/c/${s.id}`}
               className="block border-2 border-black rounded-2xl bg-white p-5 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-[6px_6px_0px_0px_rgba(0,0,0,1)] hover:-translate-x-0.5 hover:-translate-y-0.5 transition-all"
             >
               <div className="flex items-center justify-between gap-2">

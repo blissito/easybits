@@ -97,7 +97,7 @@ export async function archiveSite(site: { id: string; ownerId: string; sandboxId
 async function warnOwner(site: { id: string; name: string; ownerId: string }) {
   const user = await db.user.findUnique({ where: { id: site.ownerId }, select: { email: true, displayName: true } });
   if (!user?.email) return;
-  const url = `https://www.easybits.cloud/dash/sitios/${site.id}`;
+  const url = `https://www.easybits.cloud/c/${site.id}`;
   const days = WORK_BOX_IDLE_DAYS - WORK_BOX_WARN_DAYS;
   await sendTransactional({
     to: user.email,

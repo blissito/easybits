@@ -6,7 +6,7 @@ import { ImageGrid, TurnReceipt, TurnSummary, useImageLinks } from "@ghostystudi
 import { partirNarracion } from "~/lib/narracion";
 import { isPlumbing, stepVerb, upsertStep, type AgentStep } from "~/lib/agentSteps";
 
-// Mensajes del chat del creador de sitios. Los usan el editor (/dash/sitios/:id) y el
+// Mensajes del chat del creador de sitios. Los usan el editor (/c/:id) y el
 // morph del hero de la home: un solo formato (pasos con palomita, markdown, tools
 // contraídas), no una burbuja reinventada en cada superficie.
 

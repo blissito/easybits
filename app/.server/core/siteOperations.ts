@@ -643,8 +643,8 @@ export async function publishSite(ctx: AuthContext, siteId: string) {
   if (site.sandbox?.workBox) {
     const base = process.env.APP_URL || "https://www.easybits.cloud";
     const promo = await promoteWorkBox(ctx, site.sandboxId, {
-      successUrl: `${base}/dash/sitios/${site.id}?publicar=1`,
-      cancelUrl: `${base}/dash/sitios/${site.id}`,
+      successUrl: `${base}/c/${site.id}?publicar=1`,
+      cancelUrl: `${base}/c/${site.id}`,
     });
     if ("checkoutUrl" in promo) return { checkoutUrl: promo.checkoutUrl, monthlyMxn: promo.monthlyMxn };
   }

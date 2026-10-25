@@ -49,7 +49,7 @@ export async function action({ request }: Route.ActionArgs) {
     const { site } = await createSite(ctx, { kind, name, engine, model, secretValue: body.secretValue, stack, template, sleep: true });
     const full = await getSite(ctx, site.id);
     return Response.json(
-      { id: site.id, name, kind, stack, template, previewUrl: full.previewUrl, url: full.url, editorUrl: `/dash/sitios/${site.id}` },
+      { id: site.id, name, kind, stack, template, previewUrl: full.previewUrl, url: full.url, editorUrl: `/c/${site.id}` },
       { status: 201 }
     );
   } catch (e) {

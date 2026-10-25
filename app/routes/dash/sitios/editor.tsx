@@ -39,7 +39,7 @@ export const loader = async ({ request, params }: Route.LoaderArgs) => {
   const own = await db.site.findFirst({ where: { id: params.id!, ownerId: user.id }, select: { id: true } }).catch(() => null);
   if (!own) {
     const bySite = await db.site.findFirst({ where: { websiteId: params.id!, ownerId: user.id }, select: { id: true } }).catch(() => null);
-    if (bySite) throw redirect(`/dash/sitios/${bySite.id}`);
+    if (bySite) throw redirect(`/c/${bySite.id}`);
     // Un Website publicado por otra vía (documentos, MCP) no tiene editor: su casa es la lista.
     const web = await db.website.findFirst({ where: { id: params.id!, ownerId: user.id }, select: { id: true } }).catch(() => null);
     if (web) throw redirect(`/dash/developer/websites?id=${encodeURIComponent(web.id)}`);

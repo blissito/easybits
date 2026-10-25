@@ -13,7 +13,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   await getUserOrRedirect(request);
   const params = new URL(request.url).searchParams;
   const site = params.get("site") || undefined;
-  if (!githubAppEnabled()) throw redirect(site ? `/dash/sitios/${site}?github=off` : "/dash/hosting?github=off");
+  if (!githubAppEnabled()) throw redirect(site ? `/c/${site}?github=off` : "/dash/hosting?github=off");
   const nonce = nanoid(24);
   const state = `${STATE_PREFIX}${nonce}`;
   const add = params.get("add") === "1";

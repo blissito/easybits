@@ -40,7 +40,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
     const q = new URLSearchParams();
     if (prompt) q.set("prompt", prompt);
     if (checkoutUrl) q.set("checkout", checkoutUrl);
-    return redirect(`/dash/sitios/${site.id}${q.size ? `?${q}` : ""}`);
+    return redirect(`/c/${site.id}${q.size ? `?${q}` : ""}`);
   } catch (e) {
     const raw = e instanceof Response ? await e.text().catch(() => e.statusText) : e instanceof Error ? e.message : "error";
     // Los errores del core llegan como {error, message}: se muestra el message, no el JSON.

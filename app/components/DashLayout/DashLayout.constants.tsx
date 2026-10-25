@@ -49,7 +49,7 @@ export const ITEMS = {
   /** Primer ítem suelto — el "home" del dash */
   inicioItem: {
     icon: <img className="scale" src="/images/rocket.svg" />,
-    path: "/dash",
+    path: "/c",
     title: "Inicio",
     end: true,
   } as SidebarItem,

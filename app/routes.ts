@@ -130,7 +130,8 @@ export default [
       ...prefix("sitios", [
         index("routes/dash/sitios/list.tsx"),
         route("new", "routes/dash/sitios/new.tsx"),
-        route(":id", "routes/dash/sitios/editor.tsx"),
+        // La conversación vive en /c/:id; la liga vieja redirige.
+        route(":id", "routes/dash/sitios/legacy-redirect.ts"),
       ]),
       // Documents
       ...prefix("documents", [
@@ -217,6 +218,11 @@ export default [
         ]),
       ]),
     ]),
+  ]),
+  // Chat general: /c empieza uno (el prompt del hero) y /c/:id es cada conversación.
+  layout("components/DashLayout/DashLayout.tsx", { id: "chat-layout" }, [
+    route("c", "routes/dash/inicio.tsx"),
+    route("c/:id", "routes/dash/sitios/editor.tsx"),
   ]),
   route("/edicion", "routes/store/storeEdition.tsx"),
   // multipar upload

@@ -78,7 +78,7 @@ export function HeroPrompt({ loggedIn }: { loggedIn: boolean }) {
       if (res.status === 401) return navigate(`/login?next=${encodeURIComponent(next)}`);
       const created = await res.json().catch(() => null);
       if (!res.ok || !created?.id) throw new Error(created?.error || `Error ${res.status}`);
-      navigate(`/dash/sitios/${created.id}?prompt=${encodeURIComponent(clean)}`, { viewTransition: true });
+      navigate(`/c/${created.id}?prompt=${encodeURIComponent(clean)}`, { viewTransition: true });
     } catch (e) {
       setError(e instanceof Error ? e.message : "error de red");
       setSending(false);
@@ -130,7 +130,7 @@ export function HeroPrompt({ loggedIn }: { loggedIn: boolean }) {
       <div className="mt-4 flex flex-wrap justify-center md:justify-start gap-2">
         {lastSite && (
           <a
-            href={`/dash/sitios/${lastSite.id}`}
+            href={`/c/${lastSite.id}`}
             className="flex max-w-full items-center gap-1.5 rounded-full border-2 border-black bg-brand-500 py-1 pl-3 pr-3 text-sm font-bold shadow-[2px_2px_0_0_#000] transition-all hover:-translate-y-0.5 active:translate-y-0 active:shadow-none"
           >
             <span className="truncate">Continuar «{lastSite.name}»</span> →

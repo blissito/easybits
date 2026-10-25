@@ -19,7 +19,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   const st = readGithubState(await githubStateCookie.parse(request.headers.get("Cookie")));
   const clear = { "Set-Cookie": await githubStateCookie.serialize("", { maxAge: 0 }) };
   const back = (q: string) =>
-    st?.site ? `/dash/sitios/${st.site}?github=${q}` : `/dash/hosting?github=${q}`;
+    st?.site ? `/c/${st.site}?github=${q}` : `/dash/hosting?github=${q}`;
   if (!code || !st || state !== `${STATE_PREFIX}${st.n}`) {
     return redirect(back("state"), { headers: clear });
   }
@@ -32,7 +32,7 @@ export async function loader({ request }: Route.LoaderArgs) {
       // La App no está en su cuenta: a instalarla con el MISMO state (la cookie
       // sigue viva) y GitHub regresa aquí con otro code.
       if (!r.ok) return redirect(installUrl(state));
-      return redirect(`/dash/sitios/${st.site}?github=connected`, { headers: clear });
+      return redirect(`/c/${st.site}?github=connected`, { headers: clear });
     }
     const n = (await claimInstallationsWithToken(user.id, userToken)).length;
     if (!n) return redirect(installUrl(state));
