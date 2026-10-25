@@ -1,6 +1,5 @@
 import { db } from "../db";
 import { dispatchWebhooks } from "../webhooks";
-import { sendTransactional } from "../emails/sendTransactional";
 import {
   extractProgress,
   probeWebProvider,
@@ -124,8 +123,8 @@ export async function readWebCanary(): Promise<WebCanaryState | null> {
 }
 
 /**
- * Cada 15 min (cron `check-web`). Avisa a ADMIN_EMAILS a la SEGUNDA corrida seguida con
- * fallas (una sola suele ser un captcha pasajero) y otra vez cuando se recupera.
+ * Cada 15 min (cron `check-web`). Sólo guarda el estado para /status; los avisos por correo
+ * se apagaron el 25-oct-2026 a pedido de bliss.
  */
 export async function runWebCanary() {
   const prev = await readWebCanary();
@@ -139,29 +138,5 @@ export async function runWebCanary() {
     update: { value: state },
   });
 
-  const recovered = status === "operational" && (prev?.failStreak ?? 0) >= 2;
-  const notified = failStreak === 2 || recovered ? await notifyCanary(state, recovered) : false;
-  return { ...state, notified };
-}
-
-async function notifyCanary(state: WebCanaryState, recovered: boolean) {
-  const to = (process.env.ADMIN_EMAILS || "").split(",").map((s) => s.trim()).filter(Boolean);
-  if (!to.length) return false;
-  const esc = (s: unknown) => String(s ?? "").replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]!);
-  const row = (name: string, p: ProbeResult) =>
-    `<li><b>${name}</b>: ${p.ok ? "✅" : "❌"} ${esc(p.detail)} (${(p.ms / 1000).toFixed(1)} s)</li>`;
-  const subject = recovered
-    ? "✅ Web (buscar/leer/extraer) volvió a funcionar"
-    : `🚨 Web ${state.status === "down" ? "CAÍDO" : "degradado"}: falla en 2 revisiones seguidas`;
-  try {
-    await sendTransactional({
-      to,
-      subject,
-      html: `<p>Canario del toolset web (${esc(state.at)}):</p><ul>${row("Buscar", state.search)}${row("Leer (Amazon MX)", state.fetch)}${row("Extraer (Mercado Libre)", state.meli)}</ul>`,
-    });
-    return true;
-  } catch (e) {
-    console.error("[check-web] no se pudo enviar el aviso:", String((e as Error)?.message ?? e).slice(0, 200));
-    return false;
-  }
+  return state;
 }
