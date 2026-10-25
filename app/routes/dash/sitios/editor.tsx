@@ -1161,8 +1161,8 @@ export default function SiteEditor() {
               steps={panelSteps}
               autoplay={replay}
               live={busy && panelIsLast}
-              onTakeover={(sid) => requestTakeover(site.id, sid)}
-              onWatch={(sid) => requestWatch(site.id, sid)}
+              onTakeover={(sid, { viewport }) => requestTakeover(site.id, sid, viewport)}
+              onWatch={(sid, { viewport }) => requestWatch(site.id, sid, viewport)}
               jumpTo={focus}
               onStepChange={setViewedStep}
               takeoverNow={takeoverAt}

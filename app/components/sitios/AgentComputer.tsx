@@ -1,4 +1,4 @@
-import { AgentComputer as Computer, type AgentComputerProps, type TakeoverUrls } from "@ghostystudio/computer/react";
+import { AgentComputer as Computer, type AgentComputerProps, type PanelViewport, type TakeoverUrls } from "@ghostystudio/computer/react";
 
 /**
  * «La computadora del agente» de Sitios: el panel vive en `@ghostystudio/computer` (el mismo de
@@ -9,16 +9,17 @@ import { AgentComputer as Computer, type AgentComputerProps, type TakeoverUrls }
 export type { TakeoverUrls };
 
 /** Pide a EasyBits tomar el control de un navegador del turno en curso de un sitio. */
-export async function requestTakeover(siteId: string, sessionId: string): Promise<TakeoverUrls> {
-  const r = await fetch(`/api/v2/sites/${siteId}/takeover`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ sessionId }) });
+export async function requestTakeover(siteId: string, sessionId: string, viewport?: PanelViewport): Promise<TakeoverUrls> {
+  const r = await fetch(`/api/v2/sites/${siteId}/takeover`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ sessionId, ...(viewport ? { viewport } : {}) }) });
   const d = await r.json().catch(() => null);
   if (!r.ok || !d?.liveUrl) throw new Error(d?.error ?? "No se pudo tomar el control");
   return d;
 }
 
 /** Pide la pestaña en vivo (sólo mirar) de un navegador del turno en curso. */
-export async function requestWatch(siteId: string, sessionId: string): Promise<{ liveUrl: string; livekit?: { wsUrl: string; token: string } }> {
-  const r = await fetch(`/api/v2/sites/${siteId}/watch`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ sessionId }) });
+/** `viewport`: la medida del panel (la mide @ghostystudio/computer); la caja ajusta la página a esa forma. */
+export async function requestWatch(siteId: string, sessionId: string, viewport?: PanelViewport): Promise<{ liveUrl: string; livekit?: { wsUrl: string; token: string } }> {
+  const r = await fetch(`/api/v2/sites/${siteId}/watch`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ sessionId, ...(viewport ? { viewport } : {}) }) });
   const d = await r.json().catch(() => null);
   if (!r.ok || !d?.liveUrl) throw new Error(d?.error ?? "No se pudo ver el navegador en vivo");
   return d;

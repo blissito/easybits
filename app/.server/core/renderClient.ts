@@ -294,8 +294,18 @@ export function readTakeoverPass(pass: string, siteId: string): TakeoverPass | n
  * «Tomar el control»: la caja entrega un token de un solo dueño, pero la persona NUNCA habla con
  * la caja: recibe URLs de EasyBits con un pase firmado y la app hace de proxy (sites.$id.takeover.$op).
  */
-export async function takeoverOnBox(ctx: AuthContext, sessionId: string, siteId: string) {
-  const r = await browserOnBox(ctx, "takeover", { sessionId });
+export type PanelViewport = { width: number; height: number };
+/** La medida que manda el panel, sólo si es un par de números. */
+export function panelViewportOf(v: unknown): PanelViewport | undefined {
+  const o = v as { width?: unknown; height?: unknown } | null;
+  const width = Number(o?.width);
+  const height = Number(o?.height);
+  return Number.isFinite(width) && Number.isFinite(height) ? { width, height } : undefined;
+}
+
+/** `viewport`: la medida del panel de quien mira; la caja ajusta la página a esa forma. */
+export async function takeoverOnBox(ctx: AuthContext, sessionId: string, siteId: string, panel?: PanelViewport) {
+  const r = await browserOnBox(ctx, "takeover", { sessionId, ...(panel ? { viewport: panel } : {}) });
   const { token, expiresInMs, viewport, livekit } = r as unknown as {
     token: string;
     expiresInMs: number;
@@ -309,8 +319,8 @@ export async function takeoverOnBox(ctx: AuthContext, sessionId: string, siteId:
 }
 
 /** Mirar por WebRTC: token de sólo ver de la sala de la sesión, o nada (entonces el SSE del pase). */
-export async function watchLiveKitOnBox(ctx: AuthContext, sessionId: string): Promise<{ wsUrl: string; token: string } | undefined> {
-  const r = (await browserOnBox(ctx, "watch", { sessionId }).catch(() => null)) as unknown as { livekit?: { wsUrl: string; token: string } | null } | null;
+export async function watchLiveKitOnBox(ctx: AuthContext, sessionId: string, viewport?: PanelViewport): Promise<{ wsUrl: string; token: string } | undefined> {
+  const r = (await browserOnBox(ctx, "watch", { sessionId, ...(viewport ? { viewport } : {}) }).catch(() => null)) as unknown as { livekit?: { wsUrl: string; token: string } | null } | null;
   return r?.livekit ?? undefined;
 }
 

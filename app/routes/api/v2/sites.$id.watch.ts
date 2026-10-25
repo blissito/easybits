@@ -4,9 +4,9 @@ import { getUserOrNull } from "~/.server/getters";
 import type { AuthContext } from "~/.server/apiAuth";
 import { getSite, siteGroupId } from "~/.server/core/siteOperations";
 import { liveBrowserSession } from "~/.server/core/siteTurns.server";
-import { watchLiveKitOnBox, watchPass } from "~/.server/core/renderClient";
+import { panelViewportOf, watchLiveKitOnBox, watchPass } from "~/.server/core/renderClient";
 
-// POST /api/v2/sites/:id/watch {sessionId} — ver en vivo el navegador del agente sin quitarle
+// POST /api/v2/sites/:id/watch {sessionId, viewport?} (viewport = medida del panel; la caja ajusta la página) — ver en vivo el navegador del agente sin quitarle
 // el mando. Misma regla que takeover: sólo una sesión del turno EN CURSO de este sitio. Devuelve
 // la URL de la pestaña con un pase firmado de sólo mirar (proxy en sites.$id.takeover.$pass.$op).
 // Ruta de recurso: sin export default.
@@ -14,7 +14,7 @@ export async function action({ request, params }: Route.ActionArgs) {
   const user = await getUserOrNull(request).catch(() => null);
   if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
   const site = await getSite({ user, scopes: ["READ", "WRITE"] } as AuthContext, params.id!);
-  const body = (await request.json().catch(() => ({}))) as { sessionId?: string };
+  const body = (await request.json().catch(() => ({}))) as { sessionId?: string; viewport?: unknown };
   const sessionId = typeof body.sessionId === "string" ? body.sessionId : "";
   const turn = sessionId ? liveBrowserSession(siteGroupId(site.id), sessionId) : null;
   if (!turn) return Response.json({ error: "Ese navegador ya no está en un turno en curso" }, { status: 404 });
@@ -22,6 +22,6 @@ export async function action({ request, params }: Route.ActionArgs) {
   const agent = await db.fleetAgent.findUnique({ where: { id: turn.fleetAgentId }, select: { ownerId: true } });
   if (!agent) return Response.json({ error: "Agente no encontrado" }, { status: 404 });
   const owner = await db.user.findUnique({ where: { id: agent.ownerId } });
-  const livekit = owner ? await watchLiveKitOnBox({ user: owner, scopes: ["READ", "WRITE"] } as AuthContext, sessionId) : undefined;
+  const livekit = owner ? await watchLiveKitOnBox({ user: owner, scopes: ["READ", "WRITE"] } as AuthContext, sessionId, panelViewportOf(body.viewport)) : undefined;
   return Response.json({ ...watchPass(agent.ownerId, sessionId, site.id), ...(livekit ? { livekit } : {}) });
 }
