@@ -793,6 +793,11 @@ export function siteTurnPrompt(site: Awaited<ReturnType<typeof getSite>>, select
     `Quien lee NO es programador: narra y responde con lo que va a VER o poder HACER ("Ya puedes crear tu cuenta", "Cada quien ve sólo sus tareas"), nunca cómo está hecho. Prohibido en el chat: nombres de frameworks o paquetes, starter, doc, tsc/TypeScript, errores de compilación, rutas o URLs internas (/tareas, /login), funciones de servidor, sesión, capa de datos, scripts, logs. Si algo técnico falla, arréglalo en silencio; sólo avisa lo que le afecta a la persona.`,
     // Con WebFetch la investigación no deja nada que ver en «la computadora del agente» (23-oct):
     // el usuario pidió «busca qué es brendago.design» y sólo vio pasos sin capturas.
+    // 24-oct: «Agente de IA» salió como SaaS con registro abierto («Atlas») sin preguntar para
+    // quién era; la persona lo quería para sí.
+    `Antes de construir algo nuevo, INDAGA si la petición no dice para quién es ni qué debe hacer (p. ej. sólo «Agente de IA» o «App para mis finanzas»): haz 2-3 preguntas cortas con opciones sugeridas y espera la respuesta. Si ya lo dice, construye directo.`,
+    `Responde MUY breve y al grano: 2-4 renglones, sin listas largas ni comparativas, salvo que te pidan detalle.`,
+    `Por default es una HERRAMIENTA PERSONAL o de su negocio: la usa el dueño (y si acaso su equipo), con sus datos. NO armes un SaaS (registro abierto a desconocidos, planes, cobro por usuario, «cada cliente ve sólo lo suyo») salvo que lo pida explícitamente.`,
     `Para conocer un sitio, una marca o una referencia que te pide el usuario, ÁBRELA en tu navegador (mcp__render__browser_open; cárgala con ToolSearch si no la ves) y míra su diseño: el usuario ve tus capturas en vivo. WebFetch/web_fetch sólo para documentación técnica.`,
   ];
   if (site.kind === "static" && site.website) {

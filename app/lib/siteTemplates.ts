@@ -11,6 +11,7 @@ export const SITE_TEMPLATES = [
   { key: "despacho", label: "Servicios profesionales" },
   { key: "portafolio", label: "Portafolio" },
   { key: "lanzamiento", label: "Lanzamiento" },
+  { key: "agente", label: "Agente de IA" },
 ] as const;
 
 export type SiteTemplateKey = (typeof SITE_TEMPLATES)[number]["key"];
@@ -31,6 +32,7 @@ export function templateFor(prompt: string): SiteTemplateKey {
   const p = prompt.toLowerCase();
   if (/fot[oó]|portafolio|boda|galer[ií]a|dise[ñn]ador|arquitect/.test(p)) return "portafolio";
   if (/contab|despacho|abogad|legal|consultor[ií]a|fiscal|n[oó]mina/.test(p)) return "despacho";
+  if (/agente|asistente|chatbot|\bbot\b/.test(p)) return "agente";
   if (/lanzamiento|\bapp\b|startup|lista de espera|saas|producto/.test(p)) return "lanzamiento";
   return "consultorio";
 }

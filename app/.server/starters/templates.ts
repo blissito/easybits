@@ -6,11 +6,19 @@ import type { SiteStackId } from "~/lib/siteStacks";
 import { TEMPLATE_STACKS, type SiteTemplateKey } from "~/lib/siteTemplates";
 import { themeCssTw4, type ThemeColors } from "~/lib/siteTheme";
 import { stackThemeFiles } from "./index";
+// Plantilla «agente» (TanStack): salió de un sitio real (24-oct). Varios archivos, no sólo la página.
+import agentLib from "./agente/agent.ts.txt?raw";
+import agentApp from "./agente/app.tsx.txt?raw";
+import agentIndex from "./agente/index.tsx.txt?raw";
+import agentPage from "./agente/Page.tsx.txt?raw";
+import agentLogin from "./agente/login.tsx.txt?raw";
+import agentRoot from "./agente/__root.tsx.txt?raw";
 
 /** Dónde viven las plantillas dentro de la caja dorada (rootfs, como el starter). */
 export const TEMPLATES_DIR = "/opt/eb-templates";
 
-type Template = { title: string; colors: ThemeColors; page: string };
+/** `files`: archivos extra por stack (relativos a /app), escritos al final: ganan sobre la ruta generada. */
+type Template = { title: string; colors: ThemeColors; page: string; files?: Partial<Record<SiteStackId, Record<string, string>>> };
 
 const palette = (c: Record<string, string>): ThemeColors => c;
 
@@ -225,6 +233,24 @@ export function Page() {
 }
 `,
   },
+  agente: {
+    title: "Atlas",
+    colors: palette({
+      primary: "#6d4aff", "primary-light": "#ece7ff", "primary-dark": "#4b2fd1", secondary: "#1d1640", accent: "#6d4aff",
+      surface: "#ffffff", "surface-alt": "#f5f3ff", "on-primary": "#ffffff", "on-secondary": "#ffffff", "on-accent": "#ffffff",
+      "on-surface": "#1d1640", "on-surface-muted": "#6b6787",
+    }),
+    page: agentPage,
+    files: {
+      tanstack: {
+        "src/lib/agent.ts": agentLib,
+        "src/routes/app.tsx": agentApp,
+        "src/routes/index.tsx": agentIndex,
+        "src/routes/login.tsx": agentLogin,
+        "src/routes/__root.tsx": agentRoot,
+      },
+    },
+  },
 };
 
 /** Ruta de la página y del componente de cada stack con plantillas. */
@@ -268,11 +294,14 @@ export function templateFiles(stack: SiteStackId, key: SiteTemplateKey): Record<
   const theme = stackThemeFiles(stack);
   if (!layout || !TEMPLATE_STACKS.includes(stack)) return {};
   const t = TEMPLATES[key];
+  // Una plantilla de varios archivos sólo existe en los stacks para los que se escribió.
+  if (t.files && !t.files[stack]) return {};
   const [routePath, routeSrc] = layout.route(t.title);
   return {
     [layout.page]: t.page,
     [routePath]: routeSrc,
     ...(theme ? { [theme.theme]: themeCssTw4(t.colors) } : {}),
+    ...(t.files?.[stack] ?? {}),
   };
 }
 
