@@ -431,7 +431,7 @@ function buildRenderServer(ctx: AuthContext, panel?: { fleetAgentId: string; gro
           }
           return browserReply(v, { wanted: p.screenshot, tool: "browser_open", hint: `La página pide captcha y no se pudo usar el navegador antibot (${r.error}). No lo resuelvas tú: usa web_search/web_fetch o pídele ayuda a la persona.` });
         }
-        return browserReply(v, { wanted: p.screenshot, tool: "browser_open", hint: loginHint(v) ?? `Sesión ${v.sessionId} abierta. Actúa con browser_act y ciérrala con browser_close al terminar.` });
+        return browserReply(v, { wanted: p.screenshot, tool: "browser_open", hint: loginHint(v) ?? `Sesión ${v.sessionId} abierta. Actúa con browser_act. No la cierres al terminar: se cierra sola cuando deja de usarse y así la persona puede seguir viéndola.` });
       } catch (e) {
         return browserFail(e);
       }
@@ -545,7 +545,7 @@ function buildRenderServer(ctx: AuthContext, panel?: { fleetAgentId: string; gro
     }
   );
 
-  tool("browser_close", "Cierra una sesión de navegador cuando terminaste. Libera la caja.", { session_id: z.string() }, async (p) => {
+  tool("browser_close", "Cierra la sesión del navegador. Casi nunca hace falta: se cierra sola unos minutos después de que dejas de usarla, y mientras siga abierta la persona puede verla y tomar el control. Úsala sólo para empezar de cero.", { session_id: z.string() }, async (p) => {
     try {
       // Con la persona al mando no se le cierra el navegador en la cara.
       if (humanHasControl(p.session_id)) {
