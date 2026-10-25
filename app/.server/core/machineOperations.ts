@@ -54,6 +54,7 @@ import { isAdminUser } from "../getters";
 import type { SandboxTemplate } from "../sandbox/schemas";
 import { can, delegatedAccountIds, SCOPES } from "../delegation";
 import { backupMachine, extendBackupsForDeletedMachine } from "./machineBackupOperations";
+import { assertNotExternal, isExternallyManaged, NOT_EXTERNAL } from "./externalMachine";
 
 // Host clamp today is 8 vCPU; performance-4x (16) is by-request (human provisions).
 const BIG_TIERS_ENABLED = process.env.HOSTING_BIG_TIERS_ENABLED === "1";
@@ -88,6 +89,8 @@ export interface PermanentSandbox {
   runtimeStatus: string | null;
   /** soft-delete: when set, the machine is suspended + scheduled to hard-delete 7d after this. */
   deletionScheduledAt: string | null;
+  /** Adoptada con `machines adopt`: sólo vault y reinicio (ver externalMachine.ts). */
+  external: boolean;
 }
 
 interface SandboxRow {
@@ -102,6 +105,7 @@ interface SandboxRow {
   status: string;
   createdAt: Date;
   runtimeStatus?: string | null;
+  managedBy?: string | null;
   deletionScheduledAt?: Date | null;
 }
 
@@ -121,7 +125,8 @@ function toPermanent(row: SandboxRow, host?: SandboxRecord, shared = false): Per
     diskAddonsGB: row.diskAddonsGB,
     name: row.name,
     status: row.status,
-    monthlyMxn: tier ? machineMonthly(tier, mode, row.diskAddonsGB, !!row.sleep) : 0,
+    // Una adoptada no se cobra por EasyBits.
+    monthlyMxn: tier && !isExternallyManaged(row) ? machineMonthly(tier, mode, row.diskAddonsGB, !!row.sleep) : 0,
     vcpus: res.vcpus,
     memoryMb: res.memoryMb,
     diskMb: res.diskMb,
@@ -131,6 +136,7 @@ function toPermanent(row: SandboxRow, host?: SandboxRecord, shared = false): Per
     shared,
     runtimeStatus: row.runtimeStatus ?? null,
     deletionScheduledAt: row.deletionScheduledAt ? new Date(row.deletionScheduledAt).toISOString() : null,
+    external: isExternallyManaged(row),
   };
 }
 
@@ -950,6 +956,7 @@ export async function releasePermanent(
   if (!row || !mine || row.status === "destroyed") {
     fail(404, "MachineNotFound", "Sandbox no encontrado.");
   }
+  assertNotExternal(row, "liberar");
   // Stop the meter immediately — the owner asked to release it. Two billing
   // shapes: an item on the plan subscription, or a standalone subscription that
   // IS the machine. Cancelling the wrong one leaves the customer paying.
@@ -1191,7 +1198,8 @@ export async function listAllPermanent(): Promise<PermanentSandbox[]> {
 // webhook on subscription cancel / payment failure). Best-effort.
 export async function suspendOwnerSandboxes(ownerId: string): Promise<void> {
   const rows = await db.sandbox.findMany({
-    where: { ownerId, status: { in: ["running", "provisioning"] } },
+    // Las adoptadas no: su cobro no pasa por EasyBits (ver managedBy).
+    where: { ownerId, status: { in: ["running", "provisioning"] }, ...NOT_EXTERNAL },
   });
   await Promise.all(
     rows.map(async (row) => {

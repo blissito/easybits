@@ -32,6 +32,7 @@ import {
   execSandboxRaw,
   exposeSandboxPort,
   getSandbox,
+  readFile,
   readLogs,
   runtimeControl,
   shQuote,
@@ -39,6 +40,7 @@ import {
   writeFile,
 } from "./sandboxOperations";
 import { buyMachine, releasePermanent } from "./machineOperations";
+import { assertNotExternal } from "./externalMachine";
 import { copyMachineSecrets, createSecret, listSecrets, machineSecretName, SECRET_REF_RE } from "./secretOperations";
 import { getPlatformDefaultClient } from "../storage";
 import { nanoid } from "nanoid";
@@ -292,6 +294,11 @@ export async function setRunspec(
   const defined = Object.fromEntries(
     Object.entries(patch).filter(([, v]) => v !== undefined)
   );
+  // En una adoptada sólo valen secretNames y unit (el reinicio); construir o arrancar
+  // por comando pisaría el arranque de su runbook.
+  if (Object.keys(defined).some((k) => k !== "secretNames" && k !== "unit")) {
+    assertNotExternal(row, "runspec set");
+  }
   const merged = mergeRunspec(row.runspec, defined);
   await db.sandbox.update({ where: { sandboxId }, data: { runspec: merged } });
   // Best-effort mirror — a suspended box must not block a config change.
@@ -432,6 +439,145 @@ export async function unsetMachineSecret(
   return { ok: true, secretNames, ...(await applyNow(ctx, sandboxId, opts.restart)) };
 }
 
+// --- adopt -----------------------------------------------------------------
+
+/**
+ * Lee un dotenv tal como lo consume `docker --env-file`: `KEY=VALUE` por renglón,
+ * el valor LITERAL. Por eso un valor que empieza con comillas no se adivina (docker
+ * las pasaría tal cual y un dotenv de node las quitaría): se rechaza y se dice cuál.
+ */
+export function parseAdoptEnv(text: string): { values: Record<string, string>; problems: string[] } {
+  const values: Record<string, string> = {};
+  const problems: string[] = [];
+  for (const [i, raw] of text.split(/\r?\n/).entries()) {
+    // Como docker: sólo se quita el espacio de la IZQUIERDA del renglón.
+    const line = raw.trimStart();
+    if (!line.trim() || line.startsWith("#")) continue;
+    const m = /^(?:export\s+)?([^=\s]+)=(.*)$/.exec(line);
+    if (!m) {
+      problems.push(`renglón ${i + 1}: se esperaba NOMBRE=valor`);
+      continue;
+    }
+    const [, name, value] = m;
+    if (!/^[A-Z_][A-Z0-9_]*$/.test(name)) problems.push(`${name}: el nombre debe ir en MAYÚSCULAS_CON_GUION_BAJO`);
+    else if (/^["']/.test(value)) problems.push(`${name}: el valor empieza con comillas`);
+    else if (name in values) problems.push(`${name}: viene dos veces`);
+    else values[name] = value;
+  }
+  return { values, problems };
+}
+
+export interface AdoptResult {
+  ok: true;
+  dryRun: boolean;
+  sandboxId: string;
+  name: string;
+  tier: string;
+  template: string;
+  unit?: string;
+  /** Nombres importados al vault desde `importEnvFrom`. Nunca valores. */
+  imported: string[];
+}
+
+/**
+ * Registra en EasyBits una caja que ya corre y no tiene fila (p. ej. migrada desde
+ * Fly por runbook), para que sus secretos vivan en el vault del dueño.
+ *
+ * NO toca la caja: ni la reinicia, ni la vuelve a cobrar, ni le cambia el arranque.
+ * Queda con `managedBy: "external"` (ver externalMachine.ts). Si se pide
+ * `importEnvFrom`, el SERVIDOR lee ese archivo dentro de la caja y lo copia al vault:
+ * los valores nunca pasan por el cliente, y la respuesta sólo lleva nombres.
+ */
+export async function adoptMachine(
+  ctx: AuthContext,
+  params: { sandboxId: string; name: string; tier?: string; unit?: string; importEnvFrom?: string; dryRun?: boolean }
+): Promise<AdoptResult> {
+  requireScope(ctx, "WRITE");
+  const { sandboxId } = params;
+  const notFound = () => {
+    const e: any = new Error(`Machine ${sandboxId} not found`);
+    e.code = "MachineNotFound";
+    e.status = 404;
+    return e;
+  };
+
+  const existing = await db.sandbox.findUnique({ where: { sandboxId } });
+  if (existing && existing.status !== "destroyed") {
+    // Sin oráculo: a quien no es dueño le da igual 404 que «ya existe».
+    if (existing.ownerId !== ctx.user.id) throw notFound();
+    const e: any = new Error(`Machine ${sandboxId} ya está registrada en EasyBits.`);
+    e.code = "AlreadyRegistered";
+    e.status = 409;
+    throw e;
+  }
+
+  // Sin fila, el host contesta con el dueño de la sesión: si la caja no es suya, 404.
+  const host = await getSandbox(ctx, sandboxId).catch(() => null);
+  if (!host || host.ownerId !== ctx.user.id) throw notFound();
+
+  const tier = params.tier ?? host.metadata?.eb_tier ?? "mini";
+  const template = String(host.template ?? "app-host");
+
+  let imported: Record<string, string> = {};
+  if (params.importEnvFrom) {
+    const file = await readFile(ctx, sandboxId, { path: params.importEnvFrom }).catch(() => null);
+    if (!file) {
+      const e: any = new Error(`No se pudo leer ${params.importEnvFrom} dentro de la caja.`);
+      e.code = "ImportEnvUnreadable";
+      e.status = 400;
+      throw e;
+    }
+    const { values, problems } = parseAdoptEnv(file.content);
+    if (problems.length) {
+      const e: any = new Error(`${params.importEnvFrom} no se importó: ${problems.join("; ")}`);
+      e.code = "ImportEnvInvalid";
+      e.status = 400;
+      throw e;
+    }
+    imported = values;
+  }
+
+  const result: AdoptResult = {
+    ok: true,
+    dryRun: !!params.dryRun,
+    sandboxId,
+    name: params.name,
+    tier,
+    template,
+    ...(params.unit ? { unit: params.unit } : {}),
+    imported: Object.keys(imported).sort(),
+  };
+  if (params.dryRun) return result;
+
+  const runspec = runspecSchema.parse({
+    appDir: "/app",
+    ...(params.unit ? { unit: params.unit } : {}),
+    ...(result.imported.length ? { secretNames: result.imported } : {}),
+  });
+  const data = {
+    ownerId: ctx.user.id,
+    persistent: true,
+    tier,
+    template,
+    cpuMode: "shared",
+    name: params.name,
+    status: "running",
+    managedBy: "external",
+    runspec,
+  };
+  // Una fila `destroyed` con el mismo sandboxId se reusa (sandboxId es único).
+  if (existing) await db.sandbox.update({ where: { sandboxId }, data });
+  else await db.sandbox.create({ data: { sandboxId, ...data } });
+
+  for (const name of result.imported) {
+    await createSecret(ctx.user.id, { name: machineSecretName(sandboxId, name), value: imported[name] });
+  }
+  console.warn(
+    `[machines-adopt] ${ctx.user.id} adoptó ${sandboxId} (${params.name}); secretos importados: ${result.imported.join(", ") || "ninguno"}`
+  );
+  return result;
+}
+
 // --- publish ---------------------------------------------------------------
 
 /**
@@ -465,6 +611,7 @@ export async function publishRelease(
 ): Promise<ReleaseRecord> {
   requireScope(ctx, "WRITE");
   const { row, owner } = await requireMachine(ctx, sandboxId);
+  assertNotExternal(row, "releases publish");
   const machineSpec = (row.runspec as Runspec) ?? null;
   // `prebuilt` aquí es POR RELEASE: el tarball lleva el build y el runspec
   // guardado en la fila lo dice, así que rollback/redeploy no reconstruyen.
@@ -1013,6 +1160,7 @@ export async function applyRelease(
 ): Promise<{ sandboxId: string; releaseId: string; version: number; exitCode: number; buildOutput?: string }> {
   requireScope(ctx, "WRITE");
   const { owner, row } = await requireMachine(ctx, sandboxId);
+  assertNotExternal(row, "releases apply");
   const rel = await findOwnedRelease(ctx, releaseId);
   if (rel.status !== "available") {
     const e: any = new Error(`Release ${releaseId} is ${rel.status}, not available`);
@@ -1334,8 +1482,9 @@ export async function launchApp(
   // «Publicar» (que sólo manda sandboxId) le quitaba el `--if-present` al build y
   // reimponía el puerto 3000 a una app configurada en otro.
   const target = params.sandboxId
-    ? await db.sandbox.findUnique({ where: { sandboxId: params.sandboxId }, select: { runspec: true, workBox: true } })
+    ? await db.sandbox.findUnique({ where: { sandboxId: params.sandboxId }, select: { runspec: true, workBox: true, managedBy: true } })
     : null;
+  assertNotExternal(target, "launch");
   // Caja de trabajo de una web app sin publicar (la paga EasyBits): publicarla es el botón
   // «Publicar» del dueño, que primero la vuelve máquina cobrada (promoteWorkBox). Sin esto
   // el agente del builder la publicaba solo y quedaba sirviendo producción gratis (16-oct).

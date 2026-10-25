@@ -274,6 +274,13 @@ export const HELP_ES: Record<string, string> = {
   "edit, then:": "edítalo y luego:",
   // machines get/restart/redeploy/backups/backup/runspec/rm/tiers
   "Show a machine: tier, size, price, status and whether it sleeps": "Muestra una máquina: tier, tamaño, precio, estado y si duerme",
+  "Register a box that already runs (e.g. migrated by hand) so its secrets live in the vault": "Registra una caja que ya corre (p. ej. migrada a mano) para que sus secretos vivan en el vault",
+  "Label for the machine": "Etiqueta de la máquina",
+  "systemd unit that `machines restart` restarts": "Unit de systemd que reinicia `machines restart`",
+  "dotenv file INSIDE the box to copy into the vault (values never leave the server)": "Archivo dotenv DENTRO de la caja que se copia al vault (los valores no salen del servidor)",
+  "Tier to show for it (default: the host's, or mini)": "Tier con que se muestra (default: el del host, o mini)",
+  "Show what would happen without writing anything": "Muestra qué haría sin escribir nada",
+  "Store them without restarting the app (apply later with machines restart)": "Los guarda sin reiniciar la app (aplícalos después con machines restart)",
   "Restart the app's process with the current secrets and runspec (seconds, no build)": "Reinicia el proceso de la app con los secretos y el runspec actuales (segundos, sin build)",
   "Build a NEW machine from a release: recover a lost one, or change its tier (resize)": "Construye una máquina NUEVA desde un release: recupera una perdida o cambia su tier (resize)",
   "Release to build from (default: the machine's newest)": "Release de dónde construir (default: el más nuevo de la máquina)",

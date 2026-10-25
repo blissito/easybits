@@ -296,6 +296,41 @@ export const machines: Command = {
         emit(ctx, m, () => printMachine(m));
       },
     },
+    adopt: {
+      summary: "Register a box that already runs (e.g. migrated by hand) so its secrets live in the vault",
+      usage: "easybits machines adopt <sandbox-id> --name <name> [--unit <unit>] [--import-env <path-in-box>] [--tier <tier>] [--dry-run]",
+      options: {
+        name: { type: "string", value: "name", description: "Label for the machine" },
+        unit: { type: "string", value: "unit", description: "systemd unit that `machines restart` restarts" },
+        "import-env": { type: "string", value: "path", description: "dotenv file INSIDE the box to copy into the vault (values never leave the server)" },
+        tier: { type: "string", value: "tier", description: "Tier to show for it (default: the host's, or mini)" },
+        "dry-run": { type: "boolean", description: "Show what would happen without writing anything" },
+      },
+      examples: [
+        "easybits machines adopt sb_abc123 --name shop-prod --unit app --import-env /app/secrets.env --dry-run",
+        "easybits machines adopt sb_abc123 --name shop-prod --unit app --import-env /app/secrets.env",
+      ],
+      async run(ctx) {
+        const id = need(ctx, 0, "sandbox-id", this.usage);
+        const name = str(ctx, "name");
+        if (!name) throw usageError(t("Give --name <name>.", "Pasa --name <nombre>."), this.usage);
+        const dryRun = bool(ctx, "dry-run");
+        const r = await api<{ dryRun: boolean; sandboxId: string; name: string; tier: string; unit?: string; imported: string[] }>(
+          ctx,
+          "POST",
+          "/machines/adopt",
+          { sandboxId: id, name, unit: str(ctx, "unit"), importEnvFrom: str(ctx, "import-env"), tier: str(ctx, "tier"), dryRun },
+        );
+        emit(ctx, r, () => {
+          console.log(
+            r.dryRun
+              ? t(`Would adopt ${r.sandboxId} as ${r.name} (${r.tier}). Nothing was written.`, `Adoptaría ${r.sandboxId} como ${r.name} (${r.tier}). No se escribió nada.`)
+              : t(`Adopted ${r.sandboxId} as ${r.name}. EasyBits keeps its secrets and restarts it; it never redeploys or releases it.`, `Adoptada ${r.sandboxId} como ${r.name}. EasyBits guarda sus secretos y la reinicia; nunca la redespliega ni la libera.`),
+          );
+          if (r.imported.length) console.log(`${t("Secrets", "Secretos")}: ${r.imported.join(", ")}`);
+        });
+      },
+    },
     restart: {
       summary: "Restart the app's process with the current secrets and runspec (seconds, no build)",
       usage: "easybits machines restart <machine>",
@@ -466,7 +501,10 @@ export const machines: Command = {
     secrets: {
       summary: "App env vars stored encrypted in your vault",
       usage: SECRETS_USAGE,
-      options: { ...ENV_FILE_OPTION },
+      options: {
+        ...ENV_FILE_OPTION,
+        "no-restart": { type: "boolean", description: "Store them without restarting the app (apply later with machines restart)" },
+      },
       examples: [
         "easybits machines secrets ls sb_abc123",
         "easybits machines secrets set sb_abc123 --dotenv .env.production",
@@ -489,7 +527,9 @@ export const machines: Command = {
           const file = str(ctx, "dotenv");
           const values = { ...(file ? await readEnvFile(file, SECRETS_USAGE) : {}), ...pairs(ctx.args.slice(2), SECRETS_USAGE) };
           if (!Object.keys(values).length) throw usageError(t("Give --dotenv <path> (or - for stdin).", "Pasa --dotenv <ruta> (o - para stdin)."), SECRETS_USAGE);
-          const r = await eb.machines.setSecrets(id, values);
+          const r = bool(ctx, "no-restart")
+            ? await api<{ secretNames: string[] }>(ctx, "PUT", `/machines/${encodeURIComponent(id)}/secrets?restart=false`, values)
+            : await eb.machines.setSecrets(id, values);
           emit(ctx, r, () => console.log(t(`Set ${Object.keys(values).join(", ")}. Injected now: ${r.secretNames.join(", ")}`, `Guardados ${Object.keys(values).join(", ")}. Inyectados ahora: ${r.secretNames.join(", ")}`)));
         } else if (action === "unset") {
           const name = need(ctx, 2, "NAME", SECRETS_USAGE);

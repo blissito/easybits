@@ -144,9 +144,9 @@ easybits machines rollback "$ID" "$RELEASE_ID"
 easybits machines logs "$ID" --lines 100 --grep ERROR
 easybits machines secrets set "$ID" --dotenv .env.production     # KEY=VALUE lines
 printf 'DATABASE_URL=%s\n' "$DATABASE_URL" | easybits machines secrets set "$ID" --dotenv -
-easybits machines secrets unset "$ID" DATABASE_URL
-easybits machines secrets ls "$ID" --json           # names only; values are never readable
+easybits machines secrets ls "$ID" --json           # names only; values are never readable (`secrets unset "$ID" NAME` stops injecting one)
 easybits machines restart "$ID" --json              # apply new secrets/runspec: restart, no build (exit 1 if it fails)
+easybits machines adopt "$ID" --name NAME --unit app --import-env /app/secrets.env --dry-run --json   # box already running without a machine row: register it (no redeploy, no release, no backups)
 easybits machines get "$ID" --json                  # {tier, vcpus, memoryMb, diskMb, monthlyMxn, sleep, status…}
 easybits machines tiers --json                      # catalog {tiers:[{key, vcpus, memoryMb, diskMb, priceShared, priceReserved, minPlan}], diskAddon}
 easybits machines runspec get "$ID" --json          # {runspec:{appDir, buildCommand, startCommand, unit, port, prebuilt, dataPaths, excludes, env}}

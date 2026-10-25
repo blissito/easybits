@@ -28,6 +28,7 @@ import type { AuthContext } from "../apiAuth";
 import { requireScope } from "../apiAuth";
 import { db } from "../db";
 import { effectiveOwnerId, execSandboxRaw, listHostBackups, shQuote, writeFile } from "./sandboxOperations";
+import { NOT_EXTERNAL } from "./externalMachine";
 import { getPlatformDefaultClient } from "../storage";
 import type { Runspec } from "./releaseOperations";
 import { nanoid } from "nanoid";
@@ -316,6 +317,8 @@ export async function backupPermanentMachines(): Promise<{
       persistent: true,
       status: "running",
       ...NOT_OPTED_OUT,
+      // Las adoptadas guardan sus datos fuera de /app (p. ej. un volumen de docker).
+      ...NOT_EXTERNAL,
     },
   });
   const failed: { sandboxId: string; error: string }[] = [];
@@ -431,7 +434,7 @@ export async function staleBackupMachines(): Promise<{
   diskOnly: { sandboxId: string; name: string | null; hostRestorePoints: number }[];
 }> {
   const machines = await db.sandbox.findMany({
-    where: { persistent: true, status: "running", ...NOT_OPTED_OUT },
+    where: { persistent: true, status: "running", ...NOT_OPTED_OUT, ...NOT_EXTERNAL },
     select: { sandboxId: true, name: true, runspec: true, backupScope: true, ownerId: true },
   });
   const cutoff = new Date(Date.now() - STALE_ALERT_HOURS * 3600_000);

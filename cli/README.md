@@ -77,6 +77,7 @@ easybits machines secrets ls sb_abc123
 easybits machines secrets set sb_abc123 --dotenv .env.production   # - reads stdin
 easybits machines secrets unset sb_abc123 DATABASE_URL
 easybits machines restart shop       # restart the app with the current secrets/runspec (no build)
+easybits machines adopt sb_abc123 --name shop-prod --unit app --import-env /app/secrets.env --dry-run   # register a box that already runs; its secrets move to the vault
 easybits machines get shop           # tier, size, MXN/month, whether it sleeps
 easybits machines tiers              # the catalog: sizes and prices in MXN
 easybits machines runspec get shop

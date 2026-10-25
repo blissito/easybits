@@ -3,6 +3,7 @@ import { db } from "../db";
 import { sendTransactional } from "../emails/sendTransactional";
 import { restartMachine, type Runspec } from "./releaseOperations";
 import { callHost, type SandboxRecord } from "./sandboxOperations";
+import { NOT_EXTERNAL } from "./externalMachine";
 
 /**
  * Monitor de los sitios vendidos: sondea cada dominio y, si no responde,
@@ -66,7 +67,8 @@ export async function checkHostedDomains(opts: { heal?: boolean } = {}): Promise
   const rows = await db.sandbox.findMany({
     // "provisioning" también: hay filas que se quedaron ahí con la caja ya
     // sirviendo (normi035, réplica -r1). Lo que decide es el host.
-    where: { persistent: true, status: { in: ["running", "provisioning"] } },
+    // Las adoptadas no: el monitor las reiniciaría por su cuenta (ver managedBy).
+    where: { persistent: true, status: { in: ["running", "provisioning"] }, ...NOT_EXTERNAL },
     select: { sandboxId: true, ownerId: true, name: true, runspec: true, sleep: true },
   });
   const probed: DomainProbe[] = [];

@@ -1175,7 +1175,8 @@ function Danger({ machine, fetcher, confirm }: any) {
         </span>
       </Btn>
 
-      <Btn
+      {/* Una adoptada se opera por su runbook: borrarla desde aquí tumbaría producción. */}
+      {!machine.external && <Btn
         tone="danger"
         onClick={() =>
           confirm({
@@ -1193,7 +1194,7 @@ function Danger({ machine, fetcher, confirm }: any) {
           <LuTrash2 className="w-4 h-4" />
           Borrar
         </span>
-      </Btn>
+      </Btn>}
     </div>
   );
 }

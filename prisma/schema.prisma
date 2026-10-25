@@ -1665,6 +1665,12 @@ model Sandbox {
   // respaldos, monitor, protección y /dash/hosting; al publicar, promoteWorkBox la vuelve
   // una máquina vendida (misma caja, misma URL) y esto pasa a false.
   workBox         Boolean?
+  // "external" = caja adoptada con `machines adopt`: ya corría antes de existir
+  // esta fila (p. ej. migrada desde Fly por runbook). EasyBits le guarda el vault
+  // de secretos y la reinicia; nada más: ni la redespliega, ni la respalda, ni la
+  // monitorea, ni la suspende, ni la libera. Ausente en todas las demás.
+  // ⚠️ Mongo: filtrar con `managedBy: { isSet: false }`, nunca `{ not: "external" }`.
+  managedBy       String?
   // adminToken: Bearer for the box's in-VM admin API (:8787), persisted at
   // create when a managed-runtime template (ghostyclaw) is provisioned with env.
   // Used by the sandbox admin passthrough (/api/v2/sandbox/:id/admin) for

@@ -375,6 +375,7 @@ export default [
     // Una app en producción en UNA llamada (el `fly launch` de EasyBits).
     // Antes de machines/:id para que "launch" no se coma el :id.
     route("machines/launch", "routes/api/v2/machines-launch.ts"),
+    route("machines/adopt", "routes/api/v2/machines-adopt.ts"),
     route("machines/:id", "routes/api/v2/machine.ts"),
     // Releases (código reproducible) + backups (datos) de una máquina.
     route("machines/:id/runspec", "routes/api/v2/machine-runspec.ts"),

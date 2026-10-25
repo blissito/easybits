@@ -243,6 +243,7 @@ easybits machines secrets set sb_abc123 --dotenv .env.production   # líneas KEY
 printf 'API_KEY=%s\\n' "$API_KEY" | easybits machines secrets set sb_abc123 --dotenv -
 easybits machines secrets unset sb_abc123 API_KEY
 easybits machines restart sb_abc123                      # reinicia la app con los secretos y el runspec actuales (segundos, sin build)
+easybits machines adopt sb_abc123 --name tienda-prod --unit app --import-env /app/secrets.env   # registra una caja que ya corre: EasyBits guarda sus secretos y la reinicia, nunca la redespliega ni la libera
 easybits machines get tienda                             # tier, tamaño, MXN/mes, si duerme
 easybits machines tiers                                  # el catálogo: tamaños y precio mensual en MXN
 easybits machines runspec get tienda
