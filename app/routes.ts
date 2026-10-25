@@ -581,6 +581,7 @@ export default [
   route("api/v2/sites/:id/chat", "routes/api/v2/sites.$id.chat.ts"),
   route("api/v2/sites/:id/replay", "routes/api/v2/sites.$id.replay.ts"),
   route("api/v2/sites/:id/takeover", "routes/api/v2/sites.$id.takeover.ts"),
+  route("api/v2/sites/:id/browser-answer", "routes/api/v2/sites.$id.browser-answer.ts"),
   route("api/v2/sites/:id/watch", "routes/api/v2/sites.$id.watch.ts"),
   route("api/v2/sites/:id/takeover/:pass/:op", "routes/api/v2/sites.$id.takeover.$pass.$op.ts"),
   // Tema del sitio (botón «Tema», API/SDK/MCP)

@@ -168,6 +168,8 @@ export default function SiteEditor() {
   // Lado derecho: pestañas «Vista previa | Computadora». La computadora toma el lugar de la
   // vista previa (tres columnas apretaban las dos) y se abre sola cuando el agente usa el navegador.
   const [showComputer, setShowComputer] = useState(false);
+  // «Tomar el control» desde la tarjeta del chat: el panel toma el navegador al abrirse.
+  const [takeoverAt, setTakeoverAt] = useState<number | undefined>(undefined);
   const autoComputer = useRef(false);
   // Paso que la persona picó en el chat (de cualquier mensaje) y el que se ve en el panel.
   const [focus, setFocus] = useState<{ msgIdx: number; id: string; at: number } | null>(null);
@@ -509,6 +511,20 @@ export default function SiteEditor() {
       setPreviewKey((k) => k + 1);
     }
   }, [site.id, consume, patchLast]);
+
+  /** «Hazlo tú» / «Cancelar» de «Te necesito aquí». 410 = el agente ya no esperaba: se cierra. */
+  const answerAsk = useCallback(
+    async (sessionId: string, answer: "delegate" | "cancel") => {
+      const r = await fetch(`/api/v2/sites/${site.id}/browser-answer`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ sessionId, answer }),
+      });
+      if (r.status === 410) return { gone: true };
+      if (!r.ok) throw new Error("No se pudo contestar. Intenta otra vez.");
+    },
+    [site.id],
+  );
 
   /** STEER: con el agente trabajando, el mensaje entra a su turno; el evento `steer` del stream lo pinta. */
   const steer = useCallback(async (text: string) => {
@@ -898,6 +914,12 @@ export default function SiteEditor() {
                     onSelectStep={selectStep(i)}
                     onOpenReceipt={openReceipt(i)}
                     onApproval={(a, d) => void decideApproval(i, a, d)}
+                    onTakeover={() => {
+                      setShowComputer(true);
+                      setMobileTab("preview");
+                      setTakeoverAt(Date.now());
+                    }}
+                    onAnswer={answerAsk}
                   />
                 )
               )}
@@ -1143,6 +1165,7 @@ export default function SiteEditor() {
               onWatch={(sid) => requestWatch(site.id, sid)}
               jumpTo={focus}
               onStepChange={setViewedStep}
+              takeoverNow={takeoverAt}
             />
           </div>
         )}

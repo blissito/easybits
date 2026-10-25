@@ -5,6 +5,7 @@ import type { AuthContext } from "~/.server/apiAuth";
 import { getSite, siteGroupId } from "~/.server/core/siteOperations";
 import { liveBrowserSession } from "~/.server/core/siteTurns.server";
 import { takeoverOnBox } from "~/.server/core/renderClient";
+import { holdHandoff } from "~/.server/core/browserHandoff";
 
 // POST /api/v2/sites/:id/takeover {sessionId} — «Tomar el control» del navegador del agente.
 // Sólo una sesión que aparece en el turno EN CURSO de este sitio. Devuelve URLs de EasyBits
@@ -23,7 +24,10 @@ export async function action({ request, params }: Route.ActionArgs) {
   const owner = agent && (await db.user.findUnique({ where: { id: agent.ownerId } }));
   if (!owner) return Response.json({ error: "Agente no encontrado" }, { status: 404 });
   try {
-    return Response.json(await takeoverOnBox({ user: owner, scopes: ["READ", "WRITE"] } as AuthContext, sessionId, site.id));
+    const urls = await takeoverOnBox({ user: owner, scopes: ["READ", "WRITE"] } as AuthContext, sessionId, site.id);
+    // Con la persona al mando, browser_close no le cierra el navegador.
+    holdHandoff(sessionId, urls.expiresInMs);
+    return Response.json(urls);
   } catch (e) {
     return Response.json({ error: (e as Error).message }, { status: 502 });
   }

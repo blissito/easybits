@@ -10,6 +10,7 @@ import { db } from "~/.server/db";
 import type { AuthContext } from "~/.server/apiAuth";
 import { withAdmitRetry } from "./fleetAdmitHold";
 import { routeMessage, steerLiveTurn, FleetAgentAtCapacity } from "./fleetAgentOperations";
+import { answerHumanAskForGroup } from "./browserHandoff";
 import { ensureSiteMachine, getSite, siteGroupId, siteTurnPrompt } from "./siteOperations";
 import { recordFleetTurnUsage } from "./fleetUsage";
 import { getEngineForAgent } from "~/lib/fleetEngines";
@@ -473,10 +474,15 @@ export async function steerAgentTurn(groupId: string, text: string): Promise<"in
     const row = await db.fleetTurn.findFirst({ where: { groupId, state: "running" }, select: { turnId: true } }).catch(() => null);
     return row ? "elsewhere" : "not_live";
   }
-  const r = await steerLiveTurn(l.fleetAgentId, groupId, text).catch((e) => {
-    console.error("[steer]", groupId, e instanceof Error ? e.message : e);
-    return "unsupported" as const;
-  });
+  // El agente espera a la persona en su navegador (`browser_ask_human`): lo que escribe ES la
+  // respuesta y le llega como resultado de esa tool, sin tomar el control (aunque el motor no
+  // sepa steer). Por steer lo leería hasta que venciera la espera.
+  const r = answerHumanAskForGroup(groupId, { answered: "message", text })
+    ? ("injected" as const)
+    : await steerLiveTurn(l.fleetAgentId, groupId, text).catch((e) => {
+        console.error("[steer]", groupId, e instanceof Error ? e.message : e);
+        return "unsupported" as const;
+      });
   if (r !== "injected") return r;
   // Corte en el texto: lo que el agente diga después ya responde al mensaje nuevo.
   if (l.text.trim() && l.cortes[l.cortes.length - 1] !== l.text.length) l.cortes.push(l.text.length);

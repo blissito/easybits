@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { Streamdown } from "streamdown";
 import { LuCheck } from "react-icons/lu";
-import { ImageGrid, TurnReceipt, TurnSummary, useImageLinks } from "@ghostystudio/computer/react";
+import { ComputerCard, ImageGrid, TurnReceipt, TurnSummary, useImageLinks } from "@ghostystudio/computer/react";
+import { computerCard, pendingAsk } from "@ghostystudio/computer";
 import { partirNarracion } from "~/lib/narracion";
 import { isPlumbing, stepVerb, upsertStep, type AgentStep } from "~/lib/agentSteps";
 
@@ -65,6 +66,8 @@ export function BotMessage({
   onSelectStep,
   onApproval,
   onOpenReceipt,
+  onTakeover,
+  onAnswer,
 }: {
   msg: Msg;
   live: boolean;
@@ -76,6 +79,10 @@ export function BotMessage({
   onApproval?: (a: Approval, decision: "approve" | "deny") => void;
   /** «▶ Ver cómo lo revisé»: abre la computadora repitiendo el turno. */
   onOpenReceipt?: () => void;
+  /** «Te necesito aquí» → «Tomar el control»: abre la computadora y toma el navegador. */
+  onTakeover?: () => void;
+  /** «Hazlo tú» / «Cancelar» del pedido de ayuda, sin tomar el control. */
+  onAnswer?: (sessionId: string, answer: "delegate" | "cancel") => Promise<void | { gone?: boolean }>;
 }) {
   const { pasos, resto } = partirNarracion(msg.text, msg.cortes);
   const secs = useElapsed(live);
@@ -145,6 +152,13 @@ export function BotMessage({
             {liveStatus(msg.tools, pasos.length)}…{secs >= 5 ? ` ${secs} s` : ""}
           </span>
         )
+      )}
+      {/* El agente espera a la persona en su navegador: la tarjeta lo dice en el chat, con
+          «Tomar el control», «Hazlo tú» y «Cancelar» (escribir en el chat también le contesta). */}
+      {live && pendingAsk(steps) && (
+        <div className="mt-3">
+          <ComputerCard card={computerCard(steps, true) ?? { n: steps.length, err: 0, ms: 0, live: true }} steps={steps} live onOpen={() => onTakeover?.()} onAnswer={onAnswer} />
+        </div>
       )}
       {(msg.approvals ?? []).map((a) => (
         <ApprovalCard key={a.id} a={a} onDecide={onApproval} />

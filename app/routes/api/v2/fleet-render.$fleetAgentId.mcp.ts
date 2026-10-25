@@ -19,7 +19,7 @@ import { randomUUID } from "node:crypto";
 import { consumeService } from "~/.server/services/consume";
 import { QuotaExceededError } from "~/.server/services/errors";
 import { INTERACT_COST } from "~/.server/services/providers/brightdata";
-import { releaseHandoff, waitForRelease } from "~/.server/core/browserHandoff";
+import { closeHumanAsk, humanHasControl, openHumanAsk, releaseHandoff, takeHumanAnswer, waitForRelease, type HumanAnswer } from "~/.server/core/browserHandoff";
 
 // Dedicated, always-on `render` MCP server for FleetAgents — Streamable-HTTP.
 // Injected per-turn into EVERY fleet agent (NOT gated by the easybits builtin
@@ -488,9 +488,17 @@ function buildRenderServer(ctx: AuthContext, panel?: { fleetAgentId: string; gro
     }
   );
 
+  // Lo que hace el agente con lo que la persona contestó sin tomar el control.
+  const answerHint = (a: HumanAnswer) =>
+    a.answered === "cancel"
+      ? "La persona canceló el pedido de ayuda. Deja la tarea: cierra el navegador con browser_close y dile en una sola línea que lo dejaste."
+      : a.answered === "delegate"
+        ? "La persona te pidió que lo hagas tú («Hazlo tú»). Sigue solo en este mismo turno y confirma al terminar. Nunca escribas contraseñas ni tarjetas reales ni las pidas por el chat: para eso vuelve a llamar browser_ask_human."
+        : `La persona te contestó por el chat en vez de tomar el control: «${a.text}». Haz lo que pide; si te autoriza a seguir, sigue tú en este mismo turno. Nunca pidas contraseñas ni tarjetas por el chat. Si te dice que lo dejes, cierra el navegador y dilo en una línea.`;
+
   tool(
     "browser_ask_human",
-    "Cuando la página necesita a la persona (iniciar sesión, un captcha, un código de verificación, confirmar un pago, cualquier dato que no debes escribir tú), llama ESTA tool en vez de terminar tu respuesta. La persona ve el aviso con «Tomar el control» en la computadora del agente, lo resuelve en ese mismo navegador y te lo devuelve: la tool regresa `done: true` con la página como quedó y sigues en el mismo turno. Si regresa `waiting: true`, vuélvela a llamar igual para seguir esperando (hasta ~10 min en total). `instructions`: qué tiene que hacer, en una frase corta y clara («Inicia sesión con tu cuenta de Deník»).",
+    "Cuando la página necesita a la persona (iniciar sesión, un captcha, un código de verificación, confirmar un pago, cualquier dato que no debes escribir tú), llama ESTA tool en vez de terminar tu respuesta. La persona ve el aviso «Te necesito aquí» con «Tomar el control», lo resuelve en ese mismo navegador y te lo devuelve: la tool regresa `done: true` con la página como quedó y sigues en el mismo turno. La persona también puede contestar SIN tomar el control, y entonces regresa `answered`: `message` + `message` (lo que escribió en el chat: haz lo que pide), `delegate` («Hazlo tú»: sigue solo) o `cancel` (deja la tarea, cierra el navegador y dilo en una línea). Si regresa `waiting: true`, vuélvela a llamar igual para seguir esperando (hasta ~10 min en total). `instructions`: qué tiene que hacer, en una frase corta y clara («Inicia sesión con tu cuenta de Deník»).",
     {
       session_id: z.string().describe("el sessionId de browser_open"),
       instructions: z.string().describe("qué tiene que hacer la persona, en una frase"),
@@ -498,28 +506,51 @@ function buildRenderServer(ctx: AuthContext, panel?: { fleetAgentId: string; gro
       screenshot: z.boolean().optional(),
     },
     async (p) => {
+      const sid = p.session_id;
+      // La espera se suelta sola si la persona pica «Detener» (el turno deja de vivir aquí).
+      const stop = new AbortController();
+      let poll: ReturnType<typeof setInterval> | undefined;
       try {
-        const sid = p.session_id;
         const instructions = p.instructions.trim().slice(0, 300) || "El agente necesita tu ayuda en esta página.";
         const first = askedAt.get(sid) ?? Date.now();
         askedAt.set(sid, first);
         if (askedAt.size > 200) askedAt.delete(askedAt.keys().next().value!);
         // La captura de ahora con el aviso: el panel enseña «Tomar el control» al frente.
         await browserReply(await browserOnBox(ctx, "look", { sessionId: sid, screenshot: true, fullPage: true }), { tool: "browser_ask_human", needsHuman: instructions });
-        const released = await waitForRelease(sid, Math.min(ASK_CHUNK_MS, Math.max(0, first + ASK_TOTAL_MS - Date.now())));
+        if (panel && hasLiveTurn(panel.fleetAgentId, panel.groupId)) {
+          openHumanAsk(panel.groupId, sid);
+          poll = setInterval(() => !hasLiveTurn(panel.fleetAgentId, panel.groupId) && stop.abort(), 2000);
+        }
+        const released = await waitForRelease(sid, Math.min(ASK_CHUNK_MS, Math.max(0, first + ASK_TOTAL_MS - Date.now())), stop.signal);
+        const answer = takeHumanAnswer(sid);
+        if (panel) closeHumanAsk(panel.groupId, sid);
+        if (stop.signal.aborted) {
+          askedAt.delete(sid);
+          return ok({ done: false, reason: "stopped", hint: "El turno se detuvo mientras esperabas a la persona." });
+        }
         const v = await browserOnBox(ctx, "look", { sessionId: sid, screenshot: true, fullPage: true });
         if (released || Date.now() - first >= ASK_TOTAL_MS) askedAt.delete(sid);
+        if (answer) {
+          const said = answer.answered === "message" ? { answered: "message", message: answer.text } : answer;
+          return browserReply(v, { wanted: p.screenshot, tool: "browser_ask_human", extra: { done: false, ...said }, hint: answerHint(answer) });
+        }
         if (released) return browserReply(v, { wanted: p.screenshot, tool: "browser_ask_human", extra: { done: true }, hint: "La persona terminó y te devolvió el control. Revisa la página y sigue." });
         if (!askedAt.has(sid)) return browserReply(v, { wanted: p.screenshot, tool: "browser_ask_human", extra: { done: false, reason: "timeout" }, hint: "La persona no respondió en 10 min. Cierra el navegador y dile en tu respuesta qué falta para seguir." });
         return browserReply(v, { wanted: p.screenshot, tool: "browser_ask_human", needsHuman: instructions, extra: { done: false, waiting: true }, hint: "La persona todavía no termina. Vuelve a llamar browser_ask_human con lo mismo para seguir esperando." });
       } catch (e) {
         return browserFail(e);
+      } finally {
+        clearInterval(poll);
       }
     }
   );
 
   tool("browser_close", "Cierra una sesión de navegador cuando terminaste. Libera la caja.", { session_id: z.string() }, async (p) => {
     try {
+      // Con la persona al mando no se le cierra el navegador en la cara.
+      if (humanHasControl(p.session_id)) {
+        return ok({ closed: false, humanInControl: true, hint: "La persona tiene el control de este navegador. Espera a que te lo devuelva con browser_ask_human antes de cerrarlo." });
+      }
       askedAt.delete(p.session_id);
       releaseHandoff(p.session_id);
       await browserOnBox(ctx, "close", { sessionId: p.session_id });
