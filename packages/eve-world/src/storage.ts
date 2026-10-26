@@ -12,6 +12,7 @@ import type {
   CreateEventParams,
   Event,
   EventResult,
+  EventsResolveData,
   ExperimentalSetAttributesResult,
   GetHookParams,
   GetStepParams,
@@ -36,6 +37,7 @@ import {
   EVENT_ID_PREFIX,
   EVENT_ID_BODY_LENGTH,
   EventSchema,
+  entityResolveData,
   eventIdToSlot,
   FIRST_EVENT_SLOT,
   getMaxEventsPerRun,
@@ -141,12 +143,12 @@ async function openEventSlots(db: Db, runId: string) {
   return slotToEventId(FIRST_EVENT_SLOT);
 }
 
-function parseEventRow(row: EventRow, resolveData: ResolveData): Event {
+function parseEventRow(row: EventRow, resolveData: EventsResolveData): Event {
   return stripEventDataRefs(EventSchema.parse(compact(row)), resolveData);
 }
 
 /** Mitad "report" de bump-and-report: eventos entre el slot pedido y el ocupado. */
-async function reportSkippedSlots(db: Db, runId: string, committedEventId: string, askedFor: number, resolveData: ResolveData) {
+async function reportSkippedSlots(db: Db, runId: string, committedEventId: string, askedFor: number, resolveData: EventsResolveData) {
   const committedSlot = eventIdToSlot(committedEventId);
   if (committedSlot === null || askedFor < FIRST_EVENT_SLOT || committedSlot <= askedFor + 1) return undefined;
   const rows = await db
@@ -308,7 +310,7 @@ async function handleLegacyEvent(
       const [updatedRun] = await drizzle.select().from(Schema.runs).where(eq(Schema.runs.runId, runId)).limit(1);
       await purgeRunUserDataIfZeroRetention(drizzle, runId, updatedRun?.attributes, now);
       runStatus?.notify(runId);
-      return { run: updatedRun ? (filterRunData(parseRunRow(updatedRun), resolveData) as WorkflowRun) : undefined };
+      return { run: updatedRun ? (filterRunData(parseRunRow(updatedRun), entityResolveData(resolveData)) as WorkflowRun) : undefined };
     }
     case 'wait_completed':
     case 'hook_received': {

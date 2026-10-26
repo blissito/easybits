@@ -23,13 +23,14 @@
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
-    "smoke": "tsx scripts/smoke.ts"
+    "test": "vitest run --exclude test/spec.test.ts",
+    "smoke": "tsx scripts/smoke.ts",
+    "test:spec": "npm run build && vitest run test/spec.test.ts"
   },
   "dependencies": {
     "@libsql/client": "^0.18.0",
-    "@workflow/errors": "5.0.0-beta.22",
-    "@workflow/world": "5.0.0-beta.37",
+    "@workflow/errors": "5.0.4",
+    "@workflow/world": "5.0.4",
     "cbor-x": "^1.6.0",
     "drizzle-orm": "^0.45.2",
     "ulid": "~3.0.1",
@@ -37,9 +38,10 @@
   },
   "devDependencies": {
     "@types/node": "^22.19.0",
+    "@workflow/world-testing": "^5.0.5",
     "tsx": "^4.20.0",
     "typescript": "^5.9.0",
-    "vitest": "^3.2.0"
+    "vitest": "^4.1.11"
   },
   "publishConfig": {
     "access": "public"

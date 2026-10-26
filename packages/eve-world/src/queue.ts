@@ -181,7 +181,8 @@ export function createQueue(config: ResolvedConfig, drizzle: Drizzle, deliverOve
       try {
         const r = await nodeHttpFetch(url, { method: 'GET', agents: httpAgents, headersTimeoutMs: 2_000, bodyTimeoutMs: 2_000 });
         await r.text().catch(() => {});
-        if (r.ok) return;
+        // 404: el host no es eve (no expone /eve/v1/health) pero ya escucha.
+        if (r.ok || r.status === 404) return;
       } catch {
         // aún no escucha
       }
