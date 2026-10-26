@@ -18,6 +18,13 @@ agente nativo o no:
   recibe el adaptador). Cada app sólo las registra en su MCP o registro de tools.
 - Se desarrolla en la primera app que lo necesita y, al cerrarlo, **se extrae a un paquete
   publicable**; las apps lo consumen como clientes (patrón `@ghostystudio/pointer`: una sola fuente).
+- **Una sola pieza por capacidad, la misma en todas las apps.** Antes de construir algo, busca si ya
+  existe en otro producto nuestro y úsalo: **chat de agente = `ghostykit`** (`<Piloto>`, AG-UI),
+  señalar = `@ghostystudio/pointer`, revisar HTML con capturas = render-svc de gs
+  (`/api/v2/partner/pages/inspect` y `/shot`). Si a la pieza le falta algo, se mejora la pieza, no se
+  hace una copia local. Ghostykit es el ejemplo de la unificación que buscamos (no porque sea lo
+  mejor, sino porque es UNA). Caso que lo motivó (26-oct): Nik en Deník seguía con chat propio y
+  llegaba incompleto: sin steer y con el scroll roto, cuando los otros chats ya lo tenían.
 - Primer caso: las campañas de correo de Deník (bloques, pieles MJML de la comunidad, plantillas,
   componentes, importar plantillas propias), que también vivirán en MailMask.
 
