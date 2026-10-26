@@ -6,6 +6,21 @@ La plataforma donde un agente ejecuta código en su propia microVM, busca y lee 
 
 ⚠️ **El conteo de tools NO se escribe a mano en ningún lado.** El catálogo (`all-mcp-tools` y `tool-groups` en los docs, y `/api/tools.json`) se DERIVA del servidor MCP en `app/.server/docs/toolCatalog.ts`. Antes había cuatro cifras distintas conviviendo (99 / 118 / 158 / "200+") mientras el servidor registraba 246, y familias enteras como `web_*` no aparecían en su propia documentación. Si añades tools, no actualices prosa: `test/docsCatalog.test.ts` falla si el catálogo se desincroniza.
 
+## 🧩 Mini-sistemas acoplables (regla de bliss, 26-oct-2026)
+
+Todo feature nuevo se construye como **mini-sistema independiente**, listo para acoplarse a webapps
+nuestras (Deník, MailMask, EasyBits, Ghosty Studio, Formmy) o de terceros, y para conectarse a un
+agente nativo o no:
+
+- **Núcleo sin imports de la app**: nada de DB/ORM, storage, sesión ni rutas. Lo específico entra
+  por **adaptadores inyectados** (guardar imágenes, datos del negocio, envío).
+- **Tools de agente definidas una vez y agnósticas** (nombre, descripción, JSON Schema y handler que
+  recibe el adaptador). Cada app sólo las registra en su MCP o registro de tools.
+- Se desarrolla en la primera app que lo necesita y, al cerrarlo, **se extrae a un paquete
+  publicable**; las apps lo consumen como clientes (patrón `@ghostystudio/pointer`: una sola fuente).
+- Primer caso: las campañas de correo de Deník (bloques, pieles MJML de la comunidad, plantillas,
+  componentes, importar plantillas propias), que también vivirán en MailMask.
+
 ## Commands
 - `npm run dev` — local dev server
 - `npm run build` — production build
