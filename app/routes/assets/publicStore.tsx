@@ -7,7 +7,6 @@ import type { Asset } from "@prisma/client";
 import { StoreTemplate } from "../store/storeTemplate";
 import getBasicMetaTags from "~/utils/getBasicMetaTags";
 import { useGoogleAnalytics } from "~/hooks/useGoogleAnalytics";
-import { useTelemetry } from "~/hooks/useTelemetry";
 
 export const loader = async ({ request }: Route.LoaderArgs) => {
   const url = new URL(request.url);
@@ -77,7 +76,6 @@ export const meta = ({ data }: Route.MetaArgs) => {
 
 export default function Page({ loaderData }: Route.ComponentProps) {
   const { assets, owner } = loaderData;
-  useTelemetry({ ownerId: owner.id, linkType: "store" });
   owner?.storeConfig?.googleAnalyticsTrackingId &&
     useGoogleAnalytics({
       trackingId: owner.storeConfig.googleAnalyticsTrackingId,

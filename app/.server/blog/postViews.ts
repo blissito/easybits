@@ -161,7 +161,7 @@ export function median(values: number[]): number | null {
 
 /**
  * Agrega en memoria, no con `groupBy`: el repo ya documenta que groupBy revienta en
- * Prisma+MongoDB con campos nullable (ver users.tsx y telemetry.ts), y aquí casi
+ * Prisma+MongoDB con campos nullable (ver users.tsx), y aquí casi
  * todos lo son. El volumen de un blog cabe de sobra.
  */
 export function aggregate(

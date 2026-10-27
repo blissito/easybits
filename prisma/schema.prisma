@@ -1022,30 +1022,11 @@ model BrandKit {
   @@index([ownerId])
 }
 
-model TelemetryEvent {
-  id        String   @id @default(auto()) @map("_id") @db.ObjectId
-  ownerId   String?  @db.ObjectId
-  assetId   String?  @db.ObjectId
-  linkType  String // 'store' | 'assetDetail'
-  eventType String // 'visit'
-  timestamp DateTime
-  sessionId String?
-  ip        String?
-  metadata  Json?
-
-  @@index([ownerId])
-  @@index([assetId])
-  @@index([timestamp])
-  @@index([ownerId, timestamp])
-}
-
-// Una lectura de un post del blog. Modelo propio y no TelemetryEvent porque aquel
-// exige un ownerId (un .mdx no tiene dueño) y guarda la URL dentro de un JSON sin
-// índice, así que no se puede agrupar por post sin recorrer la colección entera.
+// Una lectura de un post del blog: agrupable por post (un .mdx no tiene dueño).
 //
 // Deliberadamente SIN ip ni userAgent: el user-agent se usa para descartar bots y
-// se tira. TelemetryEvent guarda IPs crudas para siempre y sin retención; no vale
-// la pena repetir eso para saber qué post se leyó.
+// se tira. La telemetría de visitas (TelemetryEvent, IPs crudas sin retención) llenó
+// la base de Atlas y se quitó el 27-oct-2026; no repetir eso para saber qué post se leyó.
 model PostView {
   id String @id @default(auto()) @map("_id") @db.ObjectId
   // Lo genera el navegador. Une las dos escrituras (alta al abrir, cierre al
