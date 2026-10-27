@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // Lo que hace al toolset web vendible «para producción»: ningún corte mudo, aviso por
-// webhook al terminar un extract (una sola vez) y un canario que avisa a la 2.ª falla.
+// webhook al terminar un extract (una sola vez) y un canario que guarda su estado para /status (sin correo desde el 25-oct-2026).
 
 const db = vi.hoisted(() => ({
   webJob: { findFirst: vi.fn(), findMany: vi.fn(), create: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
@@ -203,18 +203,18 @@ describe("canario", () => {
     expect(canaryStatus({ search: bad, fetch: bad, meli: bad })).toBe("down");
   });
 
-  it("avisa a la SEGUNDA falla seguida, no a la primera, y otra vez al recuperarse", async () => {
+  it("cuenta las fallas seguidas para /status y ya no manda correo (avisos apagados el 25-oct-2026)", async () => {
     // Todo el proveedor responde 500 → las tres sondas fallan.
     vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response("boom", { status: 500 }));
     db.appConfig.findUnique.mockResolvedValue(null);
     const first = await runWebCanary();
-    expect(first).toMatchObject({ status: "down", failStreak: 1, notified: false });
+    expect(first).toMatchObject({ status: "down", failStreak: 1 });
 
     db.appConfig.findUnique.mockResolvedValue({ value: { failStreak: 1 } });
-    sendTransactional.mockResolvedValue(undefined);
     const second = await runWebCanary();
-    expect(second).toMatchObject({ failStreak: 2, notified: true });
-    expect(sendTransactional.mock.calls[0][0].subject).toMatch(/CAÍDO/);
+    expect(second).toMatchObject({ status: "down", failStreak: 2 });
+    expect(db.appConfig.upsert).toHaveBeenLastCalledWith(expect.objectContaining({ update: { value: second } }));
+    expect(sendTransactional).not.toHaveBeenCalled();
   });
 
   it("con el proveedor sano da verde (sin falsas alarmas): HTML real de MELI = 48 productos", async () => {
