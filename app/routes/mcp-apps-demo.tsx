@@ -244,7 +244,7 @@ export const loader = ({ params }: Route.LoaderArgs) => {
   return { app, demoHtml, configJson: JSON.stringify(CONFIG_JSON[app.slug], null, 2) };
 };
 
-export const meta = ({ data: loaderData }: Route.MetaArgs) => {
+export const meta = ({ loaderData }: Route.MetaArgs) => {
   const d = loaderData as any;
   if (!d?.app) return [];
   return getBasicMetaTags({

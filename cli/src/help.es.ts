@@ -261,7 +261,7 @@ export const HELP_ES: Record<string, string> = {
   "Site name": "Nombre del sitio",
   "webapp (default: its own machine, published later) or static (CDN website)": "webapp (default: su propia máquina, se publica después) o static (website en el CDN)",
   "Web app stack: tanstack (default), next, react-router, remix, nuxt, sveltekit, astro, elysia": "Stack de la web app: tanstack (default), next, react-router, remix, nuxt, sveltekit, astro, elysia",
-  "Starting template (tanstack/react-router): consultorio, despacho, portafolio, lanzamiento": "Plantilla de partida (tanstack/react-router): consultorio, despacho, portafolio, lanzamiento",
+  "Starting template (tanstack/react-router): consultorio, despacho, portafolio, lanzamiento, agente": "Plantilla de partida (tanstack/react-router): consultorio, despacho, portafolio, lanzamiento, agente",
   "What builds it: claude (your Claude), easybits (included)… see sites model": "Qué lo construye: claude (tu Claude), easybits (incluido)… ver sites model",
   "Model of that engine; applies to all your sites with that engine": "Modelo de ese motor; vale para todos tus sitios con ese motor",
   "See or change what builds a site: engine and model (the model applies to all your sites with that engine)": "Ve o cambia qué construye un sitio: motor y modelo (el modelo vale para todos tus sitios con ese motor)",

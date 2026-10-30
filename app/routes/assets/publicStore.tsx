@@ -52,9 +52,9 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
   return { assets, owner };
 };
 
-export const meta = ({ data }: Route.MetaArgs) => {
-  // Get user info from the data
-  const user = data?.user;
+export const meta = ({ loaderData }: Route.MetaArgs) => {
+  // Get user info from the loaderData
+  const user = loaderData?.user;
 
   return getBasicMetaTags({
     title:

@@ -60,10 +60,10 @@ export const headers: Route.HeadersFunction = () => ({
   Link: '<https://www.easybits.cloud/docs.md>; rel="alternate"; type="text/markdown"',
 });
 
-export const meta = ({ data }: Route.MetaArgs) => [
+export const meta = ({ loaderData }: Route.MetaArgs) => [
   ...getBasicMetaTags({
     title: "EasyBits API Docs — La nube para expertos IA",
-    description: `Referencia completa de EasyBits: REST API v2, SDK y MCP con ${data?.toolCount ?? 200} tools para agentes — sandboxes, web, archivos, bases de datos, documentos, hosting y WhatsApp.`,
+    description: `Referencia completa de EasyBits: REST API v2, SDK y MCP con ${loaderData?.toolCount ?? 200} tools para agentes — sandboxes, web, archivos, bases de datos, documentos, hosting y WhatsApp.`,
   }),
   { tagName: "link", rel: "canonical", href: "https://www.easybits.cloud/docs" },
   { tagName: "link", rel: "alternate", hreflang: "es", href: "https://www.easybits.cloud/docs" },

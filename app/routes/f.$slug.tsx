@@ -26,8 +26,8 @@ function fieldVisible(field: { showIf?: { field: string; equals: string } | null
   return typeof dep === "string" && dep === field.showIf.equals;
 }
 
-export function meta({ data }: Route.MetaArgs) {
-  return [{ title: data?.name ? `${data.name} — EasyBits Forms` : "Formulario" }];
+export function meta({ loaderData }: Route.MetaArgs) {
+  return [{ title: loaderData?.name ? `${loaderData.name} — EasyBits Forms` : "Formulario" }];
 }
 
 export async function loader({ params }: Route.LoaderArgs) {
