@@ -13,8 +13,8 @@ import { getReviews } from "~/.server/reviews";
 import { useFetcher } from "react-router";
 import toast from "react-hot-toast";
 
-export const meta = ({ data }: Route.MetaArgs) => {
-  const { asset } = data as { asset: Asset & { user: any } };
+export const meta = ({ loaderData }: Route.MetaArgs) => {
+  const { asset } = loaderData as { asset: Asset & { user: any } };
   return getBasicMetaTags({
     title: asset.title,
     description: asset.description

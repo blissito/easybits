@@ -109,6 +109,10 @@ async function run() {
   const build = await import(url.pathToFileURL(buildPath).href);
 
   const app = express();
+  // Caddy is the only hop in front of the app. Trusting its X-Forwarded-Proto and
+  // X-Forwarded-Host makes request.url match the public Origin; without it the
+  // adapter builds http://<internal host> and react-router v8 answers 400 to every action.
+  app.set("trust proxy", 1);
   app.disable("x-powered-by");
   app.use(compression());
 

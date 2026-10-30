@@ -37,7 +37,7 @@ export const clientLoader = async ({ serverLoader, params }: Route.ClientLoaderA
 // sólo aparecía al navegar dentro del sitio y, con sesión, las barras salían vacías.
 clientLoader.hydrate = true as const;
 
-export const meta = ({ data: d }: Route.MetaArgs) =>
+export const meta = ({ loaderData: d }: Route.MetaArgs) =>
   getBasicMetaTags({
     title: `${d?.course.title ?? "Curso"} — Academia EasyBits`,
     description: d?.course.description ?? "",

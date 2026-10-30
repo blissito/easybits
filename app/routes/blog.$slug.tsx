@@ -110,20 +110,20 @@ export const loader = async ({ params, request }: Route.LoaderArgs) => {
   }
 };
 
-export const meta = ({ data }: Route.MetaArgs) => {
-  if (!data?.post) {
+export const meta = ({ loaderData }: Route.MetaArgs) => {
+  if (!loaderData?.post) {
     return [
       { title: "Post no encontrado | EasyBits" },
       { name: "description", content: "El post que buscas no existe." },
     ];
   }
 
-  const { post } = data;
+  const { post } = loaderData;
   const fallbackImage = "https://www.easybits.cloud/logo-eb.svg";
   const imageUrl = getAbsoluteImageUrl(post.featuredImage) || fallbackImage;
 
   const canonical = `https://www.easybits.cloud/blog/${post.slug}`;
-  const langs: string[] = (data as any).langs ?? ["es"];
+  const langs: string[] = (loaderData as any).langs ?? ["es"];
   // hreflang: le dice al buscador que las dos URLs son el MISMO texto en otro
   // idioma. Sin esto compiten entre sí en vez de sumar.
   const alternates = langs.length > 1

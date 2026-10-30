@@ -31,7 +31,7 @@ export const loader = async ({ params }: Route.LoaderArgs) => {
   return { blocked: null as { message: string; reason: string } | null, name, course: { title: course.title, outcome: course.outcome, slug: course.slug }, lessons: progress.lessons, issuedAt: issuedAt.toISOString().slice(0, 10), folio: params.token.replace(/[^a-zA-Z0-9]/g, "").slice(0, 10).toUpperCase() };
 };
 
-export const meta = ({ data: d }: Route.MetaArgs) =>
+export const meta = ({ loaderData: d }: Route.MetaArgs) =>
   getBasicMetaTags({
     title: `${d?.name ?? ""} completó ${d?.course.title ?? ""} — Academia EasyBits`,
     description: d?.course.outcome ?? "",
