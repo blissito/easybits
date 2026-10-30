@@ -11,7 +11,6 @@ import type { Asset } from "@prisma/client";
 import { BrutalButton } from "~/components/common/BrutalButton";
 import { getReviews } from "~/.server/reviews";
 import { useFetcher } from "react-router";
-import { useTelemetry } from "~/hooks/useTelemetry";
 import toast from "react-hot-toast";
 
 export const meta = ({ loaderData }: Route.MetaArgs) => {
@@ -202,13 +201,6 @@ export default function Page({ loaderData }: Route.ComponentProps) {
     : (asset.price || 0) <= 0
     ? "Suscribirse gratis"
     : "Comprar";
-
-  // register visit
-  useTelemetry({
-    assetId: asset.id,
-    ownerId: asset.userId,
-    linkType: "assetDetail",
-  });
 
   return (
     <article>

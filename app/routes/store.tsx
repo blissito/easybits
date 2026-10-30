@@ -5,7 +5,6 @@ import GlobeIcon from "/icons/globe.svg";
 import { DNSModal, useDisclosure } from "~/hooks/DNSToolkit";
 import type { Route } from "./+types/store";
 import { useEffect } from "react";
-import { useTelemetry } from "~/hooks/useTelemetry";
 
 export const loader = async ({ request }: Route.LoaderArgs) => {
   const user = await getUserOrRedirect(request);
@@ -26,7 +25,6 @@ export default function Store({ loaderData }: Route.ComponentProps) {
   const { assets, user } = loaderData;
   const { onOpen, isOpen, onClose } = useDisclosure({ user });
 
-  useTelemetry({ ownerId: user.id, linkType: "store" });
 
   return (
     <div className=" w-full flex justify-center">

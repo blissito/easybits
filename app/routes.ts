@@ -533,8 +533,6 @@ export default [
   ]),
   // v1
   ...prefix("api/v1", [
-    // Telemetry
-    route("telemetry", "routes/api/v1/telemetry/telemetry.tsx"),
     // Lectura del blog (vistas, profundidad, segundos). Nombre neutral a
     // propósito: los bloqueadores filtran "analytics"/"telemetry" por patrón.
     route("blog-read", "routes/api/v1/blog-read.ts"),

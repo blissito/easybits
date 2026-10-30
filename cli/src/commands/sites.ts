@@ -39,7 +39,7 @@ export type CreatedSite = {
 // Espejo de app/lib/siteStacks.ts y app/lib/siteTemplates.ts (sites.test.ts los compara).
 // El servidor cae en silencio a tanstack con un stack desconocido: aquí se rechaza antes.
 export const SITE_STACKS = ["tanstack", "next", "react-router", "remix", "nuxt", "sveltekit", "astro", "elysia"] as const;
-export const SITE_TEMPLATES = ["consultorio", "despacho", "portafolio", "lanzamiento"] as const;
+export const SITE_TEMPLATES = ["consultorio", "despacho", "portafolio", "lanzamiento", "agente"] as const;
 /** Stacks cuya caja trae las plantillas; el resto arranca con su starter vacío. */
 export const TEMPLATE_STACKS = ["tanstack", "react-router"] as const;
 
@@ -137,7 +137,7 @@ export const sites: Command = {
         name: { type: "string", value: "name", description: "Site name" },
         kind: { type: "string", value: "kind", description: "webapp (default: its own machine, published later) or static (CDN website)" },
         stack: { type: "string", value: "stack", description: "Web app stack: tanstack (default), next, react-router, remix, nuxt, sveltekit, astro, elysia" },
-        template: { type: "string", value: "key", description: "Starting template (tanstack/react-router): consultorio, despacho, portafolio, lanzamiento" },
+        template: { type: "string", value: "key", description: "Starting template (tanstack/react-router): consultorio, despacho, portafolio, lanzamiento, agente" },
         engine: { type: "string", value: "id", description: "What builds it: claude (your Claude), easybits (included)… see sites model" },
         model: { type: "string", value: "id", description: "Model of that engine; applies to all your sites with that engine" },
       },

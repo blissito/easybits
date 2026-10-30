@@ -5,7 +5,7 @@ license: MIT
 compatibility: Needs Node 22+ (npx is enough), network access to https://www.easybits.cloud and an EasyBits API key
 metadata:
   author: easybits
-  version: "1.33"
+  version: "1.34"
 ---
 
 # Use the EasyBits CLI
@@ -300,7 +300,7 @@ easybits sites theme set "$SITE" --theme dracula --json          # or --colors f
 `create` makes the site and hands it to its builder agent; give the person `editorUrl` to keep
 building it. `url` stays `null` until they publish from the editor (building is free; a web app is
 charged when published). `--stack`: tanstack (default), next, react-router, remix, nuxt, sveltekit,
-astro, elysia; `--template` (consultorio, despacho, portafolio, lanzamiento) only for tanstack and
+astro, elysia; `--template` (consultorio, despacho, portafolio, lanzamiento, agente) only for tanstack and
 react-router — without it the prompt picks one. `theme` takes the site's name or id; `no_tokens`
 (409) = the site predates themes, `invalid_theme` (400) = unknown palette or a missing token.
 

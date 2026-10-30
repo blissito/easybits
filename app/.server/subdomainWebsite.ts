@@ -1,5 +1,4 @@
 import { db } from "./db";
-import { trackTelemetryVisit } from "./telemetry";
 import { getReadClientForPlatformFile } from "./storage";
 import { getContentType } from "~/utils/mime";
 
@@ -181,15 +180,6 @@ async function serveWebsiteFile(
   url: URL
 ): Promise<Response> {
   const splat = url.pathname === "/" ? "index.html" : url.pathname.slice(1);
-
-  // Track visit only for the main page request (not static assets)
-  if (!isImmutable(splat)) {
-    trackTelemetryVisit({
-      asset: { ownerId: website.ownerId, id: website.id },
-      request,
-      linkType: "website",
-    }).catch(() => {});
-  }
 
   // Find the file record
   let file = await db.file.findFirst({
