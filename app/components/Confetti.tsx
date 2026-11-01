@@ -13,7 +13,6 @@ export const BrendisConfetti = ({ duration }: { duration?: number }) => {
       const scale = Math.random() * 0.6 + 0.5;
       const player = element.animate(
         {
-          opacity: [scale],
           transform: [
             `translate3d(${
               (i / len) * 100
@@ -29,6 +28,9 @@ export const BrendisConfetti = ({ duration }: { duration?: number }) => {
           duration: Math.random() * 3000 + 4000,
           iterations: Infinity,
           delay: Math.random() * 5000,
+          // Mientras espera su turno, el papelito ya está en su primer cuadro (arriba, fuera de
+          // la vista); sin esto se amontonaban todos en la esquina superior izquierda.
+          fill: "backwards",
         }
       );
       player.playbackRate = 1;
@@ -36,7 +38,7 @@ export const BrendisConfetti = ({ duration }: { duration?: number }) => {
   }, []);
 
   // @todo make it a client component to avoid console warning
-  const rand = (min = 0, max = (min = 0)) => Math.random() * (max - min) + min;
+  const rand = (min = 0, max = 1) => Math.random() * (max - min) + min;
   const colors = [
     "yellow",
     "bg-purple-400",
