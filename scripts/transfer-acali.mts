@@ -103,7 +103,7 @@ if (link) {
     cpuMode: "shared",
     diskAddonsGB: 0,
     attachSandboxIds: ids,
-    trialEnd: TRIAL_END,
+    billingCycleAnchor: TRIAL_END,
     successUrl: "https://www.easybits.cloud/dash/hosting",
     cancelUrl: "https://www.easybits.cloud/dash/hosting",
   });

@@ -120,8 +120,9 @@ export async function createMachineCheckout(params: {
   // máquina y `quantity` = cuántas.
   attachSandboxIds?: string[];
   quantity?: number;
-  // Fin de la prueba (epoch s): la tarjeta se captura hoy y el primer cobro cae aquí.
-  trialEnd?: number;
+  // Primer cobro (epoch s): la tarjeta se captura hoy, hoy se cobra $0 (sin prorrateo) y
+  // el ciclo arranca aquí. Checkout no acepta trial_end a menos de 2 días; esto sí.
+  billingCycleAnchor?: number;
 }): Promise<{ url: string; sessionId: string }> {
   const attach = params.attachSandboxIds?.length ? params.attachSandboxIds.join(",") : undefined;
   // Stripe limita cada valor de metadata a 500 caracteres (≈ 12 sandboxIds).
@@ -167,7 +168,9 @@ export async function createMachineCheckout(params: {
         eb_tier: params.tier,
         ...(attach ? { eb_attach_ids: attach } : {}),
       },
-      ...(params.trialEnd ? { trial_end: params.trialEnd } : {}),
+      ...(params.billingCycleAnchor
+        ? { billing_cycle_anchor: params.billingCycleAnchor, proration_behavior: "none" as const }
+        : {}),
     },
     success_url: params.successUrl,
     cancel_url: params.cancelUrl,
