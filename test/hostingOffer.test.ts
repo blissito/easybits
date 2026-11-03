@@ -24,7 +24,7 @@ const mockDb = {
     findUnique: vi.fn(async ({ where }: any) => offers[where.id] ?? null),
     findFirst: vi.fn(async ({ where }: any) =>
       Object.values(offers).find((o) => o.status === where.status && o.sandboxIds.some((id: string) => where.sandboxIds.hasSome.includes(id))) ?? null),
-    findMany: vi.fn(async () => []),
+    findMany: vi.fn(async (_args?: any): Promise<any[]> => []),
     create: vi.fn(async ({ data }: any) => (offers.of1 = { id: "of1", status: "pending", createdAt: new Date(), note: null, ...data })),
     update: vi.fn(async ({ where, data }: any) => Object.assign(offers[where.id], data)),
   },
