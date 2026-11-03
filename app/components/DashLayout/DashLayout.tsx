@@ -34,17 +34,8 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
     realUser && realUser.id !== user.id
       ? { asEmail: user.email, asName: user.displayName }
       : null;
-  if (
-    !impersonating &&
-    (!user.metadata?.customer_type ||
-      (user.metadata?.asset_types.length || 0) < 1)
-  ) {
-    const target = new URL(request.url);
-    return redirect(
-      "/onboarding?next=" +
-        encodeURIComponent(target.pathname + target.search)
-    );
-  }
+  // Sin onboarding obligatorio (3-nov-2026): una cuenta nueva entra directo al panel. Antes
+  // un cliente al que le entregaban apps topaba con preguntas de perfil antes de verlas.
   const isAdmin = isAdminUser(user);
   const [unreadCount, pendingOffer] = await Promise.all([
     countUnread(user.id).catch(() => 0),
