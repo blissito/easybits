@@ -18,8 +18,19 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
   const clients = await listClients(operator.id);
   // Operators only: admins (can self-add) or anyone with a roster (client-granted).
   if (!admin && clients.length === 0) throw redirect("/dash");
-  return { admin, clients };
+  // Liga «ver como»: /dash/cuentas?as=<correo>&next=/dash/hosting. No aplica nada por GET
+  // (eso sería CSRF): sólo muestra la confirmación de un clic, si esa cuenta está en tu lista.
+  const url = new URL(request.url);
+  const as = (url.searchParams.get("as") || "").trim().toLowerCase();
+  const pending = as ? clients.find((c) => c.email?.toLowerCase() === as) ?? null : null;
+  return { admin, clients, pending, next: safeNext(url.searchParams.get("next")) };
 };
+
+// Sólo rutas internas del panel: nada de redirecciones abiertas.
+function safeNext(raw: string | null): string | null {
+  if (!raw || !raw.startsWith("/dash") || raw.startsWith("//") || raw.includes("\\")) return null;
+  return raw;
+}
 
 export const action = async ({ request }: Route.ActionArgs) => {
   const operator = await getRealUserOrNull(request);
@@ -42,7 +53,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
     logger.info(
       `[impersonation] start operator=${operator.id} (${operator.email}) target=${target.id} (${target.email})`
     );
-    throw redirect("/dash/flota", {
+    throw redirect(safeNext(String(form.get("next") || "")) ?? "/dash/flota", {
       headers: { "set-cookie": await commitSession(session) },
     });
   }
@@ -77,7 +88,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
 };
 
 export default function Cuentas() {
-  const { admin, clients } = useLoaderData<typeof loader>();
+  const { admin, clients, pending, next } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
 
   return (
@@ -94,6 +105,21 @@ export default function Cuentas() {
         <p className="mb-4 border-2 border-black rounded-xl bg-red-100 px-3 py-2 text-sm">
           {actionData.error}
         </p>
+      )}
+
+      {pending && (
+        <Form method="post" className="mb-6 border-2 border-black rounded-xl bg-yellow-300 p-4 flex items-center justify-between gap-3 flex-wrap">
+          <input type="hidden" name="intent" value="set" />
+          <input type="hidden" name="email" value={pending.email ?? ""} />
+          {next && <input type="hidden" name="next" value={next} />}
+          <p className="text-sm text-black min-w-0">
+            Ver como <strong>{pending.displayName || pending.email}</strong>
+            {next ? <> en <code>{next}</code></> : null}
+          </p>
+          <button autoFocus className="border-2 border-black rounded-xl px-4 py-2 bg-black text-white font-medium hover:opacity-80">
+            Entrar
+          </button>
+        </Form>
       )}
 
       {admin && (
