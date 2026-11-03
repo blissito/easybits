@@ -36,6 +36,7 @@ const NANO_MXN = 49;
 const TRIAL_END = Math.floor(Date.UTC(2026, 10, 3, 18, 0, 0) / 1000);
 
 const apply = process.argv.includes("--apply");
+if (apply && !process.env.SANDBOX_HOST_OPERATOR_TOKEN) throw new Error("Falta SANDBOX_HOST_OPERATOR_TOKEN (las cajas vendidas están protegidas)");
 const link = process.argv.includes("--link");
 const asUser = (id: string, scopes = ["READ", "WRITE"]) => ({ user: { id }, scopes } as AuthContext);
 
@@ -70,11 +71,11 @@ for (const [sandboxId, name] of Object.entries(BOXES)) {
     await createSecret(jose!.id, { name: scoped, value });
   }
   // 2) Host y fila juntos; si el host falla, la fila no se mueve.
-  await reassignSandboxOwnerHost(sandboxId, jose!.id);
+  await reassignSandboxOwnerHost(sandboxId, jose!.id, { asOperator: true });
   try {
     await db.sandbox.update({ where: { sandboxId }, data: { ownerId: jose!.id } });
   } catch (e) {
-    await reassignSandboxOwnerHost(sandboxId, FROM).catch(() => undefined);
+    await reassignSandboxOwnerHost(sandboxId, FROM, { asOperator: true }).catch(() => undefined);
     throw e;
   }
   await db.machineRelease.updateMany({ where: { sandboxId, ownerId: FROM }, data: { ownerId: jose!.id } });
