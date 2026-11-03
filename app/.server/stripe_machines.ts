@@ -122,6 +122,8 @@ export async function createMachineCheckout(params: {
   // Cesión de una agencia (HostingOffer): al pagar, el webhook traspasa y luego pega el cobro.
   offerId?: string;
   quantity?: number;
+  // Desglose que el cliente lee en el checkout y en su suscripción.
+  description?: string;
   // Primer cobro (epoch s): la tarjeta se captura hoy, hoy se cobra $0 (sin prorrateo) y
   // el ciclo arranca aquí. Checkout no acepta trial_end a menos de 2 días; esto sí.
   billingCycleAnchor?: number;
@@ -172,10 +174,12 @@ export async function createMachineCheckout(params: {
         ...(attach ? { eb_attach_ids: attach } : {}),
         ...(params.offerId ? { eb_offer_id: params.offerId } : {}),
       },
+      ...(params.description ? { description: params.description.slice(0, 500) } : {}),
       ...(params.billingCycleAnchor
         ? { billing_cycle_anchor: params.billingCycleAnchor, proration_behavior: "none" as const }
         : {}),
     },
+    ...(params.description ? { custom_text: { submit: { message: params.description.slice(0, 1200) } } } : {}),
     success_url: params.successUrl,
     cancel_url: params.cancelUrl,
   });

@@ -2207,6 +2207,9 @@ model HostingOffer {
   sandboxIds     String[]
   monthlyMxn     Int      // precio TOTAL al mes por todas las máquinas
   note           String?  // lo que ve el cliente, p. ej. "Sistema de Acali Club"
+  // Desglose que ve el cliente: [{ label, qty, unitMxn, waived? }]. Las filas `waived` se
+  // muestran tachadas («Descuento especial») y no suman a monthlyMxn. Sin desglose, sólo el total.
+  items          Json?
   status         String   @default("pending") // pending | paid | cancelled
   subscriptionId String?
   clientUserId   String?  @db.ObjectId // se llena al pagar

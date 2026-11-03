@@ -1,6 +1,8 @@
 import { data, Outlet, redirect } from "react-router";
 import { HeaderMobile, SideBar } from "./SideBar";
 import { ImpersonationBanner } from "./ImpersonationBanner";
+import { HostingOfferBanner } from "./HostingOfferBanner";
+import { pendingOffersForEmail } from "~/.server/core/hostingOfferOperations";
 import { getRealUserOrNull, getUserOrNull, isAdminUser } from "~/.server/getters";
 import { clearShareCookie, hasValidShareCookie } from "~/.server/shareLinks";
 import { countUnread } from "~/.server/core/notificationOperations";
@@ -44,7 +46,11 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
     );
   }
   const isAdmin = isAdminUser(user);
-  const unreadCount = await countUnread(user.id).catch(() => 0);
+  const [unreadCount, pendingOffer] = await Promise.all([
+    countUnread(user.id).catch(() => 0),
+    // Una agencia le entregó apps y aún no se suscribe: banner en todo el panel.
+    pendingOffersForEmail(user.email).catch(() => null),
+  ]);
 
   // Limpieza proactiva: si el user logueado todavía trae cookie de share
   // pegada (de una visita previa al share link), la borramos para que no
@@ -53,11 +59,11 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
   const cookieHeader = request.headers.get("Cookie") || "";
   if (cookieHeader.includes("eb_share=")) {
     return data(
-      { isAdmin, isShareSession: false, impersonating, unreadCount, picture: user.picture ?? null },
+      { isAdmin, isShareSession: false, impersonating, unreadCount, pendingOffer, picture: user.picture ?? null },
       { headers: { "Set-Cookie": clearShareCookie() } }
     );
   }
-  return { isAdmin, isShareSession: false, impersonating, unreadCount, picture: user.picture ?? null };
+  return { isAdmin, isShareSession: false, impersonating, unreadCount, pendingOffer, picture: user.picture ?? null };
 };
 
 export default function DashLayout({ loaderData }: Route.ComponentProps) {
@@ -66,6 +72,8 @@ export default function DashLayout({ loaderData }: Route.ComponentProps) {
   const impersonating = loaderData?.impersonating ?? null;
   const unreadCount = loaderData?.unreadCount ?? 0;
   const picture = (loaderData as { picture?: string | null } | undefined)?.picture ?? null;
+  const pendingOffer =
+    (loaderData as { pendingOffer?: { apps: number; fromName: string | null } | null } | undefined)?.pendingOffer ?? null;
   if (isShareSession) {
     return (
       <main className="flex relative min-h-svh bg-pattern">
@@ -76,7 +84,8 @@ export default function DashLayout({ loaderData }: Route.ComponentProps) {
   return (
     <main
       className={
-        "flex relative min-h-svh bg-pattern" + (impersonating ? " pt-9" : "")
+        "flex relative min-h-svh bg-pattern" +
+        (impersonating && pendingOffer ? " pt-[4.5rem]" : impersonating || pendingOffer ? " pt-9" : "")
       }
     >
       {impersonating && (
@@ -84,6 +93,9 @@ export default function DashLayout({ loaderData }: Route.ComponentProps) {
           asEmail={impersonating.asEmail}
           asName={impersonating.asName}
         />
+      )}
+      {pendingOffer && (
+        <HostingOfferBanner apps={pendingOffer.apps} fromName={pendingOffer.fromName} top={!impersonating} />
       )}
       <HeaderMobile isAdmin={isAdmin} />
       <SideBar isAdmin={isAdmin} unreadCount={unreadCount} picture={picture} />

@@ -29,10 +29,39 @@ function fail(status: number, error: string, message: string): never {
   });
 }
 
+/** Una fila del desglose. `waived` = se muestra tachada como «Descuento especial» y no se cobra. */
+export type OfferItem = { label: string; qty: number; unitMxn: number; waived?: boolean };
+
+/** Valida el desglose y regresa el total cobrable (suma de filas no bonificadas). */
+export function normalizeOfferItems(raw: unknown): { items: OfferItem[]; totalMxn: number } {
+  if (!Array.isArray(raw) || raw.length === 0) fail(400, "InvalidItems", "El desglose está vacío.");
+  if (raw.length > 10) fail(400, "InvalidItems", "Máximo 10 conceptos en el desglose.");
+  const items = raw.map((r) => {
+    const it = r as Partial<OfferItem>;
+    const label = String(it.label ?? "").trim().slice(0, 60);
+    const qty = Number(it.qty);
+    const unitMxn = Number(it.unitMxn);
+    if (!label || !Number.isInteger(qty) || qty < 1 || !Number.isInteger(unitMxn) || unitMxn < 0) {
+      fail(400, "InvalidItems", "Cada concepto lleva nombre, cantidad (entero ≥ 1) y precio (entero ≥ 0).");
+    }
+    return { label, qty, unitMxn, ...(it.waived ? { waived: true } : {}) };
+  });
+  const totalMxn = items.filter((i) => !i.waived).reduce((a, i) => a + i.qty * i.unitMxn, 0);
+  return { items, totalMxn };
+}
+
+/** Texto corto del desglose para Stripe: «6 apps × $250 · 6 DBs × $200 (descuento especial)». */
+export function describeOfferItems(items: OfferItem[]): string {
+  return items
+    .map((i) => `${i.qty} ${i.label} × $${i.unitMxn.toLocaleString("es-MX")}${i.waived ? " (descuento especial)" : ""}`)
+    .join(" · ");
+}
+
 export type OfferView = {
   id: string;
   clientEmail: string;
   monthlyMxn: number;
+  items: OfferItem[] | null;
   note: string | null;
   status: string;
   machines: { sandboxId: string; name: string | null }[];
@@ -41,7 +70,7 @@ export type OfferView = {
 };
 
 async function toView(o: {
-  id: string; clientEmail: string; monthlyMxn: number; note: string | null; status: string;
+  id: string; clientEmail: string; monthlyMxn: number; items?: unknown; note: string | null; status: string;
   sandboxIds: string[]; fromUserId: string; createdAt: Date;
 }): Promise<OfferView> {
   const [rows, from] = await Promise.all([
@@ -52,6 +81,7 @@ async function toView(o: {
     id: o.id,
     clientEmail: o.clientEmail,
     monthlyMxn: o.monthlyMxn,
+    items: Array.isArray(o.items) ? (o.items as OfferItem[]) : null,
     note: o.note,
     status: o.status,
     machines: o.sandboxIds.map((id) => ({ sandboxId: id, name: rows.find((r) => r.sandboxId === id)?.name ?? null })),
@@ -63,11 +93,13 @@ async function toView(o: {
 /** La agencia cede máquinas suyas, vivas y sin cobro, a un cliente por un total al mes. */
 export async function createHostingOffer(
   ctx: AuthContext,
-  params: { clientEmail: string; sandboxIds: string[]; monthlyMxn: number; note?: string }
+  params: { clientEmail: string; sandboxIds: string[]; monthlyMxn?: number; items?: OfferItem[]; note?: string }
 ): Promise<OfferView> {
   const clientEmail = params.clientEmail.trim().toLowerCase();
   const sandboxIds = [...new Set(params.sandboxIds)].filter(Boolean);
-  const monthlyMxn = Math.round(Number(params.monthlyMxn));
+  // Con desglose, el total sale de las filas cobrables; sin él, el total que se escribió.
+  const norm = params.items ? normalizeOfferItems(params.items) : null;
+  const monthlyMxn = norm ? norm.totalMxn : Math.round(Number(params.monthlyMxn));
   if (!EMAIL_RE.test(clientEmail)) fail(400, "InvalidEmail", "Escribe el correo del cliente.");
   if (!sandboxIds.length) fail(400, "NoMachines", "Elige al menos una máquina.");
   if (sandboxIds.length > 12) fail(400, "TooManyMachines", "Máximo 12 máquinas por cesión.");
@@ -94,7 +126,11 @@ export async function createHostingOffer(
   if (busy) fail(409, "AlreadyOffered", `Alguna de esas máquinas ya está cedida a ${busy.clientEmail}; cancela esa oferta primero.`);
 
   const offer = await db.hostingOffer.create({
-    data: { fromUserId: ctx.user.id, clientEmail, sandboxIds, monthlyMxn, note: params.note?.trim() || null },
+    data: {
+      fromUserId: ctx.user.id, clientEmail, sandboxIds, monthlyMxn,
+      ...(norm ? { items: norm.items } : {}),
+      note: params.note?.trim() || null,
+    },
   });
   const view = await toView(offer);
   await sendOfferEmail(view).catch((e) => console.error("[hosting-offer] no se pudo mandar la invitación", e));
@@ -118,6 +154,22 @@ async function sendOfferEmail(o: OfferView): Promise<void> {
 
 function escapeHtml(s: string): string {
   return s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
+}
+
+/** Para el banner del panel: cuántas cesiones esperan el pago de este correo y de quién. */
+export async function pendingOffersForEmail(email: string): Promise<{ count: number; apps: number; fromName: string | null } | null> {
+  const offers = await db.hostingOffer.findMany({
+    where: { clientEmail: email.toLowerCase(), status: "pending" },
+    select: { fromUserId: true, sandboxIds: true },
+    orderBy: { createdAt: "desc" },
+  });
+  if (!offers.length) return null;
+  const from = await db.user.findUnique({ where: { id: offers[0].fromUserId }, select: { displayName: true, email: true } });
+  return {
+    count: offers.length,
+    apps: offers.reduce((a, o) => a + o.sandboxIds.length, 0),
+    fromName: from?.displayName || from?.email || null,
+  };
 }
 
 /** Ofertas que esperan pago: las que me hicieron (por mi correo) y las que hice yo. */
@@ -167,6 +219,7 @@ export async function startHostingOfferCheckout(ctx: AuthContext, offerId: strin
     diskAddonsGB: 0,
     attachSandboxIds: offer.sandboxIds,
     offerId: offer.id,
+    ...(Array.isArray(offer.items) ? { description: describeOfferItems(offer.items as OfferItem[]) } : {}),
     successUrl: `${APP_URL}/dash/hosting?activado=1`,
     cancelUrl: `${APP_URL}/dash/hosting`,
   });

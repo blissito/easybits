@@ -253,15 +253,30 @@ async function runIntent(ctx: AuthContext, user: Awaited<ReturnType<typeof getUs
     case "sleep":
       return data({ ok: !!(await setMachineSleep(ctx, id, String(form.get("sleep")) === "1")) });
     // Ceder máquinas a un cliente a precio acordado (la agencia) y activarlas (el cliente).
-    case "offer-create":
+    case "offer-create": {
+      // Desglose: apps × precio por app y, opcional, bases administradas (cobradas o bonificadas).
+      const sandboxIds = form.getAll("sandboxIds").map(String);
+      const items: { label: string; qty: number; unitMxn: number; waived?: boolean }[] = [
+        { label: sandboxIds.length === 1 ? "app" : "apps", qty: sandboxIds.length, unitMxn: Number(form.get("perAppMxn")) },
+      ];
+      const dbQty = Number(form.get("dbQty") || 0);
+      if (dbQty > 0) {
+        items.push({
+          label: dbQty === 1 ? "DB administrada" : "DBs administradas",
+          qty: dbQty,
+          unitMxn: Number(form.get("dbUnitMxn") || 0),
+          ...(form.get("dbWaived") ? { waived: true } : {}),
+        });
+      }
       return data({
         offer: await createHostingOffer(ctx, {
           clientEmail: String(form.get("clientEmail") || ""),
-          sandboxIds: form.getAll("sandboxIds").map(String),
-          monthlyMxn: Number(form.get("monthlyMxn")),
+          sandboxIds,
+          items,
           note: String(form.get("note") || ""),
         }),
       });
+    }
     case "offer-cancel":
       return data(await cancelHostingOffer(ctx, String(form.get("offerId"))));
     case "offer-pay":
@@ -1257,9 +1272,10 @@ function IncomingOffer({ offer }: { offer: any }) {
         {offer.machines.map((m: any) => m.name ?? m.sandboxId).join(" · ")}
       </p>
       <p className="mt-2 text-sm text-dark">
-        Ya está montado y funcionando. Al activar tu cobro las apps quedan a tu nombre, y {offer.fromName ?? "tu equipo"} sigue
+        Ya está montado y funcionando. Al suscribirte las apps pasan a ser tuyas, y {offer.fromName ?? "tu equipo"} sigue
         dándoles mantenimiento.
       </p>
+      {offer.items && <OfferBreakdown items={offer.items} />}
       <div className="mt-3 flex items-center gap-3 flex-wrap">
         <span className="text-2xl font-bold text-dark tabular-nums">
           ${offer.monthlyMxn.toLocaleString("es-MX")} <span className="text-sm font-semibold text-metal">MXN al mes</span>
@@ -1268,11 +1284,35 @@ function IncomingOffer({ offer }: { offer: any }) {
           disabled={pay.state !== "idle" || !!pay.data?.checkoutUrl}
           onClick={() => pay.submit({ intent: "offer-pay", offerId: offer.id }, { method: "post" })}
         >
-          {pay.state !== "idle" || pay.data?.checkoutUrl ? "Abriendo pago…" : "Activar mi cobro"}
+          {pay.state !== "idle" || pay.data?.checkoutUrl ? "Abriendo pago…" : "Suscribirme y reclamar mis apps"}
         </Btn>
       </div>
       {pay.data?.error && <p className="mt-2 text-sm text-red-600">{pay.data.error}</p>}
     </div>
+  );
+}
+
+/** Desglose de la oferta: cada concepto con su subtotal; lo bonificado va tachado. */
+function OfferBreakdown({ items }: { items: { label: string; qty: number; unitMxn: number; waived?: boolean }[] }) {
+  const mxn = (n: number) => "$" + n.toLocaleString("es-MX");
+  return (
+    <ul className="mt-3 grid gap-1 rounded-lg border-[2px] border-black/20 bg-white p-3 text-sm">
+      {items.map((it, i) => (
+        <li key={i} className="flex items-baseline justify-between gap-3 flex-wrap">
+          <span className="text-dark min-w-0">
+            {it.qty} {it.label} <span className="text-metal tabular-nums">× {mxn(it.unitMxn)}</span>
+            {it.waived && (
+              <span className="ml-2 rounded-full border-[2px] border-black bg-amber-300 px-2 py-0.5 text-xs font-semibold text-black">
+                Descuento especial
+              </span>
+            )}
+          </span>
+          <span className={"tabular-nums font-semibold " + (it.waived ? "text-metal line-through" : "text-dark")}>
+            {mxn(it.qty * it.unitMxn)}
+          </span>
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -1282,6 +1322,11 @@ function HandOver({ machines, outgoing }: { machines: any[]; outgoing: any[] }) 
   const cancel = useFetcher<{ ok?: boolean; error?: string }>();
   const [open, setOpen] = useState(false);
   const [picked, setPicked] = useState<string[]>([]);
+  const [perApp, setPerApp] = useState(250);
+  const [dbQty, setDbQty] = useState(0);
+  const [dbUnit, setDbUnit] = useState(200);
+  const [dbWaived, setDbWaived] = useState(true);
+  const total = picked.length * perApp + (dbWaived ? 0 : dbQty * dbUnit);
   useEffect(() => {
     if (create.data?.offer) { setOpen(false); setPicked([]); }
   }, [create.data]);
@@ -1341,9 +1386,27 @@ function HandOver({ machines, outgoing }: { machines: any[]; outgoing: any[] }) 
             <input name="clientEmail" type="email" required className="h-10 rounded-lg border-[2px] border-black px-3 font-normal" placeholder="cliente@empresa.com" />
           </label>
           <label className="grid gap-1 text-sm font-semibold text-dark">
-            Total al mes (MXN, por todas)
-            <input name="monthlyMxn" type="number" min={1} step={1} required className="h-10 rounded-lg border-[2px] border-black px-3 font-normal tabular-nums" placeholder="250" />
+            Precio por app al mes (MXN)
+            <input name="perAppMxn" type="number" min={1} step={1} required value={perApp} onChange={(e) => setPerApp(Number(e.target.value))} className="h-10 rounded-lg border-[2px] border-black px-3 font-normal tabular-nums" />
           </label>
+          <fieldset className="grid gap-2 sm:grid-cols-3 items-end">
+            <legend className="text-sm font-semibold text-dark mb-1">DBs administradas (opcional)</legend>
+            <label className="grid gap-1 text-sm text-dark">
+              Cuántas
+              <input name="dbQty" type="number" min={0} step={1} value={dbQty} onChange={(e) => setDbQty(Number(e.target.value))} className="h-10 rounded-lg border-[2px] border-black px-3 tabular-nums" />
+            </label>
+            <label className="grid gap-1 text-sm text-dark">
+              Precio c/u (MXN)
+              <input name="dbUnitMxn" type="number" min={0} step={1} value={dbUnit} onChange={(e) => setDbUnit(Number(e.target.value))} className="h-10 rounded-lg border-[2px] border-black px-3 tabular-nums" />
+            </label>
+            <label className="flex items-center gap-2 text-sm text-dark h-10">
+              <input type="checkbox" name="dbWaived" checked={dbWaived} onChange={(e) => setDbWaived(e.target.checked)} />
+              Bonificar (descuento especial)
+            </label>
+          </fieldset>
+          <p className="text-sm text-dark">
+            Total al mes: <b className="tabular-nums">{"$" + total.toLocaleString("es-MX")} MXN</b>
+          </p>
           <label className="grid gap-1 text-sm font-semibold text-dark">
             Cómo lo verá el cliente (opcional)
             <input name="note" maxLength={80} className="h-10 rounded-lg border-[2px] border-black px-3 font-normal" placeholder="Sistema de inscripciones de Acali Club" />

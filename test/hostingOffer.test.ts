@@ -48,7 +48,7 @@ vi.mock("~/.server/core/secretOperations", async (orig) => ({
   createSecret: vi.fn(async (u: string, { name, value }: any) => { secrets[`${u}:${name}`] = value; }),
 }));
 
-const { createHostingOffer, completeHostingOffer } = await import("~/.server/core/hostingOfferOperations");
+const { createHostingOffer, completeHostingOffer, normalizeOfferItems, describeOfferItems, pendingOffersForEmail } = await import("~/.server/core/hostingOfferOperations");
 const { machineSecretName } = await import("~/.server/core/secretOperations");
 const ctx = (id: string) => ({ user: { id }, scopes: ["READ", "WRITE"] } as any);
 const box = (sandboxId: string, ownerId: string, extra: object = {}) =>
@@ -82,6 +82,35 @@ describe("crear oferta", () => {
     sandboxes.sb_1.stripeSubscriptionId = "sub_x";
     await expect(createHostingOffer(ctx("brenda"), { clientEmail: "a@b.co", sandboxIds: ["sb_1"], monthlyMxn: 250 }))
       .rejects.toMatchObject({ status: 409 });
+  });
+});
+
+describe("desglose", () => {
+  const ACALI = [
+    { label: "apps", qty: 6, unitMxn: 250 },
+    { label: "DBs administradas", qty: 6, unitMxn: 200, waived: true },
+  ];
+
+  it("lo bonificado no suma al total", () => {
+    expect(normalizeOfferItems(ACALI).totalMxn).toBe(1500);
+    expect(describeOfferItems(ACALI)).toContain("(descuento especial)");
+  });
+
+  it("la oferta guarda el desglose y cobra la suma", async () => {
+    const o = await createHostingOffer(ctx("brenda"), { clientEmail: "joseluis@acaliclub.com", sandboxIds: ["sb_1", "sb_2"], items: ACALI });
+    expect(o.monthlyMxn).toBe(1500);
+    expect(o.items).toHaveLength(2);
+  });
+
+  it("rechaza filas inválidas", () => {
+    expect(() => normalizeOfferItems([{ label: "apps", qty: 0, unitMxn: 250 }])).toThrow();
+  });
+
+  it("el banner encuentra la oferta pendiente del cliente", async () => {
+    offers.of1 = { id: "of1", fromUserId: "brenda", clientEmail: "joseluis@acaliclub.com", sandboxIds: ["sb_1", "sb_2"], monthlyMxn: 500, status: "pending" };
+    mockDb.hostingOffer.findMany.mockImplementationOnce(async ({ where }: any) =>
+      Object.values(offers).filter((o) => o.clientEmail === where.clientEmail && o.status === where.status));
+    expect(await pendingOffersForEmail("JoseLuis@acaliclub.com")).toMatchObject({ count: 1, apps: 2 });
   });
 });
 
