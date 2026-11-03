@@ -115,7 +115,17 @@ export async function createMachineCheckout(params: {
   cancelUrl: string;
   // Promover una caja que YA existe (la de trabajo de un sitio) en vez de crear otra.
   sandboxId?: string;
+  // Cobrar máquinas que YA existen y no tienen cobro (p. ej. traspasadas de otra cuenta):
+  // el webhook sólo les pega la suscripción, nunca crea cajas. `monthlyMxn` es por
+  // máquina y `quantity` = cuántas.
+  attachSandboxIds?: string[];
+  quantity?: number;
+  // Fin de la prueba (epoch s): la tarjeta se captura hoy y el primer cobro cae aquí.
+  trialEnd?: number;
 }): Promise<{ url: string; sessionId: string }> {
+  const attach = params.attachSandboxIds?.length ? params.attachSandboxIds.join(",") : undefined;
+  // Stripe limita cada valor de metadata a 500 caracteres (≈ 12 sandboxIds).
+  if (attach && attach.length > 500) throw new Error("Demasiadas máquinas para una sola liga de pago");
   const product = await ensureHostingProduct();
   const session = await getStripe().checkout.sessions.create({
     mode: "subscription",
@@ -126,7 +136,7 @@ export async function createMachineCheckout(params: {
         : {}),
     line_items: [
       {
-        quantity: 1,
+        quantity: params.quantity ?? 1,
         price_data: {
           currency: "mxn",
           product,
@@ -146,6 +156,7 @@ export async function createMachineCheckout(params: {
       ...(params.template ? { eb_template: params.template } : {}),
       ...(params.name ? { eb_name: params.name } : {}),
       ...(params.sandboxId ? { eb_sandbox_id: params.sandboxId } : {}),
+      ...(attach ? { eb_attach_ids: attach } : {}),
     },
     // … and on the subscription itself, so a later cancellation still knows
     // which machine it belongs to.
@@ -154,7 +165,9 @@ export async function createMachineCheckout(params: {
         eb_machine: "1",
         eb_user_id: params.userId,
         eb_tier: params.tier,
+        ...(attach ? { eb_attach_ids: attach } : {}),
       },
+      ...(params.trialEnd ? { trial_end: params.trialEnd } : {}),
     },
     success_url: params.successUrl,
     cancel_url: params.cancelUrl,

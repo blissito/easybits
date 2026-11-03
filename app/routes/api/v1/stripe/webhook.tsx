@@ -324,6 +324,26 @@ export async function action({ request }: ActionFunctionArgs) {
             logger.error("Machine checkout missing subscription or user", { sessionId: session.id });
             break;
           }
+          // Cobrar máquinas que ya existen (traspaso): sólo se les pega la suscripción.
+          // Va ANTES de provisionPaidMachine, que crearía una caja nueva.
+          if (md.eb_attach_ids) {
+            try {
+              const { attachPaidMachines } = await import("~/.server/core/machineOperations");
+              const r = await attachPaidMachines({
+                ownerId: md.eb_user_id,
+                subscriptionId: subId,
+                sandboxIds: md.eb_attach_ids.split(",").filter(Boolean),
+              });
+              logger.info("Existing machines attached from checkout", { subscriptionId: subId, ...r });
+            } catch (e) {
+              logger.error("Attaching machines from checkout FAILED", {
+                sessionId: session.id,
+                subscriptionId: subId,
+                error: e instanceof Error ? e.message : String(e),
+              });
+            }
+            break;
+          }
           // Publicar una web app de /dash/sitios: la caja ya existe (la de trabajo), se promueve.
           if (md.eb_sandbox_id) {
             try {

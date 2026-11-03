@@ -372,7 +372,9 @@ export async function setMachineSecrets(
   opts: { restart?: boolean } = {}
 ): Promise<SecretsResult> {
   requireScope(ctx, "WRITE");
-  await requireMachine(ctx, sandboxId);
+  // Bóveda del DUEÑO, no del que actúa: el staff (delegado) carga secretos que la caja
+  // debe poder leer, y al arrancar se buscan bajo su dueño (getMachineSecretValue).
+  const { owner } = await requireMachine(ctx, sandboxId);
 
   const names = Object.keys(secrets);
   if (!names.length) {
@@ -385,7 +387,7 @@ export async function setMachineSecrets(
   // Con alcance de ESTA máquina: otra app del mismo dueño puede usar el mismo
   // nombre con otro valor (ver machineSecretName).
   for (const name of names) {
-    await createSecret(ctx.user.id, { name: machineSecretName(sandboxId, name), value: secrets[name] });
+    await createSecret(owner, { name: machineSecretName(sandboxId, name), value: secrets[name] });
   }
 
   // La lista se acumula: cargar un secreto nuevo no debe desactivar los que
@@ -404,13 +406,13 @@ export async function listMachineSecrets(
   sandboxId: string
 ): Promise<{ secretNames: string[]; inVault: string[] }> {
   requireScope(ctx, "READ");
-  const { row } = await requireMachine(ctx, sandboxId);
+  const { row, owner } = await requireMachine(ctx, sandboxId);
   const secretNames = ((row.runspec as Runspec)?.secretNames ?? []) as string[];
   // Lo que ESTA máquina puede recibir: los globales del dueño y los suyos (con
   // su nombre de app), nunca los de otras máquinas.
   const suffix = machineSecretName(sandboxId, "");
   const inVault = new Set<string>();
-  for (const { name } of await listSecrets(ctx.user.id)) {
+  for (const { name } of await listSecrets(owner)) {
     if (name.endsWith(suffix)) inVault.add(name.slice(0, -suffix.length));
     else if (!/__M_[A-Z0-9]+$/.test(name)) inVault.add(name);
   }
@@ -1205,6 +1207,14 @@ export async function recreateFromRelease(
 ): Promise<{ sandboxId: string; releaseId: string; exitCode: number; buildOutput?: string; replaced?: string }> {
   requireScope(ctx, "WRITE");
   const rel = await findOwnedRelease(ctx, params.releaseId);
+  // Redeploy compra una caja nueva (y puede liberar la vieja): es cobro, sólo el dueño.
+  // Sin esto el staff compraba la caja a SU nombre y borraba la del cliente.
+  if (rel.ownerId !== ctx.user.id) {
+    const e: any = new Error("Sólo el dueño de la máquina puede recrearla o cambiarle el tamaño.");
+    e.code = "OwnerOnly";
+    e.status = 403;
+    throw e;
+  }
   if (rel.status !== "available") {
     const e: any = new Error(`Release ${params.releaseId} is ${rel.status}, not available`);
     e.code = "ReleaseNotAvailable";

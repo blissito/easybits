@@ -14,7 +14,7 @@
  */
 import type { AuthContext } from "../apiAuth";
 import { getMachineSecretValue } from "./secretOperations";
-import { execSandboxRaw, shQuote, writeFile } from "./sandboxOperations";
+import { effectiveOwnerId, execSandboxRaw, shQuote, writeFile } from "./sandboxOperations";
 
 /**
  * Nombre del archivo de secretos. En hosting vive en el appDir (y está en los
@@ -65,10 +65,12 @@ export async function writeSecretsFile(
   const path = `${opts.dir}/${fileName}`;
   if (!opts.names.length) return { path, written: false };
 
+  // Los secretos viven en la bóveda del DUEÑO de la caja; quien actúa puede ser staff.
+  const owner = await effectiveOwnerId(ctx, sandboxId);
   const values: Record<string, string> = {};
   const missing: string[] = [];
   for (const name of opts.names) {
-    const value = await getMachineSecretValue(ctx.user.id, sandboxId, name).catch(() => null);
+    const value = await getMachineSecretValue(owner, sandboxId, name).catch(() => null);
     if (value == null) missing.push(name);
     else values[name] = value;
   }
@@ -122,8 +124,10 @@ export async function writeSecretValues(
   // El chmod va DESPUÉS del write, así que hay una ventana de milisegundos con
   // permisos por defecto. Es el mismo comportamiento que hosting lleva en
   // producción; cerrarla exigiría un modo en el endpoint de escritura del host.
+  // El host filtra por dueño: con el id del staff el chmod daba 404 y el archivo
+  // quedaba con permisos por defecto.
   await execSandboxRaw(
-    ctx.user.id,
+    await effectiveOwnerId(ctx, sandboxId),
     sandboxId,
     `mkdir -p ${shQuote(opts.dir)} && chmod 600 ${shQuote(path)}`,
     30
