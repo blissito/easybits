@@ -287,7 +287,11 @@ export async function completeHostingOffer(params: {
     sandboxIds: offer.sandboxIds,
   });
   if (attached.length) {
-    const share = Math.round((offer.monthlyMxn / attached.length) * 100) / 100;
+    // Con desglose, cada máquina guarda el precio de la fila de apps (los extras, como correos,
+    // no son de ninguna máquina); sin él, el total se reparte parejo.
+    const items = Array.isArray(offer.items) ? (offer.items as OfferItem[]) : [];
+    const appRow = items.find((i) => !i.waived && i.qty === offer.sandboxIds.length);
+    const share = appRow ? appRow.unitMxn : Math.round((offer.monthlyMxn / attached.length) * 100) / 100;
     await db.sandbox.updateMany({ where: { sandboxId: { in: attached } }, data: { agreedMonthlyMxn: share } });
   }
   const agency = await db.user.findUnique({ where: { id: offer.fromUserId }, select: { email: true } });

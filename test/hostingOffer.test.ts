@@ -130,6 +130,17 @@ describe("completar oferta (webhook)", () => {
     expect(offers.of1.status).toBe("paid");
   });
 
+  it("con desglose, cada app guarda su precio aunque haya extras (correos)", async () => {
+    offers.of1.items = [
+      { label: "apps", qty: 2, unitMxn: 250 },
+      { label: "DBs administradas", qty: 2, unitMxn: 200, waived: true },
+      { label: "paquete de 500 correos al mes", qty: 1, unitMxn: 100 },
+    ];
+    offers.of1.monthlyMxn = 600;
+    await completeHostingOffer({ offerId: "of1", clientUserId: "jose", subscriptionId: "sub_9" });
+    expect(sandboxes.sb_1.agreedMonthlyMxn).toBe(250);
+  });
+
   it("un replay del webhook no hace nada", async () => {
     await completeHostingOffer({ offerId: "of1", clientUserId: "jose", subscriptionId: "sub_9" });
     hostCalls.length = 0;
