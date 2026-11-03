@@ -2971,14 +2971,22 @@ export class EasybitsClient {
       return out ? `?${out}` : "";
     };
     return {
-      /** The hosting catalog: tiers + disk add-on pricing. */
+      /**
+       * The hosting catalog: tiers + disk add-on pricing.
+       * @deprecated Hosting is by quote (soporte@easybits.cloud); list prices are no longer sold.
+       */
       tiers: () => req<MachineTiers>("/machines/tiers"),
       /** List the caller's permanent machines. */
       list: async (): Promise<Sandbox[]> => {
         const { machines } = await req<{ machines: SandboxRecord[] }>("/machines");
         return machines.map((r) => new Sandbox(r, req));
       },
-      /** Provision a permanent machine (alias of eb.sandboxes.createPermanent). */
+      /**
+       * Provision a permanent machine (alias of eb.sandboxes.createPermanent).
+       * @deprecated Hosting is by quote: regular accounts get 403 `HostingByQuote`
+       * (write to soporte@easybits.cloud). Only the EasyBits team and agency accounts
+       * create machines; deploy onto an existing one with `machines.launch({ sandboxId })`.
+       */
       create: async (params: CreatePermanentParams): Promise<Sandbox> => {
         const rec = await req<SandboxRecord & { checkoutUrl?: string }>("/machines", {
           method: "POST",
@@ -3002,6 +3010,8 @@ export class EasybitsClient {
       /**
        * Buy a machine, returning either the machine or a payment link — the
        * non-throwing form of `create()` for accounts with no platform plan.
+       * @deprecated Hosting is by quote: regular accounts get 403 `HostingByQuote`
+       * (write to soporte@easybits.cloud).
        *
        *   const r = await eb.machines.buy({ tier: "micro" });
        *   if (r.checkoutUrl) sendToCustomer(r.checkoutUrl);  // box arrives after payment
@@ -3023,11 +3033,13 @@ export class EasybitsClient {
        * step that gets skipped is the release, and a machine without one
        * cannot be rebuilt if it dies.
        *
-       *   const app = await eb.machines.launch({ repo: "https://github.com/…", domain: "tienda.com" });
+       *   const app = await eb.machines.launch({ sandboxId, repo: "https://github.com/…", domain: "tienda.com" });
        *   console.log(app.url, app.domain?.dns);
        *
-       * Source is exactly one of: repo (git), archiveUrl (.tar.gz/.zip — e.g.
-       * uploaded from a laptop), or sandboxId (app already inside a box).
+       * Target: `sandboxId`, the user's machine. Hosting is by quote: without it a
+       * new machine would be created, and regular accounts get 403 `HostingByQuote`
+       * (soporte@easybits.cloud). Source: repo (git) or archiveUrl (.tar.gz/.zip);
+       * with neither, the code already inside the box.
        */
       launch: (params: LaunchParams): Promise<LaunchResult> =>
         req("/machines/launch", { method: "POST", body: JSON.stringify(params) }),
@@ -3520,6 +3532,8 @@ export class Sandbox {
    * Promote this (ephemeral) sandbox to a PERMANENT machine: keeps the same
    * sandboxId, disarms the host reaper, and starts flat MXN/month billing for
    * the chosen tier. The "spin it up, then keep it" flow.
+   * @deprecated Hosting is by quote: regular accounts get 403 `HostingByQuote`
+   * (write to soporte@easybits.cloud).
    */
   async makePermanent(
     tier: string,

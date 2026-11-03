@@ -4,7 +4,6 @@
 import { EN_ABOUT, EN_QUICKSTART, EN_FILES, EN_WEB, EN_DATABASES, EN_ERRORS, EN_CLAUDE } from "./reference.en.core";
 import { EN_AGENTS, EN_HOSTING, EN_EVE } from "./reference.en.agents-hosting";
 import { EN_CLI } from "./reference.en.cli";
-import { HOSTING_TIERS_MD } from "./reference";
 import { templatesMarkdownTable } from "../sandbox/templateCatalog";
 
 export const SECTIONS_EN: Record<string, string> = {
@@ -17,6 +16,6 @@ export const SECTIONS_EN: Record<string, string> = {
   databases: EN_DATABASES,
   errors: EN_ERRORS,
   agents: EN_AGENTS.replace("__TEMPLATES_MD_EN__", templatesMarkdownTable("en")),
-  hosting: EN_HOSTING.replace("__HOSTING_TIERS_MD__", HOSTING_TIERS_MD),
+  hosting: EN_HOSTING,
   eve: EN_EVE,
 };

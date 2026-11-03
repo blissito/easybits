@@ -5,7 +5,7 @@ license: MIT
 compatibility: Needs curl or any HTTP client, network access to https://www.easybits.cloud and an EasyBits API key
 metadata:
   author: easybits
-  version: "1.11"
+  version: "1.12"
 ---
 
 # Use EasyBits from a coding agent
@@ -49,7 +49,7 @@ Do not load the MCP just to make one call: a `curl` is cheaper than a tool catal
 | "extract listings from Maps / Mercado Libre / Amazon" | `POST /web/extract` → job, poll `GET /web/extract/:jobId` |
 | "store / serve / share this file" | `POST /files` → `PUT putUrl` with the bytes; `access: "public"` for a CDN URL |
 | "my agent needs a database" | `POST /databases`, then `POST /databases/:id/query` with `{ sql, args }` |
-| "deploy this app / put it on a URL" | `POST /machines/launch` with exactly one of `repo`, `archiveUrl`, `sandboxId`. Nothing else: it builds, releases and exposes |
+| "deploy this app / put it on a URL" | `POST /machines/launch` with the user's machine `sandboxId` (+ `repo` or `archiveUrl`). It builds, releases and exposes. No machine yet → hosting is by quote: soporte@easybits.cloud |
 | "run this every day / once at 23:00 / tell me when it ends" | `POST /crons` (`cron`, or one-off `at`/`in`; action `http`, `agent` or `exec` = a command in a throwaway box), then `GET /crons/:id/runs/next` waits for the run. `notify` push/email/inbox; event inboxes (`POST /inboxes` → a public URL any webhook can POST to) |
 | "make a PDF / invoice / quote" | `structured_doc` (MCP) or `POST /documents` with HTML sections; see the `documents` docs section |
 | "what tools does EasyBits have?" | `GET https://www.easybits.cloud/api/tools.json` (no auth) |
@@ -76,9 +76,10 @@ agents you talk to), `easybits-mcp` (the MCP server), `easybits-docs` (reading t
 - **Build inside the box, never on the user's Mac.** Native modules compiled on macOS crash
   on Linux.
 - **Never print the API key** back to the user, into logs or into a file in the repo.
-- **Money moves:** `POST /machines` and `POST /machines/launch` start a monthly charge (or
-  return a `checkoutUrl` when there is no plan). Say the tier and the MXN price before calling.
-- Currency is MXN; plans gate storage, AI and fleet. Hosting bills on its own subscription.
+- **Hosting is by quote:** new machines (`POST /machines`, `launch` without `sandboxId`) answer
+  403 `HostingByQuote` for regular accounts. Deploy onto machines the user already has; if they
+  have none, send them to soporte@easybits.cloud. Never quote hosting prices.
+- Currency is MXN; plans gate storage, AI and fleet.
 
 ## Recipe: scheduled reports from an app's data
 

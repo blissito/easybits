@@ -86,7 +86,7 @@ Alias: \`easybits sb …\`. Everything after \`--\` in \`exec\` is the command, 
 
 \`\`\`bash
 easybits machines ls
-easybits machines launch --repo https://github.com/you/shop.git --tier micro      # create the machine and deploy (= launch_app)
+easybits machines launch --machine shop --repo https://github.com/you/shop.git   # deploy onto your machine (= launch_app)
 easybits machines launch --machine shop --archive ./build.tgz --prebuilt -m v2   # redeploy
 easybits deploy sb_abc123 -m "v1.2"                      # publish a release (= machines deploy)
 easybits machines releases sb_abc123 --limit 5
@@ -98,20 +98,22 @@ printf 'API_KEY=%s\\n' "$API_KEY" | easybits machines secrets set sb_abc123 --do
 easybits machines secrets unset sb_abc123 API_KEY
 easybits machines restart sb_abc123                      # restart the app with the current secrets and runspec (seconds, no build)
 easybits machines adopt sb_abc123 --name shop-prod --unit app --import-env /app/secrets.env   # register a box that already runs: EasyBits keeps its secrets and restarts it, never redeploys or releases it
-easybits machines get shop                               # tier, size, MXN/month, whether it sleeps
-easybits machines tiers                                  # the catalog: sizes and monthly prices in MXN
+easybits machines get shop                               # size, status, whether it sleeps
+easybits machines tiers                                  # hosting is by quote: how to ask for a machine
 easybits machines runspec get shop
 easybits machines runspec set shop --data /app/data --start 'node server.js' --port 8080   # merges with what is there
 easybits machines backups shop                           # daily data backups, kept 7 days
 easybits machines backup shop                            # take one now
-easybits machines redeploy shop --tier focus --replace   # resize: a new machine from the newest release
-easybits machines rm shop --yes                          # release: stops billing, last backup, destroys the box
+easybits machines redeploy shop --replace              # recover: a new machine from the newest release
+easybits machines rm shop --yes                          # release (owner only): last backup, destroys the box
 easybits init --port 3000                                # GitHub Actions workflow: deploy on every push
 \`\`\`
 
+**Hosting is by quote** (write to soporte@easybits.cloud): machines are created by the EasyBits team or your agency and handed over to you. With your machine in place, everything above works the same; \`launch\` without \`--machine\` answers 403 \`HostingByQuote\`.
+
 \`easybits deploy <machine>\` is short for \`machines deploy <machine>\`. Secrets go in a dotenv file or on stdin (\`--dotenv -\`), never in argv: \`ps\` and your shell history would see them. \`secrets ls\` shows names only; values are never readable.
 
-**Runspec** = how the app is built, started and backed up: \`appDir\`, \`buildCommand\`, \`startCommand\` or \`unit\`, \`port\`, \`prebuilt\`, \`dataPaths\`, \`excludes\`, \`env\` (non-secret). \`runspec set\` merges (env by key) and applies on the next deploy or restart; \`--file rs.json\` takes the output of \`runspec get --json\` as is, and flags win over it. **Without \`--data\` (dataPaths) nothing is backed up.** \`redeploy\` is recovery and resize at once (there is no in-place resize): it builds a NEW machine from \`--release\` (default: the newest) at \`--tier\`; \`--replace\` releases the old one once the new one runs (it asks you to type the id), otherwise you pay for both. The new machine starts with no data. \`rm\` asks you to type the id too: it stops billing, takes a last backup and destroys the box.
+**Runspec** = how the app is built, started and backed up: \`appDir\`, \`buildCommand\`, \`startCommand\` or \`unit\`, \`port\`, \`prebuilt\`, \`dataPaths\`, \`excludes\`, \`env\` (non-secret). \`runspec set\` merges (env by key) and applies on the next deploy or restart; \`--file rs.json\` takes the output of \`runspec get --json\` as is, and flags win over it. **Without \`--data\` (dataPaths) nothing is backed up.** \`redeploy\` is recovery: it builds a NEW machine from \`--release\` (default: the newest); \`--replace\` releases the old one once the new one runs (it asks you to type the id). The new machine starts with no data. Changing size is quoted (soporte@easybits.cloud); a machine with an agreed price is not recreated on its own. \`rm\` asks you to type the id too: it takes a last backup and destroys the box.
 
 ### Account secrets (vault)
 

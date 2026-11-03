@@ -2,21 +2,18 @@ import type { Route } from "./+types/hosting";
 import getBasicMetaTags from "~/utils/getBasicMetaTags";
 import { ProductPage, productJsonLd } from "./product/ProductPage";
 import { productLoader } from "./product/loader";
-import { HOSTING_CATALOG, SELLABLE_TIERS } from "~/lib/hostingCatalog";
 
 export const loader = productLoader;
 
-// El precio de entrada sale del catálogo, no de la prosa: si mañana cambia el
-// tier más barato, esta página cambia sola.
-const CHEAPEST = Math.min(
-  ...SELLABLE_TIERS.map((k) => HOSTING_CATALOG[k].priceShared)
-);
+// Hosting por cotización (desde 3-nov-2026): sin lista pública de precios. Se cotiza por
+// proyecto y se entrega montado; el cliente lo paga en pesos desde su cuenta.
+const QUOTE_URL = "mailto:soporte@easybits.cloud?subject=Cotizar%20hosting";
 
 export const meta = () => [
   ...getBasicMetaTags({
-    title: `Hosting de apps desde \$${CHEAPEST}/mes en MXN | EasyBits`,
+    title: "Hosting gestionado para tu empresa, en pesos | EasyBits",
     description:
-      "Conecta tu repo de GitHub y ya está: cada push se despliega solo, con TLS, dominio propio, respaldos diarios y rollback. Precio fijo en pesos, sin cobro por tráfico.",
+      "Montamos y operamos tus apps en máquinas dedicadas: deploy desde tu repo, TLS, dominio propio, respaldos diarios y rollback. Precio fijo en pesos, cotizado por proyecto.",
     url: "https://www.easybits.cloud/hosting",
   }),
   { tagName: "link", rel: "canonical", href: "https://www.easybits.cloud/hosting" },
@@ -25,9 +22,8 @@ export const meta = () => [
 const JSON_LD = productJsonLd({
   name: "EasyBits Hosting",
   description:
-    "Hosting de aplicaciones en microVMs dedicadas: deploy desde repositorio con TLS, dominio propio, rollback y respaldos diarios. Precios en MXN.",
+    "Hosting gestionado de aplicaciones en microVMs dedicadas: deploy desde repositorio con TLS, dominio propio, rollback y respaldos diarios. Cotizado por proyecto, en MXN.",
   path: "/hosting",
-  priceMxn: CHEAPEST,
 });
 
 export default function Hosting({ loaderData }: Route.ComponentProps) {
@@ -45,9 +41,9 @@ export default function Hosting({ loaderData }: Route.ComponentProps) {
           highlight: "y ya está",
           subtitle:
             "Instalas la App de GitHub, eliges el repo y se despliega. Cada push a tu rama sale a producción solo; si el build falla, tu sitio sigue en la versión anterior.",
-          proof: `Deploy medido en ~12 s · recuperación total tras pérdida en 11.9 s · desde \$${CHEAPEST}/mes`,
-          ctaLabel: "Conectar GitHub →",
-          ctaTo: "/dash/hosting",
+          proof: "Deploy medido en ~12 s · recuperación total tras pérdida en 11.9 s · precio fijo en pesos",
+          ctaLabel: "Cotizar mi hosting →",
+          ctaTo: QUOTE_URL,
           bentos: [
             {
               title: "Del push a producción",
@@ -73,21 +69,21 @@ export default function Hosting({ loaderData }: Route.ComponentProps) {
               image: "https://i.imgur.com/R8qvNsB.png",
             },
             {
-              title: "No necesitas plan de pago",
-              body: "Cada máquina es su propia suscripción. Contratas una, la pagas, y ya está corriendo — sin obligarte a un plan superior para poder empezar.",
+              title: "Te lo entregamos montado",
+              body: "Cotizamos tu proyecto, lo montamos y te lo entregamos funcionando. Activas tu cobro desde tu cuenta y las apps quedan a tu nombre; tu equipo sigue dándoles mantenimiento.",
               bullets: [
-                "Cobro por máquina, mensual, en pesos",
-                "Puedes revenderla a tu propio cliente",
-                "Disco extra como add-on cuando haga falta",
-                "Cancelas cuando quieras",
+                "Un solo cobro mensual, fijo y en pesos",
+                "Las apps quedan a tu nombre desde el primer pago",
+                "Tu agencia o desarrollador sigue con acceso para operarlas",
+                "Sin cobro por tráfico ni sorpresas",
               ],
               image: "https://i.imgur.com/hn9dN49.png",
             },
           ],
           priceLine: (
             <>
-              Desde <strong>${CHEAPEST}/mes</strong> por máquina, en pesos, con{" "}
-              {SELLABLE_TIERS.length} tamaños según lo que necesites correr.
+              Cotizado por proyecto, <strong>en pesos y con precio fijo</strong>. Escríbenos a
+              soporte@easybits.cloud.
             </>
           ),
         }}

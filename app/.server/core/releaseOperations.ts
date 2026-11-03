@@ -1222,7 +1222,28 @@ export async function recreateFromRelease(
   }
   const spec = runspecSchema.parse(rel.runspec ?? {});
 
+  // Hosting por cotización: sólo se recrea sin cotizar una máquina que el dueño YA paga a
+  // precio de lista (la nueva toma su lugar y la vieja se libera). Una de precio acordado o
+  // de suscripción compartida se ajusta a mano: recrearla la cobraría a lista.
+  let renewal = false;
+  if (params.replaceSandboxId) {
+    const old = await db.sandbox.findUnique({ where: { sandboxId: params.replaceSandboxId } });
+    if (old && old.ownerId === ctx.user.id) {
+      const shared = old.stripeSubscriptionId
+        ? (await db.sandbox.count({ where: { stripeSubscriptionId: old.stripeSubscriptionId } })) > 1
+        : false;
+      if (old.agreedMonthlyMxn != null || shared) {
+        const e: any = new Error("Esta máquina tiene un precio acordado; escríbenos a soporte@easybits.cloud para cambiarle el tamaño.");
+        e.code = "AgreedPrice";
+        e.status = 409;
+        throw e;
+      }
+      renewal = !!(old.stripeSubItemId || old.stripeSubscriptionId);
+    }
+  }
+
   const bought = await buyMachine(ctx, {
+    renewal,
     tier: params.tier ?? rel.tier ?? "micro",
     template: (rel.template as any) ?? "node",
     name: params.name ?? `${rel.sandboxId}-r${rel.version}`,

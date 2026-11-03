@@ -64,9 +64,9 @@ easybits sandboxes resume sb_abc123
 easybits sandboxes snapshot sb_abc123 --name before-upgrade
 easybits sandboxes destroy sb_abc123 --yes
 
-# Hosting: permanent machines (alias: deploy)
+# Hosting: permanent machines (alias: deploy). Hosting is by quote: soporte@easybits.cloud
 easybits machines ls
-easybits machines launch --repo https://github.com/you/shop.git --tier micro --domain shop.example.com
+easybits machines launch --machine shop --repo https://github.com/you/shop.git --domain shop.example.com
 easybits machines launch --machine shop --archive ./build.tgz --prebuilt -m v2   # redeploy
 easybits machines deploy sb_abc123 -m "v1.2"   # publish a release of the current code
 easybits deploy sb_abc123 -m "v1.2"            # same thing, shorter
@@ -78,14 +78,14 @@ easybits machines secrets set sb_abc123 --dotenv .env.production   # - reads std
 easybits machines secrets unset sb_abc123 DATABASE_URL
 easybits machines restart shop       # restart the app with the current secrets/runspec (no build)
 easybits machines adopt sb_abc123 --name shop-prod --unit app --import-env /app/secrets.env --dry-run   # register a box that already runs; its secrets move to the vault
-easybits machines get shop           # tier, size, MXN/month, whether it sleeps
-easybits machines tiers              # the catalog: sizes and prices in MXN
+easybits machines get shop           # tier, size, status, whether it sleeps
+easybits machines tiers              # hosting is by quote: how to ask for a machine
 easybits machines runspec get shop
 easybits machines runspec set shop --data /app/data --start 'node server.js' --port 8080   # merges
 easybits machines backups shop       # daily data backups (7 days)
 easybits machines backup shop        # one now
-easybits machines redeploy shop --tier focus --replace   # resize: new machine from the newest release
-easybits machines rm shop --yes      # release: stops billing, last backup, destroys the box
+easybits machines redeploy shop --replace   # recover: new machine from the newest release (resizing is quoted)
+easybits machines rm shop --yes      # owner only: last backup, destroys the box
 easybits init --port 3000            # GitHub Actions workflow that deploys on every push
 
 # Domains of your account (serve your websites at <slug>.example.com and the root)
@@ -318,6 +318,13 @@ Host *.ghosty
 - Skill: `npx skills add https://easybits.cloud` (includes `easybits-cli`).
 
 Full reference: https://www.easybits.cloud/docs#cli · https://www.easybits.cloud/en/docs/cli.md
+
+## Changes in 0.23.0
+
+- Hosting is by quote (soporte@easybits.cloud). `machines tiers` no longer prints a price list,
+  `ls`/`get` drop the MXN/month column, and `launch` without `--machine` (or `redeploy`) explains
+  the 403 `HostingByQuote` instead of printing the raw API error. Examples deploy onto an
+  existing machine.
 
 ## Changes in 0.20.0
 

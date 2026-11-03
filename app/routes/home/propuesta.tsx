@@ -8,11 +8,9 @@ import { BrutalButton } from "~/components/common/BrutalButton";
 import { Banners, Robot } from "~/components/common/Banner";
 import { Bento } from "./Bento";
 import { ItemList } from "./ItemList";
-import { HOSTING_CATALOG, HIDDEN_TIERS, TIER_ORDER } from "~/lib/hostingCatalog";
 import { effectivePrice } from "~/lib/plans";
 
 // Precios derivados del catálogo real para que el borrador no se desfase.
-const HOSTING_FROM = `$${Math.min(...TIER_ORDER.filter((k) => !HIDDEN_TIERS.has(k)).map((k) => HOSTING_CATALOG[k].priceShared))}`;
 const PLAN_FROM = `$${effectivePrice("Mega")}`;
 
 export const meta = () => [
@@ -88,7 +86,7 @@ export default function PropuestaHome() {
         </p>
         <ItemList title="launch_app: repo → build → URL en 12 s" />
         <ItemList title="Rollback y recuperación tras pérdida en 11.9 s" />
-        <ItemList title={`Máquinas desde ${HOSTING_FROM} MXN/mes, sin plan de pago`} />
+        <ItemList title="Hosting gestionado, cotizado por proyecto" />
       </Bento>
       <Bento
         position="right"
@@ -251,7 +249,7 @@ const Integrators = () => (
       <div className="grid md:grid-cols-3 gap-6 mt-12">
         {[
           ["Una caja por cliente", "Su agente, su base y sus archivos aislados. Si un cliente se va, borras una caja."],
-          ["Una máquina, una suscripción", `Cada app de cliente es su propia suscripción desde ${HOSTING_FROM} MXN/mes. Sin plan de pago para empezar.`],
+          ["Entrega llave en mano", "Montas la app de tu cliente y se la cedes: él la paga en su cuenta y tú sigues como staff."],
           ["Curso: vende tu agente", "Multi-tenant, cobro, hosting y casos con números. Avanza solo, contra tu uso real."],
         ].map(([t, d]) => (
           <div key={t} className="border-2 border-white p-6 shadow-[8px_8px_0_#7c3aed]">

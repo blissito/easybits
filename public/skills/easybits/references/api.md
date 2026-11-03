@@ -217,25 +217,25 @@ curl -s -X POST "$B/databases/$DB/query" "${H[@]}" \
 
 ### GET /databases · GET /databases/{dbId} · DELETE /databases/{dbId} (permanent)
 
-## Hosting (a machine is its own monthly subscription, MXN)
+## Hosting (by quote)
 
-### GET /machines/tiers
-Tiers with vCPU/RAM/NVMe and `monthlyMxn`. `nano` (256 MB) does not survive a Node build;
-`micro` is the real floor for a Node app.
+Machines are created by the EasyBits team or an agency and handed over to the user, who pays the
+agreed price in `/dash/hosting`. Creating a machine (`POST /machines`, `launch` without
+`sandboxId`) answers 403 `HostingByQuote` for regular accounts: send the user to
+soporte@easybits.cloud and don't quote prices. Everything below works on machines they already
+have (`GET /machines` lists theirs and the ones shared with them as staff, `shared: true`).
 
 ### POST /machines/launch — the one call
-Body: exactly one source, `repo` (git URL, `branch?`, `repoToken?` for private) **or**
-`archiveUrl` (`.tar.gz`/`.zip`), and/or `sandboxId` (target machine to redeploy onto). Options:
-`{ tier?: "micro", template?: "node", appDir?: "/app", buildCommand?, startCommand?, port?: 3000,
-env?: { KEY: "value" }, secretNames?: [], dataPaths?: [], domain?, name? }`.
+Body: `sandboxId` (the target machine) plus a source, `repo` (git URL, `branch?`, `repoToken?`
+for private) **or** `archiveUrl` (`.tar.gz`/`.zip`); with no source it uses the code already in
+the box. Options: `{ template?: "node", appDir?: "/app", buildCommand?, startCommand?,
+port?: 3000, env?: { KEY: "value" }, secretNames?: [], dataPaths?: [], domain? }`.
 → `{ url, sandboxId, releaseId, domain?: { dns } }`.
 
 ```bash
 curl -s -X POST "$B/machines/launch" "${H[@]}" \
-  -d '{"repo":"https://github.com/user/app.git","tier":"micro","port":3000,"startCommand":"node server.js"}'
+  -d '{"sandboxId":"sb_…","repo":"https://github.com/user/app.git","port":3000,"startCommand":"node server.js"}'
 ```
-Starts a monthly charge (or returns `{ checkoutUrl }` when the account has no plan: the
-machine is created when payment confirms). Say the tier and price before calling.
 
 Known traps: `npm start` with `node --env-file=.env` dies (no `.env` in the box) → pass config
 via `env` and secrets; Express 5 rejects `app.all("*")` → `app.use(handler)`.
@@ -245,7 +245,7 @@ via `env` and secrets; Express 5 rejects `app.all("*")` → `app.use(handler)`.
 ### POST /machines/{id}/push-deploy → `{ webhook: { url, secret } }` to paste in GitHub → Settings → Webhooks; every push to the machine's branch redeploys, a failed build rolls back to the previous release. DELETE turns it off.
 ### POST /machines/{id}/secrets `{ NAME: "value" }` · POST /machines/{id}/restart · GET /machines/{id}/logs
 ### GET /machines/{id}/releases · POST /machines/{id}/rollback `{ releaseId }` · GET /machines/{id}/backups
-### DELETE /machines/{id} — releases the machine: stops billing (prorated) and destroys it. Destructive.
+### DELETE /machines/{id} — owner only: releases the machine and destroys it. Destructive.
 
 ## Documents (HTML → PDF/PNG, published pages)
 

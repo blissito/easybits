@@ -27,7 +27,7 @@ vi.mock("~/.server/delegation", () => ({
   delegatedAccountIds: vi.fn(async () => []),
 }));
 
-const { releasePermanent, setMachineSleep, attachPaidMachines, assertMachineOwner } = await import(
+const { releasePermanent, setMachineSleep, attachPaidMachines, assertMachineOwner, assertCanSellHosting, buyMachine } = await import(
   "~/.server/core/machineOperations"
 );
 const ctx = (id: string) => ({ user: { id }, scopes: ["READ", "WRITE", "DELETE"] } as any);
@@ -88,5 +88,21 @@ describe("attachPaidMachines (checkout con eb_attach_ids)", () => {
     const r = await attachPaidMachines({ ownerId: "jose", subscriptionId: "sub_9", sandboxIds: ["sb_a", "sb_b", "sb_x"] });
     expect(r).toEqual({ attached: [], skipped: ["sb_a", "sb_b", "sb_x"] });
     expect(updates).toHaveLength(0);
+  });
+});
+
+describe("hosting por cotización", () => {
+  it("un usuario normal no compra a lista: 403 HostingByQuote", async () => {
+    await expect(buyMachine(ctx("u1"), { tier: "nano" })).rejects.toMatchObject({ status: 403 });
+  });
+
+  it("cortesía (agencia) y renovación de una máquina que ya paga sí pasan", () => {
+    expect(() => assertCanSellHosting({ user: { id: "a", courtesyHosting: true }, scopes: [] } as any)).not.toThrow();
+    expect(() => assertCanSellHosting(ctx("u1"), { renewal: true })).not.toThrow();
+  });
+
+  it("precio acordado: cambiar el modo no lo reprecia (409)", async () => {
+    rows.sb_1 = box("sb_1", { agreedMonthlyMxn: 41.67 });
+    await expect(setMachineSleep(ctx("jose"), "sb_1", true)).rejects.toMatchObject({ status: 409 });
   });
 });

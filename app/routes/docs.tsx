@@ -6,11 +6,7 @@ import { CodeBlock } from "~/components/mdx/CodeBlock";
 import { PageActions } from "~/components/docs/PageActions";
 import { SkillsInstall } from "~/components/docs/SkillsInstall";
 import Markdown from "~/components/common/Markdown";
-import { FLEET_BOX, HOSTING_CATALOG, SELLABLE_TIERS } from "~/lib/hostingCatalog";
-
-// Formato humano de specs de un tier (MB → GB/MB legible).
-const fmtRam = (mb: number) => (mb >= 1024 ? `${mb / 1024}GB` : `${mb}MB`);
-const fmtPrice = (n: number | null) => (n == null ? "—" : `$${n.toLocaleString("en-US")}`);
+import { FLEET_BOX } from "~/lib/hostingCatalog";
 
 // El conteo de tools NO se escribe a mano en ninguna parte: sale del servidor MCP
 // real vía getToolCatalog(). Ver la nota en CLAUDE.md — antes convivían cuatro
@@ -3388,13 +3384,13 @@ export default defineSandbox(() => environment.open());`} />
           <section id="hosting" className="mb-16">
             <h2 className="text-2xl font-bold mb-4">Sandboxes permanentes</h2>
             <p className="text-gray-600 mb-4 text-sm">
-              Un sandbox efímero se auto-destruye al TTL. Una <strong>sandbox permanente</strong> corre 24/7 y se cobra <strong>flat en MXN/mes</strong> como item de suscripción encima de tu plan. Mismo recurso, mismo <code className="bg-gray-100 px-1 rounded">sandboxId</code> — "permanente" es solo un flag + cobro. La operas igual que cualquier sandbox (exec, archivos, expose_port, dominios).
+              Un sandbox efímero se auto-destruye al TTL. Una <strong>sandbox permanente</strong> corre 24/7 con un cobro fijo al mes en MXN, cotizado por proyecto. Mismo recurso, mismo <code className="bg-gray-100 px-1 rounded">sandboxId</code> — "permanente" es solo un flag + cobro. La operas igual que cualquier sandbox (exec, archivos, expose_port, dominios).
             </p>
 
             <div className="mb-6 bg-green-50 border-2 border-green-300 rounded-xl p-4 text-sm">
               <strong>5 herramientas MCP</strong> en el grupo <code className="bg-gray-100 px-1 rounded">hosting</code>.{" "}
               Agrega <code className="bg-gray-100 px-1 rounded">--tools hosting</code> para habilitarlas.{" "}
-              Requiere plan de pago (Mega/Tera) — el plan es el gate de acceso.
+              Crear máquinas es sólo para staff (hosting por cotización); operar las tuyas, para todos.
             </div>
 
             <div className="mb-6 bg-blue-50 border-2 border-blue-300 rounded-xl p-4 text-sm">
@@ -3402,34 +3398,9 @@ export default defineSandbox(() => environment.open());`} />
               <a href="/dash/hosting" className="underline font-medium">/dash/hosting</a> — crear, ver estado, promover un sandbox a permanente, y liberar.
             </div>
 
-            <h3 className="text-lg font-bold mb-3">Catálogo de tiers</h3>
-            <div className="overflow-x-auto mb-6">
-              <table className="w-full text-sm border-2 border-black rounded-xl overflow-hidden">
-                <thead className="bg-black text-white">
-                  <tr>
-                    <th className="text-left px-4 py-2 text-xs uppercase">Tier</th>
-                    <th className="text-left px-4 py-2 text-xs uppercase">vCPU / RAM / NVMe</th>
-                    <th className="text-left px-4 py-2 text-xs uppercase">Shared</th>
-                    <th className="text-left px-4 py-2 text-xs uppercase">Reserved</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {SELLABLE_TIERS.map((k, i) => {
-                    const t = HOSTING_CATALOG[k];
-                    return (
-                      <tr key={t.key} className={`border-t border-gray-200 ${i % 2 ? "bg-gray-50" : ""}`}>
-                        <td className="px-4 py-2 font-mono text-xs font-bold">{t.key}</td>
-                        <td className="px-4 py-2 text-xs text-gray-600">{`${t.vcpus} / ${fmtRam(t.memoryMb)} / ${fmtRam(t.diskMb)}`}</td>
-                        <td className="px-4 py-2 text-xs">{fmtPrice(t.priceShared)}</td>
-                        <td className="px-4 py-2 text-xs text-gray-500">{fmtPrice(t.priceReserved)}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+            <h3 className="text-lg font-bold mb-3">Hosting por cotización</h3>
             <p className="text-gray-600 text-sm mb-6">
-              Precios MXN/mes, NVMe, sin cobro de tráfico. Disco add-on: <strong>+100GB NVMe = $99/mes</strong> (apilable). CPU <strong>reserved</strong> (piso garantizado por cgroup) solo desde <code className="bg-gray-100 px-1 rounded">focus</code>. Para correr una app 24/7 (migrar desde Fly/Render) empieza en <code className="bg-gray-100 px-1 rounded">micro</code>; <code className="bg-gray-100 px-1 rounded">nano</code> (256MB) da para un binario estático o un side-project, no para un build de Node.
+              El hosting no se vende a precio de lista: se cotiza por proyecto (<a href="mailto:soporte@easybits.cloud" className="underline">soporte@easybits.cloud</a>). El equipo de EasyBits o tu agencia crea la máquina, la monta y te la <strong>entrega</strong> desde <code className="bg-gray-100 px-1 rounded">/dash/hosting</code>; tú activas su cobro (fijo, en MXN) y queda a tu nombre, con tu agencia como staff. Crear máquinas nuevas (<code className="bg-gray-100 px-1 rounded">create_machine</code>, <code className="bg-gray-100 px-1 rounded">launch_app</code> sin <code className="bg-gray-100 px-1 rounded">sandboxId</code>) responde <code className="bg-gray-100 px-1 rounded">403 HostingByQuote</code> salvo para staff; desplegar, hacer rollback y operar las tuyas funciona igual.
             </p>
 
             <h3 className="text-lg font-bold mb-3">Tu app en producción en una sola llamada</h3>
@@ -3563,9 +3534,9 @@ POST /api/v2/machines
 # Listar / liberar
 GET    /api/v2/machines
 DELETE /api/v2/machines/:sandboxId` },
-                { label: "MCP", code: `list_machine_tiers()                 // catálogo + precios
-create_machine({ tier: "focus" })   // crea always-on, cobra flat/mes
-list_machines()                     // tus sandboxes + monthlyMxn
+                { label: "MCP", code: `list_machines()                     // tus máquinas + monthlyMxn
+launch_app({ sandboxId, repo })     // despliega en tu máquina
+create_machine({ tier: "focus" })   // sólo staff: hosting por cotización
 release_machine({ sandboxId, confirm: true })  // quita cobro + destruye la VM YA` },
               ]}
             />

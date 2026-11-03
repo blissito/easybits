@@ -38,7 +38,7 @@ export const Faq = () => {
         />
         <Question
           question="¿Puedo hospedar mi aplicación aquí?"
-          answer="Sí. De un repositorio a una URL pública con TLS en una sola llamada, con dominio propio, respaldos diarios y rollback. Cada máquina se cobra aparte y no necesitas plan de pago para contratar una."
+          answer="Sí. De un repositorio a una URL pública con TLS en una sola llamada, con dominio propio, respaldos diarios y rollback. El hosting es gestionado y se cotiza por proyecto, con un cobro fijo al mes en pesos: escríbenos a soporte@easybits.cloud."
         />
         <Question
           question="¿Y si necesito más almacenamiento o más cajas?"

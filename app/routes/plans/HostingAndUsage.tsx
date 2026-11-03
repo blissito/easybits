@@ -2,13 +2,7 @@ import { Link } from "react-router";
 import { BrutalElement } from "~/components/common/BrutalElement";
 import { BrutalButton } from "~/components/common/BrutalButton";
 import { TextBlurEffect } from "~/components/TextBlurEffect";
-import {
-  DISK_ADDON_GB,
-  DISK_ADDON_PRICE,
-  FLEET_BOX,
-  HOSTING_CATALOG,
-  SELLABLE_TIERS,
-} from "~/lib/hostingCatalog";
+import { FLEET_BOX } from "~/lib/hostingCatalog";
 import { GENERATION_PACKS, LLM_TOKEN_PACKS, WEB_PACKS } from "~/lib/plans";
 
 /**
@@ -21,64 +15,34 @@ import { GENERATION_PACKS, LLM_TOKEN_PACKS, WEB_PACKS } from "~/lib/plans";
  */
 
 const mxn = (n: number) => `$${n.toLocaleString("es-MX")}`;
-const gb = (mb: number) => (mb >= 1024 ? `${Math.round(mb / 1024)} GB` : `${mb} MB`);
 
 export const HostingAndUsage = () => (
   <>
+    {/* Hosting por cotización (desde 3-nov-2026): ya no hay tabla de precios pública. Se
+        cotiza por proyecto y se entrega montado; los tiers siguen en hostingCatalog como
+        base interna. */}
     <section className="max-w-7xl mx-auto py-20 md:py-32 px-4 md:px-[5%] xl:px-0">
       <TextBlurEffect>
         <h2 className="text-3xl md:text-5xl font-bold text-center">
-          Hosting: una máquina para tu app
+          Hosting gestionado para tu empresa
         </h2>
         <p className="text-iron text-xl md:text-2xl mt-6 text-center max-w-3xl mx-auto">
-          Cada máquina es su propia suscripción, así que{" "}
-          <strong>no necesitas plan de pago</strong> para contratar una. Precio
-          mensual plano, en pesos.
+          Montamos tus apps en máquinas dedicadas y te las entregamos funcionando.{" "}
+          <strong>Un solo cobro mensual, fijo y en pesos</strong>, cotizado según tu proyecto.
         </p>
       </TextBlurEffect>
 
-      <div className="mt-12 lg:mt-16 overflow-x-auto">
-        <table className="w-full min-w-[560px] border-[2px] border-black rounded-xl overflow-hidden bg-white">
-          <thead className="bg-black text-white text-left">
-            <tr>
-              <th className="p-4 font-semibold">Tamaño</th>
-              <th className="p-4 font-semibold">vCPU</th>
-              <th className="p-4 font-semibold">RAM</th>
-              <th className="p-4 font-semibold">Disco</th>
-              <th className="p-4 font-semibold">Al mes</th>
-            </tr>
-          </thead>
-          <tbody>
-            {SELLABLE_TIERS.map((key) => {
-              const t = HOSTING_CATALOG[key];
-              return (
-                <tr key={key} className="border-t-[2px] border-black">
-                  <td className="p-4 font-medium capitalize">{t.key}</td>
-                  <td className="p-4">{t.vcpus}</td>
-                  <td className="p-4">{gb(t.memoryMb)}</td>
-                  <td className="p-4">{gb(t.diskMb)}</td>
-                  <td className="p-4 font-bold">
-                    {mxn(t.priceShared)}
-                    {t.priceReserved !== null && (
-                      <span className="block text-sm font-normal text-iron">
-                        {mxn(t.priceReserved)} con CPU reservada
-                      </span>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-
-      <div className="mt-8 grid gap-4 md:grid-cols-2">
+      <div className="mt-12 grid gap-4 md:grid-cols-2">
         <BrutalElement className="border-2">
           <div className="bg-white p-6 h-full">
-            <h3 className="text-lg font-semibold">Disco extra</h3>
+            <h3 className="text-lg font-semibold">Hosting a la medida</h3>
             <p className="text-iron mt-2">
-              Unidades apilables de {DISK_ADDON_GB} GB por{" "}
-              <strong>{mxn(DISK_ADDON_PRICE)}/mes</strong> cada una.
+              Deploy desde tu repo, dominio propio, respaldos diarios y rollback. Te lo cotizamos
+              por proyecto: escríbenos a{" "}
+              <a href="mailto:soporte@easybits.cloud?subject=Cotizar%20hosting" className="underline text-brand-500">
+                soporte@easybits.cloud
+              </a>
+              .
             </p>
           </div>
         </BrutalElement>

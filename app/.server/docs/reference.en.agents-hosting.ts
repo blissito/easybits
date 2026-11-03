@@ -445,56 +445,39 @@ Rate limits: 10 spawns/min, 120 ops/min. Sandboxes self-destruct at the TTL (def
 
 export const EN_HOSTING = `## Hosting — Permanent sandboxes (always-on)
 
-An ephemeral sandbox self-destructs at the TTL. A **permanent sandbox** runs 24/7 and is billed **flat in MXN/month**. Same resource, same \`sandboxId\` — "permanent" is just a flag + billing. MCP group: \`hosting\`.
+An ephemeral sandbox self-destructs at the TTL. A **machine** (permanent sandbox) runs 24/7. Same resource, same \`sandboxId\` — "permanent" is just a flag + billing. MCP group: \`hosting\`.
 
-**You do NOT need a paid plan to host.** Hosting bills on its own, with its own subscription: someone on Free pays for their box and nothing else. The plan still gates AI, storage and fleet; it no longer gates hosting.
+**Hosting is by quote.** It is no longer sold at list price or bought self-serve: write to soporte@easybits.cloud and we size the machine for you. Machines are created by the EasyBits team or by an agency, which builds the system, publishes it and **hands it over** to the client from \`/dash/hosting\` ("Entregar a un cliente"): the client activates billing right there at the agreed price, the machines move to their name, and the agency stays as staff (operates them, cannot bill or delete them).
 
-\`create_machine\` returns one of two things:
-- **with an active plan** → the machine, provisioned instantly, billed on the plan's same invoice.
-- **without a plan** → \`{ checkoutUrl }\`. You hand that link to the customer; **the machine is created on its own when the payment is confirmed** (nothing runs for free in the meantime). After they pay, \`list_machines()\` shows it.
+\`create_machine\`, \`make_permanent\` and \`launch_app\` without \`sandboxId\` return **403 \`HostingByQuote\`** for regular accounts. Everything else works the same on a machine you already have: deploy (\`launch_app\` with \`sandboxId\`), releases, rollback, redeploy, secrets, logs, domains and backups.
 
-Cancelling a machine's subscription does NOT touch your plan, and vice versa: they are independent charges. On cancel, the box goes to soft delete with a 7-day grace period and a final backup is taken.
+Machines that were already paying keep working as before. Cancelling a machine's subscription does NOT touch your plan, and vice versa. On cancel, the box goes to soft delete with a 7-day grace period and a final backup is taken.
 
-### Tier catalog
-\`GET /machines/tiers\` · MCP: \`list_machine_tiers()\` · SDK: \`eb.machines.tiers()\`
-Tiers (vCPU/RAM/NVMe → MXN/month shared):
-__HOSTING_TIERS_MD__
-For a 24/7 Node app the real floor is \`micro\`: \`nano\` (256MB) runs a static binary or a side project, but does NOT survive a Node build. Disk add-on: +100GB NVMe = $99/month (stackable). **Reserved** CPU (guaranteed floor) only from focus up.
-
-### Create a permanent sandbox
-\`POST /machines\` · Body: \`{ tier, cpuMode?, sleep?, diskAddonsGB?, template?, name? }\`
-MCP: \`create_machine({ tier })\` · SDK: \`eb.sandboxes.createPermanent({ tier })\` (or \`eb.machines.create({ tier })\`)
-Returns the record with \`sandboxId\`, \`tier\`, \`monthlyMxn\`, \`status\`. You operate it like any other sandbox (exec, files, expose_port, domains) by its \`sandboxId\`.
+### Sizes
+Sizes go from 1 vCPU/256 MB up to several dedicated vCPUs; they are chosen when quoting. For a 24/7 Node app the real floor is \`micro\` (1 GB): \`nano\` (256MB) runs a static binary or a side project, but does NOT survive a Node build. A machine with an **agreed price** cannot change size or mode on its own (409 \`AgreedPrice\`): ask support.
 
 ### Sleep when idle
-\`sleep: true\` at create, or later: \`PATCH /machines/:sandboxId\` · Body: \`{ sleep }\` · MCP: \`set_machine_sleep({ sandboxId, sleep })\` · SDK: \`sb.setSleep(true)\`
-The whole VM (disk + in-memory process) suspends after 5 min without traffic and the next request wakes it in ~200 ms right where it left off — no cold start. Same price as shared (micro $99 MXN/month) and the only mode sold for new web apps. Requires template \`node\` and shared CPU. Not for crons, queues or websockets that must run with no visitors. After waking, outbound connections (external DB) may be dead: the app must reconnect.
-
-### Promote an ephemeral to permanent
-\`POST /machines\` · Body: \`{ fromSandboxId, tier }\`
-MCP: \`make_permanent({ sandboxId, tier })\` · SDK: \`sb.makePermanent(tier)\`
-Keeps the SAME \`sandboxId\`, disarms the reaper and starts billing.
+\`PATCH /machines/:sandboxId\` · Body: \`{ sleep }\` · MCP: \`set_machine_sleep({ sandboxId, sleep })\` · SDK: \`sb.setSleep(true)\`
+The whole VM (disk + in-memory process) suspends after 5 min without traffic and the next request wakes it in ~200 ms right where it left off — no cold start. Requires template \`node\` and shared CPU. Not for crons, queues or websockets that must run with no visitors. After waking, outbound connections (external DB) may be dead: the app must reconnect.
 
 ### List / release
-MCP: \`list_machines()\` · SDK: \`eb.machines.list()\` — your permanent sandboxes with \`tier\` + \`monthlyMxn\`.
-\`DELETE /machines/:sandboxId\` · MCP: \`release_machine({ sandboxId })\` · SDK: \`sb.release()\` — removes the charge (prorated) and destroys the VM. **Destructive**, idempotent.
-
-The plan is the access gate; each sandbox bills separately. If your plan is cancelled, your sandboxes are suspended.
+MCP: \`list_machines()\` · SDK: \`eb.machines.list()\` — your machines plus the ones shared with you as staff (\`shared: true\`), with \`tier\` and \`monthlyMxn\` (the agreed price if there is one).
+\`DELETE /machines/:sandboxId\` · MCP: \`release_machine({ sandboxId })\` · SDK: \`sb.release()\` — removes the charge and destroys the VM. **Destructive**, idempotent. Owner only (staff gets 403 \`OwnerOnly\`).
 
 ### launch_app — an app in production in ONE call
-The equivalent of \`fly launch\`. It provisions the machine, puts in the code, builds, starts, exposes a public HTTPS URL, **publishes the recovery release** and optionally attaches the customer's domain. Returns \`{ url, releaseId, domain.dns }\`.
+The equivalent of \`fly launch\`. On your machine (\`sandboxId\`): it puts in the code, builds, starts, exposes a public HTTPS URL, **publishes the recovery release** and optionally attaches the customer's domain. Returns \`{ url, releaseId, domain.dns }\`.
 
 **Use this instead of chaining create + deploy + expose + domain by hand.** Done by hand, the step that gets skipped is the release — and a machine without a release cannot be rebuilt if it dies.
 
-Source: exactly ONE of the three.
+Target: \`sandboxId\`, your machine (without it a new one would be created, and that is by quote: 403 \`HostingByQuote\`). Source: \`repo\` or \`archiveUrl\`; with neither, the code already in the box is used.
 - \`repo\` — git clone. The reproducible path.
 - \`archiveUrl\` — URL of a \`.tar.gz\`/\`.zip\` of the app; for when the customer uploads it **from their computer** and has no repo yet. Accepts zip and tarball, and flattens the nested folder a zip usually comes with.
-- \`sandboxId\` — the agent already wrote the app inside that box; do the rest.
+- no source — the agent already wrote the app inside that box; do the rest.
 
-MCP: \`launch_app({ repo | archiveUrl | sandboxId, tier?, port?, dataPaths?, domain? })\`
+MCP: \`launch_app({ sandboxId, repo | archiveUrl, port?, dataPaths?, domain? })\`
 REST: \`POST /machines/launch\` · SDK: \`eb.machines.launch({ … })\`
 
-Defaults: \`tier: "micro"\` (nano is 256MB — it does NOT survive a Node build), \`template: "node"\` (Node 24 + npm/pnpm; \`ubuntu\` does NOT ship Node), \`appDir: "/app"\`, \`buildCommand: "(npm ci || npm install) && npm run build"\`, \`startCommand: "npm start"\`, \`port: 3000\`.
+Defaults: \`template: "node"\` (Node 24 + npm/pnpm; \`ubuntu\` does NOT ship Node), \`appDir: "/app"\`, \`buildCommand: "(npm ci || npm install) && npm run build"\`, \`startCommand: "npm start"\`, \`port: 3000\`.
 
 **App variables (non-secret)** go in \`env\`: \`{ PORT: "4000", API_URL: "…" }\`. They are exported before the build and before start; vault secrets win by name. Keys must be shell identifiers (\`A-Z_0-9\`).
 
@@ -520,9 +503,9 @@ A heavier app takes longer, mostly downloading the release. With \`prebuilt: tru
 
 ⚠️ **Build INSIDE the box, not on your machine.** A \`node_modules\` with native modules (sharp, better-sqlite3) compiled on macOS blows up on Linux. The first deploy pays for the \`npm ci\`; from then on you publish \`prebuilt\` and every deploy takes seconds.
 
-If the build fails, the machine \`launch_app\` created is released on its own: it does not leave you paying for a broken box. A box you passed via \`sandboxId\` is NEVER released; if you sent it new code (\`repo\` or \`archiveUrl\`) and the build fails, **it goes back on its own to the release it was serving** — the site stays up and the error says so (\`rolledBackTo\`).
+A box you passed via \`sandboxId\` is NEVER released; if you sent it new code (\`repo\` or \`archiveUrl\`) and the build fails, **it goes back on its own to the release it was serving** — the site stays up and the error says so (\`rolledBackTo\`).
 
-**It also works without a paid plan**: if the account has no plan, \`launch_app\` (and \`create_machine\`) return \`{ checkoutUrl }\` instead of failing. You hand that link to the customer; when they pay, the machine is created on its own and shows up in \`list_machines()\`. Then you call \`launch_app\` again with its \`sandboxId\` to deploy on top.
+**No machine yet?** Hosting is by quote: tell the user to write to soporte@easybits.cloud. Do not promise prices.
 
 ### Releases — making the box rebuildable
 Fly/Vercel treat the disk as disposable because the deploy rebuilds it from an image. Here the app is written INSIDE the box, so without a release a dead box takes the app with it, not just the data. A **release** is a versioned tarball of the code in durable storage + a **runspec** that says how to build and start it.
@@ -533,7 +516,7 @@ Fly/Vercel treat the disk as disposable because the deploy rebuilds it from an i
 2. \`deploy_machine({ sandboxId, message? })\` → publishes a release. SDK: \`eb.machines.deploy(id)\`
 3. \`list_machine_releases({ sandboxId })\` · \`rollback_machine({ sandboxId, releaseId })\` — goes back to a previous version on the SAME box. **No rebuild**: a release published by \`launch_app\` carries its build (\`prebuilt\`), so rollback and redeploy are download + extract + start. In exchange the tarball is heavier (it carries \`node_modules\`).
 5. \`get_machine_logs({ sandboxId, lines?, grep? })\` — THE APP's log (last N lines): the unit's journal if the runspec has one, or the file the \`startCommand\` writes to. First place to look when the deploy said it started and the site does not answer. SDK: \`eb.machines.logs(id, { lines })\`.
-4. \`redeploy_machine({ releaseId, tier?, replaceSandboxId? })\` — builds a NEW box. It serves two purposes: recovering a dead machine and **changing tier** (there is no hot resize — it is recreated). \`replaceSandboxId\` releases the old one once the new one is confirmed running; without it you pay for both.
+4. \`redeploy_machine({ releaseId, replaceSandboxId? })\` — builds a NEW box to recover a dead machine. \`replaceSandboxId\` releases the old one once the new one is confirmed running. Owner only; a machine with an agreed price returns 409 \`AgreedPrice\` (changing size is quoted).
 
 REST: \`PUT /machines/:id/runspec\` · \`POST|GET /machines/:id/releases\` · \`POST /machines/:id/rollback\` · \`POST /machine-releases/:releaseId/redeploy\` (separate collection: works even if the original machine no longer exists) · \`GET /machines/:id/logs?lines=200&grep=\`.
 
@@ -604,13 +587,13 @@ The agent gets the numbers already computed: it interprets and writes, it does n
 ### Deploy from GitHub on every push
 One GitHub webhook and you are done: every push to the machine's branch redeploys it. No workflow, no Actions.
 
-**1. Deploy once from the repo.** A clean URL and, if it is private, the token separately (a *fine-grained* PAT with **Contents: Read** on that repo):
+**1. Deploy once from the repo** onto your machine (\`sandboxId\`). A clean URL and, if it is private, the token separately (a *fine-grained* PAT with **Contents: Read** on that repo):
 
 \`\`\`bash
 curl -X POST https://www.easybits.cloud/api/v2/machines/launch \\
   -H "Authorization: Bearer $EASYBITS_API_KEY" -H "Content-Type: application/json" \\
-  -d '{"repo":"https://github.com/usuario/repo.git","branch":"main",
-       "repoToken":"github_pat_…","tier":"micro","port":3000}'
+  -d '{"sandboxId":"sb_…","repo":"https://github.com/usuario/repo.git","branch":"main",
+       "repoToken":"github_pat_…","port":3000}'
 \`\`\`
 
 The token is stored in your vault for you (\`GIT_TOKEN_<id>\`); if it is already there, pass \`"$secret:NAME"\`. The machine remembers which repo and branch it came from (\`runspec.source\`; of the token, only the secret's NAME).

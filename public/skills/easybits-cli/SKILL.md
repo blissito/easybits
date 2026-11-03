@@ -5,7 +5,7 @@ license: MIT
 compatibility: Needs Node 22+ (npx is enough), network access to https://www.easybits.cloud and an EasyBits API key
 metadata:
   author: easybits
-  version: "1.34"
+  version: "1.35"
 ---
 
 # Use the EasyBits CLI
@@ -134,9 +134,10 @@ Templates: `ubuntu` (default), `python`, `node`, `bun`, `code-interpreter`… Fu
 
 ## Hosting (permanent machines, alias `deploy`)
 
+Hosting is **by quote**: a new machine answers 403 `HostingByQuote`; deploy onto existing ones, else send the user to soporte@easybits.cloud (no prices; `easybits machines tiers` prints how). Staff machines (`shared: true`): operate yes, `rm`/billing owner only.
 ```bash
 easybits machines ls --json
-easybits machines launch --repo "$REPO" --tier micro --json      # new machine + deploy (--archive <url|file> too)
+easybits machines launch --machine "$ID" --repo "$REPO" --json   # deploy onto an existing machine (--archive <url|file> too)
 easybits machines launch --machine "$ID" --archive ./build.tgz --prebuilt -m v2   # redeploy prebuilt code
 easybits machines deploy "$ID" -m "v1.2"            # publish a release of the current code
 easybits machines releases "$ID" --limit 5 --json
@@ -147,14 +148,13 @@ printf 'DATABASE_URL=%s\n' "$DATABASE_URL" | easybits machines secrets set "$ID"
 easybits machines secrets ls "$ID" --json           # names only; values are never readable (`secrets unset "$ID" NAME` stops injecting one)
 easybits machines restart "$ID" --json              # apply new secrets/runspec: restart, no build (exit 1 if it fails)
 easybits machines adopt "$ID" --name NAME --unit app --import-env /app/secrets.env --dry-run --json   # box already running without a machine row: register it (no redeploy, no release, no backups)
-easybits machines get "$ID" --json                  # {tier, vcpus, memoryMb, diskMb, monthlyMxn, sleep, status…}
-easybits machines tiers --json                      # catalog {tiers:[{key, vcpus, memoryMb, diskMb, priceShared, priceReserved, minPlan}], diskAddon}
+easybits machines get "$ID" --json                  # {tier, vcpus, memoryMb, diskMb, sleep, status, shared…}
 easybits machines runspec get "$ID" --json          # {runspec:{appDir, buildCommand, startCommand, unit, port, prebuilt, dataPaths, excludes, env}}
 easybits machines runspec set "$ID" --data /app/data --json   # merges; --file rs.json|- takes `runspec get --json` output
 easybits machines backups "$ID" --json              # {items:[{id, stamp, status, bytes, consistency, expiresAt}]}
 easybits machines backup "$ID" --json               # take one now
-easybits machines redeploy "$ID" --tier focus --replace --yes --json   # resize/recover: NEW machine from the newest release
-easybits machines rm "$ID" --yes --json             # release: stops billing, last backup, destroys it
+easybits machines redeploy "$ID" --replace --yes --json   # recover: NEW machine from the newest release (resizing is quoted)
+easybits machines rm "$ID" --yes --json             # owner only: last backup, destroys it
 easybits init --port 3000                           # GitHub Actions: deploy on every push
 ```
 

@@ -153,6 +153,19 @@ function fail(status: number, error: string, message: string, extra?: object): n
 }
 
 /**
+ * Hosting por cotización (desde 3-nov-2026): ya no se vende a precio de lista. Sólo la casa
+ * (admin) y las agencias con cortesía crean máquinas; al cliente se le entrega con una
+ * HostingOffer a precio acordado. Quien ya paga sigue igual (renovar, redeploy de su
+ * máquina cobrada). `renewal` = el que llama reemplaza una máquina que YA paga.
+ */
+export function assertCanSellHosting(ctx: AuthContext, opts: { renewal?: boolean } = {}): void {
+  if (opts.renewal) return;
+  if (isAdminUser(ctx.user) || (ctx.user as { courtesyHosting?: boolean }).courtesyHosting) return;
+  fail(403, "HostingByQuote",
+    "El hosting de EasyBits es por cotización: escríbenos a soporte@easybits.cloud y te armamos tu máquina.");
+}
+
+/**
  * Throw a Response if this tier/cpuMode can't be provisioned at all.
  *
  * NOTE (Aug 2026): hosting no longer requires a platform plan. A machine is now
@@ -505,12 +518,15 @@ export async function buyMachine(
     successUrl?: string;
     cancelUrl?: string;
     derived?: { templateKey: string; templateHash: string };
+    // Redeploy/resize de una máquina que el que llama YA paga (recreateFromRelease).
+    renewal?: boolean;
   }
 ): Promise<
   | { machine: PermanentSandbox; checkoutUrl?: undefined }
   | { checkoutUrl: string; tier: string; monthlyMxn: number; machine?: undefined }
 > {
   requireScope(ctx, "WRITE");
+  assertCanSellHosting(ctx, { renewal: params.renewal });
   // Cortesía: cuentas invitadas y de la casa provisionan sin pasar por Stripe.
   // Va antes que el plan porque no hay suscripción que consultar, y se marca a
   // mano en la DB — la app nunca lo enciende sola.
@@ -636,6 +652,7 @@ export async function promoteWorkBox(
   const row = await db.sandbox.findUnique({ where: { sandboxId } });
   if (!row || row.ownerId !== ctx.user.id || row.status === "destroyed") fail(404, "MachineNotFound", "Sandbox no encontrado.");
   if (!row.workBox) return { promoted: true };
+  assertCanSellHosting(ctx);
   const tier = resolveTier(row.tier);
   if (!tier) fail(400, "UnknownTier", `Tier desconocido: "${row.tier}".`);
   const mode = (row.cpuMode === "reserved" ? "reserved" : "shared") as CpuMode;
@@ -849,6 +866,7 @@ export async function makePermanent(
   const mode: CpuMode = params.cpuMode === "reserved" ? "reserved" : "shared";
   const diskAddonsGB = params.diskAddonsGB ?? 0;
 
+  assertCanSellHosting(ctx);
   assertCanProvision(ctx, tier, mode);
 
   const existing = await db.sandbox.findUnique({ where: { sandboxId } });
@@ -1029,7 +1047,14 @@ export async function releasePermanent(
   if (row.stripeSubItemId) {
     await removeMachineSubscriptionItem(row.stripeSubItemId).catch(() => undefined);
   }
-  if (row.stripeSubscriptionId) {
+  // Una suscripción que cubre varias máquinas (precio acordado) no se cancela por liberar
+  // UNA: eso dejaría a las demás sin cobro. El ajuste del total se hace a mano.
+  const sharedSub = row.stripeSubscriptionId
+    ? (await db.sandbox.count({ where: { stripeSubscriptionId: row.stripeSubscriptionId } })) > 1
+    : false;
+  if (row.stripeSubscriptionId && sharedSub) {
+    console.error(`[hosting] ${sandboxId} se libera de la suscripción compartida ${row.stripeSubscriptionId}: el total no cambia, ajústalo a mano.`);
+  } else if (row.stripeSubscriptionId) {
     await cancelMachineSubscription(row.stripeSubscriptionId).catch((e) => {
       console.error(`[hosting] could not cancel subscription ${row.stripeSubscriptionId}:`, e);
     });
@@ -1105,7 +1130,13 @@ export async function restoreMachine(ctx: AuthContext, sandboxId: string): Promi
     data: { status: "running", deletionScheduledAt: null },
   });
   return attachBilling(ctx, cleared as SandboxRow, tier, mode, row.diskAddonsGB, undefined, async () => {
-    // Billing re-attach failed — leave it running but unbilled; owner can retry.
+    // Sin cobro no se revive: antes se quedaba corriendo gratis (cualquier cuenta sin plan
+    // cuya suscripción se canceló tenía cómputo gratis con restore_machine).
+    await suspendSandboxRaw(row.ownerId, sandboxId).catch(() => undefined);
+    await db.sandbox.update({
+      where: { sandboxId },
+      data: { status: "pending_deletion", deletionScheduledAt: row.deletionScheduledAt ?? new Date() },
+    });
   });
 }
 

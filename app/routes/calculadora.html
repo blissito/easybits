@@ -105,7 +105,7 @@ const ITEMS=[
  {k:'voice',icon:'micro',t:'Brazo de voz',d:'+5 min/mes',step:5,slot:[64,66]},
  {k:'tok',icon:'foco',t:'Cerebro LLM',d:'+5M tokens/mes',step:5,slot:[40,52]},
  {k:'agents',icon:'code',t:'Caja de agentes',d:'+4 agentes a la vez',step:4,slot:[74,42]},
- {k:'app',icon:'rocket',t:'Pies: app hospedada',d:'estandar · 2 vCPU · 2 GB',step:1,slot:[40,86]},
+ {k:'app',icon:'rocket',t:'Pies: app hospedada',d:'hosting gestionado, se cotiza',step:1,slot:[40,86]},
  {k:'wa',icon:'support',t:'WhatsApp',d:'su propio número',step:1,max:1,slot:[74,18]},
 ];
 const q={agents:1,web:0,docs:0,voice:0,tok:0,app:0,gb:0,wa:0};
@@ -118,7 +118,7 @@ function calc(){const P=PLANS[plan],L=[];L.push(['Plan '+plan,P.price?`${P.boxes
  const w=packs(Math.max(0,q.web-WEB_FREE),WEB);if(w.n)L.push(['Consultas web',w.txt,w.n]);
  const c=packs(Math.max(0,q.docs*100+q.voice*800-P.cr),CR);if(c.n)L.push(['Créditos extra',c.txt+' cr',c.n]);
  const t=packs(Math.max(0,q.tok*1e6-P.tok),TOK);if(t.n)L.push(['Tokens LLM',t.txt,t.n]);
- if(q.app)L.push(['App hospedada · estandar',`${q.app} × $449`,q.app*449]);
+ if(q.app)L.push(['App hospedada',`${q.app} · se cotiza aparte (soporte@easybits.cloud)`,0]);
  const notes=[];if(q.gb>P.gb)notes.push(`Para ${q.gb} GB necesitas un plan mayor (${plan} incluye ${P.gb} GB).`);if(q.wa)notes.push('WhatsApp usa la caja del agente: sin costo extra.');
  return{L,total:L.reduce((a,l)=>a+l[2],0),notes}}
 function count(i){return i.k==='agents'?Math.max(0,(q.agents-1)/4):q[i.k]/i.step}

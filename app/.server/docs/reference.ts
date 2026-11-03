@@ -1,6 +1,5 @@
 // EasyBits API Reference — returned by get_docs MCP tool and GET /api/v2/docs
 
-import { HOSTING_CATALOG, SELLABLE_TIERS } from "../../lib/hostingCatalog";
 import { WEBHOOK_EVENTS, WEBHOOK_EVENT_DOCS } from "../webhooks";
 import { templatesMarkdownTable } from "../sandbox/templateCatalog";
 
@@ -9,15 +8,6 @@ import { templatesMarkdownTable } from "../sandbox/templateCatalog";
 const WEBHOOK_EVENTS_MD = WEBHOOK_EVENTS.map(
   (e) => `- \`${e}\` — ${WEBHOOK_EVENT_DOCS[e]}`
 ).join("\n");
-
-// Catálogo de tiers en Markdown, derivado de la fuente única (hostingCatalog).
-// Un tier nuevo aparece aquí sin editar prosa a mano.
-const fmtRam = (mb: number) => (mb >= 1024 ? `${mb / 1024}GB` : `${mb}MB`);
-export const HOSTING_TIERS_MD = SELLABLE_TIERS.map((k) => {
-  const t = HOSTING_CATALOG[k];
-  const res = t.priceReserved != null ? ` (reserved $${t.priceReserved.toLocaleString("en-US")})` : "";
-  return `- ${t.key} ${t.vcpus}/${fmtRam(t.memoryMb)}/${fmtRam(t.diskMb)} → $${t.priceShared.toLocaleString("en-US")}${res}`;
-}).join("\n");
 
 const SECTIONS: Record<string, string> = {
   claude: `## Conector de Claude
@@ -232,7 +222,7 @@ Alias: \`easybits sb …\`. Todo lo que va después de \`--\` en \`exec\` es el 
 
 \`\`\`bash
 easybits machines ls
-easybits machines launch --repo https://github.com/tu/tienda.git --tier micro      # crea la máquina y despliega (= launch_app)
+easybits machines launch --machine tienda --repo https://github.com/tu/tienda.git  # despliega en tu máquina (= launch_app)
 easybits machines launch --machine tienda --archive ./build.tgz --prebuilt -m v2   # redespliega
 easybits deploy sb_abc123 -m "v1.2"                      # publica un release (= machines deploy)
 easybits machines releases sb_abc123 --limit 5
@@ -244,20 +234,22 @@ printf 'API_KEY=%s\\n' "$API_KEY" | easybits machines secrets set sb_abc123 --do
 easybits machines secrets unset sb_abc123 API_KEY
 easybits machines restart sb_abc123                      # reinicia la app con los secretos y el runspec actuales (segundos, sin build)
 easybits machines adopt sb_abc123 --name tienda-prod --unit app --import-env /app/secrets.env   # registra una caja que ya corre: EasyBits guarda sus secretos y la reinicia, nunca la redespliega ni la libera
-easybits machines get tienda                             # tier, tamaño, MXN/mes, si duerme
-easybits machines tiers                                  # el catálogo: tamaños y precio mensual en MXN
+easybits machines get tienda                             # tamaño, estado, si duerme
+easybits machines tiers                                  # el hosting es por cotización: cómo pedir una máquina
 easybits machines runspec get tienda
 easybits machines runspec set tienda --data /app/data --start 'node server.js' --port 8080   # se mezcla con lo que hay
 easybits machines backups tienda                         # respaldos diarios de datos, 7 días
 easybits machines backup tienda                          # uno ya
-easybits machines redeploy tienda --tier focus --replace # cambiar tamaño: máquina nueva desde el release más nuevo
-easybits machines rm tienda --yes                        # liberar: deja de cobrarse, último respaldo, destruye la caja
+easybits machines redeploy tienda --replace             # recuperar: máquina nueva desde el release más nuevo
+easybits machines rm tienda --yes                        # liberar (sólo el dueño): último respaldo y destruye la caja
 easybits init --port 3000                                # workflow de GitHub Actions: deploy en cada push
 \`\`\`
 
+**El hosting es por cotización** (escríbenos a soporte@easybits.cloud): las máquinas las crea el equipo de EasyBits o tu agencia y te las entrega. Con tu máquina ya creada, todo lo de arriba funciona igual; \`launch\` sin \`--machine\` responde 403 \`HostingByQuote\`.
+
 \`easybits deploy <máquina>\` es el atajo de \`machines deploy <máquina>\`. Los secretos van en un archivo dotenv o por stdin (\`--dotenv -\`), nunca en argv: ahí los ven \`ps\` y el historial de tu shell. \`secrets ls\` sólo muestra nombres; los valores no se pueden leer.
 
-**Runspec** = cómo se construye, arranca y respalda la app: \`appDir\`, \`buildCommand\`, \`startCommand\` o \`unit\`, \`port\`, \`prebuilt\`, \`dataPaths\`, \`excludes\`, \`env\` (no secreto). \`runspec set\` se mezcla (el env por llave) y aplica en el siguiente deploy o reinicio; \`--file rs.json\` acepta tal cual la salida de \`runspec get --json\`, y las banderas ganan sobre él. **Sin \`--data\` (dataPaths) no se respalda nada.** \`redeploy\` es recuperación y cambio de tamaño a la vez (no hay resize en caliente): construye una máquina NUEVA desde \`--release\` (default: el más nuevo) con \`--tier\`; \`--replace\` libera la vieja cuando la nueva corre (te pide teclear el id), si no, pagas las dos. La nueva nace sin datos. \`rm\` también pide teclear el id: deja de cobrarse, toma un último respaldo y destruye la caja.
+**Runspec** = cómo se construye, arranca y respalda la app: \`appDir\`, \`buildCommand\`, \`startCommand\` o \`unit\`, \`port\`, \`prebuilt\`, \`dataPaths\`, \`excludes\`, \`env\` (no secreto). \`runspec set\` se mezcla (el env por llave) y aplica en el siguiente deploy o reinicio; \`--file rs.json\` acepta tal cual la salida de \`runspec get --json\`, y las banderas ganan sobre él. **Sin \`--data\` (dataPaths) no se respalda nada.** \`redeploy\` es recuperación: construye una máquina NUEVA desde \`--release\` (default: el más nuevo); \`--replace\` libera la vieja cuando la nueva corre (te pide teclear el id). La nueva nace sin datos. Cambiar de tamaño se cotiza (soporte@easybits.cloud); una máquina con precio acordado no se recrea sola. \`rm\` también pide teclear el id: toma un último respaldo y destruye la caja.
 
 ### Secretos de la cuenta (vault)
 
@@ -1316,18 +1308,16 @@ Configure via MCP tool \`set_ai_key\` or dashboard. Supports ANTHROPIC and OPENA
 
 | Method | Description |
 |--------|-------------|
-| \`machines.tiers()\` | Catálogo de tiers + precio del disco add-on |
 | \`machines.list()\` | Tus máquinas permanentes |
 | \`machines.logs(id, { lines?, grep? })\` | El log de la app (unit o archivo del startCommand) |
-| \`machines.launch({ repo \\| archiveUrl \\| sandboxId, domain? })\` | **Una app en producción en UNA llamada** (el \`fly launch\` de EasyBits). Empieza por aquí. |
-| \`machines.create({ tier })\` | Provisiona una máquina always-on (caja vacía). Lanza \`MachinePaymentRequired\` con \`.checkoutUrl\` si la cuenta no tiene plan |
-| \`machines.buy({ tier })\` | Igual pero sin lanzar: devuelve la máquina **o** \`{ checkoutUrl }\` para que el cliente pague |
+| \`machines.launch({ sandboxId, repo \\| archiveUrl, domain? })\` | **Una app en producción en UNA llamada** sobre tu máquina (el \`fly launch\` de EasyBits). Empieza por aquí. |
+| \`machines.create({ tier })\` / \`machines.buy({ tier })\` | Obsoletos: el hosting es por cotización y responden 403 \`HostingByQuote\` (salvo cuentas de agencia) |
 | \`machines.setRunspec(id, spec)\` | Declara appDir/build/start/**dataPaths** — obligatorio antes del primer deploy |
 | \`machines.runspec(id)\` | Lee el runspec |
 | \`machines.deploy(id, { message? })\` | Publica el código actual como release |
 | \`machines.releases(id)\` | Lista releases (versión más nueva primero) |
 | \`machines.rollback(id, releaseId)\` | Vuelve a un release anterior, MISMA caja |
-| \`machines.redeploy(releaseId, { tier?, replaceSandboxId? })\` | Caja NUEVA desde un release: recuperación **y** cambio de tier |
+| \`machines.redeploy(releaseId, { replaceSandboxId? })\` | Caja NUEVA desde un release (recuperación) |
 | \`machines.backups(id)\` | Backups diarios de datos (7 días, incluidos) |
 | \`machines.backup(id)\` | Toma un backup ahora |
 | \`sb.exec(cmd)\` | Corre un comando dentro de la caja |
@@ -1339,14 +1329,13 @@ Configure via MCP tool \`set_ai_key\` or dashboard. Supports ANTHROPIC and OPENA
 | \`sb.enableSsh(keys)\` | SSH a la caja: inyecta llave + abre el 22; devuelve el comando \`ssh\` |
 | \`sb.addDomain(domain, port)\` | Dominio propio + TLS automático; devuelve el registro DNS exacto (apex → A, subdominio → CNAME) |
 | \`sb.verifyDomain(domain)\` | Confirma que el dominio ya resuelve y sirve por HTTPS |
-| \`sb.makePermanent(tier)\` | Promueve un sandbox efímero (mismo sandboxId) |
-| \`sb.release()\` | Libera la máquina (corta cobro, 7 días de gracia) |
+| \`sb.release()\` | Libera la máquina (sólo el dueño) |
 
 Una app en producción, con dominio, en una llamada:
 \`\`\`ts
 const app = await eb.machines.launch({
-  repo: "https://github.com/cliente/tienda",   // o archiveUrl, o sandboxId
-  tier: "micro",
+  sandboxId: "sb_…",                           // tu máquina (el hosting es por cotización)
+  repo: "https://github.com/cliente/tienda",   // o archiveUrl
   port: 3000,
   dataPaths: ["data", "uploads"],              // sin esto NO hay backup
   domain: "tienda.com",
@@ -2013,56 +2002,39 @@ call_stop({ sandboxId })    → { url }  ← link permanente al MP4
 
   hosting: `## Hosting — Sandboxes permanentes (always-on)
 
-Un sandbox efímero se auto-destruye al TTL. Una **sandbox permanente** corre 24/7 y se cobra **flat en MXN/mes**. Mismo recurso, mismo \`sandboxId\` — "permanente" es solo un flag + cobro. Grupo MCP: \`hosting\`.
+Un sandbox efímero se auto-destruye al TTL. Una **máquina** (sandbox permanente) corre 24/7. Mismo recurso, mismo \`sandboxId\` — "permanente" es solo un flag + cobro. Grupo MCP: \`hosting\`.
 
-**NO necesitas plan de pago para hostear.** Hosting se factura solo, con su propia suscripción: alguien en Free paga su caja y nada más. El plan sigue gateando IA, storage y flota; dejó de gatear hosting.
+**El hosting es por cotización.** Ya no se vende a precio de lista ni se compra solo: escríbenos a soporte@easybits.cloud y armamos la máquina a la medida. Las máquinas las crea el equipo de EasyBits o una agencia, que monta el sistema, lo publica y lo **entrega** al cliente desde \`/dash/hosting\` («Entregar a un cliente»): el cliente activa su cobro ahí mismo, al precio acordado, las máquinas pasan a su nombre y la agencia queda como staff (las opera, no las cobra ni las borra).
 
-\`create_machine\` devuelve una de dos cosas:
-- **con plan activo** → la máquina, aprovisionada al instante, cobrada en la misma factura del plan.
-- **sin plan** → \`{ checkoutUrl }\`. Le pasas ese link al cliente; **la máquina se crea sola cuando el pago se confirma** (nada corre gratis mientras tanto). Después de que pague, \`list_machines()\` la muestra.
+\`create_machine\`, \`make_permanent\` y \`launch_app\` sin \`sandboxId\` responden **403 \`HostingByQuote\`** para cuentas normales. Todo lo demás funciona igual sobre una máquina que ya tienes: desplegar (\`launch_app\` con \`sandboxId\`), releases, rollback, redeploy, secretos, logs, dominios y respaldos.
 
-Cancelar la suscripción de una máquina NO toca tu plan, y viceversa: son cobros independientes. Al cancelar, la caja pasa a borrado suave con 7 días de gracia y se toma un backup final.
+Las máquinas que ya pagaban siguen igual. Cancelar la suscripción de una máquina NO toca tu plan, y viceversa. Al cancelar, la caja pasa a borrado suave con 7 días de gracia y se toma un backup final.
 
-### Catálogo de tiers
-\`GET /machines/tiers\` · MCP: \`list_machine_tiers()\` · SDK: \`eb.machines.tiers()\`
-Tiers (vCPU/RAM/NVMe → MXN/mes shared):
-${HOSTING_TIERS_MD}
-Para una app Node 24/7 el piso real es \`micro\`: \`nano\` (256MB) corre un binario estático o un side-project, pero NO aguanta un build de Node. Disco add-on: +100GB NVMe = $99/mes (apilable). CPU **reserved** (piso garantizado) solo desde focus.
-
-### Crear sandbox permanente
-\`POST /machines\` · Body: \`{ tier, cpuMode?, sleep?, diskAddonsGB?, template?, name? }\`
-MCP: \`create_machine({ tier })\` · SDK: \`eb.sandboxes.createPermanent({ tier })\` (o \`eb.machines.create({ tier })\`)
-Devuelve el record con \`sandboxId\`, \`tier\`, \`monthlyMxn\`, \`status\`. Lo operas igual que cualquier sandbox (exec, files, expose_port, dominios) por su \`sandboxId\`.
+### Tamaños
+Hay tamaños desde 1 vCPU/256 MB hasta varias vCPU dedicadas; se eligen al cotizar. Para una app Node 24/7 el piso real es \`micro\` (1 GB): \`nano\` (256MB) corre un binario estático o un side-project, pero NO aguanta un build de Node. Una máquina con **precio acordado** no se cambia de tamaño ni de modo sola (409 \`AgreedPrice\`): pídelo a soporte.
 
 ### Duerme sin visitas
-\`sleep: true\` al crear, o después: \`PATCH /machines/:sandboxId\` · Body: \`{ sleep }\` · MCP: \`set_machine_sleep({ sandboxId, sleep })\` · SDK: \`sb.setSleep(true)\`
-La VM entera (disco + proceso en memoria) se suspende tras 5 min sin tráfico y la siguiente visita la despierta en ~200 ms donde se quedó — sin cold start. Cuesta lo mismo que shared (micro $99 MXN/mes) y es el único modo que se vende para web apps nuevas. Requiere template \`node\` y CPU shared. No sirve para crons, colas o websockets que deban correr sin visitas. Al despertar, las conexiones salientes (BD externa) pueden venir muertas: la app debe reconectar.
-
-### Promover un efímero a permanente
-\`POST /machines\` · Body: \`{ fromSandboxId, tier }\`
-MCP: \`make_permanent({ sandboxId, tier })\` · SDK: \`sb.makePermanent(tier)\`
-Conserva el MISMO \`sandboxId\`, desarma el reaper y arranca el cobro.
+\`PATCH /machines/:sandboxId\` · Body: \`{ sleep }\` · MCP: \`set_machine_sleep({ sandboxId, sleep })\` · SDK: \`sb.setSleep(true)\`
+La VM entera (disco + proceso en memoria) se suspende tras 5 min sin tráfico y la siguiente visita la despierta en ~200 ms donde se quedó — sin cold start. Requiere template \`node\` y CPU shared. No sirve para crons, colas o websockets que deban correr sin visitas. Al despertar, las conexiones salientes (BD externa) pueden venir muertas: la app debe reconectar.
 
 ### Listar / liberar
-MCP: \`list_machines()\` · SDK: \`eb.machines.list()\` — tus sandboxes permanentes con \`tier\` + \`monthlyMxn\`.
-\`DELETE /machines/:sandboxId\` · MCP: \`release_machine({ sandboxId })\` · SDK: \`sb.release()\` — quita el cobro (prorrateado) y destruye la VM. **Destructiva**, idempotente.
-
-El plan es el gate de acceso; cada sandbox factura aparte. Si tu plan se cancela, tus sandboxes se suspenden.
+MCP: \`list_machines()\` · SDK: \`eb.machines.list()\` — tus máquinas y las que te comparten como staff (\`shared: true\`), con \`tier\` y \`monthlyMxn\` (el precio acordado si lo hay).
+\`DELETE /machines/:sandboxId\` · MCP: \`release_machine({ sandboxId })\` · SDK: \`sb.release()\` — quita el cobro y destruye la VM. **Destructiva**, idempotente. Sólo el dueño (el staff recibe 403 \`OwnerOnly\`).
 
 ### launch_app — una app en producción en UNA llamada
-El equivalente a \`fly launch\`. Provisiona la máquina, mete el código, buildea, arranca, expone URL pública HTTPS, **publica el release de recuperación** y opcionalmente pega el dominio del cliente. Devuelve \`{ url, releaseId, domain.dns }\`.
+El equivalente a \`fly launch\`. Sobre tu máquina (\`sandboxId\`): mete el código, buildea, arranca, expone URL pública HTTPS, **publica el release de recuperación** y opcionalmente pega el dominio del cliente. Devuelve \`{ url, releaseId, domain.dns }\`.
 
 **Usa esto en vez de encadenar create + deploy + expose + domain a mano.** Hecho a mano, el paso que se salta es el release — y una máquina sin release no se puede reconstruir si muere.
 
-Fuente: exactamente UNA de las tres.
+Destino: \`sandboxId\`, tu máquina (sin él se crearía una y eso es por cotización: 403 \`HostingByQuote\`). Fuente: \`repo\` o \`archiveUrl\`; sin ninguna, se usa el código que ya está en la caja.
 - \`repo\` — git clone. El camino reproducible.
 - \`archiveUrl\` — URL de un \`.tar.gz\`/\`.zip\` de la app; para cuando el cliente la sube **desde su compu** y todavía no tiene repo. Acepta zip y tarball, y aplana el folder anidado que suele traer un zip.
-- \`sandboxId\` — el agente ya escribió la app dentro de esa caja; haz el resto.
+- sin fuente — el agente ya escribió la app dentro de esa caja; haz el resto.
 
-MCP: \`launch_app({ repo | archiveUrl | sandboxId, tier?, port?, dataPaths?, domain? })\`
+MCP: \`launch_app({ sandboxId, repo | archiveUrl, port?, dataPaths?, domain? })\`
 REST: \`POST /machines/launch\` · SDK: \`eb.machines.launch({ … })\`
 
-Defaults: \`tier: "micro"\` (nano son 256MB — NO aguanta un build de Node), \`template: "node"\` (Node 24 + npm/pnpm; \`ubuntu\` NO trae Node), \`appDir: "/app"\`, \`buildCommand: "(npm ci || npm install) && npm run build"\`, \`startCommand: "npm start"\`, \`port: 3000\`.
+Defaults: \`template: "node"\` (Node 24 + npm/pnpm; \`ubuntu\` NO trae Node), \`appDir: "/app"\`, \`buildCommand: "(npm ci || npm install) && npm run build"\`, \`startCommand: "npm start"\`, \`port: 3000\`.
 
 **Variables de la app (no secretas)** van en \`env\`: \`{ PORT: "4000", API_URL: "…" }\`. Se exportan antes del build y del arranque; los secretos de la bóveda ganan por nombre. Las llaves deben ser identificadores de shell (\`A-Z_0-9\`).
 
@@ -2088,9 +2060,9 @@ Una app más pesada tarda más, sobre todo en bajar el release. Con \`prebuilt: 
 
 ⚠️ **Buildea DENTRO de la caja, no en tu máquina.** Un \`node_modules\` con módulos nativos (sharp, better-sqlite3) compilado en macOS revienta en Linux. El primer deploy paga el \`npm ci\`; a partir de ahí publicas \`prebuilt\` y cada deploy es de segundos.
 
-Si el build falla, la máquina que creó \`launch_app\` se libera sola: no te deja pagando una caja rota. Una caja que tú pasaste por \`sandboxId\` NUNCA se libera; si le mandaste código nuevo (\`repo\` o \`archiveUrl\`) y el build falla, **vuelve sola al release que estaba sirviendo** — el sitio sigue en pie y el error lo dice (\`rolledBackTo\`).
+Una caja que pasaste por \`sandboxId\` NUNCA se libera; si le mandaste código nuevo (\`repo\` o \`archiveUrl\`) y el build falla, **vuelve sola al release que estaba sirviendo** — el sitio sigue en pie y el error lo dice (\`rolledBackTo\`).
 
-**Sin plan de pago también funciona**: si la cuenta no tiene plan, \`launch_app\` (y \`create_machine\`) devuelven \`{ checkoutUrl }\` en vez de fallar. Le pasas ese link al cliente; cuando paga, la máquina se crea sola y aparece en \`list_machines()\`. Entonces vuelves a llamar \`launch_app\` con su \`sandboxId\` para desplegar encima.
+**¿No hay máquina todavía?** El hosting es por cotización: dile al usuario que escriba a soporte@easybits.cloud. No prometas precios.
 
 ### Releases — hacer la caja reconstruible
 Fly/Vercel tratan el disco como desechable porque el deploy lo reconstruye desde una imagen. Aquí la app se escribe DENTRO de la caja, así que sin un release una caja muerta se lleva la app, no solo los datos. Un **release** es un tarball versionado del código en almacenamiento durable + un **runspec** que dice cómo construirlo y arrancarlo.
@@ -2101,7 +2073,7 @@ Fly/Vercel tratan el disco como desechable porque el deploy lo reconstruye desde
 2. \`deploy_machine({ sandboxId, message? })\` → publica release. SDK: \`eb.machines.deploy(id)\`
 3. \`list_machine_releases({ sandboxId })\` · \`rollback_machine({ sandboxId, releaseId })\` — vuelve a una versión anterior en la MISMA caja. **Sin rebuild**: un release publicado por \`launch_app\` lleva su build (\`prebuilt\`), así que rollback y redeploy son bajar + extraer + arrancar. A cambio el tarball pesa más (lleva \`node_modules\`).
 5. \`get_machine_logs({ sandboxId, lines?, grep? })\` — el log de LA APP (últimas N líneas): el journal de la unit si el runspec tiene una, o el archivo al que escribe el \`startCommand\`. Primer lugar a mirar cuando el deploy dijo que arrancó y el sitio no contesta. SDK: \`eb.machines.logs(id, { lines })\`.
-4. \`redeploy_machine({ releaseId, tier?, replaceSandboxId? })\` — construye una caja NUEVA. Sirve para dos cosas: recuperar una máquina muerta y **cambiar de tier** (no hay resize en caliente — se recrea). \`replaceSandboxId\` libera la vieja al confirmar que la nueva quedó corriendo; sin él pagas las dos.
+4. \`redeploy_machine({ releaseId, replaceSandboxId? })\` — construye una caja NUEVA para recuperar una máquina muerta. \`replaceSandboxId\` libera la vieja al confirmar que la nueva quedó corriendo. Sólo el dueño; una máquina con precio acordado responde 409 \`AgreedPrice\` (cambiar tamaño se cotiza).
 
 REST: \`PUT /machines/:id/runspec\` · \`POST|GET /machines/:id/releases\` · \`POST /machines/:id/rollback\` · \`POST /machine-releases/:releaseId/redeploy\` (colección aparte: funciona aunque la máquina original ya no exista) · \`GET /machines/:id/logs?lines=200&grep=\`.
 
@@ -2172,13 +2144,13 @@ El agente recibe los números ya calculados: interpreta y redacta, no cuenta.
 ### Desplegar desde GitHub en cada push
 Un webhook de GitHub y listo: cada push a la rama de la máquina la redespliega sola. Sin workflow, sin Actions.
 
-**1. Despliega una vez desde el repo.** URL limpio y, si es privado, el token aparte (un PAT *fine-grained* con **Contents: Read** sobre ese repo):
+**1. Despliega una vez desde el repo** en tu máquina (\`sandboxId\`). URL limpio y, si es privado, el token aparte (un PAT *fine-grained* con **Contents: Read** sobre ese repo):
 
 \`\`\`bash
 curl -X POST https://www.easybits.cloud/api/v2/machines/launch \\
   -H "Authorization: Bearer $EASYBITS_API_KEY" -H "Content-Type: application/json" \\
-  -d '{"repo":"https://github.com/usuario/repo.git","branch":"main",
-       "repoToken":"github_pat_…","tier":"micro","port":3000}'
+  -d '{"sandboxId":"sb_…","repo":"https://github.com/usuario/repo.git","branch":"main",
+       "repoToken":"github_pat_…","port":3000}'
 \`\`\`
 
 El token se guarda solo en tu bóveda (\`GIT_TOKEN_<id>\`); si ya lo tenías ahí, pasa \`"$secret:NOMBRE"\`. La máquina recuerda de qué repo y rama salió (\`runspec.source\`; del token sólo el NOMBRE del secreto).
@@ -3177,8 +3149,8 @@ una tool para eso.
 - **Voz y video** — transcripción, TTS, subtítulos, y video animado renderizado a MP4 con
   narración y personajes recurrentes.
 - **Hosting de apps** — de un repositorio a una URL pública con TLS en una sola llamada
-  (\`launch_app\`, ~12 s medidos de extremo a extremo), con releases, rollback, cambio de
-  tier y backups diarios.
+  (\`launch_app\`, ~12 s medidos de extremo a extremo), con releases, rollback y
+  backups diarios. Por cotización.
 - **Agentes en WhatsApp** — en tu número o en el de tu cliente (Baileys o WABA), más web
   y Teams. Cada conversación vive en su propia microVM que duerme y despierta, con su
   prompt, sus conectores y su voz.

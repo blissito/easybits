@@ -82,7 +82,7 @@ export default function Sandboxes({ loaderData }: Route.ComponentProps) {
               <a className="underline text-brand-500" href="/hosting">
                 hosting
               </a>
-              , y empieza en $49 MXN/mes.
+               gestionado: te lo cotizamos.
             </>
           ),
         }}

@@ -145,7 +145,7 @@ export const TOOL_GROUPS: ToolGroup[] = [
     key: "hosting",
     label: "Hosting",
     description:
-      "Hosting de apps sobre microVMs Firecracker, always-on, tiers fijos en MXN/mes (nano…performance). launch_app pone una app en producción en UNA llamada (caja + código + build + URL pública + release + dominio con TLS) — el equivalente a `fly launch`. Además: releases con rollback y redeploy (que es también el cambio de tier), backups diarios de datos incluidos con 7 días de retención, dominios propios, logs, y delegación de acceso para co-administrar. El plan da acceso; cada máquina factura flat al mes.",
+      "Hosting de apps sobre microVMs Firecracker, always-on. Hosting por cotización: las máquinas las crea el equipo de EasyBits o una agencia y se entregan al cliente a precio acordado. launch_app pone una app en producción en UNA llamada (caja + código + build + URL pública + release + dominio con TLS) — el equivalente a `fly launch`. Además: releases con rollback y redeploy (que es también el cambio de tier), backups diarios de datos incluidos con 7 días de retención, dominios propios, logs, y delegación de acceso para co-administrar. Cada máquina (o grupo cedido) factura un precio fijo al mes en MXN.",
     toolCount: 28,
   },
   {

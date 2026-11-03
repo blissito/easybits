@@ -187,6 +187,7 @@ import {
 } from "../core/sandboxOperations";
 import {
   buyMachine,
+  assertCanSellHosting,
   setMachineSleep,
   createPermanent,
   makePermanent,
@@ -1746,10 +1747,11 @@ How to embed safely (the only reliable rule):
 
   server.tool(
     "list_machine_tiers",
-    "List the always-on hosting catalog: tiers (nano…performance-4x) with vCPU/RAM/NVMe and flat MXN/month price (shared + reserved where available), plus the disk add-on price. Use to quote a machine before create_machine.",
+    "STAFF ONLY (EasyBits team or agencies with courtesy hosting). Hosting is quoted per project, not sold at list price: for anyone else this returns 403 HostingByQuote — tell the user to write to soporte@easybits.cloud. Staff get the internal catalog (tiers with vCPU/RAM/NVMe and base MXN/month price) to size a machine before create_machine.",
     {},
     { readOnlyHint: true, openWorldHint: false },
-    wrapHandler(async (_params) => {
+    wrapHandler(async (_params, extra) => {
+      assertCanSellHosting(extra.authInfo as unknown as AuthContext);
       return ok({
         tiers: SELLABLE_TIERS.map((k) => HOSTING_CATALOG[k]),
         diskAddon: { gb: DISK_ADDON_GB, price: DISK_ADDON_PRICE },
@@ -1760,12 +1762,12 @@ How to embed safely (the only reliable rule):
 
   server.tool(
     "create_machine",
-    "Buy an ALWAYS-ON machine (permanent VM, flat MXN/month). NO platform plan needed — hosting bills on its own. If the account has an active plan the machine is provisioned right away and rides that invoice; otherwise this returns { checkoutUrl } for the customer to pay, and the machine is provisioned automatically once payment clears (poll list_machines). Reserved CPU and performance-4x are by-request until enabled.",
+    "STAFF ONLY: create an ALWAYS-ON machine (permanent VM). Hosting is quoted per project: only the EasyBits team and agencies with courtesy hosting create machines, then hand them to the client at an agreed price from /dash/hosting (\"Entregar a un cliente\"). Anyone else gets 403 HostingByQuote — tell the user to write to soporte@easybits.cloud. To deploy onto a machine the user already has, use launch_app with its sandboxId.",
     {
       tier: z.enum(TIER_ORDER as unknown as [string, ...string[]]).describe("Catalog tier key (see list_machine_tiers)"),
       cpuMode: z.enum(["shared", "reserved"]).optional().describe("shared (default, best-effort) or reserved (guaranteed CPU floor, only focus+)"),
       sleep: z.boolean().optional().describe("Sleep when idle: the VM suspends after 5 min without traffic and the next request wakes it (~200 ms, memory intact). Requires template 'node' and shared CPU. Not for background jobs/crons/websockets."),
-      diskAddonsGB: z.number().int().min(0).max(2000).optional().describe("Extra NVMe in multiples of 100GB (+$99/mo each)"),
+      diskAddonsGB: z.number().int().min(0).max(2000).optional().describe("Extra NVMe in multiples of 100GB"),
       template: z.string().optional().describe("Base image template (default 'ubuntu'). Managed-runtime templates (e.g. 'ghostyclaw') boot a configured agent when `env` is provided."),
       name: z.string().max(64).optional().describe("Human-friendly label"),
       env: z.record(z.string()).optional().describe("Runtime env for managed-runtime templates (e.g. ghostyclaw needs ANTHROPIC_API_KEY, NANOCLAW_ADMIN_TOKEN). Injected + runtime started after provisioning."),
@@ -1794,7 +1796,7 @@ How to embed safely (the only reliable rule):
 
   server.tool(
     "make_permanent",
-    "Promote an existing (ephemeral) sandbox to an always-on machine: keeps the SAME sandboxId, disarms the host reaper, and starts flat MXN/month billing for the chosen tier. The 'spin up, then keep it' flow.",
+    "STAFF ONLY: promote an existing (ephemeral) sandbox to an always-on machine, keeping the SAME sandboxId and disarming the host reaper. Hosting is quoted per project; anyone else gets 403 HostingByQuote (soporte@easybits.cloud).",
     {
       sandboxId: z.string().describe("Sandbox ID (from sandbox_create) to make permanent"),
       tier: z.enum(TIER_ORDER as unknown as [string, ...string[]]).describe("Catalog tier to bill (see list_machine_tiers)"),
@@ -1867,7 +1869,7 @@ How to embed safely (the only reliable rule):
 
   server.tool(
     "launch_app",
-    "Put an app in production in ONE call — the `fly launch` of EasyBits: provisions the machine, gets the code in, builds, starts it, exposes a public HTTPS URL, publishes a recovery release and (optionally) attaches the customer's domain. Returns { url, releaseId, domain.dns }. PREFER THIS over wiring create_machine + deploy_machine + expose + domain by hand: doing it manually, the step that gets skipped is the release, and a machine without a release cannot be rebuilt if it dies. NO platform plan needed: if the account has none, this returns { checkoutUrl } instead — give it to the customer, and once they pay the machine is created automatically (find it with list_machines, then launch again with its sandboxId). Pass exactly ONE source.",
+    "Put an app in production in ONE call — the `fly launch` of EasyBits: provisions the machine, gets the code in, builds, starts it, exposes a public HTTPS URL, publishes a recovery release and (optionally) attaches the customer's domain. Returns { url, releaseId, domain.dns }. PREFER THIS over wiring create_machine + deploy_machine + expose + domain by hand: doing it manually, the step that gets skipped is the release, and a machine without a release cannot be rebuilt if it dies. Normally pass the sandboxId of a machine the user ALREADY has (list_machines). Without sandboxId it creates a new machine, which only staff can do: hosting is quoted per project, so anyone else gets 403 HostingByQuote — tell the user to write to soporte@easybits.cloud. Pass exactly ONE source.",
     {
       repo: z.string().optional().describe("Git URL to clone (the reproducible path). No embedded credentials — use repoToken."),
       branch: z.string().optional(),
@@ -2064,7 +2066,7 @@ How to embed safely (the only reliable rule):
 
   server.tool(
     "redeploy_machine",
-    "Build a BRAND NEW machine from a release: provisions a box, unpacks the code, builds and starts it. Two jobs, one path — recovering a machine that died, and CHANGING TIER (there is no in-place resize: you recreate at the new tier). Pass replaceSandboxId to release the old machine once the new one is confirmed running, or you pay for both. The new box starts with NO data — restore a backup after.",
+    "Build a BRAND NEW machine from a release: provisions a box, unpacks the code, builds and starts it. Two jobs, one path — recovering a machine that died, and CHANGING TIER (there is no in-place resize: you recreate at the new tier). Pass replaceSandboxId to release the old machine once the new one is confirmed running, or you pay for both. Only for a machine the caller already pays at list price; machines handed over at an agreed price return 409 AgreedPrice (resizing those goes through soporte@easybits.cloud). The new box starts with NO data — restore a backup after.",
     {
       releaseId: z.string().describe("Release to build from"),
       tier: z.enum(TIER_ORDER as unknown as [string, ...string[]]).optional().describe("Target tier (defaults to the release's original tier). This is how you resize."),

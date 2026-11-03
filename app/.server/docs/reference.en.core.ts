@@ -27,8 +27,8 @@ probably a tool for it.
 - **Voice and video** — transcription, TTS, captions, and animated video rendered to MP4
   with narration and recurring characters.
 - **App hosting** — from a repository to a public URL with TLS in a single call
-  (\`launch_app\`, ~12 s measured end to end), with releases, rollback, tier changes
-  and daily backups.
+  (\`launch_app\`, ~12 s measured end to end), with releases, rollback
+  and daily backups. By quote.
 - **Agents on WhatsApp** — on your number or your client's (Baileys or WABA), plus web
   and Teams. Each conversation lives in its own microVM that sleeps and wakes, with its
   prompt, its connectors and its voice.

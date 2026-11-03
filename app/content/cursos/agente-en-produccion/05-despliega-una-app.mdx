@@ -2,9 +2,9 @@
 title: "Despliega una app para tu agente"
 description: "Una app siempre encendida con URL pública, releases y respaldo, en un solo comando."
 minutes: 30
-cost: "Desde $49 MXN/mes por máquina (requiere plan Mega o superior)"
+cost: "Hosting por cotización: te entregamos tu máquina lista (soporte@easybits.cloud)"
 verify: release
-agentPrompt: "Despliega mi app con `easybits machines launch --repo <URL de mi repo> --tier micro --name mi-app --json` (o con la tool `launch_app` del MCP de EasyBits). Si regresa `checkoutUrl`, pásamela para pagar. Al terminar dame la URL pública y el id del release, y enséñame los releases con `easybits machines releases mi-app`."
+agentPrompt: "Despliega mi app en mi máquina con `easybits machines launch --repo <URL de mi repo> --machine mi-app --json` (o con la tool `launch_app` del MCP de EasyBits, pasando el sandboxId de mi máquina). Si no tengo máquina, dime que el hosting se cotiza en soporte@easybits.cloud. Al terminar dame la URL pública y el id del release, y enséñame los releases con `easybits machines releases mi-app`."
 ---
 
 ## Qué vas a lograr
@@ -13,13 +13,13 @@ Una app (el panel de tu negocio, una API que use tu agente, un formulario) corri
 
 ## Pasos
 
-Con el CLI, desde un repo de Node con `npm run build` y `npm start`:
+Con el CLI, desde un repo de Node con `npm run build` y `npm start`, sobre la máquina que te entregaron:
 
 ```bash
-easybits machines launch --repo https://github.com/tu-usuario/mi-app.git --tier micro --name mi-app
+easybits machines launch --repo https://github.com/tu-usuario/mi-app.git --machine mi-app
 ```
 
-En un solo paso crea la máquina, clona, construye, arranca, expone la URL y publica el primer release. Opciones útiles:
+En un solo paso clona, construye, arranca, expone la URL y publica el primer release. Opciones útiles:
 
 - `--port 8080` si tu app no escucha en el 3000.
 - `--secret STRIPE_KEY` para pasarle un secreto de tu bóveda (nunca en `--env`).
@@ -34,7 +34,7 @@ easybits machines logs mi-app --grep ERROR
 ```
 
 <Callout type="info">
-Si tu cuenta no tiene plan de pago, `launch` te regresa una liga de pago en vez de crear la máquina. Al pagar, la máquina se crea sola. `nano` ($49 MXN/mes) sirve para sitios ligeros; para Node el piso real es `micro` ($99 MXN/mes).
+El hosting de EasyBits es por cotización: te entregamos la máquina ya creada (o la crea tu agencia) y activas su cobro desde Hosting en tu cuenta. ¿Todavía no tienes una? Escríbenos a soporte@easybits.cloud.
 </Callout>
 
 ## Hazlo con tu agente

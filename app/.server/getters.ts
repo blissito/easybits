@@ -64,9 +64,12 @@ export const isAdminUser = (
   if (!user) return false;
   const adminEmails = (process.env.ADMIN_EMAILS || "")
     .split(",")
-    .map((e) => e.trim().toLowerCase());
+    .map((e) => e.trim().toLowerCase())
+    // Sin esto, ADMIN_EMAILS vacío ("" → [""]) hacía admin a cualquier contexto sin email.
+    .filter(Boolean);
+  const email = (user.email || "").toLowerCase();
   return (
-    adminEmails.includes((user.email || "").toLowerCase()) ||
+    (!!email && adminEmails.includes(email)) ||
     (user.roles || []).includes("Admin")
   );
 };

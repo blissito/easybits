@@ -219,7 +219,7 @@ export default function Eve({ loaderData }: Route.ComponentProps) {
               <a className="underline text-brand-500" href="/hosting">
                 hosting
               </a>{" "}
-              desde $49 MXN/mes.
+              gestionado, cotizado por proyecto.
               <span className="block mt-6 text-base md:text-lg">
                 Pregúntale a tu agente de código sobre todas las ventajas de usar Easybits:
               </span>

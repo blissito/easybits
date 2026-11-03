@@ -41,11 +41,25 @@ function printMachine(m: MachineInfo) {
   if (m.name) console.log(`${t("Name:     ", "Nombre:   ")} ${m.name}`);
   console.log(`${t("Status:   ", "Estado:   ")} ${m.status}${m.runtimeStatus ? ` (${m.runtimeStatus})` : ""}`);
   console.log(`Tier:      ${m.tier} · ${m.vcpus} vCPU ${m.cpuMode} · ${fmtBytes(m.memoryMb * 1024 * 1024)} RAM · ${fmtBytes(m.diskMb * 1024 * 1024)}${m.diskAddonsGB ? ` + ${m.diskAddonsGB} GB` : ""}`);
-  console.log(`${t("Price:    ", "Precio:   ")} $${m.monthlyMxn} MXN/${t("month", "mes")}`);
   console.log(`${t("Sleeps:   ", "Duerme:   ")} ${m.sleep ? t("yes, without visits", "sí, sin visitas") : t("no, always on", "no, siempre prendida")}`);
   console.log(`${t("Created:  ", "Creada:   ")} ${fmtDate(m.createdAt)}`);
   if (m.shared) console.log(t("Shared with you by its owner.", "Su dueño la compartió contigo."));
   if (m.deletionScheduledAt) console.log(t(`Scheduled for deletion: ${fmtDate(m.deletionScheduledAt)}`, `Programada para borrarse: ${fmtDate(m.deletionScheduledAt)}`));
+}
+
+export const BY_QUOTE = t(
+  "EasyBits hosting is by quote: write to soporte@easybits.cloud and we will set up your machine. To deploy onto a machine you already have: easybits machines launch --machine <machine> …",
+  "El hosting de EasyBits es por cotización: escríbenos a soporte@easybits.cloud y te armamos tu máquina. Para desplegar en una máquina que ya tienes: easybits machines launch --machine <máquina> …",
+);
+
+/** 403 HostingByQuote del servidor → mensaje claro en vez del error crudo de la API. */
+export function hostingByQuote(e: unknown): CliError | null {
+  const err = e as { status?: number; body?: string; message?: string };
+  const text = `${err?.body ?? ""} ${err?.message ?? ""}`;
+  if (err?.status === 403 && text.includes("HostingByQuote")) {
+    return new CliError(BY_QUOTE, 1, undefined, "hosting_by_quote", 403);
+  }
+  return null;
 }
 
 function printRunspec(r: Runspec) {
@@ -111,7 +125,7 @@ export const machines: Command = {
         emit(ctx, rows, () =>
           table(
             rows,
-            [["sandboxId", "ID"], ["name", "NAME"], ["tier", "TIER"], ["status", "STATUS"], ["monthlyMxn", "MXN/MONTH"]],
+            [["sandboxId", "ID"], ["name", "NAME"], ["tier", "TIER"], ["status", "STATUS"]],
             t("No permanent machines. See: easybits docs hosting", "No hay máquinas permanentes. Mira: easybits docs hosting"),
           ),
         );
@@ -119,7 +133,7 @@ export const machines: Command = {
     },
     launch: {
       aliases: ["create", "new"],
-      summary: "Create a machine and put an app on it in one step (or redeploy onto an existing one)",
+      summary: "Put an app on your machine in one step (creating machines is by quote: soporte@easybits.cloud)",
       usage:
         "easybits machines launch (--repo <url> | --archive <url|file> | --machine <machine>) [--tier micro] [--name <name>] [--prebuilt] [--start <cmd>] [--port 3000] [--env K=V]... [--secret NAME]... [--data <path>]... [--domain <host>]",
       options: {
@@ -128,7 +142,7 @@ export const machines: Command = {
         "repo-token": { type: "string", value: "$secret:NAME", description: "Token for a private repo; best as $secret:NAME from your vault" },
         archive: { type: "string", value: "url|file", description: "A .tar.gz/.zip of the app: URL, or a local file that gets uploaded first" },
         machine: { type: "string", value: "machine", description: "Deploy onto this existing machine instead of creating one" },
-        tier: { type: "string", value: "tier", description: "Size for a new machine: nano, micro (default), estandar, focus, performance…" },
+        tier: { type: "string", value: "tier", description: "Size for a new machine (agency accounts only; hosting is by quote)" },
         name: { type: "string", value: "name", description: "Human label" },
         "app-dir": { type: "string", value: "dir", description: "Where the app lives in the machine (default /app)" },
         build: { type: "string", value: "cmd", description: "Build command (default: npm ci && npm run build)" },
@@ -142,8 +156,7 @@ export const machines: Command = {
         message: { type: "string", short: "m", value: "text", description: "Release note" },
       },
       examples: [
-        "easybits machines launch --repo https://github.com/you/shop.git --tier micro --domain shop.example.com",
-        "easybits machines launch --archive ./build.tgz --prebuilt --tier nano --name shop --start 'npm start'",
+        "easybits machines launch --machine shop --repo https://github.com/you/shop.git --domain shop.example.com",
         "easybits machines launch --machine shop --archive ./build.tgz --prebuilt -m v2   # redeploy",
       ],
       async run(ctx) {
@@ -157,7 +170,7 @@ export const machines: Command = {
         if (repo && archiveUrl) throw usageError(t("--repo and --archive are exclusive.", "--repo y --archive se excluyen."), this.usage);
         if (machineRef && str(ctx, "tier")) {
           throw usageError(
-            t("--tier is only for a new machine. To resize: easybits machines redeploy <machine> --tier <tier> --replace", "--tier sólo aplica a una máquina nueva. Para cambiar tamaño: easybits machines redeploy <máquina> --tier <tier> --replace"),
+            t("--tier is only for a new machine. Changing size is quoted: soporte@easybits.cloud", "--tier sólo aplica a una máquina nueva. Cambiar de tamaño se cotiza: soporte@easybits.cloud"),
             this.usage,
           );
         }
@@ -201,6 +214,8 @@ export const machines: Command = {
           dataPaths: dataPaths.length ? dataPaths : undefined,
           domain: str(ctx, "domain"),
           message: str(ctx, "message"),
+        }).catch((e) => {
+          throw hostingByQuote(e) ?? e;
         });
 
         if (r.checkoutUrl) {
@@ -287,7 +302,7 @@ export const machines: Command = {
       },
     },
     get: {
-      summary: "Show a machine: tier, size, price, status and whether it sleeps",
+      summary: "Show a machine: tier, size, status and whether it sleeps",
       usage: "easybits machines get <machine>",
       examples: ["easybits machines get shop", "easybits machines get shop --json"],
       async run(ctx) {
@@ -346,7 +361,7 @@ export const machines: Command = {
       },
     },
     redeploy: {
-      summary: "Build a NEW machine from a release: recover a lost one, or change its tier (resize)",
+      summary: "Build a NEW machine from a release to recover a lost one (resizing is quoted)",
       usage: "easybits machines redeploy <machine> [--release <id>] [--tier <tier>] [--name <name>] [--cpu-mode shared|reserved] [--replace] [--yes]",
       options: {
         release: { type: "string", value: "id", description: "Release to build from (default: the machine's newest)" },
@@ -357,7 +372,7 @@ export const machines: Command = {
         ...YES_OPTION,
       },
       examples: [
-        "easybits machines redeploy shop --tier focus --replace   # resize",
+        "easybits machines redeploy shop --replace   # recover onto a new machine",
         "easybits machines redeploy sb_abc123 --release rel_789   # recover from a release",
       ],
       async run(ctx) {
@@ -386,6 +401,8 @@ export const machines: Command = {
           name: str(ctx, "name"),
           cpuMode: cpuMode as "shared" | "reserved" | undefined,
           replaceSandboxId: replace ? id : undefined,
+        }).catch((e) => {
+          throw hostingByQuote(e) ?? e;
         });
         emit(ctx, r, () => {
           console.log(t(`New machine ${r.sandboxId} from ${r.releaseId} (exit ${r.exitCode})`, `Máquina nueva ${r.sandboxId} desde ${r.releaseId} (salida ${r.exitCode})`));
@@ -483,19 +500,11 @@ export const machines: Command = {
       },
     },
     tiers: {
-      summary: "The hosting catalog: sizes and monthly prices in MXN",
+      summary: "Hosting is by quote: tells you how to ask for a machine",
       usage: "easybits machines tiers",
-      examples: ["easybits machines tiers", "easybits machines tiers --json"],
+      examples: ["easybits machines tiers"],
       async run(ctx) {
-        const eb = await getClient(ctx);
-        const r = await eb.machines.tiers();
-        emit(ctx, r, () => {
-          table(
-            r.tiers.map((x) => ({ ...x, memory: fmtBytes(x.memoryMb * 1024 * 1024), disk: fmtBytes(x.diskMb * 1024 * 1024), reserved: x.priceReserved ?? "-" })),
-            [["key", "TIER"], ["vcpus", "VCPUS"], ["memory", "MEMORY"], ["disk", "DISK"], ["priceShared", "MXN/MONTH"], ["reserved", "RESERVED"], ["minPlan", "PLAN"]],
-          );
-          console.log(t(`Extra disk: ${r.diskAddon.gb} GB for $${r.diskAddon.price} MXN/month each.`, `Disco extra: ${r.diskAddon.gb} GB por $${r.diskAddon.price} MXN/mes cada uno.`));
-        });
+        emit(ctx, { byQuote: true, contact: "soporte@easybits.cloud" }, () => console.log(BY_QUOTE));
       },
     },
     secrets: {
