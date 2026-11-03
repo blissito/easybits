@@ -1641,6 +1641,9 @@ model Sandbox {
   // Releasing must cancel the right one; never assume the item.
   stripeSubItemId String?
   stripeSubscriptionId String?
+  // Precio acordado (hosting por cotización, HostingOffer): su parte del total al mes.
+  // Si está puesto manda sobre el de lista y la máquina no se reprecia sola (sleep/resize).
+  agreedMonthlyMxn Float?
   // Caja de TRABAJO de una web app de /dash/sitios sin publicar: la paga EasyBits mientras
   // el agente construye (createWorkBox). Va con persistent:false para quedar fuera de
   // respaldos, monitor, protección y /dash/hosting; al publicar, promoteWorkBox la vuelve
@@ -2190,4 +2193,26 @@ model InboxEvent {
 
   @@unique([inboxId, seq])
   @@index([inboxId, receivedAt])
+}
+
+/// Cesión de máquinas de una agencia a su cliente a un precio acordado (hosting por cotización).
+/// La agencia (dueña, normalmente con courtesyHosting) monta y publica; crea la oferta con el
+/// correo del cliente y el total al mes. El cliente la ve en /dash/hosting y paga ahí: al pagar,
+/// el webhook (eb_offer_id) le traspasa las máquinas, les pega la suscripción y deja a la agencia
+/// como staff. Antes de pagar las máquinas siguen siendo de la agencia.
+model HostingOffer {
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  fromUserId     String   @db.ObjectId // agencia que cede
+  clientEmail    String   // en minúsculas; el cliente puede no tener cuenta todavía
+  sandboxIds     String[]
+  monthlyMxn     Int      // precio TOTAL al mes por todas las máquinas
+  note           String?  // lo que ve el cliente, p. ej. "Sistema de Acali Club"
+  status         String   @default("pending") // pending | paid | cancelled
+  subscriptionId String?
+  clientUserId   String?  @db.ObjectId // se llena al pagar
+  createdAt      DateTime @default(now())
+  paidAt         DateTime?
+
+  @@index([clientEmail, status])
+  @@index([fromUserId, status])
 }

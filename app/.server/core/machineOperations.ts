@@ -107,6 +107,7 @@ interface SandboxRow {
   runtimeStatus?: string | null;
   managedBy?: string | null;
   deletionScheduledAt?: Date | null;
+  agreedMonthlyMxn?: number | null;
 }
 
 function toPermanent(row: SandboxRow, host?: SandboxRecord, shared = false): PermanentSandbox {
@@ -126,7 +127,11 @@ function toPermanent(row: SandboxRow, host?: SandboxRecord, shared = false): Per
     name: row.name,
     status: row.status,
     // Una adoptada no se cobra por EasyBits.
-    monthlyMxn: tier && !isExternallyManaged(row) ? machineMonthly(tier, mode, row.diskAddonsGB, !!row.sleep) : 0,
+    monthlyMxn: isExternallyManaged(row)
+      ? 0
+      : row.agreedMonthlyMxn != null
+        ? row.agreedMonthlyMxn // precio acordado en la cesión, no el de lista
+        : tier ? machineMonthly(tier, mode, row.diskAddonsGB, !!row.sleep) : 0,
     vcpus: res.vcpus,
     memoryMb: res.memoryMb,
     diskMb: res.diskMb,
@@ -275,6 +280,10 @@ export async function setMachineSleep(
   }
   // Cambiar el modo cambia el cobro: sólo el dueño (el staff opera, no cobra).
   assertMachineOwner(ctx, row, "cambiar el modo de");
+  // Precio acordado (cesión a cliente): repreciar a lista rompería el trato.
+  if (row.agreedMonthlyMxn != null) {
+    fail(409, "AgreedPrice", "Esta máquina tiene un precio acordado; escríbenos para cambiar su modo.");
+  }
   // Una suscripción que cubre varias máquinas (traspaso con eb_attach_ids) tiene un solo
   // precio: repreciar una la cobraría a todas. Se ajusta a mano.
   if (row.stripeSubscriptionId &&

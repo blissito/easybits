@@ -31,9 +31,8 @@ const BOXES: Record<string, string> = {
   "sb_bce47e82-917d-4e42-aaaf-784673b8708d": "aguas-verano",
   "sb_72586066-4747-4f19-af2d-ba1777a255c2": "aguas-nocturna",
 };
-const NANO_MXN = 49;
-// Primer cobro: 3-nov-2026 12:00 hora de CDMX (18:00 UTC).
-const TRIAL_END = Math.floor(Date.UTC(2026, 10, 3, 18, 0, 0) / 1000);
+// Precio acordado con José Luis (Brenda, 3-nov): $250 MXN/mes por las 6, no 6 × $49 de lista.
+const MONTHLY_MXN = 250;
 
 const apply = process.argv.includes("--apply");
 if (apply && !process.env.SANDBOX_HOST_OPERATOR_TOKEN) throw new Error("Falta SANDBOX_HOST_OPERATOR_TOKEN (las cajas vendidas están protegidas)");
@@ -97,17 +96,25 @@ if (link) {
   const { url } = await createMachineCheckout({
     email: EMAIL,
     userId: jose.id,
-    monthlyMxn: NANO_MXN,
-    quantity: ids.length,
+    monthlyMxn: MONTHLY_MXN,
+    quantity: 1,
     tier: "nano",
     cpuMode: "shared",
     diskAddonsGB: 0,
     attachSandboxIds: ids,
-    billingCycleAnchor: TRIAL_END,
     successUrl: "https://www.easybits.cloud/dash/hosting",
     cancelUrl: "https://www.easybits.cloud/dash/hosting",
   });
-  console.log(`liga: ${url}  ($${NANO_MXN * ids.length} MXN/mes, primer cobro ${new Date(TRIAL_END * 1000).toISOString()})`);
+  // La liga anterior ($294) se da de baja para que no se pague por error.
+  const { getStripe } = await import("../app/.server/stripe");
+  const stripe = getStripe();
+  for (const old of (await stripe.checkout.sessions.list({ limit: 20, status: "open" })).data) {
+    if (old.metadata?.eb_attach_ids && old.metadata?.eb_user_id === jose.id && old.url !== url) {
+      await stripe.checkout.sessions.expire(old.id);
+      console.log(`liga vieja expirada: ${old.id.slice(0, 20)}…`);
+    }
+  }
+  console.log(`liga: ${url}  ($${MONTHLY_MXN} MXN/mes, se cobra al pagar)`);
 }
 if (!apply && !link) console.log("\n(dry-run: nada cambió; --apply para traspasar)");
 await db.$disconnect();

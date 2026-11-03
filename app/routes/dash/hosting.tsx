@@ -31,6 +31,12 @@ import {
 } from "~/.server/core/githubImportOperations";
 import { ConfirmDialog } from "~/components/common/ConfirmDialog";
 import {
+  cancelHostingOffer,
+  createHostingOffer,
+  listHostingOffers,
+  startHostingOfferCheckout,
+} from "~/.server/core/hostingOfferOperations";
+import {
   LuExternalLink, LuLink, LuKeyRound, LuHistory, LuScrollText,
   LuPlay, LuPause, LuRotateCcw, LuTrash2, LuPlus, LuCircleCheck, LuGithub, LuRefreshCw,
 } from "react-icons/lu";
@@ -76,7 +82,10 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
   // es justamente lo que se viene a mirar.
   const rows = await db.sandbox.findMany({
     where: { sandboxId: { in: machines.map((m: any) => m.sandboxId) } },
-    select: { sandboxId: true, currentReleaseId: true, runspec: true, previewUrl: true, previewReleaseId: true },
+    select: {
+      sandboxId: true, currentReleaseId: true, runspec: true, previewUrl: true, previewReleaseId: true,
+      stripeSubItemId: true, stripeSubscriptionId: true,
+    },
   });
   const extra = Object.fromEntries(rows.map((r) => [r.sandboxId, r]));
 
@@ -92,6 +101,8 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
         currentReleaseId: row?.currentReleaseId ?? null,
         previewUrl: row?.previewUrl ?? null,
         previewReleaseId: row?.previewReleaseId ?? null,
+        // Sin cobro: candidata a cederse a un cliente (hosting por cotización).
+        billed: !!(row?.stripeSubItemId || row?.stripeSubscriptionId),
         domains: names,
         // Los que ya apuntan aquí: sólo esos pueden ser el título y la liga del sitio.
         liveDomains: names.filter((_, i) => pointing[i]),
@@ -112,8 +123,11 @@ export const loader = async ({ request }: Route.LoaderArgs) => {
   const lastDeployment =
     last && Date.now() - last.createdAt.getTime() < 60 * 60_000 ? serializeDeployment(last) : null;
 
+  const offers = await listHostingOffers(ctx).catch(() => ({ incoming: [], outgoing: [] }));
+
   return data({
     machines: enriched,
+    offers,
     github: {
       enabled,
       connected: installs.length > 0,
@@ -137,6 +151,11 @@ export const action = async ({ request }: Route.ActionArgs) => {
     // Sin esto cualquier error del host (p. ej. 409 de dominio) tumbaba la página
     // entera con el 404 genérico, sin decir qué pasó.
     console.error("[hosting]", intent, id, e);
+    // Las operaciones lanzan Response con { error, message }: mostrar el mensaje en español.
+    if (e instanceof Response) {
+      const j = (await e.clone().json().catch(() => null)) as { message?: string } | null;
+      if (j?.message) return data({ error: j.message }, { status: 400 });
+    }
     return data({ error: hostingErrorMessage(e) }, { status: 400 });
   }
 };
@@ -233,6 +252,20 @@ async function runIntent(ctx: AuthContext, user: Awaited<ReturnType<typeof getUs
     }
     case "sleep":
       return data({ ok: !!(await setMachineSleep(ctx, id, String(form.get("sleep")) === "1")) });
+    // Ceder máquinas a un cliente a precio acordado (la agencia) y activarlas (el cliente).
+    case "offer-create":
+      return data({
+        offer: await createHostingOffer(ctx, {
+          clientEmail: String(form.get("clientEmail") || ""),
+          sandboxIds: form.getAll("sandboxIds").map(String),
+          monthlyMxn: Number(form.get("monthlyMxn")),
+          note: String(form.get("note") || ""),
+        }),
+      });
+    case "offer-cancel":
+      return data(await cancelHostingOffer(ctx, String(form.get("offerId"))));
+    case "offer-pay":
+      return data({ checkoutUrl: (await startHostingOfferCheckout(ctx, String(form.get("offerId")))).url });
     default:
       return data({ error: "intent desconocido" }, { status: 400 });
   }
@@ -332,8 +365,10 @@ const input =
   "placeholder:text-metal/50 focus:outline-none focus:ring-2 focus:ring-brand-500/40";
 
 export default function Hosting({ loaderData }: Route.ComponentProps) {
-  const { machines, github } = loaderData;
+  const { machines, github, offers } = loaderData;
   const [openId, setOpenId] = useState<string | null>(null);
+  // Máquinas mías sin cobro: las que puedo ceder a un cliente.
+  const giftable = machines.filter((m: any) => !m.shared && !m.billed && !m.external);
 
   return (
     // El sidebar es fijo y no ocupa sitio en el flujo: sin el pl-20 la página
@@ -358,6 +393,11 @@ export default function Hosting({ loaderData }: Route.ComponentProps) {
           <LuPlus /> Crear app nueva
         </Link>
       </header>
+
+      {offers.incoming.map((o: any) => <IncomingOffer key={o.id} offer={o} />)}
+      {(giftable.length > 0 || offers.outgoing.length > 0) && (
+        <HandOver machines={giftable} outgoing={offers.outgoing} />
+      )}
 
       {github.enabled && <GithubImport github={github} machines={machines} />}
 
@@ -1196,6 +1236,131 @@ function Danger({ machine, fetcher, confirm }: any) {
           Borrar
         </span>
       </Btn>}
+    </div>
+  );
+}
+
+/** Lo que ve el cliente: una agencia le cede apps a precio acordado. Paga y quedan a su nombre. */
+function IncomingOffer({ offer }: { offer: any }) {
+  const pay = useFetcher<{ checkoutUrl?: string; error?: string }>();
+  useEffect(() => {
+    if (pay.data?.checkoutUrl) window.location.href = pay.data.checkoutUrl;
+  }, [pay.data]);
+  const what = offer.note || `${offer.machines.length} ${offer.machines.length === 1 ? "app" : "apps"}`;
+  return (
+    <div className="mb-6 rounded-xl border-[2px] border-black bg-brand-500/10 p-4 min-w-0 shadow-[4px_4px_0_#000]">
+      <p className="text-xs font-semibold uppercase tracking-wide text-metal">Te entregan tu sistema</p>
+      <h2 className="mt-1 text-lg font-bold text-dark">
+        {offer.fromName ?? "Tu equipo"} te entrega {what}
+      </h2>
+      <p className="mt-1 text-sm text-metal">
+        {offer.machines.map((m: any) => m.name ?? m.sandboxId).join(" · ")}
+      </p>
+      <p className="mt-2 text-sm text-dark">
+        Ya está montado y funcionando. Al activar tu cobro las apps quedan a tu nombre, y {offer.fromName ?? "tu equipo"} sigue
+        dándoles mantenimiento.
+      </p>
+      <div className="mt-3 flex items-center gap-3 flex-wrap">
+        <span className="text-2xl font-bold text-dark tabular-nums">
+          ${offer.monthlyMxn.toLocaleString("es-MX")} <span className="text-sm font-semibold text-metal">MXN al mes</span>
+        </span>
+        <Btn
+          disabled={pay.state !== "idle" || !!pay.data?.checkoutUrl}
+          onClick={() => pay.submit({ intent: "offer-pay", offerId: offer.id }, { method: "post" })}
+        >
+          {pay.state !== "idle" || pay.data?.checkoutUrl ? "Abriendo pago…" : "Activar mi cobro"}
+        </Btn>
+      </div>
+      {pay.data?.error && <p className="mt-2 text-sm text-red-600">{pay.data.error}</p>}
+    </div>
+  );
+}
+
+/** Lo que ve la agencia: ceder sus máquinas (sin cobro) a un cliente por un total al mes. */
+function HandOver({ machines, outgoing }: { machines: any[]; outgoing: any[] }) {
+  const create = useFetcher<{ offer?: any; error?: string }>();
+  const cancel = useFetcher<{ ok?: boolean; error?: string }>();
+  const [open, setOpen] = useState(false);
+  const [picked, setPicked] = useState<string[]>([]);
+  useEffect(() => {
+    if (create.data?.offer) { setOpen(false); setPicked([]); }
+  }, [create.data]);
+
+  return (
+    <div className="mb-6 rounded-xl border-[2px] border-black bg-white p-4 min-w-0">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="min-w-0">
+          <h2 className="font-bold text-dark">Entregar a un cliente</h2>
+          <p className="text-sm text-metal">
+            Cede apps ya montadas por un precio al mes. Siguen siendo tuyas hasta que el cliente pague; luego quedas como staff.
+          </p>
+        </div>
+        {machines.length > 0 && !open && <Btn tone="quiet" onClick={() => setOpen(true)}>Ceder apps</Btn>}
+      </div>
+
+      {outgoing.map((o) => (
+        <div key={o.id} className="mt-3 flex items-center justify-between gap-3 flex-wrap rounded-lg border-[2px] border-black/20 p-3">
+          <p className="text-sm text-dark min-w-0">
+            <b>{o.clientEmail}</b> · {o.machines.map((m: any) => m.name ?? m.sandboxId).join(", ")} ·{" "}
+            <span className="tabular-nums">${o.monthlyMxn.toLocaleString("es-MX")}/mes</span>
+            <span className="text-metal"> · esperando su pago</span>
+          </p>
+          <Btn
+            tone="danger"
+            disabled={cancel.state !== "idle"}
+            onClick={() => cancel.submit({ intent: "offer-cancel", offerId: o.id }, { method: "post" })}
+          >
+            Cancelar
+          </Btn>
+        </div>
+      ))}
+      {cancel.data?.error && <p className="mt-2 text-sm text-red-600">{cancel.data.error}</p>}
+
+      {open && (
+        <create.Form method="post" className="mt-4 grid gap-3">
+          <input type="hidden" name="intent" value="offer-create" />
+          <fieldset className="grid gap-1">
+            <legend className="text-sm font-semibold text-dark mb-1">Apps que entregas</legend>
+            {machines.map((m) => (
+              <label key={m.sandboxId} className="flex items-center gap-2 text-sm text-dark">
+                <input
+                  type="checkbox"
+                  name="sandboxIds"
+                  value={m.sandboxId}
+                  checked={picked.includes(m.sandboxId)}
+                  onChange={(e) =>
+                    setPicked(e.target.checked ? [...picked, m.sandboxId] : picked.filter((x) => x !== m.sandboxId))
+                  }
+                />
+                {m.name ?? m.sandboxId}
+              </label>
+            ))}
+          </fieldset>
+          <label className="grid gap-1 text-sm font-semibold text-dark">
+            Correo del cliente
+            <input name="clientEmail" type="email" required className="h-10 rounded-lg border-[2px] border-black px-3 font-normal" placeholder="cliente@empresa.com" />
+          </label>
+          <label className="grid gap-1 text-sm font-semibold text-dark">
+            Total al mes (MXN, por todas)
+            <input name="monthlyMxn" type="number" min={1} step={1} required className="h-10 rounded-lg border-[2px] border-black px-3 font-normal tabular-nums" placeholder="250" />
+          </label>
+          <label className="grid gap-1 text-sm font-semibold text-dark">
+            Cómo lo verá el cliente (opcional)
+            <input name="note" maxLength={80} className="h-10 rounded-lg border-[2px] border-black px-3 font-normal" placeholder="Sistema de inscripciones de Acali Club" />
+          </label>
+          {create.data?.error && <p className="text-sm text-red-600">{create.data.error}</p>}
+          <div className="flex gap-2 flex-wrap">
+            <button
+              type="submit"
+              disabled={create.state !== "idle" || picked.length === 0}
+              className="h-9 px-4 rounded-lg border-[2px] border-black bg-brand-500 text-sm font-semibold disabled:opacity-50"
+            >
+              {create.state !== "idle" ? "Enviando…" : "Mandar oferta"}
+            </button>
+            <Btn tone="quiet" onClick={() => setOpen(false)}>Cancelar</Btn>
+          </div>
+        </create.Form>
+      )}
     </div>
   );
 }

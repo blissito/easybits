@@ -324,6 +324,28 @@ export async function action({ request }: ActionFunctionArgs) {
             logger.error("Machine checkout missing subscription or user", { sessionId: session.id });
             break;
           }
+          // Cesión de una agencia (HostingOffer): traspasa las máquinas al que pagó, les pega
+          // la suscripción y deja a la agencia como staff. Antes que eb_attach_ids, que sólo
+          // pegaría el cobro a máquinas que todavía son de la agencia (y las saltaría).
+          if (md.eb_offer_id) {
+            try {
+              const { completeHostingOffer } = await import("~/.server/core/hostingOfferOperations");
+              const r = await completeHostingOffer({ offerId: md.eb_offer_id, clientUserId: md.eb_user_id, subscriptionId: subId });
+              logger.info("Hosting offer completed from checkout", { offerId: md.eb_offer_id, subscriptionId: subId, ...r });
+            } catch (e) {
+              // Pagó: nunca tragarse esto. Necesita un humano (scripts/transfer-acali.mts es el molde).
+              logger.error("Hosting offer completion FAILED", {
+                sessionId: session.id,
+                offerId: md.eb_offer_id,
+                subscriptionId: subId,
+                error: e instanceof Error ? e.message : String(e),
+              });
+              // completeHostingOffer es idempotente: un 500 hace que Stripe reintente (host
+              // caído, etc.) en vez de dejar al cliente pagado y sin sus apps.
+              return new Response("Hosting offer completion failed; retry", { status: 500 });
+            }
+            break;
+          }
           // Cobrar máquinas que ya existen (traspaso): sólo se les pega la suscripción.
           // Va ANTES de provisionPaidMachine, que crearía una caja nueva.
           if (md.eb_attach_ids) {

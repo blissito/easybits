@@ -119,6 +119,8 @@ export async function createMachineCheckout(params: {
   // el webhook sólo les pega la suscripción, nunca crea cajas. `monthlyMxn` es por
   // máquina y `quantity` = cuántas.
   attachSandboxIds?: string[];
+  // Cesión de una agencia (HostingOffer): al pagar, el webhook traspasa y luego pega el cobro.
+  offerId?: string;
   quantity?: number;
   // Primer cobro (epoch s): la tarjeta se captura hoy, hoy se cobra $0 (sin prorrateo) y
   // el ciclo arranca aquí. Checkout no acepta trial_end a menos de 2 días; esto sí.
@@ -158,6 +160,7 @@ export async function createMachineCheckout(params: {
       ...(params.name ? { eb_name: params.name } : {}),
       ...(params.sandboxId ? { eb_sandbox_id: params.sandboxId } : {}),
       ...(attach ? { eb_attach_ids: attach } : {}),
+      ...(params.offerId ? { eb_offer_id: params.offerId } : {}),
     },
     // … and on the subscription itself, so a later cancellation still knows
     // which machine it belongs to.
@@ -167,6 +170,7 @@ export async function createMachineCheckout(params: {
         eb_user_id: params.userId,
         eb_tier: params.tier,
         ...(attach ? { eb_attach_ids: attach } : {}),
+        ...(params.offerId ? { eb_offer_id: params.offerId } : {}),
       },
       ...(params.billingCycleAnchor
         ? { billing_cycle_anchor: params.billingCycleAnchor, proration_behavior: "none" as const }
