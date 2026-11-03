@@ -247,6 +247,16 @@ async function applySleepPolicy(ctx: AuthContext, sandboxId: string, sleep: bool
 }
 
 /**
+ * Acciones de dueño (cobro, liberar, redeploy que compra caja): el staff con delegación
+ * "machines" opera la máquina pero no toca su cobro ni la borra.
+ */
+export function assertMachineOwner(ctx: AuthContext, row: { ownerId: string }, action: string): void {
+  if (row.ownerId !== ctx.user.id) {
+    fail(403, "OwnerOnly", `Sólo el dueño de la máquina puede ${action} esta máquina.`);
+  }
+}
+
+/**
  * Cambia una máquina existente entre "siempre prendida" y "duerme sin visitas".
  * Reprecia el cobro (item del plan o suscripción propia) y aplica la siesta en el
  * host. Primero el host: si falla, no se toca el cobro.
@@ -262,6 +272,14 @@ export async function setMachineSleep(
     !!row && (row.ownerId === ctx.user.id || (await can(ctx, row.ownerId, SCOPES.MACHINES)));
   if (!row || !mine || row.status === "destroyed" || row.status === "pending_deletion") {
     fail(404, "MachineNotFound", "Sandbox no encontrado.");
+  }
+  // Cambiar el modo cambia el cobro: sólo el dueño (el staff opera, no cobra).
+  assertMachineOwner(ctx, row, "cambiar el modo de");
+  // Una suscripción que cubre varias máquinas (traspaso con eb_attach_ids) tiene un solo
+  // precio: repreciar una la cobraría a todas. Se ajusta a mano.
+  if (row.stripeSubscriptionId &&
+      (await db.sandbox.count({ where: { stripeSubscriptionId: row.stripeSubscriptionId } })) > 1) {
+    fail(409, "SharedSubscription", "Esta máquina se cobra junto con otras en una sola suscripción; escríbenos para cambiar su modo.");
   }
   const tier = resolveTier(row.tier);
   if (!tier) fail(400, "UnknownTier", `Tier desconocido: "${row.tier}".`);
@@ -432,8 +450,14 @@ export async function provisionPaidMachine(params: {
 
 /** Release the machine attached to a cancelled standalone subscription. */
 export async function releaseMachineBySubscription(subscriptionId: string): Promise<void> {
-  const row = await db.sandbox.findFirst({ where: { stripeSubscriptionId: subscriptionId } });
-  if (!row || row.status === "destroyed" || row.status === "pending_deletion") return;
+  // findMany: una suscripción puede cubrir varias máquinas (traspaso con eb_attach_ids).
+  // Con findFirst se liberaba una y las demás seguían corriendo sin cobro.
+  const rows = await db.sandbox.findMany({ where: { stripeSubscriptionId: subscriptionId } });
+  for (const row of rows) await releaseOneBySubscription(row);
+}
+
+async function releaseOneBySubscription(row: { ownerId: string; sandboxId: string; status: string }): Promise<void> {
+  if (row.status === "destroyed" || row.status === "pending_deletion") return;
   const ctx = { user: { id: row.ownerId }, scopes: ["DELETE"] } as AuthContext;
   // SOFT-delete, a diferencia de releasePermanent (que destruye en el acto).
   // Aquí nadie pidió borrar: se acabó el trial, falló una tarjeta, Stripe canceló.
@@ -658,6 +682,35 @@ export async function promotePaidWorkBox(params: { ownerId: string; subscription
   const ctx = { user: { id: params.ownerId }, scopes: ["WRITE"] } as AuthContext;
   await finalizeWorkBox(ctx, params.sandboxId, { stripeSubscriptionId: params.subscriptionId });
   return true;
+}
+
+/**
+ * Pega una suscripción pagada a máquinas que YA existen (checkout con `eb_attach_ids`).
+ * Nunca crea cajas. Sólo toca filas del que pagó, vivas y sin cobro; las demás se
+ * gritan para un humano. Idempotente: un replay del webhook no cambia nada.
+ */
+export async function attachPaidMachines(params: {
+  ownerId: string;
+  subscriptionId: string;
+  sandboxIds: string[];
+}): Promise<{ attached: string[]; skipped: string[] }> {
+  const attached: string[] = [];
+  const skipped: string[] = [];
+  for (const sandboxId of params.sandboxIds) {
+    const row = await db.sandbox.findUnique({ where: { sandboxId } });
+    if (row?.stripeSubscriptionId === params.subscriptionId) { attached.push(sandboxId); continue; }
+    const ok = !!row && row.ownerId === params.ownerId &&
+      !["destroyed", "pending_deletion", "transferred"].includes(row.status) &&
+      !row.stripeSubItemId && !row.stripeSubscriptionId;
+    if (!ok) {
+      console.error(`[hosting] CRITICAL: pago ${params.subscriptionId} para ${sandboxId}, que no existe, no es de ${params.ownerId} o ya tiene cobro. Necesita un humano.`);
+      skipped.push(sandboxId);
+      continue;
+    }
+    await db.sandbox.update({ where: { sandboxId }, data: { stripeSubscriptionId: params.subscriptionId } });
+    attached.push(sandboxId);
+  }
+  return { attached, skipped };
 }
 
 /** Provision a fresh always-on machine. */
@@ -956,6 +1009,10 @@ export async function releasePermanent(
   if (!row || !mine || row.status === "destroyed") {
     fail(404, "MachineNotFound", "Sandbox no encontrado.");
   }
+  // El staff (delegado "machines") la ve y la opera, pero liberarla corta el cobro y
+  // destruye datos: eso es del dueño. Un operador que de verdad deba borrarla entra
+  // como el cliente (scope "account").
+  assertMachineOwner(ctx, row, "liberar");
   assertNotExternal(row, "liberar");
   // Stop the meter immediately — the owner asked to release it. Two billing
   // shapes: an item on the plan subscription, or a standalone subscription that

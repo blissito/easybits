@@ -24,7 +24,7 @@ import { SECRETS_FILE, writeSecretsFile } from "./secretsFile";
 import { MESH_DB_PASSTHROUGH } from "./sandboxOperations";
 import { applyInlineTextEdit } from "@ghostystudio/pointer/text-edit";
 import { replaceJsxText } from "~/lib/jsxTextEdit";
-import { execCommand, exposeSandboxPort, getSandbox, listFiles, readFile, waitUntilRunning, writeFile } from "./sandboxOperations";
+import { effectiveOwnerId, execCommand, exposeSandboxPort, getSandbox, listFiles, readFile, waitUntilRunning, writeFile } from "./sandboxOperations";
 import { DEFAULT_SITE_THEME, SITE_THEMES, parseThemeColors, replaceStaticTheme, themeBlockStatic, themeCssTw4, validThemeColors, type ThemeColors } from "~/lib/siteTheme";
 import { PREVIEW_DEPS_MARK, PREVIEW_PORT, PREVIEW_UNIT, STARTER_DIR, stackHasAuth, previewInstallScript, starterFiles, starterPrompt, starterRunspec, stackThemeFiles, themeRule, starterSnapshot, starterTemplate } from "~/.server/starters";
 import { isSiteStack, type SiteStackId } from "~/lib/siteStacks";
@@ -550,7 +550,7 @@ export async function siteAdminLoginUrl(ctx: AuthContext, siteId: string) {
   if (site.kind !== "webapp" || !site.sandboxId || !stack || !stackHasAuth(stack) || !site.previewUrl) {
     throw new Response("Este sitio no tiene login de admin", { status: 400 });
   }
-  const secret = await getMachineSecretValue(ctx.user.id, site.sandboxId, "BETTER_AUTH_SECRET");
+  const secret = await getMachineSecretValue(await effectiveOwnerId(ctx, site.sandboxId), site.sandboxId, "BETTER_AUTH_SECRET");
   if (!secret) throw new Response("La máquina aún no tiene su login listo", { status: 409 });
   const nonce = crypto.randomBytes(16).toString("hex");
   const exp = String(Date.now() + 60_000);

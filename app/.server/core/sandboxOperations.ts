@@ -2135,8 +2135,14 @@ export async function execCommand(
 // facturadas), así que el ownership vive host-side; mover el tag mueve la caja al
 // cupo del user (el host lista por owner). La caja re-keyea su credencial operativa
 // aparte (ver el endpoint admin/adopt-team). Owner del header = el nuevo dueño.
-export async function reassignSandboxOwnerHost(sandboxId: string, newOwnerId: string): Promise<void> {
-  await callHost("PATCH", `/v1/sandbox/${sandboxId}/owner`, { newOwner: newOwnerId }, newOwnerId);
+// asOperator: una máquina VENDIDA está protegida y el host exige X-Operator-Token para
+// cambiarle dueño (traspaso entre cuentas, p. ej. scripts/transfer-acali.mts).
+export async function reassignSandboxOwnerHost(
+  sandboxId: string,
+  newOwnerId: string,
+  opts: { asOperator?: boolean } = {}
+): Promise<void> {
+  await callHost("PATCH", `/v1/sandbox/${sandboxId}/owner`, { newOwner: newOwnerId }, newOwnerId, 120_000, opts.asOperator ?? false);
 }
 
 // Cuenta las cajas del owner en el host (live + suspended, excluye destroyed) para

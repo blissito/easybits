@@ -716,7 +716,7 @@ function MachineCard({
             {machine.sleep ? "duerme sin visitas 💤" : "siempre prendida"}
             {/* "Siempre prendida" ya no se vende: sólo se ofrece pasar a dormir (sólo `node`
                 puede, el host necesita su /busy para saber que está ociosa). */}
-            {tier && !machine.sleep && machine.template === "node" && machine.cpuMode !== "reserved" && (
+            {tier && !machine.shared && !machine.sleep && machine.template === "node" && machine.cpuMode !== "reserved" && (
               <button
                 type="button"
                 disabled={fetcher.state !== "idle"}
@@ -1175,8 +1175,9 @@ function Danger({ machine, fetcher, confirm }: any) {
         </span>
       </Btn>
 
-      {/* Una adoptada se opera por su runbook: borrarla desde aquí tumbaría producción. */}
-      {!machine.external && <Btn
+      {/* Una adoptada se opera por su runbook: borrarla desde aquí tumbaría producción.
+          Una compartida (eres staff) la borra sólo su dueño. */}
+      {!machine.external && !machine.shared && <Btn
         tone="danger"
         onClick={() =>
           confirm({
