@@ -469,6 +469,12 @@ export async function action({ request }: ActionFunctionArgs) {
           break;
         }
 
+        // Collectum comparte la cuenta de Stripe y acredita sus recargas en su propio webhook
+        if (session.metadata?.app === "collectum") {
+          logger.info("Ignoring Collectum checkout session", { sessionId: session.id });
+          break;
+        }
+
         await assignAssetToUser(session, stripe);
         // @todo send notifications
         break;
