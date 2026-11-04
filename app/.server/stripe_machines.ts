@@ -187,6 +187,26 @@ export async function createMachineCheckout(params: {
   return { url: session.url, sessionId: session.id };
 }
 
+/** El siguiente día 1 a las 00:00 de CDMX (UTC-6 todo el año desde 2022), siempre en el futuro. */
+export function nextFirstOfMonth(now: Date = new Date()): Date {
+  const mx = new Date(now.getTime() - 6 * 3600_000);
+  return new Date(Date.UTC(mx.getUTCFullYear(), mx.getUTCMonth() + 1, 1, 6));
+}
+
+/**
+ * Mueve la renovación de una suscripción YA pagada al siguiente día 1, sin devolver ni cobrar
+ * nada: lo pagado hoy cubre hasta ahí. Stripe no deja poner un ancla futura en un update, y en
+ * Checkout no combina ancla sin prorrateo con el cobro completo; `trial_end` es la vía que
+ * documenta. La suscripción queda `trialing` hasta ese día y luego cobra el mes entero.
+ * Idempotente: repetirla con el mismo día no cambia nada.
+ */
+export async function anchorSubscriptionToFirstOfMonth(subscriptionId: string): Promise<void> {
+  await getStripe().subscriptions.update(subscriptionId, {
+    trial_end: Math.floor(nextFirstOfMonth().getTime() / 1000),
+    proration_behavior: "none",
+  });
+}
+
 /** Cancel a standalone machine subscription (the release path for those). */
 export async function cancelMachineSubscription(subscriptionId: string): Promise<void> {
   await getStripe().subscriptions.cancel(subscriptionId, { prorate: true });

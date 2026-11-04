@@ -6,6 +6,9 @@
  * el webhook (eb_offer_id) le traspasa las máquinas, les pega la suscripción y deja a la agencia
  * como staff (delegación "machines": opera, no cobra ni borra).
  *
+ * Cobro: el primer pago es el mes en curso completo, sin prorrateo (el servicio ya lo recibe), y
+ * la suscripción se renueva cada día 1.
+ *
  * Mientras no pague, las máquinas siguen siendo de la agencia: si el cliente nunca paga no se
  * pierde nada. El traspaso pasa una sola vez, dentro del webhook, y es idempotente.
  */
@@ -13,7 +16,7 @@ import type { AuthContext } from "../apiAuth";
 import { db } from "../db";
 import { grantAccess, SCOPES } from "../delegation";
 import { sendTransactional } from "../emails/sendTransactional";
-import { createMachineCheckout } from "../stripe_machines";
+import { anchorSubscriptionToFirstOfMonth, createMachineCheckout, nextFirstOfMonth } from "../stripe_machines";
 import { reassignSandboxOwnerHost } from "./sandboxOperations";
 import { createSecret, getSecretValue, machineSecretName } from "./secretOperations";
 import { attachPaidMachines } from "./machineOperations";
@@ -67,6 +70,8 @@ export type OfferView = {
   machines: { sandboxId: string; name: string | null }[];
   fromName: string | null;
   createdAt: string;
+  // Si se suscribe hoy, cuándo se renueva: «1 de diciembre».
+  renewsOn: string;
 };
 
 async function toView(o: {
@@ -87,6 +92,7 @@ async function toView(o: {
     machines: o.sandboxIds.map((id) => ({ sandboxId: id, name: rows.find((r) => r.sandboxId === id)?.name ?? null })),
     fromName: from?.displayName || from?.email || null,
     createdAt: o.createdAt.toISOString(),
+    renewsOn: nextFirstOfMonth().toLocaleDateString("es-MX", { day: "numeric", month: "long", timeZone: "America/Mexico_City" }),
   };
 }
 
@@ -146,7 +152,7 @@ async function sendOfferEmail(o: OfferView): Promise<void> {
     html: `<div style="font-family:system-ui,sans-serif;font-size:16px;line-height:1.5;color:#111">
       <p>Hola,</p>
       <p><b>${escapeHtml(o.fromName ?? "Tu equipo")}</b> te entrega <b>${escapeHtml(what)}</b>, ya montado y funcionando.</p>
-      <p>Entra con este correo (${escapeHtml(o.clientEmail)}) y activa tu cobro de <b>$${o.monthlyMxn.toLocaleString("es-MX")} MXN al mes</b> en la sección Hosting. Desde ese momento las apps quedan a tu nombre.</p>
+      <p>Entra con este correo (${escapeHtml(o.clientEmail)}) y activa tu cobro de <b>$${o.monthlyMxn.toLocaleString("es-MX")} MXN al mes</b> en la sección Hosting. Pagas el mes en curso completo y la suscripción se renueva el ${escapeHtml(o.renewsOn)}; después, cada día 1. Desde ese momento las apps quedan a tu nombre.</p>
       <p><a href="${url}" style="display:inline-block;padding:10px 18px;background:#7c3aed;color:#fff;border-radius:8px;text-decoration:none;font-weight:600">Ver mis apps</a></p>
     </div>`,
   });
@@ -219,7 +225,11 @@ export async function startHostingOfferCheckout(ctx: AuthContext, offerId: strin
     diskAddonsGB: 0,
     attachSandboxIds: offer.sandboxIds,
     offerId: offer.id,
-    ...(Array.isArray(offer.items) ? { description: describeOfferItems(offer.items as OfferItem[]) } : {}),
+    // Sin fecha: este texto se queda en la suscripción y en sus facturas de todos los meses.
+    description: [
+      ...(Array.isArray(offer.items) ? [describeOfferItems(offer.items as OfferItem[])] : []),
+      "Hoy pagas el mes en curso completo; la suscripción se renueva cada día 1.",
+    ].join(" · "),
     successUrl: `${APP_URL}/dash/hosting?activado=1`,
     cancelUrl: `${APP_URL}/dash/hosting`,
   });
@@ -299,6 +309,8 @@ export async function completeHostingOffer(params: {
     await grantAccess({ user: { id: client.id }, scopes: ["WRITE"] } as AuthContext, agency.email, [SCOPES.MACHINES])
       .catch((e) => console.error(`[hosting-offer] no se pudo dar staff a ${agency.email}`, e));
   }
+  // Antes de marcarla pagada: si Stripe falla, el 500 hace que el webhook reintente esto.
+  await anchorSubscriptionToFirstOfMonth(params.subscriptionId);
   await db.hostingOffer.update({
     where: { id: offer.id },
     data: { status: "paid", subscriptionId: params.subscriptionId, clientUserId: client.id, paidAt: new Date() },

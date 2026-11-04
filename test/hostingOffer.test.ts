@@ -38,6 +38,11 @@ vi.mock("~/.server/delegation", () => ({
   grantAccess: vi.fn(async (ctx: any, email: string, scopes: string[]) => grants.push({ from: ctx.user.id, email, scopes })),
 }));
 vi.mock("~/.server/emails/sendTransactional", () => ({ sendTransactional: vi.fn(async () => ({ messageId: "m" })) }));
+const anchorSub = vi.fn(async (_id: string) => {});
+vi.mock("~/.server/stripe_machines", async (orig) => ({
+  ...(await orig<any>()),
+  anchorSubscriptionToFirstOfMonth: anchorSub,
+}));
 vi.mock("~/.server/core/sandboxOperations", async (orig) => ({
   ...(await orig<any>()),
   reassignSandboxOwnerHost: vi.fn(async (id: string, owner: string, opts: any) => hostCalls.push({ id, owner, opts })),
@@ -139,6 +144,26 @@ describe("completar oferta (webhook)", () => {
     offers.of1.monthlyMxn = 600;
     await completeHostingOffer({ offerId: "of1", clientUserId: "jose", subscriptionId: "sub_9" });
     expect(sandboxes.sb_1.agreedMonthlyMxn).toBe(250);
+  });
+
+  it("ancla la renovación al día 1; si Stripe falla, la oferta sigue pendiente y el reintento completa", async () => {
+    anchorSub.mockRejectedValueOnce(new Error("stripe caído"));
+    await expect(completeHostingOffer({ offerId: "of1", clientUserId: "jose", subscriptionId: "sub_9" })).rejects.toThrow();
+    expect(offers.of1.status).toBe("pending");
+    await completeHostingOffer({ offerId: "of1", clientUserId: "jose", subscriptionId: "sub_9" });
+    expect(anchorSub).toHaveBeenLastCalledWith("sub_9");
+    expect(offers.of1.status).toBe("paid");
+  });
+
+  it("el siguiente día 1 se calcula en hora de CDMX", async () => {
+    const { nextFirstOfMonth } = await import("~/.server/stripe_machines");
+    const iso = (s: string) => nextFirstOfMonth(new Date(s)).toISOString();
+    expect(iso("2026-11-04T14:00:00Z")).toBe("2026-12-01T06:00:00.000Z");
+    // 30 nov 23:30 en CDMX ya es 1 dic en UTC: sigue siendo noviembre, renueva en horas.
+    expect(iso("2026-12-01T05:30:00Z")).toBe("2026-12-01T06:00:00.000Z");
+    // Pagar el mismo día 1 renueva hasta el siguiente mes.
+    expect(iso("2026-12-01T06:00:00Z")).toBe("2027-01-01T06:00:00.000Z");
+    expect(iso("2026-12-15T12:00:00Z")).toBe("2027-01-01T06:00:00.000Z");
   });
 
   it("un replay del webhook no hace nada", async () => {

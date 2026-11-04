@@ -1276,6 +1276,9 @@ function IncomingOffer({ offer }: { offer: any }) {
         dándoles mantenimiento.
       </p>
       {offer.items && <OfferBreakdown items={offer.items} />}
+      <p className="mt-3 text-sm text-dark">
+        Hoy pagas el mes en curso completo y tu suscripción se renueva el {offer.renewsOn}. Después, cada día 1.
+      </p>
       <div className="mt-3 flex items-center gap-3 flex-wrap">
         <span className="text-2xl font-bold text-dark tabular-nums">
           ${offer.monthlyMxn.toLocaleString("es-MX")} <span className="text-sm font-semibold text-metal">MXN al mes</span>
