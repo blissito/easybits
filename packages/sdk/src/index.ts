@@ -663,7 +663,11 @@ export type CronAction =
 
 /** Notifications after each run. Every run also emits the `cron.run.succeeded` / `cron.run.failed` webhooks. */
 export interface CronNotify {
-  /** Default "failure": only when a run fails. */
+  /**
+   * Default "failure": only when a run fails. On a repeating cron, push and email notify on CHANGE
+   * (first failure, the one that turns it off; with "always" also the first success, each recovery
+   * and the stopOnSuccess run), not on every run. The inbox gets every run.
+   */
   on?: "failure" | "always";
   /** Push to the Ghosty app with the personal token in your vault secret (default `GHOSTY_PUSH_TOKEN`). */
   push?: true | { secret: string };
@@ -713,8 +717,10 @@ export interface Cron {
   /** The schedule in words (Spanish), e.g. "diario 08:30 America/Mexico_City". */
   schedule: string;
   enabled: boolean;
-  /** Did everything it had to (a one-off that ran, or `until`/`times` ran out). */
+  /** Did everything it had to (a one-off that ran, `until`/`times` ran out, or `stopOnSuccess` and a run succeeded). */
   done: boolean;
+  /** Turns itself off as soon as a run succeeds. */
+  stopOnSuccess?: boolean;
   /** For `exec`, files come back as `{ path, bytes }` (never their content). */
   action: CronAction;
   notify: CronNotify | null;
@@ -727,7 +733,7 @@ export interface Cron {
   lastOk: boolean | null;
   lastStatus: number | null;
   lastError: string | null;
-  /** Failures in a row; at 20 the cron turns itself off. */
+  /** Failures in a row; at 5 the cron turns itself off. */
   failCount: number;
   createdAt: string;
 }
@@ -744,6 +750,8 @@ export interface CreateCronParams {
   until?: string | null;
   /** Repeating cron that stops on its own: how many more runs. */
   times?: number | null;
+  /** Repeating cron that turns itself off once a run succeeds ("retry until it works"). */
+  stopOnSuccess?: boolean;
   /** IANA time zone. Default America/Mexico_City. */
   timezone?: string;
   enabled?: boolean;

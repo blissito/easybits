@@ -2152,8 +2152,10 @@ model UserCron {
   lastOk     Boolean?
   lastStatus Int?
   lastError  String?
-  // Fallas seguidas; a las 20 el cron se apaga solo (no se martilla una URL muerta).
+  // Fallas seguidas; a las 5 el cron se apaga solo (no se martilla una URL muerta).
   failCount  Int       @default(0)
+  // Recurrente que se apaga solo en cuanto una ejecución sale bien («reintenta hasta que funcione»).
+  stopOnSuccess Boolean?
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
 

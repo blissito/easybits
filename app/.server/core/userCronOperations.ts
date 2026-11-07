@@ -24,8 +24,11 @@ export const DEFAULT_TIMEZONE = "America/Mexico_City";
 /** Lo más seguido que puede correr un cron de usuario. */
 export const MIN_INTERVAL_MS = 5 * 60_000;
 export const USER_CRON_LIMITS: Record<PlanKey, number> = { Byte: 3, Mega: 20, Tera: 100 };
-/** Fallas seguidas tras las que el cron se apaga solo. */
-export const MAX_CONSECUTIVE_FAILS = 20;
+/**
+ * Fallas seguidas tras las que el cron se apaga solo. Era 20: uno cada 2 h que ya había cumplido
+ * siguió fallando (y avisando) 40 h antes de apagarse (`ghosty-android-29-a-play`, 5–7 nov 2026).
+ */
+export const MAX_CONSECUTIVE_FAILS = 5;
 const HTTP_TIMEOUT_MS = 30_000;
 const BODY_MAX = 16_000;
 const PROMPT_MAX = 4_000;
@@ -104,6 +107,11 @@ export type UserCronInput = {
   secretValues?: Record<string, string>;
   /** Avisos por ejecución; null los quita. */
   notify?: unknown;
+  /**
+   * Recurrente que se apaga solo en cuanto una ejecución sale bien: «reintenta hasta que funcione»
+   * (subir una build, esperar una aprobación). Sin esto el cron sigue corriendo después de cumplir.
+   */
+  stopOnSuccess?: boolean;
   /** Igual que `times` (es como se guarda; las propuestas del copiloto lo traen así). */
   timesLeft?: number | null;
   timezone?: string;
@@ -528,7 +536,16 @@ export async function normalizeCreate(ownerId: string, input: UserCronInput, now
   const sched = resolveSchedule(input, timezone, now);
   const action = await validateAction(ownerId, input.action, input);
   const notify = await validateNotify(ownerId, input.notify);
-  return { name, ...sched, timezone, enabled: input.enabled !== false, action, ...(notify ? { notify } : {}) };
+  if (input.stopOnSuccess && sched.at) throw bad("stopOnSuccess es para crons que se repiten; uno con at ya corre una sola vez");
+  return {
+    name,
+    ...sched,
+    timezone,
+    enabled: input.enabled !== false,
+    action,
+    ...(notify ? { notify } : {}),
+    ...(input.stopOnSuccess ? { stopOnSuccess: true } : {}),
+  };
 }
 
 type SchedulePatch = { cron?: string; at?: Date | null; until?: Date | null; timesLeft?: number | null; timezone?: string };
@@ -536,7 +553,7 @@ type SchedulePatch = { cron?: string; at?: Date | null; until?: Date | null; tim
 /** Valida un cambio parcial sin escribir. */
 export async function normalizeUpdate(current: UserCron, input: UserCronInput, now: Date = new Date()) {
   if (input.times === undefined && input.timesLeft !== undefined) input = { ...input, times: input.timesLeft };
-  const out: { name?: string; enabled?: boolean; action?: UserCronAction; notify?: CronNotify | null } & SchedulePatch = {};
+  const out: { name?: string; enabled?: boolean; action?: UserCronAction; notify?: CronNotify | null; stopOnSuccess?: boolean } & SchedulePatch = {};
   if (input.name !== undefined) {
     out.name = String(input.name).trim().slice(0, 80);
     if (!out.name) throw bad("name no puede ir vacío");
@@ -574,6 +591,10 @@ export async function normalizeUpdate(current: UserCron, input: UserCronInput, n
     if (until && until <= now) throw bad("La fecha `until` de ese cron ya pasó; dale otra (o null para siempre)");
   }
   if (input.notify !== undefined) out.notify = await validateNotify(current.ownerId, input.notify);
+  if (input.stopOnSuccess !== undefined) {
+    out.stopOnSuccess = !!input.stopOnSuccess;
+    if (out.stopOnSuccess && (out.at !== undefined ? out.at : current.at)) throw bad("stopOnSuccess es para crons que se repiten");
+  }
   if (input.action !== undefined) out.action = await validateAction(current.ownerId, input.action, input);
   else if (input.secretValues) throw bad("secretValues va junto con action (la acción dice qué secretos usa)");
   return out;
@@ -593,8 +614,10 @@ export type UserCronView = {
   timezone: string;
   schedule: string;
   enabled: boolean;
-  /** Ya hizo todo lo que tenía que hacer (de una sola vez que corrió, o se le acabaron until/times). */
+  /** Ya hizo todo lo que tenía que hacer (de una sola vez que corrió, se le acabaron until/times, o `stopOnSuccess` y salió bien). */
   done: boolean;
+  /** Se apaga solo en cuanto una ejecución sale bien. */
+  stopOnSuccess: boolean;
   action: UserCronAction;
   notify: CronNotify | null;
   nextRunAt: string | null;
@@ -621,8 +644,12 @@ export function describeSchedule(c: Pick<UserCron, "cron" | "at" | "until" | "ti
   return ends.length ? `${base} · ${ends.join(" · ")}` : base;
 }
 
-export const isDone = (c: Pick<UserCron, "enabled" | "at" | "until" | "timesLeft">, now = new Date()) =>
-  !c.enabled && ((c.at != null && c.at <= now) || c.timesLeft === 0 || (c.until != null && c.until <= now));
+export const isDone = (
+  c: Pick<UserCron, "enabled" | "at" | "until" | "timesLeft"> & { stopOnSuccess?: boolean | null; lastOk?: boolean | null },
+  now = new Date()
+) =>
+  !c.enabled &&
+  ((c.at != null && c.at <= now) || c.timesLeft === 0 || (c.until != null && c.until <= now) || (!!c.stopOnSuccess && c.lastOk === true));
 
 /** La acción como se muestra: los archivos sin su contenido (sólo ruta y tamaño). */
 export function publicAction(a: UserCronAction): UserCronAction {
@@ -647,6 +674,7 @@ export const toUserCronView = (c: UserCron, now = new Date()): UserCronView => {
     schedule: describeSchedule(c),
     enabled: c.enabled,
     done: isDone(c, now),
+    stopOnSuccess: !!c.stopOnSuccess,
     action: publicAction(c.action as UserCronAction),
     notify: (c.notify as CronNotify | null) ?? null,
     nextRunAt: next?.toISOString() ?? null,
@@ -841,11 +869,13 @@ function requireHuman(ctx: AuthContext) {
 
 /** Crons que ocupan lugar del plan: los de una sola vez que ya corrieron no cuentan (son historial). */
 async function countActive(ownerId: string, now = new Date()) {
-  const [all, done] = await Promise.all([
+  const [all, done, stopped] = await Promise.all([
     db.userCron.count({ where: { ownerId } }),
     db.userCron.count({ where: { ownerId, enabled: false, at: { lte: now } } }),
+    // Los que se apagaron solos al salir bien también son historial.
+    db.userCron.count({ where: { ownerId, enabled: false, stopOnSuccess: true, lastOk: true } }),
   ]);
-  return all - done;
+  return all - done - stopped;
 }
 
 export type UserCronPreview = {
@@ -1115,6 +1145,8 @@ export async function executeUserCron(c: UserCron, trigger: "schedule" | "manual
   }
   const failCount = out.ok ? 0 : c.failCount + 1;
   const disable = failCount >= MAX_CONSECUTIVE_FAILS;
+  // «Reintenta hasta que funcione»: cumplió, se apaga y queda como historial.
+  const stopped = out.ok && !!c.stopOnSuccess && !c.at;
   await db.userCron
     .update({
       where: { id: c.id },
@@ -1124,13 +1156,14 @@ export async function executeUserCron(c: UserCron, trigger: "schedule" | "manual
         lastStatus: out.status,
         lastError: disable ? `Apagado tras ${failCount} fallas seguidas. Última: ${out.error ?? ""}`.slice(0, ERROR_MAX) : out.error,
         failCount,
-        ...(disable ? { enabled: false, nextRunAt: null } : {}),
+        ...(disable || stopped ? { enabled: false, nextRunAt: null } : {}),
       },
     })
     // El cron pudo borrarse a media ejecución.
     .catch(() => undefined);
   // Avisos y webhooks: disparar y olvidar. Un aviso caído nunca vuelve fallida una ejecución buena.
-  void notifyRun(c, { ...out, runId: run?.id ?? null, startedAt, durationMs: finishedAt.getTime() - startedAt.getTime() }).catch((e) =>
+  const state: NotifyState = { once: !!c.at, prevOk: c.lastOk ?? null, disabled: disable, stopped };
+  void notifyRun(c, { ...out, runId: run?.id ?? null, startedAt, durationMs: finishedAt.getTime() - startedAt.getTime() }, state).catch((e) =>
     console.error(`[user-cron] avisos de ${c.id}:`, e)
   );
   return out;
@@ -1138,8 +1171,31 @@ export async function executeUserCron(c: UserCron, trigger: "schedule" | "manual
 
 type RunResult = Outcome & { runId: string | null; startedAt: Date; durationMs: number };
 
-/** ¿Toca avisar? Puro, con test. */
-export const shouldNotify = (n: CronNotify | null | undefined, ok: boolean) => !!n && (n.on === "always" || !ok);
+/** Lo que hace falta saber de la ejecución para no avisar de más. */
+export type NotifyState = {
+  /** De una sola vez: avisa como siempre (corre una vez). */
+  once?: boolean;
+  /** `lastOk` ANTES de esta ejecución (null = primera). */
+  prevOk?: boolean | null;
+  /** Esta falla lo apagó (MAX_CONSECUTIVE_FAILS). */
+  disabled?: boolean;
+  /** Salió bien y era `stopOnSuccess`: se apagó. */
+  stopped?: boolean;
+};
+
+/**
+ * ¿Toca avisar? Puro, con test. Sin `s` (buzón, compat): cada ejecución según `on`.
+ * Con `s` (push y correo, los que le llegan a una persona) un recurrente avisa por CAMBIO, no por
+ * ejecución: la 1a falla, la que lo apaga y, con `always`, el 1er éxito, cada recuperación y el
+ * que lo detiene por `stopOnSuccess`. Antes `always` cada 2 h = 30 avisos en 3 días.
+ */
+export function shouldNotify(n: CronNotify | null | undefined, ok: boolean, s?: NotifyState): boolean {
+  if (!n) return false;
+  if (!s || s.once) return n.on === "always" || !ok;
+  if (s.disabled) return true;
+  if (ok) return n.on === "always" && (!!s.stopped || s.prevOk !== true);
+  return s.prevOk !== false;
+}
 
 /** Una línea para el aviso: «✅ «Revisión 1.0.10» terminó · exit 0 · 1.0.9 READY_FOR_SALE». Pura, con test. */
 export function notifyText(name: string, r: Pick<Outcome, "ok" | "exitCode" | "summary" | "error">): { title: string; body: string } {
@@ -1148,7 +1204,7 @@ export function notifyText(name: string, r: Pick<Outcome, "ok" | "exitCode" | "s
   return { title, body: clip(detail || (r.exitCode != null ? `exit ${r.exitCode}` : ""), 240) };
 }
 
-async function notifyRun(c: UserCron, r: RunResult) {
+async function notifyRun(c: UserCron, r: RunResult, state?: NotifyState) {
   const payload = {
     cronId: c.id,
     name: c.name,
@@ -1163,11 +1219,19 @@ async function notifyRun(c: UserCron, r: RunResult) {
   };
   void dispatchWebhooks(c.ownerId, r.ok ? "cron.run.succeeded" : "cron.run.failed", payload);
   const n = c.notify as CronNotify | null;
-  if (!shouldNotify(n, r.ok)) return;
-  const { title, body } = notifyText(c.name, r);
+  // El buzón lo lee una máquina: recibe cada ejecución. Push y correo, sólo los cambios.
+  const toInbox = shouldNotify(n, r.ok);
+  const toPerson = shouldNotify(n, r.ok, state);
+  if (!toInbox && !toPerson) return;
+  const { title: baseTitle, body } = notifyText(c.name, r);
+  const title = state?.disabled
+    ? `⏸️ «${c.name}» se apagó tras ${MAX_CONSECUTIVE_FAILS} fallas seguidas`
+    : state?.stopped
+      ? `✅ «${c.name}» cumplió y se apagó`
+      : baseTitle;
   const url = `${(process.env.BASE_URL || "https://www.easybits.cloud").replace(/\/$/, "")}/dash/admin/crons`;
   const jobs: Promise<unknown>[] = [];
-  if (n!.push) {
+  if (n!.push && toPerson) {
     jobs.push(
       (async () => {
         const token = await getSecretValue(c.ownerId, n!.push!.secret);
@@ -1182,7 +1246,7 @@ async function notifyRun(c: UserCron, r: RunResult) {
       })()
     );
   }
-  if (n!.inbox) {
+  if (n!.inbox && toInbox) {
     jobs.push(
       (async () => {
         const box = await ownedInbox(c.ownerId, n!.inbox!);
@@ -1197,7 +1261,7 @@ async function notifyRun(c: UserCron, r: RunResult) {
       })()
     );
   }
-  if (n!.email) {
+  if (n!.email && toPerson) {
     jobs.push(
       (async () => {
         const owner = await db.user.findUnique({ where: { id: c.ownerId }, select: { email: true } });

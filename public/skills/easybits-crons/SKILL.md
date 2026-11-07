@@ -5,7 +5,7 @@ license: MIT
 compatibility: Needs Node 22+ (npx is enough), network access to https://www.easybits.cloud and an EasyBits session (easybits login) or API key
 metadata:
   author: easybits
-  version: "1.1"
+  version: "1.2"
 ---
 
 # Schedule work with EasyBits crons
@@ -65,5 +65,5 @@ https://www.easybits.cloud/dash/developer/crons, where Bittor (the panel assista
 ## Limits
 
 Byte 3 crons, Mega 20, Tera 100 (one-offs that already ran don't count). `--timeout` ≤ 600 s.
-Files ≤ 512 KB total. URLs must be public https. 20 failures in a row turn a cron off (`enabled:false`).
+Files ≤ 512 KB total. URLs must be public https. 5 failures in a row turn a cron off (`enabled:false`). A job that only has to succeed once (upload a build, wait for an approval) is a repeating cron with `stopOnSuccess: true`, so it stops after it works. A reminder ("remind me tomorrow…") is a one-off (`--at`), never a repeating cron. On repeating crons push/email notify on change, not on every run.
 Manage: `easybits crons ls|get|runs|update|pause|resume|rm <id|name> --json` (`rm` needs `--yes`).

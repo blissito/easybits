@@ -73,7 +73,7 @@ const secretValuesShape = z
 
 const notifyShape = z
   .object({
-    on: z.enum(["failure", "always"]).optional().describe("default failure: sólo cuando falla"),
+    on: z.enum(["failure", "always"]).optional().describe("default failure: sólo cuando falla. En un recurrente push y correo avisan por CAMBIO (1a falla, la que lo apaga; con always además el 1er éxito, cada recuperación y el que cumple con stopOnSuccess), no en cada ejecución; el buzón recibe todas"),
     push: z.union([z.literal(true), z.object({ secret: z.string() })]).optional().describe("aviso a la app de Ghosty; usa el token personal del secreto GHOSTY_PUSH_TOKEN (o el que digas)"),
     email: z.literal(true).optional().describe("correo a la cuenta dueña (nunca a otra dirección)"),
     inbox: z.string().optional().describe("id o nombre de un buzón tuyo (inbox_create); se guarda su id. El resultado de cada ejecución llega ahí como evento"),
@@ -119,7 +119,7 @@ export function registerUserCronTools(server: McpServer, wrapHandler: Wrap) {
 
   server.tool(
     "create_cron",
-    "Crea un cron en TU cuenta: le pega a una URL https pública, le manda un turno a uno de tus agentes o ejecuta un comando (`exec`) en una caja efímera con tus archivos y secretos (p. ej. `python3 asc.py` con un .p8 en `secretValues`). Se repite (`cron`, mínimo cada 5 min, puede terminar con `until`/`times`) o se ejecuta UNA SOLA VEZ (`at` o `in`). Límite por plan (Byte 3, Mega 20, Tera 100; los de una sola vez que ya se ejecutaron no cuentan). Devuelve el cron con `nextRunAt` (ISO), `nextRunLocal` (en su zona) e `in` (cuánto falta). Con `dryRun:true` sólo valida y regresa las próximas 3 ejecuciones. Ejemplos: diario 8:30 en CDMX → cron `30 8 * * *`; hoy a las 11 pm → at `23:00`.",
+    "Crea un cron en TU cuenta: le pega a una URL https pública, le manda un turno a uno de tus agentes o ejecuta un comando (`exec`) en una caja efímera con tus archivos y secretos (p. ej. `python3 asc.py` con un .p8 en `secretValues`). Se repite (`cron`, mínimo cada 5 min, puede terminar con `until`/`times`, o apagarse solo al salir bien con `stopOnSuccess`) o se ejecuta UNA SOLA VEZ (`at` o `in`). Un recordatorio («recuérdame mañana…») es de una sola vez (`at`), nunca un `cron`. Tras 5 fallas seguidas se apaga solo. Límite por plan (Byte 3, Mega 20, Tera 100; los de una sola vez que ya se ejecutaron no cuentan). Devuelve el cron con `nextRunAt` (ISO), `nextRunLocal` (en su zona) e `in` (cuánto falta). Con `dryRun:true` sólo valida y regresa las próximas 3 ejecuciones. Ejemplos: diario 8:30 en CDMX → cron `30 8 * * *`; hoy a las 11 pm → at `23:00`.",
     {
       name: z.string().describe("nombre corto"),
       cron: cronShape.optional(),
@@ -129,6 +129,7 @@ export function registerUserCronTools(server: McpServer, wrapHandler: Wrap) {
       action: actionShape,
       secretValues: secretValuesShape,
       notify: notifyShape,
+      stopOnSuccess: z.boolean().optional().describe("recurrente que se apaga solo en cuanto una ejecución sale bien («reintenta hasta que funcione»: subir una build, esperar una aprobación). Úsalo siempre que el trabajo se cumpla una vez; si no, el cron sigue corriendo después de cumplir"),
       dryRun: z.boolean().optional().describe("sólo valida y dice cuándo se ejecutaría; no crea nada"),
     },
     wrapHandler(async (p: Record<string, unknown>, extra) => {
@@ -151,6 +152,7 @@ export function registerUserCronTools(server: McpServer, wrapHandler: Wrap) {
       action: actionShape.optional(),
       secretValues: secretValuesShape,
       notify: notifyShape,
+      stopOnSuccess: z.boolean().optional().describe("recurrente que se apaga solo en cuanto una ejecución sale bien («reintenta hasta que funcione»: subir una build, esperar una aprobación). Úsalo siempre que el trabajo se cumpla una vez; si no, el cron sigue corriendo después de cumplir"),
     },
     wrapHandler(async (p: { id: string } & Record<string, unknown>, extra) => {
       const ctx = authOf(extra);

@@ -84,6 +84,31 @@ describe("notify", () => {
     expect(shouldNotify({ on: "always", email: true }, true)).toBe(true);
     expect(shouldNotify(null, false)).toBe(false);
   });
+  it("recurrente: push/correo avisan por cambio, no en cada ejecución", () => {
+    const always = { on: "always" as const, push: { secret: "X" } };
+    const failure = { on: "failure" as const, email: true as const };
+    // 1er éxito sí, éxitos seguidos no (el de Android avisó «ya está» 9 veces).
+    expect(shouldNotify(always, true, { prevOk: null })).toBe(true);
+    expect(shouldNotify(always, true, { prevOk: true })).toBe(false);
+    // Recuperación sí; con failure no.
+    expect(shouldNotify(always, true, { prevOk: false })).toBe(true);
+    expect(shouldNotify(failure, true, { prevOk: false })).toBe(false);
+    // 1a falla sí, fallas seguidas no, la que lo apaga sí.
+    expect(shouldNotify(failure, false, { prevOk: true })).toBe(true);
+    expect(shouldNotify(failure, false, { prevOk: false })).toBe(false);
+    expect(shouldNotify(failure, false, { prevOk: false, disabled: true })).toBe(true);
+    // stopOnSuccess: el que cumple avisa con always aunque el anterior también saliera bien.
+    expect(shouldNotify(always, true, { prevOk: true, stopped: true })).toBe(true);
+    // De una sola vez: como antes.
+    expect(shouldNotify(always, true, { once: true, prevOk: true })).toBe(true);
+  });
+  it("isDone: stopOnSuccess que salió bien es historial", async () => {
+    const { isDone } = await import("~/.server/core/userCronOperations");
+    const base = { enabled: false, at: null, until: null, timesLeft: null };
+    expect(isDone({ ...base, stopOnSuccess: true, lastOk: true })).toBe(true);
+    expect(isDone({ ...base, stopOnSuccess: true, lastOk: false })).toBe(false);
+    expect(isDone({ ...base, stopOnSuccess: null, lastOk: true })).toBe(false);
+  });
   it("texto corto con el resultado", () => {
     expect(notifyText("Revisión 1.0.10", { ok: true, exitCode: 0, summary: "exit 0 · enviada", error: null })).toEqual({
       title: "✅ «Revisión 1.0.10» terminó bien",
