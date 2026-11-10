@@ -26,8 +26,8 @@ export const sendMagicLink = (email: string, data: any) => {
   }
   for (const [k, until] of magicLinkCooldown) if (until <= now) magicLinkCooldown.delete(k);
   magicLinkCooldown.set(key, now + 120000); // 2 min por correo
-  // 24 h: es lo que promete el correo (templates/magic_link.ts).
-  const magicToken = generateUserToken({ ...data, email }, "24h");
+  // 1 h (default de generateUserToken): es lo que dice el correo (templates/magic_link.ts).
+  const magicToken = generateUserToken({ ...data, email });
   const url = new URL(location + "/api/v1/tokens");
   url.searchParams.set("token", magicToken);
   return getSesTransport()
