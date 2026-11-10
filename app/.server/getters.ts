@@ -6,13 +6,14 @@ import jwt from "jsonwebtoken";
 import { randomUUID } from "crypto";
 import { sendWelcomeEmail } from "./emails/sendWelcome";
 import { canImpersonate } from "./delegation";
+import { toDocumentPath } from "~/lib/safeNext";
 
 const throwRedirect = (request: Request) => {
   const url = new URL(request.url);
   // El query string viaja: quien vuelve del checkout trae ?welcome=trial&session_id=…
   // y perderlo aquí lo deja sin la bienvenida al otro lado del login.
   return redirect(
-    "/login?next=" + encodeURIComponent(url.pathname + url.search)
+    "/login?next=" + encodeURIComponent(toDocumentPath(url.pathname + url.search, "/"))
   );
 };
 
@@ -86,7 +87,7 @@ export const setSessionCookie = async ({
   const cookie = request.headers.get("Cookie");
   const session = await getSession(cookie);
   session.set("email", email);
-  throw redirect(redirectURL, {
+  throw redirect(toDocumentPath(redirectURL), {
     headers: {
       "set-cookie": await commitSession(session),
     },

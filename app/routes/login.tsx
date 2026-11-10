@@ -7,6 +7,7 @@ import {
   commitSession,
   getRedirectCookie as redirectCookieFn,
 } from "~/.server/sessions";
+import { toDocumentPath } from "~/lib/safeNext";
 import getBasicMetaTags from "~/utils/getBasicMetaTags";
 import {
   sendConfrimation,
@@ -74,7 +75,7 @@ export const loader = async ({ request, params }: Route.LoaderArgs) => {
   if (session) {
     cookie = await getRedirectCookie(request); // @todo revisit all this, maybe not needed
     if (cookie["next"]) {
-      const next = cookie["next"];
+      const next = toDocumentPath(cookie["next"]);
       cookie["next"] = undefined;
       throw redirect(next, {
         headers: {
