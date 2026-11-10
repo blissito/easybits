@@ -68,7 +68,7 @@ export const magic_link = ({
               font-size: 16px;
             "
           >
-          Haz clic abajo para iniciar sesión y empezar a vender tus assets digitales. El enlace es válido durante 1 hora o hasta que se use.
+          Haz clic abajo para iniciar sesión y empezar a vender tus assets digitales. El enlace es válido durante 1 hora.
      
         </p>
          
