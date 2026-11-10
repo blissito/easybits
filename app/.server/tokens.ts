@@ -44,7 +44,7 @@ export const generateUserToken = (
     email: string;
     [x: string]: unknown;
   },
-  expiresIn: "1h" | "7d" = "1h"
+  expiresIn: "1h" | "24h" | "7d" = "1h"
 ) => {
   return jwt.sign(data, SECRET, {
     expiresIn,
