@@ -1,10 +1,7 @@
 // @ts-nocheck
 import type { Route } from "./+types/utils";
-import {
-  sendConfrimation,
-  // sendConfrimation,
-  sendNewsLetter,
-} from "~/.server/emails/sendNewsLetter";
+import { sendConfirmation } from "~/.server/emails/sendAuthEmails";
+import { sendNewsLetter } from "~/.server/emails/sendNewsLetter";
 import { marked } from "marked";
 import sanitizeHtml from "sanitize-html";
 import { z } from "zod";
@@ -61,7 +58,7 @@ export const action = async ({ request }: Route.ActionArgs) => {
       return { success };
     }
 
-    await sendConfrimation(email);
+    await sendConfirmation(email);
     return { success };
   }
 

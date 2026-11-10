@@ -10,9 +10,9 @@ import {
 import { toDocumentPath } from "~/lib/safeNext";
 import getBasicMetaTags from "~/utils/getBasicMetaTags";
 import {
-  sendConfrimation,
+  sendConfirmation,
   sendMagicLink,
-} from "~/.server/emails/sendNewsLetter";
+} from "~/.server/emails/sendAuthEmails";
 
 export const loader = async ({ request, params }: Route.LoaderArgs) => {
   const setRedirectCookie = async (request: Request, next: string) => {
@@ -64,7 +64,7 @@ export const loader = async ({ request, params }: Route.LoaderArgs) => {
     const redirectCookie = await getRedirectCookie(request);
     const refCode = redirectCookie["ref"] as string | undefined;
     session = await createGoogleSession(code, request, refCode);
-    sendConfrimation(session.get("email")!);
+    sendConfirmation(session.get("email")!);
     // Clear ref from cookie
     if (refCode) {
       redirectCookie["ref"] = undefined;
