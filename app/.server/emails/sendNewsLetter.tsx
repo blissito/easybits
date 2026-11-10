@@ -12,14 +12,18 @@ export const emailSchema = z.string().email();
 const isDev = process.env.NODE_ENV === "development";
 const location = isDev ? "http://localhost:3000" : "https://www.easybits.cloud";
 
-let timer = 0;
 const recentConfirmations = new Map<string, number>();
+// Límite POR CORREO (antes era global: un link de cualquiera bloqueaba a todos 2 min).
+const magicLinkCooldown = new Map<string, number>();
 export const sendMagicLink = (email: string, data: any) => {
-  if (timer > Date.now()) {
-    console.error("Avoided: rate limited");
+  const key = String(email || "").trim().toLowerCase();
+  const now = Date.now();
+  if ((magicLinkCooldown.get(key) ?? 0) > now) {
+    console.error("Magic link rate-limited:", key);
     return;
   }
-  timer = Date.now() + 120000; // 2 min de espera para un nuevo link
+  for (const [k, until] of magicLinkCooldown) if (until <= now) magicLinkCooldown.delete(k);
+  magicLinkCooldown.set(key, now + 120000); // 2 min por correo
   const magicToken = generateUserToken({ ...data, email });
   const url = new URL(location + "/api/v1/tokens");
   url.searchParams.set("token", magicToken);
