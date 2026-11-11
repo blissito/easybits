@@ -641,9 +641,10 @@ SDK: \`eb.updateFile(fileId, { name?, access?, metadata? })\`
 
 ### Delete file
 \`DELETE /files/:fileId\`
-Soft-deletes (status → DELETED). Recoverable for 7 days.
+Soft-deletes (status → DELETED). Recoverable for 7 days. A public file stops being served at its public URL immediately.
+\`DELETE /files/:fileId?permanent=true\` erases the stored object and the record right away: no trash, not recoverable.
 Returns 409 \`WEBSITE_FILE\` if the file backs a published website (same for \`POST /files/bulk-delete\`, all-or-nothing): manage those through the website endpoints.
-SDK: \`eb.deleteFile(fileId)\`
+SDK: \`eb.deleteFile(fileId, { permanent? })\`
 
 ### Restore file
 \`POST /files/:fileId/restore\`
@@ -694,9 +695,10 @@ SDK: \`eb.bulkUploadFiles(items)\`
 
 ### Bulk delete
 \`POST /files/bulk-delete\`
-Body: \`{ fileIds: string[] }\` (max 100)
-Returns: \`{ deleted: number }\`
-SDK: \`eb.bulkDeleteFiles(fileIds)\`
+Body: \`{ fileIds: string[], permanent?: boolean }\` (max 100)
+Returns: \`{ deleted: number, ids: string[], failed?: [{ id, error }] }\`
+Public files stop being served at their public URLs immediately. \`permanent: true\` erases objects and records right away (no 7-day trash). A file whose stored object could not be removed is left untouched and listed in \`failed\`.
+SDK: \`eb.bulkDeleteFiles(fileIds, { permanent? })\`
 `,
 
   images: `## Images
@@ -776,6 +778,7 @@ It is printed to PDF (twice, for determinism) and screenshotted once: the screen
 Every text rule is zero-tolerance — a faithful clone scores exactly 1.0 — and visual changes are also checked per small region (\`layoutWorstCell\`), so a deleted logo or table rule fails even when the page average barely moves.
 Thresholds are fixed, not configurable: the caller is usually the agent being graded.
 Text positions and fonts come from MuPDF (per-character origin, size, color) and the PDF font descriptors (weight, italic) — font names lie (Chrome names every weight of a variable font "Inter-Regular"). Original and clone are rasterized by the same engine (MuPDF), so a faithful clone scores ~0 visual difference.
+Privacy: the diff image carries the document's content, so each run stores it as a **private** file in your library. \`diffUrl\` is a signed link that expires in 24 h (\`diffUrlExpiresAt\`); \`GET /files/:diffFileId\` returns a fresh one, and \`DELETE /files/:diffFileId?permanent=true\` erases it. The MCP tool \`clone_pdf\` stores its HTML the same way (\`url\`, \`urlExpiresAt\`, \`fileId\`).
 Up to 20 pages per call. Costs 1 credit per page.
 SDK: \`eb.compareRender({ fileId, pages })\`
 MCP: \`compare_render\` (also on the fleet's always-on \`render\` MCP)

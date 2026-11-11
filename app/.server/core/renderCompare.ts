@@ -196,7 +196,11 @@ export interface ComparePageResult {
   layoutWorstCell?: number | null;
   pixel: number | null;
   regions: Region[];
+  /** Montaje original | clon | diferencias. Archivo PRIVADO: liga firmada que caduca en `diffUrlExpiresAt`. */
   diffUrl: string | null;
+  /** File del montaje: liga nueva con get_file, borrado con delete_file. */
+  diffFileId: string | null;
+  diffUrlExpiresAt: string | null;
   /** Por qué no pasó, para que el agente sepa qué arreglar. */
   reasons: string[];
   error?: string;
@@ -942,7 +946,7 @@ export function geometry(widthPt: number, heightPt: number): PageGeometry {
   return { widthPt, heightPt, cssW, cssH, dsf, rasterW: RASTER_WIDTH, rasterH: Math.round(cssH * dsf) };
 }
 
-export interface EvaluatedPage extends Omit<ComparePageResult, "diffUrl"> {
+export interface EvaluatedPage extends Omit<ComparePageResult, "diffUrl" | "diffFileId" | "diffUrlExpiresAt"> {
   montage: Buffer | null;
 }
 
@@ -1542,8 +1546,8 @@ export async function compareRender(
     for (const { page, html } of input.pages) {
       try {
         const { montage, ...r } = await evaluatePage(renderer, pdfPath, pdf, page, html, thresholds, dir, input.waitMs);
-        const stored = montage ? await storeRender(ctx, montage, "image/png", `compare-p${page}`, "png") : null;
-        results.push({ ...r, diffUrl: stored?.url ?? null });
+        const stored = montage ? await storeRender(ctx, montage, "image/png", `compare-p${page}`, "png", { access: "private" }) : null;
+        results.push({ ...r, diffUrl: stored?.url ?? null, diffFileId: stored?.fileId ?? null, diffUrlExpiresAt: stored?.urlExpiresAt ?? null });
       } catch (e) {
         const msg = (e as Error).message;
         results.push({
@@ -1560,6 +1564,8 @@ export async function compareRender(
           pixel: null,
           regions: [],
           diffUrl: null,
+          diffFileId: null,
+          diffUrlExpiresAt: null,
           reasons: [msg],
           error: msg,
         });

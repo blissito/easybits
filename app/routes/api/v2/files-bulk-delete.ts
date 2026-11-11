@@ -8,7 +8,7 @@ export async function action({ request }: Route.ActionArgs) {
 
   if (request.method === "POST") {
     const body = await request.json();
-    const result = await bulkDeleteFiles(ctx, body.fileIds);
+    const result = await bulkDeleteFiles(ctx, body.fileIds, { permanent: body.permanent === true });
     return Response.json(result);
   }
 

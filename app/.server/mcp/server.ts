@@ -880,13 +880,14 @@ How to embed safely (the only reliable rule):
 
   server.tool(
     "delete_file",
-    "Soft-delete a file (sets status to DELETED). Recoverable for 7 days via `restore_file`, then auto-purged from storage. Refuses (409 WEBSITE_FILE) files that back a published website: manage those with the website tools.",
+    "Soft-delete a file (sets status to DELETED). Recoverable for 7 days via `restore_file`, then auto-purged from storage. A public file stops being served at its public URL immediately. Pass `permanent: true` to erase the stored object and the record right now (no trash, not recoverable) — use it for files with personal or sensitive data. Refuses (409 WEBSITE_FILE) files that back a published website: manage those with the website tools.",
     {
       fileId: z.string().describe("The file ID to delete"),
+      permanent: z.boolean().optional().describe("Erase immediately and for good: no 7-day trash, cannot be restored. Also empties an already soft-deleted file from the trash."),
     },
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
-      const result = await deleteFile(ctx, params.fileId);
+      const result = await deleteFile(ctx, params.fileId, { permanent: params.permanent });
       return {
         content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
       };
@@ -3658,13 +3659,14 @@ How to embed safely (the only reliable rule):
 
   server.tool(
     "bulk_delete_files",
-    "Soft-delete multiple files at once (max 100). Returns count of deleted files. Refuses the whole batch (409 WEBSITE_FILE) if any file backs a published website.",
+    "Soft-delete multiple files at once (max 100). Returns count of deleted files. Public files stop being served at their public URLs immediately. Pass `permanent: true` to erase the stored objects and records right now (no 7-day trash, not recoverable). A file whose object could not be removed is left untouched and listed in `failed`. Refuses the whole batch (409 WEBSITE_FILE) if any file backs a published website.",
     {
       fileIds: z.array(z.string()).describe("Array of file IDs to delete (1-100)"),
+      permanent: z.boolean().optional().describe("Erase immediately and for good: no 7-day trash, cannot be restored."),
     },
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
-      const result = await bulkDeleteFiles(ctx, params.fileIds);
+      const result = await bulkDeleteFiles(ctx, params.fileIds, { permanent: params.permanent });
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     })
   );

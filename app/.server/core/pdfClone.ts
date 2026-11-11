@@ -5,12 +5,15 @@
  * Cada página pesa varios MB (fuentes y fondo en base64): se sube como archivo y
  * se devuelve su URL, nunca el HTML en la respuesta (le llenaría el contexto al
  * agente). Con `verify`, la misma llamada pasa el resultado por compare_render.
+ *
+ * El clon lleva el contenido del documento del usuario: se guarda PRIVADO y la URL
+ * es una liga firmada que caduca (`urlExpiresAt`), nunca el bucket público.
  */
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import type { AuthContext } from "../apiAuth";
-import { buildSkeleton } from "./pdfCloneSkeleton";
+import { buildSkeleton, type FontReport } from "./pdfCloneSkeleton";
 import { buildCloneDocument } from "./presentationClone";
 import { compareRender, loadPdf, COMPARE_MAX_PAGES, type CompareResult } from "./renderCompare";
 import { storeRender } from "./fleetRender";
@@ -25,12 +28,16 @@ export interface ClonePdfInput {
 
 export interface ClonedPage {
   page: number;
+  /** Liga firmada al HTML (archivo privado); caduca en `urlExpiresAt`. */
   url: string | null;
+  urlExpiresAt: string | null;
   fileId: string | null;
   pageCss: { width: number; height: number };
   words: number;
-  /** Fuentes sin archivo extraíble (Type 3, CFF, no incrustadas) → equivalente. */
+  /** Fuentes que no quedaron (o no del todo) incrustadas, con el motivo. Vacío = todas son las del PDF. */
   substitutedFonts: string[];
+  /** Qué se usó para cada fuente del PDF (embedded | web | fallback). */
+  fonts: FontReport[];
   /** Pocas palabras = página escaneada: el esqueleto no aplica. */
   scanned: boolean;
   error?: string;
@@ -55,19 +62,21 @@ export async function clonePdf(ctx: AuthContext, input: ClonePdfInput): Promise<
       try {
         const sk = await buildSkeleton(pdfPath, page);
         const html = await buildCloneDocument(sk.html, sk.cssW, sk.cssH, sk.css);
-        const stored = await storeRender(ctx, Buffer.from(html), "text/html", `clone-p${page}`, "html");
+        const stored = await storeRender(ctx, Buffer.from(html), "text/html", `clone-p${page}`, "html", { access: "private" });
         docs.push({ page, html });
         pages.push({
           page,
           url: stored.url,
+          urlExpiresAt: stored.urlExpiresAt ?? null,
           fileId: stored.fileId,
           pageCss: { width: sk.cssW, height: sk.cssH },
           words: sk.words,
           substitutedFonts: sk.substituted,
+          fonts: sk.fonts,
           scanned: sk.words < 5,
         });
       } catch (e) {
-        pages.push({ page, url: null, fileId: null, pageCss: { width: 0, height: 0 }, words: 0, substitutedFonts: [], scanned: false, error: (e as Error).message });
+        pages.push({ page, url: null, urlExpiresAt: null, fileId: null, pageCss: { width: 0, height: 0 }, words: 0, substitutedFonts: [], fonts: [], scanned: false, error: (e as Error).message });
       }
     }
   } finally {

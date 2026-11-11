@@ -394,7 +394,11 @@ export async function uploadFile(
 export async function deleteFile(
   ctx: AuthContext,
   fileId: string,
-  opts?: { allowWebsiteFile?: boolean }
+  opts?: {
+    allowWebsiteFile?: boolean;
+    /** Borrado definitivo inmediato: sin papelera de 7 días ni `restore_file`. */
+    permanent?: boolean;
+  }
 ) {
   requireScope(ctx, "DELETE");
 
@@ -416,6 +420,16 @@ export async function deleteFile(
   if (!opts?.allowWebsiteFile && isWebsiteFileName(file.name)) {
     const conflict = websiteFileConflict([file], await liveWebsitesOf(ctx.user.id, [file.name]));
     if (conflict) throw conflict;
+  }
+
+  // Borrado definitivo: el objeto y la fila se van ahora (misma rutina que la
+  // purga de 7 días). También sirve para vaciar de la papelera uno ya borrado.
+  if (opts?.permanent) {
+    await hardDeleteFile(file).catch(throwPurgeFailed);
+    if (file.workspaceId && file.status !== "DELETED") await bumpWorkspaceUsage(file.workspaceId, -file.size, -1);
+    fileEvents.emit("file:changed", ctx.user.id);
+    dispatchWebhooks(ctx.user.id, "file.deleted", { id: file.id, name: file.name, permanent: true });
+    return { success: true, permanent: true };
   }
 
   // If the file is publicly served, cut the public exposure NOW (move to the
@@ -1564,7 +1578,11 @@ function buildUpgradeHint(planKey: PlanKey) {
 export async function bulkDeleteFiles(
   ctx: AuthContext,
   fileIds: string[],
-  opts?: { allowWebsiteFile?: boolean }
+  opts?: {
+    allowWebsiteFile?: boolean;
+    /** Borrado definitivo inmediato (ver `deleteFile`). */
+    permanent?: boolean;
+  }
 ) {
   requireScope(ctx, "DELETE");
 
@@ -1576,8 +1594,12 @@ export async function bulkDeleteFiles(
   }
 
   const files = await db.file.findMany({
-    where: { id: { in: fileIds }, ownerId: ctx.user.id, status: { not: "DELETED" } },
-    select: { id: true, name: true },
+    where: {
+      id: { in: fileIds },
+      ownerId: ctx.user.id,
+      // El definitivo también vacía de la papelera los que ya estaban borrados.
+      ...(opts?.permanent ? {} : { status: { not: "DELETED" } }),
+    },
   });
 
   if (files.length === 0) {
@@ -1590,17 +1612,51 @@ export async function bulkDeleteFiles(
     if (conflict) throw conflict;
   }
 
-  await db.file.updateMany({
-    where: { id: { in: files.map((f) => f.id) } },
-    data: { status: "DELETED", deletedAt: new Date() },
-  });
-
-  fileEvents.emit("file:changed", ctx.user.id);
+  // Igual que `deleteFile`, archivo por archivo: la liga pública deja de responder
+  // AHORA. Antes sólo se marcaba la fila y el objeto seguía sirviéndose en el
+  // bucket público hasta la purga de 7 días. Uno que no se pudo despublicar no se
+  // marca borrado (la fila no miente) y se devuelve en `failed`.
+  const done: typeof files = [];
+  const failed: { id: string; error: string }[] = [];
   for (const f of files) {
-    dispatchWebhooks(ctx.user.id, "file.deleted", { id: f.id, name: f.name });
+    try {
+      if (opts?.permanent) await hardDeleteFile(f);
+      else await depublishPublicObject(f);
+      done.push(f);
+    } catch (err) {
+      logger.error("bulkDeleteFiles: could not remove object", {
+        fileId: f.id,
+        err: err instanceof Error ? err.message : String(err),
+      });
+      failed.push({ id: f.id, error: "could not remove the stored object; the file was left untouched" });
+    }
   }
 
-  return { deleted: files.length, ids: files.map((f) => f.id) };
+  if (!opts?.permanent && done.length) {
+    await db.file.updateMany({
+      where: { id: { in: done.map((f) => f.id) } },
+      data: { status: "DELETED", deletedAt: new Date() },
+    });
+  }
+  for (const f of done) {
+    if (f.workspaceId && f.status !== "DELETED") await bumpWorkspaceUsage(f.workspaceId, -f.size, -1);
+  }
+
+  if (done.length) fileEvents.emit("file:changed", ctx.user.id);
+  for (const f of done) {
+    dispatchWebhooks(ctx.user.id, "file.deleted", {
+      id: f.id,
+      name: f.name,
+      ...(opts?.permanent ? { permanent: true } : {}),
+    });
+  }
+
+  return {
+    deleted: done.length,
+    ids: done.map((f) => f.id),
+    ...(opts?.permanent ? { permanent: true } : {}),
+    ...(failed.length ? { failed } : {}),
+  };
 }
 
 // --- Bulk Upload Files ---

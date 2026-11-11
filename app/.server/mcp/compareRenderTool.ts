@@ -18,6 +18,7 @@ export const COMPARE_RENDER_DESC =
   "  · `liveText`: el texto no puede estar dentro de una imagen o canvas, ni escondido sobre una imagen del PDF.\n" +
   "  · `overflow`, `trusted` (se pinta igual dos veces), `layout` (fondos, tablas, formas; `regions` dice dónde).\n" +
   "  · `diffUrl`: original | clon | diferencias en rojo. Mírala cuando `reasons` no baste.\n" +
+  "- PRIVACIDAD: cada pasada guarda esa imagen (trae el contenido del documento) como archivo PRIVADO en tu librería. `diffUrl` es una liga firmada que caduca en 24 h (`diffUrlExpiresAt`); con `get_file(diffFileId)` sacas otra. Al terminar de iterar bórralas de verdad: `bulk_delete_files({ fileIds, permanent: true })`.\n" +
   "  · Cada palabra debe VERSE (no tapada) y dibujarse con los glifos del original; no puede haber letras o números de más (`invented`).\n" +
   "  · `screen`: se ve igual en pantalla que impreso.\n" +
   "- El clon se evalúa SIN JavaScript y debe ser estático: nada de <script>, @media, backdrop-filter, mix-blend-mode, hojas externas (Google/Bunny Fonts sí) ni texto con CSS content. `violations` lo lista.\n" +

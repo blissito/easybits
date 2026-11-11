@@ -54,7 +54,7 @@ vi.mock("~/.server/logger", () => ({ default: { warn: vi.fn(), error: vi.fn(), i
 vi.mock("~/.server/webhooks", () => ({ dispatchWebhooks: vi.fn() }));
 vi.mock("~/.server/core/notificationOperations", () => ({ notifyFilesPurged: vi.fn() }));
 
-import { deleteFile, purgeDeletedFiles, findFileByStorageKey } from "~/.server/core/operations";
+import { deleteFile, bulkDeleteFiles, purgeDeletedFiles, findFileByStorageKey } from "~/.server/core/operations";
 
 const ctx = { user: { id: "u1" }, scopes: ["READ", "WRITE", "DELETE", "ADMIN"] } as never;
 
@@ -183,5 +183,83 @@ describe("findFileByStorageKey", () => {
     dbMock.file.findUnique.mockResolvedValue(null);
     expect(await findFileByStorageKey(ctx, "https://ajeno.example/x.pdf")).toBeNull();
     expect(await findFileByStorageKey(ctx, "   ")).toBeNull();
+  });
+});
+
+// Borrado definitivo: lo pidió el caso de los artefactos de clone_pdf / compare_render
+// (traían datos personales de un tercero y la papelera los guardaba 7 días).
+describe("deleteFile({ permanent })", () => {
+  it("borra el objeto y la fila ahora, sin pasar por la papelera", async () => {
+    dbMock.file.findUnique.mockResolvedValue(publicFile);
+    storage.deleteObjectFromBucket.mockResolvedValue(undefined);
+
+    await expect(deleteFile(ctx, "f1", { permanent: true })).resolves.toEqual({ success: true, permanent: true });
+    expect(storage.deleteObjectFromBucket).toHaveBeenCalledWith({ bucket: "easybits-public", key: "u1/abc.pdf" });
+    expect(dbMock.file.delete).toHaveBeenCalledWith({ where: { id: "f1" } });
+    // Ni copia al bucket privado ni fila en DELETED.
+    expect(storage.copyObjectAcrossBuckets).not.toHaveBeenCalled();
+    expect(dbMock.file.update).not.toHaveBeenCalled();
+  });
+
+  it("si el objeto público sobrevive, la fila se queda (no miente)", async () => {
+    dbMock.file.findUnique.mockResolvedValue(publicFile);
+    storage.deleteObjectFromBucket.mockRejectedValue(new ObjectStillExistsError("easybits-public", "u1/abc.pdf"));
+
+    const res = await deleteFile(ctx, "f1", { permanent: true }).catch((e) => e);
+    expect(res).toBeInstanceOf(Response);
+    expect(res.status).toBe(500);
+    expect(dbMock.file.delete).not.toHaveBeenCalled();
+  });
+});
+
+// Defecto del 11-nov-2026: bulk_delete_files sólo marcaba las filas como DELETED;
+// los objetos seguían en el bucket público y sus ligas respondían 200.
+describe("bulkDeleteFiles", () => {
+  const files = [
+    { ...publicFile, id: "a", storageKey: "u1/a.html", url: "https://easybits-public.t3.storage.dev/u1/a.html" },
+    { ...publicFile, id: "b", storageKey: "u1/b.png", url: "https://easybits-public.t3.storage.dev/u1/b.png" },
+    { ...publicFile, id: "c", storageKey: "u1/c.png", access: "private", url: "" },
+  ];
+
+  it("despublica cada archivo público antes de marcarlo borrado", async () => {
+    dbMock.file.findMany.mockResolvedValue(files);
+    storage.deleteObjectFromBucket.mockResolvedValue(undefined);
+
+    const res = await bulkDeleteFiles(ctx, ["a", "b", "c"]);
+
+    expect(res).toEqual({ deleted: 3, ids: ["a", "b", "c"] });
+    const removed = storage.deleteObjectFromBucket.mock.calls.map(([arg]) => `${arg.bucket}/${arg.key}`);
+    expect(removed).toEqual(["easybits-public/u1/a.html", "easybits-public/u1/b.png"]);
+    expect(storage.copyObjectAcrossBuckets).toHaveBeenCalledTimes(2);
+    const [soft] = dbMock.file.updateMany.mock.calls.at(-1)!;
+    expect(soft.where.id.in).toEqual(["a", "b", "c"]);
+    expect(soft.data.status).toBe("DELETED");
+  });
+
+  it("el que no se pudo retirar del bucket público NO se marca borrado y sale en failed", async () => {
+    dbMock.file.findMany.mockResolvedValue(files);
+    storage.deleteObjectFromBucket.mockImplementation(async ({ key }: { key: string }) => {
+      if (key === "u1/b.png") throw new ObjectStillExistsError("easybits-public", key);
+    });
+
+    const res = await bulkDeleteFiles(ctx, ["a", "b", "c"]);
+
+    expect(res.deleted).toBe(2);
+    expect(res.ids).toEqual(["a", "c"]);
+    expect(res.failed?.map((f) => f.id)).toEqual(["b"]);
+    const [soft] = dbMock.file.updateMany.mock.calls.at(-1)!;
+    expect(soft.where.id.in).toEqual(["a", "c"]);
+  });
+
+  it("permanent: borra objetos y filas, sin papelera", async () => {
+    dbMock.file.findMany.mockResolvedValue(files.slice(0, 2));
+    storage.deleteObjectFromBucket.mockResolvedValue(undefined);
+
+    const res = await bulkDeleteFiles(ctx, ["a", "b"], { permanent: true });
+
+    expect(res).toEqual({ deleted: 2, ids: ["a", "b"], permanent: true });
+    expect(dbMock.file.delete.mock.calls.map(([arg]) => arg.where.id)).toEqual(["a", "b"]);
+    expect(dbMock.file.updateMany).not.toHaveBeenCalled();
+    expect(storage.copyObjectAcrossBuckets).not.toHaveBeenCalled();
   });
 });

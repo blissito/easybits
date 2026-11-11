@@ -95,14 +95,25 @@ function buildPayload(input: RenderInput): RenderPayload {
   return payload;
 }
 
-/** Sube los bytes a los Files del owner y devuelve el File público. */
+/** Vida de la liga firmada de un artefacto privado (clon HTML, PNG de comparación). */
+export const PRIVATE_ARTIFACT_URL_TTL_S = 24 * 60 * 60;
+
+/**
+ * Sube los bytes a los Files del owner. Por defecto el File es PÚBLICO (render_pdf,
+ * screenshot_url: su liga es el entregable). Con `access: "private"` va al
+ * almacenamiento privado y `url` es una liga firmada que caduca en `urlExpiresAt`:
+ * así salen los artefactos que llevan el contenido del documento del usuario
+ * (clone_pdf, compare_render). Liga nueva: `get_file(fileId).readUrl`.
+ */
 export async function storeRender(
   ctx: AuthContext,
   bytes: Buffer,
   contentType: string,
   nameBase: string,
-  ext: string
-): Promise<{ fileId: string; url: string }> {
+  ext: string,
+  opts: { access?: "public" | "private" } = {}
+): Promise<{ fileId: string; url: string; urlExpiresAt?: string }> {
+  const access = opts.access ?? "public";
   const { uploadFile } = await import("./operations");
   const base =
     nameBase.replace(/^https?:\/\//, "").slice(0, 40).replace(/[^\w]+/g, "-").replace(/^-+|-+$/g, "") ||
@@ -111,7 +122,7 @@ export async function storeRender(
     fileName: `${base}.${ext}`,
     contentType,
     size: bytes.length,
-    access: "public",
+    access,
     source: "render",
   });
   const put = await fetch(putUrl, {
@@ -120,7 +131,18 @@ export async function storeRender(
     body: new Uint8Array(bytes),
   });
   if (!put.ok) throw new Error(`render upload failed: ${put.status}`);
-  return { fileId: file.id, url: file.url || "" };
+  if (access === "public") return { fileId: file.id, url: file.url || "" };
+  // Misma resolución de cliente que `getFile`: proveedor propio o bucket privado.
+  const { getClientForFile, getReadClientForPlatformFile } = await import("../storage");
+  const client = file.storageProviderId
+    ? await getClientForFile(file.storageProviderId, ctx.user.id)
+    : getReadClientForPlatformFile(file);
+  const url = await client.getReadUrl(file.storageKey, PRIVATE_ARTIFACT_URL_TTL_S);
+  return {
+    fileId: file.id,
+    url,
+    urlExpiresAt: new Date(Date.now() + PRIVATE_ARTIFACT_URL_TTL_S * 1000).toISOString(),
+  };
 }
 
 /**

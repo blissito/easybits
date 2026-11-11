@@ -169,9 +169,10 @@ SDK: \`eb.updateFile(fileId, { name?, access?, metadata? })\`
 
 ### Delete file
 \`DELETE /files/:fileId\`
-Soft-deletes (status → DELETED). Recoverable for 7 days.
+Soft-deletes (status → DELETED). Recoverable for 7 days. A public file stops being served at its public URL immediately.
+\`DELETE /files/:fileId?permanent=true\` erases the stored object and the record right away: no trash, not recoverable.
 Returns 409 \`WEBSITE_FILE\` if the file backs a published website (same for \`POST /files/bulk-delete\`, all-or-nothing): manage those through the website endpoints.
-SDK: \`eb.deleteFile(fileId)\`
+SDK: \`eb.deleteFile(fileId, { permanent? })\`
 
 ### Restore file
 \`POST /files/:fileId/restore\`

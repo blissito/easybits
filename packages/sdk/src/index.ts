@@ -351,8 +351,12 @@ export interface CompareRenderPage {
   pixel: number | null;
   /** Dónde está la diferencia visual, en px CSS de la página. */
   regions: { x: number; y: number; w: number; h: number; ratio: number }[];
-  /** Imagen original | clon | diff en rojo. */
+  /** Imagen original | clon | diff en rojo. Archivo privado: liga firmada que caduca (24 h). */
   diffUrl: string | null;
+  /** File de esa imagen: liga nueva con `getFile`, borrado con `deleteFile`. */
+  diffFileId?: string | null;
+  /** Cuándo caduca `diffUrl` (ISO 8601). */
+  diffUrlExpiresAt?: string | null;
   /** Por qué no pasó, en español. */
   reasons: string[];
   error?: string;
@@ -872,6 +876,9 @@ export interface BulkUploadItem {
 export interface BulkDeleteResponse {
   deleted: number;
   ids: string[];
+  permanent?: boolean;
+  /** Archivos cuyo objeto no se pudo retirar: quedaron intactos. */
+  failed?: { id: string; error: string }[];
 }
 
 export interface Permission {
@@ -1536,8 +1543,9 @@ export class EasybitsClient {
     });
   }
 
-  async deleteFile(fileId: string): Promise<{ success: boolean }> {
-    return this.request<{ success: boolean }>(`/files/${fileId}`, {
+  /** `permanent: true` = borrado definitivo inmediato, sin papelera de 7 días. */
+  async deleteFile(fileId: string, opts?: { permanent?: boolean }): Promise<{ success: boolean; permanent?: boolean }> {
+    return this.request<{ success: boolean; permanent?: boolean }>(`/files/${fileId}${opts?.permanent ? "?permanent=true" : ""}`, {
       method: "DELETE",
     });
   }
@@ -2163,10 +2171,10 @@ export class EasybitsClient {
     return this.request<UsageStats>("/usage");
   }
 
-  async bulkDeleteFiles(fileIds: string[]): Promise<BulkDeleteResponse> {
+  async bulkDeleteFiles(fileIds: string[], opts?: { permanent?: boolean }): Promise<BulkDeleteResponse> {
     return this.request<BulkDeleteResponse>("/files/bulk-delete", {
       method: "POST",
-      body: JSON.stringify({ fileIds }),
+      body: JSON.stringify({ fileIds, ...(opts?.permanent ? { permanent: true } : {}) }),
     });
   }
 

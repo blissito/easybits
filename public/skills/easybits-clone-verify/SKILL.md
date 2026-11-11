@@ -5,7 +5,7 @@ license: MIT
 compatibility: Needs Node 18+ (or any HTTP client), network access to https://www.easybits.cloud and an EasyBits API key with WRITE scope
 metadata:
   author: easybits
-  version: "2.2"
+  version: "2.3"
 ---
 
 # Verify a PDF clone until it passes
@@ -19,10 +19,25 @@ Before writing any HTML, call `clone_pdf` (MCP; fleet agents have it on their `r
 `{ fileId | pdfUrl, pages: [1, 2…], verify: true }`. It builds each page from the PDF itself —
 every word as live text at its exact position, the PDF's own fonts embedded, the page background
 without text — and returns a `url` per page plus the compare_render verdict. Most PDFs pass on
-the first call. Download the HTML (`curl -o page-1.html <url>`) only if you need to edit it.
+the first call. Download the HTML (`curl -o page-1.html "<url>"`) only if you need to edit it.
+
+Check `fonts` and `substitutedFonts` before trusting the draft. `fonts[].source` says what each
+PDF font is drawn with: `embedded` (the PDF's own file), `web` (the same family from Google
+Fonts) or `fallback` (another family). `substitutedFonts` lists, with the reason, every font
+that did **not** end up embedded; empty means the draft uses the PDF's real fonts.
 
 Write a page by hand only when `clone_pdf` can't: `scanned: true` (no text layer), or
 `substitutedFonts` made typography fail (Type 3 / CFF fonts). Then use the loop below.
+
+## The artifacts are private
+
+The clone HTML and every diff image carry the document's content, so they are stored as
+**private** files in the user's library, never on a public bucket. `url` and `diffUrl` are
+signed links that expire after 24 hours (`urlExpiresAt`, `diffUrlExpiresAt`); don't paste them
+into anything public or long-lived. `get_file` / `GET /api/v2/files/:fileId` (with the page's
+`fileId` or `diffFileId`) returns a fresh link. Each compare run stores one image per page: when
+you finish iterating, erase them for good with `bulk_delete_files { fileIds, permanent: true }`
+(REST: `POST /api/v2/files/bulk-delete`), especially when the document has personal data.
 
 ## The loop
 

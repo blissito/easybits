@@ -14,7 +14,9 @@ export async function action({ request, params }: Route.ActionArgs) {
   const ctx = requireAuth(await authenticateRequest(request));
 
   if (request.method === "DELETE") {
-    const result = await deleteFile(ctx, params.fileId!);
+    // ?permanent=true → borrado definitivo inmediato, sin papelera de 7 días.
+    const permanent = new URL(request.url).searchParams.get("permanent") === "true";
+    const result = await deleteFile(ctx, params.fileId!, { permanent });
     return Response.json(result);
   }
 
