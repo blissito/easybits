@@ -486,7 +486,7 @@ const isSpace = (c: string) => /^\s*$/.test(c);
 const round4 = (n: number) => Math.round(n * 10000) / 10000;
 const round1 = (n: number) => Math.round(n * 10) / 10;
 
-function weightFromName(name: string): number {
+export function weightFromName(name: string): number {
   if (/black|heavy/i.test(name)) return 900;
   if (/extrabold|ultrabold/i.test(name)) return 800;
   if (/semibold|demibold/i.test(name)) return 600;
