@@ -19,6 +19,8 @@ updates:
     groups:
       cli-minor-and-patch:
         update-types: [minor, patch]
+      cli-typescript:
+        patterns: ["typescript"]
   - package-ecosystem: github-actions
     directory: "/"
     schedule:
