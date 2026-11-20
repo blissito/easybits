@@ -109,7 +109,7 @@ export const sshProxy: Command = {
         const data = ev.data;
         process.stdout.write(typeof data === "string" ? Buffer.from(data) : Buffer.from(data as ArrayBuffer));
       };
-      process.stdin.on("data", (chunk: Buffer) => ws.send(chunk));
+      process.stdin.on("data", (chunk: Buffer) => ws.send(new Uint8Array(chunk)));
       process.stdin.on("end", () => ws.close());
       // El túnel vive hasta que ssh cierra; el proceso sale desde onclose.
       await new Promise(() => {});
