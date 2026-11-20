@@ -23,6 +23,7 @@
  */
 import type { ServiceDef } from "./types";
 import { falAvatarService, falImageService } from "./providers/fal";
+import { maiEditService, maiGenerateService } from "./providers/mai";
 import { geminiEditImageService } from "./providers/gemini";
 import { describeImageService } from "./providers/describe";
 import { openaiImageService } from "./providers/openai";
@@ -53,6 +54,8 @@ export const SERVICES = {
   "research.brightdata.interact": brightdataInteractService,
   "research.brightdata.browser": brightdataBrowserSessionService,
   "image.fal.generate": falImageService,
+  "image.mai.generate": maiGenerateService,
+  "image.mai.edit": maiEditService,
   "image.gemini.edit": geminiEditImageService,
   "image.gemini.describe": describeImageService,
   "image.openai.generate": openaiImageService,

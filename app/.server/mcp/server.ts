@@ -1175,10 +1175,11 @@ How to embed safely (the only reliable rule):
 
   server.tool(
     "create_or_edit_image",
-    "Create OR edit images with OpenAI gpt-image-2 — full implementation: text-to-image GENERATION and faithful reference-based EDITING in one tool (gpt-image-1 also selectable). NO references → generates from the prompt. Pass `imageFileIds` (library files) and/or `imageUrls` (public https) → EDITS those reference image(s) preserving the composition (e.g. 'keep everything identical, change only the background/lighting'). The result is saved public and returned as `fileId` + `imageUrl` (reusable as referenceImage or embed). Default model gpt-image-2; pass `model:\"gpt-image-1\"` for the older model. The platform key is used — you NEVER pass a key. Cost: billed in créditos by quality (low/medium/high) per image, +1 for edits.",
+    "Create OR edit images. `stage` decides the model: 'sketch' (default) uses MAI Image 2.7 Flash (fast, 25 créditos/imagen) for drafts and variants; 'final' (deliverables, critical text, brand identity) uses OpenAI gpt-image-2 (100+ créditos). quality medium/high or a mask also go to gpt-image-2. Text-to-image text-to-image GENERATION and faithful reference-based EDITING in one tool (gpt-image-1 also selectable). NO references → generates from the prompt. Pass `imageFileIds` (library files) and/or `imageUrls` (public https) → EDITS those reference image(s) preserving the composition (e.g. 'keep everything identical, change only the background/lighting'). The result is saved public and returned as `fileId` + `imageUrl` (reusable as referenceImage or embed). Default model gpt-image-2; pass `model:\"gpt-image-1\"` for the older model. The platform key is used — you NEVER pass a key. Cost: billed in créditos by quality (low/medium/high) per image, +1 for edits.",
     {
       prompt: z.string().min(1).max(4000).describe("What to generate, or the edit instruction when references are passed."),
-      model: z.enum(["gpt-image-2", "gpt-image-1"]).default("gpt-image-2").describe("Image model. Default gpt-image-2."),
+      stage: z.enum(["sketch", "final"]).default("sketch").describe("sketch = drafts/variants (cheap MAI Flash). final = the deliverable the user will use, critical text or brand/character identity (OpenAI gpt-image-2)."),
+      model: z.enum(["gpt-image-2", "gpt-image-1"]).default("gpt-image-2").describe("OpenAI model used when the stage routes to OpenAI. Default gpt-image-2."),
       imageFileIds: z.array(z.string()).max(4).optional().describe("Reference image(s) from the user's EasyBits library (fileId) to EDIT. Omit to generate from scratch."),
       imageUrls: z.array(z.string().url()).max(4).optional().describe("Reference image(s) by public https URL to EDIT. Alternative/complement to imageFileIds."),
       size: z.enum(["1024x1024", "1536x1024", "1024x1536", "auto"]).default("1024x1024").describe("Output image dimensions."),
@@ -1219,19 +1220,15 @@ How to embed safely (the only reliable rule):
           }
         }
 
-        const result = await consumeService<import("../services/providers/openai").OpenaiImageOutput>(
-          "image.openai.generate",
-          {
-            prompt: params.prompt,
-            model: params.model,
-            images,
-            size: params.size,
-            quality: params.quality,
-            n: params.n,
-            name: params.name,
-          },
-          { userId: ctx.user.id },
-        );
+        const mai = await import("../services/providers/mai");
+        const route = mai.routeImageModel({ stage: params.stage, refs: images.length, quality: params.quality });
+        const ratio = params.size === "1536x1024" ? "3:2" : params.size === "1024x1536" ? "2:3" : "1:1";
+        const serviceId = route.provider === "openai" ? "image.openai.generate" : images.length ? "image.mai.edit" : "image.mai.generate";
+        const input = route.provider === "openai"
+          ? { prompt: params.prompt, model: params.model, images, size: params.size, quality: params.quality, n: params.n, name: params.name }
+          : { prompt: params.prompt, tier: route.tier, imageSize: mai.toMaiImageSize(ratio), imageUrls: images.map(mai.toDataUri), n: images.length ? 1 : params.n, name: params.name };
+        const credits = Math.ceil((await import("../services/registry")).getService(serviceId)!.estimateCost(input as never));
+        const result = await consumeService<import("../services/providers/openai").OpenaiImageOutput>(serviceId, input, { userId: ctx.user.id });
         const d = result.data;
         const markdown = d.images.map((im) => `![image](${im.imageUrl})`).join("\n\n");
         return {
@@ -1244,12 +1241,15 @@ How to embed safely (the only reliable rule):
               mode: d.mode,
               modelId: d.modelId,
               images: d.images,
-              hint: `Imagen lista (${d.mode}, ${d.modelId}). fileId: ${d.fileId}. URL pública reusable como referenceImage o embed.`,
+              stage: params.stage,
+              route: route.reason,
+              credits,
+              hint: `Imagen lista (${d.mode}, ${d.modelId}, ${credits} créditos). fileId: ${d.fileId}. URL pública reusable como referenceImage o embed.${params.stage === "sketch" ? " Para el entregable final repite con stage:\"final\"." : ""}`,
             }, null, 2),
           }],
         };
       } catch (e) {
-        const f = failService(e, "gpt-image");
+        const f = failService(e, "image");
         if (f) return f;
         throw e;
       }
@@ -6605,30 +6605,29 @@ function registerVideoTools(server: McpServer) {
 
   server.tool(
     "image_generate",
-    "Generate an image from a text prompt using fal.ai Flux models. Returns a public image URL ready to use in landings, documents, social posts, or as `referenceImage` for `avatar_video_create` / `video_create`.\n\nHow to use:\n- Required: `prompt` (English or Spanish, descriptive).\n- `quality`: 'fast' (default, Flux Schnell, 1 crédito) or 'premium' (Flux Dev, 3 créditos, mucho mejor calidad).\n- `ratio`: '1:1' (default, square) | '16:9' (landscape) | '9:16' (vertical/reels) | '4:3' | '3:4'.\n- `negative`: things to avoid (text, logos, blur, etc.).\n- `seed`: integer for reproducibility (omit for random).\n- Returns `imageUrl` (CDN public) y `fileId`.\n\nUse for: hero images en landings, banners redes, mockups producto, ilustraciones, retratos para alimentar pipeline avatar.",
+    "Generate an image from a text prompt with Microsoft MAI Image 2.7 (fal.ai). Returns a public image URL ready to use in landings, documents, social posts, or as `referenceImage` for `avatar_video_create` / `video_create`.\n\nHow to use:\n- Required: `prompt` (English or Spanish, descriptive).\n- `quality`: 'fast' (default, MAI 2.7 Flash, 25 créditos) or 'premium' (MAI 2.7, 100 créditos, mejor detalle).\n- `transparent`: true para fondo transparente (PNG con alfa).\n- `ratio`: '1:1' (default, square) | '16:9' (landscape) | '9:16' (vertical/reels) | '4:3' | '3:4'.\n- `negative`: things to avoid (text, logos, blur, etc.).\n- `seed`: integer for reproducibility (omit for random).\n- Returns `imageUrl` (CDN public) y `fileId`.\n\nUse for: hero images en landings, banners redes, mockups producto, ilustraciones, retratos para alimentar pipeline avatar.",
     {
       prompt: z.string().min(1).max(2000).describe("Descripción de la imagen a generar."),
-      quality: z.enum(["fast", "premium"]).optional().describe("'fast' (1 crédito, Flux Schnell) o 'premium' (3 créditos, Flux Dev). Default fast."),
+      quality: z.enum(["fast", "premium"]).optional().describe("'fast' (25 créditos, MAI 2.7 Flash) o 'premium' (100 créditos, MAI 2.7). Default fast."),
+      transparent: z.boolean().optional().describe("Fondo transparente (PNG con alfa)."),
       ratio: z.enum(["1:1", "16:9", "9:16", "4:3", "3:4"]).optional().describe("Aspect ratio. Default 1:1."),
-      negative: z.string().max(500).optional().describe("Negative prompt (qué evitar)."),
-      seed: z.number().int().optional().describe("Seed para reproducir la misma imagen."),
-      isPublic: z.boolean().optional().describe("Default true (URL pública reusable). Set false para privado."),
+      negative: z.string().max(500).optional().describe("Qué evitar (se añade al prompt; MAI no tiene negative prompt nativo)."),
     },
     wrapHandler(async (params, extra) => {
       const ctx = extra.authInfo as unknown as AuthContext;
       const { consumeService } = await import("../services/consume");
-      const { QuotaExceededError, ServiceConfigError, ServiceProviderError } = await import("../services/errors");
       try {
-        const result = await consumeService<import("../services/providers/fal").FalImageOutput>(
-          "image.fal.generate",
-          {
-            prompt: params.prompt,
-            quality: params.quality,
-            ratio: params.ratio,
-            negative: params.negative,
-            seed: params.seed,
-            isPublic: params.isPublic,
-          },
+        const mai = await import("../services/providers/mai");
+        const input = {
+          prompt: params.negative ? `${params.prompt}\n\nAvoid: ${params.negative}` : params.prompt,
+          tier: params.quality === "premium" ? ("full" as const) : ("flash" as const),
+          imageSize: mai.toMaiImageSize(params.ratio),
+          background: params.transparent ? ("transparent" as const) : ("opaque" as const),
+        };
+        const credits = mai.maiCostCredits(input);
+        const result = await consumeService<import("../services/providers/mai").MaiImageOutput>(
+          "image.mai.generate",
+          input,
           { userId: ctx.user.id },
         );
         return {
@@ -6638,15 +6637,14 @@ function registerVideoTools(server: McpServer) {
               ok: true,
               fileId: result.data.fileId,
               imageUrl: result.data.imageUrl,
-              width: result.data.width,
-              height: result.data.height,
               modelId: result.data.modelId,
-              hint: `Imagen lista. fileId: ${result.data.fileId}. URL pública lista para usar como referenceImage en avatar/video o embed en landing.`,
+              credits,
+              hint: `Imagen lista (${credits} créditos). fileId: ${result.data.fileId}. URL pública lista para usar como referenceImage en avatar/video o embed en landing.`,
             }, null, 2),
           }],
         };
       } catch (e) {
-        const f = failService(e, "fal.ai");
+        const f = failService(e, "MAI Image");
         if (f) return f;
         throw e;
       }
@@ -6655,13 +6653,15 @@ function registerVideoTools(server: McpServer) {
 
   server.tool(
     "edit_image",
-    "Edit, compose, or restyle image(s) with Gemini 'Nano Banana 2' (gemini-3-pro-image-preview). The platform key is used — you NEVER pass a key. Cost: 1 generación (créditos) per call, billed to the user's plan.\n\nHow to use:\n- Required: `prompt` — the edit instruction (e.g. 'replace the background with a sunny beach', 'make it a watercolor', 'put the product on a marble table').\n- Reference image(s) — the usual case. Pass `imageFileIds` (image Files from the user's EasyBits library) and/or `imageUrls` (public https URLs). Multiple references compose together (e.g. put THIS product into THIS scene).\n- `aspectRatio`: optional output ratio ('1:1','16:9','9:16','4:5', etc.). Editing keeps source ratio if omitted.\n- `isPublic`: default true (public CDN URL, reusable as `referenceImage` in avatar/video). Set false for private.\n- `name`: optional filename for the result.\n- If you pass NO reference image, it falls back to text-to-image GENERATION from the prompt alone.\n- Returns `fileId`, `imageUrl` (public if isPublic), and `mode` ('edit' | 'generate').\n\nUse for: retoque y edición de fotos, cambiar fondos, combinar producto+escena, restyle, variaciones a partir de una imagen base, o generación desde cero (sin referencia).",
+    "Edit, compose, or restyle image(s). Default: MAI Image 2.7 Flash edit (25 créditos, up to 4 references). `stage:'final'` or a `maskFileId` routes to OpenAI gpt-image-2 (100+ créditos). The platform key is used — you NEVER pass a key.\n\nHow to use:\n- Required: `prompt` — the edit instruction (e.g. 'replace the background with a sunny beach', 'make it a watercolor', 'put the product on a marble table').\n- Reference image(s) — the usual case. Pass `imageFileIds` (image Files from the user's EasyBits library) and/or `imageUrls` (public https URLs). Multiple references compose together (e.g. put THIS product into THIS scene).\n- `aspectRatio`: optional output ratio ('1:1','16:9','9:16','4:5', etc.). Editing keeps source ratio if omitted.\n- `stage`: 'sketch' (default, MAI Flash) or 'final' (OpenAI gpt-image-2).\n- `maskFileId`: PNG mask from the library (forces OpenAI).\n- `name`: optional filename for the result.\n- If you pass NO reference image, it falls back to text-to-image GENERATION from the prompt alone.\n- Returns `fileId`, `imageUrl` (public), `mode` ('edit' | 'generate') and `credits`.\n\nUse for: retoque y edición de fotos, cambiar fondos, combinar producto+escena, restyle, variaciones a partir de una imagen base, o generación desde cero (sin referencia).",
     {
       prompt: z.string().min(1).max(4000).describe("Instrucción de edición. Si no envías referencia, es la descripción para generar desde cero."),
       imageFileIds: z.array(z.string()).max(4).optional().describe("Imagen(es) de referencia desde la librería EasyBits (fileId). Lo normal al EDITAR. Múltiples se combinan. Omite para generar desde texto puro."),
       imageUrls: z.array(z.string().url()).max(4).optional().describe("Imagen(es) de referencia por URL pública (https). Alternativa/complemento a imageFileIds."),
       aspectRatio: z.enum(["1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9"]).optional().describe("Aspect ratio del resultado. Al editar, omite para conservar el de la referencia."),
-      isPublic: z.boolean().optional().describe("Default true (URL pública reusable). Set false para privado."),
+      stage: z.enum(["sketch", "final"]).default("sketch").describe("sketch = edición rápida y barata (MAI Flash). final = entregable con calidad máxima (OpenAI gpt-image-2)."),
+      maskFileId: z.string().optional().describe("Máscara PNG (zona transparente = lo que se edita) desde la librería. Fuerza OpenAI."),
+      isPublic: z.boolean().optional().describe("Ignorado: el resultado siempre es público (URL reusable)."),
       name: z.string().optional().describe("Nombre del archivo resultante."),
     },
     wrapHandler(async (params, extra) => {
@@ -6672,19 +6672,18 @@ function registerVideoTools(server: McpServer) {
         // Resolve reference images (library fileIds + public URLs) to bytes.
         const images: Array<{ data: Uint8Array; mediaType: string }> = [];
 
-        if (params.imageFileIds?.length) {
-          const { db } = await import("../db");
-          const { getClientForFile, getReadClientForPlatformFile } = await import("../storage");
-          for (const fileId of params.imageFileIds) {
+        const { db } = await import("../db");
+        const { getClientForFile, getReadClientForPlatformFile } = await import("../storage");
+        const readLibraryImage = async (fileId: string) => {
             const file = await db.file.findUnique({ where: { id: fileId } });
             if (!file || file.status === "DELETED") {
-              throw new ServiceProviderError("image.gemini.edit", 404, `File not found: ${fileId}`);
+              throw new ServiceProviderError("image.edit", 404, `File not found: ${fileId}`);
             }
             if (file.ownerId !== ctx.user.id) {
-              throw new ServiceProviderError("image.gemini.edit", 403, `Forbidden: ${fileId}`);
+              throw new ServiceProviderError("image.edit", 403, `Forbidden: ${fileId}`);
             }
             if (!file.contentType.startsWith("image/")) {
-              throw new ServiceProviderError("image.gemini.edit", 400, `File is not an image: ${fileId}`);
+              throw new ServiceProviderError("image.edit", 400, `File is not an image: ${fileId}`);
             }
             const sourceClient = file.storageProviderId
               ? await getClientForFile(file.storageProviderId, ctx.user.id)
@@ -6692,34 +6691,37 @@ function registerVideoTools(server: McpServer) {
             const readUrl = await sourceClient.getReadUrl(file.storageKey);
             const r = await fetch(readUrl);
             if (!r.ok) {
-              throw new ServiceProviderError("image.gemini.edit", r.status, `download failed: ${fileId}`);
+              throw new ServiceProviderError("image.edit", r.status, `download failed: ${fileId}`);
             }
-            images.push({ data: new Uint8Array(await r.arrayBuffer()), mediaType: file.contentType });
-          }
-        }
+            return { data: new Uint8Array(await r.arrayBuffer()), mediaType: file.contentType };
+        };
+        for (const fileId of params.imageFileIds ?? []) images.push(await readLibraryImage(fileId));
+        const mask = params.maskFileId ? await readLibraryImage(params.maskFileId) : undefined;
 
         if (params.imageUrls?.length) {
           for (const url of params.imageUrls) {
             const r = await fetch(url);
             if (!r.ok) {
-              throw new ServiceProviderError("image.gemini.edit", r.status, `download failed: ${url}`);
+              throw new ServiceProviderError("image.edit", r.status, `download failed: ${url}`);
             }
             const ct = r.headers.get("content-type") || "image/png";
             images.push({ data: new Uint8Array(await r.arrayBuffer()), mediaType: ct });
           }
         }
 
-        const result = await consumeService<import("../services/providers/gemini").GeminiEditImageOutput>(
-          "image.gemini.edit",
-          {
-            prompt: params.prompt,
-            images,
-            aspectRatio: params.aspectRatio,
-            isPublic: params.isPublic,
-            name: params.name,
-          },
-          { userId: ctx.user.id },
-        );
+        const mai = await import("../services/providers/mai");
+        const route = mai.routeImageModel({ stage: params.stage, refs: images.length, mask: !!mask });
+        let serviceId: string;
+        let input: unknown;
+        if (route.provider === "openai") {
+          serviceId = "image.openai.generate";
+          input = { prompt: params.prompt, images, mask, size: mai.toOpenaiSize(params.aspectRatio), quality: "medium", name: params.name };
+        } else {
+          serviceId = images.length ? "image.mai.edit" : "image.mai.generate";
+          input = { prompt: params.prompt, tier: route.tier, imageSize: mai.toMaiImageSize(params.aspectRatio), imageUrls: images.map(mai.toDataUri), name: params.name };
+        }
+        const credits = Math.ceil((await import("../services/registry")).getService(serviceId)!.estimateCost(input as never));
+        const result = await consumeService<import("../services/providers/mai").MaiImageOutput>(serviceId, input, { userId: ctx.user.id });
         return {
           content: [{
             type: "text",
@@ -6729,12 +6731,14 @@ function registerVideoTools(server: McpServer) {
               imageUrl: result.data.imageUrl,
               mode: result.data.mode,
               modelId: result.data.modelId,
-              hint: `Imagen lista (${result.data.mode}). fileId: ${result.data.fileId}. ${result.data.imageUrl ? "URL pública reusable como referenceImage o embed." : "Privada — usa get_file para una URL temporal."}`,
+              route: route.reason,
+              credits,
+              hint: `Imagen lista (${result.data.mode}, ${credits} créditos). fileId: ${result.data.fileId}. URL pública reusable como referenceImage o embed.`,
             }, null, 2),
           }],
         };
       } catch (e) {
-        const f = failService(e, "Nano Banana 2");
+        const f = failService(e, "image edit");
         if (f) return f;
         throw e;
       }

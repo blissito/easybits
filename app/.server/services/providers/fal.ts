@@ -74,7 +74,7 @@ function getApiKey(): string {
  * Generic fal.ai queue helper. Submit a job, poll until done, return result.
  * Reusable for any future fal model (image, video, audio).
  */
-async function falQueue<T>(modelId: string, payload: unknown): Promise<T> {
+export async function falQueue<T>(modelId: string, payload: unknown): Promise<T> {
   const apiKey = getApiKey();
   const submitRes = await fetch(`${FAL_QUEUE_URL}/${modelId}`, {
     method: "POST",

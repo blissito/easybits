@@ -734,10 +734,8 @@ export const PUBLIC_SAFE_ALLOWLIST = new Set<string>([
 
 /** Imágenes — generar/editar/describir/transformar + IO para traer el resultado. */
 export const IMAGENES_ALLOWLIST = new Set<string>([
-  "create_or_edit_image", // OpenAI gpt-image-2: genera Y edita (con referencias)
-  // edit_image (Gemini Nano Banana) quitado POR AHORA — su cuota de plataforma está
-  // en cero y el agente lo prefería sobre image-2. Los edits van a create_or_edit_image.
-  // Re-agregar cuando se restablezca la cuota de Gemini.
+  "create_or_edit_image", // router: boceto → MAI Flash, final → OpenAI gpt-image-2
+  "edit_image", // MAI Image 2.7 Flash edit (OpenAI si hay máscara o stage final)
   "transform_image",
   "optimize_image",
   "describe_image",
