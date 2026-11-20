@@ -70,3 +70,47 @@ describe("registro", () => {
     expect(IMAGENES_ALLOWLIST.has("edit_image")).toBe(true);
   });
 });
+
+describe("OpenAI → MAI 2.7 fallback", () => {
+  it("falls back to MAI 2.7 when OpenAI has no credit, and bills MAI", async () => {
+    const { runImageWithFallback, maiCostCredits } = await import("~/.server/services/providers/mai");
+    const { ServiceProviderError } = await import("~/.server/services/errors");
+    const calls: string[] = [];
+    const run = await runImageWithFallback(
+      { serviceId: "image.openai.generate", input: { prompt: "x" } },
+      { serviceId: "image.mai.generate", input: { prompt: "x", tier: "full" } },
+      async (sid) => {
+        calls.push(sid);
+        if (sid === "image.openai.generate") throw new ServiceProviderError(sid, 400, "credit_balance_exhausted");
+        return { data: { modelId: "microsoft/mai-image-2.7/text-to-image" } };
+      },
+    );
+    expect(calls).toEqual(["image.openai.generate", "image.mai.generate"]);
+    expect(run.fellBack).toBe(true);
+    expect(run.result.data.modelId).toBe("microsoft/mai-image-2.7/text-to-image");
+    expect(getService(run.plan.serviceId)!.estimateCost(run.plan.input as never)).toBe(maiCostCredits({ tier: "full" }));
+    expect(maiCostCredits({ tier: "full" })).toBe(100);
+  });
+
+  it.each([[429, "rate"], [503, "down"], [400, "insufficient_quota"]])("treats %s %s as outage", async (status, msg) => {
+    const { isOpenaiOutage } = await import("~/.server/services/providers/mai");
+    const { ServiceProviderError } = await import("~/.server/services/errors");
+    expect(isOpenaiOutage(new ServiceProviderError("image.openai.generate", status, msg))).toBe(true);
+  });
+
+  it("does not fall back on prompt errors", async () => {
+    const { runImageWithFallback } = await import("~/.server/services/providers/mai");
+    const { ServiceProviderError } = await import("~/.server/services/errors");
+    await expect(runImageWithFallback(
+      { serviceId: "image.openai.generate", input: {} },
+      { serviceId: "image.mai.generate", input: {} },
+      async (sid) => { throw new ServiceProviderError(sid, 400, "content policy"); },
+    )).rejects.toThrow("content policy");
+  });
+
+  it("calculator image price matches what the final tool charges", async () => {
+    const { COST_IMAGE } = await import("~/lib/credits");
+    expect(COST_IMAGE).toBe(openaiImageService.estimateCost({ prompt: "x", quality: "low" } as never));
+    expect(COST_IMAGE).toBe(maiCostCredits({ tier: "full" }));
+  });
+});

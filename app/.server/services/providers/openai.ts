@@ -13,7 +13,7 @@ import { nanoid } from "nanoid";
 import { ServiceConfigError, ServiceProviderError } from "../errors";
 import { uploadPublicImage } from "../uploadImage";
 import type { ServiceCtx, ServiceDef, ServiceResult } from "../types";
-import { COST_DOC } from "~/lib/credits";
+import { COST_IMAGE_OPENAI, COST_IMAGE_OPENAI_EDIT_SURCHARGE } from "~/lib/credits";
 
 const DEFAULT_MODEL = process.env.OPENAI_IMAGE_MODEL || "gpt-image-2";
 
@@ -78,9 +78,9 @@ export const openaiImageService: ServiceDef<OpenaiImageInput, OpenaiImageOutput>
   //   Si el prompt/imagen de referencia crece, el costo por tokens sube; revisar si cambia el modelo.
   estimateCost(input) {
     const q = input.quality || "low";
-    const perImage = q === "high" ? 3 : q === "medium" ? 2 : 1;
-    const editSurcharge = (input.images?.length ?? 0) > 0 ? 1 : 0;
-    return COST_DOC * (perImage + editSurcharge) * Math.max(1, input.n ?? 1);
+    const perImage = q === "high" || q === "medium" ? COST_IMAGE_OPENAI[q] : COST_IMAGE_OPENAI.low;
+    const editSurcharge = (input.images?.length ?? 0) > 0 ? COST_IMAGE_OPENAI_EDIT_SURCHARGE : 0;
+    return (perImage + editSurcharge) * Math.max(1, input.n ?? 1);
   },
   async execute(input, ctx: ServiceCtx) {
     const prompt = input.prompt?.trim();

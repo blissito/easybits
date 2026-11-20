@@ -37,8 +37,18 @@ export const CREDIT_SCALE = 100;
 /** 1 documento profesional generado por AI (PDF/DOCX/XLSX, carta, reporte). */
 export const COST_DOC = 1 * CREDIT_SCALE;
 
-/** 1 imagen generada (Fal/OpenAI text-to-image). */
-export const COST_IMAGE = 0.5 * CREDIT_SCALE;
+/**
+ * Imágenes: fuente única de lo que cobran las tools (mai.ts / openai.ts usan estas constantes).
+ * MAI Flash (boceto) 25 · MAI 2.7 100 · gpt-image-2 low 100 / medium 200 / high 300, +100 al editar.
+ * 2K en MAI cobra ×2.
+ */
+export const COST_IMAGE_MAI_FLASH = 0.25 * COST_DOC;
+export const COST_IMAGE_MAI_FULL = 1 * COST_DOC;
+export const COST_IMAGE_OPENAI = { low: 1 * COST_DOC, medium: 2 * COST_DOC, high: 3 * COST_DOC } as const;
+export const COST_IMAGE_OPENAI_EDIT_SURCHARGE = 1 * COST_DOC;
+
+/** 1 imagen final (lo que cobra create_or_edit_image stage:"final", gpt-image-2 low o MAI 2.7). */
+export const COST_IMAGE = COST_IMAGE_OPENAI.low;
 
 /** 1 reel HTML animado (Ghosty / Easybits SDK — cheap, no IA pesada). */
 export const COST_REEL_HTML = 1 * CREDIT_SCALE;

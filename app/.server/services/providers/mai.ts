@@ -9,7 +9,7 @@
  * El router `routeImageModel` decide cuándo usar MAI y cuándo OpenAI.
  */
 import { nanoid } from "nanoid";
-import { COST_DOC } from "~/lib/credits";
+import { COST_IMAGE_MAI_FLASH, COST_IMAGE_MAI_FULL } from "~/lib/credits";
 import { ServiceProviderError } from "../errors";
 import { uploadPublicImage } from "../uploadImage";
 import type { ServiceCtx, ServiceDef, ServiceResult } from "../types";
@@ -58,7 +58,7 @@ export interface MaiImageOutput extends ServiceResult {
  * 2K usa ~4× tokens → ×2 de cobro (margen sigue > 40% en Flash).
  */
 export function maiCostCredits(input: Pick<MaiImageInput, "tier" | "resolution" | "n">): number {
-  const perImage = (input.tier === "full" ? 1 : 0.25) * COST_DOC;
+  const perImage = input.tier === "full" ? COST_IMAGE_MAI_FULL : COST_IMAGE_MAI_FLASH;
   const res = input.resolution === "2K" ? 2 : 1;
   return perImage * res * Math.max(1, input.n ?? 1);
 }
@@ -204,4 +204,38 @@ export function toOpenaiSize(ratio?: string): "1024x1024" | "1536x1024" | "1024x
   if (s.startsWith("landscape")) return "1536x1024";
   if (s.startsWith("portrait")) return "1024x1536";
   return "1024x1024";
+}
+
+// ── Respaldo OpenAI → MAI 2.7 ───────────────────────────────────────
+
+/** ¿El error de OpenAI es de cupo/saldo/caída (y no del prompt)? Entonces conviene caer a MAI. */
+export function isOpenaiOutage(e: unknown): boolean {
+  if (!(e instanceof ServiceProviderError)) return false;
+  if (!e.serviceId.startsWith("image.openai")) return false;
+  const s = e.providerStatus;
+  if (s === 429 || (s !== null && s >= 500)) return true;
+  return /credit_balance|insufficient_quota|quota|billing|rate.?limit/i.test(e.providerMessage);
+}
+
+export interface ImageRunPlan {
+  serviceId: string;
+  input: unknown;
+}
+
+/**
+ * Corre el plan OpenAI; si OpenAI está sin saldo o caído, repite con MAI 2.7 (no Flash).
+ * El cobro va por el servicio que sí corrió (consumeService cobra después de ejecutar).
+ */
+export async function runImageWithFallback<O>(
+  primary: ImageRunPlan,
+  fallback: ImageRunPlan | null,
+  run: (serviceId: string, input: unknown) => Promise<O>,
+): Promise<{ result: O; plan: ImageRunPlan; fellBack: boolean; fallbackReason?: string }> {
+  try {
+    return { result: await run(primary.serviceId, primary.input), plan: primary, fellBack: false };
+  } catch (e) {
+    if (!fallback || !isOpenaiOutage(e)) throw e;
+    const result = await run(fallback.serviceId, fallback.input);
+    return { result, plan: fallback, fellBack: true, fallbackReason: (e as Error).message.slice(0, 200) };
+  }
 }

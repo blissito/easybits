@@ -1227,8 +1227,18 @@ How to embed safely (the only reliable rule):
         const input = route.provider === "openai"
           ? { prompt: params.prompt, model: params.model, images, size: params.size, quality: params.quality, n: params.n, name: params.name }
           : { prompt: params.prompt, tier: route.tier, imageSize: mai.toMaiImageSize(ratio), imageUrls: images.map(mai.toDataUri), n: images.length ? 1 : params.n, name: params.name };
-        const credits = Math.ceil((await import("../services/registry")).getService(serviceId)!.estimateCost(input as never));
-        const result = await consumeService<import("../services/providers/openai").OpenaiImageOutput>(serviceId, input, { userId: ctx.user.id });
+        // Si OpenAI no tiene saldo o está caído, el final cae a MAI 2.7 (cobra créditos de MAI).
+        const fallbackPlan = route.provider === "openai" && images.length <= mai.MAI_MAX_REFS
+          ? {
+              serviceId: images.length ? "image.mai.edit" : "image.mai.generate",
+              input: { prompt: params.prompt, tier: "full" as const, imageSize: mai.toMaiImageSize(ratio), imageUrls: images.map(mai.toDataUri), n: images.length ? 1 : params.n, name: params.name },
+            }
+          : null;
+        const { getService } = await import("../services/registry");
+        const run = await mai.runImageWithFallback({ serviceId, input }, fallbackPlan, (sid, inp) =>
+          consumeService<import("../services/providers/openai").OpenaiImageOutput>(sid, inp, { userId: ctx.user.id }));
+        const result = run.result;
+        const credits = Math.ceil(getService(run.plan.serviceId)!.estimateCost(run.plan.input as never));
         const d = result.data;
         const markdown = d.images.map((im) => `![image](${im.imageUrl})`).join("\n\n");
         return {
@@ -1242,9 +1252,10 @@ How to embed safely (the only reliable rule):
               modelId: d.modelId,
               images: d.images,
               stage: params.stage,
-              route: route.reason,
+              route: run.fellBack ? "fallback:openai-unavailable→mai-2.7" : route.reason,
+              ...(run.fellBack ? { fallback: { from: "openai", reason: run.fallbackReason } } : {}),
               credits,
-              hint: `Imagen lista (${d.mode}, ${d.modelId}, ${credits} créditos). fileId: ${d.fileId}. URL pública reusable como referenceImage o embed.${params.stage === "sketch" ? " Para el entregable final repite con stage:\"final\"." : ""}`,
+              hint: `Imagen lista (${d.mode}, ${d.modelId}, ${credits} créditos).${run.fellBack ? " OpenAI no disponible: se usó MAI Image 2.7 como respaldo." : ""} fileId: ${d.fileId}. URL pública reusable como referenceImage o embed.${params.stage === "sketch" ? " Para el entregable final repite con stage:\"final\"." : ""}`,
             }, null, 2),
           }],
         };
