@@ -85,7 +85,7 @@ jobs:
       # NO bloquea: el repo no tiene el grafo de dependencias activo y la acción sale en rojo
       # («Dependency review is not supported on this repository»). Activarlo en Settings → Code security → Dependency graph
       # y luego quitar continue-on-error. gitleaks sí bloquea.
-      - uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v4
+      - uses: actions/dependency-review-action@bbc44d14a204704ccc493733616cd1e93a0321ec # v4
         continue-on-error: true
         with:
           fail-on-severity: high
