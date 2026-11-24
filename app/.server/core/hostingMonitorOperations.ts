@@ -33,6 +33,23 @@ function isDown(status: number | undefined, error: string | undefined) {
   return status === 502 || status === 503 || status === 504;
 }
 
+/**
+ * Sonda con confirmación (23-nov-2026). Una caja `suspendOnIdle` tarda 4–15 s en despertar y un
+ * solo timeout de 15 s la marcaba caída: se reiniciaba una app sana y llegaba el correo
+ * «se cayó» (caso `clave`, 05:45 UTC). Ahora la primera sonda espera 30 s y, si falla, se
+ * reintenta tras una pausa: sólo cuenta como caída si fallan las dos.
+ */
+export async function probeConfirmed(
+  domain: string,
+  probe: typeof probeDomain = probeDomain,
+  pauseMs = 10_000
+) {
+  const first = await probe(domain, 30_000);
+  if (!isDown(first.status, first.error)) return first;
+  await new Promise((r) => setTimeout(r, pauseMs));
+  return probe(domain, 30_000);
+}
+
 export async function probeDomain(domain: string, timeoutMs = 15_000) {
   const ctl = new AbortController();
   const t = setTimeout(() => ctl.abort(), timeoutMs);
@@ -78,19 +95,26 @@ export async function checkHostedDomains(opts: { heal?: boolean } = {}): Promise
     // visitas reales y el Restart=always de su unit.
     if (row.sleep) continue;
     let md: Record<string, string> = {};
+    let sb: SandboxRecord;
     try {
-      const sb = await callHost<SandboxRecord>("GET", `/v1/sandbox/${row.sandboxId}`, undefined, row.ownerId);
+      sb = await callHost<SandboxRecord>("GET", `/v1/sandbox/${row.sandboxId}`, undefined, row.ownerId);
       md = sb.metadata ?? {};
     } catch {
       continue; // sin fila en el host no hay dominio que sondear
     }
+    // Dormida o en arranque en el host = no es una caída, y sondearla la despertaría (cada 5 min
+    // no dormiría nunca). Sólo se sondea lo que el host dice que está corriendo.
+    if (sb.status !== "running") continue;
     const domains = Object.keys(md)
       .filter((k) => k.startsWith("domain:"))
       .map((k) => k.slice("domain:".length));
-    for (const domain of domains) {
-      const { status, error } = await probeDomain(domain);
-      const p: DomainProbe = { sandboxId: row.sandboxId, name: row.name, domain, status, error, ok: !isDown(status, error) };
-      probed.push(p);
+    // En paralelo: con la confirmación (hasta ~70 s por dominio caído) en serie rebasaría el
+    // --max-time del disparo.
+    const results = await Promise.all(
+      domains.map(async (domain) => ({ domain, ...(await probeConfirmed(domain)) }))
+    );
+    for (const { domain, status, error } of results) {
+      probed.push({ sandboxId: row.sandboxId, name: row.name, domain, status, error, ok: !isDown(status, error) });
     }
   }
 
