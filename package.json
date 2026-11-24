@@ -107,7 +107,7 @@
     "html-to-docx": "^1.8.0",
     "isbot": "^5.2.3",
     "js-confetti": "^0.13.1",
-    "jsdom": "^26.1.0",
+    "jsdom": "^31.0.1",
     "jsonwebtoken": "^9.0.2",
     "livekit-client": "^2.24.0",
     "livekit-server-sdk": "^2.19.3",
