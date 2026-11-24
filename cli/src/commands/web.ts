@@ -39,6 +39,11 @@ export function organicResults(results: unknown): Array<{ rank: number; title: s
     .filter((o) => o.url);
 }
 
+/** `webCrawl` puede encolar el recorrido y regresar `{ jobId }` en vez de páginas. Puro, con test. */
+export function isCrawlJobStarted(r: unknown): r is { jobId: string } {
+  return typeof r === "object" && r !== null && "jobId" in r;
+}
+
 /** `--input` (JSON) o `--url` repetido → el `input` que pide extract. */
 export function extractInput(inputJson: string | undefined, urls: string[], usage: string): Record<string, unknown> | Record<string, unknown>[] {
   if (inputJson && urls.length) throw usageError(t("Pass --input or --url, not both.", "Pasa --input o --url, no ambos."), usage);
@@ -170,6 +175,10 @@ export const webCmd: Command = {
         if (maxPages != null && (maxPages < 1 || maxPages > 20)) throw usageError(t("--max-pages must be 1-20.", "--max-pages debe ser de 1 a 20."), this.usage);
         const eb = await getClient(ctx);
         const r = await web(() => eb.webCrawl({ url, maxPages, onlyMainContent: bool(ctx, "main") || undefined, country: str(ctx, "country") }));
+        if (isCrawlJobStarted(r)) {
+          emit(ctx, r, () => console.log(t(`Crawl ${r.jobId} running in the background.`, `El recorrido ${r.jobId} corre en segundo plano.`)));
+          return;
+        }
         emit(ctx, r, () => {
           for (const p of r.pages) console.log(`<!-- ${p.url} -->\n${p.markdown.trim()}\n`);
           console.error(
