@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { extractInput, organicResults } from "./commands/web.ts";
+import { extractInput, isCrawlJobStarted, organicResults } from "./commands/web.ts";
 
 test("organicResults: SERP con organic[] (link o url), numerado y sin vacíos", () => {
   const r = organicResults({ organic: [{ title: " A ", link: "https://a.com" }, { title: "sin link" }, { title: "B", url: "https://b.com" }] });
@@ -26,4 +26,10 @@ test("extractInput: errores de uso (nada, ambos, JSON malo o escalar)", () => {
   assert.throws(() => extractInput("{}", ["https://a"], "u"), /not both|no ambos/);
   assert.throws(() => extractInput("{no", [], "u"), /JSON/);
   assert.throws(() => extractInput("3", [], "u"), /JSON/);
+});
+
+test("isCrawlJobStarted: el job en segundo plano no es una lista de páginas", () => {
+  assert.equal(isCrawlJobStarted({ jobId: "j_1" }), true);
+  assert.equal(isCrawlJobStarted({ pages: [], pending: [] }), false);
+  assert.equal(isCrawlJobStarted(null), false);
 });
