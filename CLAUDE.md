@@ -62,7 +62,7 @@ agente nativo o no:
 
 ## Publicar paquetes npm (sdk, cli, mcp, eve-sandbox)
 
-**Sin tokens desde el 28-nov-2026**: npm Trusted Publishing (OIDC) desde `.github/workflows/publish-packages.yml`. Se sube `version` en el `package.json` y se corre `gh workflow run publish-packages.yml -R blissito/easybits --ref main -f dry_run=false` (o se empuja un tag `packages-v*`); publica sólo lo que no esté ya en npm. La versión nueva queda unos minutos en «Validating» (revisión de npm) antes de instalarse. Alta del Trusted Publisher hecha para **sdk y cli**; **falta mcp y eve-sandbox** (npmjs.com → paquete → Settings → Trusted Publisher: blissito/easybits, publish-packages.yml, con tu llave de seguridad). Los `NPM_TOKEN` viejos caducaron: no se usan. La CLI va después del SDK (depende de él).
+**Sin tokens desde el 28-nov-2026**: npm Trusted Publishing (OIDC) desde `.github/workflows/publish-packages.yml`. Se sube `version` en el `package.json` y se corre `gh workflow run publish-packages.yml -R blissito/easybits --ref main -f dry_run=false` (o se empuja un tag `packages-v*`); publica sólo lo que no esté ya en npm. La versión nueva queda unos minutos en «Validating» (revisión de npm) antes de instalarse. Alta del Trusted Publisher hecha para los cuatro (sdk, cli, mcp, eve-sandbox): npmjs.com → paquete → Settings → Trusted Publisher, blissito/easybits, publish-packages.yml. Un paquete nuevo necesita su alta (pide la llave de seguridad de bliss). Los `NPM_TOKEN` viejos caducaron: no se usan. La CLI va después del SDK (depende de él).
 
 ## Deploy
 - **Ya NO vive en Fly** (desde 2026-10-08, commit `79866b4d`; las apps `easybits*` de Fly están borradas). Producción es la caja **app-host** del fierro A de sandbox-host.
