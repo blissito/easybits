@@ -86,7 +86,7 @@
     "ai": "^6.0.100",
     "amazon-chime-sdk-js": "^3.32.0",
     "chart.js": "^4.6.1",
-    "chokidar": "^4.0.3",
+    "chokidar": "^6.0.0",
     "clsx": "^2.1.1",
     "codemirror": "^6.0.2",
     "compression": "^1.8.2",
