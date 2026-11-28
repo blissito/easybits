@@ -34,6 +34,7 @@ describe("resolveSearch — parámetros por motor", () => {
     expect(s.country).toBe("mx");
     expect(s.url).toContain("hl=es&gl=mx");
     expect(s.url).toContain("&uule=Monterrey%2C+Nuevo+Le%C3%B3n%2C+M%C3%A9xico");
+    expect(s.url).toContain("&nfpr=1");
     expect(s.url).toContain("&start=10&tbm=nws&tbs=qdr:w&brd_mobile=1&brd_json=1");
   });
 

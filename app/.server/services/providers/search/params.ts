@@ -143,7 +143,8 @@ export function resolveSearch(p: SearchParams): ResolvedSearch {
   let via: "serp" | "html" = "serp";
   switch (engine) {
     case "google": {
-      url = `https://www.google.com/search?q=${q}&hl=${baseLang}&gl=${country}`;
+      // nfpr=1: Google busca exactamente lo escrito; sin él, según la IP, «ghosty» se volvía «ghostly».
+      url = `https://www.google.com/search?q=${q}&hl=${baseLang}&gl=${country}&nfpr=1`;
       if (location) url += `&uule=${encodeURIComponent(location).replace(/%20/g, "+")}`;
       if (page > 1) url += `&start=${(page - 1) * 10}`;
       if (type !== "web") url += GOOGLE_TYPE[type];
