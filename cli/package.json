@@ -39,7 +39,7 @@
     "@easybits.cloud/sdk": "^0.46.0"
   },
   "devDependencies": {
-    "@types/node": "^22.0.0",
+    "@types/node": "^25.9.12",
     "tsup": "^8.0.0",
     "typescript": "^5.7.0"
   },
