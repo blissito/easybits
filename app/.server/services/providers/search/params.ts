@@ -130,7 +130,8 @@ export function resolveSearch(p: SearchParams): ResolvedSearch {
   const language = langIn ?? (countryIn ? COUNTRY_LANG[countryIn] : undefined) ?? detectLanguage(query);
   const baseLang = language.split("-")[0];
   const country = countryIn ?? LANG_COUNTRY[baseLang] ?? "us";
-  const exitCountry = countryIn && !BLOCKED_EXIT_COUNTRIES.has(countryIn) ? countryIn : undefined;
+  // La IP sale por el país de búsqueda (dado o deducido), salvo que el proveedor no lo permita.
+  const exitCountry = !BLOCKED_EXIT_COUNTRIES.has(country) ? country : undefined;
   const location = p.location?.trim() || undefined;
   const q = encodeURIComponent(query);
 

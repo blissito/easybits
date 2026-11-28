@@ -26,6 +26,7 @@ describe("resolveSearch — parámetros por motor", () => {
     expect(s.url).toContain("gl=ru");
     expect(s.exitCountry).toBeUndefined();
     expect(resolveSearch({ query: "x", country: "mx" }).exitCountry).toBe("mx");
+    expect(resolveSearch({ query: "precio de llantas" }).exitCountry).toBe("mx");
   });
 
   it("google: ciudad, página, noticias, fecha y móvil", () => {
