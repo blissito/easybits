@@ -52,8 +52,22 @@ describe("resolveSearch — parámetros por motor", () => {
     expect(d.url).toContain("kl=ru-ru&df=d");
   });
 
+  it("bing noticias con intervalo de tiempo", () => {
+    const s = resolveSearch({ query: "peso mexicano dólar", engine: "bing", type: "news", time: "day" });
+    expect(s.url).toContain("bing.com/news/search?q=");
+    expect(s.url).toContain("&qft=interval%3D%227%22");
+  });
+
+  it("normaliza Bing Noticias real: ligas directas y fecha", () => {
+    const n = normalizeSerpJson(serpBody("bing-news-mx.json"));
+    expect(n.results).toHaveLength(12);
+    expect(n.results[0].date).toBeTruthy();
+    expect(n.results[0].snippet).toBeTruthy();
+    expect(n.results.every((r) => !r.url.includes("goto"))).toBe(true);
+  });
+
   it("rechaza combinaciones que el motor no tiene", () => {
-    expect(() => resolveSearch({ query: "x", engine: "bing", type: "news" })).toThrow(/sólo está disponible/);
+    expect(() => resolveSearch({ query: "x", engine: "bing", type: "images" })).toThrow(/sólo está disponible/);
     expect(() => resolveSearch({ query: "x", engine: "yandex", time: "day" })).toThrow();
     expect(() => resolveSearch({ query: "x", country: "mex" })).toThrow();
     expect(() => resolveSearch({ query: "  " })).toThrow();

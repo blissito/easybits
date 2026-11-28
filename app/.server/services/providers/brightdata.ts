@@ -342,6 +342,8 @@ export interface BrightdataSearchOutput extends ServiceResult {
     reported?: { language?: string; country?: string; location?: string };
     /** Con `raw: true`: la respuesta completa del motor. */
     raw?: unknown;
+    /** Aviso en español cuando la búsqueda se resolvió por otro camino (p. ej. noticias de Bing). */
+    notice?: string;
   };
 }
 
@@ -371,26 +373,47 @@ export const brightdataSearchService: ServiceDef<BrightdataSearchInput, Brightda
     let norm: NormalizedSerp;
     let raw: unknown;
 
+    let notice: string | undefined;
     if (s.via === "serp") {
       const zone = input.zone || process.env.BRIGHTDATA_SERP_ZONE || "serp_api_for_maps";
-      const resp = (await brightdataRequest({
-        zone,
-        url: s.url,
-        format: "json",
-        country: s.exitCountry,
-        serviceId: "research.brightdata.search",
-      })) as BrightdataResponse;
-      let body: unknown = resp.body ?? null;
-      if (typeof body === "string") {
-        try {
-          body = JSON.parse(body);
-        } catch {
-          throw new ServiceProviderError("research.brightdata.search", 502, "el buscador devolvió una respuesta ilegible; reintenta");
+      const fetchSerp = async (url: string) => {
+        const resp = (await brightdataRequest({
+          zone,
+          url,
+          format: "json",
+          country: s.exitCountry,
+          serviceId: "research.brightdata.search",
+        })) as BrightdataResponse;
+        let body: unknown = resp.body ?? null;
+        if (typeof body === "string") {
+          try {
+            body = JSON.parse(body);
+          } catch {
+            throw new ServiceProviderError("research.brightdata.search", 502, "el buscador devolvió una respuesta ilegible; reintenta");
+          }
         }
-      }
-      norm = normalizeSerpJson((body ?? {}) as Record<string, unknown>);
+        return (body ?? {}) as Record<string, unknown>;
+      };
+      const body = await fetchSerp(s.url);
+      norm = normalizeSerpJson(body);
+      const found = norm.results.length;
       norm.results = await resolveGotoLinks(norm.results);
       if (input.raw) raw = body;
+      // En noticias Google esconde casi todas las ligas tras `goto` sin ruta visible (medido 28-nov: 8 de 10).
+      // Si se perdió más de la mitad, se usan las Noticias de Bing (ligas directas y fecha) sin cobrar de más.
+      if (s.engine === "google" && s.type === "news" && norm.results.length < found / 2 && s.time !== "year") {
+        try {
+          const bing = resolveSearch({ ...input, engine: "bing", type: "news", page: s.page });
+          const nb = normalizeSerpJson(await fetchSerp(bing.url));
+          nb.results = await resolveGotoLinks(nb.results);
+          if (nb.results.length > norm.results.length) {
+            norm = nb;
+            notice = "Google escondió las ligas de estas noticias; los resultados son de Bing Noticias.";
+          }
+        } catch {
+          // se queda lo de Google
+        }
+      }
     } else {
       // Yandex y DuckDuckGo no tienen JSON en el proveedor: se lee la página y se parsea aquí.
       // Yandex y DuckDuckGo piden captcha a ratos (medido 28-nov: ~1 de 3 en DDG); otra vuelta suele pasar.
@@ -460,6 +483,7 @@ export const brightdataSearchService: ServiceDef<BrightdataSearchInput, Brightda
         next: norm.hasNext && results.length ? { page: s.page + 1 } : null,
         reported: norm.reported,
         ...(raw !== undefined ? { raw } : {}),
+        ...(notice ? { notice } : {}),
       },
     };
   },

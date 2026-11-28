@@ -98,6 +98,8 @@ const GOOGLE_TYPE: Record<Exclude<SearchType, "web">, string> = {
   images: "&udm=2",
 };
 const GOOGLE_TIME: Record<SearchTime, string> = { hour: "qdr:h", day: "qdr:d", week: "qdr:w", month: "qdr:m", year: "qdr:y" };
+// Intervalos de Bing Noticias (qft=interval="N").
+const BING_NEWS_TIME: Partial<Record<SearchTime, string>> = { hour: "4", day: "7", week: "8", month: "9" };
 const DDG_TIME: Partial<Record<SearchTime, string>> = { day: "d", week: "w", month: "m", year: "y" };
 
 const ENGINES: SearchEngine[] = ["google", "bing", "yandex", "duckduckgo"];
@@ -112,12 +114,14 @@ export function resolveSearch(p: SearchParams): ResolvedSearch {
   const type = p.type ?? "web";
   if (!TYPES.includes(type)) throw new SearchParamsError(`type inválido: usa ${TYPES.join(" | ")}`);
   if (p.time && !TIMES.includes(p.time)) throw new SearchParamsError(`time inválido: usa ${TIMES.join(" | ")}`);
-  if (type !== "web" && engine !== "google") {
-    throw new SearchParamsError(`type "${type}" sólo está disponible con engine "google"`);
+  if (type !== "web" && engine !== "google" && !(engine === "bing" && type === "news")) {
+    throw new SearchParamsError(`type "${type}" sólo está disponible con engine "google" (y news también con "bing")`);
   }
-  if (p.time && (engine === "bing" || engine === "yandex")) {
-    throw new SearchParamsError(`time sólo está disponible con engine "google" o "duckduckgo"`);
+  const bingNews = engine === "bing" && type === "news";
+  if (p.time && (engine === "yandex" || (engine === "bing" && !bingNews))) {
+    throw new SearchParamsError(`time sólo está disponible con engine "google", "duckduckgo" o "bing" con type "news"`);
   }
+  if (bingNews && p.time === "year") throw new SearchParamsError(`time "year" no está disponible en noticias de bing`);
   const page = Math.max(1, Math.floor(p.page ?? 1));
   if (engine === "duckduckgo" && page > 1) throw new SearchParamsError(`page > 1 no está disponible con engine "duckduckgo"`);
 
@@ -149,7 +153,8 @@ export function resolveSearch(p: SearchParams): ResolvedSearch {
       break;
     }
     case "bing": {
-      url = `https://www.bing.com/search?q=${q}&setlang=${baseLang}&cc=${country}&mkt=${baseLang}-${country.toUpperCase()}`;
+      url = `https://www.bing.com/${type === "news" ? "news/" : ""}search?q=${q}&setlang=${baseLang}&cc=${country}&mkt=${baseLang}-${country.toUpperCase()}`;
+      if (type === "news" && p.time) url += `&qft=${encodeURIComponent(`interval="${BING_NEWS_TIME[p.time]}"`)}`;
       if (page > 1) url += `&first=${(page - 1) * 10 + 1}`;
       url += "&brd_json=1";
       break;
