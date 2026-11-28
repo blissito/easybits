@@ -196,6 +196,8 @@ export const webCmd: Command = {
         if (maxPages != null && (maxPages < 1 || maxPages > 20)) throw usageError(t("--max-pages must be 1-20.", "--max-pages debe ser de 1 a 20."), this.usage);
         const eb = await getClient(ctx);
         const r = await web(() => eb.webCrawl({ url, maxPages, onlyMainContent: bool(ctx, "main") || undefined, country: str(ctx, "country") }));
+        // Con 1-20 páginas la API responde al momento; un job sólo sale con más de 20, que aquí no se permite.
+        if ("jobId" in r) throw new CliError(t("Unexpected background crawl job.", "Llegó un rastreo en segundo plano inesperado."), EXIT.API);
         emit(ctx, r, () => {
           for (const p of r.pages) console.log(`<!-- ${p.url} -->\n${p.markdown.trim()}\n`);
           console.error(
