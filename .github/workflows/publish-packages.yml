@@ -9,9 +9,17 @@ on:
   workflow_dispatch:
     inputs:
       dry_run:
-        description: "Solo verificar NPM_TOKEN, sin publicar"
+        description: "Ensayo: no publica nada"
         type: boolean
         default: true
+
+# Sin tokens (28-nov-2026: todos los NPM_TOKEN caducaron): npm Trusted Publishing (OIDC).
+# npm confía en ESTE workflow: npmjs.com → cada paquete (@easybits.cloud/sdk, mcp, cli,
+# eve-sandbox) → Settings → Trusted Publisher: GitHub Actions, blissito/easybits,
+# publish-packages.yml. Mismo patrón que @ghostystudio/pointer en ghosty-studio.
+permissions:
+  contents: read
+  id-token: write
 
 jobs:
   publish:
@@ -22,30 +30,17 @@ jobs:
 
       - uses: actions/setup-node@v7
         with:
-          node-version: 20
+          node-version: 22
           registry-url: https://registry.npmjs.org
 
-      # El token se verifica ANTES de construir nada. Sin esto, un token muerto
-      # se descubría a los 40 s, enterrado bajo el log de tsup, y con un 404 que
-      # parece "el paquete no existe" cuando en realidad significa "no tienes
-      # permiso de escritura" (npm devuelve 404 en vez de 401 a propósito).
-      - name: Verificar credencial de npm
-        run: |
-          if ! WHO=$(npm whoami 2>&1); then
-            echo "::error::NPM_TOKEN inválido o sin permiso. npm respondió: $WHO"
-            echo "Genera un Granular Access Token en npmjs.com con Read and write"
-            echo "sobre el scope @easybits.cloud y córrelo con:"
-            echo "  gh secret set NPM_TOKEN --repo blissito/easybits"
-            exit 1
-          fi
-          echo "Autenticado en npm como: $WHO"
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      # Trusted Publishing exige npm >= 11.5.1.
+      - name: npm reciente
+        run: npm install -g npm@11
 
       - name: Fin del ensayo
         if: inputs.dry_run
         run: |
-          echo "dry_run activo — la credencial sirve y no se publicó nada."
+          echo "dry_run activo — no se publicó nada."
 
       # Publica cada paquete SOLO si su versión aún no está en npm. Así un re-run
       # (versión sin cambios) salta limpio, pero un error REAL de publish — auth
@@ -64,8 +59,6 @@ jobs:
           else
             npm publish
           fi
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish MCP
         if: ${{ !inputs.dry_run }}
@@ -79,8 +72,6 @@ jobs:
           else
             npm publish
           fi
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       # Node 24: eve lo exige en `engines` y npm lo respeta al instalar devDependencies.
       - name: Publish eve-sandbox
@@ -95,8 +86,6 @@ jobs:
           else
             npm publish
           fi
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Publish CLI
         if: ${{ !inputs.dry_run }}
@@ -110,5 +99,3 @@ jobs:
           else
             npm publish
           fi
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
