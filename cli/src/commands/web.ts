@@ -52,7 +52,8 @@ export function formatResults(items: ReturnType<typeof organicResults>, width = 
   const clip = (s: string) => (s.length > max ? s.slice(0, max - 1) + "…" : s);
   return items
     .map((o) => {
-      const lines = [`${o.rank}. ${clip(o.title || o.url)}`, `   ${o.url}`];
+      // Sin título, la liga va una sola vez como encabezado.
+      const lines = o.title ? [`${o.rank}. ${clip(o.title)}`, `   ${o.url}`] : [`${o.rank}. ${o.url}`];
       if (o.snippet) lines.push(`   ${clip(o.snippet.replace(/\s+/g, " "))}`);
       if (o.content) lines.push(`   ${t(`(${o.content.length} chars read; --json to get them)`, `(${o.content.length} caracteres leídos; --json para verlos)`)}`);
       return lines.join("\n");
