@@ -222,10 +222,11 @@ Search Google, read any page even if it blocks bots (residential IPs, JS resolve
 
 ### Search
 \`POST /web/search\`
-Body: \`{ query, engine?: "google"|"bing"|"yandex"|"duckduckgo", country? }\`
-Returns: \`{ query, engine, results: { organic: [{ title, link, description }], … } }\` (organic, local businesses, knowledge panel)
-1 query. Use it to find the right URL, then read it with \`/web/fetch\`.
-SDK: \`eb.webSearch({ query, country? })\` · MCP: \`web_search({ query, country? })\`
+Body: \`{ query, engine?: "google"|"bing"|"yandex"|"duckduckgo", country?, language?, location?, page?, type?: "web"|"news"|"images"|"shopping"|"videos"|"places", time?: "hour"|"day"|"week"|"month"|"year", read?: 0-5, raw? }\`
+Returns: \`{ query, engine, country, language, page, results: [{ position, title, url, snippet, date?, source, content? }], peopleAlsoAsk?, related?, next: { page } | null }\` — the same shape for all 4 engines, without icons or tracking links.
+Without \`country\` or \`language\` both are inferred from the query text (a Russian query searches as in Russia). \`location\` is the city. \`read: N\` also reads the top N as markdown (\`content\`, up to 8,000 characters).
+1 query, plus 1 per page read. Failures are not charged. \`urlApprox: true\` = Google did not give the exact link and the URL comes from the visible path.
+SDK: \`eb.webSearch({ query, country?, language?, location?, read? })\` · MCP: \`web_search({ query, … })\` · CLI: \`easybits web search "<query>" --location "Monterrey" --read 2\`
 
 \`\`\`bash
 curl -X POST https://www.easybits.cloud/api/v2/web/search \\

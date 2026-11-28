@@ -12,6 +12,14 @@ test("organicResults: SERP con organic[] (link o url), numerado y sin vacíos", 
   assert.deepEqual(organicResults({ knowledge: {} }), []);
 });
 
+test("organicResults: forma nueva results[] con position y url", () => {
+  const r = organicResults([{ position: 1, title: "A", url: "https://a.com" }, { position: 2, title: "B", url: "https://b.com" }]);
+  assert.deepEqual(r, [
+    { rank: 1, title: "A", url: "https://a.com" },
+    { rank: 2, title: "B", url: "https://b.com" },
+  ]);
+});
+
 test("extractInput: --url repetido arma [{url}]", () => {
   assert.deepEqual(extractInput(undefined, ["https://a", "https://b"], "u"), [{ url: "https://a" }, { url: "https://b" }]);
 });

@@ -1056,30 +1056,37 @@ console.log(result.savings); // "75%"`}
             <Endpoint
               method="POST"
               path="/web/search"
-              description="Busca en Google (o Bing/Yandex/DuckDuckGo) y devuelve resultados estructurados: orgánicos, negocios locales, knowledge panel"
+              description="Busca en Google, Bing, Yandex o DuckDuckGo con idioma, país, ciudad, página, tipo y fecha. Los 4 motores responden con la misma forma, sin ruido, y con read también trae el contenido de las primeras páginas"
               body={[
                 { name: "query", type: "string", desc: "Texto plano (requerido)" },
                 { name: "engine", type: "string", desc: "google (default) | bing | yandex | duckduckgo" },
-                { name: "country", type: "string", desc: "País en 2 letras: mx (México), us, es, ar, co, cl, pe, br. Ver lista completa abajo" },
+                { name: "country", type: "string", desc: "País de búsqueda en 2 letras: mx, us, es, ru… Si no lo pasas, sale del idioma" },
+                { name: "language", type: "string", desc: "Idioma: es, en, ru, pt-br… Si no lo pasas, se deduce del texto de la consulta" },
+                { name: "location", type: "string", desc: "Ciudad o región: \"Monterrey, Nuevo León, México\", \"Москва\"" },
+                { name: "page", type: "number", desc: "Página de resultados, desde 1" },
+                { name: "type", type: "string", desc: "web (default) | news | images | shopping | videos | places (sólo google)" },
+                { name: "time", type: "string", desc: "hour | day | week | month | year (google y duckduckgo)" },
+                { name: "read", type: "number", desc: "0-5: lee además las N primeras y trae su markdown en content" },
+                { name: "raw", type: "boolean", desc: "Incluye la respuesta completa del motor (google y bing)" },
               ]}
-              response={`{ "query": "…", "engine": "google", "results": { "organic": [ { "title", "link", "description" } ], … } }`}
-              note="1 consulta. Úsalo para encontrar la URL correcta y luego léela con /web/fetch."
+              response={`{ "query", "engine", "country", "language", "page", "results": [ { "position", "title", "url", "snippet", "date?", "source", "content?" } ], "peopleAlsoAsk?", "related?", "next": { "page": 2 } | null }`}
+              note="1 consulta, más 1 por cada página que lea con read. Los fallos no se cobran. urlApprox: true quiere decir que Google no dio la liga exacta y la URL sale de la ruta visible."
             />
             <TabbedCode
               tabs={[
-                { label: "SDK", code: `const r = await eb.webSearch({ query: "ubiquiti u6 mesh precio", country: "mx" });
-console.log(r.results.organic[0].link);` },
+                { label: "SDK", code: `const r = await eb.webSearch({ query: "ubiquiti u6 mesh precio", country: "mx", read: 2 });
+console.log(r.results[0].url, r.results[0].content);` },
                 { label: "cURL", code: `curl -X POST https://www.easybits.cloud/api/v2/web/search \\
   -H "Authorization: Bearer $EASYBITS_API_KEY" \\
   -H "Content-Type: application/json" \\
-  -d '{"query":"ubiquiti u6 mesh precio","country":"mx"}'` },
+  -d '{"query":"ubiquiti u6 mesh precio","country":"mx","read":2}'` },
                 { label: "Node.js", code: `const res = await fetch("https://www.easybits.cloud/api/v2/web/search", {
   method: "POST",
   headers: { Authorization: \`Bearer \${process.env.EASYBITS_API_KEY}\`, "Content-Type": "application/json" },
-  body: JSON.stringify({ query: "ubiquiti u6 mesh precio", country: "mx" }),
+  body: JSON.stringify({ query: "ubiquiti u6 mesh precio", country: "mx", read: 2 }),
 });
 const data = await res.json();` },
-                { label: "MCP", code: `web_search({ query: "ubiquiti u6 mesh precio", country: "mx" })` },
+                { label: "MCP", code: `web_search({ query: "ubiquiti u6 mesh precio", country: "mx", read: 2 })` },
               ]}
             />
             <div className="mb-8" />
@@ -1248,7 +1255,7 @@ const data = await res.json();` },
             <h3 className="text-lg font-bold mb-3">Tools MCP</h3>
             <p className="text-sm text-gray-600 mb-3">Conecta <code className="bg-gray-100 px-1 rounded">https://www.easybits.cloud/api/mcp/web</code> con tu API key como Bearer.</p>
             <div className="space-y-2">
-              <McpTool name="web_search" params="query, engine?, country?" description="Busca en Google y devuelve resultados estructurados. 1 consulta." />
+              <McpTool name="web_search" params="query, engine?, country?, language?, location?, page?, type?, time?, read?" description="Busca en Google, Bing, Yandex o DuckDuckGo con idioma y ciudad; con read también lee las primeras páginas. 1 consulta (+1 por página leída)." />
               <McpTool name="web_fetch" params="url, country?, asMarkdown?, onlyMainContent?" description="Lee una página aunque bloquee bots. 1 consulta." />
               <McpTool name="web_extract" params="source | datasetId, input, limit?" description="Extrae registros con esquema (Maps, Mercado Libre, Amazon, Instagram…). Async con jobId; 1 consulta por registro." />
               <McpTool name="web_extract_status" params="jobId" description="Estado/registros de un extract. Gratis mientras corre." />
@@ -1261,8 +1268,8 @@ const data = await res.json();` },
               <McpTool name="web_map" params="url, search?, limit?" description="Todas las URLs de un sitio desde su sitemap, sin leerlas. 1 consulta por documento leído." />
             </div>
             <p className="text-sm text-gray-600 mt-4">
-              Ejemplo de flujo: <code className="bg-gray-100 px-1 rounded">web_search("ubiquiti u6 mesh precio", country: "mx")</code> → tomar el link de Amazon MX →{" "}
-              <code className="bg-gray-100 px-1 rounded">web_fetch(url, asMarkdown: true)</code> → el agente lee título y precio. Dos consultas.
+              Ejemplo de flujo: <code className="bg-gray-100 px-1 rounded">web_search("ubiquiti u6 mesh precio", country: "mx", read: 1)</code> → el agente ya tiene el primer resultado en markdown y lee título y precio. Dos consultas, una sola llamada. Para una página que no salió en la búsqueda,{" "}
+              <code className="bg-gray-100 px-1 rounded">web_fetch(url, asMarkdown: true)</code>.
             </p>
           </section>
 

@@ -6888,18 +6888,37 @@ function registerVideoTools(server: McpServer) {
   server.tool("research_scrape", `[deprecated → web_fetch] ${WEB_FETCH_DESC}`, WEB_FETCH_SHAPE, webFetchHandler);
 
   const WEB_SEARCH_DESC =
-    "Busca en Google (o Bing/Yandex/DuckDuckGo) y devuelve resultados estructurados: orgánicos, snack pack (negocios locales), knowledge panel, FAQs. Cuesta 1 consulta.\n\nHow to use:\n- Required: `query` (texto plano, sin URL-encode).\n- Optional: `engine` (default 'google'), `country` (ISO) para resultados localizados.\n\nUse for: encontrar la URL de un producto/tienda/noticia, investigar competencia, validar precios públicos. Luego `web_fetch` la URL que te interese para leer el detalle.";
+    "Busca en Google, Bing, Yandex o DuckDuckGo y devuelve resultados limpios con la misma forma en los 4: { results: [{ position, title, url, snippet, date?, source }], answer?, peopleAlsoAsk?, related?, next }. Cuesta 1 consulta (+1 por cada página que lea con `read`). Los fallos no se cobran.\n\nHow to use:\n- Required: `query` (texto plano, sin URL-encode).\n- `language` (es, en, ru…) y `country` (mx, us, ru…) localizan la búsqueda; si no los pasas se deducen del idioma de la consulta. `location` = ciudad ('Monterrey, Nuevo León, México', 'Москва').\n- `engine`: google (default), bing, yandex (Rusia y CEI), duckduckgo.\n- `page` (desde 1), `type` (news | images | shopping | videos | places, sólo google) y `time` (hour | day | week | month | year).\n- `read: 1-5` = además lee las N primeras y trae su texto en markdown en `content` (buscar + leer en una sola llamada).\n- `raw: true` = incluye la respuesta completa del motor.\n\nUse for: encontrar fuentes, noticias recientes, precios públicos o competencia. Con `read` ya tienes el contenido; si no, `web_fetch` la URL que te interese.";
   const WEB_SEARCH_SHAPE = {
     query: z.string().min(1).max(500).describe("Search query in plain text."),
     engine: z.enum(["google", "bing", "yandex", "duckduckgo"]).optional().describe("Search engine. Default google."),
-    country: z.string().length(2).optional().describe("ISO 3166-1 country code for localized results."),
+    country: z.string().length(2).optional().describe("Search country, ISO 3166-1 (mx, us, ru…). Default: deduced from language."),
+    language: z.string().min(2).max(7).optional().describe("Language code (es, en, ru, pt-br…). Default: deduced from the query."),
+    location: z.string().max(120).optional().describe("City or region, e.g. 'Monterrey, Nuevo León, México'."),
+    page: z.number().int().min(1).max(10).optional().describe("Results page, from 1."),
+    type: z.enum(["web", "news", "images", "shopping", "videos", "places"]).optional().describe("Vertical (google only). Default web."),
+    time: z.enum(["hour", "day", "week", "month", "year"]).optional().describe("Only results from the last hour/day/week/month/year (google, duckduckgo)."),
+    read: z.number().int().min(0).max(5).optional().describe("Also read the top N results (0-5) as clean markdown in `content`. +1 query per page read."),
+    raw: z.boolean().optional().describe("Include the full engine response in `raw` (google, bing)."),
   };
-  const webSearchHandler = wrapHandler(async (params: { query: string; engine?: "google" | "bing" | "yandex" | "duckduckgo"; country?: string }, extra) =>
+  type WebSearchParams = import("../services/providers/brightdata").BrightdataSearchInput;
+  const webSearchHandler = wrapHandler(async (params: WebSearchParams, extra) =>
     runWeb<import("../services/providers/brightdata").BrightdataSearchOutput>(
       "research.brightdata.search",
-      { query: params.query, engine: params.engine, country: params.country },
+      {
+        query: params.query,
+        engine: params.engine,
+        country: params.country,
+        language: params.language,
+        location: params.location,
+        page: params.page,
+        type: params.type,
+        time: params.time,
+        read: params.read,
+        raw: params.raw,
+      },
       extra,
-      (r) => ({ query: r.data.query, engine: r.data.engine, results: r.data.results }),
+      (r) => r.data,
     ),
   );
   server.tool("web_search", WEB_SEARCH_DESC, WEB_SEARCH_SHAPE, webSearchHandler);

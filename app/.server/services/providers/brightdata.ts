@@ -20,6 +20,16 @@
  */
 import { ServiceConfigError, ServiceProviderError } from "../errors";
 import type { ServiceDef, ServiceResult } from "../types";
+import {
+  resolveSearch,
+  SearchParamsError,
+  type ResolvedSearch,
+  type SearchEngine,
+  type SearchParams,
+  type SearchTime,
+  type SearchType,
+} from "./search/params";
+import { normalizeSerpJson, resolveGotoLinks, type NormalizedSerp, type SearchResultItem } from "./search/normalize";
 
 const BRIGHTDATA_URL = "https://api.brightdata.com/request";
 
@@ -293,87 +303,163 @@ export const brightdataScrapeService: ServiceDef<BrightdataScrapeInput, Brightda
 /* SEARCH — SERP API                                                      */
 /* ────────────────────────────────────────────────────────────────────── */
 
-export interface BrightdataSearchInput {
-  /** Search query. Required. */
-  query: string;
-  /** Search engine. Default google. */
-  engine?: "google" | "bing" | "yandex" | "duckduckgo";
-  /** ISO 3166-1 country code for localized results. Default unset (US). */
-  country?: string;
+export interface BrightdataSearchInput extends SearchParams {
+  /** Lee las N primeras (0-5) en markdown limpio y las trae en `content`. 1 consulta por página leída. */
+  read?: number;
+  /** true = incluye además la respuesta completa del motor en `raw` (sólo google y bing). */
+  raw?: boolean;
   /** Override SERP zone. Default from env BRIGHTDATA_SERP_ZONE. */
   zone?: string;
+}
+
+export interface SearchResultWithContent extends SearchResultItem {
+  /** Con `read`: la página en markdown limpio, hasta READ_CONTENT_MAX caracteres. */
+  content?: string;
+  /** true = la página sigue; léela completa con web_fetch (o `fetchId`). */
+  contentTruncated?: boolean;
+  fetchId?: string;
+  /** Con `read`: por qué no se pudo leer esa página (no se cobra). */
+  contentError?: string;
 }
 
 export interface BrightdataSearchOutput extends ServiceResult {
   data: {
     query: string;
-    engine: string;
-    /** Parsed structured results from Brightdata SERP API (organic, snack_pack, etc.). */
-    results: unknown;
+    engine: SearchEngine;
+    country: string;
+    language: string;
+    location?: string;
+    page: number;
+    type: SearchType;
+    time?: SearchTime;
+    results: SearchResultWithContent[];
+    answer?: string;
+    peopleAlsoAsk?: string[];
+    related?: string[];
+    /** Página siguiente, o null si no hay. */
+    next: { page: number } | null;
+    /** Idioma, país y ciudad que reporta el motor (para comprobar la localización). */
+    reported?: { language?: string; country?: string; location?: string };
+    /** Con `raw: true`: la respuesta completa del motor. */
+    raw?: unknown;
   };
 }
 
-// `brd_json=1` pide al proveedor el SERP ya parseado (organic[], snack_pack,
-// knowledge…). Sin él devuelve el HTML de Google y `results` queda inútil.
-function buildSearchUrl(query: string, engine: string, country?: string): string {
-  const q = encodeURIComponent(query);
-  const geo = country ? `&gl=${country.toLowerCase()}` : "";
-  switch (engine) {
-    case "bing":
-      return `https://www.bing.com/search?q=${q}&brd_json=1`;
-    case "yandex":
-      return `https://yandex.com/search/?text=${q}&brd_json=1`;
-    case "duckduckgo":
-      return `https://duckduckgo.com/?q=${q}&brd_json=1`;
-    case "google":
-    default:
-      return `https://www.google.com/search?q=${q}${geo}&brd_json=1`;
-  }
-}
+export const READ_MAX = 5;
+export const READ_CONTENT_MAX = 8_000;
+
+const clampRead = (n: unknown) => Math.min(READ_MAX, Math.max(0, Math.floor(Number(n) || 0)));
 
 export const brightdataSearchService: ServiceDef<BrightdataSearchInput, BrightdataSearchOutput> = {
   id: "research.brightdata.search",
   product: "research",
-  displayName: "Search Engine Results (Brightdata SERP)",
+  displayName: "Web Search",
   description:
-    "Runs a search query (Google/Bing/Yandex/DuckDuckGo) via Brightdata SERP API and returns structured organic results.",
-  estimateCost(_input) {
-    return 2; // SERP responses are larger than single pages.
+    "Busca en Google, Bing, Yandex o DuckDuckGo con idioma, país, ciudad, página, tipo y fecha; resultados limpios y, opcional, el contenido de las primeras páginas.",
+  estimateCost(input) {
+    return 1 + clampRead(input?.read);
   },
-  async execute(input) {
-    const query = input.query?.trim();
-    if (!query) {
-      throw new ServiceProviderError("research.brightdata.search", 400, "query is required");
+  async execute(input, ctx) {
+    let s: ResolvedSearch;
+    try {
+      s = resolveSearch(input);
+    } catch (e) {
+      if (e instanceof SearchParamsError) throw new ServiceProviderError("research.brightdata.search", 400, e.message);
+      throw e;
     }
-    const engine = input.engine ?? "google";
-    const zone = input.zone || process.env.BRIGHTDATA_SERP_ZONE || "serp_api_for_maps";
-    const url = buildSearchUrl(query, engine, input.country);
+    const query = input.query.trim();
+    let norm: NormalizedSerp;
+    let raw: unknown;
 
-    const resp = (await brightdataRequest({
-      zone,
-      url,
-      format: "json",
-      country: input.country,
-      serviceId: "research.brightdata.search",
-    })) as BrightdataResponse;
-
-    // Brightdata returns the parsed SERP structure inside `body` (sometimes as
-    // a JSON string when the upstream renders structured data). Try to parse;
-    // if it's already an object, use it as-is.
-    let results: unknown = resp.body ?? null;
-    if (typeof results === "string") {
-      try {
-        results = JSON.parse(results);
-      } catch {
-        // leave as string — caller can still consume it
+    if (s.via === "serp") {
+      const zone = input.zone || process.env.BRIGHTDATA_SERP_ZONE || "serp_api_for_maps";
+      const resp = (await brightdataRequest({
+        zone,
+        url: s.url,
+        format: "json",
+        country: s.exitCountry,
+        serviceId: "research.brightdata.search",
+      })) as BrightdataResponse;
+      let body: unknown = resp.body ?? null;
+      if (typeof body === "string") {
+        try {
+          body = JSON.parse(body);
+        } catch {
+          throw new ServiceProviderError("research.brightdata.search", 502, "el buscador devolvió una respuesta ilegible; reintenta");
+        }
       }
+      norm = normalizeSerpJson((body ?? {}) as Record<string, unknown>);
+      norm.results = await resolveGotoLinks(norm.results);
+      if (input.raw) raw = body;
+    } else {
+      // Yandex y DuckDuckGo no tienen JSON en el proveedor: se lee la página y se parsea aquí.
+      // Yandex y DuckDuckGo piden captcha a ratos (medido 28-nov: ~1 de 3 en DDG); otra vuelta suele pasar.
+      const zone = process.env.BRIGHTDATA_UNLOCKER_ZONE || "mcp_unlocker";
+      const { parseYandexSerp, parseDuckDuckGoSerp } = await import("./parsers/serpHtml");
+      let parsed: { results: SearchResultItem[]; hasNext: boolean } = { results: [], hasNext: false };
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          const resp = (await brightdataRequest({
+            zone,
+            url: s.url,
+            format: "json",
+            serviceId: "research.brightdata.search",
+          })) as BrightdataResponse;
+          const html = resp.body ?? "";
+          parsed = s.engine === "yandex" ? parseYandexSerp(html) : parseDuckDuckGoSerp(html);
+          if (parsed.results.length || !/captcha/i.test(html.slice(0, 20000))) break;
+        } catch (e) {
+          if (attempt === 1 || !(e instanceof ServiceProviderError) || (e.providerStatus ?? 0) < 500) throw e;
+        }
+        if (attempt === 1) {
+          throw new ServiceProviderError("research.brightdata.search", 502, "el buscador pidió captcha; reintenta en unos segundos o usa engine google");
+        }
+      }
+      norm = { results: parsed.results, hasNext: parsed.hasNext };
+    }
+
+    // Buscar + leer: las N primeras en markdown limpio, en paralelo. Una página que falla no tumba la búsqueda.
+    const read = clampRead(input.read);
+    const results: SearchResultWithContent[] = norm.results;
+    let readOk = 0;
+    if (read > 0) {
+      await Promise.all(
+        results.slice(0, read).map(async (r) => {
+          try {
+            const page = await brightdataScrapeService.execute(
+              { url: r.url, asMarkdown: true, onlyMainContent: true, country: s.exitCountry },
+              ctx,
+            );
+            const body = page.data.body ?? "";
+            r.content = body.slice(0, READ_CONTENT_MAX);
+            if (page.data.truncated || body.length > READ_CONTENT_MAX) r.contentTruncated = true;
+            if (page.data.fetchId) r.fetchId = page.data.fetchId;
+            readOk++;
+          } catch (e) {
+            r.contentError = e instanceof Error ? e.message : "no se pudo leer la página";
+          }
+        }),
+      );
     }
 
     return {
+      cost: 1 + readOk,
       data: {
         query,
-        engine,
+        engine: s.engine,
+        country: s.country,
+        language: s.language,
+        location: s.location,
+        page: s.page,
+        type: s.type,
+        time: s.time,
         results,
+        answer: norm.answer,
+        peopleAlsoAsk: norm.peopleAlsoAsk,
+        related: norm.related,
+        next: norm.hasNext && results.length ? { page: s.page + 1 } : null,
+        reported: norm.reported,
+        ...(raw !== undefined ? { raw } : {}),
       },
     };
   },
@@ -911,9 +997,8 @@ export async function probeWebProvider(): Promise<{ search: ProbeResult; fetch: 
   const [search, fetchR, meli] = await Promise.all([
     timed(async () => {
       const r = await brightdataSearchService.execute({ query: "tienda en linea", country: "mx" }, { userId: "" });
-      const organic = (r.data.results as { organic?: unknown[] } | undefined)?.organic;
-      if (!Array.isArray(organic) || organic.length === 0) throw new Error("sin resultados orgánicos");
-      return `${organic.length} orgánicos`;
+      if (!r.data.results.length) throw new Error("sin resultados");
+      return `${r.data.results.length} resultados`;
     }),
     timed(async () => {
       const html = (await brightdataRequest({

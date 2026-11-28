@@ -531,7 +531,7 @@ paths:
       tags: [Web]
       operationId: webSearch
       summary: Buscar en la web
-      description: Cuesta 1 consulta. Sin saldo responde 402 con `buy`.
+      description: Cuesta 1 consulta, más 1 por cada página leída con `read`. Los fallos no se cobran. Sin saldo responde 402 con `buy`. Los 4 motores responden con la misma forma (`results[]` con position, title, url, snippet, date, source y, con `read`, content).
       requestBody:
         required: true
         content:
@@ -541,8 +541,15 @@ paths:
               required: [query]
               properties:
                 query: { type: string }
-                engine: { type: string }
-                country: { type: string }
+                engine: { type: string, enum: [google, bing, yandex, duckduckgo] }
+                country: { type: string, description: "País de búsqueda ISO 3166-1 (mx, us, ru…). Sin él se deduce del idioma." }
+                language: { type: string, description: "Idioma (es, en, ru…). Sin él se deduce de la consulta." }
+                location: { type: string, description: "Ciudad o región." }
+                page: { type: integer, minimum: 1 }
+                type: { type: string, enum: [web, news, images, shopping, videos, places] }
+                time: { type: string, enum: [hour, day, week, month, year] }
+                read: { type: integer, minimum: 0, maximum: 5 }
+                raw: { type: boolean }
       responses:
         "200":
           description: Resultados.

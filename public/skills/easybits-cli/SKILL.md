@@ -5,7 +5,7 @@ license: MIT
 compatibility: Needs Node 22+ (npx is enough), network access to https://www.easybits.cloud and an EasyBits API key
 metadata:
   author: easybits
-  version: "1.35"
+  version: "1.36"
 ---
 
 # Use the EasyBits CLI
@@ -264,7 +264,7 @@ easybits sandboxes domains rm "$ID" shop.example.com --json --yes
 Metered in web queries; out of them → exit 1, `code: 1`, hint with the buy link (not a plan limit).
 
 ```bash
-easybits web search "dentista polanco" --country mx --json   # {query, engine, results: {organic: [{title, link, …}]}}
+easybits web search "dentista polanco" --location Monterrey --read 2 --json   # {results: [{position, title, url, snippet, content}], next}; también --language --page --type news --time day
 easybits web fetch https://example.com --markdown --main     # clean markdown on stdout; --json → {url, statusCode, format, body}
 easybits web extract google_maps --input '[{"keyword":"dentista Polanco CDMX","country":"MX"}]' --limit 50 --wait --json
 easybits web extract instagram_profiles --url https://instagram.com/x --json   # {jobId, status: "running"} (30-120 s)

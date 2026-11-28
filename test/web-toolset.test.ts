@@ -136,10 +136,11 @@ describe("brightdataRequest — captcha de la zona SERP", () => {
   it("reintenta el 502 expect_body y devuelve el resultado del segundo intento", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(envelope(502, "expect_body"))
-      .mockResolvedValueOnce(okEnvelope({ organic: [{ title: "hit" }] }));
+      .mockResolvedValueOnce(okEnvelope({ organic: [{ title: "hit", link: "https://example.com/" }] }));
     const r = await brightdataSearchService.execute({ query: "agentes de ia" }, { userId: "u1" } as never);
     expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect((r.data as { results: { organic: unknown[] } }).results.organic).toHaveLength(1);
+    expect(r.data.results).toHaveLength(1);
+    expect(r.cost).toBe(1);
   });
 
   it("agota los reintentos si el captcha persiste", async () => {

@@ -77,14 +77,62 @@ export interface Icon {
 export interface WebSearchParams {
   query: string;
   engine?: "google" | "bing" | "yandex" | "duckduckgo";
-  /** ISO 3166-1 (mx, us…) para resultados localizados. */
+  /** País de búsqueda, ISO 3166-1 (mx, us, ru…). Sin él se deduce del idioma. */
   country?: string;
+  /** Idioma (es, en, ru, pt-br…). Sin él se deduce del texto de la consulta. */
+  language?: string;
+  /** Ciudad o región: "Monterrey, Nuevo León, México", "Москва". */
+  location?: string;
+  /** Página de resultados, desde 1. */
+  page?: number;
+  /** Vertical (sólo google). Default "web". */
+  type?: "web" | "news" | "images" | "shopping" | "videos" | "places";
+  /** Sólo resultados recientes (google y duckduckgo). */
+  time?: "hour" | "day" | "week" | "month" | "year";
+  /** Lee además las N primeras (0-5) en markdown limpio (`content`). +1 consulta por página leída. */
+  read?: number;
+  /** Incluye la respuesta completa del motor en `raw` (google y bing). */
+  raw?: boolean;
+}
+export interface WebSearchItem {
+  position: number;
+  title: string;
+  url: string;
+  snippet?: string;
+  date?: string;
+  source?: string;
+  price?: string;
+  rating?: number;
+  image?: string;
+  /** true = Google no dio la liga exacta; la URL sale de la ruta visible (puede ser la portada del sitio). */
+  urlApprox?: boolean;
+  /** Con `read`: la página en markdown limpio (hasta 8,000 caracteres). */
+  content?: string;
+  /** La página sigue: léela completa con `webFetch` (o `fetchId`). */
+  contentTruncated?: boolean;
+  fetchId?: string;
+  /** Con `read`: por qué no se pudo leer esa página (no se cobra). */
+  contentError?: string;
 }
 export interface WebSearchResult {
   query: string;
-  engine: string;
-  /** Resultados estructurados: organic[], snack_pack, knowledge, etc. */
-  results: unknown;
+  engine: "google" | "bing" | "yandex" | "duckduckgo";
+  country: string;
+  language: string;
+  location?: string;
+  page: number;
+  type: string;
+  time?: string;
+  /** La misma forma en los 4 motores. */
+  results: WebSearchItem[];
+  answer?: string;
+  peopleAlsoAsk?: string[];
+  related?: string[];
+  /** Página siguiente, o null si no hay. */
+  next: { page: number } | null;
+  /** Idioma, país y ciudad que reporta el motor. */
+  reported?: { language?: string; country?: string; location?: string };
+  raw?: unknown;
 }
 export interface WebFetchParams {
   /** Página a leer. No hace falta con `fetchId`. */

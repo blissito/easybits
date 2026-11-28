@@ -221,12 +221,12 @@ describe("canario", () => {
     const meli = fs.readFileSync(path.join(__dirname, "fixtures/meli-iphone-15.html"), "utf8");
     vi.spyOn(globalThis, "fetch").mockImplementation(async (_u, init) => {
       const { url } = JSON.parse(String((init as RequestInit).body));
-      if (url.includes("google.com")) return Response.json({ status_code: 200, body: JSON.stringify({ organic: [{}, {}] }) });
+      if (url.includes("google.com")) return Response.json({ status_code: 200, body: JSON.stringify({ organic: [{ title: "a", link: "https://a.mx/" }, { title: "b", link: "https://b.mx/" }] }) });
       if (url.includes("mercadolibre")) return new Response(meli);
       return new Response("<html>" + "a".repeat(50_000));
     });
     const r = await probeWebProvider();
-    expect(r.search).toMatchObject({ ok: true, detail: "2 orgánicos" });
+    expect(r.search).toMatchObject({ ok: true, detail: "2 resultados" });
     expect(r.fetch.ok).toBe(true);
     expect(r.meli).toMatchObject({ ok: true, detail: "48 productos" });
     expect(canaryStatus(r)).toBe("operational");

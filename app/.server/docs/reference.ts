@@ -804,10 +804,11 @@ Buscar en Google, leer cualquier página aunque bloquee bots (IPs residenciales,
 
 ### Buscar
 \`POST /web/search\`
-Body: \`{ query, engine?: "google"|"bing"|"yandex"|"duckduckgo", country? }\`
-Returns: \`{ query, engine, results: { organic: [{ title, link, description }], … } }\` (orgánicos, negocios locales, knowledge panel)
-1 consulta. Úsalo para encontrar la URL correcta y luego léela con \`/web/fetch\`.
-SDK: \`eb.webSearch({ query, country? })\` · MCP: \`web_search({ query, country? })\`
+Body: \`{ query, engine?: "google"|"bing"|"yandex"|"duckduckgo", country?, language?, location?, page?, type?: "web"|"news"|"images"|"shopping"|"videos"|"places", time?: "hour"|"day"|"week"|"month"|"year", read?: 0-5, raw? }\`
+Returns: \`{ query, engine, country, language, page, results: [{ position, title, url, snippet, date?, source, content? }], peopleAlsoAsk?, related?, next: { page } | null }\` — la misma forma en los 4 motores, sin íconos ni ligas de rastreo.
+Sin \`country\` ni \`language\` se deducen del texto de la consulta (en ruso busca como en Rusia). \`location\` es la ciudad. \`read: N\` lee además las N primeras en markdown (\`content\`, hasta 8,000 caracteres).
+1 consulta, más 1 por cada página leída. Los fallos no se cobran. \`urlApprox: true\` = Google no dio la liga exacta y la URL sale de la ruta visible.
+SDK: \`eb.webSearch({ query, country?, language?, location?, read? })\` · MCP: \`web_search({ query, … })\` · CLI: \`easybits web search "<query>" --location "Monterrey" --read 2\`
 
 \`\`\`bash
 curl -X POST https://www.easybits.cloud/api/v2/web/search \\

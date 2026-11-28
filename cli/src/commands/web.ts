@@ -28,14 +28,14 @@ async function web<T>(fn: () => Promise<T>): Promise<T> {
   }
 }
 
-type Organic = { title?: string; link?: string; url?: string; description?: string };
+type Organic = { title?: string; link?: string; url?: string; position?: number };
 
-/** Los resultados orgánicos de un SERP, sea cual sea el motor. Puro, con test. */
+/** Los resultados de una búsqueda: la forma nueva (`results[]`) o la vieja (`results.organic[]`). Puro, con test. */
 export function organicResults(results: unknown): Array<{ rank: number; title: string; url: string }> {
   const r = (results ?? {}) as { organic?: Organic[] };
-  const items = Array.isArray(r.organic) ? r.organic : Array.isArray(results) ? (results as Organic[]) : [];
+  const items = Array.isArray(results) ? (results as Organic[]) : Array.isArray(r.organic) ? r.organic : [];
   return items
-    .map((o, i) => ({ rank: i + 1, title: (o.title ?? "").trim(), url: o.link ?? o.url ?? "" }))
+    .map((o, i) => ({ rank: o.position ?? i + 1, title: (o.title ?? "").trim(), url: o.url ?? o.link ?? "" }))
     .filter((o) => o.url);
 }
 
@@ -76,20 +76,46 @@ export const webCmd: Command = {
   subs: {
     search: {
       summary: "Search Google, Bing, Yandex or DuckDuckGo (1 query)",
-      usage: "easybits web search <query...> [--engine google|bing|yandex|duckduckgo] [--country <cc>]",
+      usage: "easybits web search <query...> [--engine google|bing|yandex|duckduckgo] [--country <cc>] [--language <ll>] [--location <city>] [--page <n>] [--type news|images|shopping|videos|places] [--time hour|day|week|month|year] [--read <n>]",
       options: {
         engine: { type: "string", value: "name", description: "google (default), bing, yandex or duckduckgo" },
-        country: { type: "string", value: "cc", description: "ISO country for localized results (mx, us…)" },
+        country: { type: "string", value: "cc", description: "Search country (mx, us, ru…). Default: from the language" },
+        language: { type: "string", value: "ll", description: "Language (es, en, ru…). Default: detected from the query" },
+        location: { type: "string", value: "city", description: "City or region, e.g. \"Monterrey, Nuevo León, México\"" },
+        page: { type: "string", value: "n", description: "Results page, from 1" },
+        type: { type: "string", value: "kind", description: "news, images, shopping, videos or places (google only)" },
+        time: { type: "string", value: "range", description: "hour, day, week, month or year" },
+        read: { type: "string", value: "n", description: "Also read the top N (1-5) as markdown (+1 query each)" },
       },
-      examples: ["easybits web search dentista polanco --country mx", "easybits web search \"react router 7 loaders\" --json | jq '.results.organic[0]'"],
+      examples: [
+        "easybits web search dentista polanco --country mx",
+        "easybits web search \"tipo de cambio\" --type news --time day",
+        "easybits web search \"налог на доходы\" --engine yandex --location Москва",
+        "easybits web search \"react router 7 loaders\" --read 2 --json | jq '.results[0].content'",
+      ],
       async run(ctx) {
         const query = ctx.args.join(" ").trim();
         if (!query) throw usageError(t("Missing <query>.", "Falta <query>."), this.usage);
         const engine = str(ctx, "engine");
         if (engine && !ENGINES.includes(engine)) throw usageError(t(`--engine must be one of: ${ENGINES.join(", ")}.`, `--engine debe ser uno de: ${ENGINES.join(", ")}.`), this.usage);
         const eb = await getClient(ctx);
-        const r = await web(() => eb.webSearch({ query, engine: engine as any, country: str(ctx, "country") }));
-        emit(ctx, r, () => table(organicResults(r.results), [["rank", "#"], ["title", "TITLE"], ["url", "URL"]], t("No results.", "Sin resultados.")));
+        const r = await web(() =>
+          eb.webSearch({
+            query,
+            engine: engine as any,
+            country: str(ctx, "country"),
+            language: str(ctx, "language"),
+            location: str(ctx, "location"),
+            page: int(ctx, "page", this.usage),
+            type: str(ctx, "type") as any,
+            time: str(ctx, "time") as any,
+            read: int(ctx, "read", this.usage),
+          }),
+        );
+        emit(ctx, r, () => {
+          table(organicResults(r.results), [["rank", "#"], ["title", "TITLE"], ["url", "URL"]], t("No results.", "Sin resultados."));
+          if (r.next) console.error(t(`More: --page ${r.next.page}`, `Más: --page ${r.next.page}`));
+        });
       },
     },
     fetch: {
