@@ -28,15 +28,40 @@ async function web<T>(fn: () => Promise<T>): Promise<T> {
   }
 }
 
-type Organic = { title?: string; link?: string; url?: string; position?: number };
+type Organic = { title?: string; link?: string; url?: string; position?: number; snippet?: string; description?: string; content?: string };
 
 /** Los resultados de una búsqueda: la forma nueva (`results[]`) o la vieja (`results.organic[]`). Puro, con test. */
-export function organicResults(results: unknown): Array<{ rank: number; title: string; url: string }> {
+export function organicResults(results: unknown): Array<{ rank: number; title: string; url: string; snippet?: string; content?: string }> {
   const r = (results ?? {}) as { organic?: Organic[] };
   const items = Array.isArray(results) ? (results as Organic[]) : Array.isArray(r.organic) ? r.organic : [];
   return items
-    .map((o, i) => ({ rank: o.position ?? i + 1, title: (o.title ?? "").trim(), url: o.url ?? o.link ?? "" }))
+    .map((o, i) => ({
+      rank: o.position ?? i + 1,
+      title: (o.title ?? "").trim(),
+      url: o.url ?? o.link ?? "",
+      ...((o.snippet ?? o.description) ? { snippet: (o.snippet ?? o.description)!.trim() } : {}),
+      ...(o.content ? { content: o.content } : {}),
+    }))
     .filter((o) => o.url);
+}
+
+/** Lista legible en cualquier ancho de terminal: título, liga y resumen, uno debajo del otro (una tabla se rompe al envolver). */
+export function formatResults(items: ReturnType<typeof organicResults>, width = process.stdout.columns || 100): string {
+  if (!items.length) return t("No results.", "Sin resultados.");
+  const max = Math.max(40, width - 4);
+  const clip = (s: string) => (s.length > max ? s.slice(0, max - 1) + "…" : s);
+  return items
+    .map((o) => {
+      const lines = [`${o.rank}. ${clip(o.title || o.url)}`, `   ${o.url}`];
+      if (o.snippet) lines.push(`   ${clip(o.snippet.replace(/\s+/g, " "))}`);
+      if (o.content) lines.push(`   ${t(`(${o.content.length} chars read; --json to get them)`, `(${o.content.length} caracteres leídos; --json para verlos)`)}`);
+      return lines.join("\n");
+    })
+    .join("\n\n");
+}
+
+function printResults(items: ReturnType<typeof organicResults>) {
+  console.log(formatResults(items));
 }
 
 /** `--input` (JSON) o `--url` repetido → el `input` que pide extract. */
@@ -113,7 +138,7 @@ export const webCmd: Command = {
           }),
         );
         emit(ctx, r, () => {
-          table(organicResults(r.results), [["rank", "#"], ["title", "TITLE"], ["url", "URL"]], t("No results.", "Sin resultados."));
+          printResults(organicResults(r.results));
           if (r.next) console.error(t(`More: --page ${r.next.page}`, `Más: --page ${r.next.page}`));
         });
       },

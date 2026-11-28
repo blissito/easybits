@@ -35,3 +35,12 @@ test("extractInput: errores de uso (nada, ambos, JSON malo o escalar)", () => {
   assert.throws(() => extractInput("{no", [], "u"), /JSON/);
   assert.throws(() => extractInput("3", [], "u"), /JSON/);
 });
+
+test("formatResults: lista que no se rompe en terminal angosta", async () => {
+  const { formatResults } = await import("./commands/web.ts");
+  const out = formatResults(organicResults([{ position: 1, title: "Ghostty is a fast, feature-rich, and cross-platform terminal emulator", url: "https://github.com/ghostty-org/ghostty", snippet: "Fast  terminal\n emulator" }]), 50);
+  const lines = out.split("\n");
+  assert.equal(lines[1], "   https://github.com/ghostty-org/ghostty");
+  assert.ok(lines[0].length <= 50 && lines[0].endsWith("…"));
+  assert.equal(lines[2], "   Fast terminal emulator");
+});
